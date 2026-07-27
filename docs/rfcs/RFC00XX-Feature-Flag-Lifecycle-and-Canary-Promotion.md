@@ -2,7 +2,7 @@
 
 - **Author:** Brian Harrison (bharriso)
 - **Created:** 2026-06-04
-- **Modified:** 2026-06-24
+- **Modified:** 2026-07-27
 - **Status:** Draft
 - **Discussion:** TBD (GitHub Discussion link to be added)
 
@@ -13,7 +13,7 @@
 TheRock and the ROCm libraries it builds need one disciplined way to introduce risky
 changes incrementally: gate them behind a flag, exercise both code paths in CI, soak a
 candidate default for a cycle, promote it on a predictable cadence, and back it out quickly
-when it misbehaves. Today's mechanism — the `FLAGS.cmake` build-flag registry — is real but
+when it misbehaves. Today's mechanism, the `FLAGS.cmake` build-flag registry, is real but
 partial: no runtime dimension, no metadata or expiry, no team-owned both-state CI, and no
 branch-level promotion.
 
@@ -24,22 +24,30 @@ the default of the flag (or flags) being promoted to ON, soaks it for one cadenc
 swaps the default on `main`.
 
 The proposal extends the build-flag registry rather than replacing it, and adds a parallel
-runtime-flag mechanism — the preferred path, because one binary serves every flag state and
+runtime-flag mechanism, the preferred path, because one binary serves every flag state and
 can be reverted in the field with no rebuild. The runtime mechanism is a generic,
 library-agnostic TheRock contract: a JSON-location convention, a discovery idiom, and a
 precedence order. To ease adoption, TheRock also publishes a small reference header,
-`rocm_feature_flags.h`, that implements the contract — but it is not shipped, linked, or
+`rocm_feature_flags.h`, that implements the contract, but it is not shipped, linked, or
 auto-included; there is no `.so` and no package dependency. A library either copies the header
 into its own tree (the most portable path, which this RFC recommends) or reimplements the
 contract against its existing environment-flag system. So the contract is the standard; the
 header is a reference a project may copy. hipDNN, the first adopter, uses its own config reader
 rather than the header.
 
+**Flags are ephemeral by design.** A feature flag in this lifecycle is temporary scaffolding for
+landing a risky change incrementally. It is not a supported product configuration knob and not a
+permanent tuning surface for users. Every flag carries an owner and an expiry; once its default has
+been promoted to ON and has settled for roughly one cycle, the flag and its now-dead OFF path are
+removed, along with the declaration. The single exception is an explicitly marked `long-lived`
+operational kill switch. This is why the lifecycle below treats retirement as a mandatory stage rather
+than an afterthought: a flag that outlives its purpose is debt, not a feature.
+
 ### Glossary
 
 | Term                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                             |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Flag**                                      | A named boolean toggle gating a change. Two kinds: runtime and build-time.                                                                                                                                                                                                                                                                                                                          |
+| **Flag**                                      | A named boolean toggle gating an in-development change. Temporary by design: it carries an owner and an expiry and is retired once its default is promoted and settles, so it is not a permanent or supported configuration knob (the `long-lived` kill switch is the sole exception). Two kinds: runtime and build-time.                                                                           |
 | **Flag flip**                                 | Changing a flag's effective default (for example, OFF to ON) for a branch or channel.                                                                                                                                                                                                                                                                                                               |
 | **Binary-neutral**                            | A change that does not alter emitted artifacts, ABI, or build topology, and can therefore be gated at runtime.                                                                                                                                                                                                                                                                                      |
 | **Canary**                                    | The soak-and-staging branch. The team flips the current promotion batch to ON here, so it soaks for one cadence cycle before the default is swapped on `main`. A flag may be OFF on both `main` and canary; canary is not an "everything on" branch, nor the mechanism for both-state CI coverage.                                                                                                  |
@@ -57,18 +65,19 @@ rather than the header.
 1. **Add a generic runtime flag contract** to TheRock: a JSON-location convention, `dladdr`-relative discovery, and a resolution order checked highest-first (`ROCM_FEATURE_<NAME>` environment variable, then installed JSON, then compile-time default), plus an example `rocm_feature_flags.h` header that implements it. Teams copy the header into their own tree or reimplement the contract against their existing environment-flag system; there is no shipped, linked, or auto-included dependency. hipDNN's `EngineOverrideConfig`-style reader is one instantiation, not the contract itself.
 1. **Make flags first-class inventory:** owner, created date, expiry, stage, and tracking issue on every flag, surfaced in the configure report and the shipped manifest.
 1. **Establish a canary-to-mainline promotion train** (fixed and automated; period to be determined). Canary is a soak-and-staging branch: the team flips the candidate default(s) to ON, soaks for one cadence cycle, then swaps the default on `main`. The minimum soak signal is canary builds and tests green across the cycle; RFC0011's `latest_good.json` remains the `main` and nightly health signal, with an optional per-branch `latest_good@canary.json` as a possible deepening.
-1. **Make both-state CI a first-class, team-owned mechanism, decoupled from canary, and uniform across every consumer CI.** A team developing behind a flag can run CI in both states (ON and OFF) for its PR, triggered by a label (for example, `flag:<NAME>:both`), a `workflow_dispatch` input, or a flip branch whose committed config flips the default. The trigger grammar and the OFF/ON leg semantics are a single repo-agnostic contract with one shared implementation in TheRock, adopted identically by TheRock, rocm-libraries, and rocm-systems (see Multi-repo adoption). Runtime flags cost one build and two test runs; build-time flags cost two builds.
+1. **Make both-state CI a first-class, team-owned mechanism, decoupled from canary, and uniform across every consumer CI.** A team developing behind a flag can run CI in both states (ON and OFF) for its PR, triggered by a label (for example, `flag:<NAME>:both`), a `workflow_dispatch` input, or a flip branch whose committed config flips the default. The trigger grammar and the OFF/ON leg semantics are a single repo-agnostic contract with one shared implementation in TheRock, which TheRock, rocm-libraries, and rocm-systems all adopt, each at its own call site (see Multi-repo adoption). Runtime flags cost one build and two test runs; build-time flags cost two builds.
 1. **Specify backout, kill-switch, and failed-promotion policy.** The environment kill switch (`ROCM_FEATURE_<NAME>=0`) is the per-process, per-host, minutes-scale revert; editing the installed JSON sets the next-package channel default (which requires a respin). Build-time backout takes one cycle. A bad flip is dropped from the canary batch, not carried forward.
-1. **Define flag hygiene:** expiry enforcement, mandatory retirement after default-on, and a per-cycle flag-debt audit (Fowler).
+1. **Define flag hygiene:** expiry enforcement, mandatory retirement after default-on, and a per-cycle flag-debt audit.
 1. **Provide teams a concrete playbook** with clear ownership boundaries between project teams, TheRock, and Quartz.
 
 ## Non-Goals
 
 - Replacing the existing `FLAGS.cmake` registry; this RFC extends it.
 - Defining the CI data and notification substrate; that is RFC0011 (Quartz), whose signals this RFC consumes.
-- Percentage or telemetry-driven rollout (a Finch-style gradual ramp). Flags here are binary on or off; no telemetry pipeline exists in ROCm today to drive a percentage ramp.
+- Percentage or telemetry-driven rollout (a gradual percentage ramp). Flags here are binary on or off; no telemetry pipeline exists in ROCm today to drive a percentage ramp.
 - Artifact-level RC-to-final promotion (`build_tools/packaging/promote_*`); that remains as-is, and this RFC adds branch-level flag promotion alongside it.
 - Mandating that every existing flag immediately gain a runtime equivalent.
+- Treating flags as a permanent or user-facing configuration surface. A flag is temporary scaffolding with a mandatory expiry and retirement, not a supported long-term tuning knob; the explicitly marked `long-lived` kill switch is the sole exception.
 
 ## Background and Prior Art
 
@@ -99,18 +108,18 @@ runtime registry default) rather than a branch override.
 
 ### CI, branching, and release (EXISTING; promotion hooks here)
 
-| Fact                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Trunk-based on `main`; submodules auto-rolled by `bump_submodules.yml` (push trigger `branches:[main]`, cron every 12h); `bump_automation.py` hardcodes `base="main"`. Submodule rolls land on `main` only.                                                                                                                                                                                 | repo root, `build_tools/github_actions/bump_automation.py`                                     |
-| Long-lived-branch coverage: pushes to `main`, `multi_arch/**`, and `release/therock-*` (the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml`) run the broader presubmit-plus-postsubmit tier; pull requests run presubmit only. Trigger-type tier selection lives in `configure_multi_arch_ci.py`.                                                                          | `.github/workflows/multi_arch_ci.yml`, `build_tools/github_actions/configure_multi_arch_ci.py` |
-| Branch-prefix routing exists for `release/therock-*` branches (push-triggered postsubmit), declared in the workflow `on.push.branches` list.                                                                                                                                                                                                                                                | `.github/workflows/multi_arch_ci.yml`                                                          |
-| Data-driven matrix: families by platforms by build_variants; tiers presubmit within postsubmit within nightly.                                                                                                                                                                                                                                                                              | `configure_multi_arch_ci.py`, `amdgpu_family_matrix.py`                                        |
-| CI controls: PR labels (`ci:skip`, `ci:run-all-archs`, `test_filter:<…>`, `test:<proj>`), `workflow_dispatch` inputs including `prebuilt_stages` and `baseline_run_id`; the `build_variant` environment value selects release, asan, or tsan.                                                                                                                                               | `docs/development/ci_behavior_manipulation.md`                                                 |
-| The multi-arch CI already routes the `schedule` event to a full nightly tier (`configure_multi_arch_ci.py`); the daily `0 02 * * *` cron currently lives in `multi_arch_ci_asan.yml`. There is no separate promotion workflow, and this RFC proposes adding the promotion job to that existing scheduled run rather than creating a new one; the cadence is to be determined (see cadence). | `configure_multi_arch_ci.py`, `.github/workflows/multi_arch_ci_asan.yml`                       |
-| There is no dedicated `ci_nightly.yml` in the tree today (removed in the multi-arch migration). The design constraint still holds: GitHub `schedule` crons run only on the default branch (`main`), so a scheduled nightly cannot run on canary.                                                                                                                                            | `.github/workflows/ci_nightly.yml`                                                             |
-| Release channels are stable, prerelease, nightly, dev, and dev-builds; promotion today is artifact-level (RC to final), not branch to branch.                                                                                                                                                                                                                                               | `docs/packaging/versioning.md`                                                                 |
-| `latest_good.json` is a single global symlink to the most-recent fully-passing nightly (RFC0011 Quartz). It tracks `main` and nightly health; there is no per-branch canary equivalent today.                                                                                                                                                                                               | RFC0011                                                                                        |
-| `.github/CODEOWNERS` does not currently cover `FLAGS.cmake` or `configure_multi_arch_ci.py`.                                                                                                                                                                                                                                                                                                | `.github/CODEOWNERS`                                                                           |
+| Fact                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Where                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Trunk-based on `main`; submodules auto-rolled by `bump_submodules.yml` (push trigger `branches:[main]`, cron every 12h); `bump_automation.py` hardcodes `base="main"`. Submodule rolls land on `main` only.                                                                                                                                                                                                                                                                                                                                                                                                                              | repo root, `build_tools/github_actions/bump_automation.py`                                     |
+| Long-lived-branch coverage: pushes to `main`, `multi_arch/**`, and `release/therock-*` (the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml`) run the broader presubmit-plus-postsubmit tier; pull requests run presubmit only. Trigger-type tier selection lives in `configure_multi_arch_ci.py`.                                                                                                                                                                                                                                                                                                                       | `.github/workflows/multi_arch_ci.yml`, `build_tools/github_actions/configure_multi_arch_ci.py` |
+| Branch-prefix routing exists for `release/therock-*` branches (push-triggered postsubmit), declared in the workflow `on.push.branches` list.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `.github/workflows/multi_arch_ci.yml`                                                          |
+| Data-driven matrix: families by platforms by build_variants; tiers presubmit within postsubmit within nightly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `configure_multi_arch_ci.py`, `amdgpu_family_matrix.py`                                        |
+| CI controls: PR labels (`ci:skip`, `ci:run-all-archs`, `test_filter:<…>`, `test:<proj>`), `workflow_dispatch` inputs including `prebuilt_stages` and `baseline_run_id`; the `build_variant` environment value selects release, asan, or tsan.                                                                                                                                                                                                                                                                                                                                                                                            | `docs/development/ci_behavior_manipulation.md`                                                 |
+| `configure_multi_arch_ci.py` already contains `schedule`-event routing to a full nightly tier, but no workflow currently triggers it on a schedule. The only scheduled workflows in the tree today are `bump_submodules.yml` (every 12h) and `gitleaks_main.yml` (weekly); there is no scheduled multi-arch run and no separate promotion workflow. This RFC proposes adding a `schedule` trigger to `multi_arch_ci.yml` (routed to the nightly tier the orchestrator already supports) and attaching the promotion job to that scheduled run rather than creating a standalone workflow; the cadence is to be determined (see cadence). | `configure_multi_arch_ci.py`, `.github/workflows/multi_arch_ci.yml`                            |
+| There is no dedicated `ci_nightly.yml` in the tree today (removed in the multi-arch migration). The design constraint still holds: GitHub `schedule` crons run only on the default branch (`main`), so a scheduled nightly cannot run on canary.                                                                                                                                                                                                                                                                                                                                                                                         | `.github/workflows/ci_nightly.yml`                                                             |
+| Release channels are stable, prerelease, nightly, dev, and dev-builds; promotion today is artifact-level (RC to final), not branch to branch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `docs/packaging/versioning.md`                                                                 |
+| `latest_good.json` is a single global symlink to the most-recent fully-passing nightly (RFC0011 Quartz). It tracks `main` and nightly health; there is no per-branch canary equivalent today.                                                                                                                                                                                                                                                                                                                                                                                                                                            | RFC0011                                                                                        |
+| `.github/CODEOWNERS` does not currently cover `FLAGS.cmake` or `configure_multi_arch_ci.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `.github/CODEOWNERS`                                                                           |
 
 **Gaps:** nothing toggles a `THEROCK_FLAG_*` from CI today (the controls govern architecture, test,
 and variant, not flags); there is no automated branch-to-branch promotion; the promotion slot is
@@ -169,7 +178,6 @@ serves all states, revert is immediate and remote, and there is no combinatorial
 
 |                             | **Runtime flag (preferred)**                                    | **Build-time flag**                                                      |
 | --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Analog                      | Chrome `base::Feature` / Finch                                  | Chrome `buildflag` / GN arg                                              |
 | Lives in                    | TheRock runtime registry, shipped as `feature_flags.json` (NEW) | `FLAGS.cmake` registry (EXISTING)                                        |
 | Set by                      | environment override, installed JSON, or compile default        | `-DTHEROCK_FLAG_*`, `DEFAULT_VALUE` in `FLAGS.cmake`, or compile default |
 | Change in field             | Yes: edit JSON or environment, no rebuild                       | No: revert, rebuild, and re-promote                                      |
@@ -201,8 +209,8 @@ behavior and lifecycle. Teams choose the kind, preferring runtime.
 
 #### Adding a flag does not block development
 
-Declaring a new flag — adding a default-OFF entry to `FLAGS.cmake` or `RUNTIME_FLAGS.cmake` with
-its metadata — is low-risk and not gated behind heavyweight review. A default-off flag changes
+Declaring a new flag (adding a default-OFF entry to `FLAGS.cmake` or `RUNTIME_FLAGS.cmake` with
+its metadata) is low-risk and not gated behind heavyweight review. A default-off flag changes
 nothing for users; it only adds the ability to protect an in-development feature. Two steps are
 intentionally decoupled:
 
@@ -211,9 +219,10 @@ intentionally decoupled:
    the release-manager or CODEOWNERS process (the CODEOWNERS gate below applies only to default flips
    and promotion), and it waits on nothing. New-flag PRs are treated as priority reviews, so review
    never blocks a team from starting work behind a flag.
-1. **Enabling CI for the flag.** Wiring the flag into both-state CI — the two-build path (build-time)
-   or the one-build, two-test-run path (runtime) — is a follow-on step that blocks neither the
-   declaration nor the feature. A team can land the flag and guard its code first, then add CI.
+1. **Enabling CI for the flag.** Wiring the flag into both-state CI (the two-build path for
+   build-time, or the one-build, two-test-run path for runtime) is a follow-on step that blocks
+   neither the declaration nor the feature. A team can land the flag and guard its code first, then
+   add CI.
 
 So starting a new feature depends on just two things: the flag declaration landing in TheRock, and
 the TheRock submodule bump reaching the consuming repository (for example, rocm-libraries; see the
@@ -427,7 +436,7 @@ pattern. This is tracked as a phase-1 task.
 
 ## Flag Lifecycle and Hygiene
 
-Every flag is inventory with a carrying cost (Fowler). Mandatory metadata: NAME, OWNER, CREATED,
+Every flag is inventory with a carrying cost. Mandatory metadata: NAME, OWNER, CREATED,
 EXPIRES, STAGE, ISSUE (non-mainline), DESCRIPTION.
 
 ### Stages
@@ -440,7 +449,7 @@ EXPIRES, STAGE, ISSUE (non-mainline), DESCRIPTION.
 | `deprecated`     | ON, removal scheduled                       | main           | The post-`default-on` kill-switch retention window (approximately one cycle, per Hygiene rule 3); then the flag and dead path are removed. |
 | `long-lived`     | ON (or as configured)                       | main           | The justified exception: a permanent operational kill switch or permissioning toggle, exempt from expiry (see Hygiene rule 6).             |
 
-### Hygiene rules (adopting Fowler and Chrome)
+### Hygiene rules
 
 1. **Owner and expiry are mandatory.** No flag merges without both. `EXPIRES` is a review-by date.
 1. **Minimize toggle points:** guard entry points only (for example, one `validateBeforeAdding` check), and never sprinkle conditionals.
@@ -498,20 +507,21 @@ construction and removes any cross-repo split-brain:
 
 A single shared canary branch yields one green-or-red soak signal for the whole branch; it cannot
 attribute a failure to a specific flip or certify the others independently. The default is therefore
-one small, explicitly reviewed batch per soak cycle (matching the Chrome framing of "begins as an
-experiment"). Per-flip independent certification (per-flip sub-branches each independently signalled,
+one small, explicitly reviewed batch per soak cycle. Per-flip independent certification (per-flip sub-branches each independently signalled,
 or Quartz green-per-flag attribution) is new machinery and is not assumed. Until it exists, the claim
 that independent flips can proceed past a bad one is not made.
 
 ### Promotion cadence (fixed and automated; period to be determined)
 
 Promotion runs on a fixed, automated schedule; this is the only settled cadence decision. The period
-(weekly, bi-weekly, or monthly) is open for reviewers, as is the exact schedule. The job runs as a scheduled step on the existing multi-arch CI (which
-already routes the `schedule` event to a nightly tier via `configure_multi_arch_ci.py`), not a new
-workflow; the chosen period is to be determined. On each scheduled fire, the job opens the promotion
-PR; a release
-manager (not the flip author) reviews and merges it; the frequent rebase then keeps canary current,
-and the next batch of flip PRs is merged in to soak, with no manual reset.
+(weekly, bi-weekly, or monthly) is open for reviewers, as is the exact schedule. The job runs as a
+scheduled step on the multi-arch CI. `configure_multi_arch_ci.py` already routes the `schedule` event
+to a nightly tier, but a `schedule` trigger must first be added to `multi_arch_ci.yml`, since no
+workflow fires that orchestrator on a schedule today; the promotion job then attaches to that run
+rather than a new workflow, and the chosen period is to be determined. On each scheduled fire, the job
+opens the promotion PR, a release manager (not the flip author) reviews and merges it, the frequent
+rebase then keeps canary current, and the next batch of flip PRs is merged in to soak, with no manual
+reset.
 
 | Phase                                   | Action                                                                                                                                                                                                                                                                                           |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -524,12 +534,12 @@ and the next batch of flip PRs is merged in to soak, with no manual reset.
 divergence once it is in `main`), and automation merges the next approved batch of flip PRs into
 `canary` after the cycle.
 
-Train discipline (Chrome): a flip that misses the cut waits for the next cycle; risky work is
+Train discipline: a flip that misses the cut waits for the next cycle; risky work is
 never rushed onto the promoting line.
 
-The job that automates this train — its soak-signal gate, the release-manager-merged promotion PR,
-and the flag-debt audit — is specified in CI Integration → Promotion job (a scheduled step on the
-existing multi-arch CI).
+The job that automates this train, including its soak-signal gate, the release-manager-merged
+promotion PR, and the flag-debt audit, is specified in CI Integration, Promotion job (a scheduled step
+on the multi-arch CI).
 
 ## CI Integration: Team-Owned Both-State Testing
 
@@ -570,7 +580,8 @@ The trigger and leg-expansion logic is a single shared, CI-framework-agnostic he
   parses `flag:<NAME>:both` (and optional `:on` / `:off`) and returns expanded legs. Build-time: the
   ON leg appends `-DTHEROCK_FLAG_<NAME>=ON` (two builds). Runtime: one build, with two test
   invocations toggling `ROCM_FEATURE_<NAME>` (one build, two test runs). It is pure and
-  unit-testable, mirroring the existing `therock_configure_ci_test.py` tests.
+  unit-testable, in the style of TheRock's existing `tests/configure_multi_arch_ci_test.py` (and the
+  consumer repos' `therock_configure_ci_test.py`).
 - **Build-time:** the helper's two-leg expansion mirrors the existing `build_variant` (release, asan,
   tsan) pattern in `amdgpu_family_matrix.py`, gated by the label so that it is opt-in per PR and
   never the default across all families.
@@ -589,26 +600,31 @@ Both-state CI must behave identically wherever a flag-guarded change is develope
 independent CI orchestrators, and a change in a consumer repo is steered only by that repo's
 orchestrator, never by TheRock's:
 
-| Repo           | Orchestrator                                            | Matrix/legs                         |
-| -------------- | ------------------------------------------------------- | ----------------------------------- |
-| TheRock        | `build_tools/github_actions/configure_multi_arch_ci.py` | `amdgpu_family_matrix.py`           |
-| rocm-libraries | `.github/scripts/therock_configure_ci.py`               | `.github/scripts/therock_matrix.py` |
-| rocm-systems   | `.github/scripts/therock_configure_ci.py`               | `.github/scripts/therock_matrix.py` |
+| Repo           | Orchestrator                                            | Matrix/legs                                                                                     |
+| -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| TheRock        | `build_tools/github_actions/configure_multi_arch_ci.py` | `amdgpu_family_matrix.py`                                                                       |
+| rocm-libraries | `.github/scripts/therock_configure_ci.py`               | `.github/scripts/therock_matrix.py` (`collect_projects_to_run`)                                 |
+| rocm-systems   | `.github/scripts/therock_configure_ci.py`               | `.github/scripts/therock_matrix.py` project map; legs built inline in `therock_configure_ci.py` |
 
 The shared helper `build_tools/github_actions/flag_both_state.py` is the single source of truth for
 label parsing and leg expansion; each orchestrator adapts its own leg shape to and from the helper's
-normalized leg dict. Adoption is thin because the consumer repos already have both halves of the
-pattern:
+normalized leg dict. The two consumer orchestrators are not structurally identical (see the call-site
+note below), but both already have the two building blocks the adoption needs:
 
-- They already parse steering labels (`test:*`, `ci:skip`) in `therock_configure_ci.py`.
-- They already inject `-DTHEROCK_FLAG_*=ON` into a build (the rocKE entry in `therock_matrix.py`
-  sets `-DTHEROCK_FLAG_HIPKERNELPROVIDER_ENABLE_ROCKE=ON`).
-- Their CI setup already checks out TheRock and runs its `build_tools/` scripts, so the helper is on
-  hand.
+- Both already parse PR steering labels in `therock_configure_ci.py` (rocm-libraries handles `test:*`
+  and `test_type:*` plus the `skip-therockci` label; rocm-systems handles `ci:skip`), so adding one
+  more label parse is routine.
+- rocm-libraries already injects `-DTHEROCK_FLAG_*=ON` into a build (the rocKE entry in
+  `therock_matrix.py` sets `-DTHEROCK_FLAG_HIPKERNELPROVIDER_ENABLE_ROCKE=ON`), which establishes the
+  precedent; rocm-systems has no `THEROCK_FLAG_*` injection today but uses the same
+  `-DTHEROCK_ENABLE_*` cmake-option convention, so the mechanics carry over.
+- Both repos' CI setup already checks out TheRock and runs its `build_tools/` scripts, so the helper
+  is on hand without vendoring.
 
-So a consumer adoption PR is a few lines: import the helper and call it on the legs before the matrix
-is emitted. This keeps TheRock, rocm-libraries, and rocm-systems consistent on the contract, and
-prevents the per-repo drift that separate implementations would create.
+So a consumer adoption PR is small: import the helper and call it on the legs before the matrix is
+emitted (the exact call site differs per repo, as noted below). This keeps TheRock, rocm-libraries,
+and rocm-systems consistent on the contract, and prevents the per-repo drift that separate
+implementations would create.
 
 The helper is a pure function over a normalized leg representation, so each orchestrator only adapts
 its own leg shape to and from the normalized dict:
@@ -725,7 +741,8 @@ A consumer call site is a single added call where legs are built today (for exam
 `collect_projects_to_run` inside `retrieve_projects`):
 
 ```python
-# rocm-libraries / rocm-systems: .github/scripts/therock_configure_ci.py
+# rocm-libraries: .github/scripts/therock_configure_ci.py
+# (rocm-systems adapts the same helper call to its own inline leg-building; see below.)
 from flag_both_state import expand_flag_both_state  # reachable via the TheRock checkout
 
 
@@ -739,19 +756,28 @@ def retrieve_projects(args):
     return project_to_run, test_type
 ```
 
-The one adaptation: `therock_matrix.py` currently joins `cmake_options` into a space-separated string
-and `projects_to_test` into a comma-separated string at the end of `collect_projects_to_run`. Do the
-expansion before that join (operate on the lists), then join. The runtime `test_env` entries flow
-into the matrix so the test workflow runs the target once per entry. rocm-systems is the same call,
-since its `therock_configure_ci.py` and `therock_matrix.py` share the structure. TheRock's own
-`configure_multi_arch_ci.py` calls the same helper, adapting its leg shape to and from the normalized
-dict.
+The call site differs by repo, because the two consumer orchestrators are not structurally identical:
 
-### Promotion job (a scheduled step on the existing multi-arch CI)
+- **rocm-libraries** builds its legs in `therock_matrix.collect_projects_to_run`, which joins
+  `cmake_options` into a space-separated string and `projects_to_test` into a comma-separated string
+  at the end. Do the expansion before that join (operate on the lists), then join. This is the call
+  site shown above.
+- **rocm-systems** has no `collect_projects_to_run`; it builds its legs inline in `retrieve_projects`
+  (in `therock_configure_ci.py`), merging `cmake_options` and `projects_to_test` from its own
+  `project_map` and joining them there. The adoption is the same one helper call over the same
+  normalized leg dict, but placed at that inline site rather than in the matrix module, and it has no
+  rocKE/hip-kernel-provider entry to model on.
 
-Add the automated promotion job to the existing scheduled multi-arch CI (`configure_multi_arch_ci.py`
-already routes the `schedule` event to a nightly tier; cron and period to be determined per cadence),
-so that, on each scheduled fire, it:
+In both cases the runtime `test_env` entries flow into the matrix so the test workflow runs the target
+once per entry. TheRock's own `configure_multi_arch_ci.py` likewise calls the same helper, adapting
+its leg shape to and from the normalized dict.
+
+### Promotion job (a scheduled step on the multi-arch CI)
+
+Add the automated promotion job to the multi-arch CI's scheduled run. `configure_multi_arch_ci.py`
+already routes the `schedule` event to a nightly tier, so the remaining wiring is a `schedule` trigger
+on `multi_arch_ci.yml` (none fires it today) plus the promotion job on that run; cron and period are
+to be determined per cadence. On each scheduled fire, it:
 
 1. Reads the canary soak signal for the soak cycle (minimum: canary builds and tests green across the
    cycle; optionally the new per-branch `latest_good@canary.json` if built). It does not read the
@@ -792,20 +818,20 @@ reserved for PRs that change a `DEFAULT_VALUE` or registry default on `main`.
 
 ## Backout and Error Handling
 
-| Case                                          | Action                                                                                                                                                                                                                                                                                                | Cost                                                                        |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Runtime flag bad: environment kill switch** | `ROCM_FEATURE_<NAME>=0` (alias `HIPDNN_FEATURE_<NAME>=0`): a true per-process and per-host live control, with no package change. This is the minutes-scale revert, but it is per-host (ROCm has no fleet config push, so it does not reach the fleet remotely).                                       | Minutes, per host. Primary argument for preferring runtime.                 |
-| **Runtime flag bad: channel default**         | Edit the installed `feature_flags.json` to default the flag OFF. This is the channel default for the next package only; already-installed users need a package respin and reinstall. Per Chrome's procedure, land the disable change first (proving nothing breaks), then change the shipped default. | Not minutes; a package respin and reinstall for existing installs.          |
-| **Build-time flag bad**                       | Revert the flip, rebuild, and re-promote next cycle.                                                                                                                                                                                                                                                  | One cycle plus a full rebuild. Argument against overusing build-time flags. |
-| **Failed promotion (post-merge regression)**  | LLVM RM-gated revert of the offending mainline-default diff on `main`; re-promote next cycle once fixed.                                                                                                                                                                                              | One cycle; isolates blame to the promoted flip.                             |
-| **Bad flip caught on canary**                 | Drop the offending default-flip commit from `canary` (or exclude it from the next batch). The frequent-rebase and batch model means the bad flip is simply not carried forward; no surgical in-place revert is needed.                                                                                | Bounded; the bad flip simply misses the cut.                                |
-| **Canary red mid-cycle**                      | Promotion does not happen; the flip or flips soak another cycle. There is no mainline impact (the mainline default is OFF).                                                                                                                                                                           | Zero mainline impact.                                                       |
+| Case                                          | Action                                                                                                                                                                                                                                                                        | Cost                                                                        |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Runtime flag bad: environment kill switch** | `ROCM_FEATURE_<NAME>=0` (alias `HIPDNN_FEATURE_<NAME>=0`): a true per-process and per-host live control, with no package change. This is the minutes-scale revert, but it is per-host (ROCm has no fleet config push, so it does not reach the fleet remotely).               | Minutes, per host. Primary argument for preferring runtime.                 |
+| **Runtime flag bad: channel default**         | Edit the installed `feature_flags.json` to default the flag OFF. This is the channel default for the next package only; already-installed users need a package respin and reinstall. Land the disable change first (proving nothing breaks), then change the shipped default. | Not minutes; a package respin and reinstall for existing installs.          |
+| **Build-time flag bad**                       | Revert the flip, rebuild, and re-promote next cycle.                                                                                                                                                                                                                          | One cycle plus a full rebuild. Argument against overusing build-time flags. |
+| **Failed promotion (post-merge regression)**  | Release-manager-gated revert of the offending mainline-default diff on `main`; re-promote next cycle once fixed.                                                                                                                                                              | One cycle; isolates blame to the promoted flip.                             |
+| **Bad flip caught on canary**                 | Drop the offending default-flip commit from `canary` (or exclude it from the next batch). The frequent-rebase and batch model means the bad flip is simply not carried forward; no surgical in-place revert is needed.                                                        | Bounded; the bad flip simply misses the cut.                                |
+| **Canary red mid-cycle**                      | Promotion does not happen; the flip or flips soak another cycle. There is no mainline impact (the mainline default is OFF).                                                                                                                                                   | Zero mainline impact.                                                       |
 
-Note the fleet-coverage gap: there is no Finch equivalent in ROCm, so the environment kill switch is
+Note the fleet-coverage gap: ROCm has no server-side config push, so the environment kill switch is
 per-host and the JSON default reaches only the next package. A full-coverage revert requires the
 shipped default change, which is exactly why landing the disable change first matters.
 
-The release-manager role (per LLVM) comprises the promotion job and the human owner who approves the
+The release-manager role comprises the promotion job and the human owner who approves the
 automated promotion PR (someone other than the flip author); the bar tightens as flips approach
 `default-on`.
 
@@ -909,7 +935,7 @@ attributable to this PR.
 
 The steps are listed in the order to perform them: remove things in dependency order, the consumer
 before the declaration it depends on. This sequence is uniformly safe for runtime and build-time
-flags alike — once the gated code is gone, nothing references the flag, so removing the declaration
+flags alike: once the gated code is gone, nothing references the flag, so removing the declaration
 can neither revert the live build nor break a consumer.
 
 1. **Confirm it has been `default-on` for approximately one cycle** and that nothing still depends on
@@ -1006,26 +1032,28 @@ wants both states exercised on its rocm-libraries PR. Two things happen, both sm
 
 For `MY_FEATURE` (build-time), the affected project's job fans out into an OFF leg and an ON leg
 (`-DTHEROCK_FLAG_MY_FEATURE=ON`), each built and tested. If `MY_FEATURE` were a runtime flag, the job
-would build once and run the affected tests twice with `ROCM_FEATURE_MY_FEATURE=0` then `=1`. The
-same one-line call in rocm-systems' identical orchestrator gives that repo the same behavior. No
-per-repo reimplementation, no drift.
+would build once and run the affected tests twice with `ROCM_FEATURE_MY_FEATURE=0` then `=1`.
+rocm-systems consumes the same helper for the same behavior, though its orchestrator differs
+structurally (it builds legs inline in `retrieve_projects` rather than in a shared
+`collect_projects_to_run`), so its call site is a different line while the contract and result are
+identical. No per-repo reimplementation, no drift.
 
 ## Alternatives Considered
 
 ### Flag kind default
 
-| Option                       | Pros                                                                                                       | Cons                                                                                      | Verdict                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------- |
-| **Runtime-default (chosen)** | One binary for all states; immediate field revert; no combinatorial build matrix; matches Chrome guidance. | Disabled code still ships in the binary (size); needs a new runtime mechanism.            | Chosen.                          |
-| Build-time-default           | Reuses the existing `FLAGS.cmake` only.                                                                    | Rebuild required to change; combinatorial CI; no field kill switch; binary fragmentation. | Rejected; only for forced cases. |
+| Option                       | Pros                                                                              | Cons                                                                                      | Verdict                          |
+| ---------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------- |
+| **Runtime-default (chosen)** | One binary for all states; immediate field revert; no combinatorial build matrix. | Disabled code still ships in the binary (size); needs a new runtime mechanism.            | Chosen.                          |
+| Build-time-default           | Reuses the existing `FLAGS.cmake` only.                                           | Rebuild required to change; combinatorial CI; no field kill switch; binary fragmentation. | Rejected; only for forced cases. |
 
 ### Promotion mechanism
 
-| Option                                                                   | Pros                                                                                           | Cons                                                                                                                   | Verdict   |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- |
-| **Fixed, automated canary soak train (chosen; period to be determined)** | Predictable; one soak cycle before swap; uses the canary soak signal; matches Chrome and LLVM. | New canary branch, scheduled job, and a frequent rebase of canary onto main (only difference being the flag defaults). | Chosen.   |
-| Promote on every green nightly                                           | Faster.                                                                                        | No soak window; high-churn; no human release-manager gate; the nightly is `main`-only (no canary nightly).             | Rejected. |
-| Manual ad-hoc promotion                                                  | No new infrastructure.                                                                         | Unpredictable; no soak guarantee; debt accrues.                                                                        | Rejected. |
+| Option                                                                   | Pros                                                                  | Cons                                                                                                                   | Verdict   |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- |
+| **Fixed, automated canary soak train (chosen; period to be determined)** | Predictable; one soak cycle before swap; uses the canary soak signal. | New canary branch, scheduled job, and a frequent rebase of canary onto main (only difference being the flag defaults). | Chosen.   |
+| Promote on every green nightly                                           | Faster.                                                               | No soak window; high-churn; no human release-manager gate; the nightly is `main`-only (no canary nightly).             | Rejected. |
+| Manual ad-hoc promotion                                                  | No new infrastructure.                                                | Unpredictable; no soak guarantee; debt accrues.                                                                        | Rejected. |
 
 ### Where flags live
 
@@ -1056,7 +1084,7 @@ per-repo reimplementation, no drift.
 | **P1: metadata, hygiene, and RBAC**                                  | Extend `therock_declare_flag` with OWNER, CREATED, EXPIRES, and STAGE; surface them in `therock_report_flags()` and the manifest; add an expiry warning and non-mainline `ISSUE` enforcement; fold `THEROCK_FLAG_INCLUDE_PROFILER` into the registry; add `.github/CODEOWNERS` entries (release-manager group) for `FLAGS.cmake`, `RUNTIME_FLAGS.cmake`, and the multi-arch CI (`configure_multi_arch_ci.py`, `.github/workflows/multi_arch_ci.yml`); update `docs/development/flags.md`.                                                                                                                                                                                                                                                               |
 | **P2: generic runtime contract**                                     | `RUNTIME_FLAGS.cmake` plus `therock_declare_runtime_flag` plus `therock_finalize_runtime_flags()`; emit the shared `share/therock/feature_flags.json` from the `base/aux-overlay` step alongside the manifest (it ships automatically via aux-overlay's existing `**/*` catch-all, with no toml change); add `runtime_flags` to the manifest; document the reader contract (location, `dladdr` discovery, `ROCM_FEATURE_*` precedence) and publish the example reference `rocm_feature_flags.h` (copied-in, not shipped or linked) with a standalone-build fallback note; the `rocm-feature-flags --list` helper; wire the first instantiation (hipDNN at `validateBeforeAdding`, using its own consumer).                                              |
 | **P3: canary branch, team-owned both-state CI, and canary currency** | Create `canary` (soak-only) and add it to the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml` so that CI runs on it; document the soak convention (the current batch flipped ON, else matching main); add the shared helper `build_tools/github_actions/flag_both_state.py` (label parsing plus OFF/ON leg expansion; runtime equals one build and two test runs, build-time equals two builds, scoped); wire it into TheRock's `configure_multi_arch_ci.py`; land thin call-site adoption PRs in rocm-libraries and rocm-systems (`.github/scripts/therock_configure_ci.py` plus `therock_matrix.py`) that call the same helper; add the scheduled frequent rebase of `canary` onto `main` (only difference being the flag defaults). |
-| **P4: automated promotion job**                                      | Add the promotion job to the existing scheduled multi-arch CI (cron and period to be determined): the canary soak-signal gate plus the promotion PR (release-manager-merged, not auto-merged) plus the flag-debt audit (the flag's gated code is already on `main` by the rebase model).                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **P4: automated promotion job**                                      | Add a `schedule` trigger to `multi_arch_ci.yml` (routed to the nightly tier `configure_multi_arch_ci.py` already supports), then attach the promotion job to that scheduled run (cron and period to be determined): the canary soak-signal gate plus the promotion PR (release-manager-merged, not auto-merged) plus the flag-debt audit (the flag's gated code is already on `main` by the rebase model).                                                                                                                                                                                                                                                                                                                                              |
 | **P5: canary soak signal (optional deepening)**                      | A new per-branch canary validation job (`workflow_dispatch` or matrix checking out canary) plus a Quartz-emitted per-branch `latest_good@canary.json`, if the builds-and-tests-green minimum is judged insufficient.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **P6: build-time both-state build dimension (optional and scoped)**  | A build dimension in `amdgpu_family_matrix.py` and `configure_multi_arch_ci.py` for build-time flags plus `prebuilt_stages` amortization, beyond the label wiring in P3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **P7: adopt and retire**                                             | Migrate the first real flags (SDPA v2, the new backend); run the first full train; remove the first `default-on` flag to validate retirement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -1076,7 +1104,7 @@ per-repo reimplementation, no drift.
 
 1. **Canary soak test scope:** which tests run on canary, whether and what additional testing is stacked on top, and the soak-cycle length. The minimum is canary builds and tests green; this can optionally be deepened with the per-branch `latest_good@canary.json` (P5). The exact test set, any additional stacked testing, and the cycle length are open.
 1. **Promotion cadence period:** weekly, bi-weekly, or monthly (and the exact schedule on the multi-arch CI). Only "fixed and automated" is settled; the period and schedule are open.
-1. **When and where to build the per-PR both-state label mechanism:** wire `flag:<NAME>:both` via the shared `flag_both_state.py` helper now, or rely initially on flip branches and add the label later. Flip branches need no new CI wiring; the label is the more ergonomic per-PR path. Because the helper is repo-agnostic and the consumer repos already parse labels (`test:*`) and already inject `-DTHEROCK_FLAG_*=ON` (the rocKE precedent), the build-time label path is adoptable in rocm-libraries and rocm-systems today, before the runtime contract (P2) lands. Open: whether to land all three call sites in P3 together, or TheRock first with consumers fast-following.
+1. **When and where to build the per-PR both-state label mechanism:** wire `flag:<NAME>:both` via the shared `flag_both_state.py` helper now, or rely initially on flip branches and add the label later. Flip branches need no new CI wiring; the label is the more ergonomic per-PR path. Because the helper is repo-agnostic and both consumer repos already parse steering labels (rocm-libraries `test:*`, rocm-systems `ci:skip`) and rocm-libraries already injects `-DTHEROCK_FLAG_*=ON` (the rocKE precedent), the build-time label path is adoptable in both today, before the runtime contract (P2) lands. Open: whether to land all three call sites in P3 together, or TheRock first with consumers fast-following.
 
 ## Summary
 
@@ -1087,16 +1115,17 @@ libraries.
 owner, expiry, and stage metadata, and adds a generic runtime-flag contract: a shipped
 `share/therock/feature_flags.json`, a documented reader (`dladdr` discovery,
 `ROCM_FEATURE_<NAME>` precedence), and an example `rocm_feature_flags.h` that implements it.
-Libraries copy the header or reimplement the contract — there is no shipped, linked, or
+Libraries copy the header or reimplement the contract; there is no shipped, linked, or
 auto-included dependency, and standalone builds fall back to compile-time defaults. hipDNN is
 the first adopter, using its own `EngineOverrideConfig` and `validateBeforeAdding` path.
 
 **How a flag is promoted.** A fixed, automated canary-to-mainline train (period to be
-determined) runs as a scheduled step on the existing multi-arch CI. Canary is a soak-and-staging branch: the
-team flips the candidate default(s) to ON and soaks for one cycle (minimum signal: canary builds
-and tests green; RFC0011's `latest_good.json` remains the `main` and nightly signal). On a green
-soak the automated job opens a promotion PR that a release manager — not the flip author —
-merges. Frequently rebasing canary onto `main` keeps it current: the gated code is always on
+determined) runs as a scheduled step on the multi-arch CI, on a `schedule` trigger added to
+`multi_arch_ci.yml` and routed to the nightly tier the orchestrator already supports. Canary is a
+soak-and-staging branch: the team flips the candidate default(s) to ON and soaks for one cycle
+(minimum signal: canary builds and tests green; RFC0011's `latest_good.json` remains the `main` and
+nightly signal). On a green soak the automated job opens a promotion PR that a release manager, not
+the flip author, merges. Frequently rebasing canary onto `main` keeps it current: the gated code is always on
 `main` first, the only divergence is the soaking defaults, and a promoted flip stops being a
 divergence with no manual reset. The default is one reviewed batch per cycle, and a bad flip is
 simply dropped.
@@ -1104,7 +1133,7 @@ simply dropped.
 **The decision rule.** Runtime by default; build-time only when the change alters artifacts,
 topology, or ABI (Multi-Arch Packaging is the exemplar). Both states are exercised by a
 team-owned both-state CI mechanism, decoupled from canary and triggered by a `flag:<NAME>:both`
-label, a dispatch input, or a flip branch — one build and two test runs for runtime flags, two
+label, a dispatch input, or a flip branch: one build and two test runs for runtime flags, two
 builds for build-time (the main reason to prefer runtime).
 
 **Backout.** `ROCM_FEATURE_<NAME>=0` is the minutes-scale, per-host kill switch (ROCm has no
@@ -1115,13 +1144,13 @@ installs); build-time backout takes one cycle.
 
 Full detail in Maintainer Playbooks.
 
-| To do this                         | Do the following                                                                                                                                                                                                       | Success criterion                                                                                 |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock (lands quickly); after the bump reaches your repository, guard your code at one check; ship it OFF on trunk.                                   | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
-| **Test it both ways**              | Add the `flag:<NAME>:both` label (or use a flip branch). Runtime: one build, tests run twice with `ROCM_FEATURE_<NAME>=0` then `=1`. Build-time: build OFF and ON, testing each.                                       | The affected tests are green in both states on CI.                                                |
-| **Turn it on for everyone**        | Open a PR flipping the default ON into `canary` (`STAGE: canary`); let it soak one cycle green; the automated job opens the `main` PR; a release manager (not you) merges it.                                          | The default-ON change is merged on `main` by a release manager, and the nightly is green.         |
-| **Turn it off quickly (it broke)** | Set `ROCM_FEATURE_<NAME>=0` on the affected host (minutes, no rebuild). For everyone: land a PR setting the default back to OFF; existing installs need a respin.                                                      | The bad path no longer runs.                                                                      |
-| **Clean up afterward**             | After ~one cycle default-on, drop both-state CI for the flag, delete the dead OFF code from your library, then remove the flag declaration from TheRock. (A `long-lived` flag is the exception — it is never retired.) | The flag is gone from the registry, the manifest, and the code.                                   |
+| To do this                         | Do the following                                                                                                                                                                                                      | Success criterion                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock (lands quickly); after the bump reaches your repository, guard your code at one check; ship it OFF on trunk.                                  | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
+| **Test it both ways**              | Add the `flag:<NAME>:both` label (or use a flip branch). Runtime: one build, tests run twice with `ROCM_FEATURE_<NAME>=0` then `=1`. Build-time: build OFF and ON, testing each.                                      | The affected tests are green in both states on CI.                                                |
+| **Turn it on for everyone**        | Open a PR flipping the default ON into `canary` (`STAGE: canary`); let it soak one cycle green; the automated job opens the `main` PR; a release manager (not you) merges it.                                         | The default-ON change is merged on `main` by a release manager, and the nightly is green.         |
+| **Turn it off quickly (it broke)** | Set `ROCM_FEATURE_<NAME>=0` on the affected host (minutes, no rebuild). For everyone: land a PR setting the default back to OFF; existing installs need a respin.                                                     | The bad path no longer runs.                                                                      |
+| **Clean up afterward**             | After ~one cycle default-on, drop both-state CI for the flag, delete the dead OFF code from your library, then remove the flag declaration from TheRock. (A `long-lived` flag is the exception; it is never retired.) | The flag is gone from the registry, the manifest, and the code.                                   |
 
 The core sequence: add a runtime flag, default off; guard one entry point; soak on canary;
 promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
@@ -1147,5 +1176,6 @@ promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
 
 - **2026-06-04**: Initial draft.
 - **2026-06-15**: Current revision. Defines the generic runtime-flag contract with an example reference `rocm_feature_flags.h` header (copied in or reimplemented per project; no shipped, linked, or auto-included dependency) and a standalone-build fallback; specifies the canary soak-and-promote train with a fixed, automated cadence (period to be determined); specifies team-owned both-state CI decoupled from canary; adds flag metadata, hygiene, and retirement; clarifies that adding a flag does not block development and that the release-manager gate applies to promotion rather than to flag declaration; and adds goal-based maintainer playbooks and a quick-start summary.
-- **2026-06-24**: Editorial revision. Consolidated the separate Summary and Quick-Start Summary into a single Summary (moved before References); tightened the Overview, Glossary, Goals, and other sections for concision and readability; added the `long-lived` value to the `STAGE` enum and Stages table for consistency, and exempted `long-lived` from the `therock_finalize_flags()` `ISSUE`-on-`main` enforcement so a permanent kill switch need not carry a perpetual tracking issue. Reordered the flag-retirement steps (Playbook D, Team Workflow step 7, Summary "Clean up" row) into dependency order — CI off, then dead code, then declaration — which removes the consumer before the declaration it depends on and is uniformly safe for runtime and build-time flags (once the gated code is gone, removing the declaration can neither revert the live build nor break a consumer).
+- **2026-06-24**: Editorial revision. Consolidated the separate Summary and Quick-Start Summary into a single Summary (moved before References); tightened the Overview, Glossary, Goals, and other sections for concision and readability; added the `long-lived` value to the `STAGE` enum and Stages table for consistency, and exempted `long-lived` from the `therock_finalize_flags()` `ISSUE`-on-`main` enforcement so a permanent kill switch need not carry a perpetual tracking issue. Reordered the flag-retirement steps (Playbook D, Team Workflow step 7, Summary "Clean up" row) into dependency order (CI off, then dead code, then declaration), which removes the consumer before the declaration it depends on and is uniformly safe for runtime and build-time flags (once the gated code is gone, removing the declaration can neither revert the live build nor break a consumer).
 - **2026-07-27**: Both-state CI multi-repo amendment (Tony Davis). Makes team-owned both-state CI a repo-agnostic contract with one shared TheRock helper (`build_tools/github_actions/flag_both_state.py`) that TheRock, rocm-libraries, and rocm-systems all call, so the mechanism reaches the consumer repos where flag-guarded work actually lives rather than TheRock's CI alone (Goal 5, Implementation hooks, the new Multi-repo adoption subsection with the helper sketch and consumer call site, a rocm-libraries adoption worked example, P3, and Open Question 3). Also reconciles stale CI filenames: `configure_ci.py` was deleted in favor of `multi_arch_ci.yml` (PR #5794), so references now point at `configure_multi_arch_ci.py`, and the canary/long-lived-branch coverage is described by the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml` (the `long_lived_full_match` symbol no longer exists in the tree).
+- **2026-07-27**: Correctness and editorial pass on the multi-repo amendment. (1) Scheduled-CI grounding: no workflow fires `configure_multi_arch_ci.py` on a schedule today (the only scheduled workflows are `bump_submodules.yml` and `gitleaks_main.yml`; `multi_arch_ci_asan.yml` carries no cron), so the promotion job is now framed as requiring a new `schedule` trigger on `multi_arch_ci.yml` routed to the nightly tier the orchestrator already supports, rather than attaching to an already-scheduled run (fact table, cadence, Promotion job, P4, Summary). (2) Consumer-orchestrator symmetry: corrected the overstated claim that rocm-systems mirrors rocm-libraries; rocm-systems builds legs inline in `retrieve_projects` with no `collect_projects_to_run` and no rocKE/`THEROCK_FLAG_*` precedent, so its call site differs while consuming the same helper (Multi-repo adoption bullets and table, the call-site note, the adoption exemplar, Open Question 3). Fixed the steering-label vocabulary (rocm-libraries `test:*`/`test_type:*` plus `skip-therockci`; rocm-systems `ci:skip`) and pointed the helper's unit-test analogue at TheRock's `tests/configure_multi_arch_ci_test.py`. (3) Clarified that flags are ephemeral by design and retired after promotion, not a permanent or supported configuration surface, with the `long-lived` kill switch as the sole exception (Overview callout, Glossary, a new Non-Goal). (4) Editorial: removed em-dashes throughout for a more conventional register; no structural changes.
