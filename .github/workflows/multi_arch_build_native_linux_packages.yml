@@ -50,6 +50,47 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
+  # Resolve the parameters used to build and test the amdrocm-repo package:
+  # the OS-profile build matrix for this package type, each profile's container
+  # image, the public CDN base URL for this release line (empty for lines with
+  # no public repo, e.g. ci), and the dated sub-folder for the nightly line.
+  setup_repo_params:
+    name: Resolve amdrocm-repo parameters
+    runs-on: ubuntu-24.04
+    outputs:
+      os_profiles: ${{ steps.derive.outputs.os_profiles }}
+      images: ${{ steps.derive.outputs.images }}
+      repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
+      repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requirements
+        run: pip install jinja2
+
+      - name: Derive amdrocm-repo parameters
+        id: derive
+        run: |
+          profiles="$(python ./build_tools/packaging/linux/build_repo_package.py list-profiles \
+            --pkg-type '${{ inputs.native_package_type }}')"
+          echo "os_profiles=${profiles}" >> "$GITHUB_OUTPUT"
+          python ./build_tools/packaging/linux/get_url_repo_params.py get-container-image-map \
+            --os-profiles "${profiles}"
+          python ./build_tools/packaging/linux/get_url_repo_params.py get-public-repo-base-url \
+            --release-type '${{ inputs.release_type }}'
+          python ./build_tools/packaging/linux/get_url_repo_params.py get-nightly-sub-folder \
+            --release-type '${{ inputs.release_type }}' \
+            --run-id '${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}'
+
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
@@ -137,3 +178,236 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+  # Build the amdrocm-repo package and verify it configures the repository, for
+  # each OS profile of this package type. This runs on pull-request builds and is
+  # a required check. It builds against the live prerelease repository, which is
+  # published in the same per-distro layout the release line uses, so this
+  # exercises the shape end users get. The nightly and release lines are covered
+  # by stage_repo_package, which verifies their repository URL at build time.
+  test_repo_package:
+    name: Test amdrocm-repo config (${{ matrix.os_profile }})
+    needs: [setup_repo_params]
+    if: inputs.release_type == 'ci'
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles) }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    container:
+      image: ${{ fromJSON(needs.setup_repo_params.outputs.images)[matrix.os_profile] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Install system prerequisites
+        run: |
+          bash build_tools/packaging/linux/setup_repo_build_deps.sh \
+            --os-profile "${{ matrix.os_profile }}"
+
+      - name: Setup Python
+        run: |
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
+            --os-profile "${{ matrix.os_profile }}" \
+            --install-runtime \
+            --output-format github
+
+      - name: Install Python dependencies
+        run: |
+          $PYTHON_CMD -m venv /tmp/repo-venv
+          /tmp/repo-venv/bin/python -m pip install --upgrade pip
+          /tmp/repo-venv/bin/python -m pip install jinja2
+          echo "PYTHON_CMD=/tmp/repo-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Resolve prerelease repository base URL
+        id: prerelease
+        run: |
+          $PYTHON_CMD build_tools/packaging/linux/get_url_repo_params.py \
+            get-public-repo-base-url --release-type prerelease
+
+      - name: Build and validate amdrocm-repo (config-only)
+        run: |
+          # Build against the live prerelease repository, install the package, and
+          # verify it configures the repository (config-only stops before ROCm).
+          dest="$(mktemp -d)"
+          $PYTHON_CMD build_tools/packaging/linux/build_repo_package.py \
+            --os-profile "${{ matrix.os_profile }}" \
+            --release-type prerelease \
+            --repo-base-url "${{ steps.prerelease.outputs.repo_base_url }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --dest-dir "$dest"
+          $PYTHON_CMD build_tools/packaging/linux/native_linux_package_install_test.py \
+            --repo-package-dir "$dest" \
+            --repo-config-only \
+            --os-profile "${{ matrix.os_profile }}" \
+            --release-type prerelease
+
+  # Build the amdrocm-repo package for each OS profile of this package type on the
+  # public release lines and stage it as a workflow artifact. Best-effort: a build
+  # failure here must never block the release, so the job cannot fail the workflow.
+  # Publishing to a public download location is handled separately.
+  stage_repo_package:
+    name: Stage amdrocm-repo (${{ matrix.os_profile }})
+    needs: [setup_repo_params]
+    if: needs.setup_repo_params.outputs.repo_base_url != ''
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles) }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    container:
+      image: ${{ fromJSON(needs.setup_repo_params.outputs.images)[matrix.os_profile] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Install system prerequisites
+        run: |
+          bash build_tools/packaging/linux/setup_repo_build_deps.sh \
+            --os-profile "${{ matrix.os_profile }}"
+
+      - name: Setup Python
+        run: |
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
+            --os-profile "${{ matrix.os_profile }}" \
+            --install-runtime \
+            --output-format github
+
+      - name: Install Python dependencies
+        run: |
+          $PYTHON_CMD -m venv /tmp/repo-venv
+          /tmp/repo-venv/bin/python -m pip install --upgrade pip
+          /tmp/repo-venv/bin/python -m pip install jinja2
+          echo "PYTHON_CMD=/tmp/repo-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Build amdrocm-repo
+        run: |
+          # repo_sub_folder is empty except on the nightly line, where the builder
+          # requires the dated sub-folder; passing an empty value is accepted for
+          # the other lines.
+          #
+          # --verify-repo-url fails the build if the configured repository is not
+          # served, so a package that installs cleanly but cannot refresh is
+          # caught here rather than by a user. It is a no-op on the nightly line,
+          # whose dated sub-folder is published by this same run.
+          $PYTHON_CMD build_tools/packaging/linux/build_repo_package.py \
+            --os-profile "${{ matrix.os_profile }}" \
+            --release-type "${{ inputs.release_type }}" \
+            --repo-base-url "${{ needs.setup_repo_params.outputs.repo_base_url }}" \
+            --repo-sub-folder "${{ needs.setup_repo_params.outputs.repo_sub_folder }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --dest-dir repo-package-out \
+            --verify-repo-url
+
+      - name: Upload amdrocm-repo package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: amdrocm-repo-${{ inputs.native_package_type }}-${{ matrix.os_profile }}
+          path: repo-package-out/*.${{ inputs.native_package_type }}
+          if-no-files-found: error
+
+      # This job is continue-on-error so a staging failure never blocks the
+      # release; surface it as a warning + job-summary line so the soft-fail is
+      # not silent. A failure here can mean the configured repository is no
+      # longer reachable, which is what --verify-repo-url detects.
+      - name: Report staging failure
+        if: failure()
+        run: |
+          msg="amdrocm-repo staging FAILED for ${{ matrix.os_profile }} (${{ inputs.native_package_type }}, ${{ inputs.release_type }}). The configured repository may be unreachable."
+          echo "::warning::${msg}"
+          echo "WARNING: ${msg}" >> "$GITHUB_STEP_SUMMARY"
+
+  # Publish the built amdrocm-repo packages to the per-run packages location,
+  # alongside the native content packages, as standalone per-distro files (a
+  # repo/<os_profile>/ sibling of the content repository, not part of its index).
+  # They become publicly reachable once the release promotion step copies the
+  # per-run tree to the public CDN. This runs in a generic container (not the
+  # per-distro build containers) because the AWS credentials action requires
+  # python on PATH, which the per-distro Python setup does not provide.
+  # Non-blocking: a publish failure must never block the release.
+  #
+  # The release line is excluded: it has no automated upload credentials by
+  # design (the release artifacts bucket grants no write role), so resolving that
+  # bucket fails outright. The release package is published by the ROCm release
+  # process instead. Without this exclusion the job would fail on every release
+  # run and report a spurious "not published" warning.
+  publish_repo_package:
+    name: Publish amdrocm-repo (${{ matrix.os_profile }})
+    needs: [setup_repo_params, stage_repo_package]
+    if: needs.setup_repo_params.outputs.repo_base_url != '' && inputs.release_type != 'release'
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: ${{ fromJSON(needs.setup_repo_params.outputs.os_profiles) }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install boto3
+
+      - name: Download amdrocm-repo package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: amdrocm-repo-${{ inputs.native_package_type }}-${{ matrix.os_profile }}
+          path: repo-package-out
+
+      - name: Resolve artifacts bucket
+        id: bucket-info
+        run: |
+          python build_tools/github_actions/write_artifacts_bucket_info.py \
+            --release-type "${{ inputs.release_type }}"
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      - name: Publish amdrocm-repo package
+        id: publish
+        run: |
+          # The per-run prefix mirrors WorkflowOutputRoot.native_linux_packages
+          # (<run_id>-linux/packages/<format>) so the file lands beside the
+          # content packages. ARTIFACT_RUN_ID matches what the content upload
+          # used; the external-repo prefix segment is empty for the released
+          # lines this job runs on (prerelease/release/nightly), so it is
+          # intentionally omitted.
+          pkg="$(ls repo-package-out/*.${{ inputs.native_package_type }})"
+          python build_tools/packaging/linux/publish_repo_package.py \
+            --file "$pkg" \
+            --bucket "${{ steps.bucket-info.outputs.bucket }}" \
+            --prefix "${ARTIFACT_RUN_ID}-linux/packages/${{ inputs.native_package_type }}" \
+            --os-profile "${{ matrix.os_profile }}" \
+            --pkg-type "${{ inputs.native_package_type }}"
+
+      # This job is continue-on-error so a publish failure never blocks the
+      # release; surface it as a warning + job-summary line so the soft-fail is
+      # not silent.
+      - name: Report publish failure
+        if: failure()
+        run: |
+          msg="amdrocm-repo was NOT published for ${{ matrix.os_profile }} (${{ inputs.native_package_type }}, ${{ inputs.release_type }})."
+          echo "::warning::${msg}"
+          echo "WARNING: ${msg}" >> "$GITHUB_STEP_SUMMARY"
