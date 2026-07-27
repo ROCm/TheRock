@@ -1419,7 +1419,7 @@ def combine_ci_impact_reports(
     """Combine the standalone impact reports into one report."""
 
     sections = [
-        "# TheRock CI Impact Report",
+        "# TheRock CI Change Impact Report",
     ]
 
     if stage_reuse_summary:
