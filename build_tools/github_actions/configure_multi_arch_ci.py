@@ -1021,11 +1021,12 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on push (postsubmit)
-            if not ci_inputs.is_push:
+            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
+            # due to limited ASAN runner capacity and stability concerns.
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
