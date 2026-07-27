@@ -719,7 +719,6 @@ if(THEROCK_ENABLE_HIPTHREADS)
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
-      hipcc
     BUILD_DEPS
       rocm-cmake
       libhipcxx
