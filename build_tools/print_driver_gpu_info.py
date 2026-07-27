@@ -9,7 +9,7 @@ On Linux:
   - run "amd-smi static"
   - run "rocminfo"
   - run "uname -r"
-  - run "dkms status -m amdgpu"
+  - read "/var/lib/dkms" for the AMDGPU DKMS package version
 
 On Windows:
   - run "hipInfo.exe"
@@ -91,6 +91,52 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+DKMS_ROOT = Path("/var/lib/dkms")
+
+
+def log_dkms_status(module: str = "amdgpu") -> None:
+    """
+    Report a DKMS module's version(s) by reading /var/lib/dkms/<module>/.
+
+    This avoids invoking "dkms status", which requires root on some systems.
+    The on-disk layout mirrors the "dkms status" output:
+
+        /var/lib/dkms/<module>/<version>/<kernel>/<arch>/module
+
+    A module is reported as "installed" when the "module" directory exists for
+    that version/kernel/arch, otherwise "built".
+    """
+    label = f"{module} DKMS package version"
+    log(f"\n=== {label} ===")
+
+    module_root = DKMS_ROOT / module
+    if not module_root.is_dir():
+        log(f"{module}: no DKMS entry found under {DKMS_ROOT}")
+        return
+
+    found = False
+    for version_dir in sorted(module_root.iterdir()):
+        # Skip the "kernel-*" convenience symlinks; only walk real versions.
+        if version_dir.is_symlink() or not version_dir.is_dir():
+            continue
+        version = version_dir.name
+        for kernel_dir in sorted(version_dir.iterdir()):
+            # "source" is a symlink into /usr/src, not a kernel build.
+            if kernel_dir.name == "source" or not kernel_dir.is_dir():
+                continue
+            kernel = kernel_dir.name
+            for arch_dir in sorted(kernel_dir.iterdir()):
+                if not arch_dir.is_dir():
+                    continue
+                arch = arch_dir.name
+                state = "installed" if (arch_dir / "module").is_dir() else "built"
+                log(f"{module}/{version}, {kernel}, {arch}: {state}")
+                found = True
+
+    if not found:
+        log(f"{module}: no built modules found under {module_root}")
+
+
 def run_sanity(os_name: str) -> None:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -126,12 +172,7 @@ def run_sanity(os_name: str) -> None:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
-        run_command_with_search(
-            label="AMDGPU DKMS package version",
-            command="dkms",
-            args=["status", "-m", "amdgpu"],
-            extra_command_search_paths=[bin_dir],
-        )
+        log_dkms_status("amdgpu")
 
     log("\n=== End of sanity check ===")
 
