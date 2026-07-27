@@ -156,7 +156,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -219,13 +219,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -356,18 +356,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # Windows testing is a recent addition and is being enabled incrementally.
-      # See https://github.com/ROCm/TheRock/issues/2258.
-      #
-      # Many tests are failing on torch 2.10+ so we limit testing to 2.9.
-      # (Obviously that's not ideal, but we need to start somewhere)
-      #
       # HACK: The test process does not terminate on its own gracefully,
       # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
       # After killing the process we read the return code to signal it normally.
       # See https://github.com/ROCm/TheRock/issues/999.
       - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        if: ${{ runner.os == 'Windows'}}
         continue-on-error: true
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
@@ -375,7 +369,7 @@ jobs:
             -v
 
       - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        if: ${{ runner.os == 'Windows'}}
         run: |
           if [ -f run_pytorch_tests_exit_code.txt ]; then
             EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
@@ -405,7 +399,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}

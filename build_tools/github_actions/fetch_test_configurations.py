@@ -224,6 +224,14 @@ test_matrix = {
             "linux": 1,
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -382,17 +390,22 @@ test_matrix = {
         },
         "exclude_family": {
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
             "windows": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx1200",
+                "gfx1201",
             ],
         },
     },
@@ -487,6 +500,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
+        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
+        # the specialized openmpi image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
     },
     # hipDNN tests
     "hipdnn": {
@@ -528,7 +545,7 @@ test_matrix = {
         "job_name": "hipdnn-samples",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -621,12 +638,12 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # libhipcxx hipcc tests
-    "libhipcxx_hipcc": {
-        "job_name": "libhipcxx_hipcc",
+    # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
+    "libhipcxx_amdclang": {
+        "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
