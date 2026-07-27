@@ -35,40 +35,6 @@ justification so the council can review your request.
 
 ______________________________________________________________________
 
-## 🌿 Branch Name
-
-**What does it check?**
-Your branch name must follow the agreed naming convention so PRs are easy to trace back to a contributor and topic.
-
-**Allowed formats**
-
-| Pattern                         | Example                                             |
-| ------------------------------- | --------------------------------------------------- |
-| `users/<username>/<anything>`   | users/dgaliffi/fix/remove-build-boost-option        |
-| `users/<username>/<anything>`   | users/frepaul/ROCm-end-user-project-workflow        |
-| `shared/<anything>`             | shared/add-runner-health                            |
-| `<single-segment-name>`         | bump-rocm-libraries-936a6c7                         |
-| `<single-segment-name>`         | ZIP-packaging-RFC                                   |
-| `dependabot/<anything>`         | dependabot/github_actions/github-actions-3dfd2199fc |
-| `revert-<pr-number>-<anything>` | revert-5217-users/derobins/add_hipfile_support      |
-
-Rules:
-
-- A recognised **prefix** must be present (`users/`, `shared/`, `dependabot/`, `revert-…`) — or the branch must be a single segment.
-- **Uppercase letters are allowed** (acronyms and module names are common, e.g. `ROCm`, `SMP`, `RFC`).
-- For `users/`, the `<username>` segment may contain letters (upper or lower), digits, and hyphens.
-- **Anything after the prefix is allowed**, including nested `namespace/feature` paths (e.g. `users/dgaliffi/fix/remove-build-boost-option`).
-
-**How to fix**
-Rename your branch before opening the PR:
-
-```bash
-git branch -m old-name users/<your-username>/<topic>
-git push origin -u users/<your-username>/<topic>
-```
-
-______________________________________________________________________
-
 ## 📄 PR Description
 
 **What does it check?**
