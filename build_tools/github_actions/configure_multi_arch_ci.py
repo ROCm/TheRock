@@ -528,6 +528,7 @@ class BuildConfig:
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
+    build_opencl_cts: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -1192,6 +1193,11 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
+    build_opencl_cts = platform == "linux" and jobs.test_rocm.test_type in (
+        "comprehensive",
+        "full",
+    )
+
     test_python_packages_matrix = build_rocm_python_test_matrix(
         per_family_info=per_family_info,
         platform=platform,
@@ -1212,6 +1218,7 @@ def _expand_build_config_for_platform(
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
+        build_opencl_cts=build_opencl_cts,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
