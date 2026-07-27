@@ -245,6 +245,25 @@ test_matrix = {
             "linux": 4,
         },
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+        "exclude_family": {
+            "linux": [
+                "gfx101X-dgpu",
+                "gfx103X-all",
+                "gfx110X-all",
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+                "gfx120X-all",
+                "gfx125X-dcgpu",
+                "gfx900",
+                "gfx906",
+                "gfx908",
+                "gfx90a",
+                "gfx90c",
+                "gfx950-dcgpu",
+            ],
+        },
     },
     # BLAS tests
     "rocblas": {
