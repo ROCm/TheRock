@@ -578,7 +578,9 @@ def should_skip_ci(
         and git_context.has_submodule_changes is False
         and "ci:asan" not in ci_inputs.pr_labels
     ):
-        print("  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)")
+        print(
+            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+        )
         return True
 
     if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
