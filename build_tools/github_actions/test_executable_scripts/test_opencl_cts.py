@@ -86,12 +86,7 @@ def find_test_executables():
     DISABLED_TESTS = {
         "test_bruteforce",
         "test_conversions",
-        "test_basic",
-        "test_compiler",
-        "test_half",
         "test_spir",
-        "test_vectors",
-        "test_workgroups",
     }
 
     # Disabled sub-tests within otherwise-passing binaries.
@@ -100,9 +95,6 @@ def find_test_executables():
     # test_printf: 'vector' and 'length_specifier' fail on gfx942.
     # test_svm: 'svm_migrate' fails on gfx942.
     DISABLED_SUBTESTS: dict[str, set[str]] = {
-        "test_api": {"min_max_constant_buffer_size"},
-        "test_printf": {"vector", "length_specifier"},
-        "test_svm": {"svm_migrate"},
     }
 
     test_executables = []
