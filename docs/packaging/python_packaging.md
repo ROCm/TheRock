@@ -57,6 +57,16 @@ The packaging pipeline supports two modes, selected automatically based on the
   The devel package is also arch-neutral and excludes test binaries (which
   require device code to run).
 
+In kpack-split mode the arch-neutral `rocm-sdk-devel` tree does not itself contain
+per-ISA device files. Each installed `rocm-sdk-device-{target}` wheel ships a
+manifest, and `rocm-sdk init` - which also runs on the first use of a devel tool
+such as `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries`
+into the devel tree, recording them in the device wheel's `RECORD` so
+`pip uninstall` removes them. Because the compiler trampolines only trigger this
+on the first expansion, after installing or removing a `rocm-sdk-device-*` wheel
+in an already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test`
+to refresh the device files in the devel tree.
+
 It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The
 built-in tests (via `rocm-sdk test`) verify these conditions.

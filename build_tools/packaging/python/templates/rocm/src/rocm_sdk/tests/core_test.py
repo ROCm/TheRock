@@ -53,6 +53,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
     ("hipInfo", [], "", True),
+    ("rocminfo", [], "", False),
 ]
 
 CONSOLE_SCRIPT_TESTS = COMMON_CONSOLE_SCRIPT_TESTS + (
@@ -87,10 +88,6 @@ class ROCmCoreTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
-            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
-                # TODO: Library preloads for amdsmi need to be implement.
-                # Though this is not needed for the amd-smi client.
-                continue
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.

@@ -69,6 +69,7 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
@@ -136,26 +137,67 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
 
 
 def find_available_artifacts(
-    artifact_names: Set[str],
-    target_families: List[str],
-    available: Set[str],
-) -> List[str]:
+    artifact_names: set[str],
+    target_families: list[str],
+    available: set[str],
+    excluded_components: set[str] | None = None,
+) -> list[str]:
     """Find which artifacts exist in the available set.
 
     Iterates artifact_names × target_families × components × extensions,
     returning filenames that are present in `available`. Prefers .tar.zst
     over .tar.xz when both exist.
     """
+    excluded_components = excluded_components or set()
     matched = []
     for artifact_name in sorted(artifact_names):
         for tf in target_families:
             for comp in ARTIFACT_COMPONENTS:
+                if comp in excluded_components:
+                    continue
                 for ext in ARTIFACT_EXTENSIONS:
                     filename = f"{artifact_name}_{comp}_{tf}{ext}"
                     if filename in available:
                         matched.append(filename)
                         break  # Found this artifact, don't check other extensions
     return matched
+
+
+def parse_excluded_components(raw_components: str) -> set[str]:
+    """Parse and validate component names passed to --exclude-components."""
+    components = {
+        comp.strip()
+        for comp in raw_components.replace(";", ",").split(",")
+        if comp.strip()
+    }
+    invalid_components = components - set(ARTIFACT_COMPONENTS)
+    if invalid_components:
+        raise ValueError(
+            "Invalid artifact component(s): "
+            f"{', '.join(sorted(invalid_components))}. "
+            f"Valid components are: {', '.join(ARTIFACT_COMPONENTS)}"
+        )
+    return components
+
+
+def parse_excluded_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --exclude-artifacts."""
+    artifacts = {
+        artifact.strip()
+        for artifact in raw_artifacts.replace(";", ",").split(",")
+        if artifact.strip()
+    }
+    invalid_artifacts = artifacts - valid_artifacts
+    if invalid_artifacts:
+        raise ValueError(
+            "Invalid artifact name(s): "
+            f"{', '.join(sorted(invalid_artifacts))}. "
+            f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
+        )
+    return artifacts
 
 
 # =============================================================================
@@ -334,6 +376,16 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
+    excluded_artifacts = parse_excluded_artifacts(
+        args.exclude_artifacts,
+        set(topology.artifacts.keys()),
+    )
+    if excluded_artifacts:
+        log(f"Excluding artifacts: {', '.join(sorted(excluded_artifacts))}")
+        inbound -= excluded_artifacts
+        if not inbound:
+            log("No artifacts remain after exclusions")
+            return
 
     # Create backend
     backend = create_backend_from_env(
@@ -355,7 +407,16 @@ def do_fetch(args: argparse.Namespace):
     )
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    excluded_components = parse_excluded_components(args.exclude_components)
+    if excluded_components:
+        log(f"Excluding artifact components: {', '.join(sorted(excluded_components))}")
+
+    matched_filenames = find_available_artifacts(
+        inbound,
+        target_families,
+        available,
+        excluded_components=excluded_components,
+    )
 
     download_requests = [
         DownloadRequest(
@@ -489,11 +550,46 @@ class UploadRequest:
     backend: ArtifactBackend
 
 
+def _format_bytes(size: Optional[int]) -> str:
+    return "unknown" if size is None else f"{size} bytes"
+
+
+def _directory_file_count_and_size_sum(path: Path) -> Optional[tuple[int, int]]:
+    try:
+        count = 0
+        total = 0
+        for child in path.rglob("*"):
+            if child.is_file():
+                count += 1
+                total += child.stat().st_size
+        return count, total
+    except OSError:
+        return None
+
+
+def _hash_file_path(archive_path: Path) -> Path:
+    return Path(f"{archive_path}.sha256sum")
+
+
+def _read_sha256sum_value(hash_path: Path) -> str:
+    """Read the digest from a hash sidecar.
+
+    Existing files in tests and logs use both plain digest and
+    ``sha256sum``-style ``digest filename`` formats. The digest is always the
+    first whitespace-delimited token.
+    """
+    content = hash_path.read_text().strip()
+    if not content:
+        raise ValueError(f"Empty sha256sum file: {hash_path}")
+    return content.split()[0]
+
+
 def compress_artifact(request: CompressRequest) -> Optional[Path]:
     """Compress a single artifact directory using fileset_tool.py artifact-archive."""
     try:
         log(f"  ++ Compressing {request.source_dir.name}")
         request.archive_path.parent.mkdir(parents=True, exist_ok=True)
+        hash_path = _hash_file_path(request.archive_path)
 
         # Use fileset_tool.py artifact-archive for proper archive creation
         import subprocess
@@ -515,7 +611,7 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
         cmd.extend(
             [
                 "--hash-file",
-                str(request.archive_path) + ".sha256sum",
+                str(hash_path),
                 str(request.source_dir),
             ]
         )
@@ -526,6 +622,21 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
                 f"fileset_tool.py artifact-archive failed (returncode={result.returncode}): {result.stderr}"
             )
 
+        sha256 = _read_sha256sum_value(hash_path)
+        file_count_and_size = _directory_file_count_and_size_sum(request.source_dir)
+        if file_count_and_size is None:
+            file_count = "unknown"
+            uncompressed_size = None
+        else:
+            file_count, uncompressed_size = file_count_and_size
+        log(
+            f"  ++ Compressed {request.source_dir.name} "
+            f"(files={file_count}, "
+            f"uncompressed_size={_format_bytes(uncompressed_size)}) "
+            f"-> {request.archive_path.name} "
+            f"(compressed_size={_format_bytes(request.archive_path.stat().st_size)}, "
+            f"sha256={sha256})"
+        )
         return request.archive_path
     except Exception as e:
         log(f"  !! Failed to compress {request.source_dir.name}: {e}")
@@ -539,14 +650,30 @@ def upload_artifact(request: UploadRequest) -> bool:
 
     for attempt in range(MAX_RETRIES):
         try:
-            log(f"  ++ Uploading {request.artifact_key}")
+            # Upload the artifact itself.
+            sha_path = _hash_file_path(request.source_path)
+            sha256 = calculate_hash(request.source_path, "sha256").hexdigest()
+            compressed_size = request.source_path.stat().st_size
+            log(
+                f"  ++ Uploading {request.artifact_key} "
+                f"(compressed_size={_format_bytes(compressed_size)}, "
+                f"sha256={sha256})"
+            )
             request.backend.upload_artifact(request.source_path, request.artifact_key)
 
-            # Also upload sha256sum if it exists
-            sha_path = request.source_path.with_suffix(
-                request.source_path.suffix + ".sha256sum"
-            )
+            # Upload the artifact's sha256sum file.
             if sha_path.exists():
+                sha256sum_sha256 = _read_sha256sum_value(sha_path)
+                if sha256sum_sha256 != sha256:
+                    log(
+                        f"  !! WARNING: sha256 mismatch for {request.artifact_key}: "
+                        f"computed_sha256={sha256}, sha256sum_sha256={sha256sum_sha256}"
+                    )
+                log(
+                    f"  ++ Uploading {request.artifact_key}.sha256sum "
+                    f"(artifact_sha256={sha256sum_sha256}, "
+                    f"size={_format_bytes(sha_path.stat().st_size)})"
+                )
                 request.backend.upload_artifact(
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
@@ -1082,6 +1209,19 @@ def main(argv: Optional[List[str]] = None):
         type=int,
         default=None,
         help="Number of concurrent extractions (default: auto)",
+    )
+    fetch_parser.add_argument(
+        "--exclude-components",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact components to exclude "
+        f"when fetching. Valid components: {', '.join(ARTIFACT_COMPONENTS)}",
+    )
+    fetch_parser.add_argument(
+        "--exclude-artifacts",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact names to exclude when fetching",
     )
     fetch_parser.set_defaults(func=do_fetch)
 

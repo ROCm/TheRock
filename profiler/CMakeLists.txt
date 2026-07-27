@@ -6,6 +6,21 @@ if(THEROCK_ENABLE_MPI)
   set(_openmpi_optional_dep therock-openmpi)
 endif()
 
+# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)/
+# find_package(hipfile) to detect the rocDecode/rocJPEG/hipFILE trace features.
+# Declare them as dependencies when available so they resolve from the
+# super-project dist rather than escaping to a stray build tree.
+set(_rocprofiler_sdk_optional_deps)
+if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocdecode)
+endif()
+if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocjpeg)
+endif()
+if(THEROCK_ENABLE_HIPFILE)
+  list(APPEND _rocprofiler_sdk_optional_deps hipfile)
+endif()
+
 if(THEROCK_ENABLE_ROCPROFV3)
 
   ##############################################################################
@@ -20,6 +35,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprof-trace-decoder"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder"
     BACKGROUND_BUILD
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_provide_package(rocprof-trace-decoder rocprof-trace-decoder lib/cmake/rocprof-trace-decoder)
   therock_cmake_subproject_activate(rocprof-trace-decoder)
@@ -50,6 +66,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       amd-llvm
       ROCR-Runtime
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(aqlprofile
     SUBDIRS .
@@ -90,7 +107,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
-    USE_DIST_AMDGPU_TARGETS
+    # Use TEST targets (all available archs) so the _generic test artifact
+    # contains .hsaco files for all architectures, not just dist archs.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
@@ -103,6 +122,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -118,6 +138,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprof-trace-decoder
       rocprofiler-register
+      therock-yaml-cpp
+      ${_openmpi_optional_dep}
+      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -129,6 +152,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     INTERFACE_INSTALL_RPATH_DIRS
       lib
       lib/rocm_sysdeps/lib
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
     SUBDIRS .
@@ -183,6 +207,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       hip-clr
       ROCR-Runtime
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(roctracer
     SUBDIRS .
@@ -244,6 +269,7 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
+    TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
       SUBDIRS .
@@ -303,7 +329,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       -DHIP_PLATFORM=amd
       -DROCPROFSYS_BUILD_TBB=ON
       -DROCPROFSYS_BUILD_LIBIBERTY=ON
-      -DROCPROFSYS_BUILD_BOOST=ON
       -DROCPROFSYS_BUILD_DYNINST=ON
       -DROCPROFSYS_BUILD_FOR_THEROCK=ON
       -DROCPROFSYS_USE_PYTESTS=OFF
@@ -337,6 +362,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-systems
     SUBDIRS .

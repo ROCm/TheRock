@@ -15,15 +15,12 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: >-
-          Base Python package index URL to test.
-          Per-family: nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir).
-          Multi-arch: unified index URL (e.g. "https://rocm.nightlies.amd.com/whl-multi-arch/").
+        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       python_version:
         required: true
         type: string
@@ -55,12 +52,6 @@ on:
           - "single"
           - "all"
         default: "single"
-      multi_arch:
-        description: >-
-          Install from a multi-arch index using device extras
-          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
-        type: boolean
-        default: false
 
   workflow_call:
     inputs:
@@ -94,12 +85,6 @@ on:
           GPUs visible at once.
         type: string
         default: "single"
-      multi_arch:
-        description: >-
-          Install from a multi-arch index using device extras
-          (e.g. torch[device-gfx942]) instead of per-family index subdirs.
-        type: boolean
-        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -135,13 +120,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -149,7 +134,6 @@ jobs:
       # select GPU-specific device packages. Expand the family to get the
       # comma-separated device extras string for pip install.
       - name: Expand GPU family to device extras
-        if: ${{ inputs.multi_arch }}
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
@@ -163,7 +147,6 @@ jobs:
             --torch-version=${{ inputs.torch_version }} \
             --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
             --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }} \
             --device-extras="${{ steps.expand.outputs.device_extras }}"
 
       - name: Set git options
@@ -174,6 +157,9 @@ jobs:
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
       # steps to save time.
+      # TODO(#5110): Accept manifest_url and use checkout_from_manifest.py
+      # --no-hipify --no-submodules so tests use the exact source commit and
+      # related repository pins that produced the package under test.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
@@ -195,22 +181,15 @@ jobs:
       - name: Set up virtual environment
         timeout-minutes: 15
         run: |
-          if [ "${{ inputs.multi_arch }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
-              --index-url=${{ inputs.package_index_url }} \
-              --activate-in-future-github-actions-steps
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages torch==${{ inputs.torch_version }} \
-              --index-url=${{ inputs.package_index_url }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --activate-in-future-github-actions-steps
-          fi
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --activate-in-future-github-actions-steps
 
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
       - name: Run rocm-sdk sanity tests
@@ -226,6 +205,7 @@ jobs:
             -v
 
       - name: Run PyTorch tests
+        timeout-minutes: 120
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py \
             --device-query "${{ inputs.device_query }}" \

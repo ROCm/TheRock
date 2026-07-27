@@ -60,12 +60,6 @@ class ROCmLibrariesTest(unittest.TestCase):
 
         for so_path in so_paths:
             with self.subTest(msg="Check shared library loads", so_path=so_path):
-
-                if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
-                    # TODO: Library preloads for amdsmi need to be implement.
-                    # Though this is not needed for the amd-smi client.
-                    continue
-
                 if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
                     # Python C extensions use symbols resolved at import time,
                     # not via dlopen — ctypes.CDLL fails across interpreter
@@ -95,8 +89,11 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
                 # in '_rocm_sdk_core/bin'
                 # TODO(#996): track deps in libraries then have the preloader
-                #   recursively get deps instead of hardcoding like this
-                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
+                #   recursively get deps instead of hardcoding like this.
+                # kpack is the rocke-client engine's runtime dep (DT_NEEDED), also in
+                # _rocm_sdk_core/bin; like amd_comgr it must be preloaded by name --
+                # co-location behind amdhip64's preload does not make it resolvable.
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack');"
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,

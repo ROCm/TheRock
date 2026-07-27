@@ -17,6 +17,15 @@ import compute_rocm_package_version
 
 
 class DetermineVersionTest(unittest.TestCase):
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*\.dev0\+[0-9a-z]+$")
+
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
             release_type="dev",
@@ -94,6 +103,16 @@ class DetermineVersionTest(unittest.TestCase):
 class DebPackageVersionTest(unittest.TestCase):
     """Tests for Debian package version computation."""
 
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~dev[0-9]{8}$")
+
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="deb",
@@ -163,6 +182,16 @@ class DebPackageVersionTest(unittest.TestCase):
 
 class RpmPackageVersionTest(unittest.TestCase):
     """Tests for RPM package version computation."""
+
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}g[0-9a-z]{8}$")
 
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -253,6 +282,51 @@ class GitShaOverrideTest(unittest.TestCase):
         )
         # Should truncate to 8 chars
         self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
+
+    def test_main_forwards_override_git_sha_to_all_package_types(self):
+        """main() must forward --override-git-sha into the computed versions.
+
+        Regression test for the bug where main() computed versions without
+        passing args.override_git_sha, so the flag was silently ignored and
+        cross-repo callers (e.g. rocm-libraries nightlies building TheRock)
+        got the caller's GITHUB_SHA embedded instead of the requested commit.
+        """
+        override_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        captured_outputs = {}
+        original_gha_set_output = compute_rocm_package_version.gha_set_output
+
+        def mock_gha_set_output(outputs):
+            captured_outputs.update(outputs)
+
+        compute_rocm_package_version.gha_set_output = mock_gha_set_output
+        try:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "dev",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--override-git-sha",
+                    override_sha,
+                ]
+            )
+        finally:
+            compute_rocm_package_version.gha_set_output = original_gha_set_output
+
+        # Wheel embeds the full override SHA.
+        self.assertEqual(
+            captured_outputs["rocm_package_version"], f"7.99.0.dev0+{override_sha}"
+        )
+        # DEB uses the dev-date format and does not embed a git SHA at all.
+        self.assertRegex(
+            captured_outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$"
+        )
+        self.assertNotIn(override_sha[:8], captured_outputs["rocm_deb_package_version"])
+        # RPM embeds the 8-char truncation of the same override SHA.
+        self.assertRegex(
+            captured_outputs["rocm_rpm_package_version"],
+            rf"^7\.99\.0~[0-9]{{8}}g{override_sha[:8]}$",
+        )
 
 
 class MainFunctionMultiplePackageTypesTest(unittest.TestCase):

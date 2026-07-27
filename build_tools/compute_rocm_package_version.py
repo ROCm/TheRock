@@ -117,7 +117,7 @@ def compute_version(
 
     Args:
         package_type: Type of package ("wheel", "deb", or "rpm")
-        release_type: Release type ("dev", "nightly", "prerelease", or "release")
+        release_type: Release type ("ci", "dev", "nightly", "prerelease", or "release")
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
@@ -140,7 +140,7 @@ def compute_version(
             # Trust the custom suffix to satisfy the general rules:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/
             version_suffix = custom_version_suffix
-        elif release_type == "dev":
+        elif release_type in ("ci", "dev"):
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
             git_sha = get_git_sha(override_git_sha=override_git_sha)
@@ -174,7 +174,7 @@ def compute_version(
             # Final release version - no suffix
             # Format: <rocm-version>
             version_suffix_str = ""
-        elif release_type == "dev":
+        elif release_type in ("ci", "dev"):
             # Construct a dev release version with date and optionally git SHA
             # deb format: <rocm-version>~dev<YYYYMMDD>
             # rpm format: <rocm-version>~<YYYYMMDD>g<short-git-sha>
@@ -216,8 +216,11 @@ def main(argv):
     release_type_group.add_argument(
         "--release-type",
         type=str,
-        choices=["dev", "nightly", "prerelease", "release"],
-        help="The type of package version to produce (note: 'release' only valid for deb/rpm)",
+        choices=["ci", "dev", "nightly", "prerelease", "release"],
+        help=(
+            "The type of package version to produce. "
+            "'ci' uses dev-style versions; 'release' is only valid for deb/rpm."
+        ),
     )
     release_type_group.add_argument(
         "--custom-version-suffix",
@@ -260,11 +263,12 @@ def main(argv):
     outputs = {}
     for pkg_type in ["wheel", "deb", "rpm"]:
         version = compute_version(
-            pkg_type,
-            args.release_type,
-            args.custom_version_suffix,
-            args.prerelease_version,
-            args.override_base_version,
+            package_type=pkg_type,
+            release_type=args.release_type,
+            custom_version_suffix=args.custom_version_suffix,
+            prerelease_version=args.prerelease_version,
+            override_base_version=args.override_base_version,
+            override_git_sha=args.override_git_sha,
         )
 
         # Set appropriate output variable based on package type

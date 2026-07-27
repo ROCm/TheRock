@@ -16,7 +16,7 @@ SAFETY FEATURES:
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
   - AWS credentials configured (IAM role)
-  - Packages must be promoted first using promote_from_rc_to_final.py
+  - Packages must be promoted first using promote_packages.py
 
 TYPICAL USAGE (Command Line):
   # Preview wheel upload (dry-run, no actual upload)

@@ -30,6 +30,7 @@ if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       "lib;lib/rocm_sysdeps/lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib;lib/rocm_sysdeps/lib"
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocdecode
     SUBDIRS
@@ -88,6 +89,7 @@ if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       "lib;lib/rocm_sysdeps/lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib;lib/rocm_sysdeps/lib"
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocjpeg
     SUBDIRS

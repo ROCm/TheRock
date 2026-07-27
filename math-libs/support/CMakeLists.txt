@@ -16,6 +16,7 @@ therock_cmake_subproject_declare(mxDataGenerator
     amd-hip
   BUILD_DEPS
     therock-googletest
+  TEST_SUBPROJECTS
 )
 therock_cmake_subproject_provide_package(mxDataGenerator
   mxDataGenerator lib/cmake)
