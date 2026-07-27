@@ -3,10 +3,11 @@
 # (lib/hipthreads/libhipthreads.a), the headers (include/hipthreads/**), and the
 # CMake package config (lib/cmake/hipthreads/**), so no explicit includes needed.
 [components.dev."math-libs/hipthreads/stage"]
+# The lit suite compiles against inc/ and test/ (see test/lit.cfg), and the
+# examples runner builds the apps under examples/.
 [components.test."math-libs/hipthreads/build"]
 include = [
-  "hipthreads/**/*",
-]
-exclude = [
-  "hipthreads/docs/**",
+  "hipthreads/inc/**/*",
+  "hipthreads/test/**/*",
+  "hipthreads/examples/**/*",
 ]
