@@ -25,6 +25,10 @@ on:
       - rocm-systems
       - rocm-libraries
       - debug-tools/rocgdb/source
+
+permissions:
+  contents: read
+
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
