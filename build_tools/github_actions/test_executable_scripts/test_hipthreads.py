@@ -20,6 +20,7 @@ import logging
 import os
 import platform
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -116,11 +117,24 @@ if IS_WINDOWS:
 
 # The hipThreads lit suite is self-contained and resolves all of its paths from
 # these three environment variables (see hipThreads test/lit.cfg):
-#   HIPTHREADS_SOURCE_DIR  -> the source tree (test/, inc/) packaged in the artifact
+#   HIPTHREADS_SOURCE_DIR  -> the source tree (test/) packaged in the test artifact
 #   HIPTHREADS_BUILD_DIR   -> where the pre-built libhipthreads.a is found (links -L <dir>/lib)
 #   ROCM_PATH              -> hipcc + ROCm/libhipcxx headers
 HIPTHREADS_SOURCE_DIR = OUTPUT_ARTIFACTS_PATH / "hipthreads"
 environ_vars["HIPTHREADS_SOURCE_DIR"] = str(HIPTHREADS_SOURCE_DIR)
+
+# lit.cfg compiles with `-I <HIPTHREADS_SOURCE_DIR>/inc`. The headers are not
+# bundled in the test artifact (they ship in the dev artifact, as
+# <artifacts>/include/hipthreads/hip, to avoid duplicating files across artifacts),
+# so stage them into <SOURCE_DIR>/inc/hip where lit expects them.
+# TODO (future release): repoint lit.cfg's include at <ROCM_PATH>/include/hipthreads
+# so it consumes the dev headers directly and this staging step can be removed.
+staged_include_dir = OUTPUT_ARTIFACTS_PATH / "include" / "hipthreads" / "hip"
+lit_include_dir = HIPTHREADS_SOURCE_DIR / "inc" / "hip"
+if not staged_include_dir.exists():
+    logging.error(f"Dev headers not found at: {staged_include_dir}")
+    raise FileNotFoundError(staged_include_dir)
+shutil.copytree(staged_include_dir, lit_include_dir, dirs_exist_ok=True)
 
 # lit.cfg links against `-L <HIPTHREADS_BUILD_DIR>/lib -lhipthreads`. The dev artifact
 # stages the static library at <artifacts>/lib/hipthreads/<lib> (libhipthreads.a on
@@ -151,8 +165,6 @@ if not linked_lib.exists():
     try:
         os.link(staged_lib, linked_lib)
     except OSError:
-        import shutil
-
         shutil.copy2(staged_lib, linked_lib)
 environ_vars["HIPTHREADS_BUILD_DIR"] = str(HIPTHREADS_BUILD_DIR)
 
