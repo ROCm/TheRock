@@ -220,7 +220,7 @@
           {
             "Name": "rocjitsu-hotswap",
             "Components": [
-              "lib"
+              "hook"
             ]
           }
         ]

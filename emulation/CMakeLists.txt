@@ -43,7 +43,7 @@ if(THEROCK_ENABLE_ROCJITSU)
   if(NOT WIN32)
     therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
       LIB_NAMES
-        librocjitsu_hooks.so
+        libhsa_hotswap_rocjitsu.so
     )
   endif()
 
@@ -60,26 +60,13 @@ if(THEROCK_ENABLE_ROCJITSU)
   )
 
   if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
-    therock_cmake_subproject_declare(rocjitsu-hotswap
-      DISABLE_AMDGPU_TARGETS
-      NO_MERGE_COMPILE_COMMANDS
-      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocjitsu-hotswap"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu-hotswap"
-      CMAKE_ARGS
-        -DROCJITSU_HOTSWAP_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/stage/lib/librocjitsu_hooks.so
-      BUILD_DEPS
-        rocjitsu
-    )
-
-    therock_cmake_subproject_activate(rocjitsu-hotswap)
-
     therock_provide_artifact(rocjitsu-hotswap
       TARGET_NEUTRAL
-      DESCRIPTOR artifact-rocjitsu-hotswap.toml
+      DESCRIPTOR artifact-rocjitsu.toml
       COMPONENTS
-        lib
+        hook
       SUBPROJECT_DEPS
-        rocjitsu-hotswap
+        rocjitsu
     )
   endif()
 endif()
