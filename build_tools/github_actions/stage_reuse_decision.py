@@ -108,6 +108,10 @@ class StageReusePlan:
     rebuild_stages: tuple[str, ...]
     full_rebuild_required: bool
     reasons: tuple[str, ...]
+    # Granular artifact-level analysis fields
+    impacted_artifacts: tuple[str, ...] = ()
+    reusable_artifacts: tuple[str, ...] = ()
+    artifact_level_analysis: bool = False
 
 
 @dataclass(frozen=True)
@@ -126,6 +130,10 @@ class AutoStageReuse:
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
     platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Granular artifact-level reuse fields
+    reusable_artifacts: tuple[str, ...] = field(default_factory=tuple)
+    rebuild_artifacts: tuple[str, ...] = field(default_factory=tuple)
+    artifact_level_analysis: bool = False
 
 
 def _target_families(
@@ -211,6 +219,11 @@ def plan_stage_reuse(
 
     Pure decision logic -- no baseline selection, artifact verification, or
     reporting -- so it can be reused independently of the CI plumbing.
+
+    This function now also performs granular artifact-level analysis when
+    possible. If changes are isolated to specific projects within a monorepo
+    (e.g., rocm-libraries), it identifies which artifacts are impacted and
+    which can be reused from a baseline.
     """
 
     if changed_files is None:
@@ -238,6 +251,10 @@ def plan_stage_reuse(
         rebuild_stages=tuple(impact.rebuild_stages),
         full_rebuild_required=impact.full_rebuild_required,
         reasons=tuple(impact.reasons),
+        # Granular artifact-level analysis fields
+        impacted_artifacts=impact.impacted_artifacts,
+        reusable_artifacts=impact.reusable_artifacts,
+        artifact_level_analysis=impact.artifact_level_analysis,
     )
 
 
@@ -428,6 +445,10 @@ def compute_auto_stage_reuse(
         baseline_error=baseline_error,
         platforms=platforms,
         platform_available=per_platform_available,
+        # Include artifact-level info in the report
+        artifact_level_analysis=plan.artifact_level_analysis,
+        impacted_artifacts=plan.impacted_artifacts,
+        reusable_artifacts=plan.reusable_artifacts,
     )
     return _log_and_return(
         AutoStageReuse(
@@ -443,6 +464,10 @@ def compute_auto_stage_reuse(
             reasons=plan.reasons,
             report_lines=lines,
             platform_available=per_platform_available,
+            # Granular artifact-level reuse fields
+            reusable_artifacts=plan.reusable_artifacts,
+            rebuild_artifacts=plan.impacted_artifacts,
+            artifact_level_analysis=plan.artifact_level_analysis,
         )
     )
 
@@ -575,6 +600,10 @@ def _format_report(
     baseline_error: str | None = None,
     platforms: Sequence[str] = (),
     platform_available: dict[str, tuple[str, ...]] | None = None,
+    # Granular artifact-level analysis fields
+    artifact_level_analysis: bool = False,
+    impacted_artifacts: Sequence[str] = (),
+    reusable_artifacts: Sequence[str] = (),
 ) -> tuple[str, ...]:
     platform_available = platform_available or {}
     lines: list[str] = [f"{LOG_PREFIX} mode={mode.value}"]
@@ -628,6 +657,17 @@ def _format_report(
         )
     if rebuild:
         lines.append(f"{LOG_PREFIX} stages rebuilding (impacted): {', '.join(rebuild)}")
+    # Report granular artifact-level analysis if available
+    if artifact_level_analysis:
+        lines.append(f"{LOG_PREFIX} artifact-level analysis enabled")
+        if impacted_artifacts:
+            lines.append(
+                f"{LOG_PREFIX}   impacted artifacts: {', '.join(impacted_artifacts)}"
+            )
+        if reusable_artifacts:
+            lines.append(
+                f"{LOG_PREFIX}   reusable artifacts: {', '.join(reusable_artifacts)}"
+            )
     if mode is StageReuseMode.DRY_RUN and available:
         lines.append(
             f"{LOG_PREFIX} dry-run: prebuilt_stages NOT modified; all stages "
@@ -665,6 +705,12 @@ def render_step_summary(result: AutoStageReuse) -> str:
         out.append("- reasons:")
         for reason in result.reasons:
             out.append(f"  - {reason}")
+    # Include artifact-level analysis summary if available
+    if result.artifact_level_analysis:
+        out.append("")
+        out.append("#### Artifact-level analysis")
+        out.append(f"- impacted artifacts: {_format_stage_list(result.rebuild_artifacts)}")
+        out.append(f"- reusable artifacts: {_format_stage_list(result.reusable_artifacts)}")
     if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
         out.append("")
         out.append(
