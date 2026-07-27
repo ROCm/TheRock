@@ -660,7 +660,8 @@
             "Name": "origami",
             "Components": [
               "lib",
-              "run"
+              "run",
+              "doc"
             ]
           },
           {
@@ -1556,7 +1557,8 @@
           {
             "Name": "rocPRIM",
             "Components": [
-              "dev"
+              "dev",
+              "doc"
             ]
           },
           {
@@ -2692,18 +2694,6 @@
             "Name": "miopenprovider",
             "Components": [
               "lib"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "flatbuffers",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "flatbuffers",
-            "Components": [
-              "run"
             ]
           }
         ]
