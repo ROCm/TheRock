@@ -120,7 +120,7 @@ class TestROCmSanity:
             offload_arch is not None
         ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
-        # Compiling .cpp file using amdclang++ directly (hipcc is deprecated)
+        # Compiling .cpp file using amdclang++
         rocm_path = (THEROCK_BIN_DIR / "..").resolve()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
         run_command(

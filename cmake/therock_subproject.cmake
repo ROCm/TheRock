@@ -1743,7 +1743,7 @@ function(_therock_cmake_subproject_setup_toolchain
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
     #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
-    #     HIP version info. Uses amdclang++ directly; does not require hipcc.
+    #     HIP version info.
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
