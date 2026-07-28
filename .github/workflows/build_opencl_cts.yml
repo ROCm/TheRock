@@ -89,7 +89,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: KhronosGroup/OpenCL-CTS
-          ref: db69e92a03c91b1bcedb23d7142fe1c6e2ab1761
+          ref: 2086f094c830a2c10d8c36a335c8a155ce13347d
           path: opencl/opencl-cts
 
       - name: Checkout opencl-headers
