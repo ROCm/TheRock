@@ -262,6 +262,22 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # rocshmem's functional/unit test wrappers run rocshmem_info to auto-detect
+    # the backend. rocshmem_info is installed via install(PROGRAMS ...) (not as a
+    # target), so it keeps its build-tree RPATH and can't find its shared libs
+    # (libamdhip64.so.7, librocm_sysdeps_numa.so.1, ...) in the relocated test
+    # artifact. Prepend the install lib dir and the bundled sysdeps lib dir to
+    # LD_LIBRARY_PATH so the probe resolves the ROCm runtime + sysdeps libs.
+    # (The test binaries themselves install to bin/ as targets and resolve libs
+    # via their relocatable RPATH, so this only fixes the backend-detection probe.)
+    "rocshmem": {
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [
+                ["lib"],
+                ["lib", "rocm_sysdeps", "lib"],
+            ],
+        },
+    },
 }
 
 
