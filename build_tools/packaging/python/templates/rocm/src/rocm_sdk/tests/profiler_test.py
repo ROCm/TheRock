@@ -136,7 +136,7 @@ class ROCmProfilerTest(unittest.TestCase):
             ),
         )
 
-    def test_unversioned_library_aliases(self):
+    def test_rocprof_sys_unversioned_library_aliases(self):
         """Unversioned aliases for profiler runtime deps must exist and resolve.
 
         populate_runtime_files() writes only the SONAME-matching versioned
@@ -172,7 +172,7 @@ class ROCmProfilerTest(unittest.TestCase):
                     msg=f"Unversioned alias {link} is missing or dangles",
                 )
 
-    def test_console_scripts(self):
+    def test_rocprof_sys_console_scripts(self):
         """Test the console scripts are installed and executable."""
         for test in CONSOLE_SCRIPT_TESTS:
             script_path = utils.find_console_script(test.script_name)
