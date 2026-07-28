@@ -875,7 +875,10 @@ def pr_wants_skip(body: str) -> bool:
     (comment-stripped) description.
     """
     text = _strip_markdown_comments(body or "")
-    return re.search(rf"(?<!\w){re.escape(SKIP_TAG)}(?!\w)", text, re.IGNORECASE) is not None
+    return (
+        re.search(rf"(?<!\w){re.escape(SKIP_TAG)}(?!\w)", text, re.IGNORECASE)
+        is not None
+    )
 
 
 def build_bump_pr_results(policy: Policy) -> List[CheckResult]:
