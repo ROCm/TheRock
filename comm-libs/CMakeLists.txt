@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(THEROCK_ENABLE_RCCL AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rocshmem")
+if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -118,7 +118,7 @@ if(THEROCK_ENABLE_RCCL AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rocshmem")
   )
 endif()
 
-if(THEROCK_ENABLE_ROCSHMEM AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rccl")
+if(THEROCK_ENABLE_ROCSHMEM)
   ##############################################################################
   # rocSHMEM
   ##############################################################################
@@ -136,7 +136,7 @@ if(THEROCK_ENABLE_ROCSHMEM AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rccl")
     # Build all GPU targets in a single target-neutral artifact as a workaround.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
-    BINARY_DIR "${CMAKE_BINARY_DIR}/comm-libs/rocshmem"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -160,6 +160,10 @@ if(THEROCK_ENABLE_ROCSHMEM AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rccl")
       "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
       -DBUILD_FUNCTIONAL_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_UNIT_TESTS=${THEROCK_BUILD_TESTING}
+      # Register functional/unit tests with CTest and install the relocatable
+      # bin/rocshmem/**/CTestTestfile.cmake files (with quick/standard/
+      # comprehensive/full tier labels) that test_runner.py drives via ctest.
+      -DBUILD_CTESTS=${THEROCK_BUILD_TESTING}
       -DSOURCE_DIR=${_source_dir}
       -DPATCHELF=${PATCHELF}
       -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
@@ -173,9 +177,10 @@ if(THEROCK_ENABLE_ROCSHMEM AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rccl")
       therock-googletest
     RUNTIME_DEPS
       hip-clr
-      # rocSHMEM optionally registers its API tables with rocprofiler-register
+      # rocshmem registers its API tables with rocprofiler-register
       # (USE_ROCPROFILER_REGISTER, ON by default) so rocprofiler-sdk can trace
-      # its host-stream APIs. Declare the dep so it resolves from the dist.
+      # its host-stream APIs. The find_package for it is QUIET, so without this
+      # dep the build succeeds with tracing silently disabled.
       rocprofiler-register
       ${THEROCK_BUNDLED_NUMACTL}
       ${_rocshmem_optional_runtime_deps}
@@ -201,4 +206,4 @@ if(THEROCK_ENABLE_ROCSHMEM AND NOT _THEROCK_COMM_LIBS_COMPONENT STREQUAL "rccl")
     SUBPROJECT_DEPS
       ${_rocshmem_subproject_names}
   )
-endif()
+endif(THEROCK_ENABLE_ROCSHMEM)
