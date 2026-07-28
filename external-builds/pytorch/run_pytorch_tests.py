@@ -1,84 +1,67 @@
 #!/usr/bin/env python3
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
+"""Runs PyTorch unit tests on AMD GPUs via PyTorch's run_test.py, with
+TheRock ROCm-specific skip-test integration and sharding support. Runs the
+full suite by default, or a subset via --include (shared by both the quick
+and full "Test PyTorch Wheels" workflows).
 
-"""PyTorch ROCm Pytest Runner with additional test exclusion capabilities.
+For the "default" and "distributed" configs, mirrors how PyTorch CI's
+test.sh invokes test_python_shard():
+    python test/run_test.py \\
+        --exclude-jit-executor --exclude-distributed-tests \\
+        --exclude-quantization-tests --shard N M --verbose
 
-This script runs PyTorch unit tests using pytest with additional test exclusion
-capabilities tailored for AMD ROCm GPUs.
+For the "inductor" config, mirrors test_inductor_shard() from test.sh
+with two separate run_test.py invocations:
+    1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+    2. Inductor unit tests without ``--inductor`` (avoids nested dynamo)
 
-Test Exclusion Criteria
-------------------------
-Tests may be skipped based on:
-- AMDGPU family compatibility (e.g., gfx942, gfx1151)
-- PyTorch version-specific issues
-- Platform (Linux, Windows)
-- Known failures not yet upstreamed to PyTorch
+Usage examples:
 
-Environment Variables
----------------------
-THEROCK_ROOT_DIR : str, optional
-                   Root directory of TheRock project.
-                   If not set, auto-detected from script location.
-AMDGPU_FAMILY :     str, optional
-                    Target AMDGPU family for testing (e.g., "gfx942", "gfx94X").
-                    Names should match those in "TheRock/cmake/therock_amdgpu_targets.cmake".
-                    Supports wildcards (e.g., "gfx94X" matches any gfx94* architecture).
-                    If not set, auto-detects from available hardware using PyTorch.
-PYTORCH_VERSION :   str, optional
-                    PyTorch version for version-specific test filtering (e.g., "2.10").
-                    Format: "major.minor" as string.
-                    If not set, auto-detects from installed PyTorch package.
-HIP_VISIBLE_DEVICES : str, optional (read/write)
-                      If already set, the script respects this constraint and only selects
-                      from the GPUs visible within this limitation (e.g., in containers).
-                      The script will further filter and update this variable based on
-                      the AMDGPU_FAMILY selection or auto-detection.
+    # Run all tests (no sharding):
+    python run_pytorch_tests.py
 
-Usage Examples
---------------
-Basic usage (auto-detect everything):
-    $ python run_pytorch_tests.py
+    # Run shard 2 of 4 with the "default" config:
+    python run_pytorch_tests.py --shard 2 --num-shards 4
 
-Debug mode (run only skipped tests):
-    $ python run_pytorch_tests.py --debug
+    # Run only the test_nn test file:
+    python run_pytorch_tests.py --include test_nn
 
-Custom test selection with pytest -k:
-    $ python run_pytorch_tests.py -k "test_nn and not test_dropout"
+    # Run a few specific test files:
+    python run_pytorch_tests.py --include test_nn test_torch test_cuda
 
-Pass additional pytest arguments after "--":
-    $ python run_pytorch_tests.py -- -m "slow"
-    $ python run_pytorch_tests.py -- --tb=short -x
+    # Run with the "inductor" config:
+    python run_pytorch_tests.py --test-config inductor --shard 1 --num-shards 2
 
-GPU selection options:
-    $ python run_pytorch_tests.py --gpu-policy all --device-query all
-    $ python run_pytorch_tests.py --gpu-policy single --device-query all
+    # Run with the "distributed" config on a multi-GPU runner:
+    python run_pytorch_tests.py --test-config distributed
 
-Exit Codes
-----------
-0 : All tests passed
-1 : Test failures or collection errors
-? : Other exit codes from pytest
-Other : Pytest-specific error codes
+    # Pass extra pytest arguments after "--":
+    python run_pytorch_tests.py -- --continue-on-collection-errors
 
-Side-effects
-------------
-- This script modifies PYTHONPATH and sys.path to include PyTorch test directory
-- Creates a temporary MIOpen cache directory for each run
-- Sets HIP_VISIBLE_DEVICES environment variable to select specific GPU(s) for testing
-- Runs tests sequentially (--numprocesses=0) by default
+    # Dry run to list tests without executing them:
+    python run_pytorch_tests.py --dry-run
+
+    # Disable pytest caching (useful with read-only pytorch directory):
+    python run_pytorch_tests.py --no-cache
+
+    # GPU selection options:
+    python run_pytorch_tests.py --gpu-policy all --device-query all
+    python run_pytorch_tests.py --gpu-policy single --device-query all
+
+Environment variables (all overridable via CLI flags or workflow YAML):
+    AMDGPU_FAMILY, TEST_CONFIG, SHARD_NUMBER, NUM_TEST_SHARDS,
+    TESTS_TO_INCLUDE, PYTORCH_VERSION
 """
 
 import argparse
 import os
 import platform
+import subprocess
 import sys
 import tempfile
-
-from skip_tests.create_skip_tests import *
 from pathlib import Path
 
-import pytest
+from skip_tests.create_skip_tests import get_tests
 
 from pytorch_utils import (
     check_pytorch_source_version,
@@ -89,118 +72,244 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
+# Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT, which run_test.py uses to look up
+# historical test durations in test-times.json for balanced shard splitting.
+# See: https://raw.githubusercontent.com/pytorch/test-infra/generated-stats/stats/test-times.json
+#
+# The values must match keys present in that JSON file exactly, which is why
+# they include linux-specific OS and Python versions (e.g. "linux-noble-rocm-
+# py3.12-mi300").  This list is intentionally non-exhaustive: GPU families not
+# listed here (e.g. gfx1151, Windows targets) fall back to
+# ROCM_BUILD_ENVIRONMENT_DEFAULT.  Falling back to mi300 timings still gives
+# reasonably balanced shards since relative test durations are similar across
+# GPU types.  Since pytorch/pytorch#176445, each GPU gets its own key with
+# inductor timings included, so a single map suffices for all configs.
+AMDGPU_FAMILY_TO_BUILD_ENV = {
+    "gfx90X-dcgpu": "linux-jammy-rocm-py3.10-mi200",
+    "gfx94X-dcgpu": "linux-noble-rocm-py3.12-mi300",
+    "gfx950-dcgpu": "linux-noble-rocm-py3.12-mi355",
+    "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
+}
+ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
-def setup_env(pytorch_dir: str) -> None:
-    """Set up environment variables required for PyTorch testing with ROCm.
+THEROCK_ENV_VARS = [
+    "CI",
+    "BUILD_ENVIRONMENT",
+    "PYTORCH_TEST_WITH_ROCM",
+    "PYTORCH_TESTING_DEVICE_ONLY_FOR",
+    "PYTORCH_PRINT_REPRO_ON_FAILURE",
+    "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
+    "MIOPEN_CUSTOM_CACHE_DIR",
+    "TEST_CONFIG",
+    "PYTHONPATH",
+    "HIP_VISIBLE_DEVICES",
+    "SHARD_NUMBER",
+    "NUM_TEST_SHARDS",
+    "TESTS_TO_INCLUDE",
+]
 
-    Args:
-        pytorch_dir: Path to the PyTorch directory containing test files.
 
-    Side effects:
-        - Sets multiple environment variables for PyTorch testing
-        - Creates a temporary directory for MIOpen cache
-        - Modifies sys.path to include the test directory
-    """
+PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
+
+# Test modules excluded at the run_test.py level (--exclude).  These are
+# modules that hang or crash the subprocess in ways that pytest-timeout
+# cannot catch (e.g. hanging during import or in C extensions).
+# TODO: investigate the root cause and narrow the exclusions.
+EXCLUDED_TEST_MODULES: list[str] = [
+    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
+    "inductor/test_max_autotune",
+    "inductor/test_torchinductor_opinfo_properties",
+    "inductor/test_compiled_autograd",
+    "dynamo/test_dynamic_shapes",
+    "functorch/test_control_flow",
+]
+
+# Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
+# The inductor config requires TWO separate run_test.py invocations:
+#   1. Generic tests run with --inductor (sets PYTORCH_TEST_WITH_INDUCTOR=1)
+#   2. Inductor unit tests run WITHOUT --inductor (avoids nested dynamo state)
+# See: https://github.com/pytorch/pytorch/blob/main/.ci/pytorch/test.sh
+INDUCTOR_GENERIC_TESTS = [
+    "test_modules",
+    "test_ops",
+    "test_ops_gradients",
+    "test_torch",
+]
+INDUCTOR_UNIT_TESTS = [
+    "inductor/test_torchinductor",
+    "inductor/test_torchinductor_opinfo",
+    "inductor/test_aot_inductor",
+]
+
+
+def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     reconcile_agent_visibility_env()
 
-    os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
-    os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
+    os.environ.setdefault("CI", "1")
+    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+    )
+    os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
+    os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
+    os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
+    os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
-    os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
 
+    if test_config:
+        os.environ.setdefault("TEST_CONFIG", test_config)
+
+    # On 1-GPU runners, rocminfo reports all physical GPUs (e.g. 3) but only one
+    # is visible via HIP_VISIBLE_DEVICES.  This causes NUM_PROCS=3 inside
+    # run_test.py, spawning 3 parallel workers that all contend for the same GPU.
+    # Force serial execution for non-distributed configs to avoid contention and
+    # ensure even shard distribution by wall-clock time.
+    if test_config != "distributed":
+        os.environ["PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL"] = "1"
+
+    # Add PyTorch test directory to PYTHONPATH so that run_test.py and pytest
+    # can locate test helpers and internal modules.
+    test_dir = str(pytorch_dir / "test")
     old_pythonpath = os.getenv("PYTHONPATH", "")
-    test_dir = f"{pytorch_dir}/test"
-
     if old_pythonpath:
         os.environ["PYTHONPATH"] = f"{test_dir}:{old_pythonpath}"
     else:
         os.environ["PYTHONPATH"] = test_dir
 
-    # Force update the PYTHONPATH to be part of the sys path
+    # Force update the PYTHONPATH to be part of the sys path.
     # Otherwise our current python process that will run pytest will NOT
     # find it and pytest will crash!
     if test_dir not in sys.path:
         sys.path.insert(0, test_dir)
 
 
+def print_env() -> None:
+    title = " TheRock PyTorch Test Environment "
+    bar = f"{'=' * len(title)}"
+    print(bar)
+    print(title)
+    print(bar)
+    for var in THEROCK_ENV_VARS:
+        val = os.environ.get(var, "<not set>")
+        print(f"  {var}={val}")
+    print(bar)
+    sys.stdout.flush()
+
+
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
-    """Parse command line arguments.
-
-    Args:
-        argv: Command line arguments (without program name).
-
-    Returns:
-        Tuple of (parsed args, passthrough pytest args passed after "--").
-    """
     # Extract passthrough pytest args after "--"
     try:
         rest_pos = argv.index("--")
     except ValueError:
-        passthrough_pytest_args = []
+        passthrough_args = []
     else:
-        passthrough_pytest_args = argv[rest_pos + 1 :]
+        passthrough_args = argv[rest_pos + 1 :]
         argv = argv[:rest_pos]
 
-    parser = argparse.ArgumentParser(
-        description="""
-Runs PyTorch pytest for AMD GPUs. Skips additional tests compared to upstream.
-Additional tests to be skipped can be tuned by PyTorch version and amdgpu family.
-All arguments after "--" are passed directly to pytest.
-"""
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
         "--amdgpu-family",
         type=str,
         default=os.getenv("AMDGPU_FAMILY", ""),
-        required=False,
-        help="""Amdgpu family (e.g. "gfx942").
-Select (potentially) additional tests to be skipped based on the amdgpu family""",
+        help='AMDGPU family string (e.g. "gfx94X-dcgpu", "gfx110X-all"). '
+        "Falls back to AMDGPU_FAMILY env var, then auto-detection.",
     )
-
-    pytorch_version = os.getenv("PYTORCH_VERSION")
     parser.add_argument(
         "--pytorch-version",
         type=str,
-        default=pytorch_version if pytorch_version is not None else "",
-        required=False,
-        help="""Pytorch version (e.g. "2.7" or "all").
-Select (potentially) additional tests to be skipped based on the Pytorch version.
-'All' is also possible. Then all skip tests for all pytorch versions are included.
-If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
+        default=os.getenv("PYTORCH_VERSION", ""),
+        help='PyTorch version for skip-list lookup (e.g. "2.9", "2.12"). '
+        "Auto-detected from the installed torch package if not set.",
     )
-
-    default_pytorch_dir = THIS_SCRIPT_DIR / "pytorch"
     parser.add_argument(
         "--pytorch-dir",
         type=Path,
-        default=default_pytorch_dir,
-        help="""Path for the pytorch repository, where tests will be sourced from
-By default the pytorch directory is determined based on this script's location
-""",
+        default=THIS_SCRIPT_DIR / "pytorch",
+        help="Path to the PyTorch source checkout (must contain test/run_test.py).",
     )
-
+    parser.add_argument(
+        "--test-config",
+        type=str,
+        default=os.getenv("TEST_CONFIG", "default"),
+        help='TEST_CONFIG value for run_test.py sharding/config logic (default: "default").',
+    )
+    parser.add_argument(
+        "--shard",
+        type=int,
+        default=int(os.getenv("SHARD_NUMBER", "0")),
+        help="1-indexed shard number (e.g. --shard 2 --num-shards 4 runs shard 2 of 4). "
+        "Also reads SHARD_NUMBER env var. Set to 0 to disable sharding.",
+    )
+    parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=int(os.getenv("NUM_TEST_SHARDS", "0")),
+        help="Total number of shards. Also reads NUM_TEST_SHARDS env var. "
+        "Must be set together with --shard.",
+    )
+    parser.add_argument(
+        "--include",
+        nargs="+",
+        default=None,
+        metavar="TEST",
+        help="Only run these test files (e.g. --include test_nn test_torch). "
+        "Passed to run_test.py --include. Also settable via TESTS_TO_INCLUDE "
+        "env var, which run_test.py reads directly. If neither is set, "
+        "run_test.py runs all tests for the given test config.",
+    )
+    parser.add_argument(
+        "--exclude",
+        nargs="+",
+        default=None,
+        metavar="TEST",
+        help="Exclude these test files (e.g. --exclude test_dynamo test_inductor). "
+        "Passed to run_test.py --exclude.",
+    )
+    parser.add_argument(
+        "--exclude-jit-executor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-jit-executor to run_test.py (default: enabled). "
+        "Use --no-exclude-jit-executor to include JIT executor tests.",
+    )
+    parser.add_argument(
+        "--exclude-distributed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-distributed-tests to run_test.py (default: enabled). "
+        "Use --no-exclude-distributed to include distributed tests. "
+        "Automatically disabled when --test-config=distributed.",
+    )
+    parser.add_argument(
+        "--exclude-quantization",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-quantization-tests to run_test.py (default: enabled). "
+        "Use --no-exclude-quantization to include quantization tests.",
+    )
     parser.add_argument(
         "--debug",
-        default=False,
-        required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Inverts the selection. Only runs skipped tests.""",
+        default=False,
+        help="Invert TheRock skip list: only run tests that are normally skipped.",
     )
-
     parser.add_argument(
         "-k",
         default="",
-        required=False,
-        help="""Overwrites the pytest -k option that decides which tests should be run or skipped""",
+        help="Override the pytest -k expression (bypasses TheRock skip-test generation).",
     )
-
     parser.add_argument(
         "--cache",
         default=True,
-        required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
+        help="Enable pytest caching (default). Use --no-cache when only having "
+        "read-only access to the pytorch directory.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Pass --dry-run to run_test.py to list tests without running them.",
     )
 
     # GPU selection happens in two stages:
@@ -209,21 +318,23 @@ By default the pytorch directory is determined based on this script's location
     parser.add_argument(
         "--device-query",
         type=str,
-        choices=["unique", "all"],
-        default="unique",
+        choices=["auto", "unique", "all"],
+        default="auto",
         help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
-- "unique": one device per architecture (default). E.g. {gfx942:[0], gfx1100:[2]}.
-- "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.""",
+- "unique": one device per architecture. E.g. {gfx942:[0], gfx1100:[2]}.
+- "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.
+"auto" (default) derives from --test-config: "all" for "distributed", else "unique".""",
     )
 
     parser.add_argument(
         "--gpu-policy",
         type=str,
-        choices=["single", "all"],
-        default="single",
+        choices=["auto", "single", "all"],
+        default="auto",
         help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
-- "single": one GPU visible at a time (default). Suitable for most unit tests.
-- "all": all candidate GPUs visible at once. Useful for multi-GPU tests.""",
+- "single": one GPU visible at a time. Suitable for most unit tests.
+- "all": all candidate GPUs visible at once. Useful for multi-GPU tests.
+"auto" (default) derives from --test-config: "all" for "distributed", else "single".""",
     )
 
     parser.add_argument(
@@ -233,47 +344,206 @@ By default the pytorch directory is determined based on this script's location
         action=argparse.BooleanOptionalAction,
         help="""Allows version mismatches between pytorch test sources and installed packages. Defaults to False, so mismatched versions block running tests""",
     )
-
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
+        parser.error(f"Directory at '{args.pytorch_dir}' does not exist.")
+
+    run_test_path = args.pytorch_dir / "test" / "run_test.py"
+    if not run_test_path.exists():
+        parser.error(f"run_test.py not found at '{run_test_path}'.")
+
+    if (args.shard > 0) != (args.num_shards > 0):
+        parser.error("--shard and --num-shards must both be set or both be unset.")
+
+    if args.shard > 0 and args.shard > args.num_shards:
         parser.error(
-            f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir or check it out in TheRock/external-build/pytorch/<your pytorch directory>"
+            f"--shard ({args.shard}) cannot exceed --num-shards ({args.num_shards})."
         )
 
-    return args, passthrough_pytest_args
+    # Resolve GPU selection defaults from --test-config ("auto" means "derive").
+    # Distributed tests need all GPUs by default; other configs use a single
+    # unique device to avoid contention.
+    is_distributed = args.test_config == "distributed"
+    if args.device_query == "auto":
+        args.device_query = "all" if is_distributed else "unique"
+    if args.gpu_policy == "auto":
+        args.gpu_policy = "all" if is_distributed else "single"
+
+    return args, passthrough_args
 
 
-def main() -> int:
-    """Main entry point for the PyTorch test runner.
+def build_run_test_cmd(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> list[str]:
+    """Build the command line for PyTorch's test/run_test.py.
 
-    Returns:
-        Exit code from pytest (0 for success, non-zero for failures).
+    Assembles flags for sharding, test selection, skip expressions, and any
+    extra pytest arguments that were passed after ``--``.
     """
-    try:
-        args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
+    run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
+    cmd = [sys.executable, run_test_path]
 
-        pytorch_dir = args.pytorch_dir
-        check_pytorch_source_version(
-            pytorch_dir=pytorch_dir, allow_mismatch=args.allow_version_mismatch
+    if args.exclude_jit_executor:
+        cmd.append("--exclude-jit-executor")
+    if args.exclude_distributed and args.test_config != "distributed":
+        cmd.append("--exclude-distributed-tests")
+    if args.test_config == "distributed":
+        cmd.append("--distributed-tests")
+    if args.exclude_quantization:
+        cmd.append("--exclude-quantization-tests")
+
+    cmd.append("--keep-going")
+    cmd.append("--verbose")
+
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    if args.shard > 0 and args.num_shards > 0:
+        cmd.extend(["--shard", str(args.shard), str(args.num_shards)])
+
+    if args.include:
+        cmd.extend(["--include"] + args.include)
+    test_dir = args.pytorch_dir / "test"
+    excludes = [m for m in EXCLUDED_TEST_MODULES if (test_dir / (m + ".py")).exists()]
+    if args.exclude:
+        excludes.extend(args.exclude)
+    if excludes:
+        cmd.extend(["--exclude"] + excludes)
+
+    if tests_to_skip:
+        cmd.extend(["-k", tests_to_skip])
+
+    if not args.cache:
+        passthrough_args.append("-p")
+        passthrough_args.append("no:cacheprovider")
+
+    passthrough_args.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+
+    cmd.extend(passthrough_args)
+    return cmd
+
+
+def build_inductor_cmds(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> list[list[str]]:
+    """Build the two run_test.py commands for the inductor config.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``:
+      1. Generic tests (test_modules, test_ops, …) with ``--inductor``
+      2. Inductor unit tests (inductor/test_torchinductor, …) *without*
+         ``--inductor`` to avoid nested dynamo state
+    """
+    run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
+
+    extra = list(passthrough_args)
+    if not args.cache:
+        extra.extend(["-p", "no:cacheprovider"])
+    extra.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+
+    skip_args = ["-k", tests_to_skip] if tests_to_skip else []
+
+    def _base_cmd() -> list[str]:
+        cmd = [sys.executable, run_test_path]
+        cmd.extend(["--keep-going", "--verbose"])
+        if args.dry_run:
+            cmd.append("--dry-run")
+        if args.shard > 0 and args.num_shards > 0:
+            cmd.extend(["--shard", str(args.shard), str(args.num_shards)])
+        return cmd
+
+    # 1. Generic tests WITH --inductor (enables TorchInductor backend)
+    cmd1 = _base_cmd()
+    cmd1.append("--inductor")
+    cmd1.extend(["--include"] + INDUCTOR_GENERIC_TESTS)
+    cmd1.extend(skip_args)
+    cmd1.extend(extra)
+
+    # 2. Inductor unit tests WITHOUT --inductor (nested dynamo guard)
+    cmd2 = _base_cmd()
+    cmd2.extend(["--include"] + INDUCTOR_UNIT_TESTS)
+    cmd2.extend(skip_args)
+    cmd2.extend(extra)
+
+    return [cmd1, cmd2]
+
+
+def _run_inductor(
+    args: argparse.Namespace,
+    tests_to_skip: str,
+    passthrough_args: list[str],
+) -> int:
+    """Run the inductor test config as two run_test.py invocations.
+
+    Matches upstream ``test_inductor_shard()`` in ``.ci/pytorch/test.sh``.
+    Returns the worst (non-zero) return code from either invocation.
+    """
+    # Upstream runs verify_dynamo.py first as a quick smoke test.
+    verify_script = args.pytorch_dir / "tools" / "dynamo" / "verify_dynamo.py"
+    if verify_script.exists():
+        print("Running verify_dynamo.py …")
+        vr = subprocess.run(
+            [sys.executable, str(verify_script)], cwd=str(args.pytorch_dir)
         )
+        if vr.returncode != 0:
+            print(f"verify_dynamo.py failed with return code {vr.returncode}")
+            return vr.returncode
+    else:
+        print(f"verify_dynamo.py not found at {verify_script}, skipping")
 
-        setup_env(pytorch_dir)
+    cmds = build_inductor_cmds(args, tests_to_skip, passthrough_args)
+    labels = [
+        "generic tests with --inductor",
+        "inductor unit tests (no --inductor)",
+    ]
 
-        # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
-        # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
-        # changing HIP_VISIBLE_DEVICES has no effect.
-        selected_archs = configure_gpu_visibility(
-            args.amdgpu_family, args.device_query, args.gpu_policy
+    worst_rc = 0
+    for label, cmd in zip(labels, cmds):
+        print(f"\n{'=' * 60}")
+        print(f"Inductor phase: {label}")
+        print(f"{'=' * 60}")
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        print(
+            f"run_test.py [{label}] finished with return code: {result.returncode}",
+            flush=True,
         )
+        if result.returncode != 0:
+            worst_rc = result.returncode
 
-        # Determine PyTorch version
-        pytorch_version = args.pytorch_version
-        if not pytorch_version:
-            pytorch_version = detect_pytorch_version()
-        print(f"Using PyTorch version: {pytorch_version}")
+    return worst_rc
 
-        # Get tests to skip
+
+def main(argv: list[str]) -> int:
+    args, passthrough_args = cmd_arguments(argv)
+    check_pytorch_source_version(
+        pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
+    )
+
+    setup_env(
+        pytorch_dir=args.pytorch_dir,
+        test_config=args.test_config,
+        amdgpu_family=args.amdgpu_family,
+    )
+
+    # Set HIP_VISIBLE_DEVICES BEFORE importing torch or running pytest. Once
+    # torch.cuda is initialized, changing HIP_VISIBLE_DEVICES has no effect.
+    selected_archs = configure_gpu_visibility(
+        args.amdgpu_family, args.device_query, args.gpu_policy
+    )
+
+    pytorch_version = args.pytorch_version
+    if not pytorch_version:
+        pytorch_version = detect_pytorch_version()
+    print(f"Using PyTorch version: {pytorch_version}")
+
+    if args.k:
+        tests_to_skip = args.k
+    else:
         tests_to_skip = get_tests(
             amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
@@ -281,41 +551,23 @@ def main() -> int:
             create_skip_list=not args.debug,
         )
 
-        # Allow manual override of test selection
-        if args.k:
-            tests_to_skip = args.k
+    print_env()
 
-        pytest_args = [
-            f"{pytorch_dir}/test/test_nn.py",
-            f"{pytorch_dir}/test/test_torch.py",
-            f"{pytorch_dir}/test/test_cuda.py",
-            f"{pytorch_dir}/test/test_unary_ufuncs.py",
-            f"{pytorch_dir}/test/test_binary_ufuncs.py",
-            f"{pytorch_dir}/test/test_autograd.py",
-            f"-k={tests_to_skip}",
-            # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
-            # -n numprocesses, --numprocesses=numprocesses
-            #         Shortcut for '--dist=load --tx=NUM*popen'.
-            #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
-            #         With 'auto', attempt to detect physical CPU count. If physical CPU count cannot be determined, falls back to 1.
-            #         Forced to 0 (disabled) when used with --pdb.
-        ]
+    if args.test_config == "inductor":
+        return_code = _run_inductor(args, tests_to_skip, passthrough_args)
+    else:
+        cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
+        print(f"Executing: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        return_code = result.returncode
+        print(f"run_test.py finished with return code: {return_code}")
 
-        if not args.cache:
-            pytest_args += [
-                "-p",
-                "no:cacheprovider",  # Disable caching: useful when running in a container
-            ]
-        # Append any passthrough pytest args passed after "--"
-        pytest_args.extend(passthrough_pytest_args)
-
-        retcode = pytest.main(pytest_args)
-        print(f"Pytest finished with return code: {retcode}")
-        return retcode
-    except (ValueError, IndexError) as e:
-        print(f"[ERROR] Exception in PyTorch unit-tests runner: {e}")
-        sys.exit(1)
+    # Force-exit immediately.  PyTorch's run_test.py is known to hang after
+    # all test files complete due to leaked daemon threads or orphan child
+    # processes (https://github.com/ROCm/TheRock/issues/999).  os._exit()
+    # terminates without waiting for threads or running atexit handlers.
+    os._exit(return_code if return_code >= 0 else 1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
