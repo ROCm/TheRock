@@ -239,8 +239,9 @@ python run_pytorch_smoke_tests.py -- \
 ### Running full PyTorch tests
 
 We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
-which runs PyTorch unit tests using pytest with additional test exclusion
-capabilities tailored for AMD ROCm GPUs. See the script for detailed
+which runs PyTorch unit tests via PyTorch's own `test/run_test.py` with
+additional test exclusion capabilities tailored for AMD ROCm GPUs. It runs the
+full suite by default, or a subset via `--include`. See the script for detailed
 instructions. Here are a few examples:
 
 ```bash
@@ -249,6 +250,9 @@ python -m pip install -r pytorch/.ci/docker/requirements-ci.txt
 
 # Basic usage (auto-detect everything, no extra args):
 python run_pytorch_tests.py
+
+# Run only a subset of test files (as the quick Test PyTorch Wheels workflow does):
+python run_pytorch_tests.py --include test_nn test_torch test_cuda
 
 # Typical usage on CI, passing through some useful pytest args:
 python run_pytorch_tests.py -- \
