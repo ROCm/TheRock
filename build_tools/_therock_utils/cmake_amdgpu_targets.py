@@ -136,6 +136,16 @@ def expand_families(
     return targets
 
 
+# Family of architecture-independent targets (portable IR such as SPIR-V) that
+# emit no per-arch device code, hence no split device artifacts or device wheels.
+GENERIC_FAMILY = "gpu-generic"
+
+
+def generic_targets(family_map: dict[str, list[str]]) -> set[str]:
+    """Return the set of architecture-independent gfx targets (GENERIC_FAMILY)."""
+    return set(family_map.get(GENERIC_FAMILY, []))
+
+
 def _tokenize_cmake(text: str) -> list[str]:
     """Tokenize a cmake argument list, stripping comments and handling quotes."""
     # Strip inline comments (# to end of line).
