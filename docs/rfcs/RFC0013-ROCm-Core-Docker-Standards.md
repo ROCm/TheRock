@@ -1,5 +1,7 @@
 ---
-author: Liam Berry (liaberry), Saad Rahim (saadrahim)
+authors:
+  - Liam Berry (liaberry)
+  - Saad Rahim (saadrahim)
 created: 2026-07-27
 modified: 2026-07-28
 status: Draft
@@ -232,7 +234,7 @@ Recommended: `org.opencontainers.image.vendor` (`AMD`),
  
 ROCm docs already use tags such as
 `rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1`. Core
-Core SDK/Runtime images adopt the same field order and the same OS-plus-version
+SDK/Runtime images adopt the same field order and the same OS-plus-version
 convention for `{OS}` (e.g. `ubuntu24.04`), with one refinement: Enterprise
 Linux uses source distro plus major (`alma8`/`alma9`/`alma10`, `ubi8`/`ubi9`/`ubi10`) — see
 below:
@@ -253,6 +255,15 @@ runtime Dockerfile and RFC0009's release version semantics — one of
 "channel" concept. (Earlier drafts of this RFC called this field `{CHANNEL}`;
 it is the same thing as `RELEASE_TYPE` and is renamed here to match the
 existing build arg and packaging RFCs.)
+ 
+`{VERSION}` is the full ROCm `major.minor.patch` (e.g. `7.14.0`). For Core
+SDK/Runtime images this intentionally shares its `major.minor` with the
+leading `rocm{X.Y}` field: `rocm{X.Y}` is the grouping key that floating tags
+and "latest patch in a minor" sorting hang off of, while `{VERSION}` records
+the exact patch. The overlap is not redundant in the framework tags this
+grammar is borrowed from — there `{VERSION}` is the framework's version (e.g.
+PyTorch `2.9.1`), not ROCm's — so the shared schema is kept for consistency
+across all `rocm/*` repos.
  
 Rules: always include ROCm major.minor and OS base; declare the GPU family
 (`multi-arch` for released images, or a single `gfx…` family for slim
