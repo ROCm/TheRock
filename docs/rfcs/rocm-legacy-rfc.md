@@ -22,7 +22,14 @@ This RFC proposes to resolve the confusion by swapping the names so that the can
 2. **Rename the current `ROCm/ROCm` → `ROCm/rocm-legacy`.** The existing umbrella/docs/manifest repo steps aside under a name that clearly signals its legacy status.
 3. **Move the still-relevant documentation and governance content from `rocm-legacy` into the new `ROCm/ROCm`** (formerly TheRock).
  
-GitHub automatically creates redirects from a renamed repository's old path to its new one, so existing links to both repos continue to resolve after the swap.
+GitHub automatically creates a redirect from a renamed repository's old path to its new one — **but only while no live repository occupies the old path.** Because this is a name *swap*, the redirects do not both survive: renaming the current `ROCm/ROCm` to `rocm-legacy` creates a `ROCm/ROCm` → `rocm-legacy` redirect, but the subsequent rename of `TheRock` into `ROCm/ROCm` places a live repo at that path, which overrides (destroys) the redirect. The resulting end state is:
+ 
+- `ROCm/ROCm` — the live, active repository (formerly TheRock).
+- `ROCm/TheRock` → redirects to the new `ROCm/ROCm`. This redirect persists.
+- `ROCm/ROCm` → `rocm-legacy` redirect — **does not survive**; it is clobbered by the live repo taking the name.
+- `ROCm/rocm-legacy` — reachable **only by its explicit name**; nothing redirects to it.
+ 
+This behavior is acceptable for the common case: anyone following an old `ROCm/ROCm` link lands on the new active repository, which is the desired outcome. The only casualty is deep-links to specific *legacy file paths* (e.g. the old `CHANGELOG.md` URL), which will now resolve against the new repo's tree and 404 — which is precisely why the legacy content must be migrated into the new repo (with history) rather than left behind, and why `rocm-legacy` must be linked explicitly from the new `ROCm/ROCm`.
  
 ## Scope
  
@@ -41,14 +48,14 @@ GitHub automatically creates redirects from a renamed repository's old path to i
 - Any change to `ROCm/rocm-libraries` or `ROCm/rocm-systems`, which remain independent component super-repos.
 - Changes to TheRock's build architecture, CI pipelines, or existing RFC process (RFC0002, RFC0009, RFC0012, etc.) beyond adding the migrated governance/docs content.
 - Changes to the "ROCm" product name or any marketing/branding decision — this is a repository-naming change only.
-- A decision on whether to eventually fully archive `rocm-legacy`; this RFC keeps it as a retained, redirect-only repo rather than archiving it outright (see Open Questions).
+- A decision on whether to eventually fully archive `rocm-legacy`; this RFC keeps it as a retained, explicitly-linked repo (note: it will have **no inbound redirect** — see Overview) rather than archiving it outright (see Open Questions).
  
 ## Motivation
  
 - **Direct user confusion.** The presenting problem is that users cannot tell which repository is authoritative. Two repos named `ROCm/ROCm` and `ROCm/TheRock`, both surfacing ROCm content, split issue reports, release-note traffic, and contributions across the wrong destinations. Making the actively developed repo *be* `ROCm/ROCm` removes the ambiguity at the most visible layer: the repo name itself.
 - **The canonical name should point at the active repo.** `ROCm/ROCm` is the most discoverable, best-SEO'd, most-linked name in the org. Today it points at a repo with no source and little active development. The name swap puts the org's best-known URL in front of the repo people actually need.
 - **TheRock is already the de facto direction.** The current `ROCm/ROCm` README already points to TheRock. This formalizes what is implicitly true rather than maintaining two repos with an unclear relationship indefinitely.
-- **Redirects make the swap low-risk.** GitHub's automatic rename-redirects mean existing links to `github.com/ROCm/TheRock` and `github.com/ROCm/ROCm` continue to resolve, so the transition does not break the existing ecosystem of links, bookmarks, and automation on day one.
+- **Redirects keep the highest-traffic paths working.** After the swap, both `github.com/ROCm/TheRock` and `github.com/ROCm/ROCm` resolve to the new active repository (the former via a persistent redirect, the latter because it *is* the new repo). The main ecosystem of links and bookmarks pointing at either top-level repo continues to work on day one. The one exception — deep-links to legacy file paths, which do not survive because `rocm-legacy` has no inbound redirect — is handled by migrating that content into the new repo (see Overview and Risks).
  
 ## Proposed Approach
  
