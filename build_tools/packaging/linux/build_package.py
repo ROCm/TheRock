@@ -620,63 +620,56 @@ def run(args: argparse.Namespace):
         print("Error: No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    current_pkg_idx = 0
-    try:
-        built_pkglist = []
-        failed_pkglist = []
+    built_pkglist = []
+    failed_pkglist = []
 
-        for current_pkg_idx, pkg_name in enumerate(pkg_list):
-            print(f"Creating {config.pkg_type} package: {pkg_name}")
+    for current_pkg_idx, pkg_name in enumerate(pkg_list):
+        print(f"Creating {config.pkg_type} package: {pkg_name}")
 
+        try:
             # Build all package variants for this package
             output_list = build_package_variants(pkg_name, config)
-
-            if output_list:
-                built_pkglist.extend(output_list)
-                print(
-                    f"\n✓ Successfully built {len(output_list)} variant(s) for {pkg_name}"
-                )
+        except Exception as e:
+            # A single package's failure (e.g. dpkg-buildpackage erroring out)
+            # must not prevent the remaining queued packages from being
+            # attempted. Record it and continue to the next package.
+            tb = traceback.extract_tb(sys.exc_info()[2])
+            if tb:
+                filename, line_no, func, text = tb[-1]
+                print(f"\n✗ {pkg_name} failed at {filename}:{line_no}: {e}")
             else:
-                # Package failed to build
-                failed_pkglist.append(pkg_name)
-                print(f"\n✗ Failed to build any variants for {pkg_name}")
+                print(f"\n✗ {pkg_name} failed: {e}")
+            failed_pkglist.append(pkg_name)
+            continue
 
-        # Clean the build directories
-        cleanup_packaging_environment(config)
-
-        if built_pkglist:
-            print(f"\nBuilt packages: {built_pkglist}")
-
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
-
-        # Print build summary
-        print_build_summary(config, pkglist_status)
-    except SystemExit as e:
-        # Build aborted somewhere inside create_* functions
-        tb = traceback.extract_tb(sys.exc_info()[2])
-        if tb:
-            filename, line_no, func, text = tb[-1]
-            print(f"\n❌ Build aborted due to an error at {filename}:{line_no}: {e}\n")
+        if output_list:
+            built_pkglist.extend(output_list)
+            print(
+                f"\n✓ Successfully built {len(output_list)} variant(s) for {pkg_name}"
+            )
         else:
-            print(f"\n❌ Build aborted due to an error: {e}\n")
-        # Record failed package and all pending packages
-        failed_pkglist.append(pkg_list[current_pkg_idx])
-        pending_pkgs = pkg_list[current_pkg_idx + 1 :]
-        failed_pkglist.extend(pending_pkgs)
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
-        print_build_summary(config, pkglist_status)
-        # Stop the program
-        raise
+            # Package failed to build
+            failed_pkglist.append(pkg_name)
+            print(f"\n✗ Failed to build any variants for {pkg_name}")
+
+    # Clean the build directories
+    cleanup_packaging_environment(config)
+
+    if built_pkglist:
+        print(f"\nBuilt packages: {built_pkglist}")
+
+    pkglist_status = PackageList(
+        total=pkg_list,
+        built=built_pkglist,
+        skipped=skipped_list,
+        failed=failed_pkglist,
+    )
+
+    # Print build summary
+    print_build_summary(config, pkglist_status)
+
+    if failed_pkglist:
+        sys.exit(1)
 
 
 def main(argv: list[str]):
