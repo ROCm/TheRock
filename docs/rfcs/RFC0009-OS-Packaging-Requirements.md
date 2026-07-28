@@ -1,7 +1,7 @@
 ---
 author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
 created: 2025-11-14
-modified: 2026-01-12
+modified: 2026-05-15
 status: draft
 ---
 
@@ -212,7 +212,9 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-profiler-base                   |                             | rocprofiler-sdk, tracer                                                       |                                          |
 | amdrocm-base                            |                             | rocminfo, version (rocm-core)                                                 |                                          |
 | amdrocm-CK                              |                             |                                                                               | CK                                       |
-| amdrocm-debugger                        |                             | rocgdb                                                                        |                                          |
+| amdrocm-gdb                             |                             | rocgdb, roccoremerge                                                          |                                          |
+| amdrocm-debug-agent                     |                             | rocr-debug-agent (librocm-debug-agent.so)                                     |                                          |
+| amdrocm-dbgapi                          |                             | rocm-dbgapi (librocm-dbgapi.so)                                               |                                          |
 | amdrocm-math-common or amdrocm-math-dev |                             |                                                                               | CK, rocWMMA, rocRoller, Tensile, Origami |
 | amdrocm-hipify                          |                             | HIPIFY                                                                        |                                          |
 | amdrocm-opencl                          |                             | OpenCL                                                                        |                                          |
