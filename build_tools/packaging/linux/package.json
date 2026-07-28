@@ -215,6 +215,17 @@
         ]
       },
       {
+        "Artifact": "rocjitsu-hotswap",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjitsu-hotswap",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "core-hip",
         "Artifact_Subdir": [
           {

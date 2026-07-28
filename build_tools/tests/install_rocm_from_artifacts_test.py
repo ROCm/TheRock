@@ -70,6 +70,10 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_base_only_includes_rocjitsu_hotswap(self):
+        argv = self._run_main(["--base-only"])
+        self.assertIn("rocjitsu-hotswap_lib", argv)
+
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     """Return a tarball name matching the platform under test."""
@@ -376,6 +380,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         prim=False,
         rand=False,
         rccl=False,
+        rocshmem=False,
         mpi=False,
         rocdecode=False,
         rocjpeg=False,
