@@ -264,7 +264,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     hipBLAS    hipBLAS-common    hipBLASLt    hipCUB   hipDNN    hipDNN_samples
     hipFFT    hipInfo    hipRAND    hipSOLVER    hipSPARSE    hipSPARSELt    hipTensor
     hipblasltprovider    hipdnn_integration_tests    hipfile    hipkernelprovider
-    libhipcxx    miopenprovider    mirage    mxDataGenerator    ocl-clr    rccl
+    hipthreads    miopenprovider    mirage    mxDataGenerator    ocl-clr    rccl
     rccl-tests    rdc    rocALUTION    rocBLAS    rocFFT    rocPRIM    rocPRIM_tests
     rocRAND    rocRoller    rocSOLVER    rocSPARSE    rocThrust    rocWMMA    rocdecode
     rocjitsu    rocjpeg    rocm-kpack    rocprofiler-compute    rocprofiler-sdk

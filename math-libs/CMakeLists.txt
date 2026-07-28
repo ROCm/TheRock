@@ -517,8 +517,7 @@ if(THEROCK_ENABLE_ROCALUTION AND NOT _skip_rocalution)
   )
 endif(THEROCK_ENABLE_ROCALUTION)
 
-therock_project_has_no_targets(_skip_libhipcxx libhipcxx)
-if(THEROCK_ENABLE_LIBHIPCXX AND NOT _skip_libhipcxx)
+if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
   # libhipcxx
   ##############################################################################
@@ -699,7 +698,8 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR AND NOT _skip_hiptensor)
   )
 endif()
 
-if(THEROCK_ENABLE_HIPTHREADS)
+therock_project_has_no_targets(_skip_hipthreads hipthreads)
+if(THEROCK_ENABLE_HIPTHREADS AND NOT _skip_hipthreads)
   ##############################################################################
   # hipthreads
   ##############################################################################
