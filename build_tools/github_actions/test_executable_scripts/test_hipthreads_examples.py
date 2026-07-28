@@ -249,9 +249,21 @@ if IS_WINDOWS:
     )
 
 gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
+if not gpu_arch:
+    # offload-arch can transiently fail (e.g. "no ROCm-capable device detected");
+    # fall back to the first concrete target from AMDGPU_TARGETS, which CI sets to
+    # a comma-separated list of compilable arches (e.g. gfx1100,gfx1101,...).
+    amdgpu_targets = os.getenv("AMDGPU_TARGETS", "")
+    gpu_arch = amdgpu_targets.split(",")[0].strip()
+    if gpu_arch:
+        logging.warning(
+            f"offload-arch probe failed; using AMDGPU_TARGETS[0]={gpu_arch}"
+        )
 logging.info(f"++ Detected GPU architecture: {gpu_arch}")
 if not gpu_arch:
-    raise RuntimeError("Could not detect GPU architecture (offload-arch failed).")
+    raise RuntimeError(
+        "Could not detect GPU architecture (offload-arch and AMDGPU_TARGETS both empty)."
+    )
 
 if not EXAMPLES_ROOT.exists():
     raise FileNotFoundError(
