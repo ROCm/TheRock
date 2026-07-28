@@ -244,17 +244,37 @@ def main(argv: list[str]) -> int:
         default=os.environ.get("GITHUB_RUN_ID", ""),
         help="Workflow run ID (default: $GITHUB_RUN_ID).",
     )
+    parser.add_argument(
+        "--collect-timing",
+        action="store_true",
+        help=(
+            "Collect workflow timing and write workflow_timing.json "
+            "and workflow_timing.md."
+        ),
+    )
     args = parser.parse_args(argv)
 
     jobs = parse_needs_json(args.needs_json)
     failed, _ = evaluate_results(jobs)
 
-    if args.github_repository and args.github_run_id and os.environ.get("GITHUB_TOKEN"):
+    if args.collect_timing:
+        if not args.github_repository or not args.github_run_id:
+            parser.error(
+                "--collect-timing requires --github-repository "
+                "and --github-run-id"
+            )
+
+        token = os.environ.get("GITHUB_TOKEN")
+        if not token:
+            parser.error(
+                "--collect-timing requires GITHUB_TOKEN"
+            )
+
         collected_records = collect_timing_records(
             repository=args.github_repository,
             run_id=args.github_run_id,
             run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
-            token=os.environ["GITHUB_TOKEN"],
+            token=token,
         )
 
         timing_json = format_timing_json(collected_records)
