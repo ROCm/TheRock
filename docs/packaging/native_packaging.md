@@ -51,8 +51,8 @@ the names are updated to use -dev.
 ## RPATH Packages
 
 By default, RUNPATH in binaries and libraries is converted to RPATH during
-packaging. This ensures proper library loading behavior. To disable this
-conversion, use the `--no-rpath-pkg` option.
+packaging. This ensures proper library loading behavior. To keep RUNPATH
+instead, use the `--runpath-pkg` option.
 
 ## Fields in package.json
 
@@ -236,7 +236,7 @@ Debian package with explicit target:<br>
    --pkg-type deb
 ```
 
-Debian package without RPATH conversion (disabled):<br>
+Debian package with RUNPATH preserved (skip RPATH conversion):<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -245,5 +245,5 @@ Debian package without RPATH conversion (disabled):<br>
    --rocm-version 7.1.0 \
    --pkg-type deb \
    --version-suffix build_type \
-   --no-rpath-pkg
+   --runpath-pkg
 ```

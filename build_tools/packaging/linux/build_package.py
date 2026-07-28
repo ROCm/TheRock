@@ -603,8 +603,8 @@ def run(args: argparse.Namespace):
     # Create configuration from arguments
     config = create_package_config(args)
 
-    # Convert RUNPATH to RPATH in artifacts before packaging (use --no-rpath-pkg to disable)
-    if not args.no_rpath_pkg:
+    # Convert RUNPATH to RPATH in artifacts before packaging (use --runpath-pkg to skip)
+    if not args.runpath_pkg:
         print("\n=== Converting RUNPATH to RPATH in artifacts ===")
         convert_runpath_to_rpath(config.artifacts_dir)
 
@@ -730,9 +730,9 @@ def main(argv: list[str]):
     )
 
     p.add_argument(
-        "--no-rpath-pkg",
+        "--runpath-pkg",
         action="store_true",
-        help="Disable RUNPATH to RPATH conversion (conversion enabled by default)",
+        help="Keep RUNPATH in binaries (by default, RUNPATH is converted to RPATH)",
     )
 
     p.add_argument(
