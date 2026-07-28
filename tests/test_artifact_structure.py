@@ -80,6 +80,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("support", "dev"),
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),
+    ("opencl-cts", "test"), # test-only, not intended for publishing
 }
 
 
