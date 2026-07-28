@@ -80,20 +80,15 @@ class WorkflowJobHealth:
 
 @dataclass(frozen=True)
 class CommitCompatibility:
-    """Result of checking a candidate run's commit against the current commit.
+    """Result of comparing a candidate run with the exact expected baseline."""
 
-    A baseline run is only safe to reuse when it was built from source that the
-    current commit is based on. Reusing artifacts from a divergent or newer-than-current
-    commit risks mixing incompatible binaries, so those are rejected.
-    """
-
-    current_commit_sha: str
+    expected_head_sha: str
     candidate_head_sha: str
     relationship: str
 
     @property
     def is_valid(self) -> bool:
-        return self.relationship in ("same", "ancestor")
+        return self.relationship == "same"
 
 
 @dataclass(frozen=True)
@@ -586,61 +581,22 @@ def parse_run_timing(workflow_run: dict) -> RunTiming:
 def validate_commit_compatibility(
     *,
     candidate_head_sha: str,
-    current_commit_sha: str,
-    ordered_commit_shas: Sequence[str],
+    expected_head_sha: str,
 ) -> CommitCompatibility:
-    """Validate that a candidate run was built from a compatible commit.
+    """Require the candidate run to match the exact expected baseline SHA."""
 
-    ``ordered_commit_shas`` is the branch history newest-first (as returned by
-    ``gha_query_recent_branch_commits``). The current commit is expected to be
-    at or near the front of that list. A candidate is:
-
-    * ``same`` when its head_sha equals the current commit;
-    * ``ancestor`` when its head_sha appears *after* the current commit in the
-      newest-first history (i.e. the current commit is built on top of it);
-    * ``descendant_or_divergent`` when it appears *before* the current commit
-      (newer than current, so unsafe to reuse);
-    * ``unknown`` when it does not appear in the provided history window.
-
-    Only ``same`` and ``ancestor`` are considered valid. ``unknown`` is treated
-    as unsafe rather than assumed-good: a candidate outside the history window
-    cannot be confirmed as an ancestor, so widen the window if legitimate
-    ancestors are being rejected.
-    """
-    current = _normalize_sha(current_commit_sha)
+    expected = _normalize_sha(expected_head_sha)
     candidate = _normalize_sha(candidate_head_sha)
-    if not current:
-        raise ValueError("current_commit_sha must be non-empty")
+
+    if not expected:
+        raise ValueError("expected_head_sha must be non-empty")
     if not candidate:
         raise ValueError("candidate_head_sha must be non-empty")
 
-    if candidate == current:
-        relationship = "same"
-    else:
-        history = [_normalize_sha(sha) for sha in ordered_commit_shas]
-        try:
-            current_index = history.index(current)
-        except ValueError:
-            current_index = None
-        try:
-            candidate_index = history.index(candidate)
-        except ValueError:
-            candidate_index = None
-
-        if candidate_index is None:
-            relationship = "unknown"
-        elif current_index is None:
-            # Current commit is outside the window but the candidate is in it;
-            # we cannot establish ordering, so treat as unknown.
-            relationship = "unknown"
-        elif candidate_index > current_index:
-            # Newest-first: a larger index is older than the current commit.
-            relationship = "ancestor"
-        else:
-            relationship = "descendant_or_divergent"
+    relationship = "same" if candidate == expected else "different"
 
     return CommitCompatibility(
-        current_commit_sha=current,
+        expected_head_sha=expected,
         candidate_head_sha=candidate,
         relationship=relationship,
     )
@@ -684,8 +640,7 @@ def select_baseline_run(
     max_runs: int = 20,
     exclude_run_ids: Iterable[str] = (),
     required_successful_job_name_substrings: Iterable[str] = ("Build",),
-    current_commit_sha: str | None = None,
-    ordered_commit_shas: Sequence[str] | None = None,
+    expected_head_sha: str | None = None,
     max_age_hours: float | None = None,
     now: datetime | None = None,
     workflow_runs: Sequence[dict] | None = None,
@@ -708,13 +663,9 @@ def select_baseline_run(
             match at least one completed successful job in the candidate run.
             Defaults to ``("Build",)`` so unrelated test failures do not
             automatically disqualify otherwise reusable build artifacts.
-        current_commit_sha: When provided, enables the commit-compatibility
-            rule: a candidate run is only accepted when its head_sha equals or
-            is an ancestor of this commit. Requires ``ordered_commit_shas``.
-        ordered_commit_shas: Branch history newest-first (e.g. from
-            ``gha_query_recent_branch_commits``) used to establish ancestry for
-            the commit-compatibility rule. Ignored unless ``current_commit_sha``
-            is set.
+        expected_head_sha: When provided, a candidate run is accepted only
+            when its head_sha exactly equals this SHA. Automatic stage reuse
+            passes the resolved diff-base commit here.
         max_age_hours: When provided, enables the recency rule: candidate runs
             older than this many hours (by ``created_at``) are rejected.
         now: Reference time for the recency rule; defaults to the current UTC
@@ -740,16 +691,11 @@ def select_baseline_run(
     )
     excluded = {str(run_id) for run_id in exclude_run_ids}
 
-    check_commit = current_commit_sha is not None
-    if check_commit:
-        if not current_commit_sha.strip():
-            raise ValueError(
-                "current_commit_sha must be non-empty when commit checking is enabled"
-            )
-        if ordered_commit_shas is None:
-            raise ValueError(
-                "ordered_commit_shas is required when current_commit_sha is set"
-            )
+    check_commit = expected_head_sha is not None
+    if check_commit and not expected_head_sha.strip():
+        raise ValueError(
+            "expected_head_sha must be non-empty when commit checking is enabled"
+        )
     check_recency = max_age_hours is not None
 
     candidates = (
@@ -793,21 +739,24 @@ def select_baseline_run(
         if check_commit:
             candidate_head_sha = (workflow_run.get("head_sha", "") or "").strip()
             if not candidate_head_sha:
-                # A run without a head_sha cannot be confirmed compatible.
-                logger.info("Skipping run %s: no head_sha to compare", run_id)
+                logger.info(
+                    "Skipping run %s: no head_sha to compare with expected baseline",
+                    run_id,
+                )
                 continue
+
             commit_compatibility = validate_commit_compatibility(
                 candidate_head_sha=candidate_head_sha,
-                current_commit_sha=current_commit_sha,
-                ordered_commit_shas=ordered_commit_shas or (),
+                expected_head_sha=expected_head_sha,
             )
+
             if not commit_compatibility.is_valid:
                 logger.info(
-                    "Skipping run %s: commit %s is %s relative to current %s",
+                    "Skipping run %s: candidate commit %s does not exactly match "
+                    "expected baseline commit %s",
                     run_id,
                     candidate_head_sha,
-                    commit_compatibility.relationship,
-                    commit_compatibility.current_commit_sha,
+                    commit_compatibility.expected_head_sha,
                 )
                 continue
 

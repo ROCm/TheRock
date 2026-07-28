@@ -55,11 +55,6 @@ on:
          Automatic stage reuse: reject baseline runs older than this many hours. default: "72"
         type: string
         default: "72"
-      stage_reuse_commit_history:
-        description: >-
-          Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
-        type: string
-        default: "50"
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -178,9 +173,7 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
-          STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config

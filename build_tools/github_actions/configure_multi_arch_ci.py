@@ -854,16 +854,24 @@ def _determine_test_type(
     return "quick", "default"
 
 
-def _get_reuse_commit_sha(
+def _get_expected_baseline_sha(
     ci_inputs: CIInputs,
     git_context: GitContext,
 ) -> str | None:
-    """Return the commit used for baseline compatibility checks."""
+    """Return the exact commit whose artifacts may be reused.
 
-    if ci_inputs.is_pull_request:
+    Stage impact is calculated over:
+
+        diff_base_commit -> diff_head_commit
+
+    Therefore, artifacts may only be reused from a workflow run built at
+    diff_base_commit.
+    """
+
+    if ci_inputs.is_pull_request or ci_inputs.is_push:
         return git_context.diff_base_commit
 
-    return git_context.diff_head_commit
+    return None
 
 
 def _apply_stage_reuse_precedence(
@@ -970,7 +978,7 @@ def decide_jobs(
         for family_name in targets.windows_families
     ]
 
-    reuse_commit_sha = _get_reuse_commit_sha(
+    expected_baseline_sha = _get_expected_baseline_sha(
         ci_inputs,
         git_context,
     )
@@ -980,7 +988,7 @@ def decide_jobs(
         mode=StageReuseMode.from_environ(),
         linux_amdgpu_families=linux_artifact_families,
         windows_amdgpu_families=windows_artifact_families,
-        current_commit_sha=reuse_commit_sha,
+        expected_baseline_sha=expected_baseline_sha,
     )
 
     (

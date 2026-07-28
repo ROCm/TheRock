@@ -717,26 +717,37 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
-    def test_reuse_commit_sha_depends_on_event_type(self):
+    def test_expected_baseline_sha_is_diff_base_for_pr_and_push(self):
         git_context = cm.GitContext(
             changed_files=[],
             diff_base_commit="base-commit-sha",
             diff_head_commit="head-commit-sha",
         )
 
-        cases = [
-            ("pull_request", "base-commit-sha"),
-            ("push", "head-commit-sha"),
-        ]
-
-        for event_name, expected in cases:
+        for event_name in ("pull_request", "push"):
             with self.subTest(event_name=event_name):
                 self.assertEqual(
-                    cm._get_reuse_commit_sha(
+                    cm._get_expected_baseline_sha(
                         self._inputs(event_name=event_name),
                         git_context,
                     ),
-                    expected,
+                    "base-commit-sha",
+                )
+
+    def test_expected_baseline_sha_is_none_without_diff_event(self):
+        git_context = cm.GitContext(
+            changed_files=None,
+            diff_base_commit=None,
+            diff_head_commit="head-commit-sha",
+        )
+
+        for event_name in ("schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                self.assertIsNone(
+                    cm._get_expected_baseline_sha(
+                        self._inputs(event_name=event_name),
+                        git_context,
+                    )
                 )
 
 
@@ -1932,7 +1943,7 @@ class TestConfigurePipeline(unittest.TestCase):
             cm.StageReuseMode.DRY_RUN,
         )
         self.assertEqual(
-            call_kwargs["current_commit_sha"],
+            call_kwargs["expected_baseline_sha"],
             "base-commit-sha",
         )
 

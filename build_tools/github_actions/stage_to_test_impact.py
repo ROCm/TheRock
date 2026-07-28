@@ -13,7 +13,6 @@ from _therock_utils.build_topology import (
     artifact_may_apply_to_platform,
 )
 
-
 # Only names that cannot be resolved through BuildTopology's
 # normal subproject/artifact aliases belong here.
 TEST_COMPONENT_ARTIFACT_OVERRIDES: dict[

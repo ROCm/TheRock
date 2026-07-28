@@ -57,10 +57,6 @@ on:
         type: string
         default: "72"
         description: "Automatic stage reuse: reject baseline runs older than this many hours"
-      stage_reuse_commit_history:
-        type: string
-        default: "50"
-        description: "Automatic stage reuse: number of recent branch commits to fetch for ancestry"
       changed_projects:
         type: string
         default: ""
@@ -107,7 +103,6 @@ jobs:
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
       stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
-      stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
 

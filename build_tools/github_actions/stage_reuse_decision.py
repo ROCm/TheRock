@@ -42,12 +42,11 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
 * ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
 * ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
                                    (default ``multi_arch_ci.yml``).
-* ``STAGE_REUSE_CURRENT_SHA``    - current commit SHA; enables the
-                                   commit-compatibility rule when set.
 * ``STAGE_REUSE_MAX_AGE_HOURS``  - recency window in hours; disables the recency
                                    rule when unset.
-* ``STAGE_REUSE_COMMIT_HISTORY`` - number of branch commits to fetch for
-                                   ancestry (default ``50``).
+The expected baseline SHA is passed directly from
+``GitContext.diff_base_commit`` by ``configure_multi_arch_ci.py``.
+Automatic reuse is disabled when that exact SHA is unavailable.
 """
 
 import enum
@@ -329,7 +328,7 @@ def compute_auto_stage_reuse(
     mode: StageReuseMode,
     linux_amdgpu_families: Sequence[str] = (),
     windows_amdgpu_families: Sequence[str] = (),
-    current_commit_sha: str | None = None,
+    expected_baseline_sha: str | None = None,
     topology: BuildTopology | None = None,
     baseline_selector: BaselineSelector | None = None,
     baseline_selector_factory: (
@@ -440,12 +439,12 @@ def compute_auto_stage_reuse(
         elif baseline_selector_factory is not None:
             selector = baseline_selector_factory(
                 platform,
-                current_commit_sha,
+                expected_baseline_sha,
             )
         else:
             selector = _default_baseline_selector(
                 platform=platform,
-                current_commit_sha=current_commit_sha,
+                expected_baseline_sha=expected_baseline_sha,
             )
         try:
             baseline = selector(required)
@@ -572,68 +571,57 @@ def _build_platforms(
 def _default_baseline_selector(
     *,
     platform: str,
-    current_commit_sha: str | None = None,
+    expected_baseline_sha: str | None = None,
 ) -> BaselineSelector:
-    """Build a selector bound to baseline_runs.select_baseline_run.
-    ``select_baseline_run`` already requires each candidate run to have healthy
-    build jobs (``required_successful_job_name_substrings=("Build",)``) AND to
-    contain all requested artifacts. A run with no artifacts (e.g. a docs-only
-    change) therefore fails the availability gate and is never selected, so no
-    extra "passing build" check is needed here.
+    """Build an exact-SHA baseline selector.
+
+    Automatic reuse is disabled when the exact diff-base SHA is unavailable.
+    It must never fall back to selecting a recent run without commit
+    validation.
     """
 
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-    branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
-    workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
-    if current_commit_sha is None:
-        current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
+    github_repository = os.environ.get(
+        "GITHUB_REPOSITORY",
+        "ROCm/TheRock",
+    )
+    branch = os.environ.get(
+        "STAGE_REUSE_BASELINE_BRANCH",
+        "main",
+    )
+    workflow_name = os.environ.get(
+        "STAGE_REUSE_BASELINE_WORKFLOW",
+        "multi_arch_ci.yml",
+    )
+
     max_age_hours_raw = os.environ.get("STAGE_REUSE_MAX_AGE_HOURS")
     max_age_hours = float(max_age_hours_raw) if max_age_hours_raw else None
-    history_count_raw = os.environ.get("STAGE_REUSE_COMMIT_HISTORY", "50")
-    try:
-        history_count = max(1, int(history_count_raw))
-    except ValueError:
-        history_count = 50
-    # The commit-compatibility rule needs the branch history (newest-first) to
-    # establish ancestry. select_baseline_run only accepts a candidate whose
-    # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
-    # window every candidate resolves to `unknown` and is rejected, so reuse
-    # never activates. Fetch the real history here. If the SHA is set but the
-    # history fetch fails (or returns empty), disable the commit rule (pass both
-    # as None) rather than enabling it with an empty window -- recency and
-    # artifact availability still gate the selection.
-    ordered_commit_shas = None
-    effective_commit_sha = current_commit_sha
-    if current_commit_sha is not None:
-        try:
-            ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
-                github_repository_name=github_repository,
-                branch=branch,
-                max_count=history_count,
-            )
-        except GitHubAPIError as exc:
-            logger.warning(
-                "%s could not fetch branch history (%s); "
-                "skipping commit-compatibility rule.",
-                LOG_PREFIX,
-                exc,
-            )
-            ordered_commit_shas = None
-        if not ordered_commit_shas:
-            effective_commit_sha = None
-            ordered_commit_shas = None
 
-    # A functools.partial binds the resolved configuration to
-    # select_baseline_run; the only free argument is required_artifacts, which
-    # matches the BaselineSelector signature.
+    normalized_expected_sha = (
+        expected_baseline_sha.strip() if expected_baseline_sha else ""
+    )
+
+    if not normalized_expected_sha:
+        logger.warning(
+            "%s no exact diff-base SHA is available; "
+            "automatic stage reuse is disabled.",
+            LOG_PREFIX,
+        )
+
+        def no_baseline(
+            required: Sequence[RequiredArtifact],
+        ) -> BaselineRun | None:
+            del required
+            return None
+
+        return no_baseline
+
     return functools.partial(
         _invoke_select_baseline_run,
         github_repository=github_repository,
         workflow_name=workflow_name,
         branch=branch,
         platform=platform,
-        current_commit_sha=effective_commit_sha,
-        ordered_commit_shas=ordered_commit_shas,
+        expected_head_sha=normalized_expected_sha,
         max_age_hours=max_age_hours,
     )
 

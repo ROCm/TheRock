@@ -6,6 +6,7 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -311,100 +312,71 @@ class GuardrailTest(unittest.TestCase):
 
 
 class DefaultBaselineSelectorTest(unittest.TestCase):
-    """_default_baseline_selector must fetch real branch history and never pass
-    an empty ordered_commit_shas window while current_commit_sha is set."""
-
-    def _run_with_env(self, env, fake_history, fake_select):
-        import os
-
-        old_env = {k: os.environ.get(k) for k in env}
-        os.environ.update({k: v for k, v in env.items() if v is not None})
-        for k, v in env.items():
-            if v is None:
-                os.environ.pop(k, None)
-
-        import baseline_runs
-        import github_actions_api
-
-        orig_select = baseline_runs.select_baseline_run
-        orig_hist = getattr(github_actions_api, "gha_query_recent_branch_commits", None)
-        captured = {}
-
-        def _capturing_select(**kwargs):
-            captured.update(kwargs)
-            return fake_select
-
-        baseline_runs.select_baseline_run = _capturing_select
-        github_actions_api.gha_query_recent_branch_commits = fake_history
-        try:
-            selector = srd._default_baseline_selector(platform="linux")
-            result = selector([("base", "generic")])
-        finally:
-            baseline_runs.select_baseline_run = orig_select
-            if orig_hist is not None:
-                github_actions_api.gha_query_recent_branch_commits = orig_hist
-            for k, v in old_env.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
-        return captured, result
-
-    def test_history_is_fetched_and_threaded(self):
-        def fake_history(**kwargs):
-            return ["sha-current", "sha-old", "sha-older"]
-
-        captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
-            fake_history,
-            fake_select="baseline",
+    @patch.object(
+        srd.baseline_runs,
+        "select_baseline_run",
+        return_value="baseline",
+    )
+    def test_exact_expected_sha_is_forwarded(
+        self,
+        mock_select_baseline_run,
+    ):
+        selector = srd._default_baseline_selector(
+            platform="linux",
+            expected_baseline_sha="base-commit-sha",
         )
-        # Real history passed through (NOT an empty list).
+
+        required = [
+            srd.RequiredArtifact(
+                name="base",
+                target_family="generic",
+            )
+        ]
+
+        result = selector(required)
+
+        self.assertEqual(result, "baseline")
+        mock_select_baseline_run.assert_called_once()
+
+        call_kwargs = mock_select_baseline_run.call_args.kwargs
+
         self.assertEqual(
-            captured["ordered_commit_shas"], ["sha-current", "sha-old", "sha-older"]
+            call_kwargs["expected_head_sha"],
+            "base-commit-sha",
         )
-        self.assertEqual(captured["current_commit_sha"], "sha-current")
-
-    def test_empty_history_disables_commit_rule(self):
-        def fake_history(**kwargs):
-            return []
-
-        captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
-            fake_history,
-            fake_select="baseline",
+        self.assertNotIn(
+            "current_commit_sha",
+            call_kwargs,
         )
-        # Disabled rather than enabled-with-empty-window: both None.
-        self.assertIsNone(captured["current_commit_sha"])
-        self.assertIsNone(captured["ordered_commit_shas"])
-
-    def test_history_fetch_error_disables_commit_rule(self):
-        def fake_history(**kwargs):
-            raise GitHubAPIError("api down")
-
-        captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
-            fake_history,
-            fake_select="baseline",
+        self.assertNotIn(
+            "ordered_commit_shas",
+            call_kwargs,
         )
-        self.assertIsNone(captured["current_commit_sha"])
-        self.assertIsNone(captured["ordered_commit_shas"])
 
-    def test_no_sha_means_no_history_fetch(self):
-        calls = {"n": 0}
-
-        def fake_history(**kwargs):
-            calls["n"] = 1
-            return ["x"]
-
-        captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": None},
-            fake_history,
-            fake_select="baseline",
+    @patch.object(
+        srd.baseline_runs,
+        "select_baseline_run",
+    )
+    def test_missing_expected_sha_disables_baseline_lookup(
+        self,
+        mock_select_baseline_run,
+    ):
+        selector = srd._default_baseline_selector(
+            platform="linux",
+            expected_baseline_sha=None,
         )
-        self.assertEqual(calls["n"], 0)
-        self.assertIsNone(captured["current_commit_sha"])
-        self.assertIsNone(captured["ordered_commit_shas"])
+
+        result = selector(
+            [
+                srd.RequiredArtifact(
+                    name="base",
+                    target_family="generic",
+                )
+            ]
+        )
+
+        self.assertIsNone(result)
+        mock_select_baseline_run.assert_not_called()
 
 
 class PlatformAwareAvailabilityTest(unittest.TestCase):
@@ -420,9 +392,9 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
 
         def factory(
             platform: str,
-            current_commit_sha: str | None,
+            expected_baseline_sha: str | None,
         ):
-            del current_commit_sha
+            del expected_baseline_sha
 
             baseline = per_platform.get(platform)
             return lambda required: baseline
@@ -513,17 +485,17 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
             result.reasons,
         )
 
-    def test_current_commit_sha_is_forwarded_to_selector_factory(self):
+    def test_expected_baseline_sha_is_forwarded_to_selector_factory(self):
         received: list[tuple[str, str | None]] = []
 
         def selector_factory(
             platform: str,
-            current_commit_sha: str | None,
+            expected_baseline_sha: str | None,
         ):
             received.append(
                 (
                     platform,
-                    current_commit_sha,
+                    expected_baseline_sha,
                 )
             )
 
@@ -542,7 +514,7 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
             linux_amdgpu_families=[
                 "gfx94X-dcgpu",
             ],
-            current_commit_sha="base-commit-sha",
+            expected_baseline_sha="base-commit-sha",
             topology=FakeTopology(),
             baseline_selector_factory=selector_factory,
         )
