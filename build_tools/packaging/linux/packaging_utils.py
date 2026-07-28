@@ -602,6 +602,7 @@ def process_main_dependencies_kpack(
     """
     is_meta = is_meta_package(pkg_info)
     pkg_name = pkg_info.get("Package")
+    host_fallback_deps = []  # Track deps that need host fallback
 
     if is_meta:
         if config.gfx_arch == GFX_META:
@@ -612,8 +613,7 @@ def process_main_dependencies_kpack(
         else:
             # Arch-specific metapackage: depend on actual runtime packages
             dep_list = pkg_info.get(field_key, [])
-            # Filter deps without artifacts
-            dep_list = filter_dependencies_by_artifacts(
+            dep_list, host_fallback_deps = filter_dependencies_by_artifacts(
                 dep_list, config.artifacts_dir, config.gfx_arch
             )
     elif config.gfx_arch == GFX_META:
@@ -632,16 +632,16 @@ def process_main_dependencies_kpack(
                 config.artifacts_dir,
             )
         ]
-        # Filter deps without artifacts
-        dep_list = filter_dependencies_by_artifacts(
+        # No host fallback needed for host packages
+        dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
     elif not is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
-        # Filter deps without artifacts
-        dep_list = filter_dependencies_by_artifacts(
+        # No host fallback for non-gfxarch packages
+        dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
     else:
@@ -656,15 +656,27 @@ def process_main_dependencies_kpack(
                 config.artifacts_dir,
             )
         ]
-        # Filter deps without artifacts
-        gfxarch_deps = filter_dependencies_by_artifacts(
+        gfxarch_deps, host_fallback_deps = filter_dependencies_by_artifacts(
             gfxarch_deps, config.artifacts_dir, config.gfx_arch
         )
         dep_list = [pkg_name] + gfxarch_deps
 
-    if not dep_list:
+    # Resolve dependencies at the end
+    if not dep_list and not host_fallback_deps:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+
+    deps = resolve_versioned_dependencies(dep_list, config, is_meta)
+
+    # Add host fallback deps if any
+    if host_fallback_deps:
+        host_config = replace(config, gfx_arch=GFX_HOST)
+        host_deps = resolve_versioned_dependencies(
+            host_fallback_deps, host_config, is_meta
+        )
+        if host_deps:
+            deps = f"{deps}, {host_deps}" if deps else host_deps
+
+    return deps
 
 
 def process_main_dependencies_single_arch(
@@ -1067,6 +1079,10 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         else:
             artifact_suffix = gfx_arch
 
+        # GFX_HOST uses "generic" artifacts
+        if gfx_arch == GFX_HOST:
+            artifact_suffix = "generic"
+
         # When checking for a specific gfx architecture (not host/meta),
         # skip generic-only artifacts - they do not contribute to gfx-specific packages
         if gfx_arch not in (GFX_HOST, GFX_META) and artifact_suffix == "generic":
@@ -1096,8 +1112,11 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
                                 and (artifact_subdir.lower() + "/") in line.lower()
                             )
                             if match_found and line.strip():
-                                # Found at least one required subdirectory in the manifest
-                                return True
+                                # Verify the directory exists and has files
+                                # (manifest may list dirs that weren't built or are empty)
+                                subdir_path = source_dir / line.strip().rstrip("/")
+                                if subdir_path.is_dir() and any(subdir_path.iterdir()):
+                                    return True
                 except OSError:
                     continue
 
@@ -1151,20 +1170,25 @@ def filter_archs_with_artifacts(
 
 def filter_dependencies_by_artifacts(
     dep_list: list, artifacts_dir: Path, gfx_arch: str
-) -> list:
-    """Filter dependency list to exclude packages without artifacts.
+) -> tuple[list, list]:
+    """Filter dependency list based on artifact availability.
 
-    Removes dependencies that do not have artifacts available for the specified
-    architecture. This prevents installation failures due to missing packages.
+    For each dependency:
+    - If gfx-specific artifacts exist, keep in filtered list
+    - If no gfx artifacts but host artifacts exist, add to host fallback list
+    - If no artifacts at all, exclude the dependency
 
     Parameters:
     dep_list: List of dependency package names
     artifacts_dir: Directory where artifacts are stored
     gfx_arch: Target architecture to check
 
-    Returns: Filtered dependency list
+    Returns: Tuple of (filtered_deps, host_fallback_deps) where:
+             - filtered_deps: dependencies with artifacts for target arch
+             - host_fallback_deps: dependencies to use host version instead
     """
     filtered = []
+    host_fallback = []
     for dep in dep_list:
         dep_info = get_package_info(dep, raise_if_missing=False)
         if dep_info is None:
@@ -1172,17 +1196,24 @@ def filter_dependencies_by_artifacts(
             filtered.append(dep)
             continue
 
-        # Non-gfxarch packages are always available
+        # Non-gfxarch packages: missing artifacts should fail the build,
+        # so we don't filter them out here
         if not is_gfxarch_package(
             dep_info, enable_kpack=True, artifacts_dir=artifacts_dir
         ):
             filtered.append(dep)
             continue
 
-        # Check if gfxarch package has artifacts
+        # Check if gfxarch package has artifacts for target arch
         if has_artifact_for_arch(dep, artifacts_dir, gfx_arch):
             filtered.append(dep)
+        elif gfx_arch != GFX_HOST and has_artifact_for_arch(
+            dep, artifacts_dir, GFX_HOST
+        ):
+            # Gfx-specific build missing artifacts, fall back to host version
+            print(f"INFO: {dep} has no {gfx_arch} artifacts, using host fallback")
+            host_fallback.append(dep)
         else:
-            print(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch})")
+            print(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)")
 
-    return filtered
+    return filtered, host_fallback
