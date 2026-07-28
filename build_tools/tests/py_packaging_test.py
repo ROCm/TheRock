@@ -665,7 +665,7 @@ class DevicePackagingTest(TmpDirTestCase):
         from _therock_utils.artifacts import ArtifactName
 
         self.assertTrue(
-            core_artifact_filter(ArtifactName("rocjitsu-hotswap", "hook", "generic"))
+            core_artifact_filter(ArtifactName("rocjitsu-hotswap", "lib", "generic"))
         )
         self.assertFalse(
             core_artifact_filter(ArtifactName("rocjitsu", "lib", "generic"))

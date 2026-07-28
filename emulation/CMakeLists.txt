@@ -62,9 +62,9 @@ if(THEROCK_ENABLE_ROCJITSU)
   if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
     therock_provide_artifact(rocjitsu-hotswap
       TARGET_NEUTRAL
-      DESCRIPTOR artifact-rocjitsu.toml
+      DESCRIPTOR artifact-rocjitsu-hotswap.toml
       COMPONENTS
-        hook
+        lib
       SUBPROJECT_DEPS
         rocjitsu
     )

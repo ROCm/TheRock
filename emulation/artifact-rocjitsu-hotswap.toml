@@ -1,0 +1,6 @@
+# rocjitsu HSA hotswap hook
+[components.lib."emulation/rocjitsu/stage"]
+default_patterns = false
+include = [
+  "lib/libhsa_hotswap_rocjitsu.so",
+]

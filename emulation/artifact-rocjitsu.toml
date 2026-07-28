@@ -4,11 +4,6 @@ default_patterns = false
 include = [
   "lib/librocjitsu.so",
 ]
-[components.hook."emulation/rocjitsu/stage"]
-default_patterns = false
-include = [
-  "lib/libhsa_hotswap_rocjitsu.so",
-]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
