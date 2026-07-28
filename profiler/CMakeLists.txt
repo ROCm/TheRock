@@ -6,10 +6,10 @@ if(THEROCK_ENABLE_MPI)
   set(_openmpi_optional_dep therock-openmpi)
 endif()
 
-# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)/
-# find_package(hipfile) to detect the rocDecode/rocJPEG/hipFILE trace features.
-# Declare them as dependencies when available so they resolve from the
-# super-project dist rather than escaping to a stray build tree.
+# rocprofiler-sdk performs optional find_package() calls for rocdecode, rocjpeg,
+# hipfile, and rocshmem to detect their trace features. Declare them as
+# dependencies when available so they resolve from the super-project dist rather
+# than escaping to a stray build tree.
 set(_rocprofiler_sdk_optional_deps)
 if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   list(APPEND _rocprofiler_sdk_optional_deps rocdecode)
@@ -20,20 +20,8 @@ endif()
 if(THEROCK_ENABLE_HIPFILE)
   list(APPEND _rocprofiler_sdk_optional_deps hipfile)
 endif()
-
-# rocprofiler-sdk also performs an optional find_package(rocshmem) (itself
-# guarded by find_package(MPI COMPONENTS CXX) + find_package(rocprofiler-register))
-# to detect the rocSHMEM API-trace feature. Declare rocshmem when available so it
-# resolves from the super-project dist rather than escaping to a stray build tree.
-# rocSHMEM is declared in comm-libs/rocshmem, added before this directory. Its
-# installed config references MPI::MPI_CXX, so also provide MPI (therock-openmpi)
-# when enabled; without MPI, rocprofiler-sdk falls back to its bundled rocSHMEM
-# trace headers (ROCPROFILER_SDK_USE_SYSTEM_ROCSHMEM=0).
 if(THEROCK_ENABLE_ROCSHMEM)
   list(APPEND _rocprofiler_sdk_optional_deps rocshmem)
-  if(THEROCK_ENABLE_MPI)
-    list(APPEND _rocprofiler_sdk_optional_deps therock-openmpi)
-  endif()
 endif()
 
 if(THEROCK_ENABLE_ROCPROFV3)
