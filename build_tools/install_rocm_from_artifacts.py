@@ -531,6 +531,7 @@ def retrieve_artifacts_by_run_id(args):
             # its _dev component, and its lit suite includes the libhipcxx
             # headers, so both _dev artifacts are required at test time.
             argv.append("hipthreads_dev")
+            argv.append("core-hip_run")
             extra_artifacts.append("libhipcxx")
             argv.append("libhipcxx_dev")
             argv.append("amd-llvm_dev")
