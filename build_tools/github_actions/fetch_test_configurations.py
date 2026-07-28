@@ -674,7 +674,10 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # hipthreads example apps (build + run consumer samples against the artifact)
+    # hipthreads example apps (build + run consumer samples against the artifact).
+    # Linux-only for now: on Windows the InOneWeekend example hits a clang HIP
+    # device-lambda parse bug (ROCM-25863). TODO: add "windows" back once a
+    # rocm-libraries submodule bump includes the fix (commit 2784675cb5).
     "hipthreads_examples": {
         "job_name": "hipthreads_examples",
         # --prim pulls rocThrust/rocPrim (roc::rocthrust); --rand pulls hipRAND
@@ -682,10 +685,9 @@ test_matrix = {
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
-            "windows": 1,
         },
     },
     "rocdecode": {
