@@ -52,12 +52,9 @@ class ConsoleScriptTest(NamedTuple):
     required: bool
 
 
-# rocprof-sys-sample --version exercises the packaging regression directly: it
-# dlopens librocprof-sys, whose NEEDED libprofiler-hub.so.0 was once dropped from
-# the wheel. Other
-# rocprof-sys-* tools are intentionally not asserted here - some abort on load
-# in constrained environments (no GPU, restricted perf_event_paranoid) for
-# reasons unrelated to wheel packaging, which is what this test guards.
+# Each --version invocation dlopens librocprof-sys and its NEEDED dependencies
+# (e.g. libprofiler-hub), so a missing bundled library surfaces here as a load
+# failure.
 CONSOLE_SCRIPT_TESTS = [
     ConsoleScriptTest("rocprof-sys-sample", ["--version"], "rocprof-sys-sample", True),
     ConsoleScriptTest("rocprof-sys-run", ["--version"], "rocprof-sys-run", True),
@@ -98,11 +95,11 @@ class ROCmProfilerTest(unittest.TestCase):
     def test_all_required_libraries_resolve(self):
         """Every NEEDED dependency of every profiler .so must resolve.
 
-        A past regression dropped a single NEEDED library (libprofiler-hub.so.0)
-        from the wheel, but any bundled dependency could go missing the same way.
-        Rather than
-        name one library, ask the dynamic loader to resolve each profiler shared
-        object and assert nothing is reported as "not found". This covers
+        A newly added library (libprofiler-hub.so.0) was once missing from the
+        packaging manifest and never made it into the wheel, but any bundled
+        dependency could go missing the same way. Rather than name one library,
+        ask the dynamic loader to resolve each profiler shared object and assert
+        nothing is reported as "not found". This covers
         in-package deps, cross-package deps reachable via the $ORIGIN RPATHs, and
         system libraries in one deterministic, GPU-free check (ldd resolves the
         link map without running the binary).
