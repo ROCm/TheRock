@@ -33,11 +33,13 @@ RELEASE_STABLE_PYTORCH_REFS = {
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
     "windows": [
         "release/2.10",
         "release/2.11",
         "release/2.12",
+        "release/2.13",
     ],
 }
 
@@ -48,7 +50,7 @@ RELEASE_PYTORCH_REFS = {
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.10", "release/2.11", "release/2.12"],
+    "linux": ["release/2.10", "release/2.11", "release/2.12", "release/2.13"],
     "windows": ["release/2.10"],
 }
 
@@ -57,18 +59,26 @@ CI_PYTORCH_REFS = {
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
         # gfx125x not supported for PyTorch 2.10.
-        "release/2.10": {"gfx125X-dcgpu"},
+        # gfx90c only supported in PyTorch 2.12+.
+        "release/2.10": {"gfx125X-dcgpu", "gfx90c"},
         # gfx125x supported for PyTorch 2.11 via https://github.com/ROCm/pytorch/pull/3346.
-        "release/2.11": {},
-        # gfx125x not yet upstreamed to pytorch/pytorch. Upstream expected
-        # 2026-06-26, but the ROCm 7.14 release is cut before that date.
+        # gfx90c only supported in PyTorch 2.12+.
+        "release/2.11": {"gfx90c"},
+        # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
+        "release/2.12": {},
+        # gfx125x not yet enabled for PyTorch release/2.13 (ROCm/pytorch fork).
         # See https://github.com/ROCm/TheRock/issues/5833.
-        "release/2.12": {"gfx125X-dcgpu"},
-        # gfx125x not yet upstreamed to pytorch/pytorch.
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "nightly": {"gfx125X-dcgpu"},
+        "release/2.13": {"gfx125X-dcgpu", "gfx90c"},
+        # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
+        # gfx90c excluded: blocked until CK submodule bump in pytorch nightly.
+        "nightly": {"gfx90c"},
     },
-    "windows": {},
+    "windows": {
+        "release/2.10": {"gfx90c"},
+        "release/2.11": {"gfx90c"},
+        "release/2.12": {"gfx90c"},
+        "release/2.13": {"gfx90c"},
+    },
 }
 
 

@@ -568,18 +568,23 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present.
+    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
     # This avoids running expensive ASAN builds on every PR while still
     # catching ASAN issues when library code (submodules) changes.
-    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
-    #       If overly expensive, remove that option
+    # The ci:asan label allows manual triggering of ASAN CI on any PR.
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and git_context.has_submodule_changes is False
+        and "ci:asan" not in ci_inputs.pr_labels
     ):
-        print("  Skipping: ASAN PR without submodule changes")
+        print(
+            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+        )
         return True
+
+    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
+        print("  Running: 'ci:asan' PR label triggers ASAN CI")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -1021,11 +1026,12 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on push (postsubmit)
-            if not ci_inputs.is_push:
+            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
+            # due to limited ASAN runner capacity and stability concerns.
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
