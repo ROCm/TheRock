@@ -86,7 +86,9 @@ jobs:
       reporting_workflow: multi_arch_release_asan.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
@@ -136,4 +138,6 @@ jobs:
       reporting_workflow: multi_arch_release_asan.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

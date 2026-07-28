@@ -58,7 +58,9 @@ jobs:
       reporting_workflow: multi_arch_build_native_linux_packages.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
@@ -163,4 +165,6 @@ jobs:
       reporting_workflow: multi_arch_build_native_linux_packages.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

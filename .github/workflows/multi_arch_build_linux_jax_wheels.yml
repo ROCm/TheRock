@@ -147,7 +147,9 @@ jobs:
       reporting_workflow: multi_arch_build_linux_jax_wheels.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   build_jax_wheels:
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
@@ -370,4 +372,6 @@ jobs:
       reporting_workflow: multi_arch_build_linux_jax_wheels.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

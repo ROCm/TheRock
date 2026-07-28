@@ -135,7 +135,9 @@ jobs:
       reporting_workflow: test_linux_jax_wheels_partial.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   test_jax_wheels:
     name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
@@ -319,4 +321,6 @@ jobs:
       reporting_workflow: test_linux_jax_wheels_partial.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

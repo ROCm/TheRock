@@ -104,7 +104,9 @@ jobs:
       reporting_workflow: build_portable_linux_python_packages.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
@@ -199,4 +201,6 @@ jobs:
       reporting_workflow: build_portable_linux_python_packages.yml
       workflow_inputs: ${{ toJSON(inputs) }}
       workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets: inherit
+    secrets:
+      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
+      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

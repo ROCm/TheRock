@@ -65,6 +65,13 @@ on:
         required: false
         type: string
         default: "main"
+    secrets:
+      GH_APP_HAULY_ID:
+        description: "App ID for the GitHub App used to mint the Quartz dispatch token"
+        required: true
+      GH_APP_HAULY_PRIVATE_KEY:
+        description: "Private key for the GitHub App used to mint the Quartz dispatch token"
+        required: true
 
 permissions:
   contents: read
