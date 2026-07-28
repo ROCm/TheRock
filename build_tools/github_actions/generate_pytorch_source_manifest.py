@@ -160,7 +160,7 @@ def _parse_related_commits(content: str) -> dict[str, dict[str, str]]:
         if not line or line.startswith("#"):
             continue
         # Example:
-        # ubuntu|pytorch|torchaudio|release/2.11|<commit>|https://github.com/pytorch/audio
+        # ubuntu|pytorch|torchaudio|release/2.10|<commit>|https://github.com/pytorch/audio
         parts = line.split("|")
         if len(parts) != 6:
             raise ValueError(f"Malformed related_commits line: {line!r}")
