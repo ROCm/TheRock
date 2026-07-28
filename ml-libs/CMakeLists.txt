@@ -112,10 +112,10 @@ if(THEROCK_ENABLE_HIPDNN)
       therock-googletest
       therock-fmt
       therock-spdlog
-    RUNTIME_DEPS
-      hip-clr
       therock-flatbuffers
       therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
     TEST_SUBPROJECTS
       miopenprovider
       hipblasltprovider
@@ -172,11 +172,11 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
       amd-hip
     BUILD_DEPS
       therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
     RUNTIME_DEPS
       hip-clr
       hipDNN
-      therock-flatbuffers
-      therock-nlohmann-json
     TEST_SUBPROJECTS
       miopenprovider
   )

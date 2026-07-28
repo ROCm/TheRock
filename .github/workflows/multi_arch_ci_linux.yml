@@ -60,15 +60,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # Run in container to access AWS credentials mounted from the host runner.
     container:
       image: python:3.12-slim
-      options: -v /runner/config:/home/awsconfig/
-    env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}

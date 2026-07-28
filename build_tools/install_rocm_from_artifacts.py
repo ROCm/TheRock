@@ -274,7 +274,7 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir)
+        extracted_tar_file.extractall(output_dir, filter="tar")
     destination.unlink()
 
 
