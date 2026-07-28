@@ -55,11 +55,9 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
-      options: -v /runner/config:/home/awsconfig/
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}

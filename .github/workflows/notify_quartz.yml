@@ -66,6 +66,9 @@ on:
         type: string
         default: "main"
 
+permissions:
+  contents: read
+
 jobs:
   notify:
     name: Quartz - ${{ inputs.run_phase }} ${{ inputs.reporting_workflow }}
