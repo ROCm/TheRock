@@ -725,7 +725,6 @@ if(THEROCK_ENABLE_HIPTHREADS)
     RUNTIME_DEPS
       hip-clr
       hipcc
-      libhipcxx
   )
   therock_cmake_subproject_glob_c_sources(hipthreads
     SUBDIRS
