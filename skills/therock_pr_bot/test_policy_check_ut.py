@@ -53,13 +53,6 @@ def make_policy(**overrides: Any) -> pc.Policy:
     if the shipped config changes.
     """
     defaults: Dict[str, Any] = dict(
-        branch_patterns=[
-            re.compile(r"^users\/[A-Za-z0-9][A-Za-z0-9\-]*\/.+"),
-            re.compile(r"^shared\/.+"),
-            re.compile(r"^[A-Za-z0-9][A-Za-z0-9\-_]*$"),
-            re.compile(r"^dependabot\/.+"),
-            re.compile(r"^revert-[0-9]+-.+"),
-        ],
         title_min_length=10,
         title_max_length=80,
         description_min_length=30,
@@ -99,58 +92,6 @@ def make_file(
         "deletions": deletions,
         "changes": changes if changes is not None else additions + deletions,
     }
-
-
-# ----------------------------- branch name -----------------------------------
-
-
-class BranchNameTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.policy = make_policy()
-
-    def _errs(self, branch: str) -> List[str]:
-        e: List[str] = []
-        pc.ensure_branch_name(self.policy, branch, e)
-        return e
-
-    def test_valid_branches(self) -> None:
-        for branch in [
-            "users/chi/ucicd_setup_visible_devices",
-            # Nested namespace/feature after the username is allowed.
-            "users/dgaliffi/fix/remove-build-boost-option",
-            # Uppercase letters are allowed (acronyms / module names).
-            "users/frepaul/ROCm-end-user-project-workflow",
-            "users/agunashe/hipModuleGetLoadingMode_test",
-            "compiler-ww-24-SMP-2",
-            "ZIP-packaging-RFC",
-            "shared/add-runner-health",
-            "shared/team/feature",
-            "bump-rocm-libraries-936a6c7",
-            "dependabot/github_actions/github-actions-3dfd2199fc",
-            "revert-5217-users/derobins/add_hipfile_support",
-        ]:
-            with self.subTest(branch=branch):
-                self.assertEqual(self._errs(branch), [])
-
-    def test_invalid_branches(self) -> None:
-        # "Feature/Bad" -> unknown prefix; "users//missing"/"users/" -> empty
-        # segments; "bad branch name" -> spaces are not allowed.
-        for branch in ["Feature/Bad", "users//missing", "bad branch name", "users/"]:
-            with self.subTest(branch=branch):
-                self.assertTrue(self._errs(branch))
-
-    def test_fork_pr_branch_name_is_enforced(self) -> None:
-        # All policies — including branch name — are enforced for fork PRs too.
-        # The validator always runs; there is no fork-based skip.
-        policy = make_policy()
-        e: List[str] = []
-        pc.ensure_branch_name(policy, "BadBranch", e)
-        self.assertTrue(e, "Branch name must be validated for fork PRs too")
-
-        # A valid branch name passes for both same-repo and fork PRs.
-        e = []
-        pc.ensure_branch_name(policy, "users/sam/my-feature", e)
-        self.assertEqual(e, [])
 
 
 # ----------------------------- PR title --------------------------------------
@@ -453,21 +394,17 @@ class DraftAndBumpTests(unittest.TestCase):
 
 
 class IntegrationBlobTests(unittest.TestCase):
-    """Feed full [branch, title, description, files] blobs through validators."""
+    """Feed full [title, description, files] blobs through validators."""
 
     def setUp(self) -> None:
         self.policy = make_policy()
 
     def _evaluate(
-        self, *, branch: str, title: str, body: str, files: List[Dict[str, Any]]
+        self, *, title: str, body: str, files: List[Dict[str, Any]]
     ) -> Dict[str, List[str]]:
         out: Dict[str, List[str]] = {}
 
         e: List[str] = []
-        pc.ensure_branch_name(self.policy, branch, e)
-        out["branch"] = e
-
-        e = []
         pc.ensure_pr_title(self.policy, title, e)
         pc.ensure_pr_description(self.policy, body, e)
         out["title_desc"] = e
@@ -483,7 +420,6 @@ class IntegrationBlobTests(unittest.TestCase):
 
     def test_fully_compliant_pr(self) -> None:
         result = self._evaluate(
-            branch="users/sam/add-feature",
             title="feat(ci): add policy unit tests",
             body=(
                 "Adds unit tests for the policy checker.\n"
@@ -498,19 +434,16 @@ class IntegrationBlobTests(unittest.TestCase):
 
     def test_fully_noncompliant_pr(self) -> None:
         result = self._evaluate(
-            branch="BadBranch",
             title="wip",
             body="too short",
             files=[make_file("secret.pem"), make_file("src/module.py")],
         )
-        self.assertTrue(result["branch"])
         self.assertTrue(result["title_desc"])
         self.assertTrue(result["forbidden"])
         self.assertTrue(result["unit"])
 
     def test_docs_only_pr_is_compliant(self) -> None:
         result = self._evaluate(
-            branch="shared/update-docs",
             title="docs: clarify contributing guide",
             body=(
                 "Improves the contributing docs.\n"
@@ -535,7 +468,6 @@ class LoadPolicyTests(unittest.TestCase):
         if not policy_path.exists():
             self.skipTest("policy.yml not present next to tests")
         policy = pc.load_policy(policy_path)
-        self.assertGreater(len(policy.branch_patterns), 0)
         self.assertIn("pre-commit", policy.required_checks)
         self.assertGreaterEqual(policy.title_max_length, policy.title_min_length)
 
