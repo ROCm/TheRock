@@ -142,14 +142,36 @@ if(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH)
     # This will yield an absolute path like: /some/long/path/lib/llvm/lib/clang/20
     # The version number on the end is all we want as we will form the correct
     # prefix relative path from that.
-    # The actual libraries live under lib/linux in that directory. We shamelessly
-    # just hardcode "linux" since that is the only system we do RPATH munging for.
     cmake_path(GET _abs_resource_dir FILENAME _clang_version)
     set(_prefix_resource_dir "lib/llvm/lib/clang/${_clang_version}")
-    list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_prefix_resource_dir}/lib/linux")
+    # Which sub-directory of the resource dir holds the runtimes depends on how
+    # the toolchain was configured: LLVM_ENABLE_PER_TARGET_RUNTIME_DIR (which
+    # TheRock enables for its own amd-llvm) installs them to lib/<target-triple>
+    # and leaves no lib/linux at all, so ask clang rather than assuming. A
+    # toolchain can also report a per-target dir that only holds non-sanitizer
+    # runtimes (i.e. flang_rt) while compiler-rt still lives in lib/linux, so
+    # only trust the reported dir if it actually has shared sanitizer runtimes.
+    execute_process(
+      COMMAND "${CMAKE_CXX_COMPILER}" --print-runtime-dir
+      OUTPUT_VARIABLE _abs_runtime_dir
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE _runtime_dir_status
+    )
+    set(_runtime_libs)
+    if(_runtime_dir_status EQUAL 0 AND _abs_runtime_dir)
+      file(GLOB _runtime_libs "${_abs_runtime_dir}/libclang_rt.*.so")
+    endif()
+    if(NOT _runtime_libs)
+      set(_abs_runtime_dir "${_abs_resource_dir}/lib/linux")
+      message(STATUS "No shared sanitizer runtimes found via ${CMAKE_CXX_COMPILER} --print-runtime-dir: falling back to ${_abs_runtime_dir}")
+    endif()
+    # The install RPATH is prefix relative, so mirror the same sub-directory.
+    cmake_path(RELATIVE_PATH _abs_runtime_dir BASE_DIRECTORY "${_abs_resource_dir}"
+      OUTPUT_VARIABLE _rel_runtime_dir)
+    list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_prefix_resource_dir}/${_rel_runtime_dir}")
     # Build tree needs absolute paths to the resource dir.
-    list(APPEND THEROCK_PRIVATE_BUILD_RPATH_DIRS "${_abs_resource_dir}/lib/linux")
-    message(STATUS "Added clang resource dir to RPATH: ${_prefix_resource_dir} (since sanitizer enabled)")
+    list(APPEND THEROCK_PRIVATE_BUILD_RPATH_DIRS "${_abs_runtime_dir}")
+    message(STATUS "Added clang resource dir to RPATH: ${_prefix_resource_dir}/${_rel_runtime_dir} (since sanitizer enabled)")
   endblock()
 endif()
 
@@ -171,12 +193,57 @@ block(PROPAGATE THEROCK_SANITIZER_LAUNCHER)
     else()
       message(FATAL_ERROR "Unknown processor ${CMAKE_SYSTEM_PROCESSOR}")
     endif()
-    execute_process(
-      COMMAND ${CMAKE_CXX_COMPILER} "--print-file-name=libclang_rt.${_suffix}-${_arch_suffix}.so"
-      OUTPUT_VARIABLE _rt_path
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      COMMAND_ERROR_IS_FATAL ANY
-    )
+    # With LLVM_ENABLE_PER_TARGET_RUNTIME_DIR the runtime is named
+    # libclang_rt.<sanitizer>.so with no arch suffix, so probe both names. Since
+    # clang echoes the query back verbatim when it cannot find the file, only an
+    # absolute path that exists counts as resolved: a bare soname would make the
+    # LD_PRELOAD silently fail and run the tool with no sanitizer at all.
+    set(_rt_names "libclang_rt.${_suffix}.so" "libclang_rt.${_suffix}-${_arch_suffix}.so")
+    set(_rt_path)
+    set(_rt_probe_log)
+    foreach(_rt_name ${_rt_names})
+      execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} "--print-file-name=${_rt_name}"
+        OUTPUT_VARIABLE _rt_candidate
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY
+      )
+      string(APPEND _rt_probe_log "\n      --print-file-name=${_rt_name} -> ${_rt_candidate}")
+      if(IS_ABSOLUTE "${_rt_candidate}" AND EXISTS "${_rt_candidate}")
+        set(_rt_path "${_rt_candidate}")
+        break()
+      endif()
+    endforeach()
+    if(NOT _rt_path)
+      # Only pay for the extra diagnostic queries on the failure path.
+      execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" --print-resource-dir
+        OUTPUT_VARIABLE _rt_resource_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" --print-runtime-dir
+        OUTPUT_VARIABLE _rt_runtime_dir
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      message(FATAL_ERROR
+        "Could not resolve the shared ${THEROCK_SANITIZER} runtime library required to "
+        "run build time tools under the sanitizer.\n"
+        "    Sanitizer   : ${THEROCK_SANITIZER}\n"
+        "    Compiler    : ${CMAKE_CXX_COMPILER}\n"
+        "    Resource dir: ${_rt_resource_dir}\n"
+        "    Runtime dir : ${_rt_runtime_dir}\n"
+        "    Probed sonames (clang echoes the query back verbatim when it cannot find "
+        "the file, so a bare soname below means NOT FOUND):${_rt_probe_log}\n"
+        "Provide a shared sanitizer runtime for this toolchain (compiler-rt built with "
+        "COMPILER_RT_BUILD_SANITIZERS=ON) or disable the sanitizer for this build. "
+        "Refusing to continue: an unresolvable LD_PRELOAD is ignored by the loader, so "
+        "carrying on here would silently run build time tools with no sanitizer at all "
+        "rather than failing."
+      )
+    endif()
     set(THEROCK_SANITIZER_LAUNCHER
       "${CMAKE_COMMAND}" -E env "LD_PRELOAD=${_rt_path}" --
     )
