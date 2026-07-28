@@ -181,7 +181,7 @@ jobs:
       run:
         shell: bash
     # These env vars are set at the job level so they are available to all steps
-    # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
+    # (e.g. export_test_times.py, run_pytorch_tests.py). The Python script
     # uses os.environ.setdefault() so values set here take precedence.
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -323,7 +323,7 @@ jobs:
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_tests.py \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
             -- \
@@ -346,7 +346,18 @@ jobs:
         if: ${{ runner.os == 'Windows'}}
         continue-on-error: true
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+          # Preserve the historical Windows subset: the previous
+          # run_pytorch_tests.py hard-coded these modules. Without --include the
+          # renamed runner would run the entire suite.
+          python ./external-builds/pytorch/run_pytorch_tests.py \
+            --include \
+              test_nn \
+              test_torch \
+              test_cuda \
+              test_unary_ufuncs \
+              test_binary_ufuncs \
+              test_autograd \
+            -- \
             --continue-on-collection-errors \
             -v
 

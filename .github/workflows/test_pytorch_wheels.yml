@@ -117,7 +117,7 @@ jobs:
     defaults:
       run:
         shell: bash
-    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
+    # run_pytorch_tests.py already sets CI, PYTORCH_TEST_WITH_ROCM,
     # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
     # itself, so we only set the extras the runner does not manage.
     env:
@@ -227,7 +227,7 @@ jobs:
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+          python ./external-builds/pytorch/run_pytorch_tests.py \
             --test-config default \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
