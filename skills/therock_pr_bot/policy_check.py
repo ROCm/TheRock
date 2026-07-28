@@ -25,6 +25,11 @@ import yaml
 
 NOT_READY_LABEL = "Not ready to Review"
 
+# Authors can opt a PR OUT of the bot entirely by putting this tag anywhere in
+# the PR description. When present, the bot does NOT run any checks — it simply
+# removes the "Not ready to Review" label and posts a short skip notice.
+SKIP_TAG = "@skip-pr-bot"
+
 # Anchor file paths to THIS script's location rather than the current working
 # directory or a ".git"/".github" walk-up (which breaks with nested repos /
 # submodules). See the Python style guide:
@@ -280,42 +285,6 @@ def get_check_runs(owner: str, repo: str, sha: str, token: str) -> List[Dict[str
         raise RuntimeError("Unexpected check-runs payload")
     runs = data.get("check_runs", [])
     return runs if isinstance(runs, list) else []
-
-
-def ensure_pr_title(policy: Policy, title: str, errors: List[str]) -> None:
-    """Validate the PR title (length and forbidden words).
-
-    Appends a structured Error/Expected message to `errors` for each rule that
-    fails.
-    """
-    title = (title or "").strip()
-    fmt = "**Desired format:** `type(optional-scope): short description`"
-
-    if policy.title_min_length and len(title) < policy.title_min_length:
-        errors.append(
-            f"**Error:** Title is too short ({len(title)} characters).\n"
-            f"**Expected:** at least {policy.title_min_length} characters.\n"
-            f"{fmt}"
-        )
-
-    if policy.title_max_length and len(title) > policy.title_max_length:
-        errors.append(
-            f"**Error:** Title is too long ({len(title)} characters).\n"
-            f"**Expected:** at most {policy.title_max_length} characters.\n"
-            f"{fmt}"
-        )
-
-    if policy.forbidden_title_patterns:
-        matched = [
-            p.pattern for p in policy.forbidden_title_patterns if p.search(title)
-        ]
-        if matched:
-            blocked = ", ".join([f"`{m}`" for m in matched])
-            errors.append(
-                "**Error:** Title contains forbidden text (e.g. WIP / do not merge).\n"
-                f"**Expected:** remove the matched term(s): {blocked}.\n"
-                f"{fmt}"
-            )
 
 
 def ensure_pr_not_draft(policy: Policy, is_draft: bool, errors: List[str]) -> None:
@@ -899,6 +868,16 @@ def is_bump_pr(policy: Policy, author_login: str) -> bool:
     return target in {norm(a) for a in policy.bump_bot_authors}
 
 
+def pr_wants_skip(body: str) -> bool:
+    """True if the PR description opts out of the bot via the skip tag.
+
+    Matches `@skip-pr-bot` as a whole word, case-insensitively, anywhere in the
+    (comment-stripped) description.
+    """
+    text = _strip_markdown_comments(body or "")
+    return re.search(rf"(?<!\w){re.escape(SKIP_TAG)}(?!\w)", text, re.IGNORECASE) is not None
+
+
 def build_bump_pr_results(policy: Policy) -> List[CheckResult]:
     """All-pass table rows for an automated dependency bump PR."""
     bump_note = "Bump PR — check auto-approved (automated dependency update)"
@@ -986,6 +965,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     title = str(pr.get("title") or "")
     body = str(pr.get("body") or "")
 
+    # --- Opt-out: '@skip-pr-bot' in the PR description ---
+    # If the author tagged the description with '@skip-pr-bot', do NOT run any
+    # checks. This covers BOTH cases: the tag was present when the PR was
+    # created, and the tag was added later via a description edit. In either
+    # case we remove the "Not ready to Review" label and leave a short notice.
+    if pr_wants_skip(body):
+        skip_marker = "<!-- therock-pr-bot-skipped -->"
+        skip_note = (
+            f"{skip_marker}\n"
+            f"🛑 Author chose to skip pr bot run hence removing label "
+            f"(`{SKIP_TAG}` found in the PR description)."
+        )
+        upsert_comment(owner, repo, pr_number, token, skip_marker, skip_note)  # type: ignore[arg-type]
+        remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
+        print(f"🛑 '{SKIP_TAG}' present — skipping all policy checks.")
+        return 0
+
     # --- Special case: automated dependency "bump" PRs ---
     # If the author is a configured bump bot, bypass all policy checks.
     author = str((pr.get("user") or {}).get("login") or "")
@@ -1028,15 +1024,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     check_errors: List[str] = []
 
     check_errors = []
-    ensure_pr_title(policy, title, check_errors)
-    desc_errors: List[str] = []
-    ensure_pr_description(policy, body, desc_errors)
-    check_errors.extend(desc_errors)
+    ensure_pr_description(policy, body, check_errors)
     results.append(CheckResult("PR Description", "📝", not check_errors, check_errors))
 
     # Only the JIRA/ISSUE ID reference rule of the description triggers the
     # "Not ready to Review" label — not the title, length, or checklist rules.
-    jira_issue_failed = any("must reference a JIRA ID" in e for e in desc_errors)
+    jira_issue_failed = any("must reference a JIRA ID" in e for e in check_errors)
 
     # Draft PR check is "Enabled soon" — logic kept in ensure_pr_not_draft but
     # not enforced yet (no check is performed).

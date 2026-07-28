@@ -53,13 +53,10 @@ def make_policy(**overrides: Any) -> pc.Policy:
     if the shipped config changes.
     """
     defaults: Dict[str, Any] = dict(
-        title_min_length=10,
-        title_max_length=80,
         description_min_length=30,
         description_issue_patterns=[re.compile(p) for p in _ISSUE_PATTERNS],
         description_checklist_patterns=[re.compile(p) for p in _CHECKLIST_PATTERNS],
         block_draft=True,
-        forbidden_title_patterns=[re.compile(r"(?i)\bWIP\b")],
         forbidden_paths=["**/*.pem", "**/.env", "**/id_rsa"],
         unit_test_code_extensions=[".py", ".cpp"],
         unit_test_patterns=[
@@ -68,6 +65,7 @@ def make_policy(**overrides: Any) -> pc.Policy:
             "*_test.*",
             "*_tests.*",
             "*_gtest.*",
+            "Test*",
             "**/test/gtest/**",
         ],
         unit_test_exempt_paths=[],
@@ -314,6 +312,18 @@ class UnitTestRuleTests(unittest.TestCase):
                 files = [make_file("src/module.py"), make_file(test_path)]
                 self.assertEqual(self._errs(files), [])
 
+    def test_test_prefix_capitalized_satisfies_requirement(self) -> None:
+        # The 'Test*' pattern recognises capitalised test files (e.g.
+        # TestUtils.cpp, TestParser.py) as valid test files.
+        for test_path in [
+            "TestUtils.cpp",
+            "tests/TestParser.py",
+            "deep/nested/TestFeature.cpp",
+        ]:
+            with self.subTest(test_path=test_path):
+                files = [make_file("src/module.py"), make_file(test_path)]
+                self.assertEqual(self._errs(files), [])
+
     def test_path_based_pattern_satisfies_requirement(self) -> None:
         # Patterns containing '/' are matched against the full file path, not
         # just the basename. This allows entire test directories to be
@@ -395,6 +405,35 @@ class DraftAndBumpTests(unittest.TestCase):
         self.assertFalse(pc.is_bump_pr(policy, ""))
 
 
+# ----------------------------- skip tag --------------------------------------
+
+
+class SkipTagTests(unittest.TestCase):
+    def test_skip_tag_detected(self) -> None:
+        for body in [
+            "@skip-pr-bot",
+            "Please skip this one @skip-pr-bot thanks",
+            "line one\n@SKIP-PR-BOT\nline three",  # case-insensitive
+            "Skipping: @Skip-PR-Bot",
+        ]:
+            with self.subTest(body=body):
+                self.assertTrue(pc.pr_wants_skip(body))
+
+    def test_skip_tag_absent(self) -> None:
+        for body in [
+            "",
+            "A normal description with a JIRA ID : ABC-1",
+            "email me at skip-pr-bot@example.com",  # not the @-prefixed tag
+            "@skip-pr-bottling",  # not a whole-word match
+        ]:
+            with self.subTest(body=body):
+                self.assertFalse(pc.pr_wants_skip(body))
+
+    def test_skip_tag_ignored_inside_comment(self) -> None:
+        # Tags inside HTML comments (e.g. a PR template) do not trigger a skip.
+        self.assertFalse(pc.pr_wants_skip("<!-- @skip-pr-bot -->"))
+
+
 # ----------------------------- integration -----------------------------------
 
 
@@ -411,7 +450,6 @@ class IntegrationBlobTests(unittest.TestCase):
 
         e: List[str] = []
 
-        pc.ensure_pr_title(self.policy, title, e)
         pc.ensure_pr_description(self.policy, body, e)
         out["title_desc"] = e
 
@@ -475,7 +513,9 @@ class LoadPolicyTests(unittest.TestCase):
             self.skipTest("policy.yml not present next to tests")
         policy = pc.load_policy(policy_path)
         self.assertIn("pre-commit", policy.required_checks)
-        self.assertGreaterEqual(policy.title_max_length, policy.title_min_length)
+        # Title policy has been removed from policy.yml — the description
+        # min-length is the meaningful text-length gate now.
+        self.assertGreaterEqual(policy.description_min_length, 0)
 
     def test_multiline_jira_issue_patterns_loaded(self) -> None:
         """Verify multiline JIRA/ISSUE ID patterns are in the loaded policy."""
@@ -514,11 +554,12 @@ class LoadPolicyTests(unittest.TestCase):
         # Per team lead request, 'unit/**' was removed from unit_test_patterns.
         # Test files are now recognized ONLY by basename (test_*, *_test.*, Test*).
         self.assertNotIn("unit/**", policy.unit_test_patterns)
-        # Verify the three allowed patterns ARE present.
+        # Verify the allowed patterns ARE present.
         self.assertIn("test_*", policy.unit_test_patterns)
         self.assertIn("*_test.*", policy.unit_test_patterns)
         self.assertIn("*_tests.*", policy.unit_test_patterns)
         self.assertIn("*_gtest.*", policy.unit_test_patterns)
+        self.assertIn("Test*", policy.unit_test_patterns)
         self.assertIn("**/test/gtest/**", policy.unit_test_patterns)
 
 

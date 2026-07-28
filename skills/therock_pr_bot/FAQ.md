@@ -24,6 +24,20 @@ ______________________________________________________________________
 
 Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
 
+## 🛑 Skip the PR Bot entirely (`@skip-pr-bot`)
+
+If you want to opt a PR **out of the bot completely**, add the tag
+**`@skip-pr-bot`** anywhere in the PR description. When present:
+
+- The bot runs **no policy checks** at all.
+- Any existing **`Not ready to Review`** label is **removed**.
+- The bot posts a short notice:
+  *"Author chose to skip pr bot run hence removing label."*
+
+This works both when the tag is present at PR creation **and** when it is added
+later via a description edit. Removing the tag (and pushing/editing again)
+re-enables the normal checks.
+
 ## 🙋 For any policy related feedback?
 
 please reach out to the **ROCm Policy Council**.
