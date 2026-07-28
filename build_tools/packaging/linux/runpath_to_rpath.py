@@ -5,18 +5,111 @@
 
 import argparse
 import os
-import pathlib
 import re
 import subprocess
 import sys
+from pathlib import Path
 
-try:
-    from elftools.elf.elffile import ELFFile
-    from elftools.elf.dynamic import DynamicSection
-    from elftools.common.exceptions import ELFError
-    from elftools.elf.dynamic import ENUM_D_TAG
-except ImportError:
-    sys.exit("Error : pyelftools failed to import. Make sure its installed\n")
+
+def _get_rpath(filepath: Path):
+    """Read DT_RPATH or DT_RUNPATH from an ELF binary via readelf.
+
+    patchelf --print-rpath only reads DT_RPATH, not DT_RUNPATH, so using it
+    directly on a binary that has only DT_RUNPATH returns an empty string and
+    would cause --set-rpath to wipe the rpath. readelf reads both tags.
+    """
+    try:
+        out = subprocess.check_output(
+            ["readelf", "-d", str(filepath)],
+            stderr=subprocess.DEVNULL,
+        ).decode()
+    except subprocess.CalledProcessError:
+        return None
+    m = re.search(r"\(R(?:UN)?PATH\)\s+Library r(?:un)?path: \[(.+)\]", out)
+    return m.group(1) if m else None
+
+
+def update_rpath(search_path: Path, excludes):
+    """Change DT_RUNPATH to DT_RPATH in all ELF files under search_path.
+
+    Uses patchelf --force-rpath --set-rpath, which is the same mechanism used
+    by the Python wheel packaging path. readelf is used to read the existing
+    rpath value because patchelf --print-rpath only reads DT_RPATH, not
+    DT_RUNPATH, and would return empty for binaries that only have DT_RUNPATH.
+    """
+    for path, dirs, files in os.walk(search_path, topdown=True, followlinks=True):
+        dirs[:] = [d for d in dirs if d not in excludes]
+        for filename in files:
+            filepath = Path(path) / filename
+            if filepath.is_symlink():
+                continue
+            # Quick ELF magic check before invoking readelf/patchelf
+            try:
+                if filepath.read_bytes()[:4] != b"\x7fELF":
+                    continue
+            except OSError:
+                continue
+            rpath = _get_rpath(filepath)
+            if not rpath:
+                continue
+            # Write the rpath back, forcing DT_RPATH tag instead of DT_RUNPATH
+            try:
+                subprocess.check_call(
+                    [
+                        "patchelf",
+                        "--force-rpath",
+                        "--set-rpath",
+                        rpath,
+                        str(filepath),
+                    ]
+                )
+                print(f"DT_RUNPATH changed to DT_RPATH: {filepath}")
+            except subprocess.CalledProcessError as ex:
+                print(f"patchelf failed for {filepath}: {ex}")
+
+
+def update_config_file(cfg_path: Path):
+    """Update rocm llvm config file to default to DT_RPATH."""
+    print("Updating cfg file in", cfg_path)
+    if cfg_path.exists():
+        print("cfg file exist in path, going ahead with update ")
+        try:
+            file_string = cfg_path.read_text(encoding="utf-8")
+            file_string = re.sub("enable-new-dtags", "disable-new-dtags", file_string)
+            cfg_path.write_text(file_string, encoding="utf-8")
+        except Exception as ex:
+            print("Couldnt update rocm.cfg file. ", ex)
+    else:
+        print("Config path doesnt exist", cfg_path)
+
+
+def update_compiler_config(search_path: Path):
+    """Search for rocm.cfg in search_path and update it to default to DT_RPATH."""
+    cfg_file_name = "rocm.cfg"
+    found_cfg = False
+    print("Searching for ", cfg_file_name)
+    for path, _, files in os.walk(search_path):
+        if cfg_file_name in files:
+            cfg_path = Path(path) / cfg_file_name
+            print(" Found cfg file cfg_path")
+            found_cfg = True
+            update_config_file(cfg_path)
+            # Continue with the search as there could be cfg files in llvm and llvm/alt
+    if found_cfg:
+        return
+    # rocm.cfg config file not found in search path. Search in the ROCM_PATH.
+    print(cfg_file_name, " not found in search_path. Trying to search in ROCM_PATH")
+    try:
+        rocm_path = Path(os.environ["ROCM_PATH"])
+        print(" Found ROCM_PATH trying for rocm.cfg")
+        # There are multiple possible paths for cfg file.
+        # ROCM_PATH/llvm/bin and ROCM_PATH/lib/llvm/bin. Also alt location
+        update_config_file(rocm_path / "llvm" / "bin" / cfg_file_name)
+        update_config_file(rocm_path / "llvm" / "alt" / "bin" / cfg_file_name)
+        update_config_file(rocm_path / "lib" / "llvm" / "bin" / cfg_file_name)
+        update_config_file(rocm_path / "lib" / "llvm" / "alt" / "bin" / cfg_file_name)
+    except Exception as ex:
+        print("ROCM_PATH not found ", ex)
 
 
 def convert_runpath_to_rpath(search_path):
@@ -38,104 +131,11 @@ def convert_runpath_to_rpath(search_path):
     """
     print(f"convert_runpath_to_rpath {search_path}")
     excludes = []
-    for path, dirs, files in os.walk(search_path, topdown=True, followlinks=True):
-        dirs[:] = [d for d in dirs if d not in excludes]
-        for filename in files:
-            filename = os.path.join(path, filename)
-            print("Opening file ", filename)
-            # Open the file and check if its ELF file
-            try:
-                with open(filename, "rb+") as file:
-                    elffile = ELFFile(file)
-                    # Find the dynamic section and look for DT_RUNPATH tag
-                    section = elffile.get_section_by_name(".dynamic")
-                    if not section:
-                        break
-                    n = 0
-                    for tag in section.iter_tags():
-                        # DT_RUNPATH tag found. Toggle the byte to DT_RPATH
-                        if tag.entry.d_tag == "DT_RUNPATH":
-                            offset = section.header.sh_offset + n * section._tagsize
-                            section.stream.seek(offset)
-                            section.stream.write(bytes([ENUM_D_TAG["DT_RPATH"]]))
-                            print("DT_RUNPATH changed to DT_RPATH ")
-                            break
-                        # DT_RUNPATH tag not found. Loop to the next tag
-                        n = n + 1
-            except ELFError:
-                print("Discarding file as its not an ELF file", filename)
-                continue
-            except FileNotFoundError:
-                print("Discarding file with bad links", filename)
-                continue
-            except OSError:
-                print("Discarding file with OS error", filename)
-                continue
-            except Exception as ex:
-                print("Discarding file ", filename, ex)
-                continue
-
-
-def update_config_file(cfg_path):
-    """Update the ROCm LLVM configuration file to default to DT_RPATH.
-
-    This function modifies the specified configuration file so that
-    DT_RPATH is used as the default instead of DT_RUNPATH.
-
-    Parameters:
-    cfg_path : str
-        Path to the ROCm LLVM configuration file.
-
-    Returns: None
-    """
-
-    print("Updating cfg file in", cfg_path)
-    config_file_exist = os.path.exists(cfg_path)
-    if config_file_exist:
-        print("cfg file exist in path, going ahead with update ")
-        search_str = "enable-new-dtags"
-        replace_str = "disable-new-dtags"
-        try:
-            # Read contents from file as a single string
-            file_string = ""
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                file_string = f.read()
-
-            # Use RE package for string replacement
-            file_string = re.sub(search_str, replace_str, file_string)
-
-            # Write contents back to file. Using mode 'w' truncates the file.
-            with open(cfg_path, "w", encoding="utf-8") as f:
-                f.write(file_string)
-        except Exception as ex:
-            print("Couldnt update rocm.cfg file. ", ex)
-    else:
-        print("Config path doesnt exist", cfg_path)
-
-
-def update_compiler_config(search_path):
-    """Search for the ROCm LLVM configuration file (rocm.cfg) and update it to default to DT_RPATH.
-
-    This function performs the following steps:
-    1. Look for the `rocm.cfg` file in the specified `search_path` directory.
-    2. If not found, attempt to locate the file in the `ROCM_PATH` environment variable.
-    3. Once the configuration file is found, modify its settings so that DT_RPATH is used as the default.
-
-    Parameters:
-    search_path : str
-        Path to the directory where the function should search for the configuration file.
-
-    Returns:None
-    """
-    cfg_file_name = "rocm.cfg"
-    print("Searching for ", cfg_file_name)
-    for path, dirs, files in os.walk(search_path):
-        # Search for rocm.cfg in the search path and default to DT_RPATH
-        if cfg_file_name in files:
-            cfg_path = os.path.join(path, cfg_file_name)
-            print(" Found cfg file cfg_path")
-            update_config_file(cfg_path)
-            return
+    # Find the elf files in the search path and update DT_RUNPATH to DT_RPATH
+    update_rpath(search_path, excludes)
+    # Update rocm clang configs to default to DT_RPATH
+    update_compiler_config(search_path)
+    print("Done with rpath update")
 
 
 def main():
@@ -150,7 +150,7 @@ def main():
     argparser.add_argument(
         "searchdir",
         nargs="?",
-        type=pathlib.Path,
+        type=Path,
         default=None,
         help="Folder to search for ELF file. \nPlease note: Any folder with name llvm in that path will be discarded",
     )
@@ -167,19 +167,7 @@ def main():
         argparser.print_help()
         sys.exit(0)
 
-    # pyelftools is a mandatory requirement for this script. Exit if requirement is not met
-    if "ELFFile" not in globals():
-        print(
-            "Please install pyelftools using 'pip3 install pyelftools' "
-            + "before using the script : runpath_to_rpath.py"
-        )
-        sys.exit(0)
-
-    # Find the elf files in the search path and update DT_RUNPATH to DT_RPATH
     convert_runpath_to_rpath(args.searchdir)
-    # Update rocm clang configs to default to DT_RPATH
-    update_compiler_config(args.searchdir)
-    print("Done with rpath update")
 
 
 if __name__ == "__main__":

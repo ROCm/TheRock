@@ -198,14 +198,13 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
         built_packages.extend(pkg)
 
     # Non-versioned package (user-facing, depends on meta)
-    if not config.enable_rpath:
-        print(f"\n=== Building non-versioned variant for {pkg_name} ===")
-        # For gfxarch packages in kpack mode, non-versioned has no arch suffix (e.g., amdrocm-fft)
-        # It depends on the meta package which pulls in host + all devices
-        meta_config = replace(config, gfx_arch=GFX_META)
-        pkg = build_nonversioned_package(pkg_name, meta_config)
-        if pkg:
-            built_packages.extend(pkg)
+    print(f"\n=== Building non-versioned variant for {pkg_name} ===")
+    # For gfxarch packages in kpack mode, non-versioned has no arch suffix (e.g., amdrocm-fft)
+    # It depends on the meta package which pulls in host + all devices
+    meta_config = replace(config, gfx_arch=GFX_META)
+    pkg = build_nonversioned_package(pkg_name, meta_config)
+    if pkg:
+        built_packages.extend(pkg)
 
     cleanup_build_directory(config)
     return built_packages
@@ -234,13 +233,12 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
         built_packages.extend(pkg)
 
     # Non-versioned package
-    if not config.enable_rpath:
-        print(f"\n=== Building non-versioned variant for {pkg_name} ===")
-        # For non-gfxarch packages, non-versioned has no arch suffix (e.g., amdrocm-core)
-        simple_config = replace(config, gfx_arch="")
-        pkg = build_nonversioned_package(pkg_name, simple_config)
-        if pkg:
-            built_packages.extend(pkg)
+    print(f"\n=== Building non-versioned variant for {pkg_name} ===")
+    # For non-gfxarch packages, non-versioned has no arch suffix (e.g., amdrocm-core)
+    simple_config = replace(config, gfx_arch="")
+    pkg = build_nonversioned_package(pkg_name, simple_config)
+    if pkg:
+        built_packages.extend(pkg)
 
     cleanup_build_directory(config)
     return built_packages
@@ -279,22 +277,19 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
         print(f"ERROR: Failed to build versioned package for {pkg_name}: {e}")
 
     # Non-versioned package
-    if not config.enable_rpath:
-        print(
-            f"\n=== Building non-versioned package for {pkg_name} (single-arch mode) ==="
-        )
-        try:
-            # In single-arch mode, non-versioned packages keep the arch suffix
-            # to indicate they're specific to that architecture (e.g., amdrocm-fft-gfx1100)
-            nonversioned_config = replace(config, versioned_pkg=False)
-            if nonversioned_config.pkg_type == "rpm":
-                pkg = create_nonversioned_rpm_package(pkg_name, nonversioned_config)
-            else:
-                pkg = create_nonversioned_deb_package(pkg_name, nonversioned_config)
-            if pkg:
-                built_packages.extend(pkg)
-        except Exception as e:
-            print(f"ERROR: Failed to build non-versioned package for {pkg_name}: {e}")
+    print(f"\n=== Building non-versioned package for {pkg_name} (single-arch mode) ===")
+    try:
+        # In single-arch mode, non-versioned packages keep the arch suffix
+        # to indicate they're specific to that architecture (e.g., amdrocm-fft-gfx1100)
+        nonversioned_config = replace(config, versioned_pkg=False)
+        if nonversioned_config.pkg_type == "rpm":
+            pkg = create_nonversioned_rpm_package(pkg_name, nonversioned_config)
+        else:
+            pkg = create_nonversioned_deb_package(pkg_name, nonversioned_config)
+        if pkg:
+            built_packages.extend(pkg)
+    except Exception as e:
+        print(f"ERROR: Failed to build non-versioned package for {pkg_name}: {e}")
 
     cleanup_build_directory(config)
     return built_packages
@@ -599,7 +594,6 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         version_suffix=args.version_suffix,
         install_prefix=prefix,
         gfx_arch=default_gfx_arch,
-        enable_rpath=args.rpath_pkg,
         enable_kpack=args.enable_kpack,
         gfxarch_list=tuple(gfxarch_list),
     )
@@ -608,6 +602,11 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
 def run(args: argparse.Namespace):
     # Create configuration from arguments
     config = create_package_config(args)
+
+    # Convert RUNPATH to RPATH in artifacts before packaging (use --no-rpath-pkg to disable)
+    if not args.no_rpath_pkg:
+        print("\n=== Converting RUNPATH to RPATH in artifacts ===")
+        convert_runpath_to_rpath(config.artifacts_dir)
 
     # Clean the packaging build directories
     cleanup_packaging_environment(config)
@@ -731,9 +730,9 @@ def main(argv: list[str]):
     )
 
     p.add_argument(
-        "--rpath-pkg",
+        "--no-rpath-pkg",
         action="store_true",
-        help="Enable rpath-pkg mode",
+        help="Disable RUNPATH to RPATH conversion (conversion enabled by default)",
     )
 
     p.add_argument(

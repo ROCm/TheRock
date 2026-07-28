@@ -50,9 +50,9 @@ the names are updated to use -dev.
 
 ## RPATH Packages
 
-The RUNPATH in binaries and libraries will be replaced with RPATH if
-the --rpath-pkg option is enabled in the build arguments. This option creates
-only versioned packages
+By default, RUNPATH in binaries and libraries is converted to RPATH during
+packaging. This ensures proper library loading behavior. To disable this
+conversion, use the `--no-rpath-pkg` option.
 
 ## Fields in package.json
 
@@ -236,7 +236,7 @@ Debian package with explicit target:<br>
    --pkg-type deb
 ```
 
-Debian RPATH package with auto-detected architectures:<br>
+Debian package without RPATH conversion (disabled):<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -245,18 +245,5 @@ Debian RPATH package with auto-detected architectures:<br>
    --rocm-version 7.1.0 \
    --pkg-type deb \
    --version-suffix build_type \
-   --rpath-pkg
-```
-
-Debian RPATH package with explicit target:<br>
-
-```bash
-./build_tools/packaging/linux/build_package.py \
-   --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
-   --dest-dir ./OUTPUT_PKG \
-   --rocm-version 7.1.0 \
-   --pkg-type deb \
-   --version-suffix build_type \
-   --rpath-pkg
+   --no-rpath-pkg
 ```
