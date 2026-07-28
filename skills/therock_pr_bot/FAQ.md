@@ -24,6 +24,15 @@ ______________________________________________________________________
 
 Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
 
+## 🙋 For any policy related feedback?
+
+please reach out to the **ROCm Policy Council**.
+
+📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
+
+Include your PR link, the check(s) you want overridden, and a short
+justification so the council can review your request.
+
 ## 🛑 Skip the PR Bot entirely (`@skip-pr-bot`)
 
 If you want to opt a PR **out of the bot completely**, add the tag
@@ -37,15 +46,6 @@ If you want to opt a PR **out of the bot completely**, add the tag
 This works both when the tag is present at PR creation **and** when it is added
 later via a description edit. Removing the tag (and pushing/editing again)
 re-enables the normal checks.
-
-## 🙋 For any policy related feedback?
-
-please reach out to the **ROCm Policy Council**.
-
-📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
-
-Include your PR link, the check(s) you want overridden, and a short
-justification so the council can review your request.
 
 ______________________________________________________________________
 
