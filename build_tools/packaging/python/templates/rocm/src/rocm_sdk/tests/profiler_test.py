@@ -69,7 +69,7 @@ CONSOLE_SCRIPT_TESTS = [
 
 @unittest.skipIf(is_windows, "rocm-profiler is not supported on Windows")
 class ROCmProfilerTest(unittest.TestCase):
-    def testInstallationLayout(self):
+    def test_installation_layout(self):
         """The `rocm_sdk` and profiler module must be siblings on disk."""
         # A concrete __init__.py (vs. a namespace package with __file__ == None)
         # proves the package was installed as real files, so its bundled .so
@@ -95,7 +95,7 @@ class ROCmProfilerTest(unittest.TestCase):
             msg="Paths are not siblings",
         )
 
-    def testAllRequiredLibrariesResolve(self):
+    def test_all_required_libraries_resolve(self):
         """Every NEEDED dependency of every profiler .so must resolve.
 
         A past regression dropped a single NEEDED library (libprofiler-hub.so.0)
@@ -136,7 +136,7 @@ class ROCmProfilerTest(unittest.TestCase):
             ),
         )
 
-    def testUnversionedLibraryAliases(self):
+    def test_unversioned_library_aliases(self):
         """Unversioned aliases for profiler runtime deps must exist and resolve.
 
         populate_runtime_files() writes only the SONAME-matching versioned
@@ -172,7 +172,7 @@ class ROCmProfilerTest(unittest.TestCase):
                     msg=f"Unversioned alias {link} is missing or dangles",
                 )
 
-    def testConsoleScripts(self):
+    def test_console_scripts(self):
         """Test the console scripts are installed and executable."""
         for test in CONSOLE_SCRIPT_TESTS:
             script_path = utils.find_console_script(test.script_name)
