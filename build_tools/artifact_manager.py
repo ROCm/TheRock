@@ -892,10 +892,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str,
     platform: str,
-    local_staging_dir: Optional[Path] = None,
-    source_repository: Optional[str] = None,
+    source_run_id: str,
+    source_repository: Optional[str],
+    local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -954,12 +954,11 @@ def do_copy(args: argparse.Namespace):
     target_families = parse_target_families(args)
 
     # Create source and dest backends
-    source_repository = args.source_repository or None
     source_backend = _create_source_backend(
-        source_run_id=args.source_run_id,
         platform=args.platform,
+        source_run_id=args.source_run_id,
+        source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
-        source_repository=source_repository,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
