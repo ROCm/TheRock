@@ -44,6 +44,14 @@ def format_summary(
         f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.commit_ref}`, "
         f"`{ci_inputs.build_variant}` variant."
     )
+    if ci_inputs.therock_commit_sha:
+        repo = ci_inputs.therock_repository or _REPO_SLUG
+        sha = ci_inputs.therock_commit_sha
+        short_sha = sha[:12]
+        lines.append(
+            f"TheRock commit: [`{short_sha}`]"
+            f"(https://github.com/{repo}/commit/{sha})"
+        )
     lines.append("")
 
     # Nothing to build (e.g. workflow_dispatch with no families selected)

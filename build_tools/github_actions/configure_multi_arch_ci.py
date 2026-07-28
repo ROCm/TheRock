@@ -159,6 +159,10 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
+    # Resolved checkout identity (set by setup_multi_arch.yml)
+    therock_commit_sha: str = ""
+    therock_repository: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -257,6 +261,8 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            therock_commit_sha=os.environ.get("THEROCK_COMMIT_SHA", ""),
+            therock_repository=os.environ.get("THEROCK_REPOSITORY", ""),
         )
 
 
