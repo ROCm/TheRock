@@ -8,7 +8,8 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-if(THEROCK_ENABLE_MIOPEN)
+therock_project_has_no_targets(_skip_miopen MIOpen)
+if(THEROCK_ENABLE_MIOPEN AND NOT _skip_miopen)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
@@ -85,7 +86,8 @@ if(THEROCK_ENABLE_MIOPEN)
   )
 endif(THEROCK_ENABLE_MIOPEN)
 
-if(THEROCK_ENABLE_HIPDNN)
+therock_project_has_no_targets(_skip_hipdnn hipDNN)
+if(THEROCK_ENABLE_HIPDNN AND NOT _skip_hipdnn)
   ##############################################################################
   # hipDNN
   ##############################################################################
@@ -150,7 +152,8 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
-if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+therock_project_has_no_targets(_skip_hipdnn_tests hipdnn_integration_tests)
+if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS AND NOT _skip_hipdnn_tests)
   ##############################################################################
   # hipDNN integration tests
   ##############################################################################
@@ -202,7 +205,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+therock_project_has_no_targets(_skip_miopenprovider miopenprovider)
+if(THEROCK_ENABLE_MIOPENPROVIDER AND NOT _skip_miopenprovider)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -250,7 +254,8 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
   )
 endif(THEROCK_ENABLE_MIOPENPROVIDER)
 
-if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
+therock_project_has_no_targets(_skip_hipblasltprovider hipblasltprovider)
+if(THEROCK_ENABLE_HIPBLASLTPROVIDER AND NOT _skip_hipblasltprovider)
   ##############################################################################
   # hipDNN hipBLASLt provider
   ##############################################################################
@@ -299,7 +304,8 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
-if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+therock_project_has_no_targets(_skip_hipkernelprovider hipkernelprovider)
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND NOT _skip_hipkernelprovider)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
@@ -348,7 +354,8 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
 
-if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+therock_project_has_no_targets(_skip_hipdnn_samples hipDNN_samples)
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND NOT _skip_hipdnn_samples)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
