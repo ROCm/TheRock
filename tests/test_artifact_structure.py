@@ -71,6 +71,8 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("fftw3", "run"),
     ("hipkernelprovider", "lib"),
     ("hipkernelprovider", "test"),
+    ("hipthreads", "dev"),
+    ("hipthreads", "test"),
     ("mirage", "dev"),  # new artifact, no packages yet.
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
