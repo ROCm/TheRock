@@ -1026,7 +1026,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="",
             build_pytorch=True,
             build_jax=False,
-            build_opencl_cts=False,
             build_native_linux=True,
             build_python_packages=True,
         )
@@ -1059,7 +1058,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_cmake_preset="release",
             build_pytorch=True,
             build_jax=False,
-            build_opencl_cts=False,
             build_native_linux=True,
             build_python_packages=True,
         )
@@ -1766,7 +1764,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
-            "build_opencl_cts",
         }
         self.assertEqual(
             yaml_fields,
