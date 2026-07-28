@@ -9,8 +9,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from _therock_utils.build_topology import (
-    Artifact,
     BuildTopology,
+    artifact_may_apply_to_platform,
 )
 
 
@@ -77,24 +77,6 @@ def requested_test_components(
             components.append(normalized)
 
     return tuple(dict.fromkeys(components))
-
-
-def _artifact_applies_to_platform(
-    artifact: Artifact,
-    platform: str,
-) -> bool:
-    """Return whether an artifact applies to a platform conservatively."""
-
-    if artifact.platform is not None and artifact.platform != platform:
-        return False
-
-    if platform in artifact.disable_platforms:
-        return False
-
-    # Conditional disables depend on resolved build flags,
-    # which this report does not receive. Keep the artifact
-    # applicable instead of risking a false "not applicable".
-    return True
 
 
 def _resolve_component_artifacts(
@@ -194,7 +176,7 @@ def compute_test_impact(
                 mapping_incomplete = True
                 continue
 
-            if _artifact_applies_to_platform(
+            if artifact_may_apply_to_platform(
                 artifact,
                 platform,
             ):

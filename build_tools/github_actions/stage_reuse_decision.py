@@ -67,8 +67,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 from _therock_utils.build_topology import (
-    Artifact,
     BuildTopology,
+    artifact_may_apply_to_platform,
     get_topology,
 )
 from artifact_manager import ARTIFACT_COMPONENTS
@@ -177,24 +177,6 @@ def _target_families_for_artifact(
     )
 
 
-def _artifact_applies_to_platform(
-    artifact: Artifact,
-    platform: str,
-) -> bool:
-    """Return whether an artifact unconditionally applies to a platform."""
-
-    if artifact.platform is not None and artifact.platform != platform:
-        return False
-
-    if platform in artifact.disable_platforms:
-        return False
-
-    # Conditional disables are not evaluated here because stage reuse does
-    # not yet receive the current build's enabled feature flags. Keeping the
-    # artifact required is the conservative fallback.
-    return True
-
-
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
@@ -214,7 +196,7 @@ def _required_artifacts_for_stages(
 
         for group_name in stage.artifact_groups:
             for artifact in topology.get_artifacts_in_group(group_name):
-                if not _artifact_applies_to_platform(
+                if not artifact_may_apply_to_platform(
                     artifact,
                     platform,
                 ):
