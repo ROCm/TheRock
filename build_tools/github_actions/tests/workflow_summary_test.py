@@ -327,6 +327,7 @@ class TestMain:
                     "owner/repo",
                     "--github-run-id",
                     "12345",
+                    "--collect-timing",
                 ]
             )
 
@@ -369,6 +370,7 @@ class TestMain:
                         "owner/repo",
                         "--github-run-id",
                         "12345",
+                        "--collect-timing",
                     ]
                 )
 

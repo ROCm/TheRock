@@ -260,15 +260,12 @@ def main(argv: list[str]) -> int:
     if args.collect_timing:
         if not args.github_repository or not args.github_run_id:
             parser.error(
-                "--collect-timing requires --github-repository "
-                "and --github-run-id"
+                "--collect-timing requires --github-repository " "and --github-run-id"
             )
 
         token = os.environ.get("GITHUB_TOKEN")
         if not token:
-            parser.error(
-                "--collect-timing requires GITHUB_TOKEN"
-            )
+            parser.error("--collect-timing requires GITHUB_TOKEN")
 
         collected_records = collect_timing_records(
             repository=args.github_repository,
