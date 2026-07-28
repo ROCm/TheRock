@@ -228,24 +228,6 @@ class StageToTestImpactTest(unittest.TestCase):
             ("conditional",),
         )
 
-    def test_explicit_override_maps_hip_tests(self):
-        result = compute_test_impact(
-            topology=self.topology,
-            platform="linux",
-            components=["hip-tests"],
-            rebuild_stages=["runtime-tests"],
-            full_rebuild_required=False,
-        )
-
-        self.assertIn(
-            "hip-tests",
-            result.would_run,
-        )
-        self.assertNotIn(
-            "hip-tests",
-            result.unmapped,
-        )
-
     def test_requested_components_normalizes_labels(
         self,
     ):

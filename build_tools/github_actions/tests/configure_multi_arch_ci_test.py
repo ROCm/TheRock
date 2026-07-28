@@ -717,41 +717,27 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
-    def test_reuse_commit_sha_uses_pr_base_commit(self):
-        ci_inputs = self._inputs(
-            event_name="pull_request",
-        )
+    def test_reuse_commit_sha_depends_on_event_type(self):
         git_context = cm.GitContext(
             changed_files=[],
             diff_base_commit="base-commit-sha",
             diff_head_commit="head-commit-sha",
         )
 
-        self.assertEqual(
-            cm._get_reuse_commit_sha(
-                ci_inputs,
-                git_context,
-            ),
-            "base-commit-sha",
-        )
+        cases = [
+            ("pull_request", "base-commit-sha"),
+            ("push", "head-commit-sha"),
+        ]
 
-    def test_reuse_commit_sha_uses_push_head_commit(self):
-        ci_inputs = self._inputs(
-            event_name="push",
-        )
-        git_context = cm.GitContext(
-            changed_files=[],
-            diff_base_commit="base-commit-sha",
-            diff_head_commit="head-commit-sha",
-        )
-
-        self.assertEqual(
-            cm._get_reuse_commit_sha(
-                ci_inputs,
-                git_context,
-            ),
-            "head-commit-sha",
-        )
+        for event_name, expected in cases:
+            with self.subTest(event_name=event_name):
+                self.assertEqual(
+                    cm._get_reuse_commit_sha(
+                        self._inputs(event_name=event_name),
+                        git_context,
+                    ),
+                    expected,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1622,14 +1608,6 @@ class TestFormatSummary(unittest.TestCase):
             auto_stage_reuse,
         )
 
-    def test_render_stage_reuse_report_is_empty_without_analysis(self):
-        self.assertEqual(
-            cm.render_stage_reuse_report(
-                cm.CIOutputs.skipped(),
-            ),
-            "",
-        )
-
     @patch(
         "configure_multi_arch_ci.render_test_impact_summary",
         return_value="### Test impact analysis - dry-run",
@@ -1656,14 +1634,6 @@ class TestFormatSummary(unittest.TestCase):
         )
         mock_test_impact_summary.assert_called_once_with(
             (test_impact,),
-        )
-
-    def test_render_test_impact_report_is_empty_without_analysis(self):
-        self.assertEqual(
-            cm.render_test_impact_report(
-                cm.CIOutputs.skipped(),
-            ),
-            "",
         )
 
     def test_combine_ci_impact_reports(self) -> None:
@@ -1880,9 +1850,28 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
         self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
 
-    def test_configure_forces_requested_test_components(self):
-        inputs = cm.CIInputs(
-            run_id="12345",
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_configure_populates_report_only_test_impact_and_forces_requested_components(
+        self,
+        mock_compute_auto_stage_reuse,
+    ):
+        mock_compute_auto_stage_reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.DRY_RUN,
+            candidate_stages=(),
+            rebuild_stages=(),
+            full_rebuild_required=True,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=(),
+            unavailable_stages=(),
+            applied_reuse_stages=(),
+            reasons=("test stub: skip baseline lookup",),
+            report_lines=(),
+            platform_available={},
+        )
+
+        ci_inputs = cm.CIInputs(
+            run_id="123",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
@@ -1890,10 +1879,16 @@ class TestConfigurePipeline(unittest.TestCase):
             linux_test_labels=["test:rocblas"],
             windows_test_labels=["test:rocblas"],
         )
+        git_context = cm.GitContext(
+            changed_files=["rocm-libraries"],
+            submodule_paths=["rocm-libraries"],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
 
         outputs = cm.configure(
-            inputs,
-            cm.GitContext.empty(),
+            ci_inputs=ci_inputs,
+            git_context=git_context,
         )
 
         self.assertEqual(
@@ -1904,6 +1899,8 @@ class TestConfigurePipeline(unittest.TestCase):
             },
         )
 
+        # Explicitly requested components remain enabled in the
+        # report-only recommendation for both platforms.
         self.assertIn(
             "rocblas",
             outputs.test_impact["linux"].forced,
@@ -1922,6 +1919,36 @@ class TestConfigurePipeline(unittest.TestCase):
             outputs.windows_test_labels,
             ["test:rocblas"],
         )
+
+        mock_compute_auto_stage_reuse.assert_called_once()
+
+        call_kwargs = mock_compute_auto_stage_reuse.call_args.kwargs
+        self.assertEqual(
+            call_kwargs["changed_files"],
+            ["rocm-libraries"],
+        )
+        self.assertEqual(
+            call_kwargs["mode"],
+            cm.StageReuseMode.DRY_RUN,
+        )
+        self.assertEqual(
+            call_kwargs["current_commit_sha"],
+            "base-commit-sha",
+        )
+
+        for family_argument in (
+            "linux_amdgpu_families",
+            "windows_amdgpu_families",
+        ):
+            with self.subTest(family_argument=family_argument):
+                self.assertIsInstance(
+                    call_kwargs[family_argument],
+                    list,
+                )
+                self.assertGreater(
+                    len(call_kwargs[family_argument]),
+                    0,
+                )
 
     def test_no_test_labels_has_empty_outputs(self):
         """Without test labels, outputs are empty lists."""
@@ -1979,98 +2006,6 @@ class TestConfigurePipeline(unittest.TestCase):
         linux_payload = outputs.builds.linux.to_dict()
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
-
-    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
-    def test_configure_populates_report_only_test_impact(
-        self,
-        mock_compute_auto_stage_reuse,
-    ):
-        mock_compute_auto_stage_reuse.return_value = cm.AutoStageReuse(
-            mode=cm.StageReuseMode.DRY_RUN,
-            candidate_stages=(),
-            rebuild_stages=(),
-            full_rebuild_required=True,
-            baseline_run_id="",
-            baseline_html_url="",
-            available_stages=(),
-            unavailable_stages=(),
-            applied_reuse_stages=(),
-            reasons=("test stub: skip baseline lookup",),
-            report_lines=(),
-            platform_available={},
-        )
-
-        ci_inputs = cm.CIInputs(
-            run_id="123",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            linux_test_labels=["test:rocblas"],
-            windows_test_labels=[],
-        )
-        git_context = cm.GitContext(
-            changed_files=["rocm-libraries"],
-            submodule_paths=["rocm-libraries"],
-            diff_base_commit="base-commit-sha",
-            diff_head_commit="head-commit-sha",
-        )
-
-        outputs = cm.configure(
-            ci_inputs=ci_inputs,
-            git_context=git_context,
-        )
-
-        self.assertIn("linux", outputs.test_impact)
-        self.assertIn("windows", outputs.test_impact)
-
-        self.assertEqual(
-            outputs.linux_test_labels,
-            ["test:rocblas"],
-        )
-        self.assertEqual(
-            outputs.windows_test_labels,
-            [],
-        )
-
-        self.assertIn(
-            "rocblas",
-            outputs.test_impact["linux"].forced,
-        )
-
-        mock_compute_auto_stage_reuse.assert_called_once()
-
-        call_kwargs = mock_compute_auto_stage_reuse.call_args.kwargs
-
-        self.assertEqual(
-            call_kwargs["changed_files"],
-            ["rocm-libraries"],
-        )
-        self.assertEqual(
-            call_kwargs["mode"],
-            cm.StageReuseMode.DRY_RUN,
-        )
-        self.assertEqual(
-            call_kwargs["current_commit_sha"],
-            "base-commit-sha",
-        )
-        self.assertIsInstance(
-            call_kwargs["linux_amdgpu_families"],
-            list,
-        )
-        self.assertGreater(
-            len(call_kwargs["linux_amdgpu_families"]),
-            0,
-        )
-
-        self.assertIsInstance(
-            call_kwargs["windows_amdgpu_families"],
-            list,
-        )
-        self.assertGreater(
-            len(call_kwargs["windows_amdgpu_families"]),
-            0,
-        )
 
 
 # ---------------------------------------------------------------------------

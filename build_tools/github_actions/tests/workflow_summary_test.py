@@ -345,3 +345,36 @@ class TestMain:
         assert timing_markdown_path.read_text(encoding="utf-8") == (
             "### CI Job Timing Summary\n" "\n" "_no timing data_\n"
         )
+
+    def test_timing_collection_failure_propagates(
+        self,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("GITHUB_TOKEN", "token")
+        monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+
+        with patch(
+            "workflow_summary.collect_timing_records",
+            side_effect=RuntimeError("timing collection failed"),
+        ) as mock_collect_timing_records:
+            with pytest.raises(
+                RuntimeError,
+                match="timing collection failed",
+            ):
+                main(
+                    [
+                        "--needs-json",
+                        json.dumps(ALL_SUCCESS),
+                        "--github-repository",
+                        "owner/repo",
+                        "--github-run-id",
+                        "12345",
+                    ]
+                )
+
+        mock_collect_timing_records.assert_called_once_with(
+            repository="owner/repo",
+            run_id="12345",
+            run_attempt="1",
+            token="token",
+        )

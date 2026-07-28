@@ -158,25 +158,28 @@ class SuperRepoSignalTest(unittest.TestCase):
             summaries[0],
         )
 
-    def test_invalid_json_raises(self):
-        env = _environment()
-        env["EXTERNAL_REPO_CONFIG_JSON"] = "{bad json"
+    def test_invalid_external_repo_config_raises(self):
+        cases = [
+            (
+                "{bad json",
+                "invalid JSON",
+            ),
+            (
+                '["not", "an", "object"]',
+                "JSON object",
+            ),
+        ]
 
-        with self.assertRaisesRegex(
-            ValueError,
-            "invalid JSON",
-        ):
-            super_repo_signal.load_super_repo_signal(env)
+        for config_json, expected_error in cases:
+            with self.subTest(config_json=config_json):
+                env = _environment()
+                env["EXTERNAL_REPO_CONFIG_JSON"] = config_json
 
-    def test_non_object_json_raises(self):
-        env = _environment()
-        env["EXTERNAL_REPO_CONFIG_JSON"] = '["not", "an", "object"]'
-
-        with self.assertRaisesRegex(
-            ValueError,
-            "JSON object",
-        ):
-            super_repo_signal.load_super_repo_signal(env)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    expected_error,
+                ):
+                    super_repo_signal.load_super_repo_signal(env)
 
 
 if __name__ == "__main__":

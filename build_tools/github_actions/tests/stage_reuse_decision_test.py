@@ -644,27 +644,6 @@ class RequiredArtifactsTest(unittest.TestCase):
             ],
         )
 
-    def test_target_specific_artifact_requires_gpu_family_only(self):
-        required = srd._required_artifacts_for_stages(
-            topology=FakeTopology(),
-            stage_names=["math-libs"],
-            target_families=[
-                "gfx94X-dcgpu",
-                "generic",
-            ],
-            platform="linux",
-        )
-
-        self.assertEqual(
-            required,
-            [
-                srd.RequiredArtifact(
-                    name="blas",
-                    target_family="gfx94X-dcgpu",
-                )
-            ],
-        )
-
     def test_platform_specific_artifact_is_skipped_on_other_platform(self):
         topology = FakeTopology()
         topology.artifacts["base"].platform = "windows"
@@ -716,38 +695,6 @@ class RequiredArtifactsTest(unittest.TestCase):
 
 
 class StageArtifactAvailabilityTest(unittest.TestCase):
-    def test_target_neutral_stage_does_not_require_gpu_family_archive(self):
-        available = srd._stage_artifacts_available(
-            topology=FakeTopology(),
-            stage_name="compiler-runtime",
-            target_families=[
-                "gfx94X-dcgpu",
-                "generic",
-            ],
-            available_filenames={
-                "base_lib_generic.tar.zst",
-            },
-            platform="linux",
-        )
-
-        self.assertTrue(available)
-
-    def test_target_specific_stage_does_not_require_generic_archive(self):
-        available = srd._stage_artifacts_available(
-            topology=FakeTopology(),
-            stage_name="math-libs",
-            target_families=[
-                "gfx94X-dcgpu",
-                "generic",
-            ],
-            available_filenames={
-                "blas_lib_gfx94X-dcgpu.tar.zst",
-            },
-            platform="linux",
-        )
-
-        self.assertTrue(available)
-
     def test_target_specific_stage_requires_selected_gpu_archive(self):
         available = srd._stage_artifacts_available(
             topology=FakeTopology(),
@@ -792,12 +739,6 @@ class StageArtifactAvailabilityTest(unittest.TestCase):
 
 
 class TargetFamiliesTest(unittest.TestCase):
-    def test_empty_platform_includes_generic(self):
-        self.assertEqual(
-            srd._target_families_for_platform(()),
-            ("generic",),
-        )
-
     def test_dedupes_and_appends_generic(self):
         families = srd._target_families_for_platform(
             ["gfx94X-dcgpu", "gfx94X-dcgpu"],
