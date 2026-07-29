@@ -322,10 +322,15 @@ jobs:
 
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
+        env:
+          # Temporary diagnostics for ROCm 7.14 hipMemSetAccess failures.
+          CUDA_LOG_FILE: stderr
+          AMD_LOG_LEVEL: "5"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
+            -k "test_subgroup or test_one_shot_all_reduce" \
             -- \
             --continue-on-collection-errors
 
