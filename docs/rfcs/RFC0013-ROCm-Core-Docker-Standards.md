@@ -82,6 +82,10 @@ implementation of that standard.
  
 ## Image Layering
  
+**Scope.** This layering strategy applies to end users consuming the
+package-based (rpm/deb) ROCm containers. There is no equivalent layering
+strategy for pip-wheel-based images; those are out of scope here.
+ 
 **Background.** A Docker image is a stack of read-only filesystem layers, one
 per Dockerfile instruction (`FROM`, `RUN`, `COPY`, etc.). When a Dockerfile
 starts with `FROM <some-image>`, Docker reuses every layer of `<some-image>`
@@ -339,4 +343,3 @@ documentation standard — lives in
 [RFC0014 § Worked Example](./RFC0014-ROCm-Container-Documentation-Standard.md#worked-example-rocmrocm-core-runtime-tier).
 It is the reference implementation of that standard; the `core` and `core-sdk`
 tiers each get their own overview following the same template.
- 
