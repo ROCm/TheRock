@@ -186,6 +186,7 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
+OWNERSHIP_TIMEOUT_SEC = 120
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
@@ -906,6 +907,9 @@ gpgcheck=0
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
 
+        # Verify installed files are owned by root
+        ownership_ok = self.verify_root_ownership()
+
         # Check installed packages
         print("\nChecking installed packages:")
         try:
@@ -967,11 +971,66 @@ gpgcheck=0
             except OSError as e:
                 print(f" [WARN] Could not run rocminfo: {e}")
 
-        if found_count >= VERIFY_MIN_COMPONENTS:
-            print("\n[PASS] Basic verification PASSED")
+        if found_count < VERIFY_MIN_COMPONENTS:
+            print("\n[FAIL] Basic verification FAILED (insufficient components)")
+            return False
+        if not ownership_ok:
+            print("\n[FAIL] Basic verification FAILED (files not owned by root)")
+            return False
+        print("\n[PASS] Basic verification PASSED")
+        return True
+
+    def verify_root_ownership(self) -> bool:
+        """Verify all installed files under the prefix are owned by root:root.
+
+        Uses ``find`` (C-level traversal) rather than a Python walk with per-file
+        ``lstat`` for speed on large install trees. Flags any path whose owner uid
+        or group gid is not 0.
+
+        Returns:
+        True if every file is owned by root:root (or the check could not be run),
+        False if any offending file is found.
+        """
+        print("\nVerifying installed files are owned by root...")
+        install_prefix = str(Path(self.install_prefix))
+        try:
+            result = subprocess.run(
+                [
+                    "find",
+                    install_prefix,
+                    "(",
+                    "!",
+                    "-uid",
+                    "0",
+                    "-o",
+                    "!",
+                    "-gid",
+                    "0",
+                    ")",
+                    "-print",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=OWNERSHIP_TIMEOUT_SEC,
+            )
+        except subprocess.TimeoutExpired:
+            print(" [WARN] Ownership check timed out; skipping")
             return True
-        print("\n[FAIL] Basic verification FAILED (insufficient components)")
-        return False
+        except OSError as e:
+            print(f" [WARN] Could not run ownership check: {e}")
+            return True
+
+        bad = [line for line in result.stdout.splitlines() if line]
+        if bad:
+            print(f" [FAIL] {len(bad)} file(s) not owned by root:")
+            for line in bad[:10]:
+                print(f"   {line}")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root")
+        return True
 
     def run_full_verification(self) -> bool:
         """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
