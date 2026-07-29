@@ -80,7 +80,12 @@ class WorkflowJobHealth:
 
 @dataclass(frozen=True)
 class CommitCompatibility:
-    """Result of comparing a candidate run with the exact expected baseline."""
+    """Result of comparing a candidate run with the exact expected baseline.
+
+    A baseline run is safe to reuse only when its ``head_sha`` exactly matches
+    ``expected_head_sha``. Accepting an older or different commit could omit
+    changes covered by the current impact range and reuse stale artifacts.
+    """
 
     expected_head_sha: str
     candidate_head_sha: str
