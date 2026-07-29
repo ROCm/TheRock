@@ -5,10 +5,12 @@
 """Unit tests for install_rocm_from_artifacts.py."""
 
 import argparse
+import io
 from datetime import datetime
 from pathlib import Path
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -68,66 +70,287 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_base_only_includes_rocjitsu_hotswap(self):
+        argv = self._run_main(["--base-only"])
+        self.assertIn("rocjitsu-hotswap_lib", argv)
 
-class TestReleaseDiscovery(unittest.TestCase):
-    def test_extract_version_ignores_test_tarball(self) -> None:
+
+def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
+    """Return a tarball name matching the platform under test."""
+    return f"therock-dist-{platform}-{artifact_group}-{version}.tar.gz"
+
+
+def _s3_object(
+    platform: str,
+    artifact_group: str,
+    version: str,
+    *,
+    last_modified: datetime,
+    size: int = 0,
+) -> dict:
+    """Return a tarball object in the published multi-arch S3 layout."""
+    return {
+        "Key": mod._multiarch_tarball_s3_key(
+            _tarball_name(platform, artifact_group, version)
+        ),
+        "LastModified": last_modified,
+        "Size": size,
+    }
+
+
+class TestMultiarchTarballNamePattern(unittest.TestCase):
+    def test_extracts_named_filename_parts(self) -> None:
+        test_cases = [
+            ("linux", "gfx94X-dcgpu", "7.15.0a20260722"),
+            ("windows", "gfx110X-all", "7.15.0rc20260722"),
+            ("linux", "gfx90a", "7.15.0.dev0+deadbeef"),
+            ("windows", "multiarch", "7.15.0"),
+        ]
+
+        for platform, artifact_group, version in test_cases:
+            with self.subTest(platform=platform, artifact_group=artifact_group):
+                match = mod.MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(
+                    _tarball_name(platform, artifact_group, version)
+                )
+
+                self.assertIsNotNone(match)
+                self.assertEqual(
+                    match.groupdict(),
+                    {
+                        "platform": platform,
+                        "artifact_group": artifact_group,
+                        "version": version,
+                    },
+                )
+
+    def test_rejects_unversioned_filename(self) -> None:
         self.assertIsNone(
-            mod.extract_version_from_asset_name(
-                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
-                "gfx94X-dcgpu",
-                "linux",
+            mod.MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(
+                "therock-dist-linux-gfx94X-dcgpu-not-a-version.tar.gz"
             )
         )
 
-    def test_fetch_and_sort_nightly_releases_ignores_test_tarballs(self) -> None:
+
+class TestReleaseDiscovery(unittest.TestCase):
+    @staticmethod
+    def _paginator(*objects: dict) -> mock.Mock:
         paginator = mock.Mock()
-        paginator.paginate.return_value = [
-            {
-                "Contents": [
-                    {
-                        "Key": (
-                            "therock-dist-linux-gfx94X-dcgpu-tests-"
-                            "7.13.0a20260102.tar.gz"
-                        ),
-                        "LastModified": datetime(2026, 1, 2),
-                        "Size": 20,
-                    },
-                    {
-                        "Key": "therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz",
-                        "LastModified": datetime(2026, 1, 1),
-                        "Size": 10,
-                    },
+        paginator.paginate.return_value = [{"Contents": objects}]
+        return paginator
+
+    def test_latest_release_dry_run_discovers_non_test_tarball(self) -> None:
+        platform = mod.PLATFORM
+        paginator = self._paginator(
+            _s3_object(
+                platform,
+                "gfx94X-dcgpu-tests",
+                "7.15.0a20260723",
+                last_modified=datetime(2026, 7, 23),
+            ),
+            _s3_object(
+                platform,
+                "gfx94X-dcgpu",
+                "7.15.0a20260722",
+                last_modified=datetime(2026, 7, 22),
+            ),
+            _s3_object(
+                platform,
+                "gfx110X-all",
+                "7.15.0a20260723",
+                last_modified=datetime(2026, 7, 23),
+            ),
+        )
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(
+                mod.s3_client, "get_paginator", return_value=paginator
+            ) as get_paginator,
+            mock.patch("sys.stdout", output),
+        ):
+            mod.main(
+                [
+                    "--latest-release",
+                    "--artifact-group",
+                    "gfx94X-dcgpu",
+                    "--dry-run",
                 ]
-            }
-        ]
-        s3_client = mock.Mock()
-        s3_client.get_paginator.return_value = paginator
+            )
 
-        with mock.patch.object(mod, "s3_client", s3_client):
-            releases = mod._fetch_and_sort_nightly_releases("gfx94X-dcgpu", "linux")
-
-        self.assertEqual(
-            [release["asset_name"] for release in releases],
-            ["therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz"],
+        asset_name = _tarball_name(platform, "gfx94X-dcgpu", "7.15.0a20260722")
+        self.assertIn("Found latest release: 7.15.0a20260722", output.getvalue())
+        self.assertIn(f"Would download: {asset_name}", output.getvalue())
+        get_paginator.assert_called_once_with("list_objects_v2")
+        paginator.paginate.assert_called_once_with(
+            Bucket=mod.NIGHTLY_TARBALL_BUCKET.name,
+            Prefix=mod._multiarch_tarball_s3_key(f"therock-dist-{platform}-"),
         )
 
-    def test_list_available_nightly_gpu_families_ignores_test_tarballs(self) -> None:
-        paginator = mock.Mock()
-        paginator.paginate.return_value = [
-            {
-                "Contents": [
-                    {"Key": "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"},
-                    {"Key": ("therock-dist-linux-gfx94X-dcgpu-tests-" "7.13.0.tar.gz")},
+    def test_discovery_supports_linux_and_windows_tarballs(self) -> None:
+        version = "7.15.0a20260722"
+        for platform in ("linux", "windows"):
+            asset_name = _tarball_name(platform, "gfx94X-dcgpu", version)
+            paginator = self._paginator(
+                _s3_object(
+                    platform,
+                    "gfx94X-dcgpu",
+                    version,
+                    last_modified=datetime(2026, 7, 22),
+                )
+            )
+
+            with mock.patch.object(
+                mod.s3_client, "get_paginator", return_value=paginator
+            ):
+                result = mod.discover_latest_release("gfx94X-dcgpu", platform)
+
+            self.assertEqual(result, (version, asset_name))
+
+    def test_nightly_release_dry_run_reports_s3_location_and_asset(self) -> None:
+        version = "7.15.0a20260722"
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
+        expected_s3_uri = (
+            f"s3://{mod.NIGHTLY_TARBALL_BUCKET.name}/"
+            f"{mod._multiarch_tarball_s3_key(asset_name)}"
+        )
+        output = io.StringIO()
+
+        with mock.patch("sys.stdout", output):
+            mod.main(
+                [
+                    "--release",
+                    version,
+                    "--artifact-group",
+                    "gfx94X-dcgpu",
+                    "--dry-run",
                 ]
-            }
-        ]
-        s3_client = mock.Mock()
-        s3_client.get_paginator.return_value = paginator
+            )
 
-        with mock.patch.object(mod, "s3_client", s3_client):
-            families = mod.list_available_nightly_gpu_families("linux")
+        self.assertIn(f"Would download: {expected_s3_uri}", output.getvalue())
+        self.assertIn(f"asset {asset_name}", output.getvalue())
 
-        self.assertEqual(families, {"gfx94X-dcgpu"})
+    def test_multiarch_tarball_downloads_selected_s3_object(self) -> None:
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
+        expected_key = mod._multiarch_tarball_s3_key(asset_name)
+
+        def write_tarball(_, __, file) -> None:
+            file.write(b"tarball contents")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            with (
+                mock.patch.object(
+                    mod.s3_client, "download_fileobj", side_effect=write_tarball
+                ) as download_fileobj,
+                mock.patch.object(mod, "_untar_files") as untar_files,
+            ):
+                mod._retrieve_multiarch_tarball(
+                    mod.NIGHTLY_TARBALL_BUCKET.name,
+                    asset_name,
+                    output_dir,
+                )
+
+            self.assertEqual(
+                (output_dir / asset_name).read_bytes(), b"tarball contents"
+            )
+            bucket, key, _ = download_fileobj.call_args.args
+            self.assertEqual(bucket, mod.NIGHTLY_TARBALL_BUCKET.name)
+            self.assertEqual(key, expected_key)
+            untar_files.assert_called_once_with(output_dir, output_dir / asset_name)
+
+    def test_dev_release_uses_dev_multiarch_tarball_bucket(self) -> None:
+        version = "7.15.0.dev0+deadbeef"
+        output_dir = Path("/tmp/therock-test")
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
+        args = argparse.Namespace(
+            artifact_group="gfx94X-dcgpu",
+            output_dir=output_dir,
+            release=version,
+            dry_run=False,
+        )
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(mod, "_retrieve_multiarch_tarball") as retrieve_tarball,
+            mock.patch("sys.stdout", output),
+        ):
+            mod.retrieve_artifacts_by_release(args)
+
+        retrieve_tarball.assert_called_once_with(
+            mod.DEV_TARBALL_BUCKET.name,
+            asset_name,
+            output_dir,
+        )
+        self.assertIn(
+            f"Retrieving dev multi-arch artifacts from "
+            f"s3://{mod.DEV_TARBALL_BUCKET.name}/{mod.MULTIARCH_TARBALL_S3_PREFIX}/",
+            output.getvalue(),
+        )
+
+    def test_extract_version_ignores_test_tarball(self) -> None:
+        self.assertIsNone(
+            mod.extract_version_from_asset_name(
+                _tarball_name(mod.PLATFORM, "gfx94X-dcgpu-tests", "7.15.0a20260723"),
+                "gfx94X-dcgpu-tests",
+                mod.PLATFORM,
+            )
+        )
+
+    def test_list_available_nightly_gpu_families_ignores_test_tarballs(
+        self,
+    ) -> None:
+        for platform in ("linux", "windows"):
+            paginator = self._paginator(
+                _s3_object(
+                    platform,
+                    "gfx94X-dcgpu",
+                    "7.15.0a20260723",
+                    last_modified=datetime(2026, 7, 23),
+                ),
+                _s3_object(
+                    platform,
+                    "gfx94X-dcgpu-tests",
+                    "7.15.0a20260723",
+                    last_modified=datetime(2026, 7, 23),
+                ),
+                _s3_object(
+                    platform,
+                    "multiarch",
+                    "7.15.0a20260723",
+                    last_modified=datetime(2026, 7, 23),
+                ),
+            )
+            with mock.patch.object(
+                mod.s3_client, "get_paginator", return_value=paginator
+            ):
+                families = mod.list_available_nightly_gpu_families(platform)
+
+            self.assertEqual(families, {"gfx94X-dcgpu", "multiarch"})
+
+    def test_stable_release_uses_last_modified_for_ordering(self) -> None:
+        paginator = self._paginator(
+            _s3_object(
+                mod.PLATFORM,
+                "gfx94X-dcgpu",
+                "7.15.0",
+                last_modified=datetime(2026, 7, 22),
+            ),
+            _s3_object(
+                mod.PLATFORM,
+                "gfx94X-dcgpu",
+                "7.16.0",
+                last_modified=datetime(2026, 7, 23),
+            ),
+        )
+
+        with mock.patch.object(mod.s3_client, "get_paginator", return_value=paginator):
+            releases = mod._fetch_and_sort_nightly_releases("gfx94X-dcgpu")
+
+        self.assertEqual(
+            [release["version"] for release in releases],
+            ["7.16.0", "7.15.0"],
+        )
+        self.assertEqual(releases[0]["last_modified"], datetime(2026, 7, 23))
 
 
 def _make_run_id_args(**overrides) -> argparse.Namespace:
@@ -157,6 +380,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         prim=False,
         rand=False,
         rccl=False,
+        rocshmem=False,
         mpi=False,
         rocdecode=False,
         rocjpeg=False,
