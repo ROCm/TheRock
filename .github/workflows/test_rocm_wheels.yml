@@ -201,7 +201,9 @@ jobs:
       # (non-target-specific) package, so no device_extras are appended.
       - name: Install rocm[profiler]
         id: install_profiler
-        if: ${{ !cancelled() }}
+        # rocm[profiler] is not built on Windows, so skip the whole flow there
+        # (the two dependent steps gate on this step's success).
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
             --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
