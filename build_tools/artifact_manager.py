@@ -892,7 +892,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    platform: str,
+    source_run_id: str,
+    source_repository: Optional[str],
+    local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -912,7 +915,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -949,8 +955,9 @@ def do_copy(args: argparse.Namespace):
 
     # Create source and dest backends
     source_backend = _create_source_backend(
-        source_run_id=args.source_run_id,
         platform=args.platform,
+        source_run_id=args.source_run_id,
+        source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
@@ -1277,6 +1284,13 @@ def main(argv: Optional[List[str]] = None):
         type=str,
         required=True,
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+    )
+    copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+        help="GitHub repository for source-run-id in 'owner/repo' format "
+        "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
     )
     copy_parser.add_argument(
         "--stage",
