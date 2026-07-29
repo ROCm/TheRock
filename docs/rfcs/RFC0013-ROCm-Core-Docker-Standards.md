@@ -21,15 +21,15 @@ ROCm's container catalog spans 93 Docker Hub repos, but the Core SDK/Runtime ima
 
 1. **A documentation standard** every Core SDK/Runtime container must meet,
    defined in [RFC0014](./RFC0014-ROCm-Container-Documentation-Standard.md).
-2. **A layering requirement**: every new ROCm container builds `FROM` one
+1. **A layering requirement**: every new ROCm container builds `FROM` one
    validated ROCm Runtime base image instead of reinstalling ROCm
    independently on a bare OS image.
-3. **A metadata/tagging/naming standard** so ROCm version, OS, and support
+1. **A metadata/tagging/naming standard** so ROCm version, OS, and support
    tier are machine-readable and repo names stop encoding OS versions.
-4. **A single Core SDK/Runtime repository**: all three layers (runtime, core,
+1. **A single Core SDK/Runtime repository**: all three layers (runtime, core,
    core-sdk) are published under one `rocm/rocm-core` repository, distinguished by
    the `{COMPONENT}` field of the tag rather than by separate repos.
-5. **A worked case study**: retire `rocm/dev-ubuntu-24.04` in favor of the
+1. **A worked case study**: retire `rocm/dev-ubuntu-24.04` in favor of the
    properly documented `rocm/rocm-core` repository (runtime tier).
 
 **Non-goals:** framework/workload/CI containers and the full 93-repo cleanup
@@ -112,11 +112,11 @@ Every ROCm release publishes three container layers, **all under the single
 Each layer installs the matching **arch-independent multi-arch meta-package**
 from `repo.amd.com/rocm/packages-multi-arch/<distro>/`:
 
-| Layer (`{COMPONENT}` tag) | Example tag | Installs meta | Contents |
-|---|---|---|---|
-| `runtime` | `rocm/rocm-core:rocm7.14_ubuntu24.04_runtime_stable_7.14.0` | `amdrocm-runtime` | HIP runtime + sysdeps/base/LLVM; run pre-built HIP apps |
-| `core` | `rocm/rocm-core:rocm7.14_ubuntu24.04_core_stable_7.14.0` | `amdrocm-core` | Runtime + ROCm libraries |
-| `core-sdk` | `rocm/rocm-core:rocm7.14_ubuntu24.04_core-sdk_stable_7.14.0` | `amdrocm-core-sdk` | Core + dev/build toolchain (compilers, headers, dev tools) |
+| Layer (`{COMPONENT}` tag) | Example tag                                                  | Installs meta      | Contents                                                   |
+| ------------------------- | ------------------------------------------------------------ | ------------------ | ---------------------------------------------------------- |
+| `runtime`                 | `rocm/rocm-core:rocm7.14_ubuntu24.04_runtime_stable_7.14.0`  | `amdrocm-runtime`  | HIP runtime + sysdeps/base/LLVM; run pre-built HIP apps    |
+| `core`                    | `rocm/rocm-core:rocm7.14_ubuntu24.04_core_stable_7.14.0`     | `amdrocm-core`     | Runtime + ROCm libraries                                   |
+| `core-sdk`                | `rocm/rocm-core:rocm7.14_ubuntu24.04_core-sdk_stable_7.14.0` | `amdrocm-core-sdk` | Core + dev/build toolchain (compilers, headers, dev tools) |
 
 These layers nest: the `core` tag builds `FROM` the `runtime` tag, and
 `core-sdk` builds `FROM` `core` — all within the same repository. Only the
@@ -135,22 +135,22 @@ version go in the tag's `{OS}` field (see [Naming & Tagging](#naming--tagging)),
 not the repo name; the Enterprise Linux family uses the source distro plus major. The
 supported base images for Phase 1 are:
 
-| Base image | `{OS}` token | Example tag (runtime layer) |
-|---|---|---|
-| `ubuntu:22.04` | `ubuntu22.04` | `rocm7.14_ubuntu22.04_runtime_stable_7.14.0` |
-| `ubuntu:24.04` | `ubuntu24.04` | `rocm7.14_ubuntu24.04_runtime_stable_7.14.0` |
-| `ubuntu:26.04` | `ubuntu26.04` | `rocm7.14_ubuntu26.04_runtime_stable_7.14.0` |
-| `debian:12` | `debian12` | `rocm7.14_debian12_runtime_stable_7.14.0` |
-| `debian:13` | `debian13` | `rocm7.14_debian13_runtime_stable_7.14.0` |
-| `almalinux:8` | `alma8` | `rocm7.14_alma8_runtime_stable_7.14.0` |
-| `almalinux:9` | `alma9` | `rocm7.14_alma9_runtime_stable_7.14.0` |
-| `almalinux:10` | `alma10` | `rocm7.14_alma10_runtime_stable_7.14.0` |
+| Base image                                   | `{OS}` token  | Example tag (runtime layer)                  |
+| -------------------------------------------- | ------------- | -------------------------------------------- |
+| `ubuntu:22.04`                               | `ubuntu22.04` | `rocm7.14_ubuntu22.04_runtime_stable_7.14.0` |
+| `ubuntu:24.04`                               | `ubuntu24.04` | `rocm7.14_ubuntu24.04_runtime_stable_7.14.0` |
+| `ubuntu:26.04`                               | `ubuntu26.04` | `rocm7.14_ubuntu26.04_runtime_stable_7.14.0` |
+| `debian:12`                                  | `debian12`    | `rocm7.14_debian12_runtime_stable_7.14.0`    |
+| `debian:13`                                  | `debian13`    | `rocm7.14_debian13_runtime_stable_7.14.0`    |
+| `almalinux:8`                                | `alma8`       | `rocm7.14_alma8_runtime_stable_7.14.0`       |
+| `almalinux:9`                                | `alma9`       | `rocm7.14_alma9_runtime_stable_7.14.0`       |
+| `almalinux:10`                               | `alma10`      | `rocm7.14_alma10_runtime_stable_7.14.0`      |
 | `mcr.microsoft.com/azurelinux/base/core:3.0` | `azurelinux3` | `rocm7.14_azurelinux3_runtime_stable_7.14.0` |
-| `registry.access.redhat.com/ubi8/ubi:8.10` | `ubi8` | `rocm7.14_ubi8_runtime_stable_7.14.0` |
-| `registry.access.redhat.com/ubi9/ubi:9.7` | `ubi9` | `rocm7.14_ubi9_runtime_stable_7.14.0` |
-| `registry.access.redhat.com/ubi10/ubi:10.1` | `ubi10` | `rocm7.14_ubi10_runtime_stable_7.14.0` |
-| `registry.suse.com/bci/bci-base:15.7` | `sles15` | `rocm7.14_sles15_runtime_stable_7.14.0` |
-| `registry.suse.com/bci/bci-base:16.0` | `sles16` | `rocm7.14_sles16_runtime_stable_7.14.0` |
+| `registry.access.redhat.com/ubi8/ubi:8.10`   | `ubi8`        | `rocm7.14_ubi8_runtime_stable_7.14.0`        |
+| `registry.access.redhat.com/ubi9/ubi:9.7`    | `ubi9`        | `rocm7.14_ubi9_runtime_stable_7.14.0`        |
+| `registry.access.redhat.com/ubi10/ubi:10.1`  | `ubi10`       | `rocm7.14_ubi10_runtime_stable_7.14.0`       |
+| `registry.suse.com/bci/bci-base:15.7`        | `sles15`      | `rocm7.14_sles15_runtime_stable_7.14.0`      |
+| `registry.suse.com/bci/bci-base:16.0`        | `sles16`      | `rocm7.14_sles16_runtime_stable_7.14.0`      |
 
 The base OS is selected via the `BASE_IMAGE` build arg (see
 [Dockerfile GPU architecture selection](#dockerfile-gpu-architecture-selection-required)).
@@ -282,16 +282,16 @@ Applied to Phase 1, on the `rocm/rocm-core` repository:
 
 Pulled directly from the ROCm Docker Hub organization:
 
-| Attribute | Current value |
-|---|---|
-| Repository name | `rocm/dev-ubuntu-24.04` — a naming-rule violation (OS version in the repo name instead of the tag) |
-| Overview / description | None. Docker Hub shows "No overview available." |
-| Pulls | 100K+ |
-| Tags published | 9 (visible), spanning ROCm 6.4 through 7.2 |
-| Most recent tags | `7.2.3-complete` (6.9 GB) and `7.2.3` (1.1 GB), published side by side with no explanation of the difference |
-| Documentation | None: no prerequisites, no run command beyond a bare `docker pull`, no support contact, no security information |
-| Support / ownership | Not stated |
-| Version / compatibility matrix | Not published |
+| Attribute                      | Current value                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Repository name                | `rocm/dev-ubuntu-24.04` — a naming-rule violation (OS version in the repo name instead of the tag)              |
+| Overview / description         | None. Docker Hub shows "No overview available."                                                                 |
+| Pulls                          | 100K+                                                                                                           |
+| Tags published                 | 9 (visible), spanning ROCm 6.4 through 7.2                                                                      |
+| Most recent tags               | `7.2.3-complete` (6.9 GB) and `7.2.3` (1.1 GB), published side by side with no explanation of the difference    |
+| Documentation                  | None: no prerequisites, no run command beyond a bare `docker pull`, no support contact, no security information |
+| Support / ownership            | Not stated                                                                                                      |
+| Version / compatibility matrix | Not published                                                                                                   |
 
 It's the single most-pulled, least-documented container in the tier, and
 many other ROCm containers are built starting from it or an image like it —
