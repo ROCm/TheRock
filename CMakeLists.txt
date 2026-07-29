@@ -506,12 +506,6 @@ add_subdirectory(media-libs)
 # storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
 # optional find_package(hipfile) for hipFILE trace feature detection.
 add_subdirectory(storage-libs)
-# comm-libs must be added before profiler for the same reason as media-libs:
-# rocprofiler-sdk performs an optional find_package(rocshmem) for rocSHMEM
-# API-trace feature detection.
-set(_THEROCK_COMM_LIBS_COMPONENT rocshmem)
-add_subdirectory(comm-libs comm-libs-rocshmem)
-unset(_THEROCK_COMM_LIBS_COMPONENT)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -519,9 +513,7 @@ add_subdirectory(profiler)
 add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
-set(_THEROCK_COMM_LIBS_COMPONENT rccl)
 add_subdirectory(comm-libs)
-unset(_THEROCK_COMM_LIBS_COMPONENT)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
