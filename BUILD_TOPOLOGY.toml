@@ -640,6 +640,13 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 
+[artifacts.hipthreads]
+# target-neutral: libhipthreads.a is a static archive of device bitcode that is
+# identical across per-arch shards. Built for all targets once.
+artifact_group = "math-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
@@ -816,6 +823,13 @@ disable_platforms = ["windows"]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+[artifacts.rocjitsu-hotswap]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = ["rocjitsu"]
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 

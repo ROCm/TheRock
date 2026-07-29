@@ -45,7 +45,7 @@ Prerequisites:
 - Python packages: listed in build_tools/packaging/linux/tests/requirements.txt.
   Install with: pip install -r build_tools/packaging/linux/tests/requirements.txt
   (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
-  Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
+  Equivalent one-liner: pip install requests prettytable PyYAML
 
 CI typically runs this module under pytest (same file; reporting handled by pytest)::
 
