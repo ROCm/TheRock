@@ -1,32 +1,6 @@
 version: 2
 
 pr:
-  # Branch naming rules:
-  #   A recognised PREFIX must be present; anything AFTER the prefix is allowed
-  #   (including nested namespace/feature segments). We mostly care that a
-  #   known prefix is there. Uppercase letters ARE allowed (acronyms / module
-  #   names are common, e.g. ROCm, SMP, RFC).
-  # Examples:
-  #   users/chi/ucicd_setup_visible_devices
-  #   users/frepaul/ROCm-end-user-project-workflow   (uppercase in branch)
-  #   users/dgaliffi/fix/remove-build-boost-option    (nested namespace/feature)
-  #   shared/add-runner-health
-  #   compiler-ww-24-SMP-2                             (single-segment, uppercase)
-  #   ZIP-packaging-RFC                                (single-segment, uppercase)
-  #   dependabot/github_actions/github-actions-3dfd2199fc
-  #   revert-5217-users/derobins/add_hipfile_support  (auto-revert)
-  branch_name_patterns:
-    # users/<username>/<anything> — username may use upper/lower/digits/hyphens.
-    - '^users\/[A-Za-z0-9][A-Za-z0-9\-]*\/.+'
-    # shared/<anything>
-    - '^shared\/.+'
-    # Single-segment branches, e.g. ZIP-packaging-RFC, bump-rocm-libraries-936a6c7
-    - '^[A-Za-z0-9][A-Za-z0-9\-_]*$'
-    # dependabot/<anything>
-    - '^dependabot\/.+'
-    # GitHub auto-revert branches, e.g. revert-5217-users/derobins/add_hipfile_support
-    - '^revert-[0-9]+-.+'
-
   # Special case: automated dependency "bump" PRs.
   #
   # WHY: These bots open routine, high-volume dependency-bump PRs (e.g.
@@ -120,9 +94,22 @@ pr:
       - .rs
     # A changed file is treated as a unit test if its basename matches one of
     # these glob patterns (e.g. test_parser.py, parser_test.cpp, testing_x.py).
-    # Patterns that contain a '/' are matched against the FULL path instead of
-    # the basename, so entire test directories can be recognised
-    # (e.g. anything under a 'test/gtest/' folder).
+    #
+    # TWO matching modes are supported:
+    #   1. BASENAME patterns (no '/' in the pattern): matched against the
+    #      filename only, regardless of where it lives in the repo.
+    #      e.g. 'test_*' matches 'tests/unit/test_foo.cpp'
+    #
+    #   2. PATH patterns (pattern contains '/'): matched against the full
+    #      file path from the repo root. Use these when tests live in a
+    #      dedicated directory but don't follow a special naming convention.
+    #      e.g. 'projects/hip-tests/**' matches any file under that directory,
+    #      including files named after the API they test (atomicAdd.cc, etc.).
+    #
+    # Downstream repos should add path patterns for their own test directories.
+    # Examples:
+    #   - '**/test/gtest/**'    — any file under a test/gtest/ subdirectory
+    #   - 'projects/hip-tests/**' — all of hip-tests (add in rocm-systems)
     test_file_patterns:
       - 'test_*'
       - 'testing_*'
@@ -134,7 +121,7 @@ pr:
       - '**/test/gtest/**'
     # Unit tests are required for source code ANYWHERE in the repository — there
     # are NO folder-based exemptions. A test file may also live in any folder;
-    # it is recognised by its name (test_* / *_test.*), not its location.
+    # it is recognised by its name or path pattern, not its location alone.
     # Doc/config files are still skipped by EXTENSION (they are simply not in
     # `code_extensions`), not by path.
     exempt_paths: []

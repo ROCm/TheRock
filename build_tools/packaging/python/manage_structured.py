@@ -7,9 +7,9 @@
 Generates pip-compatible PEP 503 simple indexes for the stream-subdomain
 structured layout, where each package lives in its own directory:
 
-    <product>/<index>/<normalized-package>/<filename>
-    <product>/<index>/<normalized-package>/index.html
-    <product>/<index>/index.html            (product-local root listing)
+    v5/rocm/<product>/<index>/<normalized-package>/<filename>
+    v5/rocm/<product>/<index>/<normalized-package>/index.html
+    v5/rocm/<product>/<index>/index.html            (product-local root listing)
 
 `<index>` is `whl` or `whl-next`. Release streams are selected by hostname
 (e.g. nightly.repo.amd.com), never encoded in the path, so this generator is
@@ -25,13 +25,13 @@ Example usage:
 
     # Render indexes locally without uploading (the default; writes index.html
     # files under the cwd for inspection):
-    python manage_structured.py core/whl --bucket my-python-bucket
+    python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket
 
     # Generate and upload indexes for every package under a product-local root:
-    python manage_structured.py core/whl --bucket my-python-bucket --upload
+    python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket --upload
 
     # Regenerate a single package directory (skips the product root index):
-    python manage_structured.py core/whl --bucket my-python-bucket \
+    python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket \
         --package numpy --upload
 
 The bucket may also be supplied via the `S3_BUCKET_PY` environment variable;
@@ -133,7 +133,7 @@ class IndexPage:
     """A rendered index.html and the S3 key it should be written to.
 
     Attributes:
-        key: Destination S3 key (e.g. "pytorch/whl/torch/index.html").
+        key: Destination S3 key (e.g. "v5/rocm/pytorch/whl/torch/index.html").
         html: Rendered HTML body.
     """
 
@@ -168,7 +168,8 @@ def discover_packages(
         keys: Raw S3 keys to group. '+' is escaped to '%2B' only at render
             time, so filenames here carry the literal '+' local-version
             separator that the packaging parsers expect.
-        root: The `<product>/<index>` prefix (no trailing slash required).
+        root: The `v5/rocm/<product>/<index>` prefix (no trailing slash
+            required).
         package: If set, restrict discovery to this package directory only.
 
     Returns:
@@ -290,7 +291,7 @@ def render_package_page(pkg: PackageDir, skip_checksum: bool = True) -> str:
 def render_root_page(packages: list[PackageDir]) -> str:
     """Render the product-local root page listing local package directories.
 
-    This is the product-local root (e.g. pytorch/whl/index.html), not the
+    This is the product-local root (e.g. v5/rocm/pytorch/whl/index.html), not the
     aggregate /rocm/whl/ root, which is owned by separate infrastructure.
     """
     out: list[str] = ["<!DOCTYPE html>", "<html>", "  <body>"]
@@ -312,7 +313,7 @@ def build_index_pages(
 
     Args:
         packages: Discovered package directories.
-        root: The `<product>/<index>` prefix.
+        root: The `v5/rocm/<product>/<index>` prefix.
         write_root: If True, also generate the product-local root index page.
             Must be False for package-scoped regeneration: a scoped run does
             not see the full package set and would clobber the root listing.
@@ -482,7 +483,7 @@ def generate_structured_index(
     Args:
         client: A boto3 S3 client.
         bucket_name: Target S3 bucket.
-        root: The `<product>/<index>` prefix.
+        root: The `v5/rocm/<product>/<index>` prefix.
         package: If set, regenerate only this package directory and skip the
             product-local root index (the scoped listing cannot rebuild the
             root without clobbering it).
@@ -516,7 +517,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "prefix",
-        help="Product-local root prefix, e.g. pytorch/whl or core/whl-next",
+        help="Product-local root prefix, e.g. v5/rocm/pytorch/whl or "
+        "v5/rocm/core/whl-next",
     )
     parser.add_argument("--bucket", type=str, help="S3 bucket name")
     parser.add_argument(

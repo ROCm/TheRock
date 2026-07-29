@@ -131,7 +131,7 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "rocm_version": TEST_ROCM_VERSION,
         "version_suffix": TEST_VERSION_SUFFIX,
         "install_prefix": TEST_INSTALL_PREFIX,
-        "rpath_pkg": False,
+        "runpath_pkg": False,
         "enable_kpack": False,
         "pkg_names": None,
         "clean_build": False,

@@ -215,6 +215,17 @@
         ]
       },
       {
+        "Artifact": "rocjitsu-hotswap",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjitsu-hotswap",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "core-hip",
         "Artifact_Subdir": [
           {
@@ -660,7 +671,8 @@
             "Name": "origami",
             "Components": [
               "lib",
-              "run"
+              "run",
+              "doc"
             ]
           },
           {
@@ -1556,7 +1568,8 @@
           {
             "Name": "rocPRIM",
             "Components": [
-              "dev"
+              "dev",
+              "doc"
             ]
           },
           {
@@ -2695,18 +2708,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "flatbuffers",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "flatbuffers",
-            "Components": [
-              "run"
-            ]
-          }
-        ]
       }
     ],
 
@@ -3417,6 +3418,80 @@
   },
 
   {
+    "Package": "amdrocm-threads",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "hipThreads Maintainer <hipthreads-ci@amd.com>",
+    "Description_Short": "AMD ROCm hipThreads library development files",
+    "Description_Long": "hipThreads provides std::thread-like concurrency primitives that run on AMD GPUs (headers, static library, and CMake package config)",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hipthreads",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipthreads",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-threads-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-threads"
+    ],
+    "RPMRequires": [
+      "amdrocm-threads"
+    ],
+    "Maintainer": "hipThreads Maintainer <hipthreads-ci@amd.com>",
+    "Description_Short": "AMD ROCm hipThreads library tests",
+    "Description_Long": "Test suite and example sources for the hipThreads library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hipthreads",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipthreads",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+
+  {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
     "Version": "",
@@ -3604,7 +3679,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -3623,7 +3699,8 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel"
+      "amdrocm-jpeg-devel",
+      "amdrocm-threads"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",
