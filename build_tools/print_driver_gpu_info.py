@@ -109,6 +109,14 @@ def log_dkms_status(module: str = "amdgpu") -> None:
     label = f"{module} DKMS package version"
     log(f"\n=== {label} ===")
 
+    # Diagnostic: report what is actually visible under /var/lib/dkms. Inside a
+    # container this is empty/missing unless the host path is bind-mounted in.
+    if DKMS_ROOT.is_dir():
+        entries = sorted(p.name for p in DKMS_ROOT.iterdir())
+        log(f"{DKMS_ROOT} contents: {entries if entries else '(empty)'}")
+    else:
+        log(f"{DKMS_ROOT}: directory does not exist (not mounted into container?)")
+
     module_root = DKMS_ROOT / module
     if not module_root.is_dir():
         log(f"{module}: no DKMS entry found under {DKMS_ROOT}")
