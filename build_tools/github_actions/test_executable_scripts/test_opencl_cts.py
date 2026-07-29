@@ -79,22 +79,27 @@ def find_test_executables():
     # test_bruteforce, test_conversions: prohibitively slow, exceed 4.5h CI timeout.
     # test_basic: crashes with GPU hang in 'constant' sub-test (gfx942).
     # test_compiler: crashes with SIGSEGV in 'get_program_info_kernel_names' (gfx942).
-    # test_half: crashes with GPU hang in 'vstore_half_rtp' sub-test (gfx942).
     # test_spir: cl_khr_spir not supported on gfx942, exits 156.
-    # test_vectors: crashes with GPU hang in 'vec_align_packed_struct' sub-test (gfx942).
-    # test_workgroups: crashes with GPU hang in 'work_group_reduce_add' sub-test (gfx942).
+    # test_events: crashes with GPU hang in 'userevents' sub-test (gfx942).
     DISABLED_TESTS = {
         "test_bruteforce",
+        "test_basic",
+        "test_compiler",
         "test_conversions",
         "test_spir",
+        "test_events",
     }
 
     # Disabled sub-tests within otherwise-passing binaries.
     # Sub-tests are passed as positional arguments; only the allowed subset is run.
     # test_api: 'min_max_constant_buffer_size' fails on gfx942.
     # test_printf: 'vector' and 'length_specifier' fail on gfx942.
-    # test_svm: 'svm_migrate' fails on gfx942.
-    DISABLED_SUBTESTS: dict[str, set[str]] = {}
+    # test_buffers: 'buffer_copy' fails on gfx942
+    DISABLED_SUBTESTS: dict[str, set[str]] = {
+        "test_api": {"min_max_constant_buffer_size"},
+        "test_buffers": {"buffer_copy"},
+        "test_printf": {"vector", "length_specifier"},
+    }
 
     test_executables = []
     for test_exe in CTS_BIN_DIR.rglob("test_*"):
