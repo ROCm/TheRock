@@ -58,11 +58,10 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      # Enable device profiling runtime when coverage is requested
-      if(COMPILER_RT_BUILD_PROFILE_ROCM)
-        set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_PROFILE_BAREMETAL OFF)
-        set(RUNTIMES_amdgcn-amd-amdhsa_COMPILER_RT_BUILD_PROFILE_ROCM ON)
-      endif()
+      # Device profiling is enabled via InstrProfilingPlatformGPU.c which is always
+      # included for GPU targets when COMPILER_RT_BUILD_PROFILE=ON (set by GPU.cmake).
+      # GPU targets must keep COMPILER_RT_PROFILE_BAREMETAL=ON (from GPU.cmake) since
+      # device code cannot use filesystem operations or host-side initialization.
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)
     endif()
