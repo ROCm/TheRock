@@ -28,15 +28,15 @@ How to run
 ----------
   From repo root::
 
-    python3 -m unittest build_tools.packaging.linux.tests.test_runpath_to_rpath -v
+    python3 build_tools/packaging/linux/tests/runpath_to_rpath_test.py -v
 
   From build_tools/packaging/linux/tests::
 
-    python3 test_runpath_to_rpath.py -v
+    python3 runpath_to_rpath_test.py -v
 
 Files in this directory
 -----------------------
-  test_runpath_to_rpath.py  - this test module
+  runpath_to_rpath_test.py  - this test module
   hello_lib.c               - minimal shared-library source built in setUp
 """
 
