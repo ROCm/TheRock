@@ -1,28 +1,24 @@
 ---
 author: Liam Berry (liaberry), Saad Rahim (saadrahim)
 created: 2026-07-28
-modified: 2026-07-28
+modified: 2026-07-29
 status: Draft
 ---
 
 # ROCm Container Documentation Standard
 
-<!--
-PR bot: the JIRA/ISSUE reference lives in the *PR description*, not this file.
-Add a line such as `JIRA ID : TBD` (replace with the real key before review)
-so the Title/Description policy check passes.
--->
-
 ## Problem
 
-ROCm's container catalog spans 93 Docker Hub repos, and the Docker Hub
-overview is the first — often the only — documentation a user sees before
-pulling an image. Today those overviews are inconsistent or absent: the
-most-pulled Core SDK/Runtime image, `rocm/dev-ubuntu-24.04` (100K+ pulls),
-shows "No overview available" — no prerequisites, no run command beyond a
-bare `docker pull`, no support contact, no security information. There is no
-shared definition of what a ROCm container's documentation must contain, so
-each repo documents (or doesn't) on its own terms.
+The Docker Hub overview is the first — and often the only — documentation a
+user sees before pulling a ROCm image. There is no shared definition of what
+that overview must contain, so each repository documents on its own terms, or
+not at all.
+
+The most-pulled Core SDK/Runtime image, `rocm/dev-ubuntu-24.04` (100K+
+pulls), shows "No overview available": no prerequisites, no run command
+beyond a bare `docker pull`, no support contact, no security information. A
+user cannot tell from the page what the image contains, what host setup it
+needs, who owns it, or how to report a vulnerability in it.
 
 This RFC defines the **documentation standard** every ROCm Core SDK/Runtime
 container must meet. It is a companion to the naming, tagging, layering, and
@@ -48,17 +44,17 @@ and, once gating is in place, is not publishable — until every required
 section is present and non-empty. `rocm/dev-ubuntu-24.04` meets none of
 these as of today.
 
-| Section | Contents | Required |
-|---|---|:---:|
-| **Overview** | Purpose, primary use cases, intended users; what's included; what's explicitly not included (e.g., the kernel driver is host-side) | Yes |
-| **Additional Explanations** | Non-obvious components (UCX/UCC, OpenMPI, RCCL, vLLM, Triton, FlashAttention, etc.); validated vs. community best-effort/experimental | Yes |
-| **Prerequisites** | Host OS, AMD GPU driver/kernel module requirements (host-side), network driver requirements for multi-node use, container runtime requirements, GPU support notes, link to "Running ROCm Docker containers" | Yes |
-| **Usage** | Minimal run command with GPU device access, common run patterns, a "hello world" validation step (e.g., `rocminfo`), links to user guides | Yes |
-| **Suggested Reading** | ROCm docs, relevant GitHub repos, model/app docs | Optional |
-| **Licensing** | Base image license, ROCm licensing references, third-party licenses, a short license-notes paragraph | Yes |
-| **Support and Ownership** | Maintainer contact (org/team); support level: Preview, GA, Deprecated, or Archived | Yes |
-| **Version and Compatibility Matrix** | ROCm version(s), OS base, framework version where applicable | Yes |
-| **Security** | SBOM availability, vulnerability scanning policy, links to AMD's (and, for reference, Nvidia's) vulnerability disclosure/response processes | Yes |
+| Section                              | Contents                                                                                                                                                                                                    | Required |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
+| **Overview**                         | Purpose, primary use cases, intended users; what's included; what's explicitly not included (e.g., the kernel driver is host-side)                                                                          |   Yes    |
+| **Additional Explanations**          | Non-obvious components (UCX/UCC, OpenMPI, RCCL, vLLM, Triton, FlashAttention, etc.); validated vs. community best-effort/experimental                                                                       |   Yes    |
+| **Prerequisites**                    | Host OS, AMD GPU driver/kernel module requirements (host-side), network driver requirements for multi-node use, container runtime requirements, GPU support notes, link to "Running ROCm Docker containers" |   Yes    |
+| **Usage**                            | Minimal run command with GPU device access, common run patterns, a "hello world" validation step (e.g., `rocminfo`), links to user guides                                                                   |   Yes    |
+| **Suggested Reading**                | ROCm docs, relevant GitHub repos, model/app docs                                                                                                                                                            | Optional |
+| **Licensing**                        | Base image license, ROCm licensing references, third-party licenses, a short license-notes paragraph                                                                                                        |   Yes    |
+| **Support and Ownership**            | Maintainer contact (org/team); support level: Preview, GA, Deprecated, or Archived                                                                                                                          |   Yes    |
+| **Version and Compatibility Matrix** | ROCm version(s), OS base, framework version where applicable                                                                                                                                                |   Yes    |
+| **Security**                         | SBOM availability, vulnerability scanning policy, link to AMD's vulnerability disclosure/response process                                                                                                   |   Yes    |
 
 ## Section Guidance
 
@@ -79,7 +75,12 @@ these as of today.
   enumerating it inline.
 - **Support and Ownership** — A named owner (team, not an individual) and an
   explicit support level are mandatory. "Not stated" is the current default
-  and is not acceptable.
+  and is not acceptable. Support level is one of **Preview**, **GA**,
+  **Deprecated**, or **Archived**; the latter two follow the timeline in
+  [RFC0013 § Deprecation and Lifecycle](./RFC0013-ROCm-Core-Docker-Standards.md#deprecation-and-lifecycle).
+  This is a property of the *image*, and is distinct from the
+  validated-vs-best-effort status of individual *components* recorded under
+  Additional Explanations.
 - **Version and Compatibility Matrix** — Map published tags to ROCm
   version, OS base, and (where applicable) framework version, so users can
   pick the right tag without guessing.
@@ -128,13 +129,15 @@ runtime — see "Image Layering" in the container standard.
   framework packages (those belong in an image layered on top).
 
 ## Additional Explanations
-- **Runtime vs. devel:** this image is the "runtime" tier only. To compile
-  HIP code, build ROCm libraries from source, or debug at the
-  driver/runtime level, use the devel/all tier instead (see Suggested
-  Reading).
-- **Validated vs. best-effort:** every published release tag is built and
-  smoke-tested against ROCm's official release channel; nightly/ci/rc tags
-  are best-effort and may be less stable.
+- **Which layer to use:** this repository publishes three layers as tags.
+  `runtime` (this one) runs pre-built HIP applications. `core` adds the ROCm
+  libraries. `core-sdk` adds the compiler toolchain and dev headers — use it
+  to compile HIP code, build ROCm libraries from source, or debug at the
+  driver/runtime level.
+- **Validated vs. best-effort:** every published `stable` tag is built and
+  smoke-tested against ROCm's official release channel; `nightlies`,
+  `prereleases`, and `devreleases` tags are best-effort and may be less
+  stable.
 
 ## Prerequisites
 - Host OS: Linux with a current AMD GPU (amdgpu) kernel driver installed —
@@ -143,6 +146,9 @@ runtime — see "Image Layering" in the container standard.
   configured.
 - Supported GPU architectures: [link to the current ROCm hardware
   compatibility matrix — confirm Instinct + Radeon coverage for this tag].
+- Multi-node use additionally requires a host-side RDMA/network stack
+  (e.g. an InfiniBand or RoCE driver) matching your fabric; it is not
+  included in this image. [Confirm the supported stack and version.]
 - See "Running ROCm Docker containers" in the ROCm documentation for host
   setup.
 
@@ -174,7 +180,7 @@ usage patterns.
 
 ## Support and Ownership
 - Maintainer: devops — [contact channel].
-- Support level: GA (Validated).
+- Support level: GA.
 
 ## Version and Compatibility Matrix
 | ROCm version | Layer | Tag |
@@ -186,8 +192,8 @@ usage patterns.
 
 ## Security
 - SBOM generated per build and published alongside the image.
-- Scanned at build time and on a recurring schedule; held to the
-  "Validated" severity policy.
+- Scanned for vulnerabilities at build time and on a recurring schedule.
+  [State the severity threshold that blocks a release.]
 - See AMD Product Security's vulnerability disclosure policy [link] for how
   to report an issue.
 ````
