@@ -1,43 +1,43 @@
-From dc830523f8d485a236286ea2135fb2168de29a80 Mon Sep 17 00:00:00 2001
+From 5f2e979b203e822523b777c9455c5e6f5b611bc4 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Mon, 20 Jul 2026 18:33:07 +0000
-Subject: [PATCH] [rccl] Guard x86-only code
+Date: Wed, 29 Jul 2026 15:35:41 +0000
+Subject: [PATCH] rccl: guard x86-only cpuid code for ppc64le portability
 
+Co-Authored-By: Claude <noreply@anthropic.com>
 ---
- projects/rccl/src/init.cc | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ projects/rccl/src/init.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index 0b29e6a8fe..3891da4f62 100644
+index b709cc99a4a..263e8e15856 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -78,7 +78,9 @@
  #include "dda_all_reduce.h"
  #include "ipc_init.h"
  #include "fabric_init.h"
--#include  <cpuid.h>
 +#if defined(__x86_64__) || defined(__i386__)
-+#include <cpuid.h>
+ #include <cpuid.h>
 +#endif
  #include <stdio.h>
  #include <stdlib.h>
  #include "kernel_config.h"
-@@ -288,6 +290,7 @@ static ncclResult_t ncclInit() {
-     }
-     INFO(NCCL_INIT, "Kernel version: %s", verStr);
-     if (strstr(verStr, "cray") == NULL) {
+@@ -296,6 +298,7 @@ static ncclResult_t ncclInit() {
+   }
+   INFO(NCCL_INIT, "Kernel version: %s", verStr);
+   if (strstr(verStr, "cray") == NULL) {
 +#if defined(__x86_64__) || defined(__i386__)
-       unsigned int eax, ebx, ecx, edx;
-       if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
-         ecx = 0; // cpuid not supported
-@@ -308,6 +311,7 @@ static ncclResult_t ncclInit() {
-         if (!ncclIommuPassthroughOk(cmdlinePtr))
-           WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
-       }
+     unsigned int eax, ebx, ecx, edx;
+     if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) ecx = 0; // cpuid not supported
+     NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
+@@ -315,6 +318,7 @@ static ncclResult_t ncclInit() {
+       if (!ncclIommuPassthroughOk(cmdlinePtr))
+         WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
+     }
 +#endif
  #ifndef HIP_UNCACHED_MEMORY
-       char *env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
-       if (env == NULL || strcmp(env, "1") != 0)
+     char* env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
+     if (env == NULL || strcmp(env, "1") != 0)
 -- 
 2.52.0
 
