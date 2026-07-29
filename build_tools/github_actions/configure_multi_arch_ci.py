@@ -203,7 +203,7 @@ class CIInputs:
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
-        base_ref: str | None = "HEAD^1"
+        base_ref: str | None = None
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
@@ -225,6 +225,21 @@ class CIInputs:
                 # diff against. HEAD^1 would only diff the final pushed commit
                 # against its parent, missing earlier commits in the push.
                 base_ref = None
+        elif event_name == "workflow_dispatch":
+            # This one ref defines both:
+            #
+            #   changed_files = diff(base_ref, HEAD)
+            #   expected_baseline_sha = resolve(base_ref)
+            #
+            # Keeping those values tied together prevents artifacts from one
+            # commit being reused for an independently calculated impact range.
+            base_ref = (
+                os.environ.get(
+                    "STAGE_REUSE_DIFF_BASE",
+                    "",
+                ).strip()
+                or None
+            )
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
@@ -302,10 +317,11 @@ class GitContext:
 
     @staticmethod
     def empty() -> "GitContext":
-        """Empty context with no git data.
+        """Return a context without a validated change range.
 
-        This should typically be used for schedule/workflow_dispatch events
-        where we don't want to diff against a prior commit.
+        Used for schedules, dispatches without stage_reuse_diff_base, external
+        repository calls, and events where no reliable diff base is available.
+        Automatic stage reuse must remain disabled for this context.
         """
         return GitContext()
 
@@ -855,6 +871,125 @@ def _determine_test_type(
     return "quick", "default"
 
 
+def _get_expected_baseline_sha(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> str | None:
+    """Return the exact commit whose artifacts may be reused.
+
+    Automatic reuse is allowed only when changed-file analysis was computed
+    from the same resolved base commit:
+
+        diff_base_commit -> diff_head_commit
+    """
+
+    if not (
+        ci_inputs.is_pull_request or ci_inputs.is_push or ci_inputs.is_workflow_dispatch
+    ):
+        return None
+
+    if ci_inputs.is_workflow_dispatch and not ci_inputs.base_ref:
+        return None
+
+    if git_context.changed_files is None:
+        return None
+
+    return git_context.diff_base_commit
+
+
+def _apply_stage_reuse_precedence(
+    manual_prebuilt_stages: list[str],
+    manual_baseline_run_id: str,
+    auto_stage_reuse: AutoStageReuse,
+    *,
+    allow_automatic_reuse: bool = True,
+) -> tuple[
+    dict[str, JobAction],
+    str,
+    AutoStageReuse,
+]:
+    """Resolve manual and automatic stage reuse into one build decision."""
+
+    stage_decisions: dict[str, JobAction] = {
+        stage: JobAction.PREBUILT for stage in manual_prebuilt_stages
+    }
+
+    baseline_run_id = manual_baseline_run_id
+
+    if manual_prebuilt_stages:
+        # Explicit workflow inputs take precedence over automatic reuse.
+        if auto_stage_reuse.applied_reuse_stages:
+            reason = (
+                "manual prebuilt_stages input takes precedence; "
+                "automatic stage reuse was not applied"
+            )
+
+            adjusted_report_lines = tuple(
+                line.replace(
+                    "WILL be skipped",
+                    "WOULD be reusable but was not applied",
+                )
+                for line in auto_stage_reuse.report_lines
+            )
+
+            auto_stage_reuse = replace(
+                auto_stage_reuse,
+                applied_reuse_stages=(),
+                reasons=(
+                    *auto_stage_reuse.reasons,
+                    reason,
+                ),
+                report_lines=(
+                    *adjusted_report_lines,
+                    f"[STAGE-REUSE] {reason}.",
+                ),
+            )
+
+        return (
+            stage_decisions,
+            baseline_run_id,
+            auto_stage_reuse,
+        )
+
+    if not allow_automatic_reuse:
+        if auto_stage_reuse.applied_reuse_stages:
+            reason = (
+                "automatic stage reuse was not applied because "
+                "cross-repository reuse requires explicit inputs"
+            )
+
+            auto_stage_reuse = replace(
+                auto_stage_reuse,
+                applied_reuse_stages=(),
+                reasons=(
+                    *auto_stage_reuse.reasons,
+                    reason,
+                ),
+                report_lines=(
+                    *auto_stage_reuse.report_lines,
+                    f"[STAGE-REUSE] {reason}.",
+                ),
+            )
+
+        return (
+            stage_decisions,
+            baseline_run_id,
+            auto_stage_reuse,
+        )
+
+    for stage in auto_stage_reuse.applied_reuse_stages:
+        stage_decisions[stage] = JobAction.PREBUILT
+
+    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+        baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    return (
+        stage_decisions,
+        baseline_run_id,
+        auto_stage_reuse,
+    )
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -871,10 +1006,7 @@ def decide_jobs(
     # Parse explicit prebuilt stages from workflow_dispatch input. These are
     # the MANUAL inputs and are always honored, unchanged, in every mode.
 
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
+    manual_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
 
     # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
     # which stages WOULD be reused and apply nothing; in "reuse-stage" the
@@ -882,24 +1014,52 @@ def decide_jobs(
     # their builds and copies artifacts instead. The platforms and families to
     # verify come straight from the resolved target selection.
 
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+
+    linux_artifact_families = [
+        all_families[family_name]["linux"]["family"]
+        for family_name in targets.linux_families
+    ]
+
+    windows_artifact_families = [
+        all_families[family_name]["windows"]["family"]
+        for family_name in targets.windows_families
+    ]
+
+    baseline_repository = ci_inputs.baseline_repository
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+
+    is_cross_repo = bool(baseline_repository and baseline_repository != current_repo)
+
+    expected_baseline_sha = (
+        None
+        if is_cross_repo
+        else _get_expected_baseline_sha(
+            ci_inputs,
+            git_context,
+        )
+    )
+
     auto_stage_reuse = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
-        linux_amdgpu_families=targets.linux_families,
-        windows_amdgpu_families=targets.windows_families,
+        linux_amdgpu_families=linux_artifact_families,
+        windows_amdgpu_families=windows_artifact_families,
+        expected_baseline_sha=expected_baseline_sha,
     )
 
-    baseline_repository = ci_inputs.baseline_repository
-    baseline_run_id = ci_inputs.baseline_run_id
-
-    # Apply automatic stage reuse when running in the same repo as baseline.
-    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if not baseline_repository or baseline_repository == current_repo:
-        # reuse-stage mode returns non-empty applied_reuse_stages.
-        for stage in auto_stage_reuse.applied_reuse_stages:
-            stage_decisions.setdefault(stage, JobAction.PREBUILT)
-        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-            baseline_run_id = auto_stage_reuse.baseline_run_id
+    (
+        stage_decisions,
+        baseline_run_id,
+        auto_stage_reuse,
+    ) = _apply_stage_reuse_precedence(
+        manual_prebuilt_stages=manual_prebuilt_stages,
+        manual_baseline_run_id=ci_inputs.baseline_run_id,
+        auto_stage_reuse=auto_stage_reuse,
+        allow_automatic_reuse=not is_cross_repo,
+    )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -1385,6 +1545,58 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
 
 
+def _load_git_context(
+    ci_inputs: CIInputs,
+) -> GitContext:
+    """Load the git range used for path filtering and automatic stage reuse."""
+
+    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
+    # The "run everything" behavior is the initial state for superrepo multi-arch CI migration.
+    # We will eventually support path filtering and component selection.
+    # TODO: Provide custom decision logic to run specific components and paths.
+    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+
+    if skip_path_filters:
+        # External repo: skip path filtering and run everything.
+        # Automatic cross-repository stage reuse remains disabled. Explicit
+        # manual reuse inputs are handled later by decide_jobs().
+        return GitContext.empty()
+
+    if ci_inputs.base_ref:
+        # Pull requests and pushes use their event-derived diff base.
+        #
+        # A workflow_dispatch event can also compute changed-file impact when
+        # stage_reuse_diff_base is explicitly provided. The same resolved base
+        # commit is used for both:
+        #
+        #   changed_files = diff(base_ref, HEAD)
+        #   expected_baseline_sha = resolve(base_ref)
+        #
+        # This keeps stage-impact analysis and exact baseline validation tied
+        # to the same commit range.
+        print("=== Git Diff ===")
+        git_context = GitContext.from_repo(
+            base_ref=ci_inputs.base_ref,
+        )
+        print()
+        return git_context
+
+    if ci_inputs.is_pull_request or ci_inputs.is_push or ci_inputs.is_workflow_dispatch:
+        # Some push events, such as branch creation, do not have a reliable
+        # diff base. A workflow_dispatch without stage_reuse_diff_base also
+        # has no validated change range.
+        print("=== Git Diff ===")
+        print(
+            "No diff base is available; running without changed-file "
+            "filtering or automatic stage reuse"
+        )
+        print()
+        return GitContext.empty()
+
+    # Schedule events do not have a natural diff base.
+    return GitContext.empty()
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1392,36 +1604,16 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 def main():
     ci_inputs = CIInputs.from_environ()
+    git_context = _load_git_context(ci_inputs)
 
-    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
-    # The "run everything" is initial state for superrepo multi-arch CI migration.
-    # We will eventually support path filtering and component selection.
-    # TODO: Provide custom decision logic to run specific components and paths
-    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
-
-    if skip_path_filters:
-        # External repo: skip path filtering, run everything
-        git_context = GitContext.empty()
-    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
-        # 'pull_request' and 'push' events can use the list of changed files
-        # compared to the "prior commit" to affect job selections/options.
-        print("=== Git Diff ===")
-        git_context = GitContext.from_repo(base_ref=ci_inputs.base_ref)
-        print()
-    elif ci_inputs.is_pull_request or ci_inputs.is_push:
-        # Some push events, such as branch creation, do not have a reliable
-        # base ref for changed-file filtering. Run without path filters.
-        print("=== Git Diff ===")
-        print("No diff base is available; running without changed-file filtering")
-        print()
-        git_context = GitContext.empty()
-    else:
-        # 'workflow_dispatch' and 'schedule' events don't have as natural
-        # a "prior commit" to compare against.
-        git_context = GitContext.empty()
-
-    outputs = configure(ci_inputs, git_context)
-    write_outputs(ci_inputs=ci_inputs, outputs=outputs)
+    outputs = configure(
+        ci_inputs,
+        git_context,
+    )
+    write_outputs(
+        ci_inputs=ci_inputs,
+        outputs=outputs,
+    )
 
 
 if __name__ == "__main__":
