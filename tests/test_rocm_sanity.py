@@ -82,9 +82,10 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    # TODO(#3313): Re-enable once amdclang++ test is fixed for ASAN builds
+    # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
     @pytest.mark.skipif(
-        is_asan(), reason="amdclang++ test fails with ASAN build, see TheRock#3313"
+        is_windows(),
+        reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
     )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
