@@ -55,6 +55,22 @@ class ParseAmdgpuTargetsCmakeTest(unittest.TestCase):
         self.assertEqual(infos[0].gfx_target, "gfx900")
         self.assertEqual(infos[0].families, ["dgpu-all", "gfx900-dgpu"])
 
+    def test_family_stops_at_disable_keyword(self):
+        # FAMILY must not absorb DISABLE_TARGET_PROJECTS entries (amdgcnspirv shape).
+        infos = self._parse(
+            """\
+            therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
+              EXCLUDE_TARGET_PROJECTS
+                hip-clr
+              DISABLE_TARGET_PROJECTS
+                rocBLAS rocFFT
+            )
+            """
+        )
+        self.assertEqual(len(infos), 1)
+        self.assertEqual(infos[0].gfx_target, "amdgcnspirv")
+        self.assertEqual(infos[0].families, ["gpu-generic"])
+
     def test_no_family(self):
         # Targets without an explicit FAMILY still parse correctly.
         infos = self._parse(

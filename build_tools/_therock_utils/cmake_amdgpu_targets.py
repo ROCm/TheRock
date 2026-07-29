@@ -63,7 +63,7 @@ def parse_amdgpu_targets_cmake(cmake_path: Path) -> list[AmdgpuTargetInfo]:
         if "FAMILY" in tokens:
             family_start = tokens.index("FAMILY") + 1
             # Collect until the next cmake keyword or end of tokens.
-            cmake_keywords = {"EXCLUDE_TARGET_PROJECTS"}
+            cmake_keywords = {"EXCLUDE_TARGET_PROJECTS", "DISABLE_TARGET_PROJECTS"}
             for tok in tokens[family_start:]:
                 if tok in cmake_keywords:
                     break

@@ -23,10 +23,10 @@ else()
   )
 endif()
 
-# Per-arch libraries excluded for the selected targets (e.g. the portable
+# Per-arch libraries disabled for the selected targets (e.g. the portable
 # amdgcnspirv target) are not built, so the example must not find_package() them.
 function(_therock_example_available out_var enabled project_name)
-  therock_project_has_no_targets(_skip "${project_name}")
+  therock_project_disabled(_skip "${project_name}")
   if(_skip)
     set("${out_var}" OFF PARENT_SCOPE)
   else()

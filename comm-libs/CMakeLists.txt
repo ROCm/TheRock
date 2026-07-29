@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-therock_project_has_no_targets(_skip_rccl rccl)
+therock_project_disabled(_skip_rccl rccl)
 if(THEROCK_ENABLE_RCCL AND NOT _skip_rccl)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
@@ -119,7 +119,7 @@ if(THEROCK_ENABLE_RCCL AND NOT _skip_rccl)
   )
 endif()
 
-therock_project_has_no_targets(_skip_rocshmem rocshmem)
+therock_project_disabled(_skip_rocshmem rocshmem)
 if(THEROCK_ENABLE_ROCSHMEM AND NOT _skip_rocshmem)
   ##############################################################################
   # rocSHMEM

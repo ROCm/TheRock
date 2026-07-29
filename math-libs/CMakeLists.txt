@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-therock_project_has_no_targets(_skip_rand rocRAND)
+therock_project_disabled(_skip_rand rocRAND)
 if(THEROCK_ENABLE_RAND AND NOT _skip_rand)
   # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
   # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
@@ -102,7 +102,7 @@ if(THEROCK_ENABLE_RAND AND NOT _skip_rand)
   )
 endif(THEROCK_ENABLE_RAND)
 
-therock_project_has_no_targets(_skip_prim rocPRIM)
+therock_project_disabled(_skip_prim rocPRIM)
 if(THEROCK_ENABLE_PRIM AND NOT _skip_prim)
   ##############################################################################
   # rocPRIM
@@ -274,7 +274,7 @@ if(THEROCK_ENABLE_PRIM AND NOT _skip_prim)
   )
 endif(THEROCK_ENABLE_PRIM)
 
-therock_project_has_no_targets(_skip_fft rocFFT)
+therock_project_disabled(_skip_fft rocFFT)
 if(THEROCK_ENABLE_FFT AND NOT _skip_fft)
   if(WIN32)
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
@@ -376,13 +376,13 @@ if(THEROCK_ENABLE_FFT AND NOT _skip_fft)
 endif(THEROCK_ENABLE_FFT)
 
 # rocBLAS anchors the whole BLAS cascade (support/origami included).
-therock_project_has_no_targets(_skip_blas rocBLAS)
+therock_project_disabled(_skip_blas rocBLAS)
 if(THEROCK_ENABLE_BLAS AND NOT _skip_blas)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
 
-therock_project_has_no_targets(_skip_rocwmma rocWMMA)
+therock_project_disabled(_skip_rocwmma rocWMMA)
 if(THEROCK_ENABLE_ROCWMMA AND NOT _skip_rocwmma)
   set(_rocwmma_build_samples ON)
   set(_rocwmma_build_tests ${THEROCK_BUILD_TESTING})
@@ -464,7 +464,7 @@ if(THEROCK_ENABLE_ROCWMMA AND NOT _skip_rocwmma)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
-therock_project_has_no_targets(_skip_rocalution rocALUTION)
+therock_project_disabled(_skip_rocalution rocALUTION)
 if(THEROCK_ENABLE_ROCALUTION AND NOT _skip_rocalution)
   ##############################################################################
   # rocALUTION
@@ -651,7 +651,7 @@ if(_ck_enabled)
   )
 endif()
 
-therock_project_has_no_targets(_skip_hiptensor hipTensor)
+therock_project_disabled(_skip_hiptensor hipTensor)
 if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR AND NOT _skip_hiptensor)
   ##############################################################################
   # hipTensor
@@ -698,7 +698,7 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR AND NOT _skip_hiptensor)
   )
 endif()
 
-therock_project_has_no_targets(_skip_hipthreads hipthreads)
+therock_project_disabled(_skip_hipthreads hipthreads)
 if(THEROCK_ENABLE_HIPTHREADS AND NOT _skip_hipthreads)
   ##############################################################################
   # hipthreads

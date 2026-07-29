@@ -20,13 +20,18 @@ set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
 # Keyword Args:
 # FAMILY: List of family names to associate the gfx target with.
 # EXCLUDE_TARGET_PROJECTS: sub-project names for which this target should be
-#   filtered out. This is used to work around bugs during bringup and should
-#   not be set on any fully supported targets.
+#   filtered out of GPU_TARGETS while the project still builds (host-only or via
+#   DEFAULT_GPU_TARGETS fallback). Used to work around bugs during bringup and
+#   should not be set on any fully supported targets.
+# DISABLE_TARGET_PROJECTS: sub-project names that must not build at all for this
+#   target because they are meaningless for it by design (e.g. per-arch device
+#   libraries for the architecture-independent amdgcnspirv target). Unlike
+#   EXCLUDE_TARGET_PROJECTS, the project is not declared for the target.
 function(therock_add_amdgpu_target gfx_target product_name)
   cmake_parse_arguments(PARSE_ARGV 2 ARG
     ""
     ""
-    "FAMILY;EXCLUDE_TARGET_PROJECTS"
+    "FAMILY;EXCLUDE_TARGET_PROJECTS;DISABLE_TARGET_PROJECTS"
   )
 
   get_property(_targets GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
@@ -37,6 +42,9 @@ function(therock_add_amdgpu_target gfx_target product_name)
   set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_NAME_${gfx_target}" "${product_name}")
   foreach(project_name in ${ARG_EXCLUDE_TARGET_PROJECTS})
     set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name} "${gfx_target}")
+  endforeach()
+  foreach(project_name IN LISTS ARG_DISABLE_TARGET_PROJECTS)
+    set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_PROJECT_TARGET_DISABLES_${project_name} "${gfx_target}")
   endforeach()
   foreach(_family "${gfx_target}" ${ARG_FAMILY})
     set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_TARGET_FAMILIES "${_family}")
@@ -257,19 +265,25 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
-# amdgcnspirv architecture-independent portable SPIR-V target
+# amdgcnspirv architecture-independent portable SPIR-V target. It is build-only:
+# no per-arch device code, finalized to ISA at load time. Per-arch device
+# libraries are meaningless for it and are fully disabled; host/runtime/tools
+# still build and only have the target filtered from their GPU_TARGETS.
 therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
+  # composable_kernel stays here (not DISABLE): its build gate reuses the
+  # EXCLUDE-based filter (_ck_enabled) shared with partial-support gfx shards.
   EXCLUDE_TARGET_PROJECTS
-    MIOpen    ROCR-Runtime    aqlprofile    composable_kernel    hip-clr    hip-tests
-    hipBLAS    hipBLAS-common    hipBLASLt    hipCUB   hipDNN    hipDNN_samples
-    hipFFT    hipInfo    hipRAND    hipSOLVER    hipSPARSE    hipSPARSELt    hipTensor
-    hipblasltprovider    hipdnn_integration_tests    hipfile    hipkernelprovider
-    hipthreads    miopenprovider    mirage    mxDataGenerator    ocl-clr    rccl
-    rccl-tests    rdc    rocALUTION    rocBLAS    rocFFT    rocPRIM    rocPRIM_tests
-    rocRAND    rocRoller    rocSOLVER    rocSPARSE    rocThrust    rocWMMA    rocdecode
-    rocjitsu    rocjpeg    rocm-kpack    rocprofiler-compute    rocprofiler-sdk
-    rocprofiler-systems    rocprofiler-systems-examples    rocr-debug-agent-tests
-    rocrtst    rocshmem    roctracer
+    ROCR-Runtime    aqlprofile    composable_kernel    hip-clr    hip-tests
+    hipInfo    mirage    ocl-clr    rdc    rocdecode    rocjitsu    rocjpeg
+    rocm-kpack    rocprofiler-compute    rocprofiler-sdk    rocprofiler-systems
+    rocprofiler-systems-examples    rocr-debug-agent-tests    rocrtst    roctracer
+  DISABLE_TARGET_PROJECTS
+    MIOpen    hipBLAS    hipBLAS-common    hipBLASLt    hipCUB    hipDNN
+    hipDNN_samples    hipFFT    hipRAND    hipSOLVER    hipSPARSE    hipSPARSELt
+    hipTensor    hipblasltprovider    hipdnn_integration_tests    hipfile
+    hipkernelprovider    hipthreads    miopenprovider    mxDataGenerator    rccl
+    rccl-tests    rocALUTION    rocBLAS    rocFFT    rocPRIM    rocPRIM_tests
+    rocRAND    rocRoller    rocSOLVER    rocSPARSE    rocThrust    rocWMMA    rocshmem
 )
 
 # Optional extension targets (used for out of tree target development).
