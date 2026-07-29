@@ -297,6 +297,11 @@ jobs:
 
           python -m pip install uv~=0.11.2
           python -m uv pip install -r jax/build/test-requirements.txt
+
+          # Use Python requirements lock file for correct version dependencies
+          lock="jax/build/requirements_lock_${PYTHON_VERSION/./_}.txt"
+          python -m uv pip install --upgrade -c "$lock" scipy
+
           python -m pip install pytest-json-report
 
           python -c "import jax; print(jax.local_devices())"
