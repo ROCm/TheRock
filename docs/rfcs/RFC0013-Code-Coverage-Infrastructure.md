@@ -115,11 +115,22 @@ Some components are header-only static libraries (e.g., rocPRIM, hipCUB) and do 
 - Must instrument the test binaries themselves (headers are compiled into the test binary)
 - Must use `--ignore-filename-regex` to exclude test code from the report
 - Requires explicit reference to test binaries rather than library objects
+- **The `-object` flag does not accept wildcards** - cannot use `-object test_*`, must expand to `-object test_1 -object test_2 ... -object test_n`
+
+**Why test_categories_coverage.yaml may be needed:**
+Because `llvm-cov show -object` does not accept wildcard patterns, we must explicitly list each test binary. This requires either:
+1. **Separate test_categories_coverage.yaml** that explicitly lists all test binaries for coverage processing
+2. **Declarative approach with standard naming** - if tests follow `test_*` convention:
+   ```bash
+   # Generate -object flags for all tests
+   llvm-cov show $(for test in $(ls tests/); do echo -n "-object $test "; done) -instr-profile=coverage.profdata
+   ```
 
 **Proposed standardization:**
-- Standardize test naming: `test_<test_name>`
-- Allows declarative control of `--ignore-filename-regex` at the top level
-- Reuses existing test_categories.yaml structure without modifications
+- Standardize test naming: `test_<test_name>` across all components
+- Allows declarative generation of `-object` flags at the top level
+- With standard naming, may be able to reuse test_categories.yaml structure without a separate coverage variant
+- **This remains an open discussion topic** - the tradeoffs between explicit listing vs. declarative generation need team input
 
 ## Design Proposal
 
