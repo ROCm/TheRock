@@ -126,6 +126,11 @@ option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minim
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+# Overrides the Comgr shared-library name for both the Comgr build (its output
+# name) and CLR's dynamic load of it. Empty keeps each component's default
+# (amd_comgr). Used on Windows to ship an OpenCL-flavoured comgr
+# (amd_comgr_opencl.dll) that sits side-by-side with the HIP SDK's comgr.
+set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
