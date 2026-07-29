@@ -256,8 +256,6 @@ jobs:
             }
 
   trigger_release_jax_wheels:
-    # The manylinux JAX build only consumes build_python_packages output
-    # (find-links index); it no longer needs the tarball job.
     needs: [build_artifacts, build_python_packages]
     name: Trigger Release JAX Wheels
     if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}

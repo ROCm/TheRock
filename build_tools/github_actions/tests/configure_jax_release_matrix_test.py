@@ -112,6 +112,9 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertIn(("3.12", "rocm-jaxlib-v0.11.0"), combos)
 
     def test_ci_builds_single_jax_ref(self):
+        # CI keeps the runner queues short by building one ref, while still
+        # fanning out over Python versions. Comparing the set of distinct refs
+        # (rather than the row count) is what pins CI to exactly one ref.
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="ci",
             platform="linux",

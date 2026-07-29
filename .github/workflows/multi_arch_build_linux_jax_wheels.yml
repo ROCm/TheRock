@@ -131,6 +131,7 @@ jobs:
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
     env:
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
       - name: Checkout TheRock
@@ -167,10 +168,6 @@ jobs:
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      - name: Set package dist dir
-        run: |
-          echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
 
       # TODO: THEROCK_INDEX_URL need to be renamed in the future to
       # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
