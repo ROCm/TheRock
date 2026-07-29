@@ -722,6 +722,11 @@ GFX_AWARE_WHEEL_PREFIXES = (
     "torchvision-",
 )
 
+# The JAX plugin/pjrt wheels embed the ROCm major version in their package name
+# (jax_rocm7_plugin for ROCm 7, jax_rocm10_plugin for ROCm 10), so they are
+# matched by pattern instead of listed once per ROCm release.
+JAX_ROCM_PACKAGE_PATTERN = re.compile(r"^jax_rocm\d+_(plugin|pjrt)$")
+
 
 def wheel_apply_gfx_keep_list(
     new_dir_path: pathlib.Path, keep_archs: list[str]
@@ -828,10 +833,7 @@ def wheel_change_extra_files(
     # rocm-* package to the build's rocm version. Rewrite those, then return.
     if "device_gfx" in new_dir_path.name:
         return
-    if (
-        "jax_rocm7_plugin" in package_name_no_version
-        or "jax_rocm7_pjrt" in package_name_no_version
-    ):
+    if JAX_ROCM_PACKAGE_PATTERN.match(package_name_no_version):
         return
 
     # rocm packages needing extra handling

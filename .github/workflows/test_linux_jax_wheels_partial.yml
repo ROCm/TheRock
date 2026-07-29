@@ -196,6 +196,18 @@ jobs:
 
       - name: Determine JAX package versions
         run: |
+          # The plugin/pjrt wheels embed the ROCm major version in their package
+          # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
+          # built against.
+          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${rocm_major%%.*}"
+          if [ -z "${rocm_major}" ]; then
+            echo "::error::rocm_version is required to determine the JAX plugin package name"
+            exit 1
+          fi
+          echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
+          echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
+
           if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
             echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
             echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
@@ -237,8 +249,8 @@ jobs:
 
           pip install \
             --index-url "${WHEEL_INDEX_URL}" \
-            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
-            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+            "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
+            "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
 
           if [ -n "${JAXLIB_VERSION}" ]; then
             pip install \
