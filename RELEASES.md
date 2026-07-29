@@ -419,7 +419,12 @@ Install JAX with ROCm support using the unified multi-arch index.
 > as a dependency. You must install ROCm first by following
 > [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages).
 >
-> Always pin `jax`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` to the same version.
+> Always pin `jax`, `jax_rocm<major>_plugin`, and `jax_rocm<major>_pjrt` to the
+> same version.
+>
+> The plugin and PJRT package names embed the ROCm major version they were built
+> against, so the name to install depends on the ROCm release: `jax_rocm7_*` for
+> ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
 # Set the version (currently supported: 0.9.1, 0.10.0, and 0.10.2)
@@ -430,9 +435,12 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-gfx942]"
 
 # 2. Install JAX ROCm wheels
+# Use the ROCm major version the wheels were built against: 7 for ROCm 7.x, 10
+# for ROCm 10.x.
+ROCM_MAJOR=7
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    "jax_rocm7_plugin==${JAX_VERSION}" \
-    "jax_rocm7_pjrt==${JAX_VERSION}"
+    "jax_rocm${ROCM_MAJOR}_plugin==${JAX_VERSION}" \
+    "jax_rocm${ROCM_MAJOR}_pjrt==${JAX_VERSION}"
 
 # 3. Install matching jax from PyPI
 pip install "jax==${JAX_VERSION}"
