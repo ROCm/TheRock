@@ -32,11 +32,16 @@ TheRock CI needs to support code coverage while:
 
 ### Coverage Report Scope
 Coverage reports for a given project should only instrument that project's code, not upstream or downstream dependencies. For example:
-- **rocFFT coverage** should instrument only rocFFT, not hipFFT
+- **rocFFT coverage** should instrument only rocFFT, not hipFFT (downstream)
 - **rocBLAS coverage** should not instrument hipBLASLt or downstream consumers
 - **hipBLASLt coverage** should not instrument upstream dependencies like rocBLAS, rocRAND, or rocPRIM
 
-Downstream testing is already functionally covered by TheRock CI. Coverage for hipBLASLt does not affect coverage for rocBLAS.
+**Why exclude downstream components?** Coverage in one component does not affect coverage in downstream components - they are independent concerns. For example:
+- Generating a coverage report for rocBLAS has no effect on coverage for hipBLASLt
+- Generating a coverage report for rocFFT has no effect on coverage for hipFFT
+- Each component's coverage is measured independently against its own codebase
+
+Downstream functional testing is already covered by TheRock CI's existing test infrastructure, which validates that downstream components work correctly with their dependencies. Coverage testing focuses solely on exercising the code paths within the component being measured.
 
 ### Instrumentation Behavior and Profraw Contamination
 Instrumented binaries emit `.profraw` files during execution. If we instrument code upstream to the project being measured, those upstream libraries will emit profraw files whenever the downstream project calls their APIs.
