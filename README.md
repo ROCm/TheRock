@@ -77,6 +77,11 @@ cd TheRock
 sudo apt install curl make
 sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
 
+# Install Rust 1.95 for the Mirage emulator build
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+  sh -s -- --default-toolchain 1.95.0
+source "$HOME/.cargo/env"
+
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip
@@ -208,6 +213,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
+| `-DTHEROCK_ENABLE_HIPTHREADS=ON`       | Enables hipThreads                                  |
 | `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |

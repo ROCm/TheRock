@@ -1122,11 +1122,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
@@ -1147,7 +1142,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
+                    "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
                 }
             ],
