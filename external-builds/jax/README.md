@@ -22,11 +22,25 @@ For upstream JAX development references, see:
 
 ### Project and feature support status
 
-| Project / feature | Linux support | Windows support  |
-| ----------------- | ------------- | ---------------- |
-| jaxlib            | ✅ Supported  | ❌ Not supported |
-| jax_rocm7_pjrt    | ✅ Supported  | ❌ Not supported |
-| jax_rocm7_plugin  | ✅ Supported  | ❌ Not supported |
+| Project / feature        | Linux support | Windows support  |
+| ------------------------ | ------------- | ---------------- |
+| jaxlib                   | ✅ Supported  | ❌ Not supported |
+| `jax_rocm<major>_pjrt`   | ✅ Supported  | ❌ Not supported |
+| `jax_rocm<major>_plugin` | ✅ Supported  | ❌ Not supported |
+
+> [!IMPORTANT]
+> The plugin and PJRT package names embed the major version of the ROCm release
+> they were built against, so the name changes across ROCm releases:
+>
+> | ROCm release | Package names                          |
+> | ------------ | -------------------------------------- |
+> | 7.x          | `jax_rocm7_plugin`, `jax_rocm7_pjrt`   |
+> | 10.x         | `jax_rocm10_plugin`, `jax_rocm10_pjrt` |
+>
+> Wheels published from earlier ROCm releases keep their original name, so look
+> for `jax_rocm7_*` when installing a historical ROCm 7.x release.
+>
+> This document writes `jax_rocm<major>_*` where either spelling applies.
 
 ### Supported JAX versions
 
@@ -51,13 +65,13 @@ See also:
 This repository builds the following ROCm-enabled JAX artifacts:
 
 - **jaxlib** (ROCm) - built for JAX ≤ 0.9.0 only
-- **jax_rocm7_pjrt** (PJRT runtime for ROCm)
-- **jax_rocm7_plugin** (JAX runtime plugin for ROCm)
+- **`jax_rocm<major>_pjrt`** (PJRT runtime for ROCm)
+- **`jax_rocm<major>_plugin`** (JAX runtime plugin for ROCm)
 
 > [!NOTE]
 > Starting with JAX 0.9.1, jaxlib is **not built** - it is used from upstream
-> PyPI (`pip install jaxlib==0.9.1`). Only **jax_rocm7_pjrt** and
-> **jax_rocm7_plugin** are built.
+> PyPI (`pip install jaxlib==0.9.1`). Only **`jax_rocm<major>_pjrt`** and
+> **`jax_rocm<major>_plugin`** are built.
 
 ### How building with TheRock differs from upstream
 
@@ -151,8 +165,9 @@ TheRock currently supports two build paths depending on the JAX release branch:
    - `.github/workflows/multi_arch_build_linux_jax_wheels.yml`
 
    The workflow installs ROCm Python packages from the configured TheRock
-   multi-arch package index before building `jax_rocm7_plugin` and
-   `jax_rocm7_pjrt`.
+   multi-arch package index before building `jax_rocm<major>_plugin` and
+   `jax_rocm<major>_pjrt`, where `<major>` is the ROCm major version being built
+   against.
 
 1. Locate built wheels:
 
@@ -224,10 +239,12 @@ release branch you are using.
 1. Install JAX wheels from the package index:
 
    ```bash
+   # Replace <rocm_major> with the ROCm major version of the index you install
+   # from, e.g. 7 for a ROCm 7.x release or 10 for a ROCm 10.x release.
    pip install \
    --index-url <package_index_url> \
-   jax_rocm7_plugin \
-   jax_rocm7_pjrt
+   jax_rocm<rocm_major>_plugin \
+   jax_rocm<rocm_major>_pjrt
 
    # Install jax from PyPI to match the version
    pip install jax==<JAX_VERSION>
