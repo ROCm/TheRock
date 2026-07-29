@@ -291,6 +291,16 @@ jobs:
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       - name: Build PyTorch wheels
+        # Default to the nightly multi-arch ROCm index when neither source is
+        # provided so a bare manual dispatch works; setting either input
+        # overrides it. The default is applied here rather than on the input
+        # because GitHub reverts an emptied input back to its declared default,
+        # which would make the two inputs impossible to use exclusively.
+        env:
+          # Use the index if given; else the find-links page; else default to
+          # the nightly multi-arch index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cache_flag=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
@@ -299,26 +309,14 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
-          # Default to the nightly multi-arch ROCm index when neither source
-          # is provided so a bare manual dispatch works. Setting either input
-          # overrides this. The default lives here rather than on the input
-          # because GitHub reverts an emptied input back to its declared
-          # default, which would make the two inputs impossible to use
-          # exclusively.
-          rocm_index_url="${{ inputs.rocm_package_index_url }}"
-          rocm_find_links="${{ inputs.rocm_package_find_links_url }}"
-          if [ -z "${rocm_index_url}" ] && [ -z "${rocm_find_links}" ]; then
-            rocm_index_url="https://rocm.nightlies.amd.com/whl-multi-arch"
-          fi
-
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --index-url="${rocm_index_url}" \
-            --find-links="${rocm_find_links}" \
+            --index-url="${ROCM_INDEX_URL}" \
+            --find-links="${ROCM_FIND_LINKS}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
