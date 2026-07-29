@@ -1,8 +1,27 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Render the super-repo source and TheRock checkout used by CI."""
+"""Render the super-repo source and TheRock checkout used by CI.
 
+The script appends a source/ref signal table to ``GITHUB_STEP_SUMMARY``.
+
+Example output:
+
+    ## Super-repo source/ref signal
+
+    | Field | Value |
+    | --- | --- |
+    | Super-repo repository | ROCm/rocm-libraries |
+    | Requested source ref | refs/heads/develop |
+    | Triggering super-repo SHA | test-only-super-repo-sha |
+    | TheRock repository | ROCm/TheRock |
+    | Requested TheRock ref | not provided |
+    | Resolved TheRock SHA | 0bd0cf7403f170fbb68d749b1a9ed0592f931bf4 |
+    | Source overlay path | rocm-libraries |
+    | Source fetch arguments | test-only |
+    | Calling workflow ref | test-only-caller |
+    | Reusable workflow path | .github/workflows/setup_multi_arch.yml |
+"""
 
 import json
 import os
