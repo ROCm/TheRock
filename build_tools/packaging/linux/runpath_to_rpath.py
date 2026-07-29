@@ -70,35 +70,35 @@ def update_rpath(search_path: Path, excludes):
 
 def update_config_file(cfg_path: Path):
     """Update rocm llvm config file to default to DT_RPATH."""
-    print("Updating cfg file in", cfg_path)
+    print(f"Updating cfg file in {cfg_path}")
     if cfg_path.exists():
-        print("cfg file exist in path, going ahead with update ")
+        print("cfg file exists in path, going ahead with update")
         try:
             file_string = cfg_path.read_text(encoding="utf-8")
             file_string = re.sub("enable-new-dtags", "disable-new-dtags", file_string)
             cfg_path.write_text(file_string, encoding="utf-8")
         except Exception as ex:
-            print("Couldnt update rocm.cfg file. ", ex)
+            print(f"Couldn't update rocm.cfg file: {ex}")
     else:
-        print("Config path doesnt exist", cfg_path)
+        print(f"Config path doesn't exist: {cfg_path}")
 
 
 def update_compiler_config(search_path: Path):
     """Search for rocm.cfg in search_path and update it to default to DT_RPATH."""
     cfg_file_name = "rocm.cfg"
     found_cfg = False
-    print("Searching for ", cfg_file_name)
+    print(f"Searching for {cfg_file_name}")
     for path, _, files in os.walk(search_path):
         if cfg_file_name in files:
             cfg_path = Path(path) / cfg_file_name
-            print(" Found cfg file cfg_path")
+            print(f" Found cfg file {cfg_path}")
             found_cfg = True
             update_config_file(cfg_path)
             # Continue with the search as there could be cfg files in llvm and llvm/alt
     if found_cfg:
         return
     # rocm.cfg config file not found in search path. Search in the ROCM_PATH.
-    print(cfg_file_name, " not found in search_path. Trying to search in ROCM_PATH")
+    print(f"{cfg_file_name} not found in search_path. Trying to search in ROCM_PATH")
     try:
         rocm_path = Path(os.environ["ROCM_PATH"])
         print(" Found ROCM_PATH trying for rocm.cfg")
@@ -109,7 +109,7 @@ def update_compiler_config(search_path: Path):
         update_config_file(rocm_path / "lib" / "llvm" / "bin" / cfg_file_name)
         update_config_file(rocm_path / "lib" / "llvm" / "alt" / "bin" / cfg_file_name)
     except Exception as ex:
-        print("ROCM_PATH not found ", ex)
+        print(f"ROCM_PATH not found: {ex}")
 
 
 def convert_runpath_to_rpath(search_path):
