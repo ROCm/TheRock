@@ -81,7 +81,16 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
         lib
       INTERFACE_INSTALL_RPATH_DIRS
         lib
+      TEST_SUBPROJECTS
+        hipblas
+        hipblaslt
+        rccl
+        rdc
+        rocblas
+        rocprofiler-systems
+        rocrtst
     )
+
     therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
     therock_cmake_subproject_activate(amdsmi)
 
@@ -636,6 +645,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enab
       "lib/rocm_sysdeps/lib"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/rocm_sysdeps/lib"
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
   therock_cmake_subproject_activate(rocrtst)
