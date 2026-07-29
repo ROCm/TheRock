@@ -646,6 +646,39 @@ class TestDecideJobs(unittest.TestCase):
             ("compiler-runtime",),
         )
 
+    def test_auto_reuse_is_not_applied_when_disallowed(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=None,
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=[],
+            manual_baseline_run_id="manual-run-100",
+            auto_stage_reuse=auto_stage_reuse,
+            allow_automatic_reuse=False,
+        )
+
+        self.assertEqual(stage_decisions, {})
+        self.assertEqual(baseline_run_id, "manual-run-100")
+        self.assertEqual(adjusted.applied_reuse_stages, ())
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic

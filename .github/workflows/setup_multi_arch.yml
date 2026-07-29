@@ -174,7 +174,6 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
-          STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For cross-repo artifact reuse, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
           THEROCK_REPOSITORY: ${{ inputs.repository }}

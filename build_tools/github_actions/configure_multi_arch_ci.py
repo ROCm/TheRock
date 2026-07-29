@@ -891,6 +891,8 @@ def _apply_stage_reuse_precedence(
     manual_prebuilt_stages: list[str],
     manual_baseline_run_id: str,
     auto_stage_reuse: AutoStageReuse,
+    *,
+    allow_automatic_reuse: bool = True,
 ) -> tuple[
     dict[str, JobAction],
     str,
@@ -905,7 +907,6 @@ def _apply_stage_reuse_precedence(
     baseline_run_id = manual_baseline_run_id
 
     if manual_prebuilt_stages:
-        # The downstream configuration supports only one baseline_run_id.
         # Explicit workflow inputs take precedence over automatic reuse.
         if auto_stage_reuse.applied_reuse_stages:
             reason = (
@@ -930,6 +931,32 @@ def _apply_stage_reuse_precedence(
                 ),
                 report_lines=(
                     *adjusted_report_lines,
+                    f"[STAGE-REUSE] {reason}.",
+                ),
+            )
+
+        return (
+            stage_decisions,
+            baseline_run_id,
+            auto_stage_reuse,
+        )
+
+    if not allow_automatic_reuse:
+        if auto_stage_reuse.applied_reuse_stages:
+            reason = (
+                "automatic stage reuse was not applied because "
+                "cross-repository reuse requires explicit inputs"
+            )
+
+            auto_stage_reuse = replace(
+                auto_stage_reuse,
+                applied_reuse_stages=(),
+                reasons=(
+                    *auto_stage_reuse.reasons,
+                    reason,
+                ),
+                report_lines=(
+                    *auto_stage_reuse.report_lines,
                     f"[STAGE-REUSE] {reason}.",
                 ),
             )
@@ -991,9 +1018,18 @@ def decide_jobs(
         for family_name in targets.windows_families
     ]
 
-    expected_baseline_sha = _get_expected_baseline_sha(
-        ci_inputs,
-        git_context,
+    baseline_repository = ci_inputs.baseline_repository
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+
+    is_cross_repo = bool(baseline_repository and baseline_repository != current_repo)
+
+    expected_baseline_sha = (
+        None
+        if is_cross_repo
+        else _get_expected_baseline_sha(
+            ci_inputs,
+            git_context,
+        )
     )
 
     auto_stage_reuse = compute_auto_stage_reuse(
@@ -1012,18 +1048,8 @@ def decide_jobs(
         manual_prebuilt_stages=manual_prebuilt_stages,
         manual_baseline_run_id=ci_inputs.baseline_run_id,
         auto_stage_reuse=auto_stage_reuse,
+        allow_automatic_reuse=not is_cross_repo,
     )
-    baseline_repository = ci_inputs.baseline_repository
-    baseline_run_id = ci_inputs.baseline_run_id
-
-    # Apply automatic stage reuse when running in the same repo as baseline.
-    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if not baseline_repository or baseline_repository == current_repo:
-        # reuse-stage mode returns non-empty applied_reuse_stages.
-        for stage in auto_stage_reuse.applied_reuse_stages:
-            stage_decisions.setdefault(stage, JobAction.PREBUILT)
-        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-            baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,

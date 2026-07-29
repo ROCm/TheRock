@@ -823,6 +823,8 @@ class PlatformImpactPlanningTest(unittest.TestCase):
             "compiler-runtime",
             result.candidate_stages,
         )
+
+
 class CrossRepoArtifactReuseTest(unittest.TestCase):
     """Test cross-repo vs same-repo artifact reuse logic.
 
