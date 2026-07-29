@@ -36,7 +36,6 @@ import subprocess
 import sys
 from importlib.util import find_spec
 from pathlib import Path
-
 import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -49,8 +48,13 @@ INSTALLED_COMPONENTS = {
 }
 
 
-def get_env_value(name, default=None):
-    return os.getenv(name, default)
+def _fail(message):
+    """Log an error and exit non-zero.
+
+    Single op so callers can't log an error and forget to exit.
+    """
+    logging.error(message)
+    sys.exit(1)
 
 
 def get_env_int_override(name):
@@ -77,11 +81,10 @@ def resolve_component_path(component_name, rocm_path):
     """Return the install directory that holds the component's tests + YAML."""
     rel = INSTALLED_COMPONENTS.get(component_name)
     if rel is None:
-        logging.error(
+        _fail(
             f"Unknown pytest component '{component_name}'. "
             f"Known components: {sorted(INSTALLED_COMPONENTS)}"
         )
-        sys.exit(1)
     return (rocm_path / rel).resolve()
 
 
@@ -92,11 +95,9 @@ def load_test_categories_yaml(yaml_path):
         logging.info(f"Loaded test categories from {yaml_path}")
         return config
     except FileNotFoundError:
-        logging.error(f"test_categories.yaml not found at {yaml_path}")
-        sys.exit(1)
+        _fail(f"test_categories.yaml not found at {yaml_path}")
     except yaml.YAMLError as e:
-        logging.error(f"Invalid YAML syntax in {yaml_path}: {e}")
-        sys.exit(1)
+        _fail(f"Invalid YAML syntax in {yaml_path}: {e}")
 
 
 def extract_gpu_arch(amdgpu_families):
@@ -146,8 +147,7 @@ def run_pytest(
     for p in missing:
         logging.warning(f"Test path does not exist, skipping: {cwd / p}")
     if not existing:
-        logging.error("None of the configured test paths exist; nothing to run.")
-        sys.exit(1)
+        _fail("None of the configured test paths exist; nothing to run.")
 
     cmd = ["pytest", *existing, "-v", "--color=yes"]
     if marker_expr:
@@ -218,23 +218,20 @@ def build_environment(rocm_path, component_name):
 
 
 if __name__ == "__main__":
-    TEST_COMPONENT_NAME = get_env_value("TEST_COMPONENT")
-    TEST_TYPE = get_env_value("TEST_TYPE", "quick")
-    AMDGPU_FAMILIES = get_env_value("AMDGPU_FAMILIES")
-    THEROCK_BIN_DIR = get_env_value("THEROCK_BIN_DIR")
+    TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
+    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+    THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
     if not TEST_COMPONENT_NAME:
-        logging.error("TEST_COMPONENT environment variable is required but not set.")
-        sys.exit(1)
+        _fail("TEST_COMPONENT environment variable is required but not set.")
     if not THEROCK_BIN_DIR:
-        logging.error("THEROCK_BIN_DIR environment variable is required but not set.")
-        sys.exit(1)
+        _fail("THEROCK_BIN_DIR environment variable is required but not set.")
 
     rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
     component_path = resolve_component_path(TEST_COMPONENT_NAME, rocm_path)
     if not component_path.is_dir():
-        logging.error(f"Component test directory does not exist: {component_path}")
-        sys.exit(1)
+        _fail(f"Component test directory does not exist: {component_path}")
 
     logging.info(f"Component: {TEST_COMPONENT_NAME} ({component_path})")
     logging.info(f"Test category: {TEST_TYPE}")
@@ -243,16 +240,14 @@ if __name__ == "__main__":
     all_categories = config.get("test_categories", {})
     category_config = all_categories.get(TEST_TYPE)
     if not category_config:
-        logging.error(
+        _fail(
             f"No configuration found for test category '{TEST_TYPE}'. "
             f"Available categories: {sorted(all_categories)}"
         )
-        sys.exit(1)
 
     test_paths = category_config.get("test_paths", [])
     if not test_paths:
-        logging.error(f"Category '{TEST_TYPE}' defines no test_paths")
-        sys.exit(1)
+        _fail(f"Category '{TEST_TYPE}' defines no test_paths")
 
     gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
     marker_expr = build_marker_expression(category_config, gpu_arch)
@@ -278,7 +273,7 @@ if __name__ == "__main__":
         "parallel_workers", exec_settings.get("parallel_workers", 1)
     )
 
-    junit_dir = get_env_value("JUNIT_XML_DIR")
+    junit_dir = os.getenv("JUNIT_XML_DIR")
     junit_xml = (
         str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
     )
