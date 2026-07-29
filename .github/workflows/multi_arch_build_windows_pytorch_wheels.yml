@@ -309,6 +309,7 @@ jobs:
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
+            --release-type="${{ inputs.release_type }}" ^
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
             ${{ env.optional_build_prod_arguments }}
 

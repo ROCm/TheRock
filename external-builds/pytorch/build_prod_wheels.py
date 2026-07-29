@@ -285,14 +285,20 @@ def get_version_suffix_for_installed_rocm_package() -> str:
 
 def get_torch_commit_short(pytorch_dir: Path, length: int = 8) -> str:
     """Return the short torch source commit, or "" if it can't be resolved."""
-    # capture() runs in pytorch_dir; add it as a safe.directory so the lookup
-    # works even when the checkout is owned by another user (e.g. in CI).
-    capture(
-        ["git", "config", "--global", "--add", "safe.directory", str(pytorch_dir)],
-        cwd=pytorch_dir,
-    )
+    # Pass safe.directory via `-c` (scoped to this single git invocation)
+    # instead of `git config --global` so we don't mutate global system state.
+    # This keeps the lookup working even when the checkout is owned by another
+    # user (e.g. in CI).
     commit = capture(
-        ["git", "rev-parse", f"--short={length}", "HEAD"], cwd=pytorch_dir
+        [
+            "git",
+            "-c",
+            f"safe.directory={pytorch_dir}",
+            "rev-parse",
+            f"--short={length}",
+            "HEAD",
+        ],
+        cwd=pytorch_dir,
     )
     if not commit:
         print(f"WARNING: could not resolve torch commit in '{pytorch_dir}'")
@@ -981,8 +987,11 @@ def do_build_pytorch(
     # setup.py validates the version as PEP 440, which only allows a commit hash
     # in the local segment (after `+`), so emit `<base>+git<commit>.<rocm>`,
     # e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`.
+    # TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
+    # upfront, manifest-based version computation lands so the built version
+    # always matches what the manifest records.
     pytorch_build_version = pytorch_base_version + args.version_suffix
-    if args.append_torch_commit_dev:
+    if args.release_type == "dev":
         commit = get_torch_commit_short(pytorch_dir)
         if commit:
             # args.version_suffix is a local identifier like `+rocm7.10.0`;
@@ -1465,11 +1474,14 @@ def main(argv: list[str]):
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
     )
     build_p.add_argument(
-        "--append-torch-commit-dev",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Tag the torch version with the 8-char torch source commit in the "
-        "local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only)",
+        "--release-type",
+        choices=["ci", "dev", "nightly", "prerelease"],
+        default="nightly",
+        help="Release type of the build. For `dev` builds the torch wheel "
+        "version is tagged with the 8-char torch source commit in the local "
+        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
+        "The default is non-appending so other callers (CI, nightly, "
+        "prerelease) keep their plain `<base>+<suffix>` versions.",
     )
     build_p.add_argument(
         "--clean",
