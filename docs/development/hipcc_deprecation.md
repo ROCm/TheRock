@@ -3,8 +3,9 @@
 `hipcc` is a compiler wrapper that historically injected HIP-specific flags
 (include paths, device library paths, GPU target flags, etc.) before invoking
 `clang++`. TheRock is deprecating `hipcc` in favor of calling `amdclang++`
-directly, which is a symlink to the same underlying clang binary with the HIP
-toolchain configured by CMake.
+directly. `amdclang++` is a user-facing binary (`amdllvm`) that provides the
+same HIP-capable compiler as `clang++` but under the AMD-branded name, with the
+HIP toolchain configured by CMake.
 
 This document explains why the change is being made, what the equivalents are,
 and how to migrate your project.
@@ -29,10 +30,7 @@ and how to migrate your project.
 ## What changed in TheRock
 
 - The `amd-hip` compiler toolchain now explicitly sets `CMAKE_HIP_COMPILER` to
-  `amdclang++` (our built clang) in the generated `_toolchain.cmake` file.
-- `--rtlib=compiler-rt --unwindlib=libgcc` linker flags are now injected via
-  `CMAKE_EXE_LINKER_FLAGS_INIT` and `CMAKE_SHARED_LINKER_FLAGS_INIT`, replacing
-  the equivalent flags hipcc provided.
+  `clang++` (our built clang, user-facing as `amdclang++`) in the generated `_toolchain.cmake` file.
 - `hipcc` is no longer listed as a `COMPILER_TOOLCHAIN` or `RUNTIME_DEPS` entry
   for subprojects that use the `amd-hip` toolchain.
 - The test script `test_libhipcxx_hipcc.py` has been renamed to
@@ -51,9 +49,8 @@ CMake variables that replace it when using `amdclang++` directly.
 | ---------------------------------------------------- | --------------------------------------------------------------------------- |
 | Injects `-I<hip>/include`                            | `--hip-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)                         |
 | Injects `--hip-device-lib-path=<path>`               | `--hip-device-lib-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)              |
-| Sets HIP compiler in CMake                           | `CMAKE_HIP_COMPILER` set to `amdclang++` in toolchain                       |
-| Adds `--rtlib=compiler-rt --unwindlib=libgcc`        | Added to `CMAKE_EXE_LINKER_FLAGS_INIT` and `CMAKE_SHARED_LINKER_FLAGS_INIT` |
-| Auto-detects GPU targets via `rocm_agent_enumerator` | `AMDGPU_TARGETS` / `CMAKE_HIP_ARCHITECTURES` set by TheRock super-project   |
+| Sets HIP compiler in CMake                           | `CMAKE_HIP_COMPILER` set to `clang++` (user-facing as `amdclang++`) in toolchain |
+| Auto-detects GPU targets via `rocm_agent_enumerator` | CMake: `AMDGPU_TARGETS` / `CMAKE_HIP_ARCHITECTURES` set by TheRock super-project. Direct: `--offload-arch=native` (build machine's GPUs) or explicit `--offload-arch=gfxNNNN` |
 | Defines `-D__HIP_PLATFORM_AMD__`                     | Added by `hip-config.cmake` target properties via `find_package(hip)`       |
 
 ## Migrating a CMake project
@@ -137,9 +134,9 @@ hipcc -o my_kernel my_kernel.cpp --offload-arch=gfx1100
 # After
 amdclang++ \
   --hip-path=${ROCM_PATH} \
-  --hip-device-lib-path=${ROCM_PATH}/lib/llvm/amdgcn/bitcode \
+  --hip-device-lib-path=${ROCM_PATH}/lib/llvm/amdgcn/bitcode \  # usually derivable from --hip-path; explicit here for clarity
   -x hip \
-  --offload-arch=gfx1100 \
+  --offload-arch=gfx1100 \  # or --offload-arch=native to target the build machine's GPUs
   -o my_kernel my_kernel.cpp
 ```
 
