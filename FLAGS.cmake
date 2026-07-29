@@ -22,6 +22,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable MX (microscaling) data-type support for GEMM in the hipDNN hipBLASLt provider"
+  CMAKE_VARS
+    HIPBLASLTPROVIDER_ENABLE_MX_GEMM=ON
+  SUB_PROJECTS
+    hipblasltprovider
+)
+
+therock_declare_flag(
   NAME HIPDNN_ENABLE_SDPA
   DEFAULT_VALUE OFF
   DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
