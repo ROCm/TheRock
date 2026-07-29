@@ -3,7 +3,6 @@
 
 """Report-only mapping from semantic stage impact to test components."""
 
-from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass

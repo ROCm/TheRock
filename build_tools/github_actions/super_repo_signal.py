@@ -3,7 +3,6 @@
 
 """Render the super-repo source and TheRock checkout used by CI."""
 
-from __future__ import annotations
 
 import json
 import os
