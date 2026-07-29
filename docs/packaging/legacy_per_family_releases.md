@@ -39,17 +39,21 @@ Per-family `rocm`, `torch`, and `jax` packages were published to
 GPU-architecture-specific index pages and must be installed using an appropriate
 `--index-url` argument to `pip`.
 
-| Product Name                       | GFX Target | GFX Family   | Install instructions                                                                               |
-| ---------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------- |
-| MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) // [jax](#jax-for-gfx94X-dcgpu) |
-| MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) // [jax](#jax-for-gfx950-dcgpu) |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
-| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
-| AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151) // [jax](#jax-for-gfx1151)                |
-| AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
-| AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
+The product names below are representative examples, not an exhaustive list.
+For current product-to-target mappings, see the
+[AMD GPU specifications](https://rocm.docs.amd.com/en/latest/reference/gpu-specs.html).
+
+| Product Name                    | GFX Target | GFX Family   | Install instructions                                                                               |
+| ------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| MI300A/MI300X                   | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) // [jax](#jax-for-gfx94X-dcgpu) |
+| MI350X/MI355X                   | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) // [jax](#jax-for-gfx950-dcgpu) |
+| AMD RX 7900 XTX                 | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD RX 7800 XT                  | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD Radeon RX 7600              | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all) // [jax](#jax-for-gfx110X-all)    |
+| AMD Strix Halo iGPU             | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151) // [jax](#jax-for-gfx1151)                |
+| AMD RX 9060 / XT                | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
+| AMD RX 9070 / XT                | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all) // [jax](#jax-for-gfx120X-all)    |
 
 ### Installing ROCm Python packages
 
@@ -120,12 +124,12 @@ pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ "rocm[li
 
 Supported devices in this family:
 
-| Product Name                       | GFX Target |
-| ---------------------------------- | ---------- |
-| AMD RX 7900 XTX                    | gfx1100    |
-| AMD RX 7800 XT                     | gfx1101    |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    |
+| Product Name                    | GFX Target |
+| ------------------------------- | ---------- |
+| AMD RX 7900 XTX                 | gfx1100    |
+| AMD RX 7800 XT                  | gfx1101    |
+| AMD Radeon RX 7600              | gfx1102    |
+| AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    |
 
 Install instructions:
 
@@ -310,12 +314,12 @@ pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch to
 
 Supported devices in this family:
 
-| Product Name                       | GFX Target |
-| ---------------------------------- | ---------- |
-| AMD RX 7900 XTX                    | gfx1100    |
-| AMD RX 7800 XT                     | gfx1101    |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    |
+| Product Name                    | GFX Target |
+| ------------------------------- | ---------- |
+| AMD RX 7900 XTX                 | gfx1100    |
+| AMD RX 7800 XT                  | gfx1101    |
+| AMD Radeon RX 7600              | gfx1102    |
+| AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    |
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
@@ -467,12 +471,12 @@ pip install jax==<jax_version>
 
 Supported devices in this family:
 
-| Product Name                       | GFX Target |
-| ---------------------------------- | ---------- |
-| AMD RX 7900 XTX                    | gfx1100    |
-| AMD RX 7800 XT                     | gfx1101    |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    |
+| Product Name                    | GFX Target |
+| ------------------------------- | ---------- |
+| AMD RX 7900 XTX                 | gfx1100    |
+| AMD RX 7800 XT                  | gfx1101    |
+| AMD Radeon RX 7600              | gfx1102    |
+| AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    |
 
 ##### For JAX 0.8.2:
 
@@ -671,26 +675,26 @@ were published for Debian-based and RPM-based distributions.
 
 ### GPU family and package mapping
 
-| Product Name                       | GFX Target | GFX Family | Runtime Package | Development Package      |
-| ---------------------------------- | ---------- | ---------- | --------------- | ------------------------ |
-| MI300A/MI300X                      | gfx942     | gfx94X     | amdrocm-gfx94x  | amdrocm-core-sdk-gfx94x  |
-| MI350X/MI355X                      | gfx950     | gfx950     | amdrocm-gfx950  | amdrocm-core-sdk-gfx950  |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
-| AMD RX 7800 XT                     | gfx1101    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
-| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
-| AMD Strix Point iGPU               | gfx1150    | gfx1150    | amdrocm-gfx1150 | amdrocm-core-sdk-gfx1150 |
-| AMD Strix Halo iGPU                | gfx1151    | gfx1151    | amdrocm-gfx1151 | amdrocm-core-sdk-gfx1151 |
-| AMD Fire Range iGPU                | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
-| AMD Strix Halo XT                  | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
-| AMD RX 9060 / XT                   | gfx1200    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
-| AMD RX 9070 / XT                   | gfx1201    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
-| Radeon VII                         | gfx906     | gfx906     | amdrocm-gfx906  | amdrocm-core-sdk-gfx906  |
-| MI100                              | gfx908     | gfx908     | amdrocm-gfx908  | amdrocm-core-sdk-gfx908  |
-| MI200 series                       | gfx90a     | gfx90a     | amdrocm-gfx90a  | amdrocm-core-sdk-gfx90a  |
-| AMD RX 5700 XT                     | gfx1010    | gfx101x    | amdrocm-gfx101x | amdrocm-core-sdk-gfx101x |
-| AMD RX 6900 XT                     | gfx1030    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
-| AMD RX 6800 XT                     | gfx1031    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
+| Product Name                    | GFX Target | GFX Family | Runtime Package | Development Package      |
+| ------------------------------- | ---------- | ---------- | --------------- | ------------------------ |
+| MI300A/MI300X                   | gfx942     | gfx94X     | amdrocm-gfx94x  | amdrocm-core-sdk-gfx94x  |
+| MI350X/MI355X                   | gfx950     | gfx950     | amdrocm-gfx950  | amdrocm-core-sdk-gfx950  |
+| AMD RX 7900 XTX                 | gfx1100    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD RX 7800 XT                  | gfx1101    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Radeon RX 7600              | gfx1102    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Ryzen 7 7840U / Ryzen 9 270 | gfx1103    | gfx110x    | amdrocm-gfx110x | amdrocm-core-sdk-gfx110x |
+| AMD Strix Point iGPU            | gfx1150    | gfx1150    | amdrocm-gfx1150 | amdrocm-core-sdk-gfx1150 |
+| AMD Strix Halo iGPU             | gfx1151    | gfx1151    | amdrocm-gfx1151 | amdrocm-core-sdk-gfx1151 |
+| AMD Fire Range iGPU             | gfx1152    | gfx1152    | amdrocm-gfx1152 | amdrocm-core-sdk-gfx1152 |
+| AMD Strix Halo XT               | gfx1153    | gfx1153    | amdrocm-gfx1153 | amdrocm-core-sdk-gfx1153 |
+| AMD RX 9060 / XT                | gfx1200    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| AMD RX 9070 / XT                | gfx1201    | gfx120X    | amdrocm-gfx120x | amdrocm-core-sdk-gfx120x |
+| Radeon VII                      | gfx906     | gfx906     | amdrocm-gfx906  | amdrocm-core-sdk-gfx906  |
+| MI100                           | gfx908     | gfx908     | amdrocm-gfx908  | amdrocm-core-sdk-gfx908  |
+| MI200 series                    | gfx90a     | gfx90a     | amdrocm-gfx90a  | amdrocm-core-sdk-gfx90a  |
+| AMD RX 5700 XT                  | gfx1010    | gfx101x    | amdrocm-gfx101x | amdrocm-core-sdk-gfx101x |
+| AMD RX 6900 XT                  | gfx1030    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
+| AMD RX 6800 XT                  | gfx1031    | gfx103x    | amdrocm-gfx103x | amdrocm-core-sdk-gfx103x |
 
 > [!TIP]
 > To find the latest available release:
