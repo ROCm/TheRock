@@ -192,6 +192,11 @@ jobs:
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
