@@ -197,6 +197,73 @@ determines test dependencies:
 `determine_rocm_test_dependencies.py` then reads the freshly emitted graph. The
 graph is never committed, so it cannot drift from the build definitions.
 
+## Generalizing to DEFCON 1-5
+
+The mechanism above implements DEFCON 4, but DEFCON 4 is not special: it is one
+policy over the consumer graph, wired as the default. The five DEFCON levels form
+a monotone ladder of fan-out breadth over the *same* graph, so supporting per-
+project levels 1-5 is a matter of choosing the fan-out function per changed
+subproject rather than always applying the same-stage cut. The graph, the stage
+map, and the `test_include` / `test_exclude` overrides are all reused unchanged;
+the level only decides the *reach* before those overrides layer on top.
+
+### The level ladder as fan-out reach
+
+Each level is a different reach over the consumer edges already emitted. DEFCON 4
+sits in the middle; 5 is narrower, 3/2/1 are wider:
+
+| Level | Fan-out over the graph                                       | Relation to what exists today            |
+| ----- | ----------------------------------------------------------- | ---------------------------------------- |
+| **5** | `{self}` only, no consumers                                 | the seed set, with the cut disabled      |
+| **4** | `{self}` + **same-stage** direct consumers (one hop)        | the policy this RFC implements           |
+| **3** | `{self}` + **transitive** consumers (BFS closure)           | what `test_fanout_all` already does      |
+| **2** | `{self}` + a named **frameworks** group                     | a new BUILD_TOPOLOGY group + overrides   |
+| **1** | everything (`*`) + dispatch the full-QA / nightly suite     | the existing `projects_to_test = "*"` path |
+
+Levels 3, 4, and (by radius) 5 are expressible with the current selection engine.
+`test_fanout_all` is precisely the level-3 transitive reach, so it collapses into
+the ladder and can be deprecated in favor of `defcon = 3`.
+
+### What the generalization adds
+
+1. **A `defcon` key** on `[artifacts.<name>]`, overridable in the
+   `test_overrides.<subproject>` sub-table and resolved by the existing
+   `get_test_overrides_for_subproject()` path. Absent means the default level 4,
+   which is exactly the RFC's "Phase 1 starts every component at DEFCON 4."
+2. **A fan-out dispatch** in `get_subprojects_to_test()`: the current
+   `if test_fanout_all / else same-stage` branch becomes a `level -> fan-out
+   function` table (level 5 = seed only, level 4 = same-stage cut, level 3 =
+   transitive BFS over `consumers`, level 2 = frameworks group, level 1 = `*`).
+3. **A `frameworks` group** in `BUILD_TOPOLOGY.toml` for level 2 (the
+   PyTorch / JAX / hipDNN-facing consumers).
+
+With this in place, setting a project's gating level is a one-line
+`BUILD_TOPOLOGY.toml` edit with no code change, which is the whole point:
+tightening a repeat offender (4 -> 3 -> 2 -> 1) or promoting a proven component
+(4 -> 5) becomes a reviewed, auditable, single-line change.
+
+### The tier dimension (why breadth alone is not enough)
+
+The selection engine decides *which subprojects* to test. Two DEFCON levels are
+statements about *which test tier within a subproject* runs, which breadth cannot
+express:
+
+- **DEFCON 5** is "fast unit tests only." Selecting `{self}` alone still runs
+  *all* of self's tests, so without a tier filter level 5 collapses to a narrow
+  level 4.
+- **DEFCON 1** is "full QA integration + nightly suites," a different workflow
+  dispatch, not merely `projects_to_test = "*"`.
+
+Honestly scoped: breadth-only fan-out delivers clean levels **3, 4, and a rough
+5** on top of what this RFC ships. True 1 / 2 / 5 need a **second output**
+alongside `projects_to_test`: a per-project `test_tier` (unit / full / nightly)
+that the test-runner job honors (a ctest label filter for unit-only, a workflow
+dispatch for nightly). That tier plumbing touches the test-*execution* job, not
+just selection, and is the genuinely new work; the fan-out ladder is a refactor of
+the engine already built here. The recommended sequencing is to land the
+`defcon`-key + dispatch refactor first (immediate per-project 3/4/5-by-radius),
+then add the tier dimension as a follow-up.
+
 ## Alternatives considered
 
 ### A: Fully populate `TEST_SUBPROJECTS` by hand (attempted)
@@ -263,3 +330,7 @@ change.
 - **Cross-repo selection.** How should the graph interact with external-repo CI
   (rocm-systems / rocm-libraries) where only a subset of source is present at
   configure time?
+- **Test tiers for DEFCON 1/2/5.** The fan-out ladder covers levels 3-5 by
+  selection radius, but true DEFCON 5 (unit-only) and DEFCON 1 (full QA / nightly)
+  need a per-project `test_tier` output the test-runner job honors. Should that
+  tier plumbing be part of this feature or a dedicated follow-up RFC?
