@@ -789,6 +789,7 @@ def build_triton_windows(
             "TRITON_BUILD_PROTON": "OFF",
             "TRITON_APPEND_CMAKE_ARGS": "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE",
             "TRITON_WHEEL_VERSION_SUFFIX": version_suffix,
+            "TRITON_WHEEL_NAME": "triton_windows"
         }
     )
 
