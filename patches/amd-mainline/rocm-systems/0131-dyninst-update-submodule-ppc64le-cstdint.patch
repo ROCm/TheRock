@@ -1,0 +1,24 @@
+From 17728f828c2a1d8692b9b8c9012ad8d2b5e3865e Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 28 Jul 2026 23:50:08 +0000
+Subject: [PATCH] dyninst: update submodule to include ppc64le cstdint fix
+
+Update the Dyninst submodule from 5dff47b to 07b585a (HEAD of
+dyninst_13), which includes the merged PR #24 adding the missing
+#include <cstdint> to stackwalk/src/ppc-swk.C for ppc64le builds.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/rocprofiler-systems/external/dyninst | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/rocprofiler-systems/external/dyninst b/projects/rocprofiler-systems/external/dyninst
+index 5dff47bf6fb..07b585a7fa4 160000
+--- a/projects/rocprofiler-systems/external/dyninst
++++ b/projects/rocprofiler-systems/external/dyninst
+@@ -1 +1 @@
+-Subproject commit 5dff47bf6fb53e51cdc5e98c8ef6656080931ede
++Subproject commit 07b585a7fa408c3a4ae03de6a7797d1aba5fcde4
+-- 
+2.52.0
+
