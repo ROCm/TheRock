@@ -590,8 +590,22 @@ def validate_commit_compatibility(
     candidate_head_sha: str,
     expected_head_sha: str,
 ) -> CommitCompatibility:
-    """Require the candidate run to match the exact expected baseline SHA."""
+    """Validate that a candidate run matches the exact expected baseline.
 
+    Stage impact is calculated over:
+
+        diff_base_commit -> diff_head_commit
+
+    Therefore, a candidate run is considered compatible only when its
+    ``head_sha`` exactly equals ``diff_base_commit``. Accepting an older ancestor
+    would omit changes between the candidate commit and ``diff_base_commit`` and
+    could reuse stale artifacts.
+
+    TODO: Investigate safe per-platform baseline selection and ancestor reuse.
+    Any ancestor-based approach must account for the complete change range from
+    the candidate commit to ``diff_head_commit``, rather than checking ancestry
+    alone.
+    """
     expected = _normalize_sha(expected_head_sha)
     candidate = _normalize_sha(candidate_head_sha)
 
