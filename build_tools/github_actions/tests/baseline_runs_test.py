@@ -853,9 +853,9 @@ class RunTimingTest(unittest.TestCase):
         self.assertIsNone(timing.total_seconds)
         self.assertEqual(timing.run_seconds, 3600.0)
 
-    def test_out_of_order_timestamps_yield_none(self):
+    def test_out_of_order_timestamps_are_clamped_to_zero(self):
         # run_started_at before created_at, updated_at before run_started_at:
-        # clock skew / bad data -> None rather than negative durations.
+        # clamp invalid negative durations to zero.
         timing = baseline_runs.parse_run_timing(
             {
                 "id": "42",
@@ -864,9 +864,10 @@ class RunTimingTest(unittest.TestCase):
                 "updated_at": "2026-06-17T19:00:00Z",
             }
         )
-        self.assertIsNone(timing.queue_seconds)
-        self.assertIsNone(timing.run_seconds)
-        self.assertIsNone(timing.total_seconds)
+
+        self.assertEqual(timing.queue_seconds, 0.0)
+        self.assertEqual(timing.run_seconds, 0.0)
+        self.assertEqual(timing.total_seconds, 0.0)
 
     def test_to_dict_round_trips_keys(self):
         timing = baseline_runs.parse_run_timing(

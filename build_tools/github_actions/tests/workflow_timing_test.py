@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import workflow_timing as wt
 import workflow_timing_json as wtj
+from baseline_runs import seconds_between
 
 
 class WorkflowTimingTest(unittest.TestCase):
@@ -117,25 +118,25 @@ class WorkflowTimingTest(unittest.TestCase):
             summary,
         )
 
-    def test_duration_seconds_clamps_negative_values(self):
+    def test_seconds_between_clamps_negative_values(self):
         start = wt._parse_iso8601("2026-07-09T10:05:00Z")
         end = wt._parse_iso8601("2026-07-09T10:04:59Z")
 
         self.assertEqual(
-            wt._duration_seconds(
+            seconds_between(
                 start,
                 end,
             ),
             0.0,
         )
         self.assertIsNone(
-            wt._duration_seconds(
+            seconds_between(
                 None,
                 end,
             )
         )
         self.assertIsNone(
-            wt._duration_seconds(
+            seconds_between(
                 start,
                 None,
             )

@@ -541,19 +541,25 @@ def _parse_iso_timestamp(value: str) -> datetime | None:
     return parsed
 
 
-def _seconds_between(start: datetime | None, end: datetime | None) -> float | None:
+def seconds_between(
+    start: datetime | None,
+    end: datetime | None,
+) -> float | None:
     """Return (end - start) in seconds, or None if either bound is missing."""
+
     if start is None or end is None:
         return None
+
     seconds = (end - start).total_seconds()
     if seconds < 0:
         logger.debug(
-            "Ignoring negative duration: start=%s end=%s (%.1fs)",
+            "Clamping negative duration: start=%s end=%s (%.1fs)",
             start.isoformat(),
             end.isoformat(),
             seconds,
         )
-        return None
+        return 0.0
+
     return seconds
 
 
@@ -573,9 +579,9 @@ def parse_run_timing(workflow_run: dict) -> RunTiming:
         created_at=created_at,
         run_started_at=run_started_at,
         updated_at=updated_at,
-        queue_seconds=_seconds_between(created, started),
-        run_seconds=_seconds_between(started, updated),
-        total_seconds=_seconds_between(created, updated),
+        queue_seconds=seconds_between(created, started),
+        run_seconds=seconds_between(started, updated),
+        total_seconds=seconds_between(created, updated),
     )
 
 

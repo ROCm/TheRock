@@ -8,6 +8,7 @@ import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from baseline_runs import seconds_between
 
 
 @dataclass(frozen=True)
@@ -43,20 +44,6 @@ def _parse_iso8601(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
-
-
-def _duration_seconds(
-    start: datetime | None,
-    end: datetime | None,
-) -> float | None:
-    """Return a non-negative duration between two timestamps."""
-    if start is None or end is None:
-        return None
-
-    return max(
-        0.0,
-        (end - start).total_seconds(),
-    )
 
 
 def _http_json(url: str, token: str) -> dict:
@@ -284,12 +271,12 @@ def collect_timing_records(
             started_dt = _parse_iso8601(started_at)
             completed_dt = _parse_iso8601(completed_at)
 
-            queue_seconds = _duration_seconds(
+            queue_seconds = seconds_between(
                 queued_dt,
                 started_dt,
             )
 
-            run_seconds = _duration_seconds(
+            run_seconds = seconds_between(
                 started_dt,
                 completed_dt,
             )
