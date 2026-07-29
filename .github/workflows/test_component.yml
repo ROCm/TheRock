@@ -141,7 +141,11 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Driver / GPU sanity check
-        timeout-minutes: 3
+        timeout-minutes: 5
+        env:
+          STEP_NAME: Driver GPU sanity check # name that shows up in prolens dashboards
+          STEP_TIMEOUT_MINUTES: "5" # should match timeout-minutes specified above at this step
+          NO_OUTPUT_TIMEOUT: "3" # prolense will timeout the step at this timeout mins but timeout-minutes is 5 mins so prolense has time to emit status as overall step timeout is enforced by timeout-minutes value
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
