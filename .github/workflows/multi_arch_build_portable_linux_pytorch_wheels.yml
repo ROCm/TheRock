@@ -110,19 +110,19 @@ on:
         required: true
       rocm_package_find_links_url:
         description: >-
-          URL for pip --find-links to install ROCm packages (flat page). Use
-          this OR rocm_package_index_url, not both. If you set this, clear
-          rocm_package_index_url (otherwise both get passed to pip).
+          URL for pip --find-links to install ROCm packages (flat page). Set
+          either this or rocm_package_index_url to override the ROCm package
+          source; leave both blank to use the nightly multi-arch index.
         type: string
         default: ""
       rocm_package_index_url:
         description: >-
           URL for pip --index-url to install ROCm packages (PEP 503 index).
-          Defaults to the nightly multi-arch index; override to build against a
-          different ROCm channel or a specific build's index. Use this OR
-          rocm_package_find_links_url, not both.
+          Set either this or rocm_package_find_links_url to override the ROCm
+          package source; leave both blank to use the nightly multi-arch index
+          (https://rocm.nightlies.amd.com/whl-multi-arch).
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch"
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -299,14 +299,26 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
+          # Default to the nightly multi-arch ROCm index when neither source
+          # is provided so a bare manual dispatch works. Setting either input
+          # overrides this. The default lives here rather than on the input
+          # because GitHub reverts an emptied input back to its declared
+          # default, which would make the two inputs impossible to use
+          # exclusively.
+          rocm_index_url="${{ inputs.rocm_package_index_url }}"
+          rocm_find_links="${{ inputs.rocm_package_find_links_url }}"
+          if [ -z "${rocm_index_url}" ] && [ -z "${rocm_find_links}" ]; then
+            rocm_index_url="https://rocm.nightlies.amd.com/whl-multi-arch"
+          fi
+
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --index-url="${{ inputs.rocm_package_index_url }}" \
-            --find-links="${{ inputs.rocm_package_find_links_url }}" \
+            --index-url="${rocm_index_url}" \
+            --find-links="${rocm_find_links}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
