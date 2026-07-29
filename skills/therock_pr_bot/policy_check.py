@@ -102,13 +102,10 @@ class CheckResult:
 
 @dataclass(frozen=True)
 class Policy:
-    title_min_length: int
-    title_max_length: int
     description_min_length: int
     description_issue_patterns: List[re.Pattern[str]]
     description_checklist_patterns: List[re.Pattern[str]]
     block_draft: bool
-    forbidden_title_patterns: List[re.Pattern[str]]
     forbidden_paths: List[str]
     unit_test_code_extensions: List[str]
     unit_test_patterns: List[str]
@@ -133,11 +130,6 @@ def load_policy(policy_path: Path) -> Policy:
     diff = raw.get("diff", {}) or {}
     checks = raw.get("checks", {}) or {}
 
-    # PR title rules now live under the nested `title:` mapping.
-    title_cfg = pr.get("title", {}) or {}
-    title_min_length = int(title_cfg.get("title_min_length", 0) or 0)
-    title_max_length = int(title_cfg.get("title_max_length", 0) or 0)
-
     # PR description rules.
     description_cfg = pr.get("description", {}) or {}
     description_min_length = int(description_cfg.get("min_length", 0) or 0)
@@ -152,8 +144,6 @@ def load_policy(policy_path: Path) -> Policy:
 
     # Block drafts / WIP titles.
     block_draft = bool(pr.get("block_draft", False))
-    forbidden_title_raw = pr.get("forbidden_title_patterns", []) or []
-    forbidden_title_patterns = [re.compile(str(p)) for p in forbidden_title_raw]
 
     forbidden_paths = [str(p) for p in (diff.get("forbidden_paths", []) or [])]
 
@@ -181,13 +171,10 @@ def load_policy(policy_path: Path) -> Policy:
         )
 
     return Policy(
-        title_min_length=title_min_length,
-        title_max_length=title_max_length,
         description_min_length=description_min_length,
         description_issue_patterns=description_issue_patterns,
         description_checklist_patterns=description_checklist_patterns,
         block_draft=block_draft,
-        forbidden_title_patterns=forbidden_title_patterns,
         forbidden_paths=forbidden_paths,
         unit_test_code_extensions=unit_test_code_extensions,
         unit_test_patterns=unit_test_patterns,
@@ -968,7 +955,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     title = str(pr.get("title") or "")
     body = str(pr.get("body") or "")
 
-    # --- Opt-out: '@skip-pr-bot' in the PR description ---
+    # --- PR description ---
     # If the author tagged the description with '@skip-pr-bot', do NOT run any
     # checks. This covers BOTH cases: the tag was present when the PR was
     # created, and the tag was added later via a description edit. In either
@@ -977,12 +964,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         skip_marker = "<!-- therock-pr-bot-skipped -->"
         skip_note = (
             f"{skip_marker}\n"
-            f"🛑 Author chose to skip pr bot run hence removing label "
+            f"✅ Author chose to skip pr bot run hence removing label "
             f"(`{SKIP_TAG}` found in the PR description)."
         )
         upsert_comment(owner, repo, pr_number, token, skip_marker, skip_note)  # type: ignore[arg-type]
         remove_label(owner, repo, pr_number, token, NOT_READY_LABEL)  # type: ignore[arg-type]
-        print(f"🛑 '{SKIP_TAG}' present — skipping all policy checks.")
+        print(f"✅ '{SKIP_TAG}' present — skipping all policy checks.")
         return 0
 
     # --- Special case: automated dependency "bump" PRs ---

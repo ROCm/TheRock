@@ -5,7 +5,7 @@ pr:
   #
   # WHY: These bots open routine, high-volume dependency-bump PRs (e.g.
   # "Bumps ROCm/rocm-systems from a0952b2 to 971dc69") that don't follow the
-  # human branch/title/description conventions and don't need the full policy
+  # human title/description conventions and don't need the full policy
   # gate. Auto-approving them keeps the bot from blocking trusted automation and
   # spamming "Not ready to Review" on every bump.
   #

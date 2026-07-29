@@ -50,7 +50,8 @@ def make_policy(**overrides: Any) -> pc.Policy:
     """Build a Policy with sensible defaults; override any field per-test.
 
     Independent of policy.yml so regex/validator behaviour can be pinned even
-    if the shipped config changes.
+    if the shipped config changes. Note: title and branch-name policies have
+    been removed — Policy no longer carries any title/branch fields.
     """
     defaults: Dict[str, Any] = dict(
         description_min_length=30,

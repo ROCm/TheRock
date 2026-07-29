@@ -1,9 +1,9 @@
 # TheRock PR Bot — Policy FAQ Doc
 
 **TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
-On every Pull Request, it runs a set of policy checks — branch naming,
-title/description, forbidden files, unit tests, and required CI checks —
-then posts a single results table comment summarising what passed or failed.
+On every Pull Request, it runs a set of policy checks — PR description,
+forbidden files, unit tests, and required CI checks — then posts a single
+results table comment summarising what passed or failed.
 PRs that fail key checks are flagged with a **`Not ready to Review`** label
 until the issues are resolved.
 
@@ -33,7 +33,7 @@ please reach out to the **ROCm Policy Council**.
 Include your PR link, the check(s) you want overridden, and a short
 justification so the council can review your request.
 
-## 🛑 Skip the PR Bot entirely (`@skip-pr-bot`)
+## ✅ Skip the PR Bot entirely (`@skip-pr-bot`)
 
 If you want to opt a PR **out of the bot completely**, add the tag
 **`@skip-pr-bot`** anywhere in the PR description. When present:
@@ -246,9 +246,7 @@ A **Bump PR** is an automated pull request that updates dependencies (e.g. from 
 
 When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
 
-- Branch name validation
-- PR title (length) check
-- JIRA/ISSUE ID reference requirement
+- JIRA/ISSUE ID reference requirement in Description
 - Unit test requirement
 - And all other policies
 
@@ -268,23 +266,12 @@ ______________________________________________________________________
 
 ## General Questions
 
-**Why did my PR get the "Not ready to Review" label?**
-
-The label is added when:
-
-1. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
-
-The Unit Test check is **warning-only** and does **not** add the label. All
-other policy failures (branch name, title format, description length, forbidden
-files, etc.) also do **not** add the label; they are still reported in the table but
-do not block the PR.
-
 **What is the "Not ready to Review" label?**
 
 When the **JIRA/ISSUE ID reference** is missing from the PR description, the bot
 adds a **`Not ready to Review`** label to the PR so it is clearly gated.
 The label is removed automatically once that reference is added.
-The **Unit Test** check (⚠️ warning-only) and other failures (Branch Name,
+The **Unit Test** check and **Forbidden Files** are (⚠️ warning-only).Other failures (
 Draft PR, pre-commit, CodeQL) do **not** add the label.
 
 **How are pre-commit and CodeQL shown?**
