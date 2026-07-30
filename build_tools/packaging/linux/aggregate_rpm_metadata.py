@@ -125,7 +125,12 @@ def rewrite_location_href(pkg: ET.Element, href_prefix: str) -> None:
     ns = {"c": NS_COMMON}
     location = pkg.find("c:location", ns)
     if location is None:
-        return
+        pkg_name_el = pkg.find("c:name", ns)
+        pkg_name = pkg_name_el.text if pkg_name_el is not None else "<unknown>"
+        raise RuntimeError(
+            f"Package '{pkg_name}' has no <location> element in primary.xml — "
+            f"source repo may be malformed."
+        )
     original_href = location.get("href", "")
     basename = (
         original_href.rsplit("/", 1)[-1] if "/" in original_href else original_href

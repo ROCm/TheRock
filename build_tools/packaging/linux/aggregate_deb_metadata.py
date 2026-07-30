@@ -82,16 +82,16 @@ def parse_source(value: str) -> dict:
         raise argparse.ArgumentTypeError(
             f"--source must be 'name,base_url,style,pool_prefix', got: {value!r}"
         )
-    name, base_url, style, pool_prefix = parts
+    name, base_url, style, pool_prefix = [p.strip() for p in parts]
     if style not in ("dists", "flat"):
         raise argparse.ArgumentTypeError(
             f"style must be 'dists' or 'flat', got: {style!r}"
         )
     return {
-        "name": name.strip(),
-        "base_url": base_url.strip(),
-        "style": style.strip(),
-        "pool_prefix": pool_prefix.strip(),
+        "name": name,
+        "base_url": base_url,
+        "style": style,
+        "pool_prefix": pool_prefix,
     }
 
 
