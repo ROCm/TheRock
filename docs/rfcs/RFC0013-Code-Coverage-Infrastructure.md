@@ -103,10 +103,20 @@ TheRock CI splits build nodes and test nodes and does not retain the entire CMak
 ### Solution for Most Projects
 For most projects, the solution is straightforward:
 1. Instrument code during build
-2. Run tests using the Test Filter Standard (test_categories.yaml)
-3. Minor modifications to test_categories_coverage.yaml:
-   - Add `llvm_profile_file:` key to control profraw output location
-   - Modify test_runner.py to handle coverage mode
+2. Run tests using the Test Filter Standard (test_categories.yaml or test_categories_coverage.yaml)
+3. Schema additions to test_categories_coverage.yaml:
+   - **`llvm_profile_file`**: Path pattern for profraw file output (with `%m-%p` interpolation)
+   - **`ignore-filename-regex`**: Pattern to exclude test code from coverage reports
+   - **`test_names`**: List of test binary names for `-object` flags (header-only libraries only)
+
+**Declarative approach:** These fields can potentially be calculated at the top level rather than explicitly configured per-project:
+- **`test_names`**: Discovered by listing test executables matching `test_*` in a standardized test directory
+- **`llvm_profile_file`**: Hardcoded to standard path (e.g., `./coverage-report/%m-%p.profraw`)
+- **`ignore-filename-regex`**: Set to exclude anything outside the src directory (e.g., patterns matching test files)
+
+This reduces per-project configuration overhead and ensures consistency across components.
+
+**Error handling:** If profraw files are missing entirely, the coverage job fails. This indicates a fundamental problem with instrumentation or test execution.
 
 ### Problematic: Header-Only Static Libraries
 Some components are header-only static libraries (e.g., rocPRIM, hipCUB) and do not produce a simple `.so` file for `llvm-cov show -object <lib>.so`.
@@ -117,20 +127,21 @@ Some components are header-only static libraries (e.g., rocPRIM, hipCUB) and do 
 - Requires explicit reference to test binaries rather than library objects
 - **The `-object` flag does not accept wildcards** - cannot use `-object test_*`, must expand to `-object test_1 -object test_2 ... -object test_n`
 
-**Why test_categories_coverage.yaml may be needed:**
-Because `llvm-cov show -object` does not accept wildcard patterns, we must explicitly list each test binary. This requires either:
-1. **Separate test_categories_coverage.yaml** that explicitly lists all test binaries for coverage processing
-2. **Declarative approach with standard naming** - if tests follow `test_*` convention:
-   ```bash
-   # Generate -object flags for all tests
-   llvm-cov show $(for test in $(ls tests/); do echo -n "-object $test "; done) -instr-profile=coverage.profdata
-   ```
+**Handling mixed library types:**
+- **Shared libraries (.so)**: Use `-object <lib>.so`, only need `llvm_profile_file`
+- **Static libraries**: May require `-object` for each test binary plus `ignore-filename-regex` and `test_names`
+- **Header-only libraries**: Require all three fields (test binaries, ignore patterns, profraw path)
 
-**Proposed standardization:**
-- Standardize test naming: `test_<test_name>` across all components
-- Allows declarative generation of `-object` flags at the top level
-- With standard naming, may be able to reuse test_categories.yaml structure without a separate coverage variant
-- **This remains an open discussion topic** - the tradeoffs between explicit listing vs. declarative generation need team input
+The test runner can determine library type and adjust llvm-cov invocation accordingly. With declarative field calculation, the same test_categories_coverage.yaml schema works for all library types.
+
+**Why test_categories_coverage.yaml may be needed:**
+Because `llvm-cov show -object` does not accept wildcard patterns, we must explicitly list each test binary for header-only libraries. However, with standardized `test_*` naming:
+```bash
+# Declaratively generate -object flags for all tests
+llvm-cov show $(for test in $(ls tests/); do echo -n "-object $test "; done) -instr-profile=coverage.profdata
+```
+
+This allows the test runner to discover test binaries automatically rather than requiring explicit per-project configuration.
 
 ## Design Proposal
 
