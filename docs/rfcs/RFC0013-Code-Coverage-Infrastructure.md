@@ -217,28 +217,6 @@ Modify existing test workflows:
 
 **Open question:** Can we consolidate to fewer nightly runs without resource issues?
 
-## Implementation Plan
-
-### Phase 1: CMake Infrastructure
-1. Add component-specific coverage flags to each project's CMakeLists.txt
-2. Add TheRock passthrough for coverage flags
-3. Implement `therock_configure_coverage.py` script
-
-### Phase 2: Test Runner Updates
-1. Add `llvm_profile_file:` support to test_categories.yaml schema
-2. Update test_runner.py to handle coverage mode
-3. Standardize test naming where needed (header-only libraries)
-
-### Phase 3: CI Workflow
-1. Create new `therock-ci-coverage.yml` workflow
-2. Add coverage job to nightly runs
-3. Integrate codecov.io upload
-
-### Phase 4: Validation
-1. Validate coverage reports for sample projects (rocFFT, rocBLAS, rocPRIM)
-2. Verify no cross-contamination between components
-3. Confirm performance isolation from pre-checkin builds
-
 ## Open Questions
 
 1. **Codecov.io vs. alternatives**: Should we standardize on codecov.io or evaluate other platforms?
@@ -249,51 +227,7 @@ Modify existing test workflows:
 6. **Artifact retention**: How long should coverage artifacts be retained?
 7. **Report aggregation**: Should TheRock provide a unified coverage dashboard across all components?
 
-## Areas Needing More Detail
-
-1. **therock_configure_coverage.py implementation**:
-   - How does it detect which project changed in a PR?
-   - How does it handle multi-component PRs?
-   - What happens if changes span multiple projects?
-
-2. **Test runner modifications**:
-   - Exact schema changes to test_categories.yaml
-   - How to handle mixed library types (shared vs static vs header-only) in a single coverage run
-   - Error handling when profraw files are missing
-
-3. **Header-only library handling**:
-   - Specific regex patterns for `--ignore-filename-regex`
-   - How to reference test binaries in llvm-cov commands
-   - Directory structure expectations
-
-4. **CI workflow integration**:
-   - Exact modifications to therock-ci-test-packages.yml
-   - Exact modifications to therock-ci-test-components.yml
-   - Artifact naming conventions for coverage builds
-   - Upload/download artifact paths
-
-5. **Codecov.io configuration**:
-   - Repository setup
-   - Token management
-   - PR comment configuration
-   - Failure threshold configuration
-
-6. **Resource allocation**:
-   - Build node sizing for coverage builds
-   - Test node sizing for coverage test runs
-   - Expected runtime for coverage builds vs normal builds
-   - Storage requirements for coverage artifacts
-
-7. **Failure handling**:
-   - What happens if coverage generation fails?
-   - Should coverage failures block PR merges?
-   - How to handle flaky coverage tests?
-
-8. **Migration path**:
-   - How to migrate existing Math CI coverage infrastructure?
-   - Can we maintain both during transition?
-   - What's the rollout plan across components?
-
 ## Revision History
 
 - 2026-07-28: jorobbin: Initial version
+- 2026-07-30: jorobbin: Clarified downstream independence and llvm-cov wildcard limitations
