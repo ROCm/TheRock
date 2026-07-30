@@ -685,6 +685,10 @@ def do_build(args: argparse.Namespace):
     env = _setup_common_build_env(
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
+    if is_windows:
+        # CMake's BLAS ABI probes execute binaries linked against ROCm DLLs.
+        # Make those DLLs discoverable by the Windows loader.
+        env["PATH"] = system_path
 
     if args.use_ccache:
         if not shutil.which("ccache"):
