@@ -28,9 +28,12 @@ create RPM and DEB packages and upload to artifactory server
 import argparse
 import json
 import os
+import shutil
 import sys
+import tempfile
 import traceback
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 
@@ -208,7 +211,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
-    cleanup_build_directory(config)
+    cleanup_build_directory(config, pkg_name)
     return built_packages
 
 
@@ -242,7 +245,7 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
-    cleanup_build_directory(config)
+    cleanup_build_directory(config, pkg_name)
     return built_packages
 
 
@@ -293,7 +296,7 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
     except Exception as e:
         logger.error(f"Failed to build non-versioned package for {pkg_name}: {e}")
 
-    cleanup_build_directory(config)
+    cleanup_build_directory(config, pkg_name)
     return built_packages
 
 
@@ -426,16 +429,22 @@ def build_nonversioned_package(pkg_name, config: PackageConfig) -> list:
         return []
 
 
-def cleanup_build_directory(config: PackageConfig):
+def cleanup_build_directory(config: PackageConfig, pkg_name: str = ""):
     """Clean up build directory after all package variants are built.
 
     This should only be called after all variants for a package are complete.
-    Defers cleanup to allow parallel builds of variants in the future.
+    In parallel mode, each package has its own subdirectory under the pkg_type dir.
 
     Parameters:
     config: Configuration object containing dest_dir and pkg_type
+    pkg_name: Package name for parallel-safe cleanup (cleans only this package's dir)
     """
-    build_dir = Path(config.dest_dir) / config.pkg_type
+    if pkg_name:
+        # Parallel-safe: only clean this package's build directory
+        build_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
+    else:
+        # Legacy: clean entire pkg_type directory (only safe in sequential mode)
+        build_dir = Path(config.dest_dir) / config.pkg_type
     if build_dir.exists():
         remove_dir(build_dir)
         logger.debug(f"Cleaned up build directory: {build_dir}")
@@ -601,6 +610,29 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     )
 
 
+def build_pkg(args):
+    """Build a single package in isolated process. Used by ProcessPoolExecutor."""
+    pkg_name, config, logs_dir = args
+    pkg_log_file = logs_dir / f"{config.pkg_type}-{pkg_name}.log"
+    temp_dir = tempfile.mkdtemp(prefix=f"pkg_{pkg_name}_")
+    try:
+        pkg_config = replace(config, dest_dir=Path(temp_dir))
+        with capture_console(pkg_log_file):
+            output_list = build_package_variants(pkg_name, pkg_config)
+        # Move packages to final dest
+        result = []
+        for f in output_list:
+            src = Path(temp_dir) / f
+            if src.exists():
+                dst = config.dest_dir / f
+                config.dest_dir.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+                result.append(f)
+        return (pkg_name, result)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def run(args: argparse.Namespace):
     # Create configuration from arguments
     config = create_package_config(args)
@@ -621,22 +653,18 @@ def run(args: argparse.Namespace):
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    current_pkg_idx = 0
-    try:
-        built_pkglist = []
-        failed_pkglist = []
+    logs_dir = Path(config.dest_dir) / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
-        for current_pkg_idx, pkg_name in enumerate(pkg_list):
-            logger.info(f"Creating {config.pkg_type} package: {pkg_name}")
+    built_pkglist = []
+    failed_pkglist = []
 
-            # Build all package variants for this package
-            # Capture per-package logs
-            logs_dir = Path(config.dest_dir) / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            pkg_log_file = logs_dir / f"{config.pkg_type}-{pkg_name}.log"
-            with capture_console(pkg_log_file):
-                output_list = build_package_variants(pkg_name, config)
-
+    with ProcessPoolExecutor(max_workers=args.parallel) as executor:
+        futures = {
+            executor.submit(build_pkg, (pkg, config, logs_dir)): pkg for pkg in pkg_list
+        }
+        for future in as_completed(futures):
+            pkg_name, output_list = future.result()
             if output_list:
                 built_pkglist.extend(output_list)
                 logger.info(
@@ -647,42 +675,21 @@ def run(args: argparse.Namespace):
                 failed_pkglist.append(pkg_name)
                 logger.error(f"Failed to build any variants for {pkg_name}")
 
-        # Clean the build directories
-        cleanup_packaging_environment(config)
+    # Clean the build directories
+    cleanup_packaging_environment(config)
 
-        if built_pkglist:
-            logger.info(f"Built packages: {built_pkglist}")
+    if built_pkglist:
+        logger.info(f"Built packages: {built_pkglist}")
 
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
+    pkglist_status = PackageList(
+        total=pkg_list,
+        built=built_pkglist,
+        skipped=skipped_list,
+        failed=failed_pkglist,
+    )
 
-        # Print build summary
-        print_build_summary(config, pkglist_status)
-    except SystemExit as e:
-        # Build aborted somewhere inside create_* functions
-        tb = traceback.extract_tb(sys.exc_info()[2])
-        if tb:
-            filename, line_no, func, text = tb[-1]
-            logger.error(f"Build aborted due to an error at {filename}:{line_no}: {e}")
-        else:
-            logger.error(f"Build aborted due to an error: {e}")
-        # Record failed package and all pending packages
-        failed_pkglist.append(pkg_list[current_pkg_idx])
-        pending_pkgs = pkg_list[current_pkg_idx + 1 :]
-        failed_pkglist.extend(pending_pkgs)
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
-        print_build_summary(config, pkglist_status)
-        # Stop the program
-        raise
+    # Print build summary
+    print_build_summary(config, pkglist_status)
 
 
 def main(argv: list[str]):
@@ -764,6 +771,14 @@ def main(argv: list[str]):
         "--pkg-names",
         nargs="+",
         help="Specify the packages to be created",
+    )
+
+    p.add_argument(
+        "-j",
+        "--parallel",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Number of parallel package builds (default: all available cores)",
     )
 
     args = p.parse_args(argv)
