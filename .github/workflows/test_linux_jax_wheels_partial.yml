@@ -270,23 +270,19 @@ jobs:
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
 
-          # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
-          # other releases keep the platform allocator.
-          XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
-
-          # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
+          # ROCm/HIP runtime tuning to avoid a pytest
           # slowdown/hang; other releases keep the runtime defaults.
           # TODO:(magaonka-amd) remove these as soon as fixes from corresponding system teams lands.
-          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
-          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
-          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
+          ROCPROFILER_QUEUE_INTERPOSITION: "0"
+          DEBUG_HIP_DYNAMIC_QUEUES: "0"
+          HSA_NO_SCRATCH_RECLAIM: "1"
 
-          # JAX 0.10.2 only: MIOpen selects convolution kernels
+          # JAX 0.10.1 and 0.10.2 only: MIOpen selects convolution kernels
           # nondeterministically on gfx94X, so the float32 conv tests flake.
           # Deselect them. Keeps convert/conversion tests, which also
           # match "conv".
           PYTEST_ADDOPTS: >-
-            ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '-k "((not conv) or convert or conversion) and not sumpool and not minmaxpool and not toeplitz and not hankel"' || '' }}
+            ${{ contains(fromJSON('["rocm-jaxlib-v0.10.1", "rocm-jaxlib-v0.10.2"]'), inputs.jax_ref) && '-k "((not conv) or convert or conversion) and not sumpool and not minmaxpool and not toeplitz and not hankel"' || '' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
@@ -307,7 +303,7 @@ jobs:
 
           # Use Python requirements lock file for correct version dependencies
           lock="jax/build/requirements_lock_${PYTHON_VERSION/./_}.txt"
-          python -m uv pip install --upgrade -c "$lock" scipy
+          python -m uv pip install --upgrade -c "$lock" scipy pytest
 
           python -m pip install pytest-json-report
 
