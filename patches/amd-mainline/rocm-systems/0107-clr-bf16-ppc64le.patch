@@ -1,0 +1,29 @@
+From 4377cdb2471a546b6ef911bbd5f99d4f34a33611 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 30 Jul 2026 00:48:23 +0000
+Subject: [PATCH] clr: disable gcc __bf16 type on powerpc
+
+GCC 14 on ppc64le does not support the __bf16 type, so fall back to
+the software bit-manipulation path for bfloat16 conversions.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/clr/hipamd/include/hip/amd_detail/amd_hip_bf16_gcc.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_bf16_gcc.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_bf16_gcc.h
+index 9c9028eb6d4..4d787cca59a 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_bf16_gcc.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_bf16_gcc.h
+@@ -9,7 +9,7 @@
+ 
+ #include "amd_hip_fp16.h"
+ 
+-#if __GNUC__ >= 13
++#if __GNUC__ >= 13 && !defined(__powerpc__) // TODO: remove powerpc exclusion when gcc supports __bf16 on ppc64le
+ #define HIP_GNUC_BF16_TYPE 1
+ #else
+ #define HIP_GNUC_BF16_TYPE 0
+-- 
+2.52.0
+
