@@ -1027,6 +1027,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
         "${_global_post_include}"
+        ${THEROCK_SUBPROJECT_CMAKE_INCLUDES}
         ${_extra_depends}
         ${_dep_provider_file}
         ${_configure_dep_stamps}
