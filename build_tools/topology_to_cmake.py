@@ -217,6 +217,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
         requires: list[str],
         *,
         disable_platforms: list[str],
+        disable_processors: list[str],
     ):
         f.write(f"therock_add_feature({feature_name}\n")
         f.write(f"  GROUP {feature_group}\n")
@@ -227,6 +228,11 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
 
         if disable_platforms:
             f.write(f"  DISABLE_PLATFORMS {' '.join(disable_platforms)}\n")
+
+        if disable_processors:
+            f.write(
+                f"  DISABLE_PROCESSORS {' '.join(disable_processors)}\n"
+            )
 
         f.write(")\n")
 
@@ -262,6 +268,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
             feature_group,
             requires,
             disable_platforms=[f"${{{disable_platforms_var}}}"],
+            disable_processors=artifact.disable_processors,
         )
         f.write("else()\n")
         write_feature_declaration(
@@ -270,6 +277,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
             feature_group,
             requires,
             disable_platforms=[],
+            disable_processors=artifact.disable_processors,
         )
         f.write("endif()\n")
         f.write(f"unset({disable_platforms_var})\n")
@@ -301,6 +309,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                 feature_group,
                 requires,
                 disable_platforms=artifact.disable_platforms,
+                disable_processors=artifact.disable_processors,
             )
         f.write("\n")
 

@@ -66,6 +66,8 @@
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
+#   disable_processors = ["aarch64"]     # Optional: CPU processors where disabled
+#                                           #   Canonical names: x86_64, aarch64, ppc64le
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -765,6 +767,7 @@ artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdl
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+disable_processors = ["ppc64le"]
 
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
@@ -772,6 +775,7 @@ type = "target-neutral"
 artifact_deps = ["rocprofiler-systems"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+disable_processors = ["ppc64le"]
 
 # --- Data Center Tools ---
 
