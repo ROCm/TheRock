@@ -38,6 +38,10 @@ on:
         required: false
         type: string
         default: ""
+      run_uninstall:
+        description: "After install+verify, uninstall packages and assert clean teardown"
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`"
         type: string
@@ -106,6 +110,10 @@ on:
         description: "Test type: quick, standard, comprehensive, full, install, or sanity (optional; leave empty for sanity)"
         type: string
         default: ""
+      run_uninstall:
+        description: "After install+verify, uninstall packages and assert clean teardown"
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`"
         type: string
@@ -207,6 +215,7 @@ jobs:
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
+      RUN_UNINSTALL: ${{ inputs.run_uninstall && '1' || '' }}
     steps:
       - name: Install System Prerequisites
         run: |
