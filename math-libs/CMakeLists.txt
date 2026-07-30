@@ -723,8 +723,8 @@ if(THEROCK_ENABLE_HIPTHREADS)
       rocm-cmake
       libhipcxx
     RUNTIME_DEPS
+      amd-llvm
       hip-clr
-      hipcc
   )
   therock_cmake_subproject_glob_c_sources(hipthreads
     SUBDIRS
