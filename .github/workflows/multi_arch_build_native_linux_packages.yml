@@ -38,6 +38,14 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      skip_pre_upload_build_verify:
+        description: "Skip build package verification between build and simulate install"
+        type: boolean
+        default: false
+      pre_upload_build_pkg_names:
+        description: "Space-separated package.json names for pre-upload build verification"
+        type: string
+        default: "amdrocm-core-sdk"
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -65,6 +73,7 @@ jobs:
       OUTPUT_DIR: output
       ARTIFACTS_DIR: output/artifacts
       PACKAGE_DIST_DIR: output/packages
+      PRE_UPLOAD_REPORT_DIR: output/pre_upload_reports
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checking out repository
@@ -90,7 +99,6 @@ jobs:
           sudo apt-get install -y llvm-20
           sudo apt-get install -y rpm debhelper-compat build-essential
           sudo apt-get install -y dpkg-dev createrepo-c
-          sudo apt-get install -y patchelf
 
       - name: Fetch Artifacts for all GPU families
         run: |
@@ -117,6 +125,22 @@ jobs:
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
+
+      - name: Pre-upload build package verification
+        if: ${{ !inputs.skip_pre_upload_build_verify }}
+        id: pre-upload-build-verify
+        run: |
+          mkdir -p "${{ env.PRE_UPLOAD_REPORT_DIR }}"
+          python ./build_tools/packaging/linux/build_package_verify.py \
+            --pkg-type "${{ inputs.native_package_type }}" \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
+            --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
+            --pkg-names ${{ inputs.pre_upload_build_pkg_names }} \
+            --report-dir "${{ env.PRE_UPLOAD_REPORT_DIR }}" \
+            --quiet
 
       - name: Simulated install Test
         id: test-packages
