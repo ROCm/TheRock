@@ -334,4 +334,4 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 ## Revision History
 
 - 2026-07-28: jorobbin: Initial version
-- 2026-07-30: jorobbin: Clarified downstream independence and llvm-cov wildcard limitations
+- 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
