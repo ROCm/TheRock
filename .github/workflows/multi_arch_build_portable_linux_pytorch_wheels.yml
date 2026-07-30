@@ -490,7 +490,7 @@ jobs:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
             { "amdgpu_family": "gfx94X-dcgpu",
-              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
+              "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
               "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
               "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
               "python_version": "${{ inputs.python_version }}",
