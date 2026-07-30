@@ -10,6 +10,10 @@ set(_optional_artifact_deps)
 
 therock_cmake_subproject_declare(therock-aux-overlay
   FPRINT_SOURCE_HASH
+  FPRINT_FILE_GLOBS
+    "${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake"
+  EXTRA_DEPENDS
+    "${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake"
   EXTERNAL_SOURCE_DIR "aux-overlay"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
@@ -18,6 +22,7 @@ therock_cmake_subproject_declare(therock-aux-overlay
     "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
+add_dependencies(therock-priority-build therock-aux-overlay+build)
 
 
 ################################################################################
