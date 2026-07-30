@@ -278,6 +278,25 @@ Modify existing test workflows:
 **Provider flexibility:**
 The specific coverage reporting service (codecov.io vs alternatives) and its detailed configuration are outside the scope of this RFC. The design supports any service that accepts lcov format reports.
 
+### Resource Allocation
+
+**Architecture scope:**
+- Coverage runs on single architecture only (typically gfx942)
+- Multi-architecture testing provides negligible gain in coverage reporting
+- No downstream testing - only the changed project itself
+
+**Node allocation:**
+- One build node per coverage-enabled project that changed
+- One test node per coverage-enabled project that changed
+- Resource sizing should align with single-project testing requirements
+
+**Expected characteristics:**
+- Build time: Similar to regular builds plus instrumentation overhead (exact metrics TBD)
+- Test time: Significantly longer than regular tests due to instrumentation (example: rocPRIM 20min → 3hr)
+- Storage: Coverage artifacts similar size to regular artifacts; profraw files are temporary and merged/deleted after report generation
+
+Specific node sizing, runtime benchmarks, and storage quotas remain open topics for discussion and will be refined based on initial deployment experience.
+
 ### Nightly Runs
 
 **Recommendation:** Achieve parity with Math CI:
