@@ -22,13 +22,10 @@ from . import utils
 
 import rocm_sdk
 
-utils.assert_is_physical_package(rocm_sdk)
-
+# Only the package *name* is resolved at import time; importing the package
+# itself (and probing its shared libraries) happens in setUpClass so this module
+# stays safe to import on any platform, even where the profiler wheel is absent.
 profiler_mod_name = di.ALL_PACKAGES["profiler"].get_py_package_name()
-profiler_mod = importlib.import_module(profiler_mod_name)
-utils.assert_is_physical_package(profiler_mod)
-
-so_paths = utils.get_module_shared_libraries(profiler_mod)
 is_windows = platform.system() == "Windows"
 
 # Bound each helper subprocess so a hung ldd / console script fails the test
@@ -71,6 +68,16 @@ CONSOLE_SCRIPT_TESTS = [
 
 @unittest.skipIf(is_windows, "rocm-profiler is not supported on Windows")
 class ROCmProfilerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        utils.assert_is_physical_package(rocm_sdk)
+        try:
+            cls.profiler_mod = importlib.import_module(profiler_mod_name)
+        except ImportError as e:
+            raise unittest.SkipTest(f"rocm-profiler is not installed: {e}")
+        utils.assert_is_physical_package(cls.profiler_mod)
+        cls.so_paths = utils.get_module_shared_libraries(cls.profiler_mod)
+
     def test_installation_layout(self):
         """The `rocm_sdk` and profiler module must be siblings on disk."""
         # A concrete __init__.py (vs. a namespace package with __file__ == None)
@@ -82,7 +89,7 @@ class ROCmProfilerTest(unittest.TestCase):
             "__init__.py",
             msg="Expected `rocm_sdk` module to be a non-namespace package",
         )
-        profiler_path = Path(profiler_mod.__file__)
+        profiler_path = Path(self.profiler_mod.__file__)
         self.assertEqual(
             profiler_path.name,
             "__init__.py",
@@ -110,7 +117,7 @@ class ROCmProfilerTest(unittest.TestCase):
         link map without running the binary).
         """
         self.assertTrue(
-            so_paths,
+            self.so_paths,
             msg="No shared libraries found in the installed profiler package",
         )
         self.assertIsNotNone(
@@ -119,7 +126,7 @@ class ROCmProfilerTest(unittest.TestCase):
         )
 
         unresolved: dict[str, list[str]] = {}
-        for so_path in so_paths:
+        for so_path in self.so_paths:
             result = subprocess.run(
                 ["ldd", str(so_path)],
                 stdout=subprocess.PIPE,
@@ -162,7 +169,7 @@ class ROCmProfilerTest(unittest.TestCase):
         points at a real target (whether materialized as a symlink or a plain
         file), so a build that drops any of them is caught.
         """
-        lib_dir = Path(profiler_mod.__file__).parent / "lib"
+        lib_dir = Path(self.profiler_mod.__file__).parent / "lib"
         alias_patterns = ("librocprof-sys*.so.*", "libprofiler-hub*.so.*")
 
         versioned = [
