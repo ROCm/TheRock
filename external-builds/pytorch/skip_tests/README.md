@@ -56,6 +56,33 @@ skip_tests = {
 The PyTorch test modules are `nn`, `cuda`, `unary_ufuncs` etc.
 This ordering is mainly added for easier debugging as otherwise it is difficult to determine which test module contains a given tests like `test_host_memory_stats` belongs to.
 
+### The `requires_devel` section
+
+A special top-level section, `requires_devel`, lists tests that need the ROCm SDK
+development package (`rocm[devel]`, i.e. the `rocm_sdk_devel` wheel). These tests
+JIT-compile C++/HIP extensions via `torch.utils.cpp_extension`, which needs the
+ROCm headers (e.g. `hipblas/hipblas.h`) and compiler that ship only in the devel
+package. Without it they fail with errors like
+`RuntimeError: Error building extension 'dummy_allocator'` or
+`fatal error: hipblas/hipblas.h: No such file or directory`.
+
+Unlike `common`, this section is applied **only when the devel package is not
+available**. `create_skip_tests.py` auto-detects availability with
+`is_devel_package_available()` (checks for the importable `rocm_sdk_devel`
+module). When `rocm[devel]` is installed, these tests are run instead of skipped.
+
+You can override detection with `--devel-available` / `--no-devel-available`
+(CLI) or the `devel_available` argument to `get_tests()` / `create_list()`
+(defaults to auto-detection):
+
+```
+# Force-skip the requires_devel tests (simulate a no-devel environment):
+python create_skip_tests.py --amdgpu-family gfx942 --no-devel-available
+
+# Run them (devel present):
+python create_skip_tests.py --amdgpu-family gfx942 --devel-available
+```
+
 When adding new tests to be skipped, consider adding a small comment why it was added, and best if there is any condition/resolution waiting when it can be taken off again.
 
 An example how it could look like is given below:
