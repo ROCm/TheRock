@@ -225,8 +225,8 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
-            --gitrepo-origin https://github.com/tvukovic-amd/pytorch.git \
-            --repo-hashtag fix/rocm-init-wheel-packaging \
+            --gitrepo-origin https://github.com/ethanwee1/pytorch.git \
+            --repo-hashtag ew/test-6965-combined \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
@@ -312,6 +312,32 @@ jobs:
             %CACHE_FLAG% ^
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
             ${{ env.optional_build_prod_arguments }}
+
+      # TEMP DEBUG (TheRock#6965): the build step's `import torch` sanity check
+      # fails loading torch_hip.dll (WinError 126). Dump its dependencies and
+      # cross-reference against torch/lib and the ROCm SDK bin dir to find the
+      # DLL that _rocm_init.py's preload list is missing. Runs even on failure.
+      - name: Debug - dump torch_hip.dll dependencies
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $site = (python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])").Trim()
+          $lib  = Join-Path $site 'torch/lib'
+          Write-Host "=== torch lib dir: $lib ==="
+          if (Test-Path $lib) { Get-ChildItem $lib -Filter *.dll | Select-Object -ExpandProperty Name | Sort-Object }
+          $init = Join-Path $site 'torch/_rocm_init.py'
+          Write-Host "=== _rocm_init.py present? ==="
+          if (Test-Path $init) { Write-Host "FOUND:"; Get-Content $init } else { Write-Host 'MISSING _rocm_init.py' }
+          Write-Host "=== dumpbin /dependents c10_hip.dll ==="
+          dumpbin /dependents (Join-Path $lib 'c10_hip.dll')
+          Write-Host "=== dumpbin /dependents torch_hip.dll ==="
+          dumpbin /dependents (Join-Path $lib 'torch_hip.dll')
+          $rocmbin = (python -m rocm_sdk path --bin).Trim()
+          Write-Host "=== ROCm SDK bin dir: $rocmbin ==="
+          if (Test-Path $rocmbin) { Get-ChildItem $rocmbin -Filter *.dll | Select-Object -ExpandProperty Name | Sort-Object }
+          Write-Host "=== Try loading torch_hip.dll with torch/lib + ROCm bin on the DLL search path ==="
+          python -c "import os,ctypes; [os.add_dll_directory(p) for p in [r'$lib', r'$rocmbin'] if os.path.isdir(p)]; ctypes.WinDLL(os.path.join(r'$lib','torch_hip.dll')); print('torch_hip.dll LOADED OK once ROCm bin was added to the search path')"
 
       - name: Report cache stats
         if: ${{ !cancelled() && inputs.cache_type != 'none' }}
