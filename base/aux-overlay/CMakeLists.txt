@@ -54,6 +54,11 @@ add_library(aux-overlay-build-flags-conformance OBJECT
   build_flags_conformance.c
   build_flags_conformance.cpp
 )
+set_target_properties(aux-overlay-build-flags-conformance PROPERTIES
+  C_STANDARD 11
+  C_STANDARD_REQUIRED YES
+  C_EXTENSIONS NO
+)
 target_include_directories(aux-overlay-build-flags-conformance PRIVATE
   "${CMAKE_CURRENT_BINARY_DIR}"
 )
