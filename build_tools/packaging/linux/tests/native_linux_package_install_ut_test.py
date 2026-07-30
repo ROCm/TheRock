@@ -1139,12 +1139,74 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertTrue(self._make().verify_root_ownership())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_root_ownership_python",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_find_not_available(self, mock_run):
-        # If find cannot be executed (OSError), the check is skipped (non-fatal).
+    def test_falls_back_to_python_when_find_not_available(
+        self, mock_run, mock_fallback
+    ):
+        # If find cannot be executed (OSError), fall back to the Python scan
+        # rather than silently skipping; the fallback result is returned.
         mock_run.side_effect = OSError("find not found")
         with _suppress_script_output():
             self.assertTrue(self._make().verify_root_ownership())
+        mock_fallback.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_root_ownership_python",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_find_missing_fallback_can_fail(self, mock_run, mock_fallback):
+        # When find is missing and the Python fallback finds offenders, the
+        # overall check fails.
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_root_ownership())
+        mock_fallback.assert_called_once()
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_passes_when_all_root(self, mock_walk, mock_lstat):
+        # Python fallback returns True when every entry is owned by root:root.
+        mock_walk.return_value = [
+            ("/opt/rocm/core", ["bin"], ["a.txt"]),
+            ("/opt/rocm/core/bin", [], ["rocminfo"]),
+        ]
+        mock_lstat.return_value = MagicMock(st_uid=0, st_gid=0)
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_entry(self, mock_walk, mock_lstat):
+        # Python fallback returns False when any entry is not owned by root.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["a.txt", "b.txt"])]
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0),
+            MagicMock(st_uid=1000, st_gid=1000),
+        ]
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_skips_unstatable_entries(self, mock_walk, mock_lstat):
+        # Entries that cannot be lstat'd (e.g. race/permission) are skipped, not fatal.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["gone.txt"])]
+        mock_lstat.side_effect = OSError("no such file")
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+            )
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,

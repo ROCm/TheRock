@@ -985,7 +985,8 @@ gpgcheck=0
 
         Uses ``find`` (C-level traversal) rather than a Python walk with per-file
         ``lstat`` for speed on large install trees. Flags any path whose owner uid
-        or group gid is not 0.
+        or group gid is not 0. If ``find`` is unavailable on the host, falls back
+        to a pure-Python ``os.walk`` scan so the check is not silently skipped.
 
         Returns:
         True if every file is owned by root:root (or the check could not be run),
@@ -1018,14 +1019,47 @@ gpgcheck=0
             print(" [WARN] Ownership check timed out; skipping")
             return True
         except OSError as e:
-            print(f" [WARN] Could not run ownership check: {e}")
-            return True
+            # find not available on this host; fall back to a Python walk so the
+            # check still runs rather than being silently skipped.
+            print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
+            return self._verify_root_ownership_python(Path(install_prefix))
 
         bad = [line for line in result.stdout.splitlines() if line]
         if bad:
             print(f" [FAIL] {len(bad)} file(s) not owned by root:")
             for line in bad[:10]:
                 print(f"   {line}")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root")
+        return True
+
+    def _verify_root_ownership_python(self, install_path: Path) -> bool:
+        """Pure-Python fallback for ownership verification when ``find`` is missing.
+
+        Walks the install tree with ``os.walk`` (does not follow symlinked
+        directories) and ``os.lstat`` each entry, flagging any whose owner uid or
+        group gid is not 0. Slower than ``find`` on large trees but portable.
+
+        Returns:
+        True if every entry is owned by root:root, False if any offending entry
+        is found.
+        """
+        bad: list[str] = []
+        for root, dirs, files in os.walk(install_path):
+            for name in dirs + files:
+                entry = os.path.join(root, name)
+                try:
+                    st = os.lstat(entry)
+                except OSError:
+                    continue
+                if st.st_uid != 0 or st.st_gid != 0:
+                    bad.append(entry)
+        if bad:
+            print(f" [FAIL] {len(bad)} file(s) not owned by root:")
+            for entry in bad[:10]:
+                print(f"   {entry}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
