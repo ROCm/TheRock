@@ -12,6 +12,7 @@ import importlib
 import locale
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 from typing import NamedTuple
 import unittest
@@ -108,6 +109,10 @@ class ROCmProfilerTest(unittest.TestCase):
             so_paths,
             msg="No shared libraries found in the installed profiler package",
         )
+        self.assertIsNotNone(
+            shutil.which("ldd"),
+            msg="ldd not found on PATH; required to verify library dependencies",
+        )
 
         unresolved: dict[str, list[str]] = {}
         for so_path in so_paths:
@@ -117,6 +122,14 @@ class ROCmProfilerTest(unittest.TestCase):
                 stderr=subprocess.STDOUT,
                 encoding=locale.getpreferredencoding(),
             )
+            # ldd exits 0 even when a NEEDED dependency is "not found", so a
+            # non-zero exit means ldd itself failed (bad file, unreadable, etc.)
+            # and the "not found" scan below cannot be trusted for this object.
+            if result.returncode != 0:
+                unresolved[so_path.name] = [
+                    f"ldd failed (exit {result.returncode}): {result.stdout.strip()}"
+                ]
+                continue
             missing = [
                 line.strip()
                 for line in result.stdout.splitlines()
