@@ -266,6 +266,18 @@ Modify existing test workflows:
 - Coverage data: `coverage.profdata`
 - Coverage report: `coverage.info` (lcov format)
 
+### Coverage Report Upload
+
+**Codecov.io integration:**
+- Already configured for Math CI at https://app.codecov.io/gh/ROCm/rocm-libraries
+- Upload token stored as GitHub repository secret
+- Service handles PR commenting and coverage aggregation automatically
+- Configuration via `codecov.yaml` at repository root
+- Upload step in CI workflow sends `coverage.info` to codecov.io
+
+**Provider flexibility:**
+The specific coverage reporting service (codecov.io vs alternatives) and its detailed configuration are outside the scope of this RFC. The design supports any service that accepts lcov format reports.
+
 ### Nightly Runs
 
 **Recommendation:** Achieve parity with Math CI:
