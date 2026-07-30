@@ -99,6 +99,7 @@ def find_test_executables():
         "test_api": {"min_max_constant_buffer_size"},
         "test_buffers": {"buffer_copy"},
         "test_printf": {"vector", "length_specifier"},
+        "test_svm": {"svm_migrate"},
     }
 
     test_executables = []
