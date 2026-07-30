@@ -146,7 +146,7 @@ jobs:
         env:
           STEP_NAME: "Driver GPU sanity check" # name that shows up in prolense dashboards
           STEP_TIMEOUT_MINUTES: "5" # should match timeout-minutes specified above at this step
-          NO_OUTPUT_TIMEOUT: "3" # prolense timesout the step at 3 mins if no-output; the 2 min buffer to timeout-minutes (5 min) allows prolense to report status before GitHub Actions terminates the step
+          NO_OUTPUT_TIMEOUT: "3" # prolense times out the step at 3 mins if no-output (matching previous timeout-minutes); the 2 min buffer to timeout-minutes (5 min) allows prolense to report status before GitHub Actions terminates the step
           SELF_HEALING_ACTIONS: "*:reboot[threshold=7200]" # reboot if error occurs in this step and server uptime is > threshold value
         run: |
           python ./build_tools/print_driver_gpu_info.py
