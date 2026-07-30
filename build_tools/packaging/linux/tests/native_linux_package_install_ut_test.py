@@ -974,6 +974,20 @@ class ArgvFromCiEnvTest(unittest.TestCase):
         with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
             self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
 
+    def test_adds_with_uninstall_when_run_uninstall_set(self):
+        env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+            "RUN_UNINSTALL": "1",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--with-uninstall", argv)
+
 
 class RunTestsTestTypeTest(unittest.TestCase):
     """Tests for run_tests() early exit paths for install."""
@@ -993,7 +1007,21 @@ class RunTestsTestTypeTest(unittest.TestCase):
             pkg_type=None,
             rocm_version=None,
             build_variant="",
+            with_uninstall=False,
         )
+
+    def _args_for_uninstall_run_tests(self, test_type: str, *, with_uninstall: bool = False):
+        """Args for run_tests() paths that exercise --with-uninstall.
+
+        ``rocm_version`` is set here (not in ``_base_args``) so Step 1 does not
+        duplicate ``users/acheruva/update_pkg_linux_tests`` / CHECKIN. After
+        rebase onto that branch, ``_base_args`` will already include
+        ``rocm_version=None``.
+        """
+        args = self._base_args(test_type)
+        args.rocm_version = None
+        args.with_uninstall = with_uninstall
+        return args
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -1022,6 +1050,95 @@ class RunTestsTestTypeTest(unittest.TestCase):
         with _suppress_script_output():
             rc = native_linux_package_install_test.run_tests(args)
         self.assertEqual(rc, 1)
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_uninstall_and_verify",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_basic_verification",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=True,
+    )
+    def test_sanity_runs_uninstall_when_flag_set(
+        self, mock_repo_setup, mock_basic, mock_uninstall
+    ):
+        args = self._args_for_uninstall_run_tests("sanity", with_uninstall=True)
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 0)
+        mock_uninstall.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_uninstall_and_verify",
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_basic_verification",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=True,
+    )
+    def test_sanity_skips_uninstall_when_flag_not_set(
+        self, mock_repo_setup, mock_basic, mock_uninstall
+    ):
+        args = self._args_for_uninstall_run_tests("sanity")
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 0)
+        mock_uninstall.assert_not_called()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_uninstall_and_verify",
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_basic_verification",
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=True,
+    )
+    def test_install_skips_uninstall_even_when_flag_set(
+        self, mock_repo_setup, mock_basic, mock_uninstall
+    ):
+        args = self._args_for_uninstall_run_tests("install", with_uninstall=True)
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 0)
+        mock_uninstall.assert_not_called()
+        mock_basic.assert_not_called()
+
+    def test_parse_cli_with_uninstall_flag(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--with-uninstall",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertTrue(args.with_uninstall)
 
     def test_parse_cli_rocm_version_with_multiple_gfx_arch(self):
         args = native_linux_package_install_test.parse_cli_arguments(
@@ -2034,6 +2151,214 @@ class TestRdhcTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertFalse(t.test_rdhc())
+
+
+class ListInstalledRocmPackagesTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.list_installed_rocm_packages()."""
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_deb_parses_installed_package_names(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                "Desired=Unknown/Install/Remove/Purge/Hold\n"
+                "ii  amdrocm  1.0  amd64  ROCm metapackage\n"
+                "ii  libc6  2.35  amd64  GNU C Library\n"
+                "ii  rocm-dev  1.0  amd64  ROCm dev\n"
+            ),
+        )
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        names = t.list_installed_rocm_packages()
+        self.assertEqual(names, ["amdrocm", "rocm-dev"])
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_rpm_parses_installed_package_names(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="amdrocm-7.13-1.x86_64\nkernel-5.14-1.x86_64\n",
+        )
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="rhel8",
+        )
+        names = t.list_installed_rocm_packages()
+        self.assertEqual(names, ["amdrocm-7.13-1.x86_64"])
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_empty_list_on_query_failure(self, mock_run):
+        import subprocess
+
+        mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        self.assertEqual(t.list_installed_rocm_packages(), [])
+
+
+class UninstallDebPackagesTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.uninstall_packages() on DEB."""
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_remove_and_autoremove_in_reverse_order(self, mock_streaming):
+        mock_streaming.return_value = 0
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch=["gfx94x", "gfx1100"],
+            rocm_version="7.13",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.uninstall_packages())
+        self.assertEqual(mock_streaming.call_count, 2)
+        remove_cmd = mock_streaming.call_args_list[0][0][0]
+        autoremove_cmd = mock_streaming.call_args_list[1][0][0]
+        self.assertEqual(remove_cmd[:4], ["sudo", "apt", "remove", "-y"])
+        self.assertEqual(
+            remove_cmd[4:],
+            [
+                "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm7.13-gfx1100",
+                "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm7.13-gfx94x",
+            ],
+        )
+        self.assertEqual(autoremove_cmd, ["sudo", "apt", "autoremove", "-y"])
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_returns_false_when_remove_fails(self, mock_streaming):
+        mock_streaming.return_value = 1
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx94x",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.uninstall_packages())
+
+
+class UninstallRpmPackagesTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.uninstall_packages() on RPM."""
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_dnf_remove_for_rhel(self, mock_streaming):
+        mock_streaming.return_value = 0
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="rhel8",
+            gfx_arch="gfx94x",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.uninstall_packages())
+        cmd = mock_streaming.call_args[0][0]
+        self.assertEqual(cmd[:3], ["dnf", "remove", "-y"])
+        self.assertIn("amdrocm-core-sdk", cmd)
+        self.assertIn("amdrocm", cmd)
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_zypper_remove_for_sles(self, mock_streaming):
+        mock_streaming.return_value = 0
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="sles16",
+            gfx_arch="gfx94x",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.uninstall_packages())
+        cmd = mock_streaming.call_args[0][0]
+        self.assertEqual(cmd[:4], ["zypper", "--non-interactive", "remove", "-y"])
+        self.assertEqual(mock_streaming.call_count, 1)
+
+
+class RunUninstallVerificationTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.run_uninstall_verification()."""
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "list_installed_rocm_packages",
+        return_value=[],
+    )
+    def test_passes_when_no_packages_remain(self, mock_list):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix="/nonexistent/prefix",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.run_uninstall_verification())
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "list_installed_rocm_packages",
+        return_value=["amdrocm"],
+    )
+    def test_fails_when_packages_remain(self, mock_list):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.run_uninstall_verification())
+
+
+class RunUninstallAndVerifyTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.run_uninstall_and_verify()."""
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_uninstall_verification",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "uninstall_packages",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "list_installed_rocm_packages",
+        return_value=["amdrocm"],
+    )
+    def test_orchestrates_uninstall_and_verify(
+        self, mock_list, mock_uninstall, mock_verify
+    ):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.run_uninstall_and_verify())
+        mock_list.assert_called()
+        mock_uninstall.assert_called_once()
+        mock_verify.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_uninstall_verification",
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "uninstall_packages",
+        return_value=False,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "list_installed_rocm_packages",
+        return_value=[],
+    )
+    def test_returns_false_when_uninstall_fails(
+        self, mock_list, mock_uninstall, mock_verify
+    ):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.run_uninstall_and_verify())
+        mock_verify.assert_not_called()
 
 
 class RunStreamingTest(unittest.TestCase):
