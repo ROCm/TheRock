@@ -11,7 +11,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent / "external-builds" / "pytorch"))
+sys.path.insert(
+    0, os.fspath(Path(__file__).parent.parent.parent / "external-builds" / "pytorch")
+)
 
 from build_prod_wheels import compute_build_version, get_source_commit_short
 
@@ -37,9 +39,7 @@ class ComputeBuildVersionTest(unittest.TestCase):
         self.assertEqual(version, "2.12.0a0+git1a2b3c4d.rocm7.10.0")
 
     def test_dev_release_without_commit_falls_back_to_suffix(self):
-        with mock.patch(
-            "build_prod_wheels.get_source_commit_short", return_value=""
-        ):
+        with mock.patch("build_prod_wheels.get_source_commit_short", return_value=""):
             version = compute_build_version(self.source_dir, "+rocm7.10.0", "dev")
         self.assertEqual(version, "2.12.0a0+rocm7.10.0")
 
@@ -52,9 +52,7 @@ class GetSourceCommitShortTest(unittest.TestCase):
             subprocess.check_call(
                 ["git", "config", "user.email", "test@example.com"], cwd=repo
             )
-            subprocess.check_call(
-                ["git", "config", "user.name", "Test User"], cwd=repo
-            )
+            subprocess.check_call(["git", "config", "user.name", "Test User"], cwd=repo)
             (repo / "version.txt").write_text("2.12.0a0\n")
             subprocess.check_call(["git", "add", "version.txt"], cwd=repo)
             subprocess.check_call(["git", "commit", "-m", "init"], cwd=repo)
