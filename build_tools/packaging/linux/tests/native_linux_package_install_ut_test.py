@@ -989,10 +989,16 @@ class RunBasicVerificationTest(unittest.TestCase):
         )
         self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_root_ownership",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_enough_components_found(self, mock_run):
+    def test_returns_true_when_enough_components_found(self, mock_run, mock_owner):
         # Test that run_basic_verification returns True when install_prefix exists and at least
         # VERIFY_MIN_COMPONENTS key components exist; subprocess (dpkg/rpm, rocminfo) is mocked.
+        # Ownership check is stubbed here (covered separately in VerifyRootOwnershipTest).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -1020,8 +1026,15 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_root_ownership",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_called_process_error_when_querying_packages(self, mock_run):
+    def test_handles_called_process_error_when_querying_packages(
+        self, mock_run, mock_owner
+    ):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
 
@@ -1038,8 +1051,13 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertTrue(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_root_ownership",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_rocminfo_timeout(self, mock_run):
+    def test_handles_rocminfo_timeout(self, mock_run, mock_owner):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
 
@@ -1058,6 +1076,98 @@ class RunBasicVerificationTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertTrue(t.run_basic_verification())
+
+
+class VerifyRootOwnershipTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_root_ownership()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_find_reports_no_offending_files(self, mock_run):
+        # Empty find output means every file is owned by root:root.
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_root_ownership())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_find_reports_offending_files(self, mock_run):
+        # Non-empty find output lists files not owned by root:root -> failure.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/lib/bar.so\n",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_root_ownership())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_ignores_blank_lines_in_find_output(self, mock_run):
+        # Trailing/blank lines alone should not be treated as offending files.
+        mock_run.return_value = MagicMock(returncode=0, stdout="\n\n")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_root_ownership())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_builds_expected_find_command(self, mock_run):
+        # Verify the find invocation checks both uid and gid against 0 under the prefix.
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with _suppress_script_output():
+            self._make("/opt/rocm/core").verify_root_ownership()
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[0], "find")
+        self.assertEqual(cmd[1], "/opt/rocm/core")
+        self.assertIn("-uid", cmd)
+        self.assertIn("-gid", cmd)
+        self.assertIn("!", cmd)
+        # timeout passed as keyword
+        self.assertEqual(
+            mock_run.call_args[1]["timeout"],
+            native_linux_package_install_test.OWNERSHIP_TIMEOUT_SEC,
+        )
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_find_times_out(self, mock_run):
+        # A timeout is non-fatal: the check is skipped with a warning and passes.
+        import subprocess
+
+        mock_run.side_effect = subprocess.TimeoutExpired("find", 120)
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_root_ownership())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_find_not_available(self, mock_run):
+        # If find cannot be executed (OSError), the check is skipped (non-fatal).
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_root_ownership())
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_root_ownership",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_ownership_fails(self, mock_run, mock_owner):
+        # Even with enough key components present, a failed ownership check fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_owner.assert_called_once()
 
 
 class SetupGpgKeyTest(unittest.TestCase):
