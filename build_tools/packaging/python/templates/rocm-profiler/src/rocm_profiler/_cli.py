@@ -23,22 +23,37 @@ def _extend_ld_library_path() -> None:
     if platform.system() == "Windows":
         return
 
+    paths_to_add: list[Path] = []
+
+    profiler_lib_path = _get_profiler_module_path() / "lib"
+    if profiler_lib_path.exists():
+        paths_to_add.append(profiler_lib_path)
+
     try:
         sdk_module = importlib.import_module("_rocm_sdk_core")
     except ModuleNotFoundError:
-        return
+        sdk_module = None
 
-    sdk_path = Path(sdk_module.__file__).parent
-    sysdeps_path = sdk_path / "lib" / "rocm_sysdeps" / "lib"
-    if not sysdeps_path.exists():
+    if sdk_module is not None:
+        sdk_path = Path(sdk_module.__file__).parent
+        sysdeps_path = sdk_path / "lib" / "rocm_sysdeps" / "lib"
+        if sysdeps_path.exists():
+            paths_to_add.append(sysdeps_path)
+
+    if not paths_to_add:
         return
 
     existing = os.environ.get("LD_LIBRARY_PATH", "")
     existing_parts = [p for p in existing.split(":") if p]
-    sysdeps_str = str(sysdeps_path)
 
-    if sysdeps_str not in existing_parts:
-        os.environ["LD_LIBRARY_PATH"] = ":".join([sysdeps_str, *existing_parts])
+    new_parts: list[str] = []
+    for path in paths_to_add:
+        path_str = str(path)
+        if path_str not in existing_parts and path_str not in new_parts:
+            new_parts.append(path_str)
+
+    if new_parts:
+        os.environ["LD_LIBRARY_PATH"] = ":".join([*new_parts, *existing_parts])
 
 
 def _extend_pythonpath_for_compute() -> None:
