@@ -289,7 +289,8 @@ class ROCmBuildFlagsTest(unittest.TestCase):
                 )
                 args = [extra_arg] if extra_arg else []
                 result = run_cmake(source_dir, build_dir, *args, expect_success=False)
-                self.assertIn(expected_message, result.stdout)
+                normalized_output = " ".join(result.stdout.split())
+                self.assertIn(expected_message, normalized_output)
 
     def test_missing_state_file_and_provider_flag_are_errors(self):
         with tempfile.TemporaryDirectory() as temp_dir_str:

@@ -22,7 +22,6 @@ therock_cmake_subproject_declare(therock-aux-overlay
     "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
-add_dependencies(therock-priority-build therock-aux-overlay+build)
 
 
 ################################################################################
