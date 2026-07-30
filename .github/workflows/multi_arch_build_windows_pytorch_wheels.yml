@@ -225,7 +225,8 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
-            --repo-hashtag nightly \
+            --gitrepo-origin https://github.com/tvukovic-amd/pytorch.git \
+            --repo-hashtag fix/rocm-init-wheel-packaging \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
