@@ -9,6 +9,14 @@ owner-prefix so APT resolves package files through the correct CloudFront path,
 merges all stanzas, regenerates Release/InRelease, and writes output locally
 and/or uploads to S3.
 
+Limitations:
+  - Packages index compression: tries .xz, .bz2, .gz, and uncompressed in
+    APT preference order. Fails fast if none are available for a source.
+  - A single --architecture value is supported per run. To serve multiple
+    architectures, run the script once per architecture. Note that each run
+    overwrites dists/<suite>/Release, so multi-arch runs must use separate
+    --output-prefix values or the Release file must be manually merged.
+
 Usage:
     python aggregate_deb_metadata.py \\
         --source "core,https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404,dists,pool/core" \\
@@ -44,12 +52,15 @@ At least one of --output-dir or --output-bucket must be provided.
 """
 
 import argparse
+import bz2
 import gzip
 import hashlib
+import lzma
 import os
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,20 +108,45 @@ def fetch_bytes(url: str) -> bytes:
         return resp.read()
 
 
-def fetch_packages_gz(
+def fetch_packages(
     base_url: str, style: str, suite: str, component: str, arch: str
 ) -> bytes:
     """Download and return decompressed Packages content.
 
-    style="dists" → standard: <base>/dists/<suite>/<component>/binary-<arch>/Packages.gz
-    style="flat"  → flat repo: <base>/Packages.gz  (deb [...] <url> /)
+    Tries compression formats in APT preference order: .xz, .bz2, .gz,
+    then uncompressed. Raises RuntimeError if none are available.
+
+    style="dists" → standard: <base>/dists/<suite>/<component>/binary-<arch>/Packages*
+    style="flat"  → flat repo: <base>/Packages*  (deb [...] <url> /)
     """
     if style == "flat":
-        url = f"{base_url.rstrip('/')}/Packages.gz"
+        base_path = f"{base_url.rstrip('/')}/Packages"
     else:
-        url = f"{base_url.rstrip('/')}/dists/{suite}/{component}/binary-{arch}/Packages.gz"
-    compressed = fetch_bytes(url)
-    return gzip.decompress(compressed)
+        base_path = (
+            f"{base_url.rstrip('/')}/dists/{suite}/{component}/binary-{arch}/Packages"
+        )
+
+    candidates = [
+        (f"{base_path}.xz", lzma.decompress),
+        (f"{base_path}.bz2", bz2.decompress),
+        (f"{base_path}.gz", gzip.decompress),
+        (base_path, lambda b: b),  # uncompressed
+    ]
+
+    for url, decompress in candidates:
+        try:
+            compressed = fetch_bytes(url)
+            return decompress(compressed)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print(f"  Not found: {url} — trying next format")
+                continue
+            raise
+
+    raise RuntimeError(
+        f"No Packages index found for [{base_url}] — "
+        f"tried .xz, .bz2, .gz, and uncompressed."
+    )
 
 
 def parse_stanzas(packages_text: str) -> list[dict[str, str]]:
@@ -380,7 +416,7 @@ def main():
         print(f"         style={style}  pool_prefix={pool_prefix}")
 
         try:
-            raw = fetch_packages_gz(base_url, style, suite, component, arch)
+            raw = fetch_packages(base_url, style, suite, component, arch)
         except Exception as e:
             sys.exit(
                 f"ERROR: Failed to fetch Packages.gz from [{name}] {base_url}: {e}"
