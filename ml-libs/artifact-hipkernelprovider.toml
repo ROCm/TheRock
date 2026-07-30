@@ -26,6 +26,8 @@ include = [
   "bin/hip_kernel_provider/*.py",
   "bin/hip_kernel_provider/golden/**",
   "bin/hip_kernel_provider/rocke/**",
+  # rocKE Python wheels (rocke + rocke-library)
+  "bin/hip_kernel_provider/wheels/*.whl",
   # rocKE pytest suite
   "bin/hip_kernel_provider/tests/**",
 ]
