@@ -221,19 +221,50 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
 Modify existing test workflows:
 
 **`therock-ci-test-packages.yml`:**
-- Add `coverage_enabled` passthrough flag
+- Add `coverage_enabled` input parameter (boolean, default: false)
+- Pass through to `therock-ci-test-component.yml`
 
-**`therock-ci-test-components.yml`:**
-- Condition on `coverage_enabled` flag
-- Download artifacts
-- Run tests with `LLVM_PROFILE_FILE` environment variable set
-- Execute post-test coverage commands:
-  ```bash
-  llvm-profdata merge <profraw_dir>/*.profraw -o coverage.profdata
-  llvm-cov show -object <lib_or_test_binary> -instr-profile=coverage.profdata
-  llvm-cov export -format=lcov -object <lib_or_test_binary> -instr-profile=coverage.profdata > coverage.lcov
-  ```
-- Upload to codecov.io
+**`therock-ci-test-component.yml` modifications:**
+
+1. **Input parameter:**
+   ```yaml
+   coverage_enabled:
+     description: "When true, collect llvm profraw from the test run and generate a coverage report."
+     type: boolean
+     default: false
+   ```
+
+2. **Artifact download:**
+   - Pass `AMDGPU_TARGETS: ${{ inputs.coverage_enabled && inputs.amdgpu_families || '' }}` to setup_test_environment
+   - Downloads coverage-instrumented artifacts when coverage_enabled is true
+
+3. **Prepare coverage profile directory** (conditional on `coverage_enabled`):
+   ```bash
+   mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
+   echo "LLVM_PROFILE_FILE=${GITHUB_WORKSPACE}/coverage-report/profraw/${TEST_COMPONENT}-shard${matrix.shard}-%p-%m.profraw" >> "${GITHUB_ENV}"
+   ```
+   - Creates directory for profraw files
+   - Sets `LLVM_PROFILE_FILE` environment variable with component name and shard index
+   - Pattern `%p-%m` provides unique identifiers per process/module
+
+4. **Merge profraw and generate coverage report** (conditional on `coverage_enabled`):
+   ```bash
+   cd ${GITHUB_WORKSPACE}/coverage-report
+   ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-profdata merge -sparse -o coverage.profdata profraw/*.profraw
+   ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-cov export \
+     -object ${GITHUB_WORKSPACE}/build/lib/lib${COMPONENT_NAME}.so \
+     -instr-profile=coverage.profdata --format=lcov > coverage.info
+   ```
+   - Merges all profraw files from all shards into single profdata
+   - Exports coverage in lcov format for codecov.io upload
+   - Uses component-specific library object file
+
+**Artifact naming conventions:**
+- Coverage builds use same artifact naming as regular builds
+- Artifacts downloaded via existing `fetch_artifact_args` mechanism
+- Profraw files: `${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw`
+- Coverage data: `coverage.profdata`
+- Coverage report: `coverage.info` (lcov format)
 
 ### Nightly Runs
 
