@@ -867,13 +867,15 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "set(THEROCK_USER_POST_HOOK \"@_post_hook_path@\")\n")
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
-  # The subproject toolchain sets CMAKE_PROJECT_TOP_LEVEL_INCLUDES, which try_compile
-  # re-reads during compiler detection, so this init file also runs inside the scratch
-  # project. Do not schedule the global post hook there: it references targets that only
-  # exist in the real subproject (aborting the compiler check) and its rpath/debug-split
-  # fixups are meaningless for a throwaway project. The scratch project is named
-  # CMAKE_TRY_COMPILE.
-  string(APPEND _init_contents "if(NOT CMAKE_PROJECT_NAME STREQUAL \"CMAKE_TRY_COMPILE\")\n")
+  # The subproject toolchain sets CMAKE_PROJECT_TOP_LEVEL_INCLUDES, so the
+  # generated init file is also replayed inside nested try_compile()/try_run()
+  # scratch-project configures, not just the real subproject configure.
+  #
+  # Do not schedule the global post hook there: it may reference targets that
+  # only exist in the real subproject, and its rpath/debug-split/stamp-touch
+  # side effects are meaningless for throwaway probe builds.
+  string(APPEND _init_contents "get_property(_therock_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)\n")
+  string(APPEND _init_contents "if(NOT _therock_in_try_compile)\n")
   string(APPEND _init_contents "  cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
   string(APPEND _init_contents "endif()\n")
   foreach(_addl_cmake_include ${_cmake_includes})
