@@ -17,8 +17,8 @@ import summarize_test_pytorch_workflow
 def _make_args(
     index_url,
     device_extras="",
-    torch_version="2.10.0+rocm7.12.0a20260501",
-    pytorch_git_ref="release/2.10",
+    torch_version="2.11.0+rocm7.12.0a20260501",
+    pytorch_git_ref="release/2.11",
     python_version="3.12",
 ):
     return argparse.Namespace(
