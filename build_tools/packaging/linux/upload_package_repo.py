@@ -42,14 +42,19 @@ from pathlib import Path
 
 _THIS_DIR = Path(__file__).resolve().parent
 _BUILD_TOOLS_DIR = _THIS_DIR.parent.parent
+_GITHUB_ACTIONS_DIR = _BUILD_TOOLS_DIR / "github_actions"
 
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+if str(_GITHUB_ACTIONS_DIR) not in sys.path:
+    sys.path.insert(0, str(_GITHUB_ACTIONS_DIR))
 
+from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions_api import gha_append_step_summary
 
 
 def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
@@ -645,6 +650,45 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
+def upload_packaging_logs(
+    package_dir: Path,
+    pkg_type: str,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+) -> str | None:
+    """Upload native packaging logs to S3.
+
+    Uploads all log files from the packaging logs directory to the S3 location
+    specified by WorkflowOutputRoot.native_linux_packages_log_dir().
+
+    Args:
+        package_dir: Directory containing built packages (logs are in logs/ subdir)
+        pkg_type: Package type ('deb' or 'rpm')
+        output_root: WorkflowOutputRoot for computing S3 paths
+        backend: Storage backend for uploads
+
+    Returns:
+        URL to the log index page, or None if no logs were uploaded
+    """
+    log_dir = package_dir / "logs"
+    if not log_dir.is_dir():
+        print(f"[INFO] Log directory {log_dir} not found. Skipping log upload.")
+        return None
+
+    log_files = list(log_dir.glob("*.log"))
+    if not log_files:
+        print(f"[INFO] No log files found in {log_dir}. Skipping log upload.")
+        return None
+
+    print(f"Uploading {len(log_files)} packaging log files...")
+    dest_location = output_root.native_linux_packages_log_dir(pkg_type)
+    backend.upload_directory(log_dir, dest_location)
+
+    log_index_url = output_root.native_linux_packages_log_index(pkg_type).https_url
+    print(f"Packaging logs uploaded to: {log_index_url}")
+    return log_index_url
+
+
 def _emit_github_output(key: str, value: str) -> None:
     """Write a key=value pair to $GITHUB_OUTPUT if running in GitHub Actions."""
     github_output = os.environ.get("GITHUB_OUTPUT")
@@ -776,6 +820,26 @@ def main():
 
     print(f"Package repository URL: {install_url}")
     _emit_github_output("package_repository_url", install_url)
+
+    # Upload packaging logs and write step summary (only available with new-style --run-id)
+    log_index_url = None
+    if args.run_id:
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id=args.run_id, platform="linux"
+        )
+        backend = create_storage_backend()
+        log_index_url = upload_packaging_logs(
+            package_dir, args.pkg_type, output_root, backend
+        )
+        if log_index_url:
+            _emit_github_output("packaging_logs_url", log_index_url)
+
+    # Write GitHub Actions step summary
+    pkg_type_upper = args.pkg_type.upper()
+    gha_append_step_summary(f"### {pkg_type_upper} Package Build Results")
+    gha_append_step_summary(f"[Package Repository]({install_url})")
+    if log_index_url:
+        gha_append_step_summary(f"[Packaging Logs]({log_index_url})")
 
 
 if __name__ == "__main__":
