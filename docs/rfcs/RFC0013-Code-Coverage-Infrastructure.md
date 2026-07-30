@@ -168,13 +168,29 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
   - Negligible gain from multi-arch coverage
 
 #### Build Phase
-1. Determine coverage flag from PR changes:
-   ```bash
-   python build_tools/therock_configure_coverage.py
-   ```
-   Output: `-D<PROJECT_NAME>_ENABLE_COVERAGE=ON`
+1. Determine coverage-enabled projects from PR changes via `therock_configure_coverage.py`:
+   - Leverages existing TheRock CI infrastructure (`therock_matrix.py`) to detect changed projects
+   - Maintains a whitelist of coverage-enabled projects in `COVERAGE_PROJECT_METADATA`
+   - For each coverage-enabled project that changed:
+     - Outputs project-specific CMake options (e.g., `-DTHEROCK_ENABLE_RAND=ON -DTHEROCK_ENABLE_ALL=OFF`)
+     - Pins build to single project only (not merged mega-group)
+     - References project's `test_categories_coverage.yaml` file
+   - Creates independent coverage job per project (even if multiple projects changed)
+   - **Multi-component PRs**: Each coverage-enabled project gets its own isolated build → test → report pipeline
 
-2. Run coverage build:
+   Example metadata output for hipRAND:
+   ```json
+   {
+     "project_name": "HIPRAND",
+     "cmake_target": "hipRAND",
+     "build_dir": "TheRock/build-coverage/ml-libs/hipRAND/build",
+     "cmake_options": "-DTHEROCK_ENABLE_RAND=ON -DTHEROCK_ENABLE_ALL=OFF",
+     "coverage_config": "projects/hiprand/test_categories_coverage.yaml",
+     "projects_to_test": "hiprand"
+   }
+   ```
+
+2. Run coverage build for each project:
    ```bash
    cmake -B build -GNinja \
      -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
