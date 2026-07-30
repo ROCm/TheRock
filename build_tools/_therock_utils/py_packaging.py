@@ -38,6 +38,15 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
+# Unversioned .so symlinks that must be present in the runtime package (not
+# just in devel) because they are dlopen'd at runtime by their unversioned name.
+# Example: PyTorch's IntraNodeComm::getNvlMesh calls dlopen("libamd_smi.so").
+_RUNTIME_DLOPEN_UNVERSIONED_LIBS: frozenset[str] = frozenset(
+    [
+        "libamd_smi.so",
+    ]
+)
+
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -450,6 +459,11 @@ class PopulatedDistPackage:
         # Case 2: Shared library.
         if file_type == "so" and (soname := get_soname(link_target)):
             if soname == src_entry.name:
+                self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
+            elif src_entry.name in _RUNTIME_DLOPEN_UNVERSIONED_LIBS:
+                # Some libraries are dlopen'd at runtime using their unversioned
+                # name (e.g. dlopen("libamd_smi.so")). Materialize the unversioned
+                # symlink in the runtime package so devel is not required for this.
                 self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
             else:
                 self.files.soname_aliases[relpath] = soname
