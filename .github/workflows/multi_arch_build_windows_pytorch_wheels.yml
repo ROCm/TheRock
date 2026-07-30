@@ -225,8 +225,8 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
-            --gitrepo-origin https://github.com/ethanwee1/rocm-pytorch-ethanwee.git \
-            --repo-hashtag ew/pyproject-wheel-rocm-init \
+            --gitrepo-origin https://github.com/ethanwee1/pytorch.git \
+            --repo-hashtag ew/test-6965-combined \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
