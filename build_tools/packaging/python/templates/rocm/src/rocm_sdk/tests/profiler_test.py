@@ -31,6 +31,10 @@ utils.assert_is_physical_package(profiler_mod)
 so_paths = utils.get_module_shared_libraries(profiler_mod)
 is_windows = platform.system() == "Windows"
 
+# Bound each helper subprocess so a hung ldd / console script fails the test
+# instead of stalling until the CI job-level timeout.
+SUBPROCESS_TIMEOUT_SECONDS = 60
+
 
 class ConsoleScriptTest(NamedTuple):
     """A single console-script invocation to exercise.
@@ -121,6 +125,7 @@ class ROCmProfilerTest(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding=locale.getpreferredencoding(),
+                timeout=SUBPROCESS_TIMEOUT_SECONDS,
             )
             # ldd exits 0 even when a NEEDED dependency is "not found", so a
             # non-zero exit means ldd itself failed (bad file, unreadable, etc.)
@@ -197,6 +202,7 @@ class ROCmProfilerTest(unittest.TestCase):
                 output_text = subprocess.check_output(
                     [script_path] + test.cl,
                     stderr=subprocess.STDOUT,
+                    timeout=SUBPROCESS_TIMEOUT_SECONDS,
                 ).decode(encoding)
                 if test.expected_text and test.expected_text not in output_text:
                     self.fail(
