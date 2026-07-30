@@ -20,6 +20,10 @@ Test modes (--test-type):
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+  4. Uninstall (optional, ``--with-uninstall`` / ``RUN_UNINSTALL=1``): remove
+     installed metapackages in reverse order, autoremove (deb), and verify no
+     ROCm packages remain. Run only after steps 1–2 (sanity) or 1–3 (full)
+     succeed. Not run for ``simulate`` or ``install`` test types.
 - comprehensive: CI alias for full.
 - install: Repo-based install only (step 1). No rocminfo or component checks.
   Used by release workflows that dispatch install tests off the critical path.
@@ -177,6 +181,8 @@ RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
+# Pytest/CI only: becomes ``--with-uninstall`` when set to 1/true/yes.
+ENV_RUN_UNINSTALL = "RUN_UNINSTALL"
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -186,6 +192,7 @@ ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
+UNINSTALL_TIMEOUT_SEC = 600  # 10 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
@@ -271,6 +278,12 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
     except FileNotFoundError as e:
         print(f"[FAIL] Command not found: {e}", file=sys.stderr)
         return False
+
+
+def _is_rocm_related_package_name(name: str) -> bool:
+    """Return True if a package name looks ROCm-related (rocm or amdrocm)."""
+    lower = name.lower()
+    return "rocm" in lower or "amdrocm" in lower
 
 
 def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
@@ -1216,6 +1229,184 @@ gpgcheck=0
         print("=" * 80)
         return self.test_rdhc()
 
+    def list_installed_rocm_packages(self) -> list[str]:
+        """Query the system package manager for installed rocm/amdrocm packages.
+
+        Returns:
+            Sorted list of package names matching rocm/amdrocm. Empty on query failure.
+        """
+        try:
+            if self.package_type == "deb":
+                result = subprocess.run(
+                    ["dpkg", "-l"],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                names: list[str] = []
+                for line in result.stdout.splitlines():
+                    if not line.startswith("ii"):
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 2 and _is_rocm_related_package_name(parts[1]):
+                        names.append(parts[1])
+                return sorted(names)
+
+            result = subprocess.run(
+                ["rpm", "-qa"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            return sorted(
+                line.strip()
+                for line in result.stdout.splitlines()
+                if line.strip() and _is_rocm_related_package_name(line.strip())
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[WARN] Could not query installed packages: {e}")
+            return []
+        except OSError as e:
+            print(f"[WARN] Could not query installed packages: {e}")
+            return []
+
+    def uninstall_packages(self) -> bool:
+        """Remove installed metapackages in reverse install order.
+
+        deb: ``sudo apt remove -y`` then ``sudo apt autoremove -y``.
+        rpm: ``dnf remove -y`` or ``zypper remove -y`` on SLES.
+
+        Returns:
+            True if uninstall commands succeeded, False otherwise.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 4a: UNINSTALL PACKAGES")
+        print("=" * 80)
+
+        packages_to_remove = list(reversed(self.package_names))
+        if not packages_to_remove:
+            print("[WARN] No package names configured for uninstall")
+            return True
+
+        print(f"\nPackages to remove (reverse install order): {packages_to_remove}")
+
+        if self.package_type == "deb":
+            remove_cmd = ["sudo", "apt", "remove", "-y"] + packages_to_remove
+            autoremove_cmd = ["sudo", "apt", "autoremove", "-y"]
+        elif self._is_sles():
+            remove_cmd = [
+                "zypper",
+                "--non-interactive",
+                "remove",
+                "-y",
+            ] + packages_to_remove
+            autoremove_cmd = None
+        else:
+            remove_cmd = ["dnf", "remove", "-y"] + packages_to_remove
+            autoremove_cmd = None
+
+        print(f"\nRunning: {' '.join(remove_cmd)}")
+        print("=" * 80)
+        print("Uninstall progress (streaming output):\n")
+
+        try:
+            return_code = _run_streaming(remove_cmd, UNINSTALL_TIMEOUT_SEC)
+            if return_code != 0:
+                print("\n" + "=" * 80)
+                print(f"[FAIL] Failed to remove packages (exit code: {return_code})")
+                return False
+
+            if autoremove_cmd:
+                print(f"\nRunning: {' '.join(autoremove_cmd)}")
+                print("=" * 80)
+                print("Autoremove progress (streaming output):\n")
+                return_code = _run_streaming(autoremove_cmd, UNINSTALL_TIMEOUT_SEC)
+                if return_code != 0:
+                    print("\n" + "=" * 80)
+                    print(f"[FAIL] apt autoremove failed (exit code: {return_code})")
+                    return False
+
+            print("\n" + "=" * 80)
+            print("[PASS] Package uninstall completed successfully")
+            return True
+        except subprocess.TimeoutExpired:
+            print("\n" + "=" * 80)
+            print(
+                f"[FAIL] Uninstall timed out after {UNINSTALL_TIMEOUT_SEC // 60} minutes"
+            )
+            return False
+        except OSError as e:
+            print(f"\n[FAIL] Error during uninstall: {e}")
+            return False
+
+    def run_uninstall_verification(self) -> bool:
+        """Step 4b: Verify no ROCm packages remain after uninstall.
+
+        Optionally logs install-prefix cleanup status (non-fatal).
+
+        Returns:
+            True if zero ROCm packages remain installed.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 4b: UNINSTALL VERIFICATION")
+        print("=" * 80)
+
+        remaining = self.list_installed_rocm_packages()
+        if remaining:
+            print(f"\n[FAIL] {len(remaining)} ROCm package(s) still installed:")
+            for pkg in remaining[:10]:
+                print(f"  {pkg}")
+            if len(remaining) > 10:
+                print(f"  ... and {len(remaining) - 10} more")
+            return False
+
+        print("\n[PASS] No ROCm packages remain installed")
+
+        install_path = Path(self.install_prefix)
+        if not install_path.exists():
+            print(f"[PASS] Install prefix removed: {self.install_prefix}")
+        else:
+            leftover = [
+                component
+                for component in VERIFY_KEY_COMPONENTS
+                if (install_path / component).exists()
+            ]
+            if leftover:
+                print(
+                    f"[WARN] Install prefix still contains key components: {leftover}"
+                )
+            else:
+                print(
+                    f"[INFO] Install prefix exists but key ROCm components are gone: "
+                    f"{self.install_prefix}"
+                )
+
+        print("\n[PASS] Uninstall verification PASSED")
+        return True
+
+    def run_uninstall_and_verify(self) -> bool:
+        """Step 4: Uninstall metapackages and verify clean teardown.
+
+        Returns:
+            True if uninstall and verification both succeeded.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 4: UNINSTALL AND VERIFY")
+        print("=" * 80)
+
+        before = self.list_installed_rocm_packages()
+        print(f"\nROCm packages before uninstall: {len(before)}")
+        if before:
+            print(" Sample packages (first 5):")
+            for pkg in before[:5]:
+                print(f"  {pkg}")
+
+        if not self.uninstall_packages():
+            return False
+        return self.run_uninstall_verification()
+
     def test_rdhc(self) -> bool:
         """Test rdhc.py binary in libexec/rocm-core/.
 
@@ -1425,6 +1616,11 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
+        "--with-uninstall",
+        action="store_true",
+        help="After install verification succeeds (sanity or full), uninstall packages and verify clean teardown. Ignored for simulate and install test types.",
+    )
+    parser.add_argument(
         "--packages-dir",
         type=str,
         metavar="DIR",
@@ -1561,6 +1757,8 @@ def run_tests(args: Namespace) -> int:
         print("ROCm version (for package names): (not set)")
     print(f"Install Prefix: {args.install_prefix}")
     print(f"Test Type: {args.test_type}")
+    if args.with_uninstall:
+        print("With Uninstall: yes")
     if args.gpg_key_url:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
@@ -1600,10 +1798,22 @@ def run_tests(args: Namespace) -> int:
             if not test_runner.run_full_verification():
                 print("\n[FAIL] Step 3 (full verification) failed.")
                 return 1
+        if args.with_uninstall and args.test_type in ("sanity", "full"):
+            if not test_runner.run_uninstall_and_verify():
+                print("\n[FAIL] Step 4 (uninstall and verify) failed.")
+                return 1
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            print("(sanity: basic verification completed)")
+            msg = "(sanity: basic verification completed"
+            if args.with_uninstall:
+                msg += " + uninstall verified"
+            print(msg + ")")
+        elif args.test_type == "full":
+            msg = "ROCm has been successfully installed from repository and verified"
+            if args.with_uninstall:
+                msg += " and uninstalled cleanly"
+            print(msg + "!")
         else:
             print("ROCm has been successfully installed from repository and verified!")
         print("=" * 80 + "\n")
@@ -1676,6 +1886,9 @@ def _argv_from_ci_env() -> list[str] | None:
     gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
     if gpg:
         argv.extend(["--gpg-key-url", gpg])
+    run_uninstall = (os.environ.get(ENV_RUN_UNINSTALL) or "").strip().lower()
+    if run_uninstall in ("1", "true", "yes"):
+        argv.append("--with-uninstall")
     return argv
 
 
