@@ -35,9 +35,10 @@ RELEASE_STABLE_PYTORCH_REFS = {
         "release/2.13",
     ],
     "windows": [
-        "release/2.11",
-        "release/2.12",
-        "release/2.13",
+        # TEST BRANCH (ROCm/TheRock#6942): build only the harkgill-amd/pytorch
+        # fork ref that carries the null-slot export fix (missing _native.h
+        # includes). Restore release/2.11-2.13 before merging.
+        "harkgill-amd/windows-null-slot-ops-2.11",
     ],
 }
 
