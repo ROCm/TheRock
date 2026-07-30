@@ -1,0 +1,20 @@
+From ba7956ba2fa8d62e306067ed76c48decef59aaf0 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 30 Jul 2026 00:53:14 +0000
+Subject: [PATCH] rocprofiler-systems: update dyninst to dyninst_13 HEAD
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ projects/rocprofiler-systems/external/dyninst | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/rocprofiler-systems/external/dyninst b/projects/rocprofiler-systems/external/dyninst
+index 81cd27fc9ae..07b585a7fa4 160000
+--- a/projects/rocprofiler-systems/external/dyninst
++++ b/projects/rocprofiler-systems/external/dyninst
+@@ -1 +1 @@
+-Subproject commit 81cd27fc9ae4984df307bc41d5cb8c1ce9bf761e
++Subproject commit 07b585a7fa408c3a4ae03de6a7797d1aba5fcde4
+-- 
+2.52.0
+
