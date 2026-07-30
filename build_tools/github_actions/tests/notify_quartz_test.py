@@ -198,7 +198,12 @@ class LoadPayloadStepOutputsTest(unittest.TestCase):
         payload = self._load(args)
         self.assertEqual(
             payload["workflow_run"]["captured_outputs"],
-            {"build_job": {"result": "success", "outputs": {"url": "https://example/x"}}},
+            {
+                "build_job": {
+                    "result": "success",
+                    "outputs": {"url": "https://example/x"},
+                }
+            },
         )
 
     def test_step_outputs_take_precedence_over_captured_outputs(self):
@@ -243,11 +248,16 @@ class MainStepOutputsValidationTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             self._run_main(
                 [
-                    "--token", "t",
-                    "--run-phase", "completed",
-                    "--run-conclusion", "success",
-                    "--step-outputs", json.dumps({"a": {"outputs": {}}}),
-                    "--captured-outputs", json.dumps({"j": {"result": "success"}}),
+                    "--token",
+                    "t",
+                    "--run-phase",
+                    "completed",
+                    "--run-conclusion",
+                    "success",
+                    "--step-outputs",
+                    json.dumps({"a": {"outputs": {}}}),
+                    "--captured-outputs",
+                    json.dumps({"j": {"result": "success"}}),
                 ]
             )
         self.assertEqual(ctx.exception.code, 2)
@@ -256,9 +266,12 @@ class MainStepOutputsValidationTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             self._run_main(
                 [
-                    "--token", "t",
-                    "--run-phase", "completed",
-                    "--step-outputs", json.dumps({"a": {"outputs": {}}}),
+                    "--token",
+                    "t",
+                    "--run-phase",
+                    "completed",
+                    "--step-outputs",
+                    json.dumps({"a": {"outputs": {}}}),
                 ]
             )
         self.assertEqual(ctx.exception.code, 2)
@@ -266,10 +279,14 @@ class MainStepOutputsValidationTest(unittest.TestCase):
     def test_job_name_falls_back_to_github_job_env(self):
         rc = self._run_main(
             [
-                "--token", "t",
-                "--run-phase", "completed",
-                "--run-conclusion", "success",
-                "--step-outputs", json.dumps({"a": {"outputs": {}}}),
+                "--token",
+                "t",
+                "--run-phase",
+                "completed",
+                "--run-conclusion",
+                "success",
+                "--step-outputs",
+                json.dumps({"a": {"outputs": {}}}),
             ],
             env={"GITHUB_JOB": "build_linux"},
         )
@@ -279,27 +296,35 @@ class MainStepOutputsValidationTest(unittest.TestCase):
     def test_job_name_falls_back_to_reporting_workflow_basename(self):
         rc = self._run_main(
             [
-                "--token", "t",
-                "--run-phase", "completed",
-                "--run-conclusion", "success",
-                "--step-outputs", json.dumps({"a": {"outputs": {}}}),
-                "--reporting-workflow", "multi_arch_build_portable_linux.yml",
+                "--token",
+                "t",
+                "--run-phase",
+                "completed",
+                "--run-conclusion",
+                "success",
+                "--step-outputs",
+                json.dumps({"a": {"outputs": {}}}),
+                "--reporting-workflow",
+                "multi_arch_build_portable_linux.yml",
             ],
             env={"GITHUB_JOB": ""},
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(
-            self._captured["job_name"], "multi_arch_build_portable_linux"
-        )
+        self.assertEqual(self._captured["job_name"], "multi_arch_build_portable_linux")
 
     def test_explicit_job_name_wins_over_env(self):
         rc = self._run_main(
             [
-                "--token", "t",
-                "--run-phase", "completed",
-                "--run-conclusion", "success",
-                "--step-outputs", json.dumps({"a": {"outputs": {}}}),
-                "--job-name", "explicit_job",
+                "--token",
+                "t",
+                "--run-phase",
+                "completed",
+                "--run-conclusion",
+                "success",
+                "--step-outputs",
+                json.dumps({"a": {"outputs": {}}}),
+                "--job-name",
+                "explicit_job",
             ],
             env={"GITHUB_JOB": "runner_job"},
         )
