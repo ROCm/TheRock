@@ -114,23 +114,21 @@ permissions:
   contents: read
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   setup_matrix:
     runs-on: ubuntu-24.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
+      - name: Notify Quartz - started
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -162,6 +160,7 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
@@ -181,12 +180,16 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Notify Quartz - completed
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

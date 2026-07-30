@@ -96,18 +96,6 @@ permissions:
 run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: build_portable_linux_python_packages.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
@@ -127,6 +115,16 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
+      - name: Notify Quartz - started
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: build_portable_linux_python_packages.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -192,15 +190,14 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_rocm_wheels]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: build_portable_linux_python_packages.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      - name: Notify Quartz - completed
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: build_portable_linux_python_packages.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

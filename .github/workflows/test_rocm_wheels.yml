@@ -101,18 +101,6 @@ permissions:
 run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_version }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: test_rocm_wheels.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   test_wheels:
     name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | py${{ inputs.python_version }} | ${{ inputs.container_image_name }}
     if: ${{ inputs.test_runs_on != '' }}
@@ -135,6 +123,16 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
 
     steps:
+      - name: Notify Quartz - started
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: test_rocm_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -205,15 +203,14 @@ jobs:
         run: |
           rocm-sdk test
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [test_wheels]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: test_rocm_wheels.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      - name: Notify Quartz - completed
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: test_rocm_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

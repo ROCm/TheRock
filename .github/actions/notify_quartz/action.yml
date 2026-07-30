@@ -1,0 +1,111 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: "Notify Quartz"
+
+description: >-
+  Report a CI run's status to Quartz. Runs build_tools/github_actions/notify_quartz.py
+  from ROCm/TheRock to capture workflow inputs + job outputs, fetch the run's jobs via
+  the GitHub API (stripping them when the payload exceeds the workflow_dispatch size
+  cap), and dispatch the Quartz ingest workflow.
+
+  Self-contained: it checks out ROCm/TheRock into a private path to reach the script, so
+  it works as the first step of a job regardless of what the host job has checked out
+  (including external-repo builds).
+
+inputs:
+  run_phase:
+    description: "'started' (run in progress) or 'completed' (run finished)."
+    required: true
+  reporting_workflow:
+    description: >-
+      Filename of the workflow reporting (e.g. 'setup_multi_arch.yml'). Each caller
+      passes its own filename so nested reusable workflows self-identify.
+    required: true
+  run_conclusion:
+    description: >-
+      Overall conclusion (success / failure / cancelled). Optional when run_phase=completed
+      and workflow_captured_outputs is a toJSON(needs) blob (derived from per-job results).
+      Pass ${{ job.status }} when folding 'completed' into a single monitored job.
+    required: false
+    default: ""
+  workflow_inputs:
+    description: "JSON string of workflow inputs, i.e. ${{ toJSON(inputs) }}."
+    required: false
+    default: "{}"
+  workflow_captured_outputs:
+    description: >-
+      JSON object of caller-supplied job context, canonically ${{ toJSON(needs) }}.
+      Stored verbatim by Quartz: do NOT include secrets. Use for a dedicated
+      notify_completed job that has a `needs:` list. Mutually exclusive with
+      workflow_step_outputs.
+    required: false
+    default: "{}"
+  workflow_step_outputs:
+    description: >-
+      JSON object of ${{ toJSON(steps) }} for the folded 'completed' case where
+      the notify step lives inside the single monitored job (no `needs:` context
+      to serialize). The script rewrites it into the toJSON(needs) shape keyed by
+      the job id (GITHUB_JOB), with `result` taken from run_conclusion. Pass
+      run_conclusion=${{ job.status }} alongside it. Mutually exclusive with
+      workflow_captured_outputs. Do NOT include secrets.
+    required: false
+    default: ""
+  gh_app_id:
+    description: "App ID for the GitHub App used to mint the Quartz dispatch token."
+    required: true
+  gh_app_private_key:
+    description: "Private key for the GitHub App used to mint the Quartz dispatch token."
+    required: true
+  quartz_repo:
+    description: "Target Quartz repository (owner/repo)."
+    required: false
+    default: "ROCm/Quartz"
+  quartz_workflow_file:
+    description: "Filename of the Quartz ingest workflow to dispatch to."
+    required: false
+    default: "receive_therock_data.yml"
+  quartz_workflow_ref:
+    description: "Branch in the Quartz repo where the ingest workflow lives."
+    required: false
+    default: "main"
+  therock_ref:
+    description: "Ref of ROCm/TheRock to source notify_quartz.py from."
+    required: false
+    default: "main"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout TheRock (notify_quartz script)
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ROCm/TheRock
+        ref: ${{ inputs.therock_ref }}
+        path: .therock-notify-quartz
+        sparse-checkout: |
+          build_tools/github_actions/notify_quartz.py
+        sparse-checkout-cone-mode: false
+
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        app-id: ${{ inputs.gh_app_id }}
+        private-key: ${{ inputs.gh_app_private_key }}
+        repositories: ${{ inputs.quartz_repo }}
+
+    - name: Notify Quartz
+      shell: bash
+      env:
+        QUARTZ_HAULY_TOKEN: ${{ steps.app-token.outputs.token }}
+        WORKFLOW_INPUTS: ${{ inputs.workflow_inputs }}
+        WORKFLOW_CAPTURED_OUTPUTS: ${{ inputs.workflow_captured_outputs }}
+        WORKFLOW_STEP_OUTPUTS: ${{ inputs.workflow_step_outputs }}
+        REPORTING_WORKFLOW: ${{ inputs.reporting_workflow }}
+        RUN_CONCLUSION: ${{ inputs.run_conclusion }}
+        RUN_PHASE: ${{ inputs.run_phase }}
+        QUARTZ_REPO: ${{ inputs.quartz_repo }}
+        QUARTZ_WORKFLOW_FILE: ${{ inputs.quartz_workflow_file }}
+        QUARTZ_WORKFLOW_REF: ${{ inputs.quartz_workflow_ref }}
+      run: python .therock-notify-quartz/build_tools/github_actions/notify_quartz.py

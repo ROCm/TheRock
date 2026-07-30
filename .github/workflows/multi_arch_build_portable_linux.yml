@@ -68,15 +68,18 @@ permissions:
 jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: multi_arch_build_portable_linux.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Notify Quartz - started
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
@@ -335,12 +338,16 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: multi_arch_build_portable_linux.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Notify Quartz - completed
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -110,6 +110,7 @@ jobs:
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
+    secrets: inherit
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}

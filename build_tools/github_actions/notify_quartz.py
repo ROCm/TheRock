@@ -609,6 +609,30 @@ def build_parser() -> argparse.ArgumentParser:
             "API path. Defaults to the REPORTING_WORKFLOW env var."
         ),
     )
+    p.add_argument(
+        "--step-outputs",
+        default=os.environ.get("WORKFLOW_STEP_OUTPUTS", ""),
+        help=(
+            "JSON string of `${{ toJSON(steps) }}` for the case where "
+            "`completed` is folded into the single monitored job (no `needs:` "
+            "context to serialize). Rewritten into the canonical "
+            "`toJSON(needs)` shape (`{job: {result, outputs}}`) before "
+            "dispatch, keyed by --job-name, with `result` taken from "
+            "--run-conclusion. Mutually exclusive with --captured-outputs. "
+            "Defaults to the WORKFLOW_STEP_OUTPUTS env var."
+        ),
+    )
+    p.add_argument(
+        "--job-name",
+        default=os.environ.get("WORKFLOW_JOB_NAME", ""),
+        help=(
+            "Job id used as the key when rewriting --step-outputs into the "
+            "needs shape. Empty falls back to the GITHUB_JOB env var (the "
+            "runner-injected job id, which matches how `needs.<job_id>` keys), "
+            "then to the --reporting-workflow basename. Defaults to the "
+            "WORKFLOW_JOB_NAME env var."
+        ),
+    )
     return p
 
 
@@ -665,6 +689,38 @@ def _derive_run_conclusion_from_captured_outputs(
     return "skipped"
 
 
+def _step_outputs_to_needs_shape(
+    step_outputs: dict[str, Any],
+    *,
+    job_name: str,
+    run_conclusion: str,
+) -> dict[str, Any]:
+    """Rewrite a `${{ toJSON(steps) }}` blob into the `toJSON(needs)` shape.
+
+    When `completed` is folded into the single monitored job (rather than a
+    dedicated `notify_completed` job with `needs:`), the job has no `needs`
+    context to serialize. It instead passes `${{ toJSON(steps) }}`, which is
+    keyed by step id and carries `outcome` / `conclusion` per step:
+
+        {"<step-id>": {"outcome": ..., "conclusion": ..., "outputs": {...}}}
+
+    The receiver stores everything under the canonical needs shape
+    (`{job: {result, outputs}}`), so we collapse the per-step outputs into a
+    single job entry keyed by `job_name` (the job id, matching how
+    `needs.<job_id>` keys). `result` comes from `run_conclusion`
+    (`${{ job.status }}`), since a single job's status IS the run conclusion.
+
+    Step output names within a job are normally unique; on collision the last
+    step wins, matching how a `notify_completed` job's `outputs:` block would
+    have to pick one value anyway.
+    """
+    merged_outputs: dict[str, Any] = {}
+    for step in step_outputs.values():
+        if isinstance(step, dict):
+            merged_outputs.update(step.get("outputs") or {})
+    return {job_name: {"result": run_conclusion, "outputs": merged_outputs}}
+
+
 def _load_payload(
     args: argparse.Namespace,
     token: str,
@@ -675,6 +731,12 @@ def _load_payload(
     captured_outputs = (
         json.loads(args.captured_outputs) if args.captured_outputs else {}
     )
+    if args.step_outputs:
+        captured_outputs = _step_outputs_to_needs_shape(
+            json.loads(args.step_outputs),
+            job_name=args.job_name,
+            run_conclusion=args.run_conclusion,
+        )
     return _build_payload(
         token=token,
         repo=repo,
@@ -703,6 +765,29 @@ def main(argv: list[str]) -> int:
         log.error("GITHUB_REPOSITORY not set")
         return 1
 
+    # `--captured-outputs` defaults to "{}" at the action layer, so compare on
+    # parsed content rather than raw truthiness to avoid a false clash.
+    if args.step_outputs:
+        try:
+            _captured = (
+                json.loads(args.captured_outputs) if args.captured_outputs else {}
+            )
+        except json.JSONDecodeError as exc:
+            parser.error(f"--captured-outputs is not valid JSON: {exc}")
+        if _captured:
+            parser.error(
+                "--step-outputs and --captured-outputs are mutually exclusive: "
+                "pass toJSON(steps) (folded completed) OR toJSON(needs) "
+                "(dedicated notify_completed job), not both."
+            )
+
+    if args.step_outputs and not args.run_conclusion:
+        parser.error(
+            "--run-conclusion (or RUN_CONCLUSION env) is required with "
+            "--step-outputs: a folded single-job completed has no per-job "
+            "`result` to derive from, so pass ${{ job.status }}."
+        )
+
     if args.run_phase == "completed" and not args.run_conclusion:
         # Try deriving from --captured-outputs when caller passed a
         # `toJSON(needs)` blob — that's the canonical pattern under
@@ -730,6 +815,15 @@ def main(argv: list[str]) -> int:
             derived,
         )
         args.run_conclusion = derived
+
+    if args.step_outputs and not args.job_name:
+        # GITHUB_JOB is the runner-injected
+        # job id (matches how `needs.<job_id>` keys); fall back to the
+        # reporting-workflow basename when even that is absent.
+        args.job_name = (
+            os.environ.get("GITHUB_JOB", "")
+            or PurePosixPath(_normalize_reporting_path(args.reporting_workflow)).stem
+        )
 
     try:
         payload = _load_payload(args, token, repo)

@@ -126,18 +126,6 @@ permissions:
   contents: read
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: setup_multi_arch.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   setup:
     runs-on: ubuntu-24.04
     outputs:
@@ -153,6 +141,16 @@ jobs:
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     steps:
+      - name: Notify Quartz - started
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: setup_multi_arch.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
         id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -227,15 +225,14 @@ jobs:
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [setup]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: setup_multi_arch.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      - name: Notify Quartz - completed
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: setup_multi_arch.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

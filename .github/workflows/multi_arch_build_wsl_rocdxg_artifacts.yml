@@ -49,18 +49,6 @@ on:
         default: ""
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: started
-      reporting_workflow: multi_arch_build_wsl_rocdxg_artifacts.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   build_stage:
     name: ${{ inputs.stage_display_name }}
     runs-on:
@@ -88,6 +76,16 @@ jobs:
       WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
+      - name: Notify Quartz - started
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_wsl_rocdxg_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
@@ -352,15 +350,14 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_stage]
-    uses: ./.github/workflows/notify_quartz.yml
-    with:
-      run_phase: completed
-      reporting_workflow: multi_arch_build_wsl_rocdxg_artifacts.yml
-      workflow_inputs: ${{ toJSON(inputs) }}
-      workflow_captured_outputs: ${{ toJSON(needs) }}
-    secrets:
-      GH_APP_HAULY_ID: ${{ secrets.GH_APP_HAULY_ID }}
-      GH_APP_HAULY_PRIVATE_KEY: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      - name: Notify Quartz - completed
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: multi_arch_build_wsl_rocdxg_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
