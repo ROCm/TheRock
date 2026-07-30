@@ -297,6 +297,21 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 
 Specific node sizing, runtime benchmarks, and storage quotas remain open topics for discussion and will be refined based on initial deployment experience.
 
+### Failure Handling
+
+**Coverage test failures:**
+- If a test fails during coverage runs, the pipeline fails
+- Coverage failures block PR merges (must be fixed before merge)
+- Treated the same as any other test failure in the CI pipeline
+
+**Missing profraw files:**
+- If profraw files are missing entirely, the coverage job fails
+- Indicates fundamental instrumentation or test execution problem
+
+**Flaky tests:**
+- Can be disabled at component owner's discretion
+- Same policy as regular pre-checkin test handling
+
 ### Nightly Runs
 
 **Recommendation:** Achieve parity with Math CI:
