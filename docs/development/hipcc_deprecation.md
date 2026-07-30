@@ -45,13 +45,13 @@ and how to migrate your project.
 The following table maps hipcc's implicit behavior to the explicit flags or
 CMake variables that replace it when using `amdclang++` directly.
 
-| hipcc behavior                                       | amdclang++ / CMake equivalent                                               |
-| ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| Injects `-I<hip>/include`                            | `--hip-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)                         |
-| Injects `--hip-device-lib-path=<path>`               | `--hip-device-lib-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)              |
-| Sets HIP compiler in CMake                           | `CMAKE_HIP_COMPILER` set to `clang++` (user-facing as `amdclang++`) in toolchain |
+| hipcc behavior                                       | amdclang++ / CMake equivalent                                                                                                                                                 |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Injects `-I<hip>/include`                            | `--hip-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)                                                                                                                           |
+| Injects `--hip-device-lib-path=<path>`               | `--hip-device-lib-path=<path>` (set in `CMAKE_CXX_FLAGS_INIT`)                                                                                                                |
+| Sets HIP compiler in CMake                           | `CMAKE_HIP_COMPILER` set to `clang++` (user-facing as `amdclang++`) in toolchain                                                                                              |
 | Auto-detects GPU targets via `rocm_agent_enumerator` | CMake: `AMDGPU_TARGETS` / `CMAKE_HIP_ARCHITECTURES` set by TheRock super-project. Direct: `--offload-arch=native` (build machine's GPUs) or explicit `--offload-arch=gfxNNNN` |
-| Defines `-D__HIP_PLATFORM_AMD__`                     | Added by `hip-config.cmake` target properties via `find_package(hip)`       |
+| Defines `-D__HIP_PLATFORM_AMD__`                     | Added by `hip-config.cmake` target properties via `find_package(hip)`                                                                                                         |
 
 ## Migrating a CMake project
 
