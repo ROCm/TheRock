@@ -17,7 +17,7 @@ project(therock-aux-overlay LANGUAGES C CXX)
 
 # This is the canonical example of consuming ROCm build flags from either a
 # super-repository provider or project-specific standalone cache variables.
-include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/ROCMBuildFlags.cmake")
+include("${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake")
 
 rocm_resolve_build_flag(
   NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
