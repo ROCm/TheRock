@@ -264,7 +264,7 @@ def package_with_rpmbuild(spec_file):
     # Execute the command
     try:
         subprocess.run(cmd, check=True)
-        logger.info(f"RPM Package built successfully: {spec_file.name}\n")
+        logger.info(f"RPM Package built successfully: {spec_file.parent.name}\n")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error building RPM package: {spec_file.name}: {e}")
+        logger.error(f"Error building RPM package: {spec_file.parent.name}: {e}")
         sys.exit(e.returncode)
