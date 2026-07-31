@@ -3,53 +3,36 @@
 # SPDX-License-Identifier: MIT
 
 """
-GitHub Actions helper: derive native Linux packaging URL parameters.
+Canonical, unit-tested spec for native Linux install-test parameters (KEY=value → $GITHUB_OUTPUT).
 
-Used by CI workflows (see test_native_linux_packages_install.yml) to normalize
-install-test inputs. Each subcommand prints KEY=value lines suitable for
-$GITHUB_OUTPUT via gha_set_output().
+Purpose: one Python module + tests that define how CDN repo URLs, GPG paths, GPU arch
+tokens, and CI container images should be derived (per native_packaging.md and install
+workflows). Callers should converge here; upload_package_repo.py and
+install_rocm_packages.sh still embed parallel logic until get-repo-url / get-gpg-url are
+wired. Tests catch spec drift at merge time — wrong …/packages/ paths, GPG tree mismatches,
+container renames — without running the full install matrix.
 
-Layout scope:
-  - **per_family** (default): legacy GFX-specific tree from native_packaging.md
-    (…/packages/{os}, …/rocm/packages/{os}, …/deb|rpm/{YYYYMMDD-id}/).
-  - **multi_arch**: packages-multi-arch/… tree (install_rocm_packages.sh /
-    s3_buckets.md). Signed stable uses …/rocm/packages-multi-arch/{os_profile}.
+In production CI today: test_native_linux_packages_install.yml uses extract-gfx-arch and
+get-container-image only. Install repo/GPG URLs still arrive via workflow inputs from
+upload_package_repo.py.
 
-Subcommands:
-  get-base-url         scheme + netloc from any URL → repo_base_url=
-  get-gpg-url          GPG key URL from package repo URL → gpg_key_url=
-                       (--release-type omits URL for dev/nightly/ci unsigned repos)
-  get-repo-sub-folder  YYYYMMDD-<id> segment from S3 prefix → repo_sub_folder=
-  get-repo-url         install repo URL from components → repo_url=
-                       (--layout per_family default, or multi_arch)
-  extract-gfx-arch     gfx94X-dcgpu → gfx94x (lists supported) → gfx_arch=
-  get-container-image  os_profile → CI container image → container_image=
+Expected: get-repo-url → per_family or multi_arch install URLs; invalid release_type or
+layout → ValueError. get-gpg-url derives a default gpg_key_url= for workflow outputs:
+signed lines (prerelease/release) get a URL, dev/nightly/ci get empty when --release-type
+is set. That policy does not override install tests — native_linux_package_install_test.py
+and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL input as-is,
+regardless of release_type (if omitted, install runs without GPG verification).
 
-Workflow usage today:
-  extract-gfx-arch and get-container-image are called from GHA.
-  package_install_url and gpg_key_url are still passed as workflow inputs;
-  get-repo-url / get-gpg-url / get-repo-sub-folder are available for wiring.
+Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
+get-container-image. Run with -h for examples.
 
-Examples:
-  python build_tools/packaging/linux/get_url_repo_params.py get-base-url \\
-      --from-url https://example.com/v2/whl
-  python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url \\
-      --release-type prerelease \\
-      --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder \\
-      --from-s3-prefix v3/packages/deb/20260204-12345
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \\
-      --release-type prerelease --native-package-type deb \\
-      --repo-base-url https://rocm.prereleases.amd.com \\
-      --os-profile ubuntu2404 --repo-sub-folder ''
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \\
-      --layout multi_arch --release-type stable --native-package-type deb \\
-      --repo-base-url https://repo.amd.com --os-profile ubuntu2604 \\
-      --repo-sub-folder ''
-  python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \\
-      --artifact-group gfx94X-dcgpu
-  python build_tools/packaging/linux/get_url_repo_params.py get-container-image \\
-      --os-profile ubuntu2404
+Maintenance (when packaging or install URLs change):
+
+1. Update docs first: docs/packaging/native_packaging.md (and docs/development/s3_buckets.md
+   if S3 bucket/prefix layout changes).
+2. Change this module and get_url_repo_params_test.py together — tests are the drift alarm.
+3. Cross-check upload_package_repo.py and dockerfiles/install_rocm_packages.sh if CI or
+   manual install paths must stay in sync (minimum sanity check; full dedupe is P2).
 """
 
 import argparse
@@ -64,6 +47,9 @@ from github_actions.github_actions_api import gha_set_output
 
 LAYOUT_PER_FAMILY = "per_family"
 LAYOUT_MULTI_ARCH = "multi_arch"
+
+# Reserved dummy CDN host for docstrings, --help, and generic unit tests (RFC 2606).
+EXAMPLE_CDN_BASE = "https://sample-cdn.example"
 
 
 def normalize_layout(layout: str | None) -> str:
@@ -102,6 +88,23 @@ def _normalize_release_type(release_type: str) -> str:
         "nightlies": "nightly",
     }
     return aliases.get(rt, rt)
+
+
+_KNOWN_RELEASE_TYPES = frozenset({"prerelease", "release", "dev", "nightly", "ci"})
+
+
+def _normalize_and_validate_release_type(release_type: str) -> str:
+    """Normalize and validate ``release_type`` for :func:`get_repo_url`.
+
+    Raises:
+        ValueError: If ``release_type`` is empty or not a known workflow value.
+    """
+    if not release_type or not release_type.strip():
+        raise ValueError("release_type cannot be empty")
+    rt = _normalize_release_type(release_type)
+    if rt not in _KNOWN_RELEASE_TYPES:
+        raise ValueError(f"Unknown release_type: {release_type!r}")
+    return rt
 
 
 # --- base_url ---
@@ -156,14 +159,14 @@ def get_gpg_key_url(package_url: str) -> str:
         ValueError: If ``package_url`` is not a valid HTTP(S) URL.
 
     Examples:
-        https://rocm.prereleases.amd.com/packages/ubuntu2404
-            → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
-        https://repo.amd.com/rocm/packages/rhel10/x86_64/
-            → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
-        https://repo.amd.com/rocm/packages-multi-arch/ubuntu2604
-            → https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg
-        https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260204-12345/
-            → https://rocm.nightlies.amd.com/packages-multi-arch/gpg/rocm.gpg
+        https://sample-cdn.example/packages/ubuntu2404
+            → https://sample-cdn.example/packages/gpg/rocm.gpg
+        https://sample-cdn.example/rocm/packages/rhel10/x86_64/
+            → https://sample-cdn.example/rocm/packages/gpg/rocm.gpg
+        https://sample-cdn.example/packages-multi-arch/ubuntu2604
+            → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
+        https://sample-cdn.example/packages-multi-arch/deb/20260204-12345/
+            → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
         https://repo.amd.com/
             → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
     """
@@ -233,19 +236,23 @@ def get_gpg_key_url_from_release_type(
 
 
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
-    """Return whether a signed-repo GPG key URL applies for this release line.
+    """Return whether ``get-gpg-url`` should derive a non-empty GPG URL.
+
+    This is a **derivation policy for this helper only**. It does not restrict
+    ``native_linux_package_install_test.py`` or workflow ``gpg_key_url`` inputs: if the
+    caller supplies a GPG URL, install uses it regardless of ``release_type``.
 
     Args:
         release_type: Workflow release type, or ``None`` for legacy callers.
 
     Returns:
-        ``True`` if a GPG URL should be emitted/derived; ``False`` for unsigned
-        lines (``dev``, ``nightly``, ``ci``, empty string).
+        ``True`` if ``get-gpg-url`` should derive from ``--from-url``; ``False`` if it
+        should emit empty ``gpg_key_url=`` for unsigned lines (``dev``, ``nightly``,
+        ``ci``, empty string).
 
     Notes:
         ``None`` means always derive from the package URL (backward compatible).
-        Signed lines: ``prerelease``, ``prereleases``, ``release``, ``stable``
-        (case-insensitive, whitespace trimmed).
+        Signed lines: ``prerelease``, ``prereleases``, ``release``, ``stable``.
     """
     if release_type is None:
         return True
@@ -254,7 +261,13 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
 
 
 def cmd_gpg_key_url(args: argparse.Namespace) -> int:
-    """CLI: ``get-gpg-url`` → writes ``gpg_key_url=`` (or empty) to ``$GITHUB_OUTPUT``."""
+    """CLI: ``get-gpg-url`` → writes ``gpg_key_url=`` (or empty) to ``$GITHUB_OUTPUT``.
+
+    When ``--release-type`` is unsigned (dev/nightly/ci), emits empty output so workflows
+    need not pass GPG for typical unsigned repos. Omit ``--release-type`` to always
+    derive from ``--from-url``. Explicit ``gpg_key_url`` on the install workflow or CLI
+    bypasses this helper entirely.
+    """
     if not gpg_key_url_needed_for_release_type(args.release_type):
         gha_set_output({"gpg_key_url": ""})
         return 0
@@ -321,15 +334,18 @@ def get_repo_url_per_family(
         release_type: ``prerelease`` / ``prereleases``, ``release`` / ``stable``,
             or unsigned lines ``dev``, ``nightly``, ``ci`` (aliases normalized).
         native_package_type: ``deb`` or ``rpm``.
-        repo_base_url: Scheme + host (e.g. ``https://rocm.prereleases.amd.com``).
+        repo_base_url: Scheme + host (e.g. ``https://sample-cdn.example``).
         os_profile: OS profile slug (e.g. ``ubuntu2404``, ``rhel10``).
         repo_sub_folder: ``YYYYMMDD-<id>`` for dev/nightly; empty for signed lines.
 
     Returns:
         HTTPS URL pointing at the apt/dnf repo root (RPM URLs include ``/x86_64/``).
+
+    Raises:
+        ValueError: If ``release_type`` is empty or unknown.
     """
     base = repo_base_url.rstrip("/")
-    rt = _normalize_release_type(release_type)
+    rt = _normalize_and_validate_release_type(release_type)
 
     if rt == "prerelease":
         if native_package_type == "deb":
@@ -374,9 +390,12 @@ def get_repo_url_multi_arch(
         - release deb: ``{base}/rocm/packages-multi-arch/{os_profile}``
         - nightly deb: ``{base}/packages-multi-arch/deb/{repo_sub_folder}``
         - nightly rpm: ``{base}/packages-multi-arch/rpm/{repo_sub_folder}/x86_64``
+
+    Raises:
+        ValueError: If ``release_type`` is empty or unknown.
     """
     base = repo_base_url.rstrip("/")
-    rt = _normalize_release_type(release_type)
+    rt = _normalize_and_validate_release_type(release_type)
 
     if rt == "prerelease":
         if native_package_type == "deb":
@@ -418,6 +437,9 @@ def get_repo_url(
     Returns:
         HTTPS URL pointing at the apt/dnf repo root.
 
+    Raises:
+        ValueError: If ``layout`` or ``release_type`` is invalid.
+
     See Also:
         :func:`get_repo_url_per_family`, :func:`get_repo_url_multi_arch`.
     """
@@ -450,7 +472,7 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
             repo_sub_folder=args.repo_sub_folder or "",
             layout=args.layout,
         )
-    except (ValueError, TypeError) as e:
+    except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     gha_set_output({"repo_url": url})
@@ -607,27 +629,43 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         metavar="URL",
-        help="Any URL to derive base URL from (scheme + netloc only; e.g. https://example.com/v2/whl → https://example.com)",
+        help=(
+            "Any URL to derive base URL from (scheme + netloc only; e.g. "
+            "https://sample-cdn.example/v2/whl → https://sample-cdn.example)"
+        ),
     )
     p_base.set_defaults(func=cmd_base_url)
 
     # get-gpg-url: get GPG key URL from package repository URL
     p_gpg = subparsers.add_parser(
         "get-gpg-url",
-        help="Print gpg_key_url= for GITHUB_OUTPUT. With --release-type, only prerelease/release get a non-empty URL; otherwise gpg_key_url=. Omit --release-type to always derive from --from-url.",
+        help=(
+            "Derive gpg_key_url= for GITHUB_OUTPUT from --from-url. With --release-type, "
+            "only signed lines get a non-empty URL; dev/nightly/ci emit gpg_key_url=. "
+            "Does not affect install when gpg_key_url is passed explicitly in the workflow."
+        ),
     )
     p_gpg.add_argument(
         "--from-url",
         type=str,
         required=True,
         metavar="URL",
-        help="Package repository URL to derive GPG key URL from when needed (per-family or packages-multi-arch paths; e.g. …/packages/ubuntu2404 → …/packages/gpg/rocm.gpg)",
+        help=(
+            "Package repository URL to derive GPG key URL from when needed "
+            "(e.g. https://sample-cdn.example/packages/ubuntu2404 → "
+            "…/packages/gpg/rocm.gpg)"
+        ),
     )
     p_gpg.add_argument(
         "--release-type",
         type=str,
         default=None,
-        help="If set, emit non-empty GPG URL only for signed lines (prerelease/release/stable); for dev/nightly/ci print gpg_key_url=. If omitted, always derive from --from-url.",
+        help=(
+            "If set, emit non-empty GPG URL only for signed lines (prerelease/release/stable); "
+            "for dev/nightly/ci print gpg_key_url= (typical unsigned repos). If omitted, "
+            "always derive from --from-url. Install tests still honor an explicit gpg_key_url "
+            "workflow input regardless of this flag."
+        ),
     )
     p_gpg.set_defaults(func=cmd_gpg_key_url)
 

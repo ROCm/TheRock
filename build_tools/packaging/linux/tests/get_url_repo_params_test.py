@@ -16,6 +16,7 @@ Per-family coverage (native_packaging.md GFX URLs):
   - release/stable → …/rocm/packages/{os_profile}
   - dev/nightly → …/deb|rpm/{repo_sub_folder}/
   - GPG beside packages tree (…/packages/gpg/ or …/rocm/packages/gpg/)
+  - get-gpg-url derivation policy (signed vs unsigned); install honors explicit gpg_key_url input
 
 Multi-arch coverage (layout=multi_arch, packages-multi-arch/…):
   - prerelease → …/packages-multi-arch/{os_profile}
@@ -43,6 +44,8 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent.parent))
 import get_url_repo_params
 
+_EXAMPLE = get_url_repo_params.EXAMPLE_CDN_BASE
+
 
 def _run_main_with_output(argv: list[str]) -> tuple[int, str]:
     """Run main() with a temp GITHUB_OUTPUT file; return (exit_code, file_contents)."""
@@ -63,22 +66,22 @@ class GetBaseUrlTest(unittest.TestCase):
     def test_returns_scheme_and_netloc(self):
         # Test that get_base_url returns scheme and netloc only, stripping path.
         self.assertEqual(
-            get_url_repo_params.get_base_url("https://example.com/v2/whl"),
-            "https://example.com",
+            get_url_repo_params.get_base_url(f"{_EXAMPLE}/v2/whl"),
+            _EXAMPLE,
         )
 
     def test_strips_query_and_fragment(self):
         # Test that get_base_url strips query string and fragment.
         self.assertEqual(
-            get_url_repo_params.get_base_url("https://example.com/path?q=1#anchor"),
-            "https://example.com",
+            get_url_repo_params.get_base_url(f"{_EXAMPLE}/path?q=1#anchor"),
+            _EXAMPLE,
         )
 
     def test_http_url(self):
         # Test that get_base_url works with http.
         self.assertEqual(
-            get_url_repo_params.get_base_url("http://repo.local/artifacts"),
-            "http://repo.local",
+            get_url_repo_params.get_base_url("http://sample-cdn.example/artifacts"),
+            "http://sample-cdn.example",
         )
 
     def test_invalid_url_no_scheme_raises(self):
@@ -98,26 +101,22 @@ class GetGpgKeyUrlTest(unittest.TestCase):
 
     def test_extracts_base_and_adds_gpg_path(self):
         self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(
-                "https://rocm.prereleases.amd.com/packages/ubuntu2404"
-            ),
-            "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
+            get_url_repo_params.get_gpg_key_url(f"{_EXAMPLE}/packages/ubuntu2404"),
+            f"{_EXAMPLE}/packages/gpg/rocm.gpg",
         )
 
     def test_strips_path_from_url(self):
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
-                "https://repo.amd.com/rocm/packages/rhel10/x86_64/"
+                f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/"
             ),
-            "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
+            f"{_EXAMPLE}/rocm/packages/gpg/rocm.gpg",
         )
 
     def test_handles_nightly_url(self):
         self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(
-                "https://rocm.nightlies.amd.com/deb/20260204-12345/"
-            ),
-            "https://rocm.nightlies.amd.com/packages/gpg/rocm.gpg",
+            get_url_repo_params.get_gpg_key_url(f"{_EXAMPLE}/deb/20260204-12345/"),
+            f"{_EXAMPLE}/packages/gpg/rocm.gpg",
         )
 
     def test_repo_amd_com_without_packages_segment(self):
@@ -129,17 +128,17 @@ class GetGpgKeyUrlTest(unittest.TestCase):
     def test_handles_multi_arch_repo_url(self):
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
-                "https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260204-12345/"
+                f"{_EXAMPLE}/packages-multi-arch/deb/20260204-12345/"
             ),
-            "https://rocm.nightlies.amd.com/packages-multi-arch/gpg/rocm.gpg",
+            f"{_EXAMPLE}/packages-multi-arch/gpg/rocm.gpg",
         )
 
     def test_handles_stable_multi_arch_repo_url(self):
         self.assertEqual(
             get_url_repo_params.get_gpg_key_url(
-                "https://repo.amd.com/rocm/packages-multi-arch/ubuntu2604"
+                f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604"
             ),
-            "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg",
+            f"{_EXAMPLE}/rocm/packages-multi-arch/gpg/rocm.gpg",
         )
 
 
@@ -277,11 +276,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prereleases",
                 native_package_type="deb",
-                repo_base_url="https://rocm.prereleases.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            f"{_EXAMPLE}/packages/ubuntu2404",
         )
 
     def test_prerelease_deb(self):
@@ -289,11 +288,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://rocm.prereleases.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            f"{_EXAMPLE}/packages/ubuntu2404",
         )
 
     def test_prerelease_rpm(self):
@@ -301,11 +300,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="rpm",
-                repo_base_url="https://rocm.prereleases.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="rhel8",
                 repo_sub_folder="",
             ),
-            "https://rocm.prereleases.amd.com/packages/rhel8/x86_64/",
+            f"{_EXAMPLE}/packages/rhel8/x86_64/",
         )
 
     def test_release_deb_matches_native_packaging_doc(self):
@@ -313,11 +312,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="release",
                 native_package_type="deb",
-                repo_base_url="https://repo.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://repo.amd.com/rocm/packages/ubuntu2404",
+            f"{_EXAMPLE}/rocm/packages/ubuntu2404",
         )
 
     def test_stable_rpm_matches_native_packaging_doc(self):
@@ -325,11 +324,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="stable",
                 native_package_type="rpm",
-                repo_base_url="https://repo.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="rhel10",
                 repo_sub_folder="",
             ),
-            "https://repo.amd.com/rocm/packages/rhel10/x86_64/",
+            f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/",
         )
 
     def test_nightly_deb(self):
@@ -338,11 +337,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/deb/20260204-12345/",
+            f"{_EXAMPLE}/deb/20260204-12345/",
         )
 
     def test_nightly_rpm(self):
@@ -351,11 +350,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="rpm",
-                repo_base_url="https://x.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="rhel8",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/rpm/20260204-12345/x86_64/",
+            f"{_EXAMPLE}/rpm/20260204-12345/x86_64/",
         )
 
     def test_strips_trailing_slash_from_base(self):
@@ -363,11 +362,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://rocm.prereleases.amd.com/",
+                repo_base_url=f"{_EXAMPLE}/",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+            f"{_EXAMPLE}/packages/ubuntu2404",
         )
 
     def test_explicit_per_family_layout_matches_default(self):
@@ -375,7 +374,7 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
                 layout="per_family",
@@ -383,11 +382,33 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
             ),
         )
+
+    def test_unknown_release_type_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            get_url_repo_params.get_repo_url(
+                release_type="typo-channel",
+                native_package_type="deb",
+                repo_base_url=_EXAMPLE,
+                os_profile="ubuntu2404",
+                repo_sub_folder="",
+            )
+        self.assertIn("Unknown release_type", str(ctx.exception))
+
+    def test_empty_release_type_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            get_url_repo_params.get_repo_url(
+                release_type="   ",
+                native_package_type="deb",
+                repo_base_url=_EXAMPLE,
+                os_profile="ubuntu2404",
+                repo_sub_folder="",
+            )
+        self.assertIn("cannot be empty", str(ctx.exception))
 
 
 class GetRepoUrlMultiArchTest(unittest.TestCase):
@@ -398,12 +419,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="stable",
                 native_package_type="deb",
-                repo_base_url="https://repo.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2604",
                 repo_sub_folder="",
                 layout="multi_arch",
             ),
-            "https://repo.amd.com/rocm/packages-multi-arch/ubuntu2604",
+            f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604",
         )
 
     def test_stable_rpm_matches_production_url(self):
@@ -411,12 +432,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="release",
                 native_package_type="rpm",
-                repo_base_url="https://repo.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="rhel10",
                 repo_sub_folder="",
                 layout="multi_arch",
             ),
-            "https://repo.amd.com/rocm/packages-multi-arch/rhel10/x86_64/",
+            f"{_EXAMPLE}/rocm/packages-multi-arch/rhel10/x86_64/",
         )
 
     def test_prerelease_deb(self):
@@ -424,12 +445,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://rocm.prereleases.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
                 layout="multi_arch",
             ),
-            "https://rocm.prereleases.amd.com/packages-multi-arch/ubuntu2404",
+            f"{_EXAMPLE}/packages-multi-arch/ubuntu2404",
         )
 
     def test_nightly_deb_with_subfolder(self):
@@ -437,12 +458,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://rocm.nightlies.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260501-25200531110",
                 layout="multi_arch",
             ),
-            "https://rocm.nightlies.amd.com/packages-multi-arch/deb/20260501-25200531110",
+            f"{_EXAMPLE}/packages-multi-arch/deb/20260501-25200531110",
         )
 
     def test_nightly_rpm_with_subfolder(self):
@@ -450,12 +471,12 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="rpm",
-                repo_base_url="https://rocm.nightlies.amd.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="rhel10",
                 repo_sub_folder="20260501-25200531110",
                 layout="multi_arch",
             ),
-            "https://rocm.nightlies.amd.com/packages-multi-arch/rpm/20260501-25200531110/x86_64",
+            f"{_EXAMPLE}/packages-multi-arch/rpm/20260501-25200531110/x86_64",
         )
 
     def test_empty_subfolder_index_urls(self):
@@ -463,22 +484,34 @@ class GetRepoUrlMultiArchTest(unittest.TestCase):
             get_url_repo_params.get_repo_url_multi_arch(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://repo_url.com",
+                repo_base_url=_EXAMPLE,
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://repo_url.com/packages-multi-arch/deb",
+            f"{_EXAMPLE}/packages-multi-arch/deb",
         )
         self.assertEqual(
             get_url_repo_params.get_repo_url_multi_arch(
                 release_type="nightly",
                 native_package_type="rpm",
-                repo_base_url="https://repo_url.com/",
+                repo_base_url=f"{_EXAMPLE}/",
                 os_profile="rhel10",
                 repo_sub_folder="",
             ),
-            "https://repo_url.com/packages-multi-arch/rpm/x86_64",
+            f"{_EXAMPLE}/packages-multi-arch/rpm/x86_64",
         )
+
+    def test_unknown_release_type_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            get_url_repo_params.get_repo_url(
+                release_type="unknown",
+                native_package_type="deb",
+                repo_base_url=_EXAMPLE,
+                os_profile="ubuntu2604",
+                repo_sub_folder="",
+                layout="multi_arch",
+            )
+        self.assertIn("Unknown release_type", str(ctx.exception))
 
 
 class ExtractGfxArchTest(unittest.TestCase):
@@ -560,10 +593,10 @@ class MainSubcommandsTest(unittest.TestCase):
     def test_get_base_url_success(self):
         # Test that get-base-url subcommand writes repo_base_url= to GITHUB_OUTPUT.
         code, output = _run_main_with_output(
-            ["get-base-url", "--from-url", "https://example.com/v2/whl"]
+            ["get-base-url", "--from-url", f"{_EXAMPLE}/v2/whl"]
         )
         self.assertEqual(code, 0)
-        self.assertIn("repo_base_url=https://example.com", output)
+        self.assertIn(f"repo_base_url={_EXAMPLE}", output)
 
     def test_get_base_url_invalid_returns_one(self):
         # Test that get-base-url with invalid URL returns 1 and prints error.
@@ -589,7 +622,7 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--native-package-type",
                 "deb",
                 "--repo-base-url",
-                "https://rocm.prereleases.amd.com",
+                _EXAMPLE,
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-sub-folder",
@@ -597,9 +630,7 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn(
-            "repo_url=https://rocm.prereleases.amd.com/packages/ubuntu2404", output
-        )
+        self.assertIn(f"repo_url={_EXAMPLE}/packages/ubuntu2404", output)
 
     def test_get_repo_url_multi_arch_layout_cli(self):
         code, output = _run_main_with_output(
@@ -612,7 +643,7 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--native-package-type",
                 "deb",
                 "--repo-base-url",
-                "https://repo.amd.com",
+                _EXAMPLE,
                 "--os-profile",
                 "ubuntu2604",
                 "--repo-sub-folder",
@@ -621,9 +652,49 @@ class MainSubcommandsTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "repo_url=https://repo.amd.com/rocm/packages-multi-arch/ubuntu2604",
+            f"repo_url={_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604",
             output,
         )
+
+    def test_get_repo_url_unknown_release_type_returns_one(self):
+        with patch("sys.stderr"):
+            code = get_url_repo_params.main(
+                [
+                    "get-repo-url",
+                    "--release-type",
+                    "typo-channel",
+                    "--native-package-type",
+                    "deb",
+                    "--repo-base-url",
+                    _EXAMPLE,
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--repo-sub-folder",
+                    "",
+                ]
+            )
+        self.assertEqual(code, 1)
+
+    def test_get_repo_url_unknown_layout_returns_one(self):
+        with patch("sys.stderr"):
+            code = get_url_repo_params.main(
+                [
+                    "get-repo-url",
+                    "--layout",
+                    "unknown",
+                    "--release-type",
+                    "nightly",
+                    "--native-package-type",
+                    "deb",
+                    "--repo-base-url",
+                    _EXAMPLE,
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--repo-sub-folder",
+                    "20260204-12345",
+                ]
+            )
+        self.assertEqual(code, 1)
 
     def test_get_repo_url_error_returns_one(self):
         # Test that get-repo-url returns 1 and prints error when get_repo_url raises.
@@ -639,7 +710,7 @@ class MainSubcommandsTest(unittest.TestCase):
                         "--native-package-type",
                         "deb",
                         "--repo-base-url",
-                        "https://x.com",
+                        _EXAMPLE,
                         "--os-profile",
                         "ubuntu2404",
                         "--repo-sub-folder",
@@ -694,14 +765,11 @@ class MainSubcommandsTest(unittest.TestCase):
             [
                 "get-gpg-url",
                 "--from-url",
-                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+                f"{_EXAMPLE}/packages/ubuntu2404",
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn(
-            "gpg_key_url=https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
-            output,
-        )
+        self.assertIn(f"gpg_key_url={_EXAMPLE}/packages/gpg/rocm.gpg", output)
 
     def test_get_gpg_url_with_release_type_dev_emits_empty(self):
         code, output = _run_main_with_output(
@@ -710,7 +778,7 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--release-type",
                 "dev",
                 "--from-url",
-                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+                f"{_EXAMPLE}/packages/ubuntu2404",
             ]
         )
         self.assertEqual(code, 0)
@@ -737,14 +805,11 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--release-type",
                 "prerelease",
                 "--from-url",
-                "https://rocm.prereleases.amd.com/packages/ubuntu2404",
+                f"{_EXAMPLE}/packages/ubuntu2404",
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn(
-            "gpg_key_url=https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
-            output,
-        )
+        self.assertIn(f"gpg_key_url={_EXAMPLE}/packages/gpg/rocm.gpg", output)
 
     def test_get_gpg_url_with_release_type_release(self):
         code, output = _run_main_with_output(
@@ -753,13 +818,11 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--release-type",
                 "release",
                 "--from-url",
-                "https://repo.amd.com/rocm/packages/rhel10/x86_64/",
+                f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/",
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn(
-            "gpg_key_url=https://repo.amd.com/rocm/packages/gpg/rocm.gpg", output
-        )
+        self.assertIn(f"gpg_key_url={_EXAMPLE}/rocm/packages/gpg/rocm.gpg", output)
 
 
 class GetContainerImageTest(unittest.TestCase):
