@@ -288,6 +288,11 @@ jobs:
           DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
           HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
 
+          # On gfx950 MIOpen's Winograd assembly does not build under the
+          # ROCm 10 comgr, so every convolution fails to autotune. The other
+          # solvers work, so drop Winograd until MIOpen assembles again.
+          MIOPEN_DEBUG_CONV_WINOGRAD: "0"
+
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
             --xla_gpu_force_compilation_parallelism=1
