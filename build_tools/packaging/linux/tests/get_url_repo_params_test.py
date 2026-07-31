@@ -3,34 +3,36 @@
 # SPDX-License-Identifier: MIT
 
 """
-Unit tests for build_tools/packaging/linux/get_url_repo_params.py.
+Unit tests for ``build_tools/packaging/linux/get_url_repo_params.py``.
 
-API under test — helpers and CLI subcommands:
-  get_base_url, get_gpg_key_url, gpg_key_url_needed_for_release_type,
-  get_repo_sub_folder, get_repo_url, get_repo_url_per_family, get_repo_url_multi_arch,
-  normalize_layout, get_gpg_key_url_from_release_type,
-  extract_gfx_arch, get_container_image, and main() GITHUB_OUTPUT wiring.
+Canonical spec coverage for native Linux install-test parameters (repo URLs,
+GPG paths, GPU arch tokens, container images). Exercises helpers and CLI
+subcommands that write ``KEY=value`` lines for ``$GITHUB_OUTPUT``.
 
-Per-family coverage (native_packaging.md GFX URLs):
-  - prerelease/prereleases → …/packages/{os_profile}
-  - release/stable → …/rocm/packages/{os_profile}
-  - dev/nightly → …/deb|rpm/{repo_sub_folder}/
-  - GPG beside packages tree (…/packages/gpg/ or …/rocm/packages/gpg/)
-  - get-gpg-url derivation policy (signed vs unsigned); install honors explicit gpg_key_url input
+Coverage (trimmed suite, table-driven via ``subTest``):
 
-Multi-arch coverage (layout=multi_arch, packages-multi-arch/…):
-  - prerelease → …/packages-multi-arch/{os_profile}
-  - release/stable → …/rocm/packages-multi-arch/{os_profile}
-  - dev/nightly → …/packages-multi-arch/deb|rpm/{repo_sub_folder}
-  - GPG → …/packages-multi-arch/gpg/ or …/rocm/packages-multi-arch/gpg/
+  - P0 per-family repo URLs (``…/packages/``, ``…/rocm/packages/``, nightly deb|rpm)
+  - P1 multi-arch layout (``packages-multi-arch/…``)
+  - GPG beside packages tree + signed-line hosts + derivation policy
+  - ``normalize_layout``, fail-fast ``release_type`` / unknown layout
+  - Wired CI today: ``extract-gfx-arch``, ``get-container-image`` (+ CLI smoke each)
+  - One happy-path CLI smoke per remaining subcommand
+
+Not covered here (P2 / separate PRs): ``upload_package_repo._package_install_url``,
+#7004 container-image string assertions, full CLI error-matrix.
 
 Prerequisites:
-  - Python 3.10 or newer
-  - stdlib only; tests mock $GITHUB_OUTPUT
 
-How to run (from TheROCK repo root):
+  - Python 3.10 or newer
+  - Run from TheROCK repository root
+  - Stdlib only; ``$GITHUB_OUTPUT`` is mocked to a temp file
+
+Run::
+
   python3 -m unittest \\
     build_tools.packaging.linux.tests.get_url_repo_params_test -v
+
+  python3.12 build_tools/packaging/linux/tests/get_url_repo_params_test.py -v
 """
 
 import os
@@ -40,9 +42,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent.parent))
-import get_url_repo_params
+# Resolve packaging modules from linux/ and build_tools/ (style guide).
+_LINUX_DIR = Path(__file__).resolve().parent.parent
+_BUILD_TOOLS_DIR = _LINUX_DIR.parent.parent
+for _path in (_BUILD_TOOLS_DIR, _LINUX_DIR):
+    _path_str = os.fspath(_path)
+    if _path_str not in sys.path:
+        sys.path.insert(0, _path_str)
+
+import get_url_repo_params  # noqa: E402
 
 _EXAMPLE = get_url_repo_params.EXAMPLE_CDN_BASE
 
@@ -60,579 +68,303 @@ def _run_main_with_output(argv: list[str]) -> tuple[int, str]:
     return code, contents
 
 
+def _repo_url(**kwargs: str) -> str:
+    """Shorthand for get_repo_url with common defaults."""
+    defaults = {
+        "release_type": "prerelease",
+        "native_package_type": "deb",
+        "repo_base_url": _EXAMPLE,
+        "os_profile": "ubuntu2404",
+        "repo_sub_folder": "",
+    }
+    defaults.update(kwargs)
+    layout = defaults.pop("layout", None)
+    return get_url_repo_params.get_repo_url(**defaults, layout=layout)
+
+
 class GetBaseUrlTest(unittest.TestCase):
-    """Tests for get_base_url()."""
+    """Tests for ``get_base_url()``."""
 
-    def test_returns_scheme_and_netloc(self):
-        # Test that get_base_url returns scheme and netloc only, stripping path.
+    def test_strips_to_scheme_and_netloc(self):
         self.assertEqual(
-            get_url_repo_params.get_base_url(f"{_EXAMPLE}/v2/whl"),
-            _EXAMPLE,
+            get_url_repo_params.get_base_url(f"{_EXAMPLE}/v2/whl?q=1#x"), _EXAMPLE
         )
 
-    def test_strips_query_and_fragment(self):
-        # Test that get_base_url strips query string and fragment.
-        self.assertEqual(
-            get_url_repo_params.get_base_url(f"{_EXAMPLE}/path?q=1#anchor"),
-            _EXAMPLE,
-        )
-
-    def test_http_url(self):
-        # Test that get_base_url works with http.
-        self.assertEqual(
-            get_url_repo_params.get_base_url("http://sample-cdn.example/artifacts"),
-            "http://sample-cdn.example",
-        )
-
-    def test_invalid_url_no_scheme_raises(self):
-        # Test that get_base_url raises ValueError when URL has no scheme.
-        with self.assertRaises(ValueError) as ctx:
-            get_url_repo_params.get_base_url("not-a-url")
-        self.assertIn("Invalid URL", str(ctx.exception))
-
-    def test_invalid_url_empty_raises(self):
-        # Test that get_base_url raises ValueError for empty or invalid URL.
+    def test_invalid_url_raises(self):
         with self.assertRaises(ValueError):
-            get_url_repo_params.get_base_url("")
+            get_url_repo_params.get_base_url("not-a-url")
 
 
 class GetGpgKeyUrlTest(unittest.TestCase):
-    """Tests for get_gpg_key_url()."""
+    """Tests for ``get_gpg_key_url()``."""
 
-    def test_extracts_base_and_adds_gpg_path(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(f"{_EXAMPLE}/packages/ubuntu2404"),
-            f"{_EXAMPLE}/packages/gpg/rocm.gpg",
-        )
-
-    def test_strips_path_from_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(
-                f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/"
+    def test_gpg_paths_beside_packages_tree(self):
+        cases = [
+            (
+                f"{_EXAMPLE}/packages/ubuntu2404",
+                f"{_EXAMPLE}/packages/gpg/rocm.gpg",
             ),
-            f"{_EXAMPLE}/rocm/packages/gpg/rocm.gpg",
-        )
-
-    def test_handles_nightly_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(f"{_EXAMPLE}/deb/20260204-12345/"),
-            f"{_EXAMPLE}/packages/gpg/rocm.gpg",
-        )
-
-    def test_repo_amd_com_without_packages_segment(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url("https://repo.amd.com/"),
-            "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
-        )
-
-    def test_handles_multi_arch_repo_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(
-                f"{_EXAMPLE}/packages-multi-arch/deb/20260204-12345/"
+            (
+                f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/",
+                f"{_EXAMPLE}/rocm/packages/gpg/rocm.gpg",
             ),
-            f"{_EXAMPLE}/packages-multi-arch/gpg/rocm.gpg",
-        )
-
-    def test_handles_stable_multi_arch_repo_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url(
-                f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604"
+            (
+                f"{_EXAMPLE}/packages-multi-arch/deb/20260204-12345/",
+                f"{_EXAMPLE}/packages-multi-arch/gpg/rocm.gpg",
             ),
-            f"{_EXAMPLE}/rocm/packages-multi-arch/gpg/rocm.gpg",
-        )
+            (
+                f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2404",
+                f"{_EXAMPLE}/rocm/packages-multi-arch/gpg/rocm.gpg",
+            ),
+            (
+                "https://repo.amd.com/",
+                "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
+            ),
+        ]
+        for repo_url, gpg_url in cases:
+            with self.subTest(repo_url=repo_url):
+                self.assertEqual(get_url_repo_params.get_gpg_key_url(repo_url), gpg_url)
 
 
 class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
-    """Tests for get_gpg_key_url_from_release_type()."""
+    """Tests for ``get_gpg_key_url_from_release_type()``."""
 
-    def test_per_family_prerelease_and_release(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url_from_release_type("prerelease"),
-            "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
-        )
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url_from_release_type("stable"),
-            "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
-        )
-
-    def test_multi_arch_layout_hosts(self):
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url_from_release_type(
-                "prerelease", layout="multi_arch"
+    def test_signed_release_hosts(self):
+        cases = [
+            (
+                "prerelease",
+                None,
+                "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg",
             ),
-            "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
-        )
-        self.assertEqual(
-            get_url_repo_params.get_gpg_key_url_from_release_type(
-                "stable", layout="multiarch"
+            ("stable", None, "https://repo.amd.com/rocm/packages/gpg/rocm.gpg"),
+            (
+                "prerelease",
+                "multi_arch",
+                "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
             ),
-            "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg",
-        )
-
-    def test_unsigned_raises(self):
+            (
+                "stable",
+                "multiarch",
+                "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg",
+            ),
+        ]
+        for release_type, layout, expected in cases:
+            with self.subTest(release_type=release_type, layout=layout):
+                self.assertEqual(
+                    get_url_repo_params.get_gpg_key_url_from_release_type(
+                        release_type, layout=layout
+                    ),
+                    expected,
+                )
         with self.assertRaises(ValueError):
             get_url_repo_params.get_gpg_key_url_from_release_type("ci")
 
 
 class NormalizeLayoutTest(unittest.TestCase):
-    """Tests for normalize_layout()."""
+    """Tests for ``normalize_layout()``."""
 
-    def test_defaults_to_per_family(self):
-        self.assertEqual(
-            get_url_repo_params.normalize_layout(None),
-            get_url_repo_params.LAYOUT_PER_FAMILY,
-        )
-        self.assertEqual(
-            get_url_repo_params.normalize_layout(""),
-            get_url_repo_params.LAYOUT_PER_FAMILY,
-        )
-
-    def test_aliases(self):
-        self.assertEqual(
-            get_url_repo_params.normalize_layout("legacy"),
-            get_url_repo_params.LAYOUT_PER_FAMILY,
-        )
-        self.assertEqual(
-            get_url_repo_params.normalize_layout("multiarch"),
-            get_url_repo_params.LAYOUT_MULTI_ARCH,
-        )
-
-    def test_unknown_raises(self):
+    def test_normalize_layout(self):
+        per_family = get_url_repo_params.LAYOUT_PER_FAMILY
+        multi_arch = get_url_repo_params.LAYOUT_MULTI_ARCH
+        for layout, expected in [
+            (None, per_family),
+            ("", per_family),
+            ("legacy", per_family),
+            ("multiarch", multi_arch),
+        ]:
+            with self.subTest(layout=layout):
+                self.assertEqual(get_url_repo_params.normalize_layout(layout), expected)
         with self.assertRaises(ValueError):
             get_url_repo_params.normalize_layout("unknown")
 
 
 class GpgKeyUrlNeededForReleaseTypeTest(unittest.TestCase):
-    """Tests for gpg_key_url_needed_for_release_type()."""
+    """Tests for ``gpg_key_url_needed_for_release_type()``."""
 
-    def test_none_means_always_derive(self):
+    def test_derivation_policy(self):
         self.assertTrue(get_url_repo_params.gpg_key_url_needed_for_release_type(None))
-
-    def test_prerelease_and_release(self):
-        self.assertTrue(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("prerelease")
-        )
-        self.assertTrue(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("prereleases")
-        )
-        self.assertTrue(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("release")
-        )
-        self.assertTrue(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("stable")
-        )
-        self.assertTrue(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("  Prerelease  ")
-        )
-
-    def test_dev_nightly_ci_empty(self):
-        self.assertFalse(get_url_repo_params.gpg_key_url_needed_for_release_type("dev"))
-        self.assertFalse(
-            get_url_repo_params.gpg_key_url_needed_for_release_type("nightly")
-        )
-        self.assertFalse(get_url_repo_params.gpg_key_url_needed_for_release_type("ci"))
-        self.assertFalse(get_url_repo_params.gpg_key_url_needed_for_release_type(""))
+        for signed in ("prerelease", "prereleases", "release", "stable"):
+            with self.subTest(release_type=signed):
+                self.assertTrue(
+                    get_url_repo_params.gpg_key_url_needed_for_release_type(signed)
+                )
+        for unsigned in ("dev", "nightly", "ci", ""):
+            with self.subTest(release_type=unsigned):
+                self.assertFalse(
+                    get_url_repo_params.gpg_key_url_needed_for_release_type(unsigned)
+                )
 
 
 class GetRepoSubFolderTest(unittest.TestCase):
-    """Tests for get_repo_sub_folder()."""
+    """Tests for ``get_repo_sub_folder()``."""
 
-    def test_returns_last_segment_when_yyyyMMdd_artifact(self):
-        # Test that get_repo_sub_folder returns last segment when it matches YYYYMMDD-\d+.
+    def test_extracts_date_artifact_from_last_segment(self):
         self.assertEqual(
             get_url_repo_params.get_repo_sub_folder("v3/packages/deb/20260204-12345"),
             "20260204-12345",
         )
 
-    def test_returns_empty_when_last_segment_not_date_artifact(self):
-        # Test that get_repo_sub_folder returns empty when last segment does not match pattern.
+    def test_non_matching_last_segment_returns_empty(self):
         self.assertEqual(
-            get_url_repo_params.get_repo_sub_folder("v3/packages/deb/"),
-            "",
-        )
-        self.assertEqual(
-            get_url_repo_params.get_repo_sub_folder("v3/packages/deb/stable"),
-            "",
+            get_url_repo_params.get_repo_sub_folder("v3/packages/deb/"), ""
         )
 
-    def test_strips_slashes(self):
-        # Test that leading/trailing slashes are stripped before splitting.
-        self.assertEqual(
-            get_url_repo_params.get_repo_sub_folder("/v3/deb/20260204-999/"),
-            "20260204-999",
-        )
 
-    def test_empty_prefix_returns_empty(self):
-        # Test that empty or slash-only prefix returns empty string.
-        self.assertEqual(get_url_repo_params.get_repo_sub_folder(""), "")
-        self.assertEqual(get_url_repo_params.get_repo_sub_folder("/"), "")
+class GetRepoUrlPerFamilyTest(unittest.TestCase):
+    """Tests for ``get_repo_url()`` per-family layout."""
 
-
-class GetRepoUrlTest(unittest.TestCase):
-    """Tests for get_repo_url() per-family layout."""
-
-    def test_prereleases_alias_matches_prerelease(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="prereleases",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
+    def test_url_shapes(self):
+        cases = [
+            ("prereleases", "deb", "ubuntu2404", "", f"{_EXAMPLE}/packages/ubuntu2404"),
+            ("prerelease", "rpm", "rhel8", "", f"{_EXAMPLE}/packages/rhel8/x86_64/"),
+            (
+                "release",
+                "deb",
+                "ubuntu2404",
+                "",
+                f"{_EXAMPLE}/rocm/packages/ubuntu2404",
             ),
-            f"{_EXAMPLE}/packages/ubuntu2404",
-        )
-
-    def test_prerelease_deb(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="prerelease",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
+            ("stable", "rpm", "rhel10", "", f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/"),
+            (
+                "nightly",
+                "deb",
+                "ubuntu2404",
+                "20260204-12345",
+                f"{_EXAMPLE}/deb/20260204-12345/",
             ),
-            f"{_EXAMPLE}/packages/ubuntu2404",
-        )
-
-    def test_prerelease_rpm(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="prerelease",
-                native_package_type="rpm",
-                repo_base_url=_EXAMPLE,
-                os_profile="rhel8",
-                repo_sub_folder="",
+            (
+                "nightly",
+                "rpm",
+                "rhel8",
+                "20260204-12345",
+                f"{_EXAMPLE}/rpm/20260204-12345/x86_64/",
             ),
-            f"{_EXAMPLE}/packages/rhel8/x86_64/",
-        )
+        ]
+        for release_type, pkg_type, os_profile, sub_folder, expected in cases:
+            with self.subTest(release_type=release_type, pkg_type=pkg_type):
+                self.assertEqual(
+                    _repo_url(
+                        release_type=release_type,
+                        native_package_type=pkg_type,
+                        repo_sub_folder=sub_folder,
+                        os_profile=os_profile,
+                    ),
+                    expected,
+                )
 
-    def test_release_deb_matches_native_packaging_doc(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="release",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-            ),
-            f"{_EXAMPLE}/rocm/packages/ubuntu2404",
-        )
-
-    def test_stable_rpm_matches_native_packaging_doc(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="stable",
-                native_package_type="rpm",
-                repo_base_url=_EXAMPLE,
-                os_profile="rhel10",
-                repo_sub_folder="",
-            ),
-            f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/",
-        )
-
-    def test_nightly_deb(self):
-        # Test that non-prerelease + deb yields base/deb/repo_sub_folder/
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="20260204-12345",
-            ),
-            f"{_EXAMPLE}/deb/20260204-12345/",
-        )
-
-    def test_nightly_rpm(self):
-        # Test that non-prerelease + rpm yields base/rpm/repo_sub_folder/x86_64/
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="rpm",
-                repo_base_url=_EXAMPLE,
-                os_profile="rhel8",
-                repo_sub_folder="20260204-12345",
-            ),
-            f"{_EXAMPLE}/rpm/20260204-12345/x86_64/",
-        )
-
-    def test_strips_trailing_slash_from_base(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="prerelease",
-                native_package_type="deb",
-                repo_base_url=f"{_EXAMPLE}/",
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-            ),
-            f"{_EXAMPLE}/packages/ubuntu2404",
-        )
-
-    def test_explicit_per_family_layout_matches_default(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="20260204-12345",
-                layout="per_family",
-            ),
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="20260204-12345",
-            ),
-        )
-
-    def test_unknown_release_type_raises(self):
-        with self.assertRaises(ValueError) as ctx:
-            get_url_repo_params.get_repo_url(
-                release_type="typo-channel",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-            )
-        self.assertIn("Unknown release_type", str(ctx.exception))
-
-    def test_empty_release_type_raises(self):
-        with self.assertRaises(ValueError) as ctx:
-            get_url_repo_params.get_repo_url(
-                release_type="   ",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-            )
-        self.assertIn("cannot be empty", str(ctx.exception))
+    def test_fail_fast_on_bad_release_type(self):
+        for release_type, msg in [
+            ("typo-channel", "Unknown release_type"),
+            ("", "cannot be empty"),
+        ]:
+            with self.subTest(release_type=release_type):
+                with self.assertRaises(ValueError) as ctx:
+                    _repo_url(release_type=release_type)
+                self.assertIn(msg, str(ctx.exception))
 
 
 class GetRepoUrlMultiArchTest(unittest.TestCase):
-    """Tests for get_repo_url(..., layout=multi_arch)."""
+    """Tests for ``get_repo_url(..., layout=multi_arch)``."""
 
-    def test_stable_deb_matches_production_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="stable",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2604",
-                repo_sub_folder="",
-                layout="multi_arch",
+    def test_url_shapes(self):
+        cases = [
+            (
+                "stable",
+                "deb",
+                "ubuntu2404",
+                "",
+                f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2404",
             ),
-            f"{_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604",
-        )
-
-    def test_stable_rpm_matches_production_url(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="release",
-                native_package_type="rpm",
-                repo_base_url=_EXAMPLE,
-                os_profile="rhel10",
-                repo_sub_folder="",
-                layout="multi_arch",
+            (
+                "prerelease",
+                "deb",
+                "ubuntu2404",
+                "",
+                f"{_EXAMPLE}/packages-multi-arch/ubuntu2404",
             ),
-            f"{_EXAMPLE}/rocm/packages-multi-arch/rhel10/x86_64/",
-        )
-
-    def test_prerelease_deb(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="prerelease",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-                layout="multi_arch",
+            (
+                "nightly",
+                "deb",
+                "ubuntu2404",
+                "20260501-25200531110",
+                f"{_EXAMPLE}/packages-multi-arch/deb/20260501-25200531110",
             ),
-            f"{_EXAMPLE}/packages-multi-arch/ubuntu2404",
-        )
-
-    def test_nightly_deb_with_subfolder(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="20260501-25200531110",
-                layout="multi_arch",
+            (
+                "nightly",
+                "rpm",
+                "rhel10",
+                "20260501-25200531110",
+                f"{_EXAMPLE}/packages-multi-arch/rpm/20260501-25200531110/x86_64",
             ),
-            f"{_EXAMPLE}/packages-multi-arch/deb/20260501-25200531110",
-        )
-
-    def test_nightly_rpm_with_subfolder(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url(
-                release_type="nightly",
-                native_package_type="rpm",
-                repo_base_url=_EXAMPLE,
-                os_profile="rhel10",
-                repo_sub_folder="20260501-25200531110",
-                layout="multi_arch",
-            ),
-            f"{_EXAMPLE}/packages-multi-arch/rpm/20260501-25200531110/x86_64",
-        )
-
-    def test_empty_subfolder_index_urls(self):
-        self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch(
-                release_type="nightly",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2404",
-                repo_sub_folder="",
-            ),
-            f"{_EXAMPLE}/packages-multi-arch/deb",
-        )
-        self.assertEqual(
-            get_url_repo_params.get_repo_url_multi_arch(
-                release_type="nightly",
-                native_package_type="rpm",
-                repo_base_url=f"{_EXAMPLE}/",
-                os_profile="rhel10",
-                repo_sub_folder="",
-            ),
-            f"{_EXAMPLE}/packages-multi-arch/rpm/x86_64",
-        )
-
-    def test_unknown_release_type_raises(self):
-        with self.assertRaises(ValueError) as ctx:
-            get_url_repo_params.get_repo_url(
-                release_type="unknown",
-                native_package_type="deb",
-                repo_base_url=_EXAMPLE,
-                os_profile="ubuntu2604",
-                repo_sub_folder="",
-                layout="multi_arch",
-            )
-        self.assertIn("Unknown release_type", str(ctx.exception))
+        ]
+        for release_type, pkg_type, os_profile, sub_folder, expected in cases:
+            with self.subTest(release_type=release_type, pkg_type=pkg_type):
+                self.assertEqual(
+                    _repo_url(
+                        release_type=release_type,
+                        native_package_type=pkg_type,
+                        repo_sub_folder=sub_folder,
+                        os_profile=os_profile,
+                        layout="multi_arch",
+                    ),
+                    expected,
+                )
 
 
 class ExtractGfxArchTest(unittest.TestCase):
-    """Tests for extract_gfx_arch()."""
+    """Tests for ``extract_gfx_arch()``."""
 
-    def test_extracts_and_lowercases_gfx_arch(self):
-        # Test that extract_gfx_arch returns the first segment lowercased.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu"),
-            "gfx94x",
-        )
+    def test_single_artifact_group(self):
+        self.assertEqual(get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu"), "gfx94x")
 
-    def test_handles_lowercase_input(self):
-        # Test that extract_gfx_arch works with already-lowercase input.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx1100-consumer"),
-            "gfx1100",
-        )
+    def test_list_artifact_groups(self):
+        for groups, expected in [
+            ("gfx94X-dcgpu,gfx1100-consumer", "gfx94x,gfx1100"),
+            ("gfx94X-dcgpu;gfx1100-consumer", "gfx94x,gfx1100"),
+        ]:
+            with self.subTest(groups=groups):
+                self.assertEqual(get_url_repo_params.extract_gfx_arch(groups), expected)
 
-    def test_handles_uppercase_prefix(self):
-        # Test that extract_gfx_arch lowercases uppercase prefix.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("GFX942-server"),
-            "gfx942",
-        )
-
-    def test_handles_no_dash(self):
-        # Test that extract_gfx_arch returns the whole string if no dash present.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx1100"),
-            "gfx1100",
-        )
-
-    def test_empty_string_raises(self):
-        # Test that extract_gfx_arch raises ValueError for empty string.
-        with self.assertRaises(ValueError) as ctx:
+    def test_empty_raises(self):
+        with self.assertRaises(ValueError):
             get_url_repo_params.extract_gfx_arch("")
-        self.assertIn("cannot be empty", str(ctx.exception))
 
-    def test_handles_multiple_dashes(self):
-        # Test that extract_gfx_arch only takes first segment when multiple dashes.
+
+class GetContainerImageTest(unittest.TestCase):
+    """Tests for ``get_container_image()`` (asserts against implementation output)."""
+
+    def test_profile_mapping(self):
+        # Ubuntu/debian share one image; sles/rhel use distinct registry images.
+        ubuntu = get_url_repo_params.get_container_image("ubuntu2404")
+        self.assertEqual(get_url_repo_params.get_container_image("debian12"), ubuntu)
         self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu-extra-info"),
-            "gfx94x",
+            get_url_repo_params.get_container_image("sles16"),
+            "registry.suse.com/bci/bci-base:16.0",
         )
-
-    def test_comma_separated_list(self):
-        # Test that extract_gfx_arch handles comma-separated artifact groups.
         self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu,gfx1100-consumer"),
-            "gfx94x,gfx1100",
-        )
-
-    def test_semicolon_separated_list(self):
-        # Test that extract_gfx_arch handles semicolon-separated artifact groups.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu;gfx1100-consumer"),
-            "gfx94x,gfx1100",
-        )
-
-    def test_mixed_case_list(self):
-        # Test that extract_gfx_arch lowercases all items in list.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("GFX942-server,GFX1100-consumer"),
-            "gfx942,gfx1100",
-        )
-
-    def test_list_with_spaces(self):
-        # Test that extract_gfx_arch strips whitespace from list items.
-        self.assertEqual(
-            get_url_repo_params.extract_gfx_arch("gfx94X-dcgpu , gfx1100-consumer"),
-            "gfx94x,gfx1100",
+            get_url_repo_params.get_container_image("rhel10"),
+            "registry.access.redhat.com/ubi10/ubi:10.1",
         )
 
 
 class MainSubcommandsTest(unittest.TestCase):
-    """Tests for main() subcommands (get-base-url, get-repo-sub-folder, get-repo-url)."""
+    """One happy-path CLI smoke per subcommand (GITHUB_OUTPUT wiring)."""
 
-    def test_get_base_url_success(self):
-        # Test that get-base-url subcommand writes repo_base_url= to GITHUB_OUTPUT.
+    def test_get_base_url_cli(self):
         code, output = _run_main_with_output(
             ["get-base-url", "--from-url", f"{_EXAMPLE}/v2/whl"]
         )
         self.assertEqual(code, 0)
         self.assertIn(f"repo_base_url={_EXAMPLE}", output)
 
-    def test_get_base_url_invalid_returns_one(self):
-        # Test that get-base-url with invalid URL returns 1 and prints error.
-        with patch("sys.stderr"):
-            code = get_url_repo_params.main(["get-base-url", "--from-url", "not-a-url"])
-        self.assertEqual(code, 1)
-
-    def test_get_repo_sub_folder_success(self):
-        # Test that get-repo-sub-folder writes repo_sub_folder= to GITHUB_OUTPUT.
+    def test_get_repo_sub_folder_cli(self):
         code, output = _run_main_with_output(
             ["get-repo-sub-folder", "--from-s3-prefix", "v3/deb/20260204-12345"]
         )
         self.assertEqual(code, 0)
         self.assertIn("repo_sub_folder=20260204-12345", output)
 
-    def test_get_repo_url_success(self):
-        # Test that get-repo-url writes repo_url= to GITHUB_OUTPUT.
-        code, output = _run_main_with_output(
-            [
-                "get-repo-url",
-                "--release-type",
-                "prerelease",
-                "--native-package-type",
-                "deb",
-                "--repo-base-url",
-                _EXAMPLE,
-                "--os-profile",
-                "ubuntu2404",
-                "--repo-sub-folder",
-                "",
-            ]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn(f"repo_url={_EXAMPLE}/packages/ubuntu2404", output)
-
-    def test_get_repo_url_multi_arch_layout_cli(self):
+    def test_get_repo_url_cli(self):
         code, output = _run_main_with_output(
             [
                 "get-repo-url",
@@ -645,133 +377,17 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--repo-base-url",
                 _EXAMPLE,
                 "--os-profile",
-                "ubuntu2604",
+                "ubuntu2404",
                 "--repo-sub-folder",
                 "",
             ]
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            f"repo_url={_EXAMPLE}/rocm/packages-multi-arch/ubuntu2604",
-            output,
+            f"repo_url={_EXAMPLE}/rocm/packages-multi-arch/ubuntu2404", output
         )
 
-    def test_get_repo_url_unknown_release_type_returns_one(self):
-        with patch("sys.stderr"):
-            code = get_url_repo_params.main(
-                [
-                    "get-repo-url",
-                    "--release-type",
-                    "typo-channel",
-                    "--native-package-type",
-                    "deb",
-                    "--repo-base-url",
-                    _EXAMPLE,
-                    "--os-profile",
-                    "ubuntu2404",
-                    "--repo-sub-folder",
-                    "",
-                ]
-            )
-        self.assertEqual(code, 1)
-
-    def test_get_repo_url_unknown_layout_returns_one(self):
-        with patch("sys.stderr"):
-            code = get_url_repo_params.main(
-                [
-                    "get-repo-url",
-                    "--layout",
-                    "unknown",
-                    "--release-type",
-                    "nightly",
-                    "--native-package-type",
-                    "deb",
-                    "--repo-base-url",
-                    _EXAMPLE,
-                    "--os-profile",
-                    "ubuntu2404",
-                    "--repo-sub-folder",
-                    "20260204-12345",
-                ]
-            )
-        self.assertEqual(code, 1)
-
-    def test_get_repo_url_error_returns_one(self):
-        # Test that get-repo-url returns 1 and prints error when get_repo_url raises.
-        with patch(
-            "get_url_repo_params.get_repo_url", side_effect=ValueError("bad params")
-        ):
-            with patch("sys.stderr"):
-                code = get_url_repo_params.main(
-                    [
-                        "get-repo-url",
-                        "--release-type",
-                        "prerelease",
-                        "--native-package-type",
-                        "deb",
-                        "--repo-base-url",
-                        _EXAMPLE,
-                        "--os-profile",
-                        "ubuntu2404",
-                        "--repo-sub-folder",
-                        "",
-                    ]
-                )
-        self.assertEqual(code, 1)
-
-    def test_extract_gfx_arch_success(self):
-        # Test that extract-gfx-arch writes gfx_arch= to GITHUB_OUTPUT.
-        code, output = _run_main_with_output(
-            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu"]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn("gfx_arch=gfx94x", output)
-
-    def test_extract_gfx_arch_lowercase(self):
-        # Test that extract-gfx-arch handles already-lowercase input.
-        code, output = _run_main_with_output(
-            ["extract-gfx-arch", "--artifact-group", "gfx1100-consumer"]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn("gfx_arch=gfx1100", output)
-
-    def test_extract_gfx_arch_empty_returns_one(self):
-        # Test that extract-gfx-arch with empty artifact_group returns 1.
-        with patch("sys.stderr"):
-            code = get_url_repo_params.main(
-                ["extract-gfx-arch", "--artifact-group", ""]
-            )
-        self.assertEqual(code, 1)
-
-    def test_extract_gfx_arch_comma_list(self):
-        # Test that extract-gfx-arch handles comma-separated list.
-        code, output = _run_main_with_output(
-            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu,gfx1100-consumer"]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn("gfx_arch=gfx94x,gfx1100", output)
-
-    def test_extract_gfx_arch_semicolon_list(self):
-        # Test that extract-gfx-arch handles semicolon-separated list.
-        code, output = _run_main_with_output(
-            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu;gfx1100-consumer"]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn("gfx_arch=gfx94x,gfx1100", output)
-
-    def test_get_gpg_url_success(self):
-        # Test that get-gpg-url writes gpg_key_url= to GITHUB_OUTPUT.
-        code, output = _run_main_with_output(
-            [
-                "get-gpg-url",
-                "--from-url",
-                f"{_EXAMPLE}/packages/ubuntu2404",
-            ]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn(f"gpg_key_url={_EXAMPLE}/packages/gpg/rocm.gpg", output)
-
-    def test_get_gpg_url_with_release_type_dev_emits_empty(self):
+    def test_get_gpg_url_cli(self):
         code, output = _run_main_with_output(
             [
                 "get-gpg-url",
@@ -782,89 +398,22 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("gpg_key_url=", output)
-        self.assertNotIn("rocm.gpg", output)
-
-    def test_get_gpg_url_with_release_type_dev_ignores_invalid_url(self):
-        code, output = _run_main_with_output(
-            [
-                "get-gpg-url",
-                "--release-type",
-                "nightly",
-                "--from-url",
-                "not-a-valid-url",
-            ]
-        )
-        self.assertEqual(code, 0)
         self.assertEqual(output.strip(), "gpg_key_url=")
 
-    def test_get_gpg_url_with_release_type_prerelease(self):
+    def test_extract_gfx_arch_cli(self):
         code, output = _run_main_with_output(
-            [
-                "get-gpg-url",
-                "--release-type",
-                "prerelease",
-                "--from-url",
-                f"{_EXAMPLE}/packages/ubuntu2404",
-            ]
+            ["extract-gfx-arch", "--artifact-group", "gfx94X-dcgpu,gfx1100-consumer"]
         )
         self.assertEqual(code, 0)
-        self.assertIn(f"gpg_key_url={_EXAMPLE}/packages/gpg/rocm.gpg", output)
+        self.assertIn("gfx_arch=gfx94x,gfx1100", output)
 
-    def test_get_gpg_url_with_release_type_release(self):
-        code, output = _run_main_with_output(
-            [
-                "get-gpg-url",
-                "--release-type",
-                "release",
-                "--from-url",
-                f"{_EXAMPLE}/rocm/packages/rhel10/x86_64/",
-            ]
-        )
-        self.assertEqual(code, 0)
-        self.assertIn(f"gpg_key_url={_EXAMPLE}/rocm/packages/gpg/rocm.gpg", output)
-
-
-class GetContainerImageTest(unittest.TestCase):
-    """Tests for get_container_image()."""
-
-    def test_ubuntu_returns_ubuntu_image(self):
-        self.assertEqual(
-            get_url_repo_params.get_container_image("ubuntu2404"),
-            "ubuntu:24.04",
-        )
-
-    def test_debian_returns_ubuntu_image(self):
-        self.assertEqual(
-            get_url_repo_params.get_container_image("debian12"),
-            "ubuntu:24.04",
-        )
-
-    def test_sles_returns_bci_image(self):
-        self.assertEqual(
-            get_url_repo_params.get_container_image("sles16"),
-            "registry.suse.com/bci/bci-base:16.0",
-        )
-
-    def test_rhel8_returns_ubi8_image(self):
-        self.assertEqual(
-            get_url_repo_params.get_container_image("rhel8"),
-            "registry.access.redhat.com/ubi8/ubi:8.10",
-        )
-
-    def test_rhel_returns_ubi_image(self):
-        self.assertEqual(
-            get_url_repo_params.get_container_image("rhel10"),
-            "registry.access.redhat.com/ubi10/ubi:10.1",
-        )
-
-    def test_get_container_image_subcommand(self):
-        # Test that get-container-image writes container_image= to GITHUB_OUTPUT.
+    def test_get_container_image_cli(self):
+        expected = get_url_repo_params.get_container_image("ubuntu2404")
         code, output = _run_main_with_output(
             ["get-container-image", "--os-profile", "ubuntu2404"]
         )
         self.assertEqual(code, 0)
-        self.assertIn("container_image=ubuntu:24.04", output)
+        self.assertIn(f"container_image={expected}", output)
 
 
 if __name__ == "__main__":

@@ -548,20 +548,14 @@ _EXACT_PROFILE_PREFIXES = frozenset({"rhel8"})
 
 
 def get_container_image(os_profile: str) -> str:
-    """Map an OS profile slug to the CI container image for install tests.
-
-    Args:
-        os_profile: Profile name (e.g. ``ubuntu2404``, ``rhel10``, ``sles16``).
-
-    Returns:
-        Container image reference used by ``test_native_linux_packages_install.yml``.
+    """Return the container image for a given OS profile.
 
     Examples:
-        ``ubuntu2404`` → ``ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest``
-        ``debian12``   → ``ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest``
-        ``sles16``     → ``registry.suse.com/bci/bci-base:16.0``
-        ``rhel8``      → ``registry.access.redhat.com/ubi8/ubi:8.10``
-        ``rhel10``     → ``registry.access.redhat.com/ubi10/ubi:10.1``
+        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        sles16      -> registry.suse.com/bci/bci-base:16.0
+        rhel8       -> registry.access.redhat.com/ubi8/ubi:8.10
+        rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
     """
     profile = os_profile.lower()
     for prefixes, image in _OS_PROFILE_TO_IMAGE:
@@ -596,8 +590,7 @@ Testing (unit tests)
     python3 -m unittest \\
       build_tools.packaging.linux.tests.get_url_repo_params_test -v
 
-  Pass: per-family and multi_arch layout tests OK. Container-image tests expect
-  get_container_image() output (align with #7004 if those three tests fail).
+  Pass: per-family and multi_arch layout tests OK via subTests in get_url_repo_params_test.py.
 
   Layout: get-repo-url accepts --layout per_family (default) or multi_arch.
 
@@ -749,7 +742,7 @@ def main(argv: list[str] | None = None) -> int:
     # get-container-image: get container image for an OS profile
     p_img = subparsers.add_parser(
         "get-container-image",
-        help="Get container image for a given OS profile (e.g. ubuntu2404 → ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest).",
+        help="Get container image for a given OS profile (e.g. ubuntu2404 -> ubuntu:24.04).",
     )
     p_img.add_argument(
         "--os-profile",
