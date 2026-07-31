@@ -134,6 +134,7 @@ Example invocations:
 import argparse
 import os
 import re
+import stat
 import subprocess
 import sys
 import traceback
@@ -186,7 +187,7 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
-OWNERSHIP_TIMEOUT_SEC = 120
+FILE_SECURITY_TIMEOUT_SEC = 120
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
@@ -907,8 +908,10 @@ gpgcheck=0
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
 
-        # Verify installed files are owned by root
-        ownership_ok = self.verify_root_ownership()
+        # Verify installed files are owned by root:root and have safe
+        # permissions (no group/other-writable paths or setuid/setgid bits),
+        # which guards against local PATH-hijack privilege escalation.
+        security_ok = self.verify_installed_file_security()
 
         # Check installed packages
         print("\nChecking installed packages:")
@@ -974,25 +977,42 @@ gpgcheck=0
         if found_count < VERIFY_MIN_COMPONENTS:
             print("\n[FAIL] Basic verification FAILED (insufficient components)")
             return False
-        if not ownership_ok:
-            print("\n[FAIL] Basic verification FAILED (files not owned by root)")
+        if not security_ok:
+            print(
+                "\n[FAIL] Basic verification FAILED "
+                "(files not owned by root or with insecure permissions)"
+            )
             return False
         print("\n[PASS] Basic verification PASSED")
         return True
 
-    def verify_root_ownership(self) -> bool:
-        """Verify all installed files under the prefix are owned by root:root.
+    def verify_installed_file_security(self) -> bool:
+        """Verify installed files are owned by root:root with safe permissions.
 
-        Uses ``find`` (C-level traversal) rather than a Python walk with per-file
-        ``lstat`` for speed on large install trees. Flags any path whose owner uid
-        or group gid is not 0. If ``find`` is unavailable on the host, falls back
-        to a pure-Python ``os.walk`` scan so the check is not silently skipped.
+        Combines two related install-tree security checks into a single
+        traversal. A path under the prefix is flagged when any of the following
+        holds:
+
+        - Ownership: its owner uid or group gid is not 0 (not ``root:root``);
+          a non-root-owned path can be tampered with by that owner.
+        - Writability: it is writable by group or other (mode bits ``0o022``),
+          which would let an unprivileged user drop or replace a binary in a
+          directory on ``PATH`` and have another user (or root) execute it.
+          Group/other-writable *sticky* directories (mode bit ``0o1000``,
+          e.g. ``/tmp``-style dirs) are allowed, since the sticky bit prevents
+          users from tampering with files they do not own.
+        - setuid/setgid: it carries mode bits ``0o6000``, a direct privilege
+          escalation surface.
+
+        Uses ``find`` (C-level traversal) for speed on large install trees and
+        falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
+        so the check is not silently skipped.
 
         Returns:
-        True if every file is owned by root:root (or the check could not be run),
-        False if any offending file is found.
+        True if no offending path is found (or the check could not be run),
+        False if any offending path is found.
         """
-        print("\nVerifying installed files are owned by root...")
+        print("\nVerifying installed files are owned by root with safe permissions...")
         install_prefix = str(Path(self.install_prefix))
         try:
             result = subprocess.run(
@@ -1000,6 +1020,7 @@ gpgcheck=0
                     "find",
                     install_prefix,
                     "(",
+                    # not owned by root:root
                     "!",
                     "-uid",
                     "0",
@@ -1007,44 +1028,62 @@ gpgcheck=0
                     "!",
                     "-gid",
                     "0",
+                    "-o",
+                    # group/other-writable, excluding sticky-bit dirs
+                    "(",
+                    "-perm",
+                    "/022",
+                    "!",
+                    "-perm",
+                    "-1000",
+                    ")",
+                    "-o",
+                    # setuid/setgid
+                    "-perm",
+                    "/6000",
                     ")",
                     "-print",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=OWNERSHIP_TIMEOUT_SEC,
+                timeout=FILE_SECURITY_TIMEOUT_SEC,
             )
         except subprocess.TimeoutExpired:
-            print(" [WARN] Ownership check timed out; skipping")
+            print(" [WARN] File security check timed out; skipping")
             return True
         except OSError as e:
             # find not available on this host; fall back to a Python walk so the
             # check still runs rather than being silently skipped.
             print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
-            return self._verify_root_ownership_python(Path(install_prefix))
+            return self._verify_installed_file_security_python(Path(install_prefix))
 
         bad = [line for line in result.stdout.splitlines() if line]
         if bad:
-            print(f" [FAIL] {len(bad)} file(s) not owned by root:")
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
             for line in bad[:10]:
                 print(f"   {line}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
-        print(" [PASS] All installed files owned by root")
+        print(" [PASS] All installed files owned by root with safe permissions")
         return True
 
-    def _verify_root_ownership_python(self, install_path: Path) -> bool:
-        """Pure-Python fallback for ownership verification when ``find`` is missing.
+    def _verify_installed_file_security_python(self, install_path: Path) -> bool:
+        """Pure-Python fallback for the install-tree security check.
 
         Walks the install tree with ``os.walk`` (does not follow symlinked
-        directories) and ``os.lstat`` each entry, flagging any whose owner uid or
-        group gid is not 0. Slower than ``find`` on large trees but portable.
+        directories) and ``os.lstat`` each entry, applying the same rules as
+        :meth:`verify_installed_file_security`: flag entries not owned by
+        ``root:root``, group/other-writable entries (unless they are sticky
+        directories), and any setuid/setgid entry. Slower than ``find`` on
+        large trees but portable.
 
         Returns:
-        True if every entry is owned by root:root, False if any offending entry
-        is found.
+        True if no offending path is found, False if any offending path is found.
         """
         bad: list[str] = []
         for root, dirs, files in os.walk(install_path):
@@ -1054,16 +1093,24 @@ gpgcheck=0
                     st = os.lstat(entry)
                 except OSError:
                     continue
-                if st.st_uid != 0 or st.st_gid != 0:
+                mode = st.st_mode
+                not_root = st.st_uid != 0 or st.st_gid != 0
+                is_sticky_dir = stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
+                group_other_writable = bool(mode & 0o022) and not is_sticky_dir
+                setid = bool(mode & (stat.S_ISUID | stat.S_ISGID))
+                if not_root or group_other_writable or setid:
                     bad.append(entry)
         if bad:
-            print(f" [FAIL] {len(bad)} file(s) not owned by root:")
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
             for entry in bad[:10]:
                 print(f"   {entry}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
-        print(" [PASS] All installed files owned by root")
+        print(" [PASS] All installed files owned by root with safe permissions")
         return True
 
     def run_full_verification(self) -> bool:

@@ -8,6 +8,7 @@
 import contextlib
 import importlib.util
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -991,14 +992,14 @@ class RunBasicVerificationTest(unittest.TestCase):
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "verify_root_ownership",
+        "verify_installed_file_security",
         return_value=True,
     )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_enough_components_found(self, mock_run, mock_owner):
+    def test_returns_true_when_enough_components_found(self, mock_run, mock_security):
         # Test that run_basic_verification returns True when install_prefix exists and at least
         # VERIFY_MIN_COMPONENTS key components exist; subprocess (dpkg/rpm, rocminfo) is mocked.
-        # Ownership check is stubbed here (covered separately in VerifyRootOwnershipTest).
+        # The file-security check is stubbed here (covered separately in its own tests).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -1028,12 +1029,12 @@ class RunBasicVerificationTest(unittest.TestCase):
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "verify_root_ownership",
+        "verify_installed_file_security",
         return_value=True,
     )
     @patch("native_linux_package_install_test.subprocess.run")
     def test_handles_called_process_error_when_querying_packages(
-        self, mock_run, mock_owner
+        self, mock_run, mock_security
     ):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
@@ -1053,11 +1054,11 @@ class RunBasicVerificationTest(unittest.TestCase):
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "verify_root_ownership",
+        "verify_installed_file_security",
         return_value=True,
     )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_rocminfo_timeout(self, mock_run, mock_owner):
+    def test_handles_rocminfo_timeout(self, mock_run, mock_security):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
 
@@ -1078,8 +1079,8 @@ class RunBasicVerificationTest(unittest.TestCase):
             self.assertTrue(t.run_basic_verification())
 
 
-class VerifyRootOwnershipTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.verify_root_ownership()."""
+class VerifyInstalledFileSecurityTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_installed_file_security()."""
 
     def _make(self, install_prefix="/opt/rocm/core"):
         return native_linux_package_install_test.NativeLinuxPackageInstallTest(
@@ -1089,45 +1090,48 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         )
 
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_find_reports_no_offending_files(self, mock_run):
-        # Empty find output means every file is owned by root:root.
+    def test_returns_true_when_find_reports_no_offending_paths(self, mock_run):
+        # Empty find output means every path is root-owned with safe permissions.
         mock_run.return_value = MagicMock(returncode=0, stdout="")
         with _suppress_script_output():
-            self.assertTrue(self._make().verify_root_ownership())
+            self.assertTrue(self._make().verify_installed_file_security())
 
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_false_when_find_reports_offending_files(self, mock_run):
-        # Non-empty find output lists files not owned by root:root -> failure.
+    def test_returns_false_when_find_reports_offending_paths(self, mock_run):
+        # Non-empty find output lists non-root-owned or insecure paths -> failure.
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/lib/bar.so\n",
+            stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/bin/setuid-tool\n",
         )
         with _suppress_script_output():
-            self.assertFalse(self._make().verify_root_ownership())
+            self.assertFalse(self._make().verify_installed_file_security())
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_ignores_blank_lines_in_find_output(self, mock_run):
-        # Trailing/blank lines alone should not be treated as offending files.
+        # Trailing/blank lines alone should not be treated as offending paths.
         mock_run.return_value = MagicMock(returncode=0, stdout="\n\n")
         with _suppress_script_output():
-            self.assertTrue(self._make().verify_root_ownership())
+            self.assertTrue(self._make().verify_installed_file_security())
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_builds_expected_find_command(self, mock_run):
-        # Verify the find invocation checks both uid and gid against 0 under the prefix.
+        # Verify the single find invocation checks ownership (uid/gid), writable
+        # (0o022) and setid (0o6000) bits while excluding sticky-bit dirs.
         mock_run.return_value = MagicMock(returncode=0, stdout="")
         with _suppress_script_output():
-            self._make("/opt/rocm/core").verify_root_ownership()
+            self._make("/opt/rocm/core").verify_installed_file_security()
         cmd = mock_run.call_args[0][0]
         self.assertEqual(cmd[0], "find")
         self.assertEqual(cmd[1], "/opt/rocm/core")
         self.assertIn("-uid", cmd)
         self.assertIn("-gid", cmd)
+        self.assertIn("/022", cmd)
+        self.assertIn("/6000", cmd)
+        self.assertIn("-1000", cmd)
         self.assertIn("!", cmd)
-        # timeout passed as keyword
         self.assertEqual(
             mock_run.call_args[1]["timeout"],
-            native_linux_package_install_test.OWNERSHIP_TIMEOUT_SEC,
+            native_linux_package_install_test.FILE_SECURITY_TIMEOUT_SEC,
         )
 
     @patch("native_linux_package_install_test.subprocess.run")
@@ -1137,11 +1141,11 @@ class VerifyRootOwnershipTest(unittest.TestCase):
 
         mock_run.side_effect = subprocess.TimeoutExpired("find", 120)
         with _suppress_script_output():
-            self.assertTrue(self._make().verify_root_ownership())
+            self.assertTrue(self._make().verify_installed_file_security())
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "_verify_root_ownership_python",
+        "_verify_installed_file_security_python",
         return_value=True,
     )
     @patch("native_linux_package_install_test.subprocess.run")
@@ -1152,12 +1156,12 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         # rather than silently skipping; the fallback result is returned.
         mock_run.side_effect = OSError("find not found")
         with _suppress_script_output():
-            self.assertTrue(self._make().verify_root_ownership())
+            self.assertTrue(self._make().verify_installed_file_security())
         mock_fallback.assert_called_once()
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "_verify_root_ownership_python",
+        "_verify_installed_file_security_python",
         return_value=False,
     )
     @patch("native_linux_package_install_test.subprocess.run")
@@ -1166,21 +1170,29 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         # overall check fails.
         mock_run.side_effect = OSError("find not found")
         with _suppress_script_output():
-            self.assertFalse(self._make().verify_root_ownership())
+            self.assertFalse(self._make().verify_installed_file_security())
         mock_fallback.assert_called_once()
 
     @patch("native_linux_package_install_test.os.lstat")
     @patch("native_linux_package_install_test.os.walk")
-    def test_python_fallback_passes_when_all_root(self, mock_walk, mock_lstat):
-        # Python fallback returns True when every entry is owned by root:root.
+    def test_python_fallback_passes_for_safe_root_owned_tree(
+        self, mock_walk, mock_lstat
+    ):
+        # Python fallback returns True for root-owned 0755 dir / 0644 file modes.
         mock_walk.return_value = [
             ("/opt/rocm/core", ["bin"], ["a.txt"]),
             ("/opt/rocm/core/bin", [], ["rocminfo"]),
         ]
-        mock_lstat.return_value = MagicMock(st_uid=0, st_gid=0)
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o755),  # bin dir
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),  # a.txt
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o755),  # rocminfo
+        ]
         with _suppress_script_output():
             self.assertTrue(
-                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
             )
 
     @patch("native_linux_package_install_test.os.lstat")
@@ -1189,12 +1201,61 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         # Python fallback returns False when any entry is not owned by root.
         mock_walk.return_value = [("/opt/rocm/core", [], ["a.txt", "b.txt"])]
         mock_lstat.side_effect = [
-            MagicMock(st_uid=0, st_gid=0),
-            MagicMock(st_uid=1000, st_gid=1000),
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),
+            MagicMock(st_uid=1000, st_gid=1000, st_mode=stat.S_IFREG | 0o644),
         ]
         with _suppress_script_output():
             self.assertFalse(
-                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_world_writable(self, mock_walk, mock_lstat):
+        # A root-owned but world-writable directory (PATH-hijack case) is flagged.
+        mock_walk.return_value = [("/opt/rocm/core", ["bin"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_sticky_world_writable_dir(
+        self, mock_walk, mock_lstat
+    ):
+        # A root-owned world-writable *sticky* directory (mode 1777) is allowed.
+        mock_walk.return_value = [("/opt/rocm/core", ["tmp"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISVTX | 0o777
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setuid(self, mock_walk, mock_lstat):
+        # A root-owned setuid binary is flagged as a privilege-escalation surface.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setuid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISUID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
             )
 
     @patch("native_linux_package_install_test.os.lstat")
@@ -1205,17 +1266,22 @@ class VerifyRootOwnershipTest(unittest.TestCase):
         mock_lstat.side_effect = OSError("no such file")
         with _suppress_script_output():
             self.assertTrue(
-                self._make()._verify_root_ownership_python(Path("/opt/rocm/core"))
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
             )
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
-        "verify_root_ownership",
+        "verify_installed_file_security",
         return_value=False,
     )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_basic_verification_fails_when_ownership_fails(self, mock_run, mock_owner):
-        # Even with enough key components present, a failed ownership check fails Step 2.
+    def test_basic_verification_fails_when_security_check_fails(
+        self, mock_run, mock_security
+    ):
+        # Even with enough key components present, a failed file-security check
+        # (bad ownership or insecure permissions) fails Step 2.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -1229,7 +1295,7 @@ class VerifyRootOwnershipTest(unittest.TestCase):
             )
             with _suppress_script_output():
                 self.assertFalse(t.run_basic_verification())
-        mock_owner.assert_called_once()
+        mock_security.assert_called_once()
 
 
 class SetupGpgKeyTest(unittest.TestCase):
