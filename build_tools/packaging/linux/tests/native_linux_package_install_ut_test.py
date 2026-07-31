@@ -1556,5 +1556,118 @@ class RunStreamingTest(unittest.TestCase):
         mock_proc.kill.assert_called_once()
 
 
+class VerifyNoRunpathTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_no_runpath()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def _elf_tree(self, d):
+        # Create two files with ELF magic and one non-ELF file under d.
+        (Path(d) / "bin").mkdir()
+        (Path(d) / "lib").mkdir()
+        (Path(d) / "bin" / "hipcc").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "lib" / "libamdhip64.so").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "readme.txt").write_text("not an elf file")
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_no_elf_uses_runpath(self, mock_run):
+        # readelf output showing (RPATH) for every ELF -> pass.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf invoked for the two ELF files only, not the .txt file.
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_an_elf_uses_runpath(self, mock_run):
+        # Any (RUNPATH) line marks the file as offending -> fail.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_elf_has_no_dynamic_path(self, mock_run):
+        # ELF with neither RPATH nor RUNPATH is acceptable.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_skips_non_elf_files(self, mock_run):
+        # A tree with no ELF files performs no readelf calls and passes.
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "a.txt").write_text("plain")
+            (Path(d) / "b.json").write_text("{}")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        mock_run.assert_not_called()
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_readelf_unavailable(self, mock_run):
+        # If readelf cannot be executed (OSError), the check is skipped (non-fatal).
+        mock_run.side_effect = OSError("readelf not found")
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_readelf_timeout_skips_file(self, mock_run):
+        # A readelf timeout on a file is non-fatal; that file is skipped.
+        import subprocess
+
+        mock_run.side_effect = subprocess.TimeoutExpired("readelf", 30)
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_no_runpath",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_runpath_check_fails(
+        self, mock_run, mock_rpath
+    ):
+        # Even with enough components present, a failed RUNPATH check fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_rpath.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
