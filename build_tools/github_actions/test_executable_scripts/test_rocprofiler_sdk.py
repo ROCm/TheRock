@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import argparse
 import logging
 import os
 import platform
@@ -13,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
+from runner_capability import check_runner_requirements
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -55,6 +57,28 @@ ASAN_EXCLUDED_TESTS = [
 
 logging.basicConfig(level=logging.INFO)
 environ_vars = os.environ.copy()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run rocprofiler-sdk CI tests")
+    parser.add_argument(
+        "--ctest-label",
+        action="append",
+        default=[],
+        help="Run only CTest tests with this label (repeatable)",
+    )
+    parser.add_argument(
+        "--ctest-label-exclude",
+        action="append",
+        default=[],
+        help="Exclude CTest tests with this label (repeatable)",
+    )
+    parser.add_argument(
+        "--require-amdgpu-driver-min",
+        default=None,
+        help="Fail fast if /sys/module/amdgpu/version is below this value",
+    )
+    return parser.parse_args()
 
 
 def get_asan_runtime_library():
@@ -168,7 +192,7 @@ def cmake_build():
     )
 
 
-def execute_tests():
+def execute_tests(args):
     ctest_cmd = [
         "ctest",
         "--test-dir",
@@ -177,6 +201,10 @@ def execute_tests():
         "8",
         "--output-on-failure",
     ]
+    for label in args.ctest_label:
+        ctest_cmd += ["-L", label]
+    for label in args.ctest_label_exclude:
+        ctest_cmd += ["-LE", label]
     if is_asan():
         # Exclude tests known to fail/hang in the ASan configuration.
         exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
@@ -192,7 +220,12 @@ def execute_tests():
 
 
 if __name__ == "__main__":
+    args = parse_args()
+    if args.require_amdgpu_driver_min:
+        check_runner_requirements(
+            {"amdgpu_driver_min": args.require_amdgpu_driver_min}
+        )
     setup_env()
     cmake_config()
     cmake_build()
-    execute_tests()
+    execute_tests(args)
