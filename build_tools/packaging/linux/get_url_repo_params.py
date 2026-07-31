@@ -72,14 +72,31 @@ def get_gpg_key_url(package_url: str) -> str:
     """
     Get GPG key URL from package repository URL.
 
-    Extracts base URL and appends /gpg/rocm.gpg path.
+    Keys live beside the packages tree (see install_rocm_packages.sh):
+    - prerelease-style hosts: .../packages/gpg/rocm.gpg
+    - stable (repo.amd.com): .../rocm/packages/gpg/rocm.gpg
 
     Examples:
-        https://rocm.prereleases.amd.com/packages/ubuntu2404 -> https://rocm.prereleases.amd.com/gpg/rocm.gpg
-        https://repo.amd.com/rocm/packages/rhel10/x86_64/ -> https://repo.amd.com/gpg/rocm.gpg
+        https://rocm.prereleases.amd.com/packages/ubuntu2404
+            -> https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        https://repo.amd.com/rocm/packages/rhel10/x86_64/
+            -> https://repo.amd.com/rocm/packages/gpg/rocm.gpg
+        https://rocm.nightlies.amd.com/deb/20260204-12345/
+            -> https://rocm.nightlies.amd.com/packages/gpg/rocm.gpg
     """
-    base_url = get_base_url(package_url)
-    return f"{base_url}/gpg/rocm.gpg"
+    parsed = urlparse(package_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"Invalid URL: {package_url!r}")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    path = parsed.path or ""
+
+    if "/rocm/packages/" in path or path.rstrip("/").endswith("/rocm/packages"):
+        return f"{origin}/rocm/packages/gpg/rocm.gpg"
+    if "/packages/" in path or path.rstrip("/").endswith("/packages"):
+        return f"{origin}/packages/gpg/rocm.gpg"
+    if parsed.netloc == "repo.amd.com":
+        return f"{origin}/rocm/packages/gpg/rocm.gpg"
+    return f"{origin}/packages/gpg/rocm.gpg"
 
 
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
@@ -95,7 +112,7 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
     if release_type is None:
         return True
     rt = release_type.strip().lower()
-    return rt in ("prerelease", "release")
+    return rt in ("prerelease", "prereleases", "release", "stable")
 
 
 def cmd_gpg_key_url(args: argparse.Namespace) -> int:
@@ -136,6 +153,16 @@ def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
 # --- repo_url ---
 
 
+def _normalize_release_type(release_type: str) -> str:
+    rt = release_type.strip().lower()
+    aliases = {
+        "prereleases": "prerelease",
+        "stable": "release",
+        "nightlies": "nightly",
+    }
+    return aliases.get(rt, rt)
+
+
 def get_repo_url(
     release_type: str,
     native_package_type: str,
@@ -144,17 +171,28 @@ def get_repo_url(
     repo_sub_folder: str,
 ) -> str:
     """
-    Return the full repo URL for install tests.
-    - prerelease + deb: repo_base_url / os_profile
-    - prerelease + rpm: repo_base_url / os_profile / x86_64/
-    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder /
-    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/
+    Return the full per-family repo URL for install tests (native_packaging.md).
+
+    - prerelease + deb: {base}/packages/{os_profile}
+    - prerelease + rpm: {base}/packages/{os_profile}/x86_64/
+    - release/stable + deb: {base}/rocm/packages/{os_profile}
+    - release/stable + rpm: {base}/rocm/packages/{os_profile}/x86_64/
+    - dev/nightly/ci + deb: {base}/deb/{repo_sub_folder}/
+    - dev/nightly/ci + rpm: {base}/rpm/{repo_sub_folder}/x86_64/
     """
     base = repo_base_url.rstrip("/")
-    if release_type == "prerelease":
+    rt = _normalize_release_type(release_type)
+
+    if rt == "prerelease":
         if native_package_type == "deb":
-            return f"{base}/{os_profile}"
-        return f"{base}/{os_profile}/x86_64/"
+            return f"{base}/packages/{os_profile}"
+        return f"{base}/packages/{os_profile}/x86_64/"
+
+    if rt == "release":
+        if native_package_type == "deb":
+            return f"{base}/rocm/packages/{os_profile}"
+        return f"{base}/rocm/packages/{os_profile}/x86_64/"
+
     if native_package_type == "deb":
         return f"{base}/deb/{repo_sub_folder}/"
     return f"{base}/rpm/{repo_sub_folder}/x86_64/"
@@ -300,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         metavar="URL",
-        help="Package repository URL to derive GPG key URL from when needed (e.g. https://rocm.prereleases.amd.com/packages/ubuntu2404 → https://rocm.prereleases.amd.com/gpg/rocm.gpg)",
+        help="Package repository URL to derive GPG key URL from when needed (e.g. https://rocm.prereleases.amd.com/packages/ubuntu2404 → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg)",
     )
     p_gpg.add_argument(
         "--release-type",
