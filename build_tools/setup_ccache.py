@@ -26,6 +26,7 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 
 import argparse
 import os
+import re
 from pathlib import Path
 import platform
 import sys
@@ -101,6 +102,17 @@ def _apply_remote_opts(remote_storage: str, args: argparse.Namespace) -> str:
     return remote_storage
 
 
+# Matches the password in a "scheme://user:password@host" URL.
+_USERINFO_RE = re.compile(r"(://[^:/@\s]+:)[^@/\s]+(@)")
+
+
+def _redact_userinfo(text: str) -> str:
+    """Mask the password in any scheme://user:password@host URL so injected
+    credentials are not leaked when the generated config is echoed to CI logs
+    (URL-encoding can otherwise defeat GitHub Actions secret masking)."""
+    return _USERINFO_RE.sub(r"\1***\2", text)
+
+
 def _log(msg: str):
     print(f"[setup_ccache] {msg}", file=sys.stderr)
 
@@ -133,7 +145,9 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     if args.remote:
         if not args.remote_storage:
             raise ValueError(f"Expected --remote-storage with --remote option")
-        lines.append(f"remote_storage = {_apply_remote_opts(args.remote_storage, args)}")
+        lines.append(
+            f"remote_storage = {_apply_remote_opts(args.remote_storage, args)}"
+        )
         lines.append(f"remote_only = true")
     else:
         # Default, local.
@@ -219,11 +233,13 @@ def run(args: argparse.Namespace):
             _log(
                 f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
             )
-    # Print the generated config for visibility in CI logs.
+    # Print the generated config for visibility in CI logs. Redact any
+    # injected basic-auth password so trusted/release write credentials do not
+    # leak into logs.
     _log("Generated ccache config:")
     for line in config_contents.splitlines():
         if line.strip():
-            _log(f"  {line}")
+            _log(f"  {_redact_userinfo(line)}")
 
     # Output options.
     # Note: these print to stdout, while _log prints to stderr.
