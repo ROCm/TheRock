@@ -516,8 +516,12 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
 
   set(libhipcxx_runtime_deps)
+  # Used on Linux when amd-smi is available. amdsmi is only declared when
+  # THEROCK_ENABLE_CORE_AMDSMI is ON (see core/CMakeLists.txt), so guard on the
+  # target existing to keep narrow configs (e.g. THEROCK_ENABLE_LIBHIPCXX=ON /
+  # THEROCK_ENABLE_ALL=OFF, as in the hipThreads nightly) from referencing a
+  # non-existent target.
   if(NOT WIN32 AND TARGET amdsmi)
-    # Required on Linux.
     list(APPEND libhipcxx_runtime_deps amdsmi)
   endif()
 
