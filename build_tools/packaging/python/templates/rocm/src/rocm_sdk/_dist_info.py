@@ -284,13 +284,13 @@ LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 LibraryEntry("origami", "libraries", "liborigami.so*", "origami*.dll")
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
+LibraryEntry("rocblas", "libraries", "librocblas.so*", "rocblas*.dll")
+LibraryEntry("rocsolver", "libraries", "librocsolver.so*", "rocsolver*.dll")
 
 # Others we may want:
 # hiprtc-builtins
-# rocblas
 # rocfft
 # rocrand
-# rocsolver
 # rocsparse
 
 # Overall ROCM package version.

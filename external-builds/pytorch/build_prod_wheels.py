@@ -190,6 +190,12 @@ LINUX_LIBRARY_PRELOADS = [
 WINDOWS_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
+    # rocblas and rocsolver are direct load-time deps of torch_hip.dll on
+    # Windows (verified via dumpbin). Preload them (after amdhip64, and rocblas
+    # before rocsolver which depends on it) so they are resolved in-namespace
+    # before torch loads torch_hip.dll. On Linux these resolve via RPATH.
+    "rocblas",
+    "rocsolver",
     "hiprtc",
     "hipblas",
     "hipfft",
