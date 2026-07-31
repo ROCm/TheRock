@@ -25,10 +25,12 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 """
 
 import argparse
+import os
 from pathlib import Path
 import platform
 import sys
 import subprocess
+from urllib.parse import quote
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
@@ -71,6 +73,34 @@ CONFIG_PRESETS_MAP = {
 }
 
 
+def _inject_userinfo(remote_storage: str, user: str, password: str) -> str:
+    """Insert HTTP basic-auth userinfo into the URL part of a remote_storage
+    string (everything before the first '|'). Trusted/release tiers get their
+    write credential from CI secrets; forks leave it unset and stay read-only."""
+    parts = remote_storage.split("|", 1)
+    url = parts[0]
+    for scheme in ("http://", "https://"):
+        if url.startswith(scheme):
+            host = url[len(scheme) :]
+            url = f"{scheme}{quote(user, safe='')}:{quote(password, safe='')}@{host}"
+            break
+    return "|".join([url, *parts[1:]])
+
+
+def _apply_remote_opts(remote_storage: str, args: argparse.Namespace) -> str:
+    """Apply access-tier options to a remote_storage string: authenticated
+    read-write (userinfo from CCACHE_REMOTE_USER/PASSWORD) and/or client-side
+    read-only (|read-only). Both default off, so no env + no --read-only leaves
+    the string unchanged."""
+    user = os.environ.get("CCACHE_REMOTE_USER")
+    password = os.environ.get("CCACHE_REMOTE_PASSWORD")
+    if user and password:
+        remote_storage = _inject_userinfo(remote_storage, user, password)
+    if args.read_only:
+        remote_storage = f"{remote_storage}|read-only"
+    return remote_storage
+
+
 def _log(msg: str):
     print(f"[setup_ccache] {msg}", file=sys.stderr)
 
@@ -83,6 +113,8 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     _log(f"Config preset: {config_preset}")
     _log(f"Platform: {'Windows' if IS_WINDOWS else 'POSIX'}")
     for k, v in selected_config.items():
+        if k == "remote_storage":
+            v = _apply_remote_opts(v, args)
         lines.append(f"{k} = {v}")
 
     # Log paths: use --log-dir if provided, otherwise default to
@@ -101,7 +133,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     if args.remote:
         if not args.remote_storage:
             raise ValueError(f"Expected --remote-storage with --remote option")
-        lines.append(f"remote_storage = {args.remote_storage}")
+        lines.append(f"remote_storage = {_apply_remote_opts(args.remote_storage, args)}")
         lines.append(f"remote_only = true")
     else:
         # Default, local.
@@ -236,6 +268,16 @@ def main(argv: list[str]):
     )
 
     p.add_argument("--remote-storage", help="Remote storage configuration/URL")
+
+    p.add_argument(
+        "--read-only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Configure the remote cache as read-only (appends |read-only): the "
+        "untrusted / presubmit / fork tier can read but not upload. Trusted "
+        "postsubmit/release builds omit this and, with CCACHE_REMOTE_USER/PASSWORD "
+        "set, get read-write.",
+    )
 
     p.add_argument(
         "--log-dir",

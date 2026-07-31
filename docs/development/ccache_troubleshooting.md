@@ -39,8 +39,30 @@ remote cache, accessed via ccache's `remote_storage` option with
 | `github-oss-dev`     | `bazelremote-svc.bazelremote-ns.svc.cluster.local:8080`     | PR builds, postsubmit |
 | `github-oss-release` | `bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080` | Release builds        |
 
-Both servers are on the Kubernetes cluster, accessible without
-authentication from any pod in the cluster.
+Both servers run in the `therock-runners-prod` cluster as separate, isolated
+instances (dev vs release), so presubmit/fork traffic on the dev cache never
+pollutes release builds. The release server (`bazelremote-svc-rel`) must exist
+for `github-oss-release` (nightly / prerelease / stable) to cache — if it is
+absent those builds run cold. This is now monitored by a Grafana alert
+("Bazel-remote release cache (bazelremote-svc-rel) down or absent"), so the
+degradation is no longer silent.
+
+#### Access tier (read-only forks / read-write trusted)
+
+Target model: the servers run bazel-remote with `--htpasswd_file` +
+`--allow_unauthenticated_reads`, so unauthenticated clients get read-only and any
+valid credential gets read-write. `setup_ccache.py` supports both sides:
+
+- Untrusted (presubmit / fork) builds pass `--read-only`, which appends
+  `|read-only` to `remote_storage` so they can read but not upload.
+- Trusted (postsubmit / release) builds set `CCACHE_REMOTE_USER` /
+  `CCACHE_REMOTE_PASSWORD` (from CI secrets); the credential is injected into the
+  remote URL for read-write access.
+
+Select read-only vs read-write by trigger in the workflows (presubmit/fork ->
+`--read-only`; push-to-main + `release_type in {nightly,prerelease,stable}` ->
+credentials). Forks never receive the write secret, so they fall back to
+read-only automatically.
 
 ### Namespace version
 
