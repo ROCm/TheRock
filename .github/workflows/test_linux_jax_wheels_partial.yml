@@ -284,6 +284,11 @@ jobs:
           DEBUG_HIP_DYNAMIC_QUEUES: "0"
           HSA_NO_SCRATCH_RECLAIM: "1"
 
+          # On gfx950 MIOpen's Winograd assembly does not build under the
+          # ROCm 10 comgr, so every convolution fails to autotune. The other
+          # solvers work, so drop Winograd until MIOpen assembles again.
+          MIOPEN_DEBUG_CONV_WINOGRAD: "0"
+
           # JAX 0.10.1 and 0.10.2 only: MIOpen selects convolution kernels
           # nondeterministically on gfx94X, so the float32 conv tests flake.
           # Deselect them. Keeps convert/conversion tests, which also
