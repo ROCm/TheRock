@@ -1115,20 +1115,25 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_builds_expected_find_command(self, mock_run):
-        # Verify the single find invocation checks ownership (uid/gid), writable
-        # (0o022) and setid (0o6000) bits while excluding sticky-bit dirs.
+        # Verify the single find invocation follows the prefix symlink (-H),
+        # checks ownership (uid/gid), writable (0o022) and setid (0o6000) bits
+        # while excluding sticky-bit dirs and symlinks (! -type l).
         mock_run.return_value = MagicMock(returncode=0, stdout="")
         with _suppress_script_output():
             self._make("/opt/rocm/core").verify_installed_file_security()
         cmd = mock_run.call_args[0][0]
         self.assertEqual(cmd[0], "find")
-        self.assertEqual(cmd[1], "/opt/rocm/core")
+        self.assertEqual(cmd[1], "-H")
+        self.assertEqual(cmd[2], "/opt/rocm/core")
         self.assertIn("-uid", cmd)
         self.assertIn("-gid", cmd)
         self.assertIn("/022", cmd)
         self.assertIn("/6000", cmd)
         self.assertIn("-1000", cmd)
         self.assertIn("!", cmd)
+        # symlinks are excluded from the permission portion
+        self.assertIn("-type", cmd)
+        self.assertIn("l", cmd)
         self.assertEqual(
             mock_run.call_args[1]["timeout"],
             native_linux_package_install_test.FILE_SECURITY_TIMEOUT_SEC,
@@ -1250,6 +1255,37 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         mock_walk.return_value = [("/opt/rocm/core", [], ["setuid-tool"])]
         mock_lstat.return_value = MagicMock(
             st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISUID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_root_owned_symlink(self, mock_walk, mock_lstat):
+        # A root-owned symlink (mode 0o777, but bits are meaningless) is allowed.
+        # This is the /opt/rocm/core -> /opt/rocm/core-X.Y case from CI.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFLNK | 0o777
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_symlink(self, mock_walk, mock_lstat):
+        # A non-root-owned symlink is still flagged (ownership is meaningful).
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=1000, st_gid=1000, st_mode=stat.S_IFLNK | 0o777
         )
         with _suppress_script_output():
             self.assertFalse(

@@ -1004,6 +1004,14 @@ gpgcheck=0
         - setuid/setgid: it carries mode bits ``0o6000``, a direct privilege
           escalation surface.
 
+        Symbolic links are exempt from the permission rules: on Linux a
+        symlink's own mode bits are always ``lrwxrwxrwx`` and are ignored by
+        the kernel (the target's permissions govern access), so checking them
+        would produce false positives. The install prefix itself is commonly a
+        symlink (e.g. ``/opt/rocm/core`` -> ``/opt/rocm/core-X.Y``), so
+        ``find -H`` follows that top-level link to scan the real tree while not
+        following links found *inside* the tree.
+
         Uses ``find`` (C-level traversal) for speed on large install trees and
         falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
         so the check is not silently skipped.
@@ -1018,6 +1026,8 @@ gpgcheck=0
             result = subprocess.run(
                 [
                     "find",
+                    # follow the prefix if it is a symlink, but not links inside
+                    "-H",
                     install_prefix,
                     "(",
                     # not owned by root:root
@@ -1029,6 +1039,13 @@ gpgcheck=0
                     "-gid",
                     "0",
                     "-o",
+                    # insecure permissions, but skip symlinks whose own mode
+                    # bits are meaningless (the target is checked on its own)
+                    "(",
+                    "!",
+                    "-type",
+                    "l",
+                    "(",
                     # group/other-writable, excluding sticky-bit dirs
                     "(",
                     "-perm",
@@ -1041,6 +1058,8 @@ gpgcheck=0
                     # setuid/setgid
                     "-perm",
                     "/6000",
+                    ")",
+                    ")",
                     ")",
                     "-print",
                 ],
@@ -1076,11 +1095,12 @@ gpgcheck=0
         """Pure-Python fallback for the install-tree security check.
 
         Walks the install tree with ``os.walk`` (does not follow symlinked
-        directories) and ``os.lstat`` each entry, applying the same rules as
-        :meth:`verify_installed_file_security`: flag entries not owned by
-        ``root:root``, group/other-writable entries (unless they are sticky
-        directories), and any setuid/setgid entry. Slower than ``find`` on
-        large trees but portable.
+        directories found inside the tree) and ``os.lstat`` each entry, applying
+        the same rules as :meth:`verify_installed_file_security`: flag entries
+        not owned by ``root:root``, group/other-writable entries (unless they
+        are sticky directories), and any setuid/setgid entry. Symlinks are
+        exempt from the permission rules since their mode bits are meaningless
+        on Linux. Slower than ``find`` on large trees but portable.
 
         Returns:
         True if no offending path is found, False if any offending path is found.
@@ -1095,6 +1115,12 @@ gpgcheck=0
                     continue
                 mode = st.st_mode
                 not_root = st.st_uid != 0 or st.st_gid != 0
+                if stat.S_ISLNK(mode):
+                    # A symlink's own mode bits are always 0o777 and ignored by
+                    # the kernel; only ownership is meaningful for links.
+                    if not_root:
+                        bad.append(entry)
+                    continue
                 is_sticky_dir = stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
                 group_other_writable = bool(mode & 0o022) and not is_sticky_dir
                 setid = bool(mode & (stat.S_ISUID | stat.S_ISGID))
