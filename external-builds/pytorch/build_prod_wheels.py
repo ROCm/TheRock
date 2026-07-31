@@ -360,7 +360,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
     )
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
-    return textwrap.dedent(
+    init_block = textwrap.dedent(
         f"""
         def initialize():
             import rocm_sdk
@@ -369,6 +369,37 @@ def get_rocm_init_contents(args: argparse.Namespace):
                 check_version='{sdk_version}')
         """
     )
+    if not is_windows:
+        return init_block
+    # On Windows there is no RPATH equivalent, so ROCm runtime libraries that
+    # torch_hip.dll links directly (e.g. rocblas.dll, rocsolver.dll) are not
+    # discoverable by torch's loader. Preloading only covers libraries that have
+    # a registered rocm_sdk shortname, so additionally add the ROCm SDK bin
+    # directory to the DLL search path. torch._load_dll_libraries() loads
+    # torch_hip.dll with LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, which honors
+    # directories registered via os.add_dll_directory().
+    windows_dll_dir_block = textwrap.indent(
+        textwrap.dedent(
+            """
+            import os as _os
+
+            try:
+                from rocm_sdk import _devel as _rocm_devel
+
+                _rocm_bin_dir = _rocm_devel.get_devel_root() / "bin"
+            except Exception:
+                _rocm_bin_dir = None
+            if _rocm_bin_dir is not None and _os.path.isdir(_rocm_bin_dir):
+                # Keep the handle alive for the lifetime of the process so the
+                # directory remains on the search path when torch later loads
+                # torch_hip.dll.
+                global _ROCM_SDK_DLL_DIRECTORY
+                _ROCM_SDK_DLL_DIRECTORY = _os.add_dll_directory(str(_rocm_bin_dir))
+            """
+        ),
+        "    ",
+    )
+    return init_block + windows_dll_dir_block
 
 
 def remove_dir_if_exists(dir: Path):
