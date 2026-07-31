@@ -51,13 +51,15 @@ def extract_gpu_details(files):
     return sorted(list(gpu_families))
 
 
-def generate_index_s3(s3_client, bucket_name, prefix: str, upload: bool = False, allow_empty: bool = False) -> str:
+def generate_index_s3(
+    s3_client, bucket_name, prefix: str, upload: bool = False, allow_empty: bool = False
+) -> str:
     """Generate index.html for direct-child .tar.gz files at s3://bucket_name/prefix.
 
     With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
     and the HTTPS URL is returned. Otherwise the index is written to
     ./index.html and the local path is returned.
-    
+
     With allow_empty=True, an empty index is generated when the prefix
     contains no .tar.gz files. Otherwise, FileNotFoundError is raised.
     """
