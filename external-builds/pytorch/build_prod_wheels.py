@@ -542,9 +542,13 @@ def _setup_common_build_env(
     is_windows: bool,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
+    cmake_prefixes = [cmake_prefix]
+    if not is_windows:
+        cmake_prefixes.append(rocm_dir / "lib" / "rocm_sysdeps")
+
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
-        "CMAKE_PREFIX_PATH": str(cmake_prefix),
+        "CMAKE_PREFIX_PATH": os.pathsep.join(str(path) for path in cmake_prefixes),
         "ROCM_HOME": str(rocm_dir),
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
