@@ -1,4 +1,5 @@
 boto3==1.39.15
+jinja2>=3.0.0 # Packaging scripts render templates; their tests import them.
 pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
 pytest-cov==6.0.0

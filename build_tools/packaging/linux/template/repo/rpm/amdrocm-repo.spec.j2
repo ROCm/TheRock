@@ -1,0 +1,29 @@
+Name: {{ pkg_name }}
+Version: {{ version }}
+Release: {{ release }}%{?dist}
+BuildArch: noarch
+Summary: {{ description_short }}
+License: MIT
+Vendor: Advanced Micro Devices, Inc
+URL: https://github.com/ROCm/TheRock
+
+%description
+{{ description_long }}
+
+%install
+mkdir -p %{buildroot}{{ rpm_repo_dir }}
+install -m 644 %{_sourcedir}/{{ repo_id }}.repo %{buildroot}{{ rpm_repo_dir }}/
+{% if signed %}
+mkdir -p %{buildroot}/etc/pki/rpm-gpg
+install -m 644 %{_sourcedir}/RPM-GPG-KEY-rocm %{buildroot}{{ rpm_gpg_key_path }}
+{% endif %}
+
+%files
+%config(noreplace) {{ rpm_repo_dir }}/{{ repo_id }}.repo
+{% if signed %}
+{{ rpm_gpg_key_path }}
+{% endif %}
+
+%changelog
+* {{ changelog_date }} {{ maintainer }} - {{ version }}-{{ release }}
+- ROCm {{ rocm_version }} repository configuration.

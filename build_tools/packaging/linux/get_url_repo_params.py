@@ -15,6 +15,9 @@ Subcommands (get operations):
   get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
   extract-gfx-arch     Extract and normalize GPU architecture from artifact group. Prints gfx_arch=<value>.
   get-container-image  Get container image for a given OS profile. Prints container_image=<value>.
+  get-public-repo-base-url  Get the public CDN base URL for a release line. Prints repo_base_url=<value> (empty for ci/dev).
+  get-nightly-sub-folder    Get the dated nightly sub-folder from a run id. Prints repo_sub_folder=YYYYMMDD-<run_id>.
+  get-container-image-map   Map a JSON array of OS profiles to container images. Prints images=<json>.
 
 Usage:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
@@ -28,15 +31,17 @@ Examples:
   python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
   python build_tools/packaging/linux/get_url_repo_params.py get-gpg-url --release-type prerelease --from-url https://rocm.prereleases.amd.com/packages/ubuntu2404
   python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
+  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://example.com --os-profile ubuntu2404 --repo-sub-folder ''
   python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch --artifact-group gfx94X-dcgpu
   python build_tools/packaging/linux/get_url_repo_params.py get-container-image --os-profile ubuntu2404
 """
 
 import argparse
+import json
 import os
 import re
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -145,13 +150,17 @@ def get_repo_url(
 ) -> str:
     """
     Return the full repo URL for install tests.
-    - prerelease + deb: repo_base_url / os_profile
-    - prerelease + rpm: repo_base_url / os_profile / x86_64/
-    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder /
-    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/
+
+    The public lines (prerelease, release) publish one repository per distro;
+    the per-run lines (dev, nightly, ci) publish one repository per package type
+    under a dated/run sub-folder.
+    - prerelease, release + deb: repo_base_url / os_profile
+    - prerelease, release + rpm: repo_base_url / os_profile / x86_64/
+    - other + deb: repo_base_url / deb / repo_sub_folder /
+    - other + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/
     """
     base = repo_base_url.rstrip("/")
-    if release_type == "prerelease":
+    if release_type in ("prerelease", "release"):
         if native_package_type == "deb":
             return f"{base}/{os_profile}"
         return f"{base}/{os_profile}/x86_64/"
@@ -173,6 +182,73 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     gha_set_output({"repo_url": url})
+    return 0
+
+
+# --- public repository base URL ---
+
+# Public CDN base for each signed/served release line, using the flat
+# packages-multi-arch layout (deb/, rpm/x86_64/, gpg/rocm.gpg beneath the base).
+# Lines without a public repository (e.g. ci, dev) map to an empty string, which
+# callers treat as "no amdrocm-repo package for this line".
+_PUBLIC_REPO_BASE_URLS = {
+    "prerelease": "https://rocm.prereleases.amd.com/packages-multi-arch",
+    "release": "https://repo.amd.com/rocm/packages-multi-arch",
+    "nightly": "https://rocm.nightlies.amd.com/packages-multi-arch",
+}
+
+
+def get_public_repo_base_url(release_type: str) -> str:
+    """Return the public CDN base URL for a release line (empty if none)."""
+    return _PUBLIC_REPO_BASE_URLS.get(release_type.strip().lower(), "")
+
+
+def cmd_public_repo_base_url(args: argparse.Namespace) -> int:
+    gha_set_output({"repo_base_url": get_public_repo_base_url(args.release_type)})
+    return 0
+
+
+# --- nightly sub-folder ---
+
+
+def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
+    """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
+
+    ``today`` is injectable for deterministic tests; it defaults to the current
+    UTC date.
+    """
+    day = today or datetime.now(timezone.utc).date()
+    return f"{day:%Y%m%d}-{run_id}"
+
+
+def cmd_nightly_sub_folder(args: argparse.Namespace) -> int:
+    # Only the nightly line publishes into a dated sub-folder; every other line
+    # publishes at the repository root, so the value is empty there.
+    if args.release_type and args.release_type.strip().lower() != "nightly":
+        gha_set_output({"repo_sub_folder": ""})
+        return 0
+    gha_set_output({"repo_sub_folder": nightly_sub_folder(args.run_id)})
+    return 0
+
+
+# --- container image map ---
+
+
+def get_container_image_map(os_profiles: list[str]) -> dict[str, str]:
+    """Map each OS profile to its container image (for a build matrix)."""
+    return {profile: get_container_image(profile) for profile in os_profiles}
+
+
+def cmd_container_image_map(args: argparse.Namespace) -> int:
+    try:
+        profiles = json.loads(args.os_profiles)
+    except json.JSONDecodeError as e:
+        print(f"Error: --os-profiles is not valid JSON: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(profiles, list) or not all(isinstance(p, str) for p in profiles):
+        print("Error: --os-profiles must be a JSON array of strings", file=sys.stderr)
+        return 1
+    gha_set_output({"images": json.dumps(get_container_image_map(profiles))})
     return 0
 
 
@@ -386,6 +462,55 @@ def main(argv: list[str] | None = None) -> int:
         help="OS profile (e.g. ubuntu2404, sles16, rhel10)",
     )
     p_img.set_defaults(func=cmd_container_image)
+
+    # get-public-repo-base-url: public CDN base for a release line
+    p_pub = subparsers.add_parser(
+        "get-public-repo-base-url",
+        help="Print repo_base_url= for a release line (empty for lines without a public repo, e.g. ci/dev).",
+    )
+    p_pub.add_argument(
+        "--release-type",
+        type=str,
+        required=True,
+        help="Release line (e.g. prerelease, release, nightly)",
+    )
+    p_pub.set_defaults(func=cmd_public_repo_base_url)
+
+    # get-nightly-sub-folder: dated sub-folder for the nightly line
+    p_sub = subparsers.add_parser(
+        "get-nightly-sub-folder",
+        help="Print repo_sub_folder=YYYYMMDD-<run_id> for the nightly line.",
+    )
+    p_sub.add_argument(
+        "--run-id",
+        type=str,
+        required=True,
+        help="Workflow run id to embed in the dated sub-folder",
+    )
+    p_sub.add_argument(
+        "--release-type",
+        type=str,
+        default=None,
+        help=(
+            "If set, print an empty repo_sub_folder for any line other than "
+            "'nightly'. If omitted, always print the dated sub-folder."
+        ),
+    )
+    p_sub.set_defaults(func=cmd_nightly_sub_folder)
+
+    # get-container-image-map: os_profile -> image map for a build matrix
+    p_map = subparsers.add_parser(
+        "get-container-image-map",
+        help="Print images=<json> mapping each OS profile (JSON array input) to its container image.",
+    )
+    p_map.add_argument(
+        "--os-profiles",
+        type=str,
+        required=True,
+        metavar="JSON",
+        help='JSON array of OS profiles (e.g. ["rhel8","rhel10","sles16"])',
+    )
+    p_map.set_defaults(func=cmd_container_image_map)
 
     args = parser.parse_args(argv)
     return args.func(args)

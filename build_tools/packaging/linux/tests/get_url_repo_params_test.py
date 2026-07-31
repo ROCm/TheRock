@@ -4,12 +4,15 @@
 
 # Unit test coverage for get_url_repo_params.py:
 #   get_base_url, get_gpg_key_url, gpg_key_url_needed_for_release_type, get_repo_sub_folder,
-#   get_repo_url, extract_gfx_arch, and main() subcommands.
+#   get_repo_url, extract_gfx_arch, get_public_repo_base_url, nightly_sub_folder,
+#   get_container_image_map, and main() subcommands.
 
+import json
 import os
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -167,11 +170,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://example.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/ubuntu2404",
+            "https://example.com/ubuntu2404",
         )
 
     def test_prerelease_rpm(self):
@@ -180,11 +183,38 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="rpm",
-                repo_base_url="https://x.com",
+                repo_base_url="https://example.com",
                 os_profile="rhel8",
                 repo_sub_folder="",
             ),
-            "https://x.com/rhel8/x86_64/",
+            "https://example.com/rhel8/x86_64/",
+        )
+
+    def test_release_deb(self):
+        # Test that release + deb yields base/os_profile. The release repository
+        # is served per distro, not as a flat deb/ tree.
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="release",
+                native_package_type="deb",
+                repo_base_url="https://example.com",
+                os_profile="ubuntu2404",
+                repo_sub_folder="",
+            ),
+            "https://example.com/ubuntu2404",
+        )
+
+    def test_release_rpm(self):
+        # Test that release + rpm yields base/os_profile/x86_64/
+        self.assertEqual(
+            get_url_repo_params.get_repo_url(
+                release_type="release",
+                native_package_type="rpm",
+                repo_base_url="https://example.com",
+                os_profile="rhel10",
+                repo_sub_folder="",
+            ),
+            "https://example.com/rhel10/x86_64/",
         )
 
     def test_nightly_deb(self):
@@ -193,11 +223,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="deb",
-                repo_base_url="https://x.com",
+                repo_base_url="https://example.com",
                 os_profile="ubuntu2404",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/deb/20260204-12345/",
+            "https://example.com/deb/20260204-12345/",
         )
 
     def test_nightly_rpm(self):
@@ -206,11 +236,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="nightly",
                 native_package_type="rpm",
-                repo_base_url="https://x.com",
+                repo_base_url="https://example.com",
                 os_profile="rhel8",
                 repo_sub_folder="20260204-12345",
             ),
-            "https://x.com/rpm/20260204-12345/x86_64/",
+            "https://example.com/rpm/20260204-12345/x86_64/",
         )
 
     def test_strips_trailing_slash_from_base(self):
@@ -219,11 +249,11 @@ class GetRepoUrlTest(unittest.TestCase):
             get_url_repo_params.get_repo_url(
                 release_type="prerelease",
                 native_package_type="deb",
-                repo_base_url="https://x.com/",
+                repo_base_url="https://example.com/",
                 os_profile="ubuntu2404",
                 repo_sub_folder="",
             ),
-            "https://x.com/ubuntu2404",
+            "https://example.com/ubuntu2404",
         )
 
 
@@ -335,7 +365,7 @@ class MainSubcommandsTest(unittest.TestCase):
                 "--native-package-type",
                 "deb",
                 "--repo-base-url",
-                "https://x.com",
+                "https://example.com",
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-sub-folder",
@@ -343,7 +373,7 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("repo_url=https://x.com/ubuntu2404", output)
+        self.assertIn("repo_url=https://example.com/ubuntu2404", output)
 
     def test_get_repo_url_error_returns_one(self):
         # Test that get-repo-url returns 1 and prints error when get_repo_url raises.
@@ -359,7 +389,7 @@ class MainSubcommandsTest(unittest.TestCase):
                         "--native-package-type",
                         "deb",
                         "--repo-base-url",
-                        "https://x.com",
+                        "https://example.com",
                         "--os-profile",
                         "ubuntu2404",
                         "--repo-sub-folder",
@@ -518,6 +548,145 @@ class GetContainerImageTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn("container_image=ubuntu:24.04", output)
+
+
+class GetPublicRepoBaseUrlTest(unittest.TestCase):
+    """Tests for get_public_repo_base_url() and its subcommand."""
+
+    def test_prerelease(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("prerelease"),
+            "https://rocm.prereleases.amd.com/packages-multi-arch",
+        )
+
+    def test_release(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("release"),
+            "https://repo.amd.com/rocm/packages-multi-arch",
+        )
+
+    def test_nightly(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("nightly"),
+            "https://rocm.nightlies.amd.com/packages-multi-arch",
+        )
+
+    def test_ci_and_dev_are_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("ci"), "")
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("dev"), "")
+
+    def test_unknown_line_is_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("bogus"), "")
+
+    def test_case_insensitive(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("PreRelease"),
+            "https://rocm.prereleases.amd.com/packages-multi-arch",
+        )
+
+    def test_subcommand_emits_url(self):
+        code, output = _run_main_with_output(
+            ["get-public-repo-base-url", "--release-type", "prerelease"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "repo_base_url=https://rocm.prereleases.amd.com/packages-multi-arch",
+            output,
+        )
+
+    def test_subcommand_emits_empty_for_ci(self):
+        code, output = _run_main_with_output(
+            ["get-public-repo-base-url", "--release-type", "ci"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("repo_base_url=", output)
+        self.assertNotIn("packages-multi-arch", output)
+
+
+class NightlySubFolderTest(unittest.TestCase):
+    """Tests for nightly_sub_folder() and its subcommand."""
+
+    def test_formats_with_injected_date(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("12345", today=date(2026, 7, 16)),
+            "20260716-12345",
+        )
+
+    def test_zero_padded_month_and_day(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("7", today=date(2026, 1, 3)),
+            "20260103-7",
+        )
+
+    def test_subcommand_emits_sub_folder(self):
+        code, output = _run_main_with_output(
+            ["get-nightly-sub-folder", "--run-id", "12345"]
+        )
+        self.assertEqual(code, 0)
+        # The date is the current UTC date; assert the structure, not the value.
+        self.assertRegex(output, r"repo_sub_folder=\d{8}-12345")
+
+    def test_subcommand_emits_sub_folder_for_nightly(self):
+        code, output = _run_main_with_output(
+            ["get-nightly-sub-folder", "--release-type", "nightly", "--run-id", "12345"]
+        )
+        self.assertEqual(code, 0)
+        self.assertRegex(output, r"repo_sub_folder=\d{8}-12345")
+
+    def test_subcommand_emits_empty_for_other_lines(self):
+        # Only the nightly line publishes into a dated sub-folder; the other
+        # lines publish at the repository root.
+        for release_type in ("release", "prerelease", "ci"):
+            with self.subTest(release_type=release_type):
+                code, output = _run_main_with_output(
+                    [
+                        "get-nightly-sub-folder",
+                        "--release-type",
+                        release_type,
+                        "--run-id",
+                        "12345",
+                    ]
+                )
+                self.assertEqual(code, 0)
+                self.assertIn("repo_sub_folder=", output)
+                self.assertNotRegex(output, r"repo_sub_folder=\S")
+
+
+class GetContainerImageMapTest(unittest.TestCase):
+    """Tests for get_container_image_map() and its subcommand."""
+
+    def test_maps_rpm_profiles(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image_map(["rhel8", "sles16"]),
+            {
+                "rhel8": "registry.access.redhat.com/ubi8/ubi:8.10",
+                "sles16": "registry.suse.com/bci/bci-base:16.0",
+            },
+        )
+
+    def test_subcommand_emits_json_map(self):
+        code, output = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", '["ubuntu2404"]']
+        )
+        self.assertEqual(code, 0)
+        # Recover the JSON value written after ``images=``.
+        line = next(l for l in output.splitlines() if l.startswith("images="))
+        images = json.loads(line[len("images=") :])
+        self.assertEqual(
+            images, {"ubuntu2404": "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"}
+        )
+
+    def test_subcommand_rejects_invalid_json(self):
+        code, _ = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", "not-json"]
+        )
+        self.assertEqual(code, 1)
+
+    def test_subcommand_rejects_non_list_json(self):
+        code, _ = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", '{"a": 1}']
+        )
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":
