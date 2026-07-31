@@ -516,7 +516,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
 
   set(libhipcxx_runtime_deps)
-  if(NOT WIN32)
+  if(NOT WIN32 AND TARGET amdsmi)
     # Required on Linux.
     list(APPEND libhipcxx_runtime_deps amdsmi)
   endif()
