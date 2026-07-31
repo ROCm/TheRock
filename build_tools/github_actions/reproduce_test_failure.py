@@ -128,6 +128,12 @@ def run_linux(args: argparse.Namespace) -> int:
                     f"export SHARD_INDEX={args.shard_index}",
                     f"export TOTAL_SHARDS={args.total_shards}",
                     f"export TEST_TYPE={args.test_type}",
+                    # Test scripts branch on the family (e.g. per-family gtest
+                    # exclusion lists), and an emulated test_script forwards it
+                    # into the mirage session by name, so it must be set here
+                    # or the reproduction runs a different selection than CI.
+                    f"export AMDGPU_FAMILIES={args.amdgpu_family}",
+                    f"export AMDGPU_TARGETS={args.amdgpu_targets}",
                 ]
             ),
         ),

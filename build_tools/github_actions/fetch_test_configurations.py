@@ -56,12 +56,18 @@ def _get_script_path(script_name: str) -> str:
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+# -e KUBE_CPU_REQUEST - Pass the pod's CPU budget in; test_component.yml's
+#   "Set thread limits" step derives OMP_NUM_THREADS / OPENBLAS_NUM_THREADS
+#   from it. Not GPU-specific, and previously only reached GPU jobs: CPU-only
+#   jobs (hipfile, rocgdb-cpu, every emulated component) are the ones most
+#   likely to oversubscribe without it.
 _BASE_CONTAINER_OPTIONS = [
     "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
     "--security-opt seccomp=unconfined",
+    "-e KUBE_CPU_REQUEST",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
@@ -80,8 +86,214 @@ _GPU_CONTAINER_OPTIONS = [
     "--group-add 110",
     "--env-file /etc/podinfo/gha-gpu-isolation-settings",
     "-e ROCR_VISIBLE_DEVICES",
-    "-e KUBE_CPU_REQUEST",
 ]
+
+
+# Mirage builtin profiles, keyed by AMDGPU family prefix.
+#
+# Emulated test jobs run their tests under `mirage run --profile <profile> --
+# ...`, where <profile> is one of mirage's builtin profiles (see
+# rocm-systems/emulation/mirage/builtin/src/profiles.rs). Each builtin profile
+# pins exactly one emulated GPU agent and targets the rocjitsu software
+# emulator, so the family under test only decides which GPU mirage pretends to
+# be -- the job itself runs on a CPU runner with no GPU attached.
+#
+# Keys are matched as prefixes of the AMDGPU_FAMILIES value ("gfx950-dcgpu",
+# "gfx94X-dcgpu", "gfx125X-dcgpu", ...), longest key first. Each key also
+# covers the bare targets under it ("gfx94" matches "gfx942", "gfx125" matches
+# "gfx1250"), so no key is a prefix of another today; matching is still
+# longest-first so a future split (e.g. a "gfx951" that is not an MI350X) can
+# be added as a longer, more specific key.
+_MIRAGE_PROFILE_BY_FAMILY_PREFIX = {
+    "gfx94": "mi300x",  # gfx94X family label (gfx940/gfx941/gfx942)
+    "gfx950": "mi350x",
+    "gfx125": "mi450x",  # gfx125X family label, and gfx1250
+}
+
+# Mirage profiles we actually schedule emulated jobs for. mi300x is mapped
+# above so local runs and future callers can resolve it, but gfx94X has ample
+# hardware in CI, so emulating it there would only burn CPU-cluster time for
+# coverage we already have.
+_EMULATED_PROFILES = frozenset({"mi350x", "mi450x"})
+
+# Emulated jobs are far slower than the same tests on hardware. Scale the
+# component's declared timeout rather than making every emulated component
+# hand-maintain a second timeout. Components are separately responsible for
+# not running tests that are too slow to emulate at all -- see
+# `emulate_test_type`.
+_EMULATION_TIMEOUT_MULTIPLIER = 10
+
+# ...but never past an hour. The multiplier is a blunt instrument: applied to
+# rocrtst's 15 min hardware budget it yields 150 min for a category that
+# measures ~10 s emulated, so a wedged emulator would sit on a CPU-cluster
+# slot for two and a half hours before anything reported. An hour is the
+# budget an emulated component has to fit in to be worth scheduling at all,
+# which makes it the right point to stop waiting.
+_EMULATION_MAX_TIMEOUT_MINUTES = 60
+
+# Artifacts an emulated job needs on top of whatever its component fetches:
+# the mirage CLI and the rocjitsu emulator it drives.
+_EMULATION_FETCH_ARTIFACT_ARGS = "--mirage --rocjitsu"
+
+# Matrix keys that configure emulation. These are consumed by
+# _build_emulated_job() and never appear in the emitted matrix entries.
+_EMULATION_MATRIX_KEYS = (
+    "emulate",
+    "emulate_only",
+    "emulate_test_type",
+    "emulate_env",
+)
+
+# Environment the emulated test script needs, forwarded across the session
+# boundary by name.
+#
+# `mirage host` starts the workload with env_clear() and re-inherits only
+# PATH/HOME/USER/LANG/LC_ALL/TERM/TMPDIR (see mirage host/src/lib.rs), so
+# anything test_component.yml put in the environment is otherwise lost. These
+# are expanded by the shell that runs test_script, so they pick up whatever the
+# workflow set.
+_EMULATION_FORWARDED_ENV = (
+    "THEROCK_BIN_DIR",
+    "OUTPUT_ARTIFACTS_DIR",
+    "AMDGPU_FAMILIES",
+    "AMDGPU_TARGETS",
+    "TEST_TYPE",
+    "TEST_COMPONENT",
+    "SHARD_INDEX",
+    "TOTAL_SHARDS",
+    # Thread limits, which test_component.yml derives from the pod's
+    # KUBE_CPU_REQUEST. Emulated jobs are the most CPU-hungry ones in the
+    # matrix, and without these their test binaries size thread pools from the
+    # node's core count rather than the share this job may use.
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+)
+
+
+def _wrap_in_mirage_run(
+    test_script: str,
+    emulator: str,
+    profile: str,
+    extra_env: dict | None = None,
+) -> str:
+    """Wrap `test_script` so the whole thing runs inside a mirage session.
+
+    The emulator and profile are baked in as literals rather than read from the
+    environment, so the command reproduces a run on its own -- which is what
+    the failure-reproduction output and the component repositories' copies of
+    test_component.yml rely on. `extra_env` (the component's `emulate_env`) is
+    baked in the same way and for the same reason.
+
+    The result deliberately contains no quote characters. test_component.yml
+    passes test_script to the reproduction helper inside single quotes (so
+    $THEROCK_BIN_DIR reaches the user unexpanded) and that helper re-wraps it
+    in double quotes, so either kind here would end one of those early. This
+    matches the rest of the matrix, whose test_script values are already
+    unquoted, and it means no path in this command may contain spaces.
+    """
+    # $THEROCK_BIN_DIR rather than a fixed path: test_component.yml unpacks
+    # artifacts to ./build, the reproduction container to ./therock-build.
+    parts = [
+        "$THEROCK_BIN_DIR/mirage",
+        "run",
+        "--profile",
+        profile,
+        "--emulator",
+        emulator,
+        f"--env TEST_EMULATOR={emulator}",
+        f"--env TEST_EMULATOR_PROFILE={profile}",
+    ]
+    parts += [f"--env {name}={value}" for name, value in (extra_env or {}).items()]
+    parts += [f"--env {name}=${name}" for name in _EMULATION_FORWARDED_ENV]
+    parts += ["--", test_script]
+    return " ".join(parts)
+
+
+def get_mirage_profile(amdgpu_families: str | None) -> str | None:
+    """Return the mirage builtin profile that emulates `amdgpu_families`.
+
+    Returns None when no builtin profile covers the family. Matching is by
+    longest prefix, so a future entry for a specific target ("gfx951") would
+    win over the family-label entry it sits under ("gfx950").
+    """
+    if not amdgpu_families:
+        return None
+    family = amdgpu_families.lower()
+    for prefix in sorted(_MIRAGE_PROFILE_BY_FAMILY_PREFIX, key=len, reverse=True):
+        if family.startswith(prefix):
+            return _MIRAGE_PROFILE_BY_FAMILY_PREFIX[prefix]
+    return None
+
+
+def _build_emulated_job(job_config: dict, emulator: str, profile: str) -> dict:
+    """Derive the emulated variant of an already-expanded job config.
+
+    The variant differs from the hardware job in that it:
+      * runs on the CPU cluster (`linux_cpu_runner`), since rocjitsu emulates
+        the GPU in software and a real device would go unused,
+      * carries the emulator name and mirage profile so the test script can
+        wrap its commands in `mirage run`,
+      * gets _EMULATION_TIMEOUT_MULTIPLIER x the hardware timeout, capped at
+        _EMULATION_MAX_TIMEOUT_MINUTES,
+      * pins `test_type` to the component's `emulate_test_type`, when set,
+      * sets the component's `emulate_env` inside the mirage session,
+      * additionally fetches the mirage and rocjitsu artifacts, and
+      * runs unsharded -- emulated jobs already run a reduced subset, and
+        splitting that across CPU-cluster jobs costs more in artifact fetches
+        than it saves.
+    """
+    emulated = deepcopy(job_config)
+    base_job_name = job_config["job_name"]
+
+    emulated["job_name"] = f"{base_job_name} (emulated {profile})"
+    # test_component.yml derives TEST_COMPONENT from job_name unless this is
+    # set. test_runner.py maps TEST_COMPONENT to a test directory, so the
+    # emulated variant must keep reporting the *component* name even though
+    # its job name is decorated.
+    emulated["test_component"] = job_config.get("test_component", base_job_name)
+    emulated["emulator"] = emulator
+    emulated["emulator_profile"] = profile
+    emulated["linux_cpu_runner"] = True
+    emulated["timeout_minutes"] = min(
+        job_config["timeout_minutes"] * _EMULATION_TIMEOUT_MULTIPLIER,
+        _EMULATION_MAX_TIMEOUT_MINUTES,
+    )
+    # install_rocm_from_artifacts.py treats --base-only as exclusive: it takes
+    # an if/elif branch that skips the whole extra-artifact block, so
+    # "--base-only --mirage" would silently fetch neither mirage nor rocjitsu.
+    # Dropping it loses nothing -- the extra-artifact branch pulls the same
+    # base patterns in addition to the extras.
+    base_args = [
+        arg
+        for arg in job_config.get("fetch_artifact_args", "").split()
+        if arg != "--base-only"
+    ]
+    emulated["fetch_artifact_args"] = " ".join(
+        base_args + _EMULATION_FETCH_ARTIFACT_ARGS.split()
+    )
+    emulated["total_shards"] = 1
+    emulated["shard_arr"] = [1]
+    # Pin, not default: which categories an emulator can get through is a
+    # property of the emulator, not of what the CI run asked for. A nightly
+    # asking for "comprehensive" must not drag the emulated variant into a
+    # category that was measured to be too slow or too broken under emulation,
+    # so a component that declares emulate_test_type always runs that one.
+    emulate_test_type = job_config.get("emulate_test_type")
+    if emulate_test_type:
+        emulated["test_type"] = emulate_test_type
+    emulated["test_script"] = _wrap_in_mirage_run(
+        job_config["test_script"],
+        emulator,
+        profile,
+        job_config.get("emulate_env"),
+    )
+    # A CPU runner has no GPUs at all, let alone several, so drop any
+    # multi-GPU routing inherited from the hardware job.
+    emulated.pop("multi_gpu", None)
+    emulated.pop("multi_gpu_runner", None)
+    for key in _EMULATION_MATRIX_KEYS:
+        emulated.pop(key, None)
+    return emulated
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
@@ -814,6 +1026,55 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Also run the ROCr runtime tests against an emulated GPU. rocrtst
+        # exercises the runtime directly (agents, signals, memory pools), which
+        # is exactly the surface rocjitsu emulates, so it is the cheapest
+        # meaningful hardware-free check of a new target.
+        "emulate": "rocjitsu",
+        # Measured on gfx950-dcgpu artifacts under `mirage run --profile
+        # mi350x --emulator rocjitsu`:
+        #   quick     13 of 19 tests, all pass,        ~10 s
+        #   standard  65 tests, 62 pass, 3 fail,       ~10 min
+        # So the ceiling is correctness, not time. The three standard-tier
+        # failures are emulator gaps rather than ROCr regressions --
+        # MemoryAllocateContiguousTest and SvmMemory_AccessedBy_All_Devices_
+        # Test hit unimplemented dmabuf interop / SVM attribute queries, and
+        # FP_Exception_Shutdown needs exception delivery rocjitsu does not
+        # model. Blocking those belongs in rocrtst's platforms.EMULATOR.
+        # blocked_tests (rocm-systems), and this can move to "standard" once
+        # they land there; picking them off from TheRock would rebuild exactly
+        # the per-component filter this job exists to stop maintaining.
+        "emulate_test_type": "quick",
+        # rocrtst detects an emulator from /sys/module/amdgpu/parameters/
+        # emu_mode, which rocjitsu does not provide -- so without this it
+        # believes it is on real hardware. EMULATOR mode shrinks allocation
+        # sizes and iteration counts and skips the ~50 entries under
+        # platforms.EMULATOR.blocked_tests in share/rocrtst/
+        # platform_config.yaml. Two of those (IPC, Deallocation_Notifier_Test)
+        # fail outright under rocjitsu, and IPC leaves a child spinning at
+        # 100% CPU after the suite reports, so this is what makes the emulated
+        # job pass rather than merely run.
+        "emulate_env": {"ROCRTST_PLATFORM_OVERRIDE": "EMULATOR"},
+    },
+    # Emulation smoke test: runs `rocminfo` under mirage/rocjitsu. This is the
+    # cheapest end-to-end check that the mirage CLI, the rocjitsu emulator, the
+    # emulated agent definition, and the ROCr runtime in the artifacts all
+    # agree with each other. When this fails, every other emulated job is
+    # expected to fail too, so keep it fast and keep it first.
+    "emulation-smoke": {
+        "job_name": "emulation-smoke",
+        "fetch_artifact_args": "--base-only",
+        # One rocminfo invocation. Multiplied to 30 min, which is already ample
+        # headroom -- a bigger leash would just mean a wedged emulator holds a
+        # CPU-cluster slot for longer before anything reports.
+        "timeout_minutes": 3,
+        "test_script": f"python {_get_script_path('test_emulation_smoke.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "emulate": "rocjitsu",
+        "emulate_only": True,
     },
     # hipTensor tests
     "hiptensor": {
@@ -879,6 +1140,23 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
+    # Mirage profile emulating this family, if any. Components carrying an
+    # "emulate" field grow an extra emulated variant when this is set to a
+    # profile we schedule emulated jobs for; components carrying
+    # "emulate_only" are dropped entirely otherwise.
+    mirage_profile = get_mirage_profile(amdgpu_families)
+    # None unless we actually schedule emulated jobs for this family+platform.
+    emulate_profile = (
+        mirage_profile
+        if platform == "linux" and mirage_profile in _EMULATED_PROFILES
+        else None
+    )
+    if mirage_profile:
+        logging.info(
+            f"Mirage profile for {amdgpu_families}: {mirage_profile} "
+            f"(emulated jobs {'enabled' if emulate_profile else 'disabled'})"
+        )
+
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
@@ -907,6 +1185,19 @@ def run():
     all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
+        emulator = selected_matrix[key].get("emulate")
+        emulate_only = selected_matrix[key].get("emulate_only", False)
+
+        # Components that only make sense under an emulator are skipped
+        # wholesale on families we do not emulate. Note this is checked before
+        # exclude_family below: both are "skip this component for this family"
+        # rules, and either one firing is enough.
+        if emulate_only and not (emulator and emulate_profile):
+            logging.info(
+                f"Excluding job {job_name} since it only runs emulated and "
+                f"family {amdgpu_families} is not emulated on {platform}"
+            )
+            continue
 
         # If the test is disabled for a particular platform, skip the test.
         # Check both the family group string (e.g. "gfx120X-all") and the individual
@@ -946,7 +1237,12 @@ def run():
         if platform in selected_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            if emulate_only:
+                # The hardware entry is only a template for the emulated
+                # variant derived below; saying "including" it would be a lie.
+                logging.info(f"Including job {job_name} emulated only")
+            else:
+                logging.info(f"Including job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
             # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
@@ -1027,7 +1323,25 @@ def run():
                     )
                     continue
 
-            all_components.append(job_config_data)
+            # Emulated variants are derived last, from the fully expanded
+            # hardware config, so they inherit every earlier decision
+            # (exclude_family, test labels, project selection, container
+            # image). A component excluded above never grows an emulated
+            # variant.
+            if emulator and emulate_profile:
+                emulated_job = _build_emulated_job(
+                    job_config_data, emulator, emulate_profile
+                )
+                logging.info(
+                    f"Including job {emulated_job['job_name']} on the CPU runner "
+                    f"(timeout {emulated_job['timeout_minutes']} min)"
+                )
+                all_components.append(emulated_job)
+
+            if not emulate_only:
+                for emulation_key in _EMULATION_MATRIX_KEYS:
+                    job_config_data.pop(emulation_key, None)
+                all_components.append(job_config_data)
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights

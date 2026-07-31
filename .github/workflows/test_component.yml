@@ -140,7 +140,10 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
+      # CPU-only components (hipfile, rocgdb-cpu, every emulated component)
+      # run on GPU-less runners where there is no driver to report on.
       - name: Driver / GPU sanity check
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
@@ -179,7 +182,25 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # Normally the job name, but derived components (e.g. the emulated
+          # variants built by fetch_test_configurations.py) decorate their job
+          # name and set test_component to the undecorated component name.
+          # test_runner.py maps this to a test directory, so it must stay
+          # undecorated.
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
+          # Emulation. Set only on components that fetch_test_configurations.py
+          # derived from an `emulate` field: TEST_EMULATOR names the emulator
+          # backend (e.g. "rocjitsu") and TEST_EMULATOR_PROFILE the mirage
+          # builtin profile pinning the emulated GPU (e.g. "mi350x"). Both are
+          # empty for jobs running against real hardware.
+          #
+          # These describe the job to anything reading its environment; they are
+          # not how the test script learns it is emulated. `mirage host` clears
+          # the environment, so the values the script actually sees come from
+          # the `--env TEST_EMULATOR=...` literals that _wrap_in_mirage_run()
+          # bakes into test_script.
+          TEST_EMULATOR: ${{ fromJSON(inputs.component).emulator }}
+          TEST_EMULATOR_PROFILE: ${{ fromJSON(inputs.component).emulator_profile }}
           ROCM_KPACK_DEBUG: "1"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
@@ -208,7 +229,7 @@ jobs:
             --repository "${{ github.repository }}" \
             --amdgpu-family "${{ inputs.amdgpu_families }}" \
             --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
-            --test-script "${{ fromJSON(inputs.component).test_script }}" \
+            --test-script '${{ fromJSON(inputs.component).test_script }}' \
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
