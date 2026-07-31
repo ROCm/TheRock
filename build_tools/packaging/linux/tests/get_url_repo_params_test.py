@@ -2,9 +2,30 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Unit test coverage for get_url_repo_params.py:
-#   get_base_url, get_gpg_key_url, gpg_key_url_needed_for_release_type, get_repo_sub_folder,
-#   get_repo_url, extract_gfx_arch, and main() subcommands.
+"""
+Unit tests for build_tools/packaging/linux/get_url_repo_params.py.
+
+API under test — helpers and CLI subcommands:
+  get_base_url, get_gpg_key_url, gpg_key_url_needed_for_release_type,
+  get_repo_sub_folder, get_repo_url (per-family layout),
+  extract_gfx_arch, get_container_image, and main() GITHUB_OUTPUT wiring.
+
+Per-family coverage (native_packaging.md GFX URLs):
+  - prerelease/prereleases → …/packages/{os_profile}
+  - release/stable → …/rocm/packages/{os_profile}
+  - dev/nightly → …/deb|rpm/{repo_sub_folder}/
+  - GPG beside packages tree (…/packages/gpg/ or …/rocm/packages/gpg/)
+
+Not covered here yet: layout=multi_arch (packages-multi-arch/…).
+
+Prerequisites:
+  - Python 3.10 or newer
+  - stdlib only; tests mock $GITHUB_OUTPUT
+
+How to run (from TheROCK repo root):
+  python3 -m unittest \\
+    build_tools.packaging.linux.tests.get_url_repo_params_test -v
+"""
 
 import os
 import sys
@@ -385,7 +406,9 @@ class MainSubcommandsTest(unittest.TestCase):
             ]
         )
         self.assertEqual(code, 0)
-        self.assertIn("repo_url=https://rocm.prereleases.amd.com/packages/ubuntu2404", output)
+        self.assertIn(
+            "repo_url=https://rocm.prereleases.amd.com/packages/ubuntu2404", output
+        )
 
     def test_get_repo_url_error_returns_one(self):
         # Test that get-repo-url returns 1 and prints error when get_repo_url raises.
