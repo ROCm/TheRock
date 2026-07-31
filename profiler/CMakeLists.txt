@@ -6,16 +6,19 @@ if(THEROCK_ENABLE_MPI)
   set(_openmpi_optional_dep therock-openmpi)
 endif()
 
-# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)
-# to detect the rocDecode/rocJPEG trace features. Declare them as dependencies
-# when available so they resolve from the super-project dist rather than
-# escaping to a stray build tree.
+# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)/
+# find_package(hipfile) to detect the rocDecode/rocJPEG/hipFILE trace features.
+# Declare them as dependencies when available so they resolve from the
+# super-project dist rather than escaping to a stray build tree.
 set(_rocprofiler_sdk_optional_deps)
 if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   list(APPEND _rocprofiler_sdk_optional_deps rocdecode)
 endif()
 if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   list(APPEND _rocprofiler_sdk_optional_deps rocjpeg)
+endif()
+if(THEROCK_ENABLE_HIPFILE)
+  list(APPEND _rocprofiler_sdk_optional_deps hipfile)
 endif()
 
 if(THEROCK_ENABLE_ROCPROFV3)
@@ -104,7 +107,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
-    USE_DIST_AMDGPU_TARGETS
+    # Use TEST targets (all available archs) so the _generic test artifact
+    # contains .hsaco files for all architectures, not just dist archs.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
@@ -134,6 +139,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprof-trace-decoder
       rocprofiler-register
       therock-yaml-cpp
+      ${_openmpi_optional_dep}
       ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}

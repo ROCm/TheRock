@@ -126,6 +126,7 @@ option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minim
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -494,6 +495,7 @@ endif()
 # don't be fooled).
 add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
+add_subdirectory(third-party/googletest)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
@@ -502,6 +504,9 @@ add_subdirectory(debug-tools)
 # performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
 # feature detection.
 add_subdirectory(media-libs)
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
+# optional find_package(hipfile) for hipFILE trace feature detection.
+add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -510,7 +515,6 @@ add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
-add_subdirectory(storage-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
@@ -540,3 +544,6 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+# Write artifact→subprojects manifest for Python scripts to use
+therock_write_subproject_manifest()

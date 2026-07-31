@@ -635,6 +635,12 @@ class DevicePackagingTest(TmpDirTestCase):
         an_rccl = ArtifactName("rccl", "lib", "gfx942")
         self.assertTrue(device_artifact_filter("gfx942", an_rccl))
 
+        # hipkernelprovider is target-specific + kpack-split (its rocKE engine ships
+        # per-arch AOT bundles), so its per-ISA lib artifact must land in the device
+        # wheel.
+        an_hkp = ArtifactName("hipkernelprovider", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_hkp))
+
         # Should NOT match generic.
         an_generic = ArtifactName("blas", "lib", "generic")
         self.assertFalse(device_artifact_filter("gfx942", an_generic))
@@ -650,6 +656,23 @@ class DevicePackagingTest(TmpDirTestCase):
         # Should NOT match non-library artifact name.
         an_core = ArtifactName("core-hip", "lib", "gfx942")
         self.assertFalse(device_artifact_filter("gfx942", an_core))
+
+    def test_core_artifact_filter_includes_only_rocjitsu_hotswap(self):
+        """The core wheel ships the HSA hotswap hook without the rocjitsu library."""
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import core_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        self.assertTrue(
+            core_artifact_filter(ArtifactName("rocjitsu-hotswap", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "run", "generic"))
+        )
 
     def test_device_dist_info_has_libraries_py_package_name(self):
         """Device package _dist_info.py must contain LIBRARIES_PY_PACKAGE_NAME."""
@@ -1552,6 +1575,178 @@ class PerTargetExtrasTest(TmpDirTestCase):
             req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
             f"Unexpected Requires-Dist shape: {req}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for AIPROFSYST-669: rocm-profiler wheel silently dropped
+# libprofiler-hub.so*
+# ---------------------------------------------------------------------------
+
+
+class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
+    """rocprofiler-systems' ProfilerHub.cmake vendors profiler-hub as a
+    runtime .so dependency (NEEDED libprofiler-hub.so.0). It stages into the
+    same lib/ dir as librocprof-sys*, but PROFILER_WHEEL_INCLUDES never
+    listed it, so it was silently dropped when the rocm-profiler wheel was
+    assembled from an otherwise-correct artifact - breaking every rocprof-sys
+    tool at load time.
+    """
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        files: dict[str, str],
+    ):
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        for relpath, content in files.items():
+            f = stage / relpath
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(self, artifact_dir: Path) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+
+    def test_profiler_wheel_includes_libprofiler_hub(self):
+        """libprofiler-hub.so* staged inside the rocprofiler-systems artifact
+        must be selected into the profiler wheel, same as librocprof-sys*.
+        """
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "lib",
+            "generic",
+            {
+                "lib/librocprof-sys.so.1": "rocprof-sys runtime",
+                "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
+            },
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(
+            profiler.files.has("lib/libprofiler-hub.so.0"),
+            "libprofiler-hub.so.0 was dropped from the profiler wheel "
+            "(AIPROFSYST-669 regression)",
+        )
+        self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
+
+    def test_profiler_wheel_excludes_unrelated_lib_files(self):
+        """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
+        catch-all - an unrelated file must not sneak into the profiler wheel.
+        """
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "lib",
+            "generic",
+            {
+                "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
+                "lib/libunrelated-dependency.so.1": "should not be selected",
+            },
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
+        self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
+
+
+class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
+    """Unit tests for ensure_profiler_library_symlinks() in isolation - no
+    real ELF binaries or ArtifactCatalog machinery needed, since it only
+    walks profiler.platform_dir / "lib" by filename pattern.
+    """
+
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory()
+        self.platform_dir = Path(self.temp_context.name)
+        self.lib_dir = self.platform_dir / "lib"
+        self.lib_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self.temp_context.cleanup()
+
+    def _fake_profiler(self):
+        import types
+
+        return types.SimpleNamespace(platform_dir=self.platform_dir)
+
+    def test_creates_unversioned_symlink_for_libprofiler_hub(self):
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "libprofiler-hub.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "libprofiler-hub.so.0")
+
+    def test_still_creates_unversioned_symlink_for_librocprof_sys(self):
+        """Regression guard: extending the glob to cover libprofiler-hub must
+        not break the existing librocprof-sys* symlink behavior.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "librocprof-sys.so.1").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "librocprof-sys.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "librocprof-sys.so.1")
+
+    def test_does_not_overwrite_existing_symlink(self):
+        """A prior run (or another mechanism) may have already created the
+        unversioned symlink - don't clobber it, even if it happens to point
+        at a different (but real) target than we'd have picked.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
+        (self.lib_dir / "libprofiler-hub.so.99").write_text("a different target")
+        (self.lib_dir / "libprofiler-hub.so").symlink_to("libprofiler-hub.so.99")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "libprofiler-hub.so"
+        self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
 
 
 if __name__ == "__main__":

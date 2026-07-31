@@ -16,14 +16,20 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_api import (
     GitHubAPI,
     GitHubAPIError,
+    gha_append_step_summary,
     gha_fetch_file_contents,
     gha_fetch_text_file_contents,
+    gha_job_summary_mirror_path,
     gha_load_github_event,
     gha_query_last_workflow_run,
+    gha_query_prs_for_commit,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
     gha_resolve_git_ref,
+    gha_set_job_summary_output,
+    gha_set_output,
+    gha_update_pr_comment,
     is_authenticated_github_api_available,
 )
 
@@ -192,6 +198,39 @@ class GitHubAPITest(unittest.TestCase):
         api = GitHubAPI()
         auth_method = api.get_auth_method()
         self.assertIsInstance(auth_method, GitHubAPI.AuthMethod)
+
+    def test_explicit_github_token_skips_auto_detection(self):
+        """An explicit github_token should be used without env/gh-CLI detection."""
+        # No GITHUB_TOKEN env var and gh CLI unavailable: auto-detection alone
+        # would land on UNAUTHENTICATED, but the explicit token should win.
+        with mock.patch("github_actions_api.shutil.which", return_value=None):
+            api = GitHubAPI(github_token="explicit-token")
+            self.assertEqual(api.get_auth_method(), GitHubAPI.AuthMethod.GITHUB_TOKEN)
+            self.assertEqual(api._github_token, "explicit-token")
+
+    def test_explicit_github_token_used_in_request_headers(self):
+        """An explicit github_token should be sent as the Authorization header."""
+        api = GitHubAPI(github_token="explicit-token")
+        headers = api._get_request_headers()
+        self.assertEqual(headers["Authorization"], "Bearer explicit-token")
+
+    def test_explicit_github_token_independent_of_env_token(self):
+        """Two instances with different explicit tokens should not interfere."""
+        os.environ["GITHUB_TOKEN"] = "env-token"
+        default_api = GitHubAPI()
+        app_api = GitHubAPI(github_token="app-token")
+
+        self.assertEqual(
+            default_api._get_request_headers()["Authorization"], "Bearer env-token"
+        )
+        self.assertEqual(
+            app_api._get_request_headers()["Authorization"], "Bearer app-token"
+        )
+
+    def test_no_github_token_falls_back_to_auto_detection(self):
+        """Without an explicit github_token, auto-detection still runs as before."""
+        api = GitHubAPI(github_token=None)
+        self.assertIsNone(api._auth_method)
 
     # -------------------------------------------------------------------------
     # Successful request tests
@@ -469,6 +508,299 @@ class GitHubAPITest(unittest.TestCase):
             self.assertIn("Invalid JSON", str(ctx.exception))
             self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
 
+    def test_rest_api_post_sends_json_body(self):
+        """REST API POST should send JSON body with Content-Type header."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 99}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 99})
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.data, b'{"body": "hello"}')
+        self.assertEqual(request.headers["Content-type"], "application/json")
+
+    def test_rest_api_patch_sends_json_body(self):
+        """REST API PATCH should send JSON body."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 42, "body": "updated"}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch(
+            "github_actions_api.urlopen", return_value=mock_response
+        ) as urlopen:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/comments/42",
+                method="PATCH",
+                body={"body": "updated"},
+            )
+
+        self.assertEqual(result["id"], 42)
+        request = urlopen.call_args[0][0]
+        self.assertEqual(request.method, "PATCH")
+
+    def test_gh_cli_post_uses_method_and_stdin_body(self):
+        """gh CLI POST should pass --method and JSON on stdin."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = '{"id": 7}'
+
+        with mock.patch(
+            "github_actions_api.subprocess.run", return_value=mock_result
+        ) as subprocess_run:
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {"id": 7})
+        cmd = subprocess_run.call_args[0][0]
+        self.assertEqual(cmd[0:4], ["/usr/bin/gh", "api", "--method", "POST"])
+        self.assertEqual(cmd[4], "/repos/test/test/issues/1/comments")
+        self.assertIn("--input", cmd)
+        self.assertEqual(subprocess_run.call_args[1]["input"], '{"body": "hello"}')
+
+    def test_rest_api_get_empty_body_raises_github_api_error(self):
+        """REST API GET with empty body should raise GitHubAPIError (unchanged behavior)."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Invalid JSON", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    def test_rest_api_post_empty_body_returns_empty_dict(self):
+        """REST API POST with empty body may return {} without parsing JSON."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_api.urlopen", return_value=mock_response):
+            result = api.send_request(
+                "https://api.github.com/repos/test/test/issues/1/comments",
+                method="POST",
+                body={"body": "hello"},
+            )
+
+        self.assertEqual(result, {})
+
+
+class GhaUpdatePrCommentTest(unittest.TestCase):
+    """Tests for gha_update_pr_comment."""
+
+    def test_posts_new_comment_when_marker_not_found(self):
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [{"id": 1, "body": "unrelated comment"}],
+                {"id": 99, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 99)
+        self.assertEqual(send_request.call_count, 2)
+        send_request.assert_any_call(
+            f"{comments_url}?per_page=100&page=1",
+        )
+        send_request.assert_any_call(
+            comments_url,
+            method="POST",
+            body={"body": body},
+        )
+
+    def test_patches_existing_comment_when_marker_found(self):
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\n### Report\n\n[View report](https://example.com/v2)\n"
+        comments_url = "https://api.github.com/repos/ROCm/TheRock/issues/42/comments"
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [{"id": 10, "body": f"{marker}\nold content"}],
+                {"id": 10, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=42,
+                marker=marker,
+                body=body,
+            )
+
+        self.assertEqual(result["id"], 10)
+        self.assertEqual(send_request.call_count, 2)
+        send_request.assert_any_call(
+            "https://api.github.com/repos/ROCm/TheRock/issues/comments/10",
+            method="PATCH",
+            body={"body": body},
+        )
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+
+    def test_paginates_until_marker_found(self):
+        marker = "<!-- therock-breadcrumb-unmapped-6057 -->"
+        body = f"{marker}\n### Unmapped\n"
+        comments_url = (
+            "https://api.github.com/repos/ROCm/rocm-libraries/issues/7/comments"
+        )
+
+        page_1 = [{"id": i, "body": f"comment {i}"} for i in range(100)]
+        page_2 = [{"id": 200, "body": f"{marker}\nstale"}]
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                page_1,
+                page_2,
+                {"id": 200, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=7,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-libraries",
+            )
+
+        self.assertEqual(result["id"], 200)
+        self.assertEqual(send_request.call_count, 3)
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=1")
+        send_request.assert_any_call(f"{comments_url}?per_page=100&page=2")
+
+    def test_ignores_comment_from_other_author_when_comment_author_set(self):
+        """A marker match from an unexpected author should be skipped, not edited."""
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\nThis PR is now part of TheRock."
+        comments_url = (
+            "https://api.github.com/repos/ROCm/rocm-systems/issues/9/comments"
+        )
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [
+                    {
+                        "id": 1,
+                        "body": f"{marker}\nquote-reply",
+                        "user": {"login": "some-human"},
+                    }
+                ],
+                {"id": 99, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=9,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-systems",
+                comment_author="systems-assistant[bot]",
+            )
+
+        self.assertEqual(result["id"], 99)
+        send_request.assert_any_call(
+            comments_url,
+            method="POST",
+            body={"body": body},
+        )
+
+    def test_patches_comment_matching_comment_author(self):
+        """A marker match authored by comment_author should still be updated in place."""
+        marker = "<!-- example-marker -->"
+        body = f"{marker}\nThis PR is now part of TheRock."
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            side_effect=[
+                [
+                    {
+                        "id": 1,
+                        "body": f"{marker}\nold",
+                        "user": {"login": "systems-assistant[bot]"},
+                    }
+                ],
+                {"id": 1, "body": body},
+            ],
+        ) as send_request:
+            result = gha_update_pr_comment(
+                pr_number=9,
+                marker=marker,
+                body=body,
+                github_repository="ROCm/rocm-systems",
+                comment_author="systems-assistant[bot]",
+            )
+
+        self.assertEqual(result["id"], 1)
+        send_request.assert_any_call(
+            "https://api.github.com/repos/ROCm/rocm-systems/issues/comments/1",
+            method="PATCH",
+            body={"body": body},
+        )
+
+
+class GhaQueryPrsForCommitTest(unittest.TestCase):
+    """Tests for gha_query_prs_for_commit."""
+
+    def test_returns_prs_for_commit(self):
+        sha = "a" * 40
+        prs = [{"number": 42, "title": "Some PR"}]
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=prs,
+        ) as send_request:
+            result = gha_query_prs_for_commit("ROCm/TheRock", sha)
+
+        self.assertEqual(result, prs)
+        send_request.assert_called_once_with(
+            f"https://api.github.com/repos/ROCm/TheRock/commits/{sha}/pulls"
+        )
+
+    def test_returns_empty_list_when_no_prs_found(self):
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=[],
+        ):
+            result = gha_query_prs_for_commit("ROCm/TheRock", "b" * 40)
+
+        self.assertEqual(result, [])
+
 
 class GitHubActionsUtilsTest(unittest.TestCase):
     def test_resolve_git_ref_returns_sha_from_commit_api(self):
@@ -675,6 +1007,132 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         # Each limited result should also be a valid SHA
         for sha in commits_limited:
             self.assertRegex(sha, sha_pattern)
+
+
+class JobSummaryTest(unittest.TestCase):
+    """Tests for the job-summary mirror and output helpers."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp_path = Path(self._tmp.name)
+        self.runner_temp = self.tmp_path / "runner_temp"
+        self.runner_temp.mkdir()
+        self.step_summary_file = self.tmp_path / "step_summary.md"
+        self.github_output_file = self.tmp_path / "github_output"
+        self.env = {
+            "RUNNER_TEMP": os.fspath(self.runner_temp),
+            "GITHUB_STEP_SUMMARY": os.fspath(self.step_summary_file),
+            "GITHUB_OUTPUT": os.fspath(self.github_output_file),
+        }
+
+    def test_mirror_path_uses_runner_temp(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            self.assertEqual(
+                gha_job_summary_mirror_path(),
+                self.runner_temp / "job_summary.md",
+            )
+
+    def test_mirror_path_none_without_runner_temp(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(gha_job_summary_mirror_path())
+
+    def test_append_writes_both_step_summary_and_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Section A")
+            gha_append_step_summary("### Section B")
+
+        expected = "### Section A\n\n### Section B\n\n"
+        self.assertEqual(self.step_summary_file.read_text(encoding="utf-8"), expected)
+        mirror = self.runner_temp / "job_summary.md"
+        self.assertEqual(mirror.read_text(encoding="utf-8"), expected)
+
+    def test_append_multiline_summary(self):
+        summary = "### Heading\n\n- bullet a\n- bullet b\n\n| col |\n| --- |"
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary(summary)
+
+        expected = summary + "\n\n"
+        self.assertEqual(self.step_summary_file.read_text(encoding="utf-8"), expected)
+        mirror = self.runner_temp / "job_summary.md"
+        self.assertEqual(mirror.read_text(encoding="utf-8"), expected)
+
+    def test_append_can_skip_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Only step summary", mirror_to_job_file=False)
+
+        self.assertEqual(
+            self.step_summary_file.read_text(encoding="utf-8"),
+            "### Only step summary\n\n",
+        )
+        self.assertFalse((self.runner_temp / "job_summary.md").exists())
+
+    def test_append_without_step_summary_does_not_mirror(self):
+        # The mirror must only ever hold what was written to GITHUB_STEP_SUMMARY.
+        # When that env var is unset there is nothing to mirror, so the mirror
+        # file must not be created.
+        env = {k: v for k, v in self.env.items() if k != "GITHUB_STEP_SUMMARY"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            gha_append_step_summary("### Mirror only")
+
+        self.assertFalse((self.runner_temp / "job_summary.md").exists())
+
+    def test_set_output_publishes_with_custom_name(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Line 1")
+            gha_append_step_summary("### Line 2")
+            gha_set_job_summary_output(output_name="job_summary")
+
+        # The accumulated mirror is published under the requested name using the
+        # multiline heredoc form written by gha_set_output.
+        output = self.github_output_file.read_text(encoding="utf-8")
+        self.assertIn("job_summary<<EOF_mag1c\n", output)
+        self.assertIn("### Line 1", output)
+        self.assertIn("### Line 2", output)
+
+    def _parse_heredoc_output(self, output_name):
+        # Parse the GITHUB_OUTPUT heredoc the way GitHub does and return the
+        # published value for output_name.
+        output = self.github_output_file.read_text(encoding="utf-8")
+        # first == "output_name<<EOF_mag1c", rest == "value\nEOF_mag1c\n"
+        first, _, rest = output.partition("\n")
+        key, _, delimiter = first.partition("<<")
+        self.assertEqual(key, output_name)
+        closing = f"\n{delimiter}\n"
+        self.assertTrue(rest.endswith(closing))
+        return rest[: -len(closing)]
+
+    def test_set_output_round_trips_single_line_summary(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Only section")
+            gha_set_job_summary_output()
+
+        # gha_append_step_summary always appends a blank-line separator, so the
+        # published value carries the same trailing newlines as the mirror.
+        self.assertEqual(self._parse_heredoc_output("summary"), "### Only section\n\n")
+
+    def test_set_output_round_trips_multi_line_summary(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_append_step_summary("### Heading\n\n- bullet a\n- bullet b")
+            gha_append_step_summary("| col |\n| --- |\n| val |")
+            gha_set_job_summary_output()
+
+        expected = (
+            "### Heading\n\n- bullet a\n- bullet b\n\n" "| col |\n| --- |\n| val |\n\n"
+        )
+        self.assertEqual(self._parse_heredoc_output("summary"), expected)
+
+    def test_set_output_skips_when_no_mirror(self):
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            gha_set_job_summary_output()
+
+        # No mirror written -> nothing published to GITHUB_OUTPUT.
+        output = (
+            self.github_output_file.read_text(encoding="utf-8")
+            if self.github_output_file.exists()
+            else ""
+        )
+        self.assertEqual(output, "")
 
 
 if __name__ == "__main__":
