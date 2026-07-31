@@ -271,8 +271,27 @@ jobs:
           python build_tools/github_actions/patch_installed_jax_rocm_plugin_names.py \
             --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
+      # The 1gpu runners are single-device slices of shared multi-GPU hosts:
+      # ROCR_VISIBLE_DEVICES hides the other devices but not other tenants of
+      # ours. Record which physical GPU we got and who is already on it, so a
+      # noisy neighbour can be told apart from a library fault after the fact.
+      - name: Report GPU isolation
+        continue-on-error: true
+        run: |
+          echo "host=$(hostname)"
+          echo "ROCR_VISIBLE_DEVICES=${ROCR_VISIBLE_DEVICES:-unset}"
+          echo "GPU_DEVICE_ORDINAL=${GPU_DEVICE_ORDINAL:-unset}"
+          echo "HIP_VISIBLE_DEVICES=${HIP_VISIBLE_DEVICES:-unset}"
+
+          # The serial number is what identifies a recurring bad device across
+          # runs, since the runner and the device index change every time.
+          "${ROCM_ROOT}/bin/amd-smi" static --asic --board
+          "${ROCM_ROOT}/bin/amd-smi" process
+
       - name: Run JAX tests
-        timeout-minutes: 60
+        # The suite runs 35-70 min across versions, so 60 left no headroom: one
+        # job reached 100% of the tests and was still killed by the timeout.
+        timeout-minutes: 120
         env:
           # Avoid large upfront GPU memory reservation.
           XLA_PYTHON_CLIENT_PREALLOCATE: "false"
@@ -289,11 +308,17 @@ jobs:
           # solvers work, so drop Winograd until MIOpen assembles again.
           MIOPEN_DEBUG_CONV_WINOGRAD: "0"
 
+          # Retries a worker abort and the occasional one-off runtime error.
+          # Crashed workers are always retried, independently of --only-rerun.
+          # Everything else is left to the fresh-process pass below, which no
+          # in-process rerun can stand in for.
+          #
           # JAX 0.10.1 and 0.10.2 only: MIOpen selects convolution kernels
           # nondeterministically on gfx94X, so the float32 conv tests flake.
           # Deselect them. Keeps convert/conversion tests, which also
           # match "conv".
           PYTEST_ADDOPTS: >-
+            --reruns 2 --reruns-delay 5 --only-rerun INTERNAL
             ${{ contains(fromJSON('["rocm-jaxlib-v0.10.1", "rocm-jaxlib-v0.10.2"]'), inputs.jax_ref) && '-k "((not conv) or convert or conversion) and not sumpool and not minmaxpool and not toeplitz and not hankel"' || '' }}
 
           # Reduce compilation/autotune memory pressure.
@@ -310,14 +335,17 @@ jobs:
           unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
 
-          python -m pip install uv~=0.11.2
-          python -m uv pip install -r jax/build/test-requirements.txt
+          # One PyPI timeout has already cost a job a whole run.
+          retry() { for _ in 1 2 3; do "$@" && return 0; sleep 20; done; return 1; }
+
+          retry python -m pip install uv~=0.11.2
+          retry python -m uv pip install -r jax/build/test-requirements.txt
 
           # Use Python requirements lock file for correct version dependencies
           lock="jax/build/requirements_lock_${PYTHON_VERSION/./_}.txt"
-          python -m uv pip install --upgrade -c "$lock" scipy pytest
+          retry python -m uv pip install --upgrade -c "$lock" scipy pytest
 
-          python -m pip install pytest-json-report
+          retry python -m pip install pytest-json-report
 
           python -c "import jax; print(jax.local_devices())"
 
@@ -326,4 +354,33 @@ jobs:
 
           # Create a dist directory to avoid the issue with the pytest script.
           mkdir -p dist
-          ./ci/run_pytest_rocm.sh
+
+          if ./ci/run_pytest_rocm.sh; then
+            exit 0
+          fi
+
+          # A sticky library fault only clears in a new process, so the reruns
+          # above cannot, and this pass decides the job. A mismatch that clears
+          # here is the same fault wearing a different face.
+          echo "=== Retrying failures in a fresh process ==="
+          retries="$(python "${GITHUB_WORKSPACE}/build_tools/github_actions/list_failed_tests.py" \
+            logs/pytest_results_single.json logs/pytest_results_multi.json)"
+
+          if [[ -z "${retries}" ]]; then
+            echo "Nothing to retry."
+            exit 1
+          fi
+
+          # Word splitting is what turns the list into pytest arguments.
+          # shellcheck disable=SC2086
+          JAX_SKIP_SLOW_TESTS=true "python${PYTHON_VERSION}" -m pytest -n 0 --tb=short ${retries}
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}
+          path: |
+            jax/logs/
+            jax/test-artifacts/
+          if-no-files-found: ignore
