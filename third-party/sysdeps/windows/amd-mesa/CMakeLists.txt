@@ -14,11 +14,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       OUTPUT_ON_FAILURE
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
-        "-DPATCHELF=${PATCHELF}"
         "-DMESON_BUILD=${MESON_BUILD}"
         "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
-      RUNTIME_DEPS
-        therock-libdrm
       INSTALL_DESTINATION
         lib/rocm_sysdeps
       INTERFACE_INCLUDE_DIRS
@@ -35,7 +32,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libgallium_drv_video.so radeonsi_drv_video.so libva.so libva-drm.so
+      LIB_NAMES va.dll va_win32.dll
     )
 
     return()
@@ -44,8 +41,31 @@ endif()
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
 project(MESA_BUILD)
-if(NOT PATCHELF OR NOT MESON_BUILD)
-  message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
+if(NOT MESON_BUILD)
+  message(FATAL_ERROR "Missing MESON_BUILD from super-project")
+endif()
+
+# Locate a pkg-config executable that Meson will accept. Meson rejects
+# Strawberry Perl's pkg-config.BAT wrapper, so we need a native .exe.
+# Preference order:
+#   1. PKG_CONFIG env var (set by the user to a known-good executable)
+#   2. pkg-config.exe on PATH (e.g. installed via winget/choco/scoop)
+if(DEFINED ENV{PKG_CONFIG} AND NOT "$ENV{PKG_CONFIG}" MATCHES "\\.BAT$|\\.bat$")
+  set(_meson_pkg_config "PKG_CONFIG=$ENV{PKG_CONFIG}")
+  message(STATUS "Using pkg-config from PKG_CONFIG env: $ENV{PKG_CONFIG}")
+else()
+  find_program(PKG_CONFIG_EXECUTABLE
+    NAMES pkg-config.exe pkg-config
+    NO_CMAKE_FIND_ROOT_PATH
+  )
+  if(PKG_CONFIG_EXECUTABLE AND NOT PKG_CONFIG_EXECUTABLE MATCHES "\\.BAT$|\\.bat$")
+    set(_meson_pkg_config "PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}")
+    message(STATUS "Found pkg-config for mesa: ${PKG_CONFIG_EXECUTABLE}")
+  else()
+    message(WARNING "No suitable pkg-config found. Meson may fail to resolve libva-win32. "
+                    "Set PKG_CONFIG env var to a pkg-config.exe path.")
+    set(_meson_pkg_config "")
+  endif()
 endif()
 
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
@@ -62,12 +82,13 @@ add_custom_target(
     # We have to patch the sources so make a fresh copy.
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
   COMMAND
-    # Step 1: Initial meson setup to download libva-2.22.0 subproject
-    # This is required before patching because patch_source.sh modifies files in the libva subproject
+    # Step 1: Initial meson setup to download libva-2.22.0 subproject.
+    # Required before patching because patch_source.ps1 modifies files
+    # in the libva subproject after extraction.
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
+      ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -75,45 +96,35 @@ add_custom_target(
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         -Dva-libs-path="/lib"
-        -Dallow-fallback-for=libva # NOTE: Use local build of VA library
-        -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
-        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
+        -Dallow-fallback-for=libva
+        -Dforce_fallback_for=libva
         -Degl=disabled
-        -Dgallium-drivers=radeonsi
-        -Dgallium-rusticl=false
+        -Dgallium-drivers=d3d12
         -Dgallium-va=enabled
-        -Dgbm=disabled
-        -Dgles1=disabled
-        -Dgles2=disabled
-        -Dglvnd=disabled
-        -Dglx=disabled
         -Dllvm=disabled
         -Dopengl=false
-        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvideo-codecs=all
         -Dvulkan-drivers=
-        -Dplatforms=
         -Dlibva:with_glx=no
         -Dlibva:with_wayland=no
         -Dlibva:with_x11=no
-        -Dvalgrind=disabled
         -Dspirv-tools=disabled
         -Dzlib=disabled
         -Dzstd=disabled
-        -Dshader-cache=disabled
         -Dexpat=disabled
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
   COMMAND
-    # Step 2: Patch source files including libva driver path configuration
-    # Modifies library names and driver search paths for ROCm sysdeps integration
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${PATCH_SOURCE_DIR}"
+    # Step 2: Patch source files including libva win32 header fix.
+    powershell -ExecutionPolicy Bypass -File
+      "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.ps1"
+      "${PATCH_SOURCE_DIR}"
   COMMAND
-    # Step 3: Reconfigure meson to build from patched source
-    # This ensures the build system uses the modified source files
+    # Step 3: Reconfigure meson to build from patched source.
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
+      ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -121,31 +132,21 @@ add_custom_target(
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         -Dva-libs-path="/lib"
-        -Dallow-fallback-for=libva # NOTE: Use local build of VA library
-        -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
-        -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
+        -Dallow-fallback-for=libva
+        -Dforce_fallback_for=libva
         -Degl=disabled
-        -Dgallium-drivers=radeonsi
-        -Dgallium-rusticl=false
+        -Dgallium-drivers=d3d12
         -Dgallium-va=enabled
-        -Dgbm=disabled
-        -Dgles1=disabled
-        -Dgles2=disabled
-        -Dglvnd=disabled
-        -Dglx=disabled
         -Dllvm=disabled
         -Dopengl=false
-        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvideo-codecs=all
         -Dvulkan-drivers=
-        -Dplatforms=
         -Dlibva:with_glx=no
         -Dlibva:with_wayland=no
         -Dlibva:with_x11=no
-        -Dvalgrind=disabled
         -Dspirv-tools=disabled
         -Dzlib=disabled
         -Dzstd=disabled
-        -Dshader-cache=disabled
         -Dexpat=disabled
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
@@ -154,10 +155,4 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
       "${MESON_BUILD}" install
-  COMMAND
-    "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
 )

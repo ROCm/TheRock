@@ -27,9 +27,9 @@
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "amd-mesa"]
-	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
-	url = https://github.com/ROCm/mesa-fork.git
-	branch = main
+	path = third-party/sysdeps/amd-mesa/mesa-fork
+	url = https://gitlab.freedesktop.org/lakshmi.kumar/mesa.git
+	branch = fix/libva-win32-buildorder
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
