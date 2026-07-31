@@ -192,6 +192,8 @@ ROCMINFO_TIMEOUT_SEC = 30
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
 RDHC_TIMEOUT_SEC = 600  # 10 minutes
 VERIFY_MIN_COMPONENTS = 2
+# Per-file readelf timeout for the RPATH/RUNPATH verification scan.
+RUNPATH_READELF_TIMEOUT_SEC = 30
 _TEST_TYPE_MAP = {
     "": "sanity",
     "quick": "sanity",
@@ -966,6 +968,11 @@ gpgcheck=0
         except subprocess.CalledProcessError:
             print(" [WARN] Could not query installed packages")
 
+        # Verify installed ELF files use RPATH and not RUNPATH.
+        if not self.verify_no_runpath():
+            print("\n[FAIL] Basic verification FAILED (ELF files still using RUNPATH)")
+            return False
+
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
         if rocminfo_path.exists():
@@ -1300,6 +1307,63 @@ gpgcheck=0
         except OSError as e:
             print(f" [WARN] Could not run rdhc.py: {e}")
             return False
+
+    def verify_no_runpath(self) -> bool:
+        """Verify no installed ELF file uses DT_RUNPATH (expect DT_RPATH only).
+
+        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py),
+        so any ELF file that still carries a DT_RUNPATH tag indicates the
+        conversion was missed. Files with no rpath/runpath tag at all are fine.
+
+        Reads each ELF's dynamic section with ``readelf -d``. If ``readelf`` is
+        unavailable the check is skipped (non-fatal), matching the tolerant
+        behaviour used elsewhere in basic verification.
+
+        Returns:
+        True if no installed ELF uses DT_RUNPATH (or the check could not run),
+        False if any offending file is found.
+        """
+        print("\nVerifying installed ELF files use RPATH (not RUNPATH)...")
+        install_path = Path(self.install_prefix)
+        offending: list[str] = []
+        for root, _dirs, files in os.walk(install_path):
+            for name in files:
+                filepath = Path(root) / name
+                if filepath.is_symlink():
+                    continue
+                try:
+                    # Cheap ELF magic check before invoking readelf.
+                    with open(filepath, "rb") as f:
+                        if f.read(4) != b"\x7fELF":
+                            continue
+                except OSError:
+                    continue
+                try:
+                    out = subprocess.run(
+                        ["readelf", "-d", str(filepath)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        text=True,
+                        timeout=RUNPATH_READELF_TIMEOUT_SEC,
+                    ).stdout
+                except subprocess.TimeoutExpired:
+                    continue
+                except OSError as e:
+                    print(
+                        f" [WARN] 'readelf' unavailable ({e}); skipping RUNPATH check"
+                    )
+                    return True
+                if "(RUNPATH)" in out:
+                    offending.append(str(filepath))
+        if offending:
+            print(f" [FAIL] {len(offending)} ELF file(s) still using DT_RUNPATH:")
+            for entry in offending[:10]:
+                print(f"   {entry}")
+            if len(offending) > 10:
+                print(f"   ... and {len(offending) - 10} more")
+            return False
+        print(" [PASS] No installed ELF files use DT_RUNPATH")
+        return True
 
 
 _CLI_EXAMPLES_EPILOG = """
