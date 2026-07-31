@@ -346,6 +346,12 @@ function(therock_cmake_subproject_declare target_name)
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
   endif()
+  # Centralized compatibility gate: fail loudly if this subproject is being
+  # declared for an AMDGPU target it is declared incompatible with (via
+  # INCOMPATIBLE_TARGET_PROJECTS in therock_amdgpu_targets.cmake). This runs for
+  # every subproject automatically, so incompatible components are not silently
+  # built or dropped — a bad configuration is surfaced here.
+  therock_check_target_compatible("${target_name}")
   if(NOT ARG_LOGICAL_TARGET_NAME)
     set(ARG_LOGICAL_TARGET_NAME "${target_name}")
   endif()

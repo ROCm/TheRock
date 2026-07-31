@@ -9,6 +9,12 @@
 #     family
 #   THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}: Project target keyed
 #     list of gfx targets to exclude when building the target.
+#   THEROCK_AMDGPU_TARGET_HW_INDEPENDENT_${gfx_target}: TRUE if the target is
+#     hardware-independent (e.g. amdgcnspirv: portable SPIR-V finalized to native
+#     ISA at load time by an already-installed runtime; runs on any HW).
+#   THEROCK_AMDGPU_PROJECT_TARGET_INCOMPATIBLE_${project_name}: Project target
+#     keyed list of gfx targets the project is fundamentally incompatible with.
+#     Enabling such a project for such a target is a configuration error (FATAL).
 #
 # Note that each gfx_target will also create a family of the same name.
 set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
@@ -19,14 +25,24 @@ set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
 #
 # Keyword Args:
 # FAMILY: List of family names to associate the gfx target with.
+# HW_INDEPENDENT: Option marking this target as hardware-independent (portable,
+#   not tied to a specific GPU ISA; e.g. amdgcnspirv). Used to reason about which
+#   components make sense for it.
 # EXCLUDE_TARGET_PROJECTS: sub-project names for which this target should be
-#   filtered out. This is used to work around bugs during bringup and should
-#   not be set on any fully supported targets.
+#   filtered out of GPU_TARGETS while the project still builds. This is used to
+#   work around bugs during bringup and should not be set on any fully supported
+#   targets.
+# INCOMPATIBLE_TARGET_PROJECTS: sub-project names that are fundamentally
+#   incompatible with this target (cannot be built for it by design). This does
+#   NOT silently disable them; instead enabling such a project for this target is
+#   reported as a fatal configuration error via therock_check_target_compatible().
+#   The intent is to surface bad configurations high up rather than quietly drop
+#   components.
 function(therock_add_amdgpu_target gfx_target product_name)
   cmake_parse_arguments(PARSE_ARGV 2 ARG
+    "HW_INDEPENDENT"
     ""
-    ""
-    "FAMILY;EXCLUDE_TARGET_PROJECTS"
+    "FAMILY;EXCLUDE_TARGET_PROJECTS;INCOMPATIBLE_TARGET_PROJECTS"
   )
 
   get_property(_targets GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
@@ -35,13 +51,70 @@ function(therock_add_amdgpu_target gfx_target product_name)
   endif()
   set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_TARGETS "${gfx_target}")
   set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_NAME_${gfx_target}" "${product_name}")
+  set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_HW_INDEPENDENT_${gfx_target}" "${ARG_HW_INDEPENDENT}")
   foreach(project_name in ${ARG_EXCLUDE_TARGET_PROJECTS})
     set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name} "${gfx_target}")
+  endforeach()
+  foreach(project_name IN LISTS ARG_INCOMPATIBLE_TARGET_PROJECTS)
+    set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_PROJECT_TARGET_INCOMPATIBLE_${project_name} "${gfx_target}")
   endforeach()
   foreach(_family "${gfx_target}" ${ARG_FAMILY})
     set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_TARGET_FAMILIES "${_family}")
     set_property(GLOBAL APPEND PROPERTY "THEROCK_AMDGPU_TARGET_FAMILY_${_family}" "${gfx_target}")
   endforeach()
+endfunction()
+
+# Fails with a fatal error if a project is enabled for a target it is declared
+# incompatible with (via INCOMPATIBLE_TARGET_PROJECTS). This is the "component
+# incompatibility" gate: rather than silently disabling components low in the
+# tree, callers assert compatibility explicitly and a misconfiguration is
+# surfaced loudly.
+#
+# Semantics: fires only when a per-arch target list is actually requested
+# (THEROCK_AMDGPU_TARGETS is set and not the NOTFOUND sentinel) and every
+# requested target is incompatible with the project. For a mixed selection where
+# at least one requested target is compatible, this does not fire (the project
+# builds for the compatible subset; use EXCLUDE_TARGET_PROJECTS to strip the
+# incompatible ones from its GPU_TARGETS).
+function(therock_check_target_compatible project_name)
+  if(NOT THEROCK_AMDGPU_TARGETS OR "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    return()
+  endif()
+  get_property(_incompatible GLOBAL PROPERTY
+    "THEROCK_AMDGPU_PROJECT_TARGET_INCOMPATIBLE_${project_name}")
+  if(NOT _incompatible)
+    return()
+  endif()
+  set(_remaining ${THEROCK_AMDGPU_TARGETS})
+  list(REMOVE_ITEM _remaining ${_incompatible})
+  if(NOT _remaining)
+    string(JOIN " " _targets_pretty ${THEROCK_AMDGPU_TARGETS})
+    message(FATAL_ERROR
+      "Project '${project_name}' is enabled but is incompatible with the "
+      "selected AMDGPU target(s): ${_targets_pretty}. This component cannot be "
+      "built for these targets by design. Disable it (do not include it in the "
+      "enabled feature set) or select a compatible target.")
+  endif()
+endfunction()
+
+# TRUE when 'project_name' is incompatible with ALL currently requested per-arch
+# targets. Lets a caller prune incompatible members while expanding a feature
+# group (e.g. ENABLE_ALL) without triggering the fatal check. FALSE for
+# generic/no-target stages and ordinary gfx builds.
+function(therock_project_incompatible out_var project_name)
+  set(_result FALSE)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    get_property(_incompatible GLOBAL PROPERTY
+      "THEROCK_AMDGPU_PROJECT_TARGET_INCOMPATIBLE_${project_name}")
+    if(_incompatible)
+      set(_remaining ${THEROCK_AMDGPU_TARGETS})
+      list(REMOVE_ITEM _remaining ${_incompatible})
+      if(NOT _remaining)
+        set(_result TRUE)
+      endif()
+    endif()
+  endif()
+  set("${out_var}" "${_result}" PARENT_SCOPE)
 endfunction()
 
 # gfx900
@@ -257,10 +330,15 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
-# amdgcnspirv architecture-independent portable SPIR-V target
-# Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
+# amdgcnspirv: hardware-independent portable SPIR-V target. Runs on any HW where
+# a ROCm runtime is already installed (the runtime finalizes SPIR-V to native ISA
+# at load time). Projects with GPU-specific components that do not yet support
+# SPIR-V are declared INCOMPATIBLE: enabling any of them for this target is a
+# fatal configuration error (see therock_check_target_compatible), rather than
+# silently disabling them.
 therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
-  EXCLUDE_TARGET_PROJECTS
+  HW_INDEPENDENT
+  INCOMPATIBLE_TARGET_PROJECTS
     MIOpen # https://github.com/ROCm/TheRock/issues/6918
     ROCR-Runtime # https://github.com/ROCm/TheRock/issues/6918
     aqlprofile # https://github.com/ROCm/TheRock/issues/6918
