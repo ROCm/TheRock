@@ -17,6 +17,9 @@ project(therock-aux-overlay LANGUAGES C CXX)
 
 # This is the canonical example of consuming ROCm build flags from either a
 # super-repository provider or project-specific standalone cache variables.
+# ROCm projects include their super-repository's verbatim helper copy through
+# its root variable (for example, ROCM_LIBRARIES_ROOT). This project uses
+# THEROCK_SOURCE_DIR because its containing repository is TheRock.
 include("${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake")
 
 rocm_resolve_build_flag(

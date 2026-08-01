@@ -141,10 +141,13 @@ endif()
 
 ### Using a Flag in a ROCm Project
 
-Include the helper from the containing super-repository and resolve each flag:
+Include the helper copy from the containing super-repository and resolve each
+flag. Each super-repository defines its own root variable; for example, a
+project in rocm-libraries uses `ROCM_LIBRARIES_ROOT`. This path does not refer
+back to a TheRock checkout.
 
 ```cmake
-include("${ROCM_SUPER_REPO_ROOT}/cmake/ROCMBuildFlags.cmake")
+include("${ROCM_LIBRARIES_ROOT}/cmake/ROCMBuildFlags.cmake")
 
 rocm_resolve_build_flag(
   NAME EXAMPLE_INTEGER
