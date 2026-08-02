@@ -1,0 +1,10 @@
+# gitleaks fingerprint suppressions for historical findings.
+# Each line is a fingerprint: commit:file:rule:line
+# These are false positives — variable names that match secret patterns but
+# contain no real secrets. Keep this file shrinking by fixing the source
+# when possible; use this only for findings in already-merged commits.
+
+# aggregate_metadata_test.py: variable named 'key' holding a test NEVRA string
+# "key = 'pkg1_2.0_amd64'" is a test NEVRA key, not an API key.
+# Fixed in source: renamed to 'nevra' in subsequent commit.
+8a41fc81026a3a5d0321c3a5c389d21e7cfa3520:build_tools/packaging/linux/tests/aggregate_metadata_test.py:generic-api-key:270
