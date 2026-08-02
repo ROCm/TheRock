@@ -267,8 +267,8 @@ class TestDebNevraCollision(unittest.TestCase):
 
     def test_different_versions_no_collision(self):
         declared = {"pkg1_1.0_amd64": "core"}
-        key = "pkg1_2.0_amd64"
-        self.assertNotIn(key, declared)
+        nevra = "pkg1_2.0_amd64"
+        self.assertNotIn(nevra, declared)
 
 
 class TestDebStanzaRoundTrip(unittest.TestCase):
@@ -398,9 +398,9 @@ class TestRpmNevraCollision(unittest.TestCase):
     def test_same_nevra_different_sources_detected(self):
         pkg = self._make_pkg("mypkg", "0", "1.0", "1.el8", "x86_64")
         declared = {self._nevra_key(pkg): "core"}
-        key = self._nevra_key(pkg)
-        self.assertIn(key, declared)
-        self.assertNotEqual(declared[key], "rvs")
+        nevra = self._nevra_key(pkg)
+        self.assertIn(nevra, declared)
+        self.assertNotEqual(declared[nevra], "rvs")
 
     def test_different_versions_no_collision(self):
         pkg1 = self._make_pkg("mypkg", "0", "1.0", "1.el8", "x86_64")

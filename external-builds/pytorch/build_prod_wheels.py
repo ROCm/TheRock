@@ -284,6 +284,57 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     return version_suffix
 
 
+def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
+    """Return the short git commit for a source dir, or "" if unresolved."""
+    # Pass safe.directory via `-c` (scoped to this single git invocation)
+    # instead of `git config --global` so we don't mutate global system state.
+    # This keeps the lookup working even when the checkout is owned by another
+    # user (e.g. in CI).
+    commit = capture(
+        [
+            "git",
+            "-c",
+            f"safe.directory={source_dir}",
+            "rev-parse",
+            f"--short={length}",
+            "HEAD",
+        ],
+        cwd=source_dir,
+    )
+    if not commit:
+        print(f"WARNING: could not resolve source commit in '{source_dir}'")
+    return commit
+
+
+def compute_build_version(
+    source_dir: Path, version_suffix: str, release_type: str
+) -> str:
+    """Compute a wheel version, tagging dev builds with the source commit.
+
+    Reads `<source_dir>/version.txt` as the base version and appends
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
+    builds the 8-char source commit is merged into that single local segment,
+    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
+    torchvision) records exactly which source commit produced it. PyTorch's
+    setup.py validates the version as PEP 440, which only allows a commit hash
+    in the local segment (after `+`).
+    TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
+    upfront, manifest-based version computation lands so the built version
+    always matches what the manifest records.
+    """
+    base_version = (source_dir / "version.txt").read_text().strip()
+    build_version = base_version + version_suffix
+    if release_type == "dev":
+        commit = get_source_commit_short(source_dir)
+        if commit:
+            # version_suffix is a local identifier like `+rocm7.10.0`; merge the
+            # commit into that single local segment (PEP 440 allows one `+`).
+            local = version_suffix.lstrip("+")
+            local_parts = [p for p in (f"git{commit}", local) if p]
+            build_version = f"{base_version}+{'.'.join(local_parts)}"
+    return build_version
+
+
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
     """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
     hash_file = triton_dir / "cmake" / "llvm-hash.txt"
@@ -960,9 +1011,10 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    # Compute version.
-    pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the torch source commit).
+    pytorch_build_version = compute_build_version(
+        pytorch_dir, args.version_suffix, args.release_type
+    )
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1199,9 +1251,10 @@ def do_build_pytorch(
 def do_build_pytorch_audio(
     args: argparse.Namespace, pytorch_audio_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the audio source commit).
+    build_version = compute_build_version(
+        pytorch_audio_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -1238,9 +1291,10 @@ def do_build_pytorch_audio(
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the vision source commit).
+    build_version = compute_build_version(
+        pytorch_vision_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
@@ -1473,6 +1527,16 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--version-suffix",
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
+    )
+    build_p.add_argument(
+        "--release-type",
+        choices=["ci", "dev", "nightly", "prerelease"],
+        default="nightly",
+        help="Release type of the build. For `dev` builds the torch wheel "
+        "version is tagged with the 8-char torch source commit in the local "
+        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
+        "The default is non-appending so other callers (CI, nightly, "
+        "prerelease) keep their plain `<base>+<suffix>` versions.",
     )
     build_p.add_argument(
         "--clean",

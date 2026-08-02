@@ -878,6 +878,7 @@ class RunTestsTestTypeTest(unittest.TestCase):
             gpg_key_url=None,
             packages_dir=None,
             pkg_type=None,
+            rocm_version=None,
         )
 
     @patch.object(
@@ -1081,10 +1082,9 @@ class SetupGpgKeyTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_gpg_key())
 
-    @patch("native_linux_package_install_test.os.chmod")
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run, mock_chmod):
-        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir and pipeline succeed.
+    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run):
+        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir, pipeline, and chmod succeed.
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -1092,7 +1092,7 @@ class SetupGpgKeyTest(unittest.TestCase):
             gpg_key_url="https://example.com/rocm.gpg",
         )
         self.assertTrue(t.setup_gpg_key())
-        self.assertEqual(mock_run.call_count, 2)  # mkdir, then pipeline
+        self.assertEqual(mock_run.call_count, 3)  # mkdir, pipeline, chmod
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_false_for_deb_when_subprocess_fails(self, mock_run):
@@ -1114,11 +1114,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.setup_deb_repository()."""
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_when_apt_update_succeeds_no_gpg(
-        self, mock_write_text, mock_streaming
+        self, mock_run, mock_streaming
     ):
-        # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
+        # Test that setup_deb_repository writes repo entry via sudo tee (trusted=yes) and returns True when apt update returns 0.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1127,8 +1128,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
             gfx_arch="gfx94x",
         )
         self.assertTrue(t.setup_deb_repository())
-        mock_write_text.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0][:2], ["sudo", "tee"])
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("trusted=yes", written)
         self.assertIn("https://repo.example.com", written)
 
@@ -1138,11 +1140,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "setup_gpg_key",
         return_value=True,
     )
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_with_gpg_when_apt_update_succeeds(
-        self, mock_write_text, mock_gpg, mock_streaming
+        self, mock_run, mock_gpg, mock_streaming
     ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1152,7 +1155,7 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_deb_repository())
         mock_gpg.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("signed-by", written)
 
     @patch.object(
@@ -1169,13 +1172,14 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertFalse(t.setup_deb_repository())
 
-    @patch("native_linux_package_install_test._run_streaming")
-    @patch(
-        "native_linux_package_install_test.Path.write_text",
-        side_effect=OSError("Permission denied"),
-    )
-    def test_returns_false_when_open_raises(self, mock_write_text, mock_streaming):
-        # Test that setup_deb_repository returns False when writing sources list raises OSError.
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_open_raises(self, mock_run):
+        # Test that setup_deb_repository returns False when sudo tee fails.
+        import subprocess
+
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "tee", stderr=b"permission denied"
+        )
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
@@ -1185,9 +1189,10 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_fails(self, mock_write_text, mock_streaming):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_fails(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when apt update returns non-zero.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 1
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1198,13 +1203,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_times_out(
-        self, mock_write_text, mock_streaming
-    ):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_times_out(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.side_effect = subprocess.TimeoutExpired("apt", 120)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1302,7 +1306,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         )
         self.assertTrue(t.install_deb_packages())
         call_args = mock_streaming.call_args[0][0]
-        self.assertEqual(call_args[0], "apt")
+        self.assertEqual(call_args[:4], ["sudo", "apt", "install", "-y"])
         self.assertIn("amdrocm", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
@@ -1319,7 +1323,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertTrue(t.install_deb_packages())
         cmd = mock_streaming.call_args[0][0]
-        self.assertEqual(cmd[:3], ["apt", "install", "-y"])
+        self.assertEqual(cmd[:4], ["sudo", "apt", "install", "-y"])
         self.assertIn("amdrocm7.13-gfx94x", cmd)
         self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
         self.assertIn("amdrocm7.13-gfx1100", cmd)

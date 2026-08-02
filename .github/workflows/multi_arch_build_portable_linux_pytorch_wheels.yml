@@ -310,6 +310,8 @@ jobs:
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
+          # --release-type lets the script tag dev builds' torch version with
+          # the torch source commit (e.g. 2.12.0a0+git1a2b3c4d.rocm7.10.0).
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
@@ -318,6 +320,7 @@ jobs:
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
+            --release-type="${{ inputs.release_type }}" \
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} \
             ${{ env.optional_build_prod_arguments }}
 
@@ -510,7 +513,7 @@ jobs:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
             { "amdgpu_family": "gfx94X-dcgpu",
-              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
+              "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
               "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
               "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
               "python_version": "${{ inputs.python_version }}",
