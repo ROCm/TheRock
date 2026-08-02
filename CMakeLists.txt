@@ -515,6 +515,7 @@ add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
+include(profiler/rocprofiler-systems-examples.cmake)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 

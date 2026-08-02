@@ -386,49 +386,4 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       rocprofiler-sdk
       rocprofiler-systems
     )
-
-
-  # TODO: This should be built as target-specific, but that's not currently possible as
-  # the artifact splitter strips per-arch HIP offload bundles out of the example binaries,
-  # preventing llvm-objdump (used in our tests) from detecting the offload architectures
-  # See https://github.com/ROCm/TheRock/issues/4848
-  if(THEROCK_BUILD_TESTING)
-    # Escape semicolons in GPU targets list to prevent shell interpretation
-    if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
-      set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
-    else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
-    endif()
-
-    therock_cmake_subproject_declare(rocprofiler-systems-examples
-      USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
-        -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
-      COMPILER_TOOLCHAIN
-        amd-hip
-      INSTALL_RPATH_DIRS
-        "lib"
-        "lib/rocprofiler-systems"
-        "lib/llvm/lib"
-      RUNTIME_DEPS
-        rocprofiler-systems
-    )
-    therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
-      SUBDIRS .
-    )
-    therock_cmake_subproject_activate(rocprofiler-systems-examples)
-
-    therock_provide_artifact(rocprofiler-systems-examples
-      TARGET_NEUTRAL
-      DESCRIPTOR "${CMAKE_SOURCE_DIR}/profiler/artifact-rocprofiler-systems-examples.toml"
-      COMPONENTS
-        test
-      SUBPROJECT_DEPS
-        rocprofiler-systems-examples
-    )
-  endif()
 endif(THEROCK_ENABLE_ROCPROFSYS)
