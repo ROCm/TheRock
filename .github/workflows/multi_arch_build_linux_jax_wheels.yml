@@ -276,7 +276,7 @@ jobs:
   test_jax_wheels:
     if: ${{ inputs.test_amdgpu_family != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
-    name: Test JAX wheels | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    name: Test | ${{ inputs.test_amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     permissions:
       contents: read
       id-token: write
