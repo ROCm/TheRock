@@ -164,6 +164,7 @@ LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 # List of library preloads for Linux to generate into _rocm_init.py
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
+    "amd_smi",  # Preload with RTLD_GLOBAL so IntraNodeComm::getNvlMesh can resolve amdsmi symbols via dlsym(RTLD_DEFAULT, ...)
     "amdhip64",
     "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
