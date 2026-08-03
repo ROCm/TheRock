@@ -627,7 +627,9 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        # rocdecode/rocjpeg back the videodecode/jpegdecode examples, whose
+        # binaries link librocdecode.so/librocjpeg.so at runtime.
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --rocdecode --rocjpeg --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",
@@ -637,6 +639,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # The videodecode example links FFmpeg (libavcodec/libavformat/libavutil),
+        # which is not bundled in TheRock artifacts. Use the same media image as
+        # the rocdecode job so those libraries are present.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {

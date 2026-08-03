@@ -319,7 +319,9 @@ source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 [artifact_groups.profiler-apps]
 description = "Profiler applications and analysis tools"
 type = "generic"
-artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
+# media-libs supplies rocdecode/rocjpeg for the rocprofiler-systems videodecode
+# and jpegdecode examples, so it has to be built and available first.
+artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi", "media-libs"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.media-libs]
@@ -762,7 +764,8 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-systems"]
+# rocdecode/rocjpeg back the videodecode/jpegdecode examples.
+artifact_deps = ["rocprofiler-systems", "rocdecode", "rocjpeg"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 

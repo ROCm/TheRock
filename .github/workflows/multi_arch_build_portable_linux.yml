@@ -12,8 +12,9 @@
 # 6. storage-libs (generic) - hipfile (parallel to math-libs)
 # 7. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 8. dctools-core (generic) - RDC (parallel to math-libs)
-# 9. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 9. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 10. profiler-apps (generic) - rocprofiler-systems; needs media-libs because the
+#     videodecode/jpegdecode examples link rocdecode/rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -276,7 +277,7 @@ jobs:
   # STAGE: profiler-apps (generic, parallel to math-libs)
   # ==========================================================================
   profiler-apps:
-    needs: compiler-runtime
+    needs: [compiler-runtime, media-libs]
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
