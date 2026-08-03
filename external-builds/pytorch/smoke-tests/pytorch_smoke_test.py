@@ -1,10 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import ctypes
 import logging
-import torch
-import pytest
+import platform
 import re
+
+import pytest
+import torch
 
 
 class TestROCmAvailability:
@@ -158,3 +161,68 @@ class TestOpenBLASAvailability:
         assert output_u.device == torch.device("cpu")
         assert output_s.device == torch.device("cpu")
         assert output_vh.device == torch.device("cpu")
+
+
+@pytest.mark.skipif(platform.system() != "Linux", reason="Linux only")
+class TestRocmSdkLibraries:
+    """Verify rocm_sdk library packaging and preload correctness on Linux.
+
+    Two layers of checks:
+
+    1. Packaging (test_all_exported_libraries_findable):
+       Verifies every installed rocm_sdk library resolves to an existing file
+       via rocm_sdk.find_libraries. Catches files missing from a package.
+
+    2. Runtime preload (test_amdsmi_symbol_resolvable_via_rtld_default):
+       import torch triggers _rocm_init.py which calls rocm_sdk.initialize_process,
+       preloading libamd_smi.so with RTLD_GLOBAL. Verifies amdsmi symbols are
+       resolvable via dlsym(RTLD_DEFAULT, ...) so IntraNodeComm::getNvlMesh can
+       resolve them without needing dlopen("libamd_smi.so") to succeed by filename.
+       See ROCM-27833.
+    """
+
+    # ctypes.CDLL(None) is the Python equivalent of dlsym(RTLD_DEFAULT, ...)
+    _rtld_default = ctypes.CDLL(None)
+
+    _AMDSMI_SYMBOLS = [
+        "amdsmi_init",
+        "amdsmi_get_socket_handles",
+        "amdsmi_get_processor_handles",
+        "amdsmi_is_P2P_accessible",
+    ]
+
+    def test_all_exported_libraries_findable(self):
+        """Verify all installed rocm_sdk libraries are findable — packaging layer check.
+
+        Iterates over every library declared in _dist_info.ALL_LIBRARIES whose
+        package is installed and verifies it resolves to an existing file via
+        rocm_sdk.find_libraries. Libraries whose package is not installed are
+        skipped (e.g. rocm-sdk-libraries may not be present in all test configs).
+        If this fails, a library is missing from an installed package which is a
+        packaging issue. If this passes but the dlsym tests fail, the library
+        exists but was not preloaded with RTLD_GLOBAL.
+        """
+        import importlib
+
+        import rocm_sdk
+        from rocm_sdk import _dist_info
+
+        for shortname, entry in _dist_info.ALL_LIBRARIES.items():
+            if entry.optional:
+                continue  # skip optional libs (e.g. rocdxg — WSL only)
+            # Skip if the package that provides this library is not installed
+            py_package_name = entry.package.pure_py_package_name
+            if importlib.util.find_spec(py_package_name) is None:
+                continue
+            paths = rocm_sdk.find_libraries(shortname)
+            assert paths, f"rocm_sdk.find_libraries('{shortname}') returned no paths"
+            assert paths[0].exists(), f"Library '{shortname}' not found at {paths[0]}"
+
+    @pytest.mark.parametrize("symbol", _AMDSMI_SYMBOLS)
+    def test_amdsmi_symbol_resolvable_via_rtld_default(self, symbol):
+        fn = getattr(self._rtld_default, symbol, None)
+        addr = ctypes.cast(fn, ctypes.c_void_p).value
+        assert addr, (
+            f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
+            f"libamd_smi was not preloaded with RTLD_GLOBAL by _rocm_init.py"
+        )
