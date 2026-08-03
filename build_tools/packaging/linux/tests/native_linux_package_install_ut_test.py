@@ -1130,7 +1130,8 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
     def test_builds_expected_find_command(self, mock_run):
         # Verify the single find invocation follows the prefix symlink (-H),
         # stays on one filesystem (-xdev), checks ownership (uid/gid), writable
-        # (0o022) and setid (0o6000) bits while excluding symlinks (! -type l).
+        # (0o022) on non-symlinks (! -type l) and setid (0o6000) on regular
+        # files only (-type f).
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         with _suppress_script_output():
             self._make("/opt/rocm/core").verify_installed_file_security()
@@ -1144,9 +1145,14 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         self.assertIn("/022", cmd)
         self.assertIn("/6000", cmd)
         self.assertIn("!", cmd)
-        # symlinks are excluded from the permission portion
+        # symlinks are excluded from the writable portion (! -type l)
         self.assertIn("-type", cmd)
         self.assertIn("l", cmd)
+        # setuid/setgid is scoped to regular files (-type f) so benign setgid
+        # directories (drwxr-sr-x) are not flagged.
+        self.assertIn("f", cmd)
+        setid_idx = cmd.index("/6000")
+        self.assertEqual(cmd[setid_idx - 3 : setid_idx], ["-type", "f", "-perm"])
         # no sticky-bit special-casing anymore
         self.assertNotIn("-1000", cmd)
         # no in-process timeout (style guide: no timeouts on basic binutils)
@@ -1263,6 +1269,38 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         )
         with _suppress_script_output():
             self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setgid_file(self, mock_walk, mock_lstat):
+        # A root-owned setgid *regular file* is still flagged.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setgid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_setgid_directory(self, mock_walk, mock_lstat):
+        # A root-owned setgid *directory* (drwxr-sr-x, mode 2755) is a benign
+        # group-inheritance pattern and must NOT be flagged. This is the common
+        # ROCm install-tree case (2287 such dirs surfaced in CI).
+        mock_walk.return_value = [("/opt/rocm/core", ["libexec"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertTrue(
                 self._make()._verify_installed_file_security_python(
                     Path("/opt/rocm/core")
                 )

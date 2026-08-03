@@ -990,9 +990,14 @@ gpgcheck=0
         """Format an owner/group/mode + 'why flagged' annotation from a stat result.
 
         Renders which rule(s) a path violated (non-root owner, group/other
-        writable, setuid/setgid) so the CI log shows *why* each path was
-        flagged rather than just its name. Mirrors the flagging logic; symlink
-        mode bits are ignored (only ownership is meaningful for links).
+        writable, setuid/setgid on a regular file) so the CI log shows *why*
+        each path was flagged rather than just its name. Mirrors the flagging
+        logic: symlink mode bits are ignored (only ownership is meaningful for
+        links) and the setuid/setgid rule applies to regular files only, since
+        setgid on a directory is a normal, benign group-inheritance pattern.
+
+        Returns the bare annotation body (no surrounding parentheses) so callers
+        can wrap it as needed.
         """
         mode = st.st_mode
         reasons = []
@@ -1003,27 +1008,33 @@ gpgcheck=0
                 reasons.append("other-writable")
             if mode & 0o020:
                 reasons.append("group-writable")
-            if mode & (stat.S_ISUID | stat.S_ISGID):
+            if stat.S_ISREG(mode) and mode & (stat.S_ISUID | stat.S_ISGID):
                 reasons.append("setuid/setgid")
         why = ",".join(reasons) if reasons else "?"
-        return (
-            f" (uid={st.st_uid} gid={st.st_gid} "
-            f"mode={stat.S_IMODE(mode):04o} -> {why})"
-        )
+        return f"uid={st.st_uid} gid={st.st_gid} mode={stat.S_IMODE(mode):04o} -> {why}"
 
     @classmethod
     def _describe_flagged_path(cls, path: str) -> str:
-        """Best-effort owner/group/mode annotation for a path printed by ``find``.
+        """Best-effort ``(owner/group/mode -> why)`` annotation for a ``find`` hit.
 
         ``find`` prints only names, so re-``lstat`` the path to explain why it
-        was flagged. Never raises: on any error it returns an annotation noting
-        the failure so reporting is unaffected.
+        was flagged. The prefix itself is often a symlink that ``find -H``
+        follows and flags via its *target*; ``lstat`` would only see the link's
+        meaningless ``0777`` bits, so for a symlink we additionally ``stat`` the
+        target and report that. Never raises: on any error it returns an
+        annotation noting the failure so reporting is unaffected.
         """
         try:
             st = os.lstat(path)
         except OSError as e:
-            return f" (stat failed: {e.strerror or e})"
-        return cls._format_flagged_reason(st)
+            return f"(stat failed: {e.strerror or e})"
+        if stat.S_ISLNK(st.st_mode):
+            try:
+                target = os.stat(path)
+            except OSError as e:
+                return f"(symlink; target stat failed: {e.strerror or e})"
+            return f"(symlink target: {cls._format_flagged_reason(target)})"
+        return f"({cls._format_flagged_reason(st)})"
 
     def verify_installed_file_security(self) -> bool:
         """Verify installed files are owned by root:root with safe permissions.
@@ -1039,8 +1050,10 @@ gpgcheck=0
           directory on ``PATH`` and have another user (or root) execute it.
           ROCm ships no group/other-writable paths (including sticky
           directories), so any such path is flagged.
-        - setuid/setgid: it carries mode bits ``0o6000``, a direct privilege
-          escalation surface.
+        - setuid/setgid on a **regular file**: it carries mode bits ``0o6000``,
+          a direct privilege-escalation surface. This rule applies to regular
+          files only: setgid on a *directory* is a normal, benign
+          group-inheritance pattern (``drwxr-sr-x``) and is not flagged.
 
         Symbolic links are exempt from the permission rules: on Linux a
         symlink's own mode bits are always ``lrwxrwxrwx`` and are ignored by
@@ -1082,18 +1095,24 @@ gpgcheck=0
                     "0",
                     ")",
                     "-o",
-                    # insecure permissions, but skip symlinks whose own mode
-                    # bits are meaningless (the target is checked on its own)
+                    # insecure permissions
+                    "(",
+                    # group/other-writable on any non-symlink (a symlink's own
+                    # mode bits are meaningless; the target is checked on its own)
                     "(",
                     "!",
                     "-type",
                     "l",
-                    "(",
-                    # group/other-writable
                     "-perm",
                     "/022",
+                    ")",
                     "-o",
-                    # setuid/setgid
+                    # setuid/setgid on a regular file only; setgid on a
+                    # directory (drwxr-sr-x) is a benign group-inheritance
+                    # pattern and must not be flagged.
+                    "(",
+                    "-type",
+                    "f",
                     "-perm",
                     "/6000",
                     ")",
@@ -1126,7 +1145,7 @@ gpgcheck=0
                 "or with insecure permissions:"
             )
             for line in bad[:10]:
-                print(f"   {line}{self._describe_flagged_path(line)}")
+                print(f"   {line} {self._describe_flagged_path(line)}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
@@ -1139,10 +1158,11 @@ gpgcheck=0
         Walks the install tree with ``os.walk`` (does not follow symlinked
         directories found inside the tree) and ``os.lstat`` each entry, applying
         the same rules as :meth:`verify_installed_file_security`: flag entries
-        not owned by ``root:root``, group/other-writable entries, and any
-        setuid/setgid entry. Symlinks are exempt from the permission rules since
-        their mode bits are meaningless on Linux. Slower than ``find`` on large
-        trees but portable.
+        not owned by ``root:root``, group/other-writable entries, and
+        setuid/setgid *regular files*. Symlinks are exempt from the permission
+        rules since their mode bits are meaningless on Linux, and setgid
+        directories are not flagged (a benign group-inheritance pattern).
+        Slower than ``find`` on large trees but portable.
 
         Returns:
         True if no offending path is found, False if any offending path is found.
@@ -1166,8 +1186,12 @@ gpgcheck=0
                         bad.append((entry, st))
                     continue
                 group_other_writable = bool(mode & 0o022)
-                setid = bool(mode & (stat.S_ISUID | stat.S_ISGID))
-                if not_root or group_other_writable or setid:
+                # setgid on a directory is benign; only flag setuid/setgid on
+                # regular files (a real privilege-escalation surface).
+                setid_file = stat.S_ISREG(mode) and bool(
+                    mode & (stat.S_ISUID | stat.S_ISGID)
+                )
+                if not_root or group_other_writable or setid_file:
                     bad.append((entry, st))
         if bad:
             print(
@@ -1175,7 +1199,7 @@ gpgcheck=0
                 "or with insecure permissions:"
             )
             for entry, st in bad[:10]:
-                print(f"   {entry}{self._format_flagged_reason(st)}")
+                print(f"   {entry} ({self._format_flagged_reason(st)})")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
