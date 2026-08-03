@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Builds one multi-architecture UCCL wheel, tests it on an 8x gfx942 runner,
+# Builds a multi-architecture UCCL wheel, tests it on an 8x gfx942 runner,
 # and optionally publishes that exact tested artifact to the multi-arch index.
 
 name: Test UCCL Wheels
