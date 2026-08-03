@@ -187,7 +187,6 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
-FILE_SECURITY_TIMEOUT_SEC = 120
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
@@ -995,12 +994,11 @@ gpgcheck=0
 
         - Ownership: its owner uid or group gid is not 0 (not ``root:root``);
           a non-root-owned path can be tampered with by that owner.
-        - Writability: it is writable by group or other (mode bits ``0o022``),
-          which would let an unprivileged user drop or replace a binary in a
+        - Writability: it is writable by group or other (mode bits ``0o022``).
+          This would let an unprivileged user drop or replace a binary in a
           directory on ``PATH`` and have another user (or root) execute it.
-          Group/other-writable *sticky* directories (mode bit ``0o1000``,
-          e.g. ``/tmp``-style dirs) are allowed, since the sticky bit prevents
-          users from tampering with files they do not own.
+          ROCm ships no group/other-writable paths (including sticky
+          directories), so any such path is flagged.
         - setuid/setgid: it carries mode bits ``0o6000``, a direct privilege
           escalation surface.
 
@@ -1010,7 +1008,8 @@ gpgcheck=0
         would produce false positives. The install prefix itself is commonly a
         symlink (e.g. ``/opt/rocm/core`` -> ``/opt/rocm/core-X.Y``), so
         ``find -H`` follows that top-level link to scan the real tree while not
-        following links found *inside* the tree.
+        following links found *inside* the tree. ``-xdev`` keeps the scan on the
+        prefix's own filesystem so bind mounts inside the tree are not crossed.
 
         Uses ``find`` (C-level traversal) for speed on large install trees and
         falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
@@ -1029,8 +1028,11 @@ gpgcheck=0
                     # follow the prefix if it is a symlink, but not links inside
                     "-H",
                     install_prefix,
+                    # do not cross into other filesystems mounted under prefix
+                    "-xdev",
                     "(",
                     # not owned by root:root
+                    "(",
                     "!",
                     "-uid",
                     "0",
@@ -1038,6 +1040,7 @@ gpgcheck=0
                     "!",
                     "-gid",
                     "0",
+                    ")",
                     "-o",
                     # insecure permissions, but skip symlinks whose own mode
                     # bits are meaningless (the target is checked on its own)
@@ -1046,14 +1049,9 @@ gpgcheck=0
                     "-type",
                     "l",
                     "(",
-                    # group/other-writable, excluding sticky-bit dirs
-                    "(",
+                    # group/other-writable
                     "-perm",
                     "/022",
-                    "!",
-                    "-perm",
-                    "-1000",
-                    ")",
                     "-o",
                     # setuid/setgid
                     "-perm",
@@ -1066,16 +1064,20 @@ gpgcheck=0
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=FILE_SECURITY_TIMEOUT_SEC,
             )
-        except subprocess.TimeoutExpired:
-            print(" [WARN] File security check timed out; skipping")
-            return True
         except OSError as e:
             # find not available on this host; fall back to a Python walk so the
             # check still runs rather than being silently skipped.
             print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
             return self._verify_installed_file_security_python(Path(install_prefix))
+
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial results; surface that rather than passing
+        # silently on an incomplete scan.
+        if result.returncode != 0:
+            print(f" [WARN] find exited {result.returncode}: {result.stderr[:200]}")
+        elif result.stderr.strip():
+            print(f" [WARN] find reported: {result.stderr[:200]}")
 
         bad = [line for line in result.stdout.splitlines() if line]
         if bad:
@@ -1097,18 +1099,18 @@ gpgcheck=0
         Walks the install tree with ``os.walk`` (does not follow symlinked
         directories found inside the tree) and ``os.lstat`` each entry, applying
         the same rules as :meth:`verify_installed_file_security`: flag entries
-        not owned by ``root:root``, group/other-writable entries (unless they
-        are sticky directories), and any setuid/setgid entry. Symlinks are
-        exempt from the permission rules since their mode bits are meaningless
-        on Linux. Slower than ``find`` on large trees but portable.
+        not owned by ``root:root``, group/other-writable entries, and any
+        setuid/setgid entry. Symlinks are exempt from the permission rules since
+        their mode bits are meaningless on Linux. Slower than ``find`` on large
+        trees but portable.
 
         Returns:
         True if no offending path is found, False if any offending path is found.
         """
-        bad: list[str] = []
+        bad: list[Path] = []
         for root, dirs, files in os.walk(install_path):
             for name in dirs + files:
-                entry = os.path.join(root, name)
+                entry = Path(root) / name
                 try:
                     st = os.lstat(entry)
                 except OSError:
@@ -1121,8 +1123,7 @@ gpgcheck=0
                     if not_root:
                         bad.append(entry)
                     continue
-                is_sticky_dir = stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
-                group_other_writable = bool(mode & 0o022) and not is_sticky_dir
+                group_other_writable = bool(mode & 0o022)
                 setid = bool(mode & (stat.S_ISUID | stat.S_ISGID))
                 if not_root or group_other_writable or setid:
                     bad.append(entry)

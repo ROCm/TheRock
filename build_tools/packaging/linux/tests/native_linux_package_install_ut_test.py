@@ -1092,7 +1092,7 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_when_find_reports_no_offending_paths(self, mock_run):
         # Empty find output means every path is root-owned with safe permissions.
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         with _suppress_script_output():
             self.assertTrue(self._make().verify_installed_file_security())
 
@@ -1102,6 +1102,7 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/bin/setuid-tool\n",
+            stderr="",
         )
         with _suppress_script_output():
             self.assertFalse(self._make().verify_installed_file_security())
@@ -1109,44 +1110,47 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
     @patch("native_linux_package_install_test.subprocess.run")
     def test_ignores_blank_lines_in_find_output(self, mock_run):
         # Trailing/blank lines alone should not be treated as offending paths.
-        mock_run.return_value = MagicMock(returncode=0, stdout="\n\n")
+        mock_run.return_value = MagicMock(returncode=0, stdout="\n\n", stderr="")
         with _suppress_script_output():
             self.assertTrue(self._make().verify_installed_file_security())
 
     @patch("native_linux_package_install_test.subprocess.run")
+    def test_nonzero_find_returncode_warns_but_still_evaluates_output(self, mock_run):
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial output; that output is still evaluated.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="/opt/rocm/core/bin/foo\n",
+            stderr="find: '/opt/rocm/core/x': Permission denied\n",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_builds_expected_find_command(self, mock_run):
         # Verify the single find invocation follows the prefix symlink (-H),
-        # checks ownership (uid/gid), writable (0o022) and setid (0o6000) bits
-        # while excluding sticky-bit dirs and symlinks (! -type l).
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        # stays on one filesystem (-xdev), checks ownership (uid/gid), writable
+        # (0o022) and setid (0o6000) bits while excluding symlinks (! -type l).
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         with _suppress_script_output():
             self._make("/opt/rocm/core").verify_installed_file_security()
         cmd = mock_run.call_args[0][0]
         self.assertEqual(cmd[0], "find")
         self.assertEqual(cmd[1], "-H")
         self.assertEqual(cmd[2], "/opt/rocm/core")
+        self.assertIn("-xdev", cmd)
         self.assertIn("-uid", cmd)
         self.assertIn("-gid", cmd)
         self.assertIn("/022", cmd)
         self.assertIn("/6000", cmd)
-        self.assertIn("-1000", cmd)
         self.assertIn("!", cmd)
         # symlinks are excluded from the permission portion
         self.assertIn("-type", cmd)
         self.assertIn("l", cmd)
-        self.assertEqual(
-            mock_run.call_args[1]["timeout"],
-            native_linux_package_install_test.FILE_SECURITY_TIMEOUT_SEC,
-        )
-
-    @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_find_times_out(self, mock_run):
-        # A timeout is non-fatal: the check is skipped with a warning and passes.
-        import subprocess
-
-        mock_run.side_effect = subprocess.TimeoutExpired("find", 120)
-        with _suppress_script_output():
-            self.assertTrue(self._make().verify_installed_file_security())
+        # no sticky-bit special-casing anymore
+        self.assertNotIn("-1000", cmd)
+        # no in-process timeout (style guide: no timeouts on basic binutils)
+        self.assertNotIn("timeout", mock_run.call_args[1])
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -1233,16 +1237,17 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test.os.lstat")
     @patch("native_linux_package_install_test.os.walk")
-    def test_python_fallback_allows_sticky_world_writable_dir(
+    def test_python_fallback_flags_sticky_world_writable_dir(
         self, mock_walk, mock_lstat
     ):
-        # A root-owned world-writable *sticky* directory (mode 1777) is allowed.
+        # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
+        # is flagged rather than exempted.
         mock_walk.return_value = [("/opt/rocm/core", ["tmp"], [])]
         mock_lstat.return_value = MagicMock(
             st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISVTX | 0o777
         )
         with _suppress_script_output():
-            self.assertTrue(
+            self.assertFalse(
                 self._make()._verify_installed_file_security_python(
                     Path("/opt/rocm/core")
                 )
