@@ -155,4 +155,15 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
       "${MESON_BUILD}" install
+  COMMAND
+    # DirectX-Headers / d3dx12 are build-time only dependencies of mesa,
+    # statically linked into vaon12_drv_video.dll. Remove them from the staged
+    # install so they are not shipped in the dist tree or artifacts.
+    "${CMAKE_COMMAND}" -E rm -rf --
+      "${CMAKE_INSTALL_PREFIX}/include/directx"
+      "${CMAKE_INSTALL_PREFIX}/include/dxguids"
+      "${CMAKE_INSTALL_PREFIX}/include/wsl"
+      "${CMAKE_INSTALL_PREFIX}/include/composition"
+      "${CMAKE_INSTALL_PREFIX}/lib/libDirectX-Guids.a"
+      "${CMAKE_INSTALL_PREFIX}/lib/libd3dx12-format-properties.a"
 )
