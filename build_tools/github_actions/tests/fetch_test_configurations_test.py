@@ -80,6 +80,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("windows", job["platform"])
 
+    def test_rocprofiler_sdk_submits_to_cdash(self):
+        config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
+        self.assertIn("--enable-cdash", config["test_script"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
