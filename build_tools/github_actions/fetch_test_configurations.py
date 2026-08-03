@@ -897,14 +897,14 @@ def run():
         # Check both the family group string (e.g. "gfx120X-all") and the individual
         # gfx targets within that family (e.g. "gfx1200", "gfx1201") against the
         # exclude list, since CI may pass either form via AMDGPU_FAMILIES.
-        _exclude_list = (
-            selected_matrix[key].get("exclude_family", {}).get(platform, [])
-        )
+        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
         _family_gfx_targets = []
         if amdgpu_families and shortened_family and shortened_family in all_families:
-            _family_gfx_targets = all_families[shortened_family].get(
-                platform, {}
-            ).get("fetch-gfx-targets", [])
+            _family_gfx_targets = (
+                all_families[shortened_family]
+                .get(platform, {})
+                .get("fetch-gfx-targets", [])
+            )
         _is_excluded = amdgpu_families in _exclude_list or any(
             t in _exclude_list for t in _family_gfx_targets
         )
