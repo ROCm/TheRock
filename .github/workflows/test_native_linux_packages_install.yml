@@ -177,7 +177,8 @@ jobs:
               curl \
               ca-certificates \
               gpg \
-              lsb-release
+              lsb-release \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -191,7 +192,8 @@ jobs:
               ca-certificates \
               gpg2 \
               lsb-release \
-              update-alternatives
+              update-alternatives \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -203,7 +205,8 @@ jobs:
               curl \
               ca-certificates \
               gnupg2 \
-              dnf-plugins-core
+              dnf-plugins-core \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
