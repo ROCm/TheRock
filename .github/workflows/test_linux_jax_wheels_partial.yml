@@ -316,10 +316,11 @@ jobs:
           # JAX 0.10.1 and 0.10.2 only: MIOpen selects convolution kernels
           # nondeterministically on gfx94X, so the float32 conv tests flake.
           # Deselect them. Keeps convert/conversion tests, which also
-          # match "conv".
+          # match "conv". polymul convolves too, on fixed inputs, and returned
+          # a different wrong answer in each of the five jobs it has failed.
           PYTEST_ADDOPTS: >-
             --reruns 2 --reruns-delay 5 --only-rerun INTERNAL
-            ${{ contains(fromJSON('["rocm-jaxlib-v0.10.1", "rocm-jaxlib-v0.10.2"]'), inputs.jax_ref) && '-k "((not conv) or convert or conversion) and not sumpool and not minmaxpool and not toeplitz and not hankel"' || '' }}
+            ${{ contains(fromJSON('["rocm-jaxlib-v0.10.1", "rocm-jaxlib-v0.10.2"]'), inputs.jax_ref) && '-k "((not conv) or convert or conversion) and not sumpool and not minmaxpool and not toeplitz and not hankel and not polymul"' || '' }}
 
           # Reduce compilation/autotune memory pressure.
           XLA_FLAGS: >-
