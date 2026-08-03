@@ -60,12 +60,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # Run in container to access AWS credentials mounted from the host runner.
     container:
       image: python:3.12-slim
-      options: -v /runner/config:/home/awsconfig/
-    env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,6 +84,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
@@ -356,7 +353,6 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: ${{ matrix.python_version }}
       jax_repository: ${{ matrix.jax_repository }}
-      build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}

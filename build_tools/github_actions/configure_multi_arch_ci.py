@@ -158,6 +158,8 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse)
+    baseline_repository: str = ""
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -257,6 +259,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
         )
 
 
@@ -403,6 +406,10 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse).
+    # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
+    # TheRock's baseline runs instead of their own.
+    baseline_repository: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -497,6 +504,7 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -568,18 +576,23 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present.
+    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
     # This avoids running expensive ASAN builds on every PR while still
     # catching ASAN issues when library code (submodules) changes.
-    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
-    #       If overly expensive, remove that option
+    # The ci:asan label allows manual triggering of ASAN CI on any PR.
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and git_context.has_submodule_changes is False
+        and "ci:asan" not in ci_inputs.pr_labels
     ):
-        print("  Skipping: ASAN PR without submodule changes")
+        print(
+            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+        )
         return True
+
+    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
+        print("  Running: 'ci:asan' PR label triggers ASAN CI")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -876,17 +889,23 @@ def decide_jobs(
         windows_amdgpu_families=targets.windows_families,
     )
 
-    # Only reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
+    baseline_repository = ci_inputs.baseline_repository
     baseline_run_id = ci_inputs.baseline_run_id
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-        baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    # Apply automatic stage reuse when running in the same repo as baseline.
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not baseline_repository or baseline_repository == current_repo:
+        # reuse-stage mode returns non-empty applied_reuse_stages.
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
+        baseline_repository=baseline_repository,
     )
 
     # Test ROCm.
@@ -1151,6 +1170,7 @@ def _expand_build_config_for_platform(
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        baseline_repository=jobs.build_rocm.baseline_repository,
     )
 
 
