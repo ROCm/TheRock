@@ -10,68 +10,80 @@ status: draft
 > [!NOTE]
 > **ROCm/ROCm is dead! Long live ROCm/ROCm!**
  
-## Overview
+## Problem
  
-The org maintains two confusingly similar top-level repos:
+Two confusingly similar top-level repos:
  
-- **`ROCm/ROCm`** — docs/manifest/governance landing page (`README`, `CHANGELOG.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`, `default.xml`, `CMakeLists.txt`). Primarily documentation and manifest; little active development.
-- **`ROCm/TheRock`** — the actively developed unified build platform: CMake super-project, multi-arch/multi-OS builds, nightly releases, CI, RFC process, active issues/discussions.
+- **`ROCm/ROCm`** — docs/manifest/governance landing page. Little active development.
+- **`ROCm/TheRock`** — the active build platform (CMake super-project, CI, RFCs, active issues). Nightlies run from `ROCm/rockrel`, reusing TheRock workflows.
  
-Users can't tell which is authoritative and file issues, read release notes, and contribute in the wrong place. The org's most discoverable name (`ROCm/ROCm`) points at the *less* active, primarily-documentation repo.
+Users can't tell which is authoritative and file issues / read release notes / contribute in the wrong place. The most discoverable name (`ROCm/ROCm`) points at the *less* active repo.
  
-**Proposal:** swap the names so the canonical name follows the active repo.
+## Proposal
  
-1. Rename `ROCm/TheRock` → `ROCm/ROCm`.
-2. Rename current `ROCm/ROCm` → `ROCm/legacy-rocm-build`.
-3. Migrate still-relevant docs/governance from `legacy-rocm-build` into the new `ROCm/ROCm`, **preserving git history**.
+Deliver in **two phases** to decouple the risky rename from the contentious doc/changelog migration.
  
-## Redirect behavior (important)
+### Phase 1 — Repository rename + build system
  
-A name *swap* does not preserve both redirects. Renaming current `ROCm/ROCm` → `legacy-rocm-build` creates a `ROCm/ROCm` → `legacy-rocm-build` redirect, but then renaming TheRock *into* `ROCm/ROCm` puts a live repo on that path, which overrides (destroys) that redirect. End state:
+Swap the names so the build system becomes canonical:
+ 
+- `ROCm/TheRock` → `ROCm/ROCm`
+- current `ROCm/ROCm` → `ROCm/legacy-rocm-build`
+ 
+**No git history touched, no docs moved, no changelog changes.** Documentation and changelog keep publishing from `legacy-rocm-build`.
+ 
+Steps:
+ 
+1. **Pre-plan with DevOps/owners** — inventory everything keyed to the exact repo name (Quartz cross-repo hooks, cloud-project resource auth, registered resources, CI incl. `rockrel`). Owners schedule the change.
+2. Rename current `ROCm/ROCm` → `legacy-rocm-build` (add a disambiguation notice).
+3. Rename `ROCm/TheRock` → `ROCm/ROCm` (back-to-back with step 2, by an org admin).
+4. Repoint infra (cloud-resource auth, Quartz) and validate CI/build end-to-end.
+5. Update cross-links in other ROCm-org repos (`rocm-libraries`, `rocm-systems`, `.github` PR template); link `legacy-rocm-build` explicitly.
+6. **Keep "TheRock" as the build/CI system name** where embedded (`therock-ci.yml`, `-DHIPBLASLT_ENABLE_THEROCK`, `THEROCK_INSTALL_RPATH_ORIGIN`, `docs/development`). Don't strip these; the README disambiguates "ROCm the repo" from "TheRock the build/CI system."
+7. **Timing** — target a quiet period (proposed: after the last ROCm release before the holidays). Reversible if issues arise.
+ 
+### Phase 2 — Documentation & changelog consolidation
+ 
+After Phase 1 is stable, on its own timeline, migrate still-relevant docs/changelog into the new `ROCm/ROCm`. Constraints (from reviewer feedback):
+ 
+- **No history merge/rewrite** — ~293 forks make this too disruptive.
+- **New `CHANGELOG.md`, no history import** — not folded into `RELEASES.md` (different purposes); historical changelog stays in `legacy-rocm-build`.
+- **Retire all legacy `ROCm/ROCm` labels** — the new repo keeps its own set; re-create any label still needed rather than bulk-migrating.
+- **Retire `default.xml`** — superseded by `BUILD_TOPOLOGY.toml`; confirm no `repo`-tool/CI consumer breaks first.
+- CONTRIBUTING/GOVERNANCE placement TBD (org-wide default likely in `ROCm/.github`, TheRock-specific guidance layered on).
+ 
+## Redirect behavior
+ 
+A name *swap* keeps only one redirect:
  
 - `ROCm/ROCm` — live repo (formerly TheRock).
-- `ROCm/TheRock` → redirects to new `ROCm/ROCm` (**persists**).
-- `ROCm/ROCm` → `legacy-rocm-build` redirect — **does not survive**.
-- `legacy-rocm-build` — reachable only by explicit name; nothing redirects to it.
+- `ROCm/TheRock` → new `ROCm/ROCm` (**persists**).
+- `ROCm/ROCm` → `legacy-rocm-build` — **does not survive** (live repo overrides it).
+- `legacy-rocm-build` — reachable only by explicit name.
  
-This is acceptable: old `ROCm/ROCm` links land on the new active repo. The one casualty is deep-links to legacy *file paths* (e.g. old `CHANGELOG.md`), which will 404 against the new tree — hence migrating legacy content into the new repo and linking `legacy-rocm-build` explicitly.
+Acceptable: old `ROCm/ROCm` links land on the new active repo. Legacy file deep-links stay reachable at `legacy-rocm-build` paths (Phase 1 keeps docs/changelog there).
  
-## Scope
- 
-**In scope:** the two renames; history-preserving migration of README content, `GOVERNANCE.md`, `CONTRIBUTING.md`, and relevant `docs/` into the new `ROCm/ROCm`; reconciling `CHANGELOG.md` into `RELEASES.md`; updating cross-links in other ROCm-org repos; issue-tracker cutover; a "moved" notice on `legacy-rocm-build`.
- 
-**Out of scope:** changes to `rocm-libraries`/`rocm-systems`; changes to TheRock's build/CI/RFC process beyond adding migrated docs; the "ROCm" product name/branding; any eventual full archive of `legacy-rocm-build` (retained as an explicitly-linked repo, no inbound redirect).
+> [!WARNING]
+> The redirect does **not** cover cross-repo Quartz interaction, cloud-resource auth keyed to the repo name, or registered resources. These need real work and careful validation by DevOps/owners — not a settings-only rename.
  
 ## Motivation
  
-- **Removes the confusion directly** — the active repo *becomes* `ROCm/ROCm`, resolving ambiguity at the most visible layer, the name.
-- **Canonical name → active repo** — the best-known, best-SEO'd URL now fronts the repo users actually need.
-- **Formalizes the de facto direction** — current `ROCm/ROCm`'s README already points to TheRock.
-- **Low risk for common traffic** — top-level links to either repo resolve to the new active repo on day one.
+- Removes the confusion at the most visible layer — the name.
+- One canonical top-level entry point; triage routes mis-filed issues to the correct super-repos.
+- Best-known URL fronts the repo users actually need.
+- Phased = the reversible rename ships without waiting on the harder doc/governance decisions.
  
-## Proposed Approach
+## Open Questions
  
-1. **Audit** current `ROCm/ROCm` files; map each to a destination (merge / new / drop).
-2. **Stage migration in TheRock first, with history** — use `git filter-repo` (or `subtree`) to import the selected docs paths with full commit history so `git log`/`blame` stay intact; reconcile `CHANGELOG.md` into `RELEASES.md`.
-3. **Rename** current `ROCm/ROCm` → `legacy-rocm-build`; add a "moved" notice.
-4. **Rename** `ROCm/TheRock` → `ROCm/ROCm` (must follow step 3, back-to-back, by an org admin).
-5. **Update cross-links** in `rocm-libraries`, `rocm-systems`, etc. to the new canonical repo; link `legacy-rocm-build` explicitly.
-6. **Issue cutover** — announce a date; triage/migrate open `legacy-rocm-build` issues; pin a notice.
-7. **Communicate** — post plan/timeline in Discussions; 30-day notice before executing.
- 
-## Risks & Open Questions
- 
-- **`legacy-rocm-build` has no inbound redirect** — must be linked directly from the new README, pinned issues, and release notes.
-- **Legacy deep-links 404** — inventory legacy-only file paths so the new repo can point at their `legacy-rocm-build` equivalents.
-- **Rename ordering** — the `ROCm/ROCm` name must be freed before TheRock claims it; execute both renames back-to-back.
-- **Never recreate a repo** at the old paths (would break the persistent `TheRock` → `ROCm/ROCm` redirect).
-- **History import mechanics** — validate on a scratch clone; don't pull in unrelated legacy history or bloat the repo; verify any path renames.
-- **`default.xml` dependents** — validate `repo`-tool/CI consumers before moving it; decide whether it moves, stays, or is superseded by `BUILD_TOPOLOGY.toml`.
-- **`GOVERNANCE.md` placement** — new `ROCm/ROCm`, an org `.github` profile repo, or retained `legacy-rocm-build`?
+- **Single entry point vs. build-focused repo** — some reviewers prefer keeping `ROCm/ROCm` (or `ROCm/ROCm-community`) as a docs/triage entry point, arguing a rename floods the build repo with mis-routed issues. This RFC's position: one entry point with triage routing. Central debate to resolve.
+- **"TheRock" name retention** — confirm the README disambiguation so references like "Integration with TheRock" stay discoverable.
+- **RFC process location** — TheRock's `docs/rfcs` is build/release-focused; broader ecosystem RFCs may belong elsewhere (`ROCm/community` / a forum).
+- **Rename mechanics** — names freed/claimed back-to-back; never recreate a repo at the old paths (breaks the `TheRock` → `ROCm/ROCm` redirect); `legacy-rocm-build` needs explicit linking.
  
 ## Alternatives Considered
  
-- **Archive current `ROCm/ROCm`, keep TheRock's name** — leaves the best-known name dead and users still hunting for "TheRock." Rejected.
-- **Deprecation banner only, no rename** — preserves the dual-source and naming ambiguity. Rejected.
-- **Fold TheRock into current `ROCm/ROCm`** — rewrites the active repo's identity and disrupts its issues/discussions/RFC history. Rejected.
-- **True git-history merge into a new repo** — needlessly disruptive; sacrifices the existing `ROCm/ROCm` name value. Rejected.
+- **Do it all at once** (rename + doc/changelog/history merge) — couples a reversible change to contentious migration. Rejected; the two-phase split is the response.
+- **Archive current `ROCm/ROCm`, keep TheRock's name** — leaves the best-known name dead. Rejected.
+- **Deprecation banner only** — preserves the ambiguity. Rejected.
+- **Keep `ROCm/ROCm` as docs/community entry point, TheRock stays the build repo** — main reviewer counter; captured as the central Open Question.
+- **Fold TheRock into current `ROCm/ROCm`** — disrupts the active repo's issues/discussions/RFC history. Rejected
