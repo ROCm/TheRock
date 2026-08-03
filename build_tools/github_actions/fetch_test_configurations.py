@@ -402,8 +402,10 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # hipsparselt does not support gfx908, gfx90a (see TheRock#2042),
-            # gfx103X, gfx110X (TensileLibrary missing), gfx115X, or gfx120X (see TheRock#6473)
+            # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
+            # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
+            # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx908",
                 "gfx90a",
