@@ -180,6 +180,9 @@ jobs:
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
+          # For cross-repo artifact reuse, use repository input (defaults to GITHUB_REPOSITORY).
+          # External repos set repository to "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
+          THEROCK_REPOSITORY: ${{ inputs.repository }}
           # Skip path filtering for external repos (git sha won't exist in TheRock)
           SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
           CI_CONFIG_PATH: ci-config

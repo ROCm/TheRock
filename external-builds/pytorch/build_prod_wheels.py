@@ -283,6 +283,57 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     return version_suffix
 
 
+def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
+    """Return the short git commit for a source dir, or "" if unresolved."""
+    # Pass safe.directory via `-c` (scoped to this single git invocation)
+    # instead of `git config --global` so we don't mutate global system state.
+    # This keeps the lookup working even when the checkout is owned by another
+    # user (e.g. in CI).
+    commit = capture(
+        [
+            "git",
+            "-c",
+            f"safe.directory={source_dir}",
+            "rev-parse",
+            f"--short={length}",
+            "HEAD",
+        ],
+        cwd=source_dir,
+    )
+    if not commit:
+        print(f"WARNING: could not resolve source commit in '{source_dir}'")
+    return commit
+
+
+def compute_build_version(
+    source_dir: Path, version_suffix: str, release_type: str
+) -> str:
+    """Compute a wheel version, tagging dev builds with the source commit.
+
+    Reads `<source_dir>/version.txt` as the base version and appends
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
+    builds the 8-char source commit is merged into that single local segment,
+    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
+    torchvision) records exactly which source commit produced it. PyTorch's
+    setup.py validates the version as PEP 440, which only allows a commit hash
+    in the local segment (after `+`).
+    TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
+    upfront, manifest-based version computation lands so the built version
+    always matches what the manifest records.
+    """
+    base_version = (source_dir / "version.txt").read_text().strip()
+    build_version = base_version + version_suffix
+    if release_type == "dev":
+        commit = get_source_commit_short(source_dir)
+        if commit:
+            # version_suffix is a local identifier like `+rocm7.10.0`; merge the
+            # commit into that single local segment (PEP 440 allows one `+`).
+            local = version_suffix.lstrip("+")
+            local_parts = [p for p in (f"git{commit}", local) if p]
+            build_version = f"{base_version}+{'.'.join(local_parts)}"
+    return build_version
+
+
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
     """Read the LLVM hash from triton-windows cmake/llvm-hash.txt."""
     hash_file = triton_dir / "cmake" / "llvm-hash.txt"
@@ -959,9 +1010,10 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    # Compute version.
-    pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the torch source commit).
+    pytorch_build_version = compute_build_version(
+        pytorch_dir, args.version_suffix, args.release_type
+    )
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1116,28 +1168,65 @@ def do_build_pytorch(
         + pip_install_args,
         cwd=pytorch_dir,
     )
+
+    # PEP 517 build backend requirements. We build below with
+    # `python -m build --wheel --no-isolation`, which (unlike an isolated build)
+    # does not auto-install the backend declared in pyproject.toml's
+    # [build-system]. PyTorch migrated its build backend from setuptools to
+    # scikit-build-core (ROCm/TheRock#6523; setup.py no longer builds wheels on
+    # recent checkouts). Newer checkouts ship requirements-build.txt (pinning
+    # scikit-build-core>=1.0), older ones do not. `build` provides the
+    # `python -m build` frontend itself.
+    print("+++ Installing pytorch build backend requirements:")
+    build_backend_install = [sys.executable, "-m", "pip", "install", "build"]
+    pytorch_build_requirements = pytorch_dir / "requirements-build.txt"
+    if pytorch_build_requirements.exists():
+        build_backend_install += ["-r", pytorch_build_requirements]
+    run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
+
+    build_command = [sys.executable, "-m", "build", "--wheel", "--no-isolation"]
+    pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
+    if "scikit_build_core.build" in pytorch_pyproject_text:
+        # scikit-build-core applies Git ignore rules when constructing the wheel,
+        # dropping generated, gitignored runtime files. This workaround can be
+        # removed once these fixes are merged and commonly available:
+        # https://github.com/pytorch/pytorch/pull/191625
+        # https://github.com/pytorch/pytorch/pull/191629
+        build_command.append(
+            "-Cwheel.force-include.torch/_rocm_init.py=torch/_rocm_init.py"
+        )
+        if is_windows:
+            build_command.append(
+                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
+                "torch/lib/libomp140.x86_64.dll"
+            )
     if is_windows:
-        # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
-        # behind upstream:
-        # * https://pypi.org/project/ninja/#history
-        # * https://github.com/ninja-build/ninja/releases
-        # Version 1.11.1 is buggy on Windows (looping without making progress):
+        # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
+        # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
+        # (LNK1104/LNK1181), and no fixed version has been published
+        # (scikit-build/ninja-python-distributions#308). requirements-build.txt
+        # just pulled it in, so remove it; the runner provides a good system
+        # ninja (>=1.13.1) on PATH that CMake uses instead.
         run_command(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "uninstall",
-                "ninja",
-                "-y",
-            ],
+            [sys.executable, "-m", "pip", "uninstall", "ninja", "-y"],
             cwd=pytorch_dir,
         )
+        # With the PyPI ninja gone, `python -m build`'s PEP 517 dependency check
+        # would abort with "Missing dependencies: ninja". Skip that check: the
+        # backend drives CMake, which finds the system ninja on PATH.
+        build_command.append("--skip-dependency-check")
+
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+    # `python -m build --wheel --no-isolation` is the standard replacement for
+    # the removed `setup.py bdist_wheel` (ROCm/TheRock#6523), used on all
+    # platforms. It drives the legacy setuptools backend and the new
+    # scikit-build-core backend alike, and all build-configuration env vars
+    # (USE_ROCM, PYTORCH_ROCM_ARCH, MAX_JOBS, ...) continue to be honored as they
+    # now seed the CMake cache directly.
+    run_command(build_command, cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -1161,9 +1250,10 @@ def do_build_pytorch(
 def do_build_pytorch_audio(
     args: argparse.Namespace, pytorch_audio_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the audio source commit).
+    build_version = compute_build_version(
+        pytorch_audio_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -1200,9 +1290,10 @@ def do_build_pytorch_audio(
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the vision source commit).
+    build_version = compute_build_version(
+        pytorch_vision_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
@@ -1435,6 +1526,16 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--version-suffix",
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
+    )
+    build_p.add_argument(
+        "--release-type",
+        choices=["ci", "dev", "nightly", "prerelease"],
+        default="nightly",
+        help="Release type of the build. For `dev` builds the torch wheel "
+        "version is tagged with the 8-char torch source commit in the local "
+        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
+        "The default is non-appending so other callers (CI, nightly, "
+        "prerelease) keep their plain `<base>+<suffix>` versions.",
     )
     build_p.add_argument(
         "--clean",

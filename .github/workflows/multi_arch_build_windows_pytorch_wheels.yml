@@ -103,11 +103,19 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: >-
+          URL for pip --find-links to install ROCm packages (flat page). Use
+          this OR rocm_package_index_url, not both. One of the two must be set
+          (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        description: >-
+          URL for pip --index-url to install ROCm packages (PEP 503 index). Use
+          this OR rocm_package_find_links_url, not both. One of the two must be
+          set (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       release_type:
@@ -117,11 +125,17 @@ on:
           - dev
         default: dev
       repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        description: >-
+          TheRock repository to check out the build scripts/workflow from (NOT
+          the PyTorch source). Leave blank to use this repository. To build a
+          different PyTorch branch, set pytorch_git_ref instead.
         type: string
         default: ""
       ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        description: >-
+          Branch, tag, or SHA of TheRock (the repository above) to check out.
+          Leave blank to use the triggering ref. This does NOT select the
+          PyTorch source ref; use pytorch_git_ref for that.
         type: string
         default: ""
       cache_type:
@@ -292,23 +306,37 @@ jobs:
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       - name: Build PyTorch wheels
+        # Default to the nightly multi-arch ROCm index when neither source is
+        # provided so a bare manual dispatch works; setting either input
+        # overrides it. The default is applied here rather than on the input
+        # because GitHub reverts an emptied input back to its declared default,
+        # which would make the two inputs impossible to use exclusively.
         shell: cmd
+        env:
+          # Use the index if given; else the find-links page; else default to
+          # the nightly multi-arch index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           set "CACHE_FLAG="
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
+          REM build_prod_wheels.py forwards each of these to pip and ignores an
+          REM empty value, so pass both and supply whichever source applies:
+          REM --index-url for a PEP 503 index, --find-links for a flat page.
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --index-url="${{ inputs.rocm_package_index_url }}" ^
-            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
+            --index-url="%ROCM_INDEX_URL%" ^
+            --find-links="%ROCM_FIND_LINKS%" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
+            --release-type="${{ inputs.release_type }}" ^
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
             ${{ env.optional_build_prod_arguments }}
 
