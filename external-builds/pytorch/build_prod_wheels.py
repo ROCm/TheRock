@@ -161,10 +161,14 @@ is_windows = platform.system() == "Windows"
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
-# List of library preloads for Linux to generate into _rocm_init.py
+# List of library preloads for Linux to generate into _rocm_init.py.
+# These are loaded with RTLD_GLOBAL on `import torch` via _rocm_init.py so
+# that their symbols are available via dlsym(RTLD_DEFAULT, ...) without
+# requiring a successful dlopen by unversioned name (which fails in wheel
+# installs where only the versioned .so exists in the runtime package).
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
-    "amd_smi",  # Preload with RTLD_GLOBAL so amdsmi symbols are resolvable via dlsym(RTLD_DEFAULT, ...)
+    "amd_smi",
     "amdhip64",
     "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.

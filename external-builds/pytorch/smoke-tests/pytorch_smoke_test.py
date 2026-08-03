@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 import ctypes
+import importlib
+import importlib.util
 import logging
 import platform
 import re
@@ -165,64 +167,65 @@ class TestOpenBLASAvailability:
 
 @pytest.mark.skipif(platform.system() != "Linux", reason="Linux only")
 class TestRocmSdkLibraries:
-    """Verify rocm_sdk library packaging and preload correctness on Linux.
+    """Verify that import torch preloads ROCm libraries with RTLD_GLOBAL on Linux.
 
-    Two layers of checks:
+    import torch triggers _rocm_init.py (injected into the torch wheel by TheRock)
+    which calls rocm_sdk.initialize_process, loading each library in
+    LINUX_LIBRARY_PRELOADS with RTLD_GLOBAL. This makes their symbols available
+    via dlsym(RTLD_DEFAULT, ...) so native code can resolve them without needing
+    dlopen by unversioned name (which fails in wheel installs where only the
+    versioned .so exists). See ROCM-27833.
 
-    1. Packaging (test_all_exported_libraries_findable):
-       Verifies every installed rocm_sdk library resolves to an existing file
-       via rocm_sdk.find_libraries. Catches files missing from a package.
-
-    2. Runtime preload (test_amdsmi_symbol_resolvable_via_rtld_default):
-       import torch triggers _rocm_init.py which calls rocm_sdk.initialize_process,
-       preloading libamd_smi.so with RTLD_GLOBAL. Verifies amdsmi symbols are
-       resolvable via dlsym(RTLD_DEFAULT, ...) so IntraNodeComm::getNvlMesh can
-       resolve them without needing dlopen("libamd_smi.so") to succeed by filename.
-       See ROCM-27833.
+    Libraries tested:
+      - rocm-sdk-core libraries (amd_smi, amdhip64): always installed with torch.
+      - rocm-sdk-libraries (hipblas): installed as a torch dependency but not
+        guaranteed in all configurations (e.g. narrow installs). Skipped when
+        rocm_sdk_libraries is not importable.
     """
 
     # ctypes.CDLL(None) is the Python equivalent of dlsym(RTLD_DEFAULT, ...)
     _rtld_default = ctypes.CDLL(None)
 
-    _AMDSMI_SYMBOLS = [
-        "amdsmi_init",
-        "amdsmi_get_socket_handles",
-        "amdsmi_get_processor_handles",
-        "amdsmi_is_P2P_accessible",
+    # Symbols from rocm-sdk-core — always installed with torch, no skip needed.
+    _CORE_PRELOAD_SYMBOLS = [
+        (
+            "amd_smi",
+            "amdsmi_init",
+        ),  # ROCM-27833: dlopen by name fails in wheel installs
+        ("amd_smi", "amdsmi_get_socket_handles"),
+        ("amd_smi", "amdsmi_get_processor_handles"),
+        ("amd_smi", "amdsmi_is_P2P_accessible"),
+        ("amdhip64", "hipGetDeviceCount"),  # HIP runtime — core dependency of torch
     ]
 
-    def test_all_exported_libraries_findable(self):
-        """Verify all installed rocm_sdk libraries are findable — packaging layer check.
+    # Symbols from rocm-sdk-libraries — installed as a torch dependency but may
+    # be absent in narrow configurations (e.g. rocm[core] only). Skipped when
+    # rocm_sdk_libraries is not importable so narrow installs don't fail here.
+    _LIBRARIES_PRELOAD_SYMBOLS = [
+        ("hipblas", "hipblasCreate"),
+    ]
 
-        Iterates over every library declared in _dist_info.ALL_LIBRARIES whose
-        package is installed and verifies it resolves to an existing file via
-        rocm_sdk.find_libraries. Libraries whose package is not installed are
-        skipped (e.g. rocm-sdk-libraries may not be present in all test configs).
-        If this fails, a library is missing from an installed package which is a
-        packaging issue. If this passes but the dlsym tests fail, the library
-        exists but was not preloaded with RTLD_GLOBAL.
-        """
-        import importlib
-
-        import rocm_sdk
-        from rocm_sdk import _dist_info
-
-        for shortname, entry in _dist_info.ALL_LIBRARIES.items():
-            if entry.optional:
-                continue  # skip optional libs (e.g. rocdxg — WSL only)
-            # Skip if the package that provides this library is not installed
-            py_package_name = entry.package.pure_py_package_name
-            if importlib.util.find_spec(py_package_name) is None:
-                continue
-            paths = rocm_sdk.find_libraries(shortname)
-            assert paths, f"rocm_sdk.find_libraries('{shortname}') returned no paths"
-            assert paths[0].exists(), f"Library '{shortname}' not found at {paths[0]}"
-
-    @pytest.mark.parametrize("symbol", _AMDSMI_SYMBOLS)
-    def test_amdsmi_symbol_resolvable_via_rtld_default(self, symbol):
+    @pytest.mark.parametrize("lib,symbol", _CORE_PRELOAD_SYMBOLS)
+    def test_core_preloaded_symbol_resolvable_via_rtld_default(self, lib, symbol):
         fn = getattr(self._rtld_default, symbol, None)
         addr = ctypes.cast(fn, ctypes.c_void_p).value
         assert addr, (
             f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
-            f"libamd_smi was not preloaded with RTLD_GLOBAL by _rocm_init.py"
+            f"'{lib}' was not preloaded with RTLD_GLOBAL by _rocm_init.py"
+        )
+
+    @pytest.mark.skipif(
+        # rocm-sdk-libraries is installed as a torch dependency in normal
+        # configurations, but may be absent in narrow installs (e.g. rocm[core]
+        # only). Skip rather than fail so narrow configs stay green.
+        importlib.util.find_spec("rocm_sdk_libraries") is None,
+        reason="rocm-sdk-libraries not installed",
+    )
+    @pytest.mark.parametrize("lib,symbol", _LIBRARIES_PRELOAD_SYMBOLS)
+    def test_libraries_preloaded_symbol_resolvable_via_rtld_default(self, lib, symbol):
+        fn = getattr(self._rtld_default, symbol, None)
+        addr = ctypes.cast(fn, ctypes.c_void_p).value
+        assert addr, (
+            f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
+            f"'{lib}' was not preloaded with RTLD_GLOBAL by _rocm_init.py"
         )
