@@ -985,6 +985,46 @@ gpgcheck=0
         print("\n[PASS] Basic verification PASSED")
         return True
 
+    @staticmethod
+    def _format_flagged_reason(st: os.stat_result) -> str:
+        """Format an owner/group/mode + 'why flagged' annotation from a stat result.
+
+        Renders which rule(s) a path violated (non-root owner, group/other
+        writable, setuid/setgid) so the CI log shows *why* each path was
+        flagged rather than just its name. Mirrors the flagging logic; symlink
+        mode bits are ignored (only ownership is meaningful for links).
+        """
+        mode = st.st_mode
+        reasons = []
+        if st.st_uid != 0 or st.st_gid != 0:
+            reasons.append("non-root-owner")
+        if not stat.S_ISLNK(mode):
+            if mode & 0o002:
+                reasons.append("other-writable")
+            if mode & 0o020:
+                reasons.append("group-writable")
+            if mode & (stat.S_ISUID | stat.S_ISGID):
+                reasons.append("setuid/setgid")
+        why = ",".join(reasons) if reasons else "?"
+        return (
+            f" (uid={st.st_uid} gid={st.st_gid} "
+            f"mode={stat.S_IMODE(mode):04o} -> {why})"
+        )
+
+    @classmethod
+    def _describe_flagged_path(cls, path: str) -> str:
+        """Best-effort owner/group/mode annotation for a path printed by ``find``.
+
+        ``find`` prints only names, so re-``lstat`` the path to explain why it
+        was flagged. Never raises: on any error it returns an annotation noting
+        the failure so reporting is unaffected.
+        """
+        try:
+            st = os.lstat(path)
+        except OSError as e:
+            return f" (stat failed: {e.strerror or e})"
+        return cls._format_flagged_reason(st)
+
     def verify_installed_file_security(self) -> bool:
         """Verify installed files are owned by root:root with safe permissions.
 
@@ -1086,7 +1126,7 @@ gpgcheck=0
                 "or with insecure permissions:"
             )
             for line in bad[:10]:
-                print(f"   {line}")
+                print(f"   {line}{self._describe_flagged_path(line)}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
@@ -1107,7 +1147,9 @@ gpgcheck=0
         Returns:
         True if no offending path is found, False if any offending path is found.
         """
-        bad: list[Path] = []
+        # Store (path, stat) so printing can annotate why each path was flagged
+        # without re-stat'ing (the stat result here is authoritative).
+        bad: list[tuple[Path, os.stat_result]] = []
         for root, dirs, files in os.walk(install_path):
             for name in dirs + files:
                 entry = Path(root) / name
@@ -1121,19 +1163,19 @@ gpgcheck=0
                     # A symlink's own mode bits are always 0o777 and ignored by
                     # the kernel; only ownership is meaningful for links.
                     if not_root:
-                        bad.append(entry)
+                        bad.append((entry, st))
                     continue
                 group_other_writable = bool(mode & 0o022)
                 setid = bool(mode & (stat.S_ISUID | stat.S_ISGID))
                 if not_root or group_other_writable or setid:
-                    bad.append(entry)
+                    bad.append((entry, st))
         if bad:
             print(
                 f" [FAIL] {len(bad)} path(s) not owned by root "
                 "or with insecure permissions:"
             )
-            for entry in bad[:10]:
-                print(f"   {entry}")
+            for entry, st in bad[:10]:
+                print(f"   {entry}{self._format_flagged_reason(st)}")
             if len(bad) > 10:
                 print(f"   ... and {len(bad) - 10} more")
             return False
