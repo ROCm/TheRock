@@ -192,8 +192,6 @@ ROCMINFO_TIMEOUT_SEC = 30
 # separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
 RDHC_TIMEOUT_SEC = 600  # 10 minutes
 VERIFY_MIN_COMPONENTS = 2
-# Per-file readelf timeout for the RPATH/RUNPATH verification scan.
-RUNPATH_READELF_TIMEOUT_SEC = 30
 _TEST_TYPE_MAP = {
     "": "sanity",
     "quick": "sanity",
@@ -1339,21 +1337,23 @@ gpgcheck=0
                 except OSError:
                     continue
                 try:
-                    out = subprocess.run(
+                    result = subprocess.run(
                         ["readelf", "-d", str(filepath)],
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        timeout=RUNPATH_READELF_TIMEOUT_SEC,
-                    ).stdout
-                except subprocess.TimeoutExpired:
-                    continue
+                    )
                 except OSError as e:
                     print(
                         f" [WARN] 'readelf' unavailable ({e}); skipping RUNPATH check"
                     )
                     return True
-                if "(RUNPATH)" in out:
+                if result.returncode != 0:
+                    print(
+                        f" [WARN] readelf failed for {filepath}: {result.stderr.strip()}"
+                    )
+                    continue
+                if "(RUNPATH)" in result.stdout:
                     offending.append(str(filepath))
         if offending:
             print(f" [FAIL] {len(offending)} ELF file(s) still using DT_RUNPATH:")

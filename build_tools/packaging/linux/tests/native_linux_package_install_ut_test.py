@@ -2023,15 +2023,20 @@ class VerifyNoRunpathTest(unittest.TestCase):
                 self.assertTrue(self._make(d).verify_no_runpath())
 
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_readelf_timeout_skips_file(self, mock_run):
-        # A readelf timeout on a file is non-fatal; that file is skipped.
-        import subprocess
-
-        mock_run.side_effect = subprocess.TimeoutExpired("readelf", 30)
+    def test_skips_file_when_readelf_returns_nonzero(self, mock_run):
+        # readelf returning non-zero (corrupt ELF, etc.) is non-fatal; the file
+        # is skipped with a warning and the overall check still passes.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="readelf: Error: Not an ELF file\n",
+        )
         with tempfile.TemporaryDirectory() as d:
             self._elf_tree(d)
             with _suppress_script_output():
                 self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf was invoked for both ELF files despite the non-zero exit.
+        self.assertEqual(mock_run.call_count, 2)
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
