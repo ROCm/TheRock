@@ -184,7 +184,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
     SUBDIRS
       src
   )
-  therock_cmake_subproject_provide_package(rocshmem ROCSHMEM lib/cmake/rocshmem)
+  therock_cmake_subproject_provide_package(rocshmem rocshmem lib/cmake/rocshmem)
   therock_cmake_subproject_activate(rocshmem)
   list(APPEND _rocshmem_subproject_names rocshmem)
 
