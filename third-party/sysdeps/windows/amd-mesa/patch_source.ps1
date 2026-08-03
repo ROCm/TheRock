@@ -69,6 +69,40 @@ if ($content -notmatch [regex]::Escape($old.Trim())) {
 }
 
 $content = $content.Replace($old, $new)
+
+# Rename the shared_library targets so meson emits rocm_sysdeps_-prefixed
+# outputs (rocm_sysdeps_va.{dll,lib}, rocm_sysdeps_va_win32.{dll,lib}). This
+# matches the Linux sysdeps naming and keeps all internal references consistent
+# (e.g. va_win32's import of va.dll is relinked by meson automatically). The
+# runtime driver name (vaon12_drv_video.dll) is unaffected.
+$vaOld = @'
+libva = shared_library(
+  'va',
+'@
+$vaNew = @'
+libva = shared_library(
+  'rocm_sysdeps_va',
+'@
+if ($content -notmatch [regex]::Escape($vaOld)) {
+  Write-Error "Could not find libva shared_library('va') declaration in $LibvaMesonBuild - patch may already be applied or file changed upstream."
+  exit 1
+}
+$content = $content.Replace($vaOld, $vaNew)
+
+$vaWin32Old = @'
+  libva_win32 = shared_library(
+    'va_win32',
+'@
+$vaWin32New = @'
+  libva_win32 = shared_library(
+    'rocm_sysdeps_va_win32',
+'@
+if ($content -notmatch [regex]::Escape($vaWin32Old)) {
+  Write-Error "Could not find libva_win32 shared_library('va_win32') declaration in $LibvaMesonBuild - patch may already be applied or file changed upstream."
+  exit 1
+}
+$content = $content.Replace($vaWin32Old, $vaWin32New)
+
 Set-Content $LibvaMesonBuild $content -NoNewline
 
 Write-Host "Patched $LibvaMesonBuild"

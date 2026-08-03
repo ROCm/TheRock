@@ -32,7 +32,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES va.dll va_win32.dll
+      LIB_NAMES rocm_sysdeps_va.dll rocm_sysdeps_va_win32.dll
     )
 
     return()
