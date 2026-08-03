@@ -50,7 +50,7 @@ on:
       uccl_git_ref:
         description: UCCL commit, tag, or branch to build and test.
         type: string
-        default: 3e06114fceae2ecc315a917be51965e4d210991a
+        default: d56e3492f7990d337b4383141eb6217a08259c13
       publish_to_s3:
         description: Publish the tested wheel to S3.
         type: boolean
@@ -106,7 +106,7 @@ on:
         description: UCCL commit, tag, or branch to build and test.
         required: true
         type: string
-        default: 3e06114fceae2ecc315a917be51965e4d210991a
+        default: d56e3492f7990d337b4383141eb6217a08259c13
       publish_to_s3:
         description: Publish the tested wheel to S3 after all tests pass.
         required: true
@@ -134,7 +134,7 @@ jobs:
       python_version: ${{ inputs.python_version || '3.12' }}
       rocm_arches: ${{ inputs.rocm_arches || 'gfx90a,gfx942,gfx950,gfx1250' }}
       rocm_index_url: ${{ inputs.rocm_index_url || 'https://rocm.prereleases.amd.com/whl-multi-arch/' }}
-      uccl_git_ref: ${{ inputs.uccl_git_ref || '3e06114fceae2ecc315a917be51965e4d210991a' }}
+      uccl_git_ref: ${{ inputs.uccl_git_ref || 'd56e3492f7990d337b4383141eb6217a08259c13' }}
       artifact_name: uccl-wheel-multiarch-py${{ inputs.python_version || '3.12' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
@@ -164,7 +164,7 @@ jobs:
       ROCM_INDEX_URL: ${{ inputs.rocm_index_url || 'https://rocm.prereleases.amd.com/whl-multi-arch/' }}
       TEST_ROCM_ARCH: ${{ inputs.test_rocm_arch || 'gfx942' }}
       TORCH_VERSION: ${{ inputs.torch_version || '2.12.0+rocm7.14.0rc3' }}
-      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || '3e06114fceae2ecc315a917be51965e4d210991a' }}
+      UCCL_GIT_REF: ${{ inputs.uccl_git_ref || 'd56e3492f7990d337b4383141eb6217a08259c13' }}
 
     steps:
       - name: Checkout TheRock
