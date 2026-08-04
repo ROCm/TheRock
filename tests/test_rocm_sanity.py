@@ -29,10 +29,10 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, env=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -55,10 +55,30 @@ def rocm_info_output():
         return None
 
 
+def _opencl_env():
+    """Point the system OpenCL ICD loader at this build's vendor runtime.
+
+    clinfo loads the vendor (amdocl64) through the system ICD loader
+    (libOpenCL / OpenCL.dll); TheRock does not ship the loader. Setting
+    OCL_ICD_FILENAMES makes the test exercise this build's runtime without
+    relying on a system-wide /etc or registry ICD registration (absent in the
+    CI container).
+    """
+    if is_windows():
+        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+    else:
+        vendor = THEROCK_BIN_DIR.parent / "lib" / "libamdocl64.so"
+    env = os.environ.copy()
+    if vendor.exists():
+        env["OCL_ICD_FILENAMES"] = str(vendor)
+    return env
+
+
 @pytest.fixture(scope="session")
 def clinfo_output():
+    clinfo = f"{THEROCK_BIN_DIR}/clinfo" + (".exe" if is_windows() else "")
     try:
-        return str(run_command([f"{THEROCK_BIN_DIR}/clinfo"]).stdout)
+        return str(run_command([clinfo], env=_opencl_env()).stdout)
     except Exception as e:
         logger.info(str(e))
         return None
@@ -91,10 +111,10 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    # clinfo enumerates the GPU through the OpenCL ICD loader -> libamdocl64.so,
-    # exercising the full OpenCL runtime path that rocminfo does not.
-    # Windows OpenCL uses a different (PAL) runtime backend not validated here.
-    @pytest.mark.skipif(is_windows(), reason="Windows OpenCL uses the PAL backend")
+    # clinfo enumerates the GPU through the system OpenCL ICD loader ->
+    # amdocl64, exercising the OpenCL runtime path that rocminfo does not.
+    # Runs on Windows too, where OpenCL (PAL backend) is the enumeration path
+    # that works (rocminfo is HSA-only and unsupported there).
     @pytest.mark.skipif(
         is_asan(),
         reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
