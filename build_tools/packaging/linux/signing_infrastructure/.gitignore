@@ -38,3 +38,7 @@ config/secrets.json
 /var/log/gpg-signing/
 audit.log
 *.log
+
+# Patent/IP documents — keep local only until filed with AMD patent counsel
+# Publishing before filing creates public prior art which harms patentability
+docs/invention-disclosure*.md
