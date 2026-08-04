@@ -4,25 +4,39 @@
 
 """Unit tests for artifact_backend.py."""
 
+import hashlib
+import io
+import json
 import os
 import socket
 import sys
 import tempfile
 import unittest
+import urllib.error
 from botocore import UNSIGNED
 from pathlib import Path
+from typing import List
 from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
+    HTTPBackend,
     LocalDirectoryBackend,
     S3Backend,
+    TRANSPORTS,
+    create_backend,
     create_backend_from_env,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from _therock_utils.s3_buckets import S3BucketConfig, require_bucket_config
+from _therock_utils.s3_buckets import (
+    S3BucketConfig,
+    require_bucket_config,
+    set_bucket_config_file,
+)
+
+import generate_s3_index
 
 
 def _make_local_root(run_id="test-run-123", platform="linux"):
@@ -715,6 +729,474 @@ class TestCreateBackendFromEnv(unittest.TestCase):
             self.assertEqual(backend.bucket, "therock-ci-artifacts")
             # ROCm/TheRock has no external_repo prefix
             self.assertNotIn("SomeUser", backend.s3_prefix)
+
+
+class _FakeUrlOpen:
+    """Stand-in for urllib.request.urlopen backed by an in-memory URL map.
+
+    Values are either bytes (a 200 response) or an exception instance to raise.
+    Records every URL requested so tests can assert that nothing hit the network
+    that should have been served from cache.
+    """
+
+    def __init__(self, responses: dict):
+        self.responses = responses
+        self.requested: List[str] = []
+
+    def __call__(self, url_or_request, timeout=None):
+        url = getattr(url_or_request, "full_url", url_or_request)
+        self.requested.append(url)
+        if url not in self.responses:
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        value = self.responses[url]
+        if isinstance(value, Exception):
+            raise value
+        return io.BytesIO(value)
+
+
+def _http_error(url, code):
+    return urllib.error.HTTPError(url, code, "Boom", None, None)
+
+
+def _make_index_html(filenames, title="index"):
+    """Build an index page using the real generator.
+
+    Calling the generator rather than hand-writing a fixture is the point of
+    this helper: if the emitted markup changes, HTTPBackend's parser has to keep
+    up, and these tests are what notices.
+    """
+    entries = [
+        generate_s3_index._FileEntry(
+            name=name, href=name, size_bytes=1024, last_modified=None
+        )
+        for name in filenames
+    ]
+    return generate_s3_index._generate_index_html(
+        title=title, entries=entries, parent_href="../index.html"
+    )
+
+
+class HTTPBackendTestCase(unittest.TestCase):
+    """Shared setup: a backend over a bucket with no CDN, plus URL helpers."""
+
+    def setUp(self):
+        self.output_root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+        )
+        self.backend = HTTPBackend(self.output_root)
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.dest_dir = Path(self.temp_dir.name)
+
+    def url_for(self, filename):
+        return self.output_root.artifact(filename).public_url
+
+    @property
+    def index_url(self):
+        return self.output_root.artifact_index().public_url
+
+    def patch_urlopen(self, responses):
+        fake = _FakeUrlOpen(responses)
+        patcher = mock.patch("urllib.request.urlopen", fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+
+class TestHTTPBackendIndexParsing(HTTPBackendTestCase):
+    """Tests for parsing the generated directory index."""
+
+    def test_parses_generator_output(self):
+        """The parser reads pages produced by generate_s3_index unchanged."""
+        html_content = _make_index_html(
+            ["blas_lib_gfx94X.tar.xz", "core_runtime_generic.tar.zst"]
+        )
+
+        artifacts = self.backend._parse_index_html(html_content)
+
+        self.assertEqual(
+            sorted(artifacts),
+            ["blas_lib_gfx94X.tar.xz", "core_runtime_generic.tar.zst"],
+        )
+
+    def test_percent_encoded_names_are_decoded(self):
+        """Hrefs are quoted by the generator, so the parser must unquote them."""
+        filename = "blas_lib_gfx942:xnack+.tar.xz"
+        html_content = _make_index_html([filename])
+
+        # Guard the premise: if the generator stopped encoding, this test would
+        # pass for the wrong reason.
+        self.assertIn("%3A", html_content)
+
+        self.assertEqual(self.backend._parse_index_html(html_content), [filename])
+
+    def test_non_archives_and_navigation_links_are_skipped(self):
+        html_content = _make_index_html(
+            [
+                "blas_lib_gfx94X.tar.xz",
+                "blas_lib_gfx94X.tar.xz.sha256sum",
+                "build.log",
+                "subdir/index.html",
+            ]
+        )
+
+        self.assertEqual(
+            self.backend._parse_index_html(html_content), ["blas_lib_gfx94X.tar.xz"]
+        )
+
+    def test_single_quoted_attributes_are_handled(self):
+        """A regex-based parser missed these; HTMLParser does not."""
+        html_content = "<a href='blas_lib_gfx94X.tar.xz'>blas</a>"
+
+        self.assertEqual(
+            self.backend._parse_index_html(html_content), ["blas_lib_gfx94X.tar.xz"]
+        )
+
+    def test_absolute_links_are_skipped(self):
+        html_content = '<a href="https://example.com/other_lib_generic.tar.xz">x</a>'
+
+        self.assertEqual(self.backend._parse_index_html(html_content), [])
+
+
+class TestHTTPBackendListArtifacts(HTTPBackendTestCase):
+    """Tests for list_artifacts and its index fetch."""
+
+    def test_lists_and_filters(self):
+        fake = self.patch_urlopen(
+            {
+                self.index_url: _make_index_html(
+                    ["blas_lib_gfx94X.tar.xz", "core_runtime_generic.tar.zst"]
+                ).encode("utf-8")
+            }
+        )
+
+        self.assertEqual(
+            self.backend.list_artifacts(),
+            ["blas_lib_gfx94X.tar.xz", "core_runtime_generic.tar.zst"],
+        )
+        self.assertEqual(
+            self.backend.list_artifacts(name_filter="blas"), ["blas_lib_gfx94X.tar.xz"]
+        )
+        # Second call is served from cache.
+        self.assertEqual(len(fake.requested), 1)
+
+    def test_missing_index_raises(self):
+        """A missing index is an error, not "this run has no artifacts"."""
+        self.patch_urlopen({})
+
+        with self.assertRaises(FileNotFoundError) as cm:
+            self.backend.list_artifacts()
+        self.assertIn(self.index_url, str(cm.exception))
+
+    def test_forbidden_index_raises_file_not_found(self):
+        """S3 answers 403 rather than 404 without ListBucket."""
+        self.patch_urlopen({self.index_url: _http_error(self.index_url, 403)})
+
+        with self.assertRaises(FileNotFoundError):
+            self.backend.list_artifacts()
+
+    def test_server_error_is_not_swallowed(self):
+        self.patch_urlopen({self.index_url: _http_error(self.index_url, 500)})
+
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            self.backend.list_artifacts()
+        self.assertEqual(cm.exception.code, 500)
+
+    def test_network_failure_raises_connection_error(self):
+        self.patch_urlopen({self.index_url: urllib.error.URLError("dns")})
+
+        with self.assertRaises(ConnectionError):
+            self.backend.list_artifacts()
+
+
+class TestHTTPBackendDownload(HTTPBackendTestCase):
+    """Tests for download_artifact and its checksum handling."""
+
+    ARTIFACT = "blas_lib_gfx94X.tar.xz"
+    CONTENT = b"artifact bytes"
+
+    def _checksum_line(self, content=None):
+        digest = hashlib.sha256(content or self.CONTENT).hexdigest()
+        return f"{digest}  {self.ARTIFACT}\n".encode("utf-8")
+
+    def test_downloads_and_verifies_checksum(self):
+        self.patch_urlopen(
+            {
+                self.url_for(self.ARTIFACT): self.CONTENT,
+                self.url_for(f"{self.ARTIFACT}.sha256sum"): self._checksum_line(),
+            }
+        )
+        dest = self.dest_dir / self.ARTIFACT
+
+        self.backend.download_artifact(self.ARTIFACT, dest)
+
+        self.assertEqual(dest.read_bytes(), self.CONTENT)
+
+    def test_checksum_mismatch_deletes_both_files(self):
+        self.patch_urlopen(
+            {
+                self.url_for(self.ARTIFACT): self.CONTENT,
+                self.url_for(f"{self.ARTIFACT}.sha256sum"): self._checksum_line(
+                    b"different bytes"
+                ),
+            }
+        )
+        dest = self.dest_dir / self.ARTIFACT
+
+        with self.assertRaises(ValueError) as cm:
+            self.backend.download_artifact(self.ARTIFACT, dest)
+
+        message = str(cm.exception)
+        self.assertIn(self.url_for(self.ARTIFACT), message)
+        self.assertIn(hashlib.sha256(self.CONTENT).hexdigest(), message)
+        self.assertFalse(dest.exists())
+        self.assertFalse((self.dest_dir / f"{self.ARTIFACT}.sha256sum").exists())
+
+    def test_missing_checksum_warns_and_keeps_artifact(self):
+        self.patch_urlopen({self.url_for(self.ARTIFACT): self.CONTENT})
+        dest = self.dest_dir / self.ARTIFACT
+
+        with mock.patch("builtins.print") as mock_print:
+            self.backend.download_artifact(self.ARTIFACT, dest)
+
+        self.assertEqual(dest.read_bytes(), self.CONTENT)
+        self.assertTrue(
+            any("no checksum" in str(call) for call in mock_print.call_args_list),
+            f"expected a warning, got {mock_print.call_args_list}",
+        )
+
+    def test_missing_artifact_raises_file_not_found(self):
+        self.patch_urlopen({})
+
+        with self.assertRaises(FileNotFoundError):
+            self.backend.download_artifact(self.ARTIFACT, self.dest_dir / self.ARTIFACT)
+
+    def test_network_failure_removes_partial_file(self):
+        self.patch_urlopen(
+            {self.url_for(self.ARTIFACT): urllib.error.URLError("reset")}
+        )
+        dest = self.dest_dir / self.ARTIFACT
+
+        with self.assertRaises(ConnectionError):
+            self.backend.download_artifact(self.ARTIFACT, dest)
+        self.assertFalse(dest.exists())
+
+
+class TestHTTPBackendArtifactExists(HTTPBackendTestCase):
+    """Tests for artifact_exists, including the cache guard."""
+
+    ARTIFACT = "blas_lib_gfx94X.tar.xz"
+
+    def _populate_cache(self, fake=None):
+        fake = fake or self.patch_urlopen(
+            {self.index_url: _make_index_html([self.ARTIFACT]).encode("utf-8")}
+        )
+        self.backend.list_artifacts()
+        return fake
+
+    def test_archive_answered_from_cache(self):
+        fake = self._populate_cache()
+        requests_before = len(fake.requested)
+
+        self.assertTrue(self.backend.artifact_exists(self.ARTIFACT))
+        self.assertFalse(self.backend.artifact_exists("other_lib_generic.tar.xz"))
+        self.assertEqual(len(fake.requested), requests_before)
+
+    def test_checksum_key_probes_despite_populated_cache(self):
+        """The index only lists archives, so a .sha256sum needs a HEAD.
+
+        S3Backend.copy_artifact asks exactly this question; answering it from
+        the archive-only cache would wrongly report the checksum as absent.
+        """
+        checksum_key = f"{self.ARTIFACT}.sha256sum"
+        fake = self.patch_urlopen(
+            {
+                self.index_url: _make_index_html([self.ARTIFACT]).encode("utf-8"),
+                self.url_for(checksum_key): b"digest",
+            }
+        )
+        self._populate_cache(fake)
+
+        self.assertTrue(self.backend.artifact_exists(checksum_key))
+        self.assertIn(self.url_for(checksum_key), fake.requested)
+
+    def test_head_probe_404_is_false(self):
+        self.patch_urlopen({})
+
+        self.assertFalse(self.backend.artifact_exists(self.ARTIFACT))
+
+    def test_head_probe_server_error_raises(self):
+        """A 5xx means "cannot answer", not "does not exist"."""
+        url = self.url_for(self.ARTIFACT)
+        self.patch_urlopen({url: _http_error(url, 500)})
+
+        with self.assertRaises(urllib.error.HTTPError):
+            self.backend.artifact_exists(self.ARTIFACT)
+
+    def test_head_probe_network_failure_raises_connection_error(self):
+        url = self.url_for(self.ARTIFACT)
+        self.patch_urlopen({url: urllib.error.URLError("dns")})
+
+        with self.assertRaises(ConnectionError):
+            self.backend.artifact_exists(self.ARTIFACT)
+
+
+class TestHTTPBackendIsReadOnly(HTTPBackendTestCase):
+    """Write operations fail loudly and say what to use instead."""
+
+    def test_upload_artifact_raises(self):
+        with self.assertRaises(NotImplementedError) as cm:
+            self.backend.upload_artifact(Path("/tmp/x.tar.xz"), "x.tar.xz")
+        self.assertIn("s3", str(cm.exception))
+
+    def test_copy_artifact_raises(self):
+        with self.assertRaises(NotImplementedError) as cm:
+            self.backend.copy_artifact("x.tar.xz", self.backend)
+        self.assertIn("s3", str(cm.exception))
+
+
+class TestHTTPBackendPublicUrl(unittest.TestCase):
+    """HTTPBackend inherits CDN awareness from the bucket registry.
+
+    This is the whole payoff of landing the bucket-config work first: the
+    backend has no URL configuration of its own.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.addCleanup(set_bucket_config_file, None)
+
+    def _write_registry(self, payload):
+        path = Path(self.temp_dir.name) / "buckets.json"
+        path.write_text(json.dumps(payload))
+        set_bucket_config_file(path)
+        return path
+
+    def test_raw_s3_url_when_the_bucket_has_no_cdn(self):
+        backend = HTTPBackend(
+            WorkflowOutputRoot(
+                bucket="therock-ci-artifacts",
+                external_repo="",
+                run_id="12345",
+                platform="linux",
+            )
+        )
+
+        self.assertEqual(
+            backend.base_uri,
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux",
+        )
+
+    def test_cdn_url_and_stripped_key_prefix(self):
+        """A downstream bucket behind a CDN, registered from a file."""
+        self._write_registry(
+            {
+                "version": 1,
+                "buckets": [
+                    {
+                        "name": "downstream-artifacts",
+                        "key_prefix": "v3/artifacts/",
+                        "cdn_rules": [
+                            {
+                                "key_prefix": "v3/artifacts/",
+                                "url_prefix": "https://cdn.example.com/artifacts/",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        output_root = WorkflowOutputRoot(
+            bucket="downstream-artifacts",
+            external_repo="",
+            run_id="4242",
+            platform="linux",
+            key_prefix="v3/artifacts/",
+        )
+        backend = HTTPBackend(output_root)
+
+        # The S3 key keeps the prefix; the public URL has it swapped out.
+        self.assertEqual(
+            output_root.root().s3_uri,
+            "s3://downstream-artifacts/v3/artifacts/4242-linux",
+        )
+        self.assertEqual(
+            backend.base_uri, "https://cdn.example.com/artifacts/4242-linux"
+        )
+        self.assertEqual(
+            output_root.artifact_index().public_url,
+            "https://cdn.example.com/artifacts/4242-linux/index.html",
+        )
+
+
+class TestCreateBackendTransports(unittest.TestCase):
+    """Tests for explicit transport selection."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+
+    def test_transport_vocabulary(self):
+        self.assertEqual(TRANSPORTS, ("auto", "s3", "http", "local"))
+
+    def test_unknown_transport_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            create_backend(run_id="1", platform="linux", transport="ftp")
+        self.assertIn("ftp", str(cm.exception))
+
+    def test_local_transport(self):
+        backend = create_backend(
+            run_id="1",
+            platform="linux",
+            transport="local",
+            staging_dir=Path(self.temp_dir.name),
+        )
+        self.assertIsInstance(backend, LocalDirectoryBackend)
+
+    def test_local_transport_without_staging_dir_raises(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ValueError) as cm:
+                create_backend(run_id="1", platform="linux", transport="local")
+        self.assertIn("staging", str(cm.exception))
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_s3_transport(self, mock_retrieve):
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            backend = create_backend(run_id="1", platform="linux", transport="s3")
+        self.assertIsInstance(backend, S3Backend)
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_http_transport(self, mock_retrieve):
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            backend = create_backend(run_id="1", platform="linux", transport="http")
+        self.assertIsInstance(backend, HTTPBackend)
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_auto_transport_prefers_s3_without_staging(self, mock_retrieve):
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            backend = create_backend(run_id="1", platform="linux", transport="auto")
+        self.assertIsInstance(backend, S3Backend)
+
+    def test_auto_transport_prefers_local_staging(self):
+        with mock.patch.dict(
+            os.environ, {"THEROCK_LOCAL_STAGING_DIR": self.temp_dir.name}, clear=True
+        ):
+            backend = create_backend(run_id="1", platform="linux", transport="auto")
+        self.assertIsInstance(backend, LocalDirectoryBackend)
+
+    def test_auto_never_selects_the_read_only_transport(self):
+        """`auto` must always yield a writable backend."""
+        from _therock_utils.artifact_backend import WRITABLE_TRANSPORTS
+
+        self.assertIn("auto", WRITABLE_TRANSPORTS)
+        self.assertNotIn("http", WRITABLE_TRANSPORTS)
 
 
 if __name__ == "__main__":

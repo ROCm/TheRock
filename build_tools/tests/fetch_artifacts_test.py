@@ -5,11 +5,14 @@ from pathlib import Path
 import os
 import sys
 import unittest
+from unittest import mock
 from unittest.mock import MagicMock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifact_backend import ArtifactBackend
+import fetch_artifacts
+from _therock_utils.artifact_backend import ArtifactBackend, HTTPBackend, S3Backend
+from _therock_utils.s3_buckets import S3BucketConfig
 from fetch_artifacts import (
     list_artifacts_for_group,
     filter_artifacts,
@@ -258,6 +261,73 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         self.assertIn("foo_run", filtered)
         self.assertNotIn("bar_test", filtered)
         self.assertNotIn("bar_run", filtered)
+
+
+class TransportSelectionTest(unittest.TestCase):
+    """Tests for --transport on fetch_artifacts.py."""
+
+    def _argv(self, *extra):
+        return ["--run-id", "12345", "--dry-run", *extra]
+
+    def _parse(self, *extra):
+        """Parse args without running, by intercepting run()."""
+        with mock.patch.object(fetch_artifacts, "run") as mock_run:
+            fetch_artifacts.main(self._argv(*extra))
+        return mock_run.call_args[0][0]
+
+    def test_default_transport_is_auto(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(self._parse().transport, "auto")
+
+    def test_env_var_supplies_the_default(self):
+        with mock.patch.dict(
+            os.environ, {"THEROCK_ARTIFACT_TRANSPORT": "http"}, clear=True
+        ):
+            self.assertEqual(self._parse().transport, "http")
+
+    def test_flag_beats_the_env_var(self):
+        with mock.patch.dict(
+            os.environ, {"THEROCK_ARTIFACT_TRANSPORT": "http"}, clear=True
+        ):
+            self.assertEqual(self._parse("--transport", "s3").transport, "s3")
+
+    def test_accepts_transports_it_cannot_serve(self):
+        """'local' parses so that a shared env var does not break arg parsing.
+
+        artifact_manager.py and this script read the same
+        THEROCK_ARTIFACT_TRANSPORT; rejecting a value at parse time here would
+        make setting it for one break the other. run() rejects it instead.
+        """
+        self.assertEqual(self._parse("--transport", "local").transport, "local")
+
+    def test_local_transport_exits_with_a_pointer_to_artifact_manager(self):
+        args = mock.MagicMock(transport="local", bucket_config_file=None)
+        with self.assertRaises(SystemExit) as cm:
+            fetch_artifacts.run(args)
+        self.assertEqual(cm.exception.code, 1)
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def _backend_for(self, transport, mock_retrieve):
+        mock_retrieve.return_value = ("", S3BucketConfig(name="therock-ci-artifacts"))
+        captured = {}
+
+        def capture(backend, **kwargs):
+            captured["backend"] = backend
+            return set()
+
+        with mock.patch.object(
+            fetch_artifacts, "list_artifacts_for_group", side_effect=capture
+        ):
+            # Nothing to fetch, so run() exits 1 after building the backend.
+            with self.assertRaises(SystemExit):
+                fetch_artifacts.main(self._argv("--transport", transport))
+        return captured["backend"]
+
+    def test_http_transport_builds_an_http_backend(self):
+        self.assertIsInstance(self._backend_for("http"), HTTPBackend)
+
+    def test_s3_transport_builds_an_s3_backend(self):
+        self.assertIsInstance(self._backend_for("s3"), S3Backend)
 
 
 if __name__ == "__main__":

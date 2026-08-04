@@ -36,6 +36,7 @@ If unspecified, we will create an anonymous boto file that can only acccess publ
 
 import argparse
 import concurrent.futures
+import os
 from pathlib import Path
 import platform
 import re
@@ -43,12 +44,18 @@ import shutil
 import sys
 
 from _therock_utils.archive_util import open_archive_for_read
-from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
+from _therock_utils.artifact_backend import (
+    ArtifactBackend,
+    HTTPBackend,
+    S3Backend,
+    TRANSPORTS,
+)
 from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.artifacts import (
     ArtifactName,
     ArtifactPopulator,
 )
+from _therock_utils.s3_buckets import set_bucket_config_file
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
 
@@ -214,6 +221,17 @@ def extract_artifact(
 
 
 def run(args):
+    if args.bucket_config_file:
+        set_bucket_config_file(args.bucket_config_file)
+
+    if args.transport == "local":
+        log(
+            "ERROR: fetch_artifacts.py reads a published workflow run; "
+            "transport 'local' is not supported here. Use artifact_manager.py fetch "
+            "--transport local for a local staging directory."
+        )
+        sys.exit(1)
+
     run_github_repo = args.run_github_repo
     run_id = args.run_id
     artifact_group = args.artifact_group
@@ -225,7 +243,12 @@ def run(args):
         github_repository=run_github_repo,
         lookup_workflow_run=True,
     )
-    backend = S3Backend(output_root=output_root)
+    # Both transports read the same run; "http" needs no credentials but can only
+    # see what is published through the bucket's public URL.
+    if args.transport == "http":
+        backend = HTTPBackend(output_root=output_root)
+    else:
+        backend = S3Backend(output_root=output_root)
 
     # Parse individual GPU targets (comma-separated string to list).
     amdgpu_targets = (
@@ -378,6 +401,24 @@ def main(argv):
         default=False,
         help="If set, will only log which artifacts would be fetched without downloading or extracting",
         action=argparse.BooleanOptionalAction,
+    )
+    # Accepts the full transport vocabulary, not just the two this script can
+    # serve, so that a THEROCK_ARTIFACT_TRANSPORT shared with artifact_manager.py
+    # does not fail argument parsing here. 'local' is rejected in run().
+    parser.add_argument(
+        "--transport",
+        choices=TRANSPORTS,
+        default=os.getenv("THEROCK_ARTIFACT_TRANSPORT", "auto"),
+        help="How to read artifacts: 's3' (and 'auto') uses boto3 credentials, "
+        "'http' reads the bucket's public URL with no credentials (read-only)",
+    )
+    parser.add_argument(
+        "--bucket-config-file",
+        type=Path,
+        default=None,
+        help="JSON file registering S3 buckets outside TheRock's inventory. Takes "
+        "precedence over the THEROCK_S3_BUCKETS_FILE environment variable. "
+        "See build_tools/_therock_utils/s3_buckets.py for the schema.",
     )
 
     postprocess_group = parser.add_argument_group("Postprocessing")

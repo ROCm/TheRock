@@ -254,7 +254,7 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
     """Tests that push command exits with non-zero code on upload failures."""
 
     @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.create_backend")
     def test_push_fails_when_all_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when all uploads fail."""
         import artifact_manager
@@ -285,7 +285,7 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         mock_backend_factory.assert_called_once()
 
     @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.create_backend")
     def test_push_fails_when_some_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when some (but not all) uploads fail."""
         import artifact_manager
@@ -484,7 +484,7 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
     """Tests that fetch command exits with non-zero code on download failures."""
 
     @mock.patch("artifact_manager._delay_for_retry")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.create_backend")
     def test_fetch_fails_when_download_fails(self, mock_backend_factory, mock_delay):
         """Test that fetch exits with code 1 when download fails."""
         import artifact_manager
@@ -1120,7 +1120,7 @@ class TestFetchDownloadCache(ArtifactManagerTestBase):
         with (
             mock.patch("artifact_manager.extract_artifact", mock_extract),
             mock.patch(
-                "artifact_manager.create_backend_from_env",
+                "artifact_manager.create_backend",
                 return_value=failing_backend,
             ),
         ):
@@ -1276,7 +1276,7 @@ class TestCopy(ArtifactManagerTestBase):
 
     @mock.patch("artifact_manager._delay_for_retry")
     @mock.patch("artifact_manager._create_source_backend")
-    @mock.patch("artifact_manager.create_backend_from_env")
+    @mock.patch("artifact_manager.create_backend")
     def test_copy_fails_when_copy_fails(
         self, mock_dest_factory, mock_source_factory, mock_delay
     ):
@@ -1488,6 +1488,153 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx110X-all", result)
         self.assertIn("gfx1100", result)
         self.assertIn("gfx1101", result)
+
+
+class TestTransportSelection(ArtifactManagerTestBase):
+    """Tests for --transport / --source-transport on the CLI."""
+
+    def _common_argv(self):
+        return [
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+        ]
+
+    def test_push_rejects_the_read_only_transport(self):
+        import artifact_manager
+
+        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        argv = [
+            "push",
+            "--stage",
+            "upstream-stage",
+            "--build-dir",
+            str(self.build_dir),
+            "--transport",
+            "http",
+            *self._common_argv(),
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_copy_rejects_a_read_only_destination(self):
+        import artifact_manager
+
+        argv = [
+            "copy",
+            "--stage",
+            "upstream-stage",
+            "--source-run-id",
+            "999",
+            "--transport",
+            "http",
+            *self._common_argv(),
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    @mock.patch("artifact_manager.create_backend")
+    @mock.patch("artifact_manager._create_source_backend")
+    def test_copy_passes_the_source_transport_through(
+        self, mock_source_factory, mock_dest_factory
+    ):
+        """The source and destination transports are independent.
+
+        This is the case no process-wide setting can express: one invocation
+        reads from one location and writes to another.
+        """
+        import artifact_manager
+
+        source_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="999", platform=TEST_PLATFORM
+            ),
+        )
+        mock_source_factory.return_value = source_backend
+        mock_dest_factory.return_value = source_backend
+
+        argv = [
+            "copy",
+            "--stage",
+            "upstream-stage",
+            "--source-run-id",
+            "999",
+            "--source-transport",
+            "http",
+            *self._common_argv(),
+        ]
+        artifact_manager.main(argv)
+
+        self.assertEqual(
+            mock_source_factory.call_args.kwargs["transport"],
+            "http",
+            "copy must read the source with --source-transport",
+        )
+        self.assertEqual(
+            mock_dest_factory.call_args.kwargs["transport"],
+            "auto",
+            "the destination must keep its own --transport, not inherit the source's",
+        )
+
+    def test_fetch_passes_the_transport_through(self):
+        import artifact_manager
+
+        with mock.patch("artifact_manager.create_backend") as mock_factory:
+            mock_factory.return_value = LocalDirectoryBackend(
+                staging_dir=self.staging_dir,
+                output_root=WorkflowOutputRoot.for_local(
+                    run_id="local", platform=TEST_PLATFORM
+                ),
+            )
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--transport",
+                "http",
+                *self._common_argv(),
+            ]
+            artifact_manager.main(argv)
+
+        self.assertEqual(mock_factory.call_args.kwargs["transport"], "http")
+
+    def test_transport_defaults_from_the_environment(self):
+        import artifact_manager
+
+        with mock.patch.dict(
+            os.environ, {"THEROCK_ARTIFACT_TRANSPORT": "s3"}, clear=False
+        ):
+            # The default is read at parser construction, so build a fresh one.
+            with mock.patch("artifact_manager.create_backend") as mock_factory:
+                mock_factory.return_value = LocalDirectoryBackend(
+                    staging_dir=self.staging_dir,
+                    output_root=WorkflowOutputRoot.for_local(
+                        run_id="local", platform=TEST_PLATFORM
+                    ),
+                )
+                argv = [
+                    "fetch",
+                    "--stage",
+                    "downstream-stage",
+                    "--output-dir",
+                    str(self.output_dir),
+                    *self._common_argv(),
+                ]
+                artifact_manager.main(argv)
+
+        self.assertEqual(mock_factory.call_args.kwargs["transport"], "s3")
 
 
 if __name__ == "__main__":
