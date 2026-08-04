@@ -74,7 +74,6 @@ _BASE_CONTAINER_OPTIONS = [
 _GPU_CONTAINER_OPTIONS = [
     "--group-add video",
     "--device /dev/kfd",
-    "--device /dev/dri",
     "--group-add 993",
     "--group-add 992",
     "--group-add 110",
