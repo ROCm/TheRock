@@ -74,29 +74,41 @@ CONFIG_PRESETS_MAP = {
 }
 
 
-def _inject_userinfo(remote_storage: str, user: str, password: str) -> str:
-    """Insert HTTP basic-auth userinfo into the URL part of a remote_storage
-    string (everything before the first '|'). Trusted/release tiers get their
-    write credential from CI secrets; forks leave it unset and stay read-only."""
+def _inject_userinfo(remote_storage: str, userinfo: str) -> str:
+    """Insert a preformed HTTP basic-auth ``userinfo`` ("user:password") into
+    the URL part of a remote_storage string (everything before the first '|').
+    Trusted/release tiers get their write credential from CI secrets; forks
+    leave it unset and stay read-only."""
     parts = remote_storage.split("|", 1)
     url = parts[0]
     for scheme in ("http://", "https://"):
         if url.startswith(scheme):
             host = url[len(scheme) :]
-            url = f"{scheme}{quote(user, safe='')}:{quote(password, safe='')}@{host}"
+            url = f"{scheme}{userinfo}@{host}"
             break
     return "|".join([url, *parts[1:]])
 
 
-def _apply_remote_opts(remote_storage: str, args: argparse.Namespace) -> str:
+def _apply_remote_opts(
+    remote_storage: str, args: argparse.Namespace, redact: bool = False
+) -> str:
     """Apply access-tier options to a remote_storage string: authenticated
     read-write (userinfo from CCACHE_REMOTE_USER/PASSWORD) and/or client-side
     read-only (|read-only). Both default off, so no env + no --read-only leaves
-    the string unchanged."""
+    the string unchanged.
+
+    With redact=True the injected password is replaced by ``***`` and the real
+    secret is never read into the result, producing a log-safe string so
+    credentials cannot reach CI logs."""
     user = os.environ.get("CCACHE_REMOTE_USER")
     password = os.environ.get("CCACHE_REMOTE_PASSWORD")
     if user and password:
-        remote_storage = _inject_userinfo(remote_storage, user, password)
+        # redact=True emits a literal "***" for the password (the real secret is
+        # never read into the result), making the string safe to log; the file
+        # path URL-encodes the real credential.
+        secret = "***" if redact else quote(password, safe="")
+        userinfo = f"{quote(user, safe='')}:{secret}"
+        remote_storage = _inject_userinfo(remote_storage, userinfo)
     if args.read_only:
         remote_storage = f"{remote_storage}|read-only"
     return remote_storage
@@ -118,7 +130,16 @@ def _log(msg: str):
 
 
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
+    # `lines` is written to the config file (may embed the real basic-auth
+    # secret); `log_lines` mirrors it with any injected password masked, so the
+    # config can be echoed to CI logs without ever placing the secret into the
+    # logged string.
     lines = []
+    log_lines = []
+
+    def emit(line: str):
+        lines.append(line)
+        log_lines.append(line)
 
     config_preset: str = args.config_preset
     selected_config = CONFIG_PRESETS_MAP[config_preset]
@@ -126,8 +147,10 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     _log(f"Platform: {'Windows' if IS_WINDOWS else 'POSIX'}")
     for k, v in selected_config.items():
         if k == "remote_storage":
-            v = _apply_remote_opts(v, args)
-        lines.append(f"{k} = {v}")
+            lines.append(f"{k} = {_apply_remote_opts(v, args)}")
+            log_lines.append(f"{k} = {_apply_remote_opts(v, args, redact=True)}")
+        else:
+            emit(f"{k} = {v}")
 
     # Log paths: use --log-dir if provided, otherwise default to
     # REPO_ROOT/build/logs/ccache. On Windows CI the build dir is on
@@ -137,8 +160,8 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     if config_preset != "local":
         ccache_log_dir: Path = args.log_dir if args.log_dir else DEFAULT_LOG_DIR
         ccache_log_dir.mkdir(parents=True, exist_ok=True)
-        lines.append(f"log_file = {ccache_log_dir / 'ccache.log'}")
-        lines.append(f"stats_log = {ccache_log_dir / 'ccache_stats.log'}")
+        emit(f"log_file = {ccache_log_dir / 'ccache.log'}")
+        emit(f"stats_log = {ccache_log_dir / 'ccache_stats.log'}")
 
     # (TODO:consider https://ccache.dev/manual/4.6.1.html#_storage_interaction)
     # Switch based on cache type.
@@ -148,27 +171,30 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         lines.append(
             f"remote_storage = {_apply_remote_opts(args.remote_storage, args)}"
         )
-        lines.append(f"remote_only = true")
+        log_lines.append(
+            f"remote_storage = {_apply_remote_opts(args.remote_storage, args, redact=True)}"
+        )
+        emit(f"remote_only = true")
     else:
         # Default, local.
         local_path: Path = args.local_path
         if local_path is None:
             local_path = dir / "local"
         local_path.mkdir(parents=True, exist_ok=True)
-        lines.append(f"cache_dir = {local_path}")
+        emit(f"cache_dir = {local_path}")
 
     # Compiler Check
     if not IS_WINDOWS:
         # On POSIX we use a custom script that fingerprints the
         # compiler binary and its shared libraries via ldd + sha256sum.
-        lines.append(
+        emit(
             f"compiler_check = {sys.executable} {compiler_check_file} "
             f"{dir / 'compiler_check_cache'} %compiler%"
         )
     else:
         # On Windows the LLVM toolchain is compiled statically linked,
         # therefore using content is sufficient to detect changes.
-        lines.append(f"compiler_check = content")
+        emit(f"compiler_check = content")
 
     # Sloppiness settings.
     # include_file_ctime:
@@ -184,11 +210,11 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   amd-llvm uses PCH on Windows builds by default, CMake will correctly
     #   use the appropriate compilation flags that ccache understands. See
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
-    lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
+    emit(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
     # End with blank line.
-    lines.append("")
-    return "\n".join(lines)
+    emit("")
+    return "\n".join(lines), "\n".join(log_lines)
 
 
 def run(args: argparse.Namespace):
@@ -196,7 +222,7 @@ def run(args: argparse.Namespace):
     config_file = dir / "ccache.conf"
     compiler_check_file = dir / "compiler_check.py"
 
-    config_contents = gen_config(dir, compiler_check_file, args)
+    config_contents, log_contents = gen_config(dir, compiler_check_file, args)
     if args.init or not config_file.exists():
         _log(f"Initializing ccache dir: {dir}")
         dir.mkdir(parents=True, exist_ok=True)
@@ -233,11 +259,12 @@ def run(args: argparse.Namespace):
             _log(
                 f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
             )
-    # Print the generated config for visibility in CI logs. Redact any
-    # injected basic-auth password so trusted/release write credentials do not
-    # leak into logs.
+    # Print the generated config for visibility in CI logs. `log_contents` is
+    # built with the injected basic-auth password already masked (redact=True),
+    # so trusted/release write credentials are never placed into the logged
+    # string; the _redact_userinfo pass is defense-in-depth for any other line.
     _log("Generated ccache config:")
-    for line in config_contents.splitlines():
+    for line in log_contents.splitlines():
         if line.strip():
             _log(f"  {_redact_userinfo(line)}")
 

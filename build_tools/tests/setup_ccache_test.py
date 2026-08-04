@@ -76,6 +76,24 @@ class ApplyRemoteOptsTest(unittest.TestCase):
         # User without password -> no injection (both are required).
         self.assertEqual(_apply_remote_opts(_BAZEL, _args()), _BAZEL)
 
+    @patch.dict(
+        os.environ,
+        {"CCACHE_REMOTE_USER": "ci", "CCACHE_REMOTE_PASSWORD": "s3cr3t"},
+        clear=True,
+    )
+    def test_redact_masks_password(self):
+        # redact=True builds a log-safe string: the real password never appears;
+        # the userinfo is shown as ci:***.
+        out = _apply_remote_opts(_BAZEL, _args(), redact=True)
+        self.assertNotIn("s3cr3t", out)
+        self.assertTrue(out.startswith("http://ci:***@bazelremote-svc"))
+        self.assertTrue(out.endswith("|layout=bazel|connect-timeout=50"))
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_redact_no_creds_unchanged(self):
+        # With no creds, redact=True leaves the string byte-identical.
+        self.assertEqual(_apply_remote_opts(_BAZEL, _args(), redact=True), _BAZEL)
+
 
 class RedactUserinfoTest(unittest.TestCase):
     """Password redaction so injected credentials are not echoed to CI logs."""
