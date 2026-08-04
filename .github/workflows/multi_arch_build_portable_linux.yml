@@ -40,6 +40,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      rebuild_artifacts:
+        type: string
+        default: ""
+        description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
       build_runs_on:
         type: string
         default: "aws-linux-scale-rocm-prod"
@@ -166,6 +170,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
     permissions:
       contents: read
       id-token: write

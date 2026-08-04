@@ -49,7 +49,7 @@ permissions:
 jobs:
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
-    if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
+    if: ${{ (fromJSON(inputs.build_config).prebuilt_stages != '' || fromJSON(inputs.build_config).reusable_artifacts != '') && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
     runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
@@ -84,9 +84,20 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
+          STAGES="${{ fromJSON(inputs.build_config).prebuilt_stages }}"
+          ARTIFACTS="${{ fromJSON(inputs.build_config).reusable_artifacts }}"
+          STAGE_ARG=""
+          ARTIFACT_ARG=""
+          if [ -n "$STAGES" ]; then
+            STAGE_ARG="--stage=$STAGES"
+          fi
+          if [ -n "$ARTIFACTS" ]; then
+            ARTIFACT_ARG="--artifacts=$ARTIFACTS"
+          fi
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
-            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
+            $STAGE_ARG \
+            $ARTIFACT_ARG \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
 
