@@ -64,9 +64,12 @@ from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
     ARTIFACT_EXTENSIONS,
+    COPY_SOURCE_TRANSPORTS,
     LocalDirectoryBackend,
     S3Backend,
-    create_backend_from_env,
+    TRANSPORTS,
+    WRITABLE_TRANSPORTS,
+    create_backend,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
 from _therock_utils.hash_util import calculate_hash
@@ -441,10 +444,11 @@ def do_fetch(args: argparse.Namespace):
             return
 
     # Create backend
-    backend = create_backend_from_env(
+    backend = create_backend(
         run_id=args.run_id,
         github_repository=args.run_github_repo,
         platform=args.platform,
+        transport=args.transport,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -776,10 +780,18 @@ def do_push(args: argparse.Namespace):
         )
 
     # Create backend
-    backend = create_backend_from_env(
+    if args.transport not in WRITABLE_TRANSPORTS:
+        log(
+            f"ERROR: push requires a writable transport "
+            f"({' or '.join(t for t in WRITABLE_TRANSPORTS if t != 'auto')}), "
+            f"got '{args.transport}'"
+        )
+        sys.exit(1)
+    backend = create_backend(
         run_id=args.run_id,
         github_repository=args.run_github_repo,
         platform=args.platform,
+        transport=args.transport,
     )
     log(f"Using backend: {backend.base_uri}")
 
@@ -949,22 +961,40 @@ def _create_source_backend(
     source_run_id: str,
     source_repository: Optional[str],
     local_staging_dir: Optional[Path],
+    transport: str = "auto",
 ) -> ArtifactBackend:
-    """Create a backend for the source run ID.
+    """Create a read backend for the source run ID.
 
-    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
-    to resolve the correct bucket (which may differ from the current run's bucket).
+    Separate from create_backend because the source run may live in a different
+    bucket than the current run, which needs
+    WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True) to resolve.
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
+
+    'http' is not accepted: the only caller is `copy`, which needs a source it
+    can copy from rather than merely read. See COPY_SOURCE_TRANSPORTS.
     """
-    if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
-        staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
-        output_root = WorkflowOutputRoot.for_local(
-            run_id=source_run_id, platform=platform
+    if transport not in COPY_SOURCE_TRANSPORTS:
+        raise ValueError(
+            f"Unknown copy source transport {transport!r}, expected one of "
+            f"{', '.join(COPY_SOURCE_TRANSPORTS)}"
         )
+
+    staging = local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR")
+    if transport == "auto":
+        transport = "local" if staging else "s3"
+
+    if transport == "local":
+        if not staging:
+            raise ValueError(
+                "source transport 'local' needs --local-staging-dir or "
+                "THEROCK_LOCAL_STAGING_DIR"
+            )
         return LocalDirectoryBackend(
-            staging_dir=staging,
-            output_root=output_root,
+            staging_dir=Path(staging),
+            output_root=WorkflowOutputRoot.for_local(
+                run_id=source_run_id, platform=platform
+            ),
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
@@ -1012,11 +1042,34 @@ def do_copy(args: argparse.Namespace):
         source_run_id=args.source_run_id,
         source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
+        transport=args.source_transport,
     )
-    dest_backend = create_backend_from_env(
+    if args.transport not in WRITABLE_TRANSPORTS:
+        log(
+            f"ERROR: copy requires a writable destination transport "
+            f"({' or '.join(t for t in WRITABLE_TRANSPORTS if t != 'auto')}), "
+            f"got '{args.transport}'"
+        )
+        sys.exit(1)
+    dest_backend = create_backend(
         run_id=args.run_id,
         platform=args.platform,
+        transport=args.transport,
     )
+    # Both ends must be the same kind of storage: S3 copies server-side and local
+    # copies on the filesystem, and neither can reach across. Before the two
+    # transports became separate flags this was guaranteed by construction, since
+    # one env-driven rule chose both. Now that they are chosen independently, say
+    # so up front rather than letting the first copy raise a TypeError.
+    if type(source_backend) is not type(dest_backend):
+        log(
+            f"ERROR: copy needs the source and destination on the same kind of "
+            f"storage, got {type(source_backend).__name__} (--source-transport "
+            f"'{args.source_transport}') and {type(dest_backend).__name__} "
+            f"(--transport '{args.transport}'). To move artifacts between "
+            f"storage kinds, run 'fetch' and then 'push'."
+        )
+        sys.exit(1)
 
     log(f"Source: {source_backend.base_uri}")
     log(f"Dest:   {dest_backend.base_uri}")
@@ -1207,6 +1260,14 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
     parser.add_argument(
+        "--transport",
+        choices=TRANSPORTS,
+        default=os.getenv("THEROCK_ARTIFACT_TRANSPORT", "auto"),
+        help="Artifact transport (default: 'auto', which is a local staging dir "
+        "if THEROCK_LOCAL_STAGING_DIR is set and S3 otherwise). 'http' reads "
+        "public HTTPS URLs with no credentials and cannot write.",
+    )
+    parser.add_argument(
         "--bucket-config-file",
         type=Path,
         default=None,
@@ -1353,6 +1414,17 @@ def main(argv: Optional[List[str]] = None):
         default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
         help="GitHub repository for source-run-id in 'owner/repo' format "
         "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
+    )
+    copy_parser.add_argument(
+        "--source-transport",
+        choices=COPY_SOURCE_TRANSPORTS,
+        default=os.getenv("THEROCK_ARTIFACT_SOURCE_TRANSPORT", "auto"),
+        help="Transport to read the source run with. Independent of --transport, "
+        "which is the destination: copy reads one location and writes another, "
+        "so the two are separate flags. 'http' is not offered here - copying is "
+        "a same-kind operation (S3 copies server-side, local copies on the "
+        "filesystem), so an HTTP source has nothing to copy into. Use "
+        "'fetch --transport http' followed by 'push' instead.",
     )
     copy_parser.add_argument(
         "--stage",
