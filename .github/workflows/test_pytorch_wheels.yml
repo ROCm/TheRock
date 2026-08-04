@@ -202,17 +202,23 @@ jobs:
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
-        # Some pinned test requirements have no cp314 wheel and build from source.
-        # The test container ships clang but not gcc, and setuptools/distutils
-        # defaults to sysconfig's baked CC=gcc. Point it at the clang that is
-        # already installed. Scoped to this step so it does not affect the tests.
-        env:
-          CC: clang
-          CXX: clang++
         run: |
+          # Some pinned test requirements have no cp314 wheel and build from source.
+          # The test container ships clang but not gcc, and setuptools/distutils
+          # defaults to sysconfig's baked CC=gcc. Point it at the clang that is
+          # already installed. Scoped to this step so it does not affect the tests.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            export CC=clang
+            export CXX=clang++
+          elif [[ "${RUNNER_OS}" == "Windows" ]]; then
+            export CC=cl
+            export CXX=cl
+          fi
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
+          unset CC
+          unset CXX
 
       - name: Driver / GPU sanity check
         timeout-minutes: 3
