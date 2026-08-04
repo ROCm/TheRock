@@ -202,15 +202,17 @@ def _append_build_rocm(
         )
         if platform_name == "linux":
             linux_output_root = output_root
-        log_url = output_root.log_root_index().https_url
-        artifact_url = output_root.artifact_index().https_url
-        manifest_url = output_root.manifests_index().https_url
+        # These land in the job summary table for a human to click, so they use
+        # .public_url and pick up the bucket's CDN when it has one.
+        log_url = output_root.log_root_index().public_url
+        artifact_url = output_root.artifact_index().public_url
+        manifest_url = output_root.manifests_index().public_url
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
     manifest_diff_url = linux_output_root.log_file(
         "manifest-diff", "index.html"
-    ).https_url
+    ).public_url
     lines.append(f"Manifest diff *(if produced)* | {manifest_diff_url} | — | —")
     lines.append("")
     lines.append(
