@@ -550,18 +550,22 @@ class ArtifactLevelAnalysisTest(unittest.TestCase):
             [artifacts.blas]
             artifact_group = "math-libs"
             type = "target-specific"
+            components = ["rocblas", "hipblas"]
 
             [artifacts.fft]
             artifact_group = "math-libs"
             type = "target-specific"
+            components = ["rocfft", "hipfft"]
 
             [artifacts.prim]
             artifact_group = "math-libs"
             type = "target-specific"
+            components = ["rocprim", "hipcub", "rocthrust"]
 
             [artifacts.rand]
             artifact_group = "math-libs"
             type = "target-specific"
+            components = ["rocrand", "hiprand"]
             """
         )
 

@@ -11,7 +11,7 @@ and computing artifact dependencies for sharded build pipelines.
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 
 def get_topology(topology_path: Optional[Path] = None) -> "BuildTopology":
@@ -127,6 +127,9 @@ class Artifact:
     test_artifacts: List[str] = field(
         default_factory=list
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
+    components: List[str] = field(
+        default_factory=list
+    )  # Monorepo component names for granular CI reuse (e.g., ["rocblas", "hipblas"])
 
 
 class BuildTopology:
@@ -237,6 +240,7 @@ class BuildTopology:
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
+                components=artifact_data.get("components", []),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -1208,15 +1212,11 @@ class BuildTopology:
             for db_name in artifact.split_databases:
                 alias_map[db_name.lower()] = artifact.name
 
-        # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
-        mappings = self._load_project_mappings()
-        if mappings and "rocm_systems_projects" in mappings:
-            for project_name, artifact_name in mappings[
-                "rocm_systems_projects"
-            ].items():
-                project_lower = project_name.lower()
-                if project_lower not in alias_map:
-                    alias_map[project_lower] = artifact_name
+            # Include component mappings from BUILD_TOPOLOGY.toml
+            for component in artifact.components:
+                component_lower = component.lower()
+                if component_lower not in alias_map:
+                    alias_map[component_lower] = artifact.name
 
         return alias_map
 
@@ -1324,3 +1324,52 @@ class BuildTopology:
     def get_all_stage_names(self) -> Set[str]:
         """Get all build stage names."""
         return set(self.build_stages.keys())
+
+    def get_component_to_artifact_map(self) -> Dict[str, str]:
+        """Return {component_name: artifact_name} mapping."""
+        mapping: Dict[str, str] = {}
+        for artifact_name, artifact in self.artifacts.items():
+            for component in artifact.components:
+                mapping[component] = artifact_name
+        return mapping
+
+    def get_artifact_for_component(self, component_name: str) -> Optional[str]:
+        """Look up artifact name for a component directory name."""
+        return self.get_component_to_artifact_map().get(component_name)
+
+    def get_source_sets_with_components(self) -> List[str]:
+        """Get source sets that support granular artifact analysis."""
+        source_sets: Set[str] = set()
+        for group in self.artifact_groups.values():
+            for artifact in self.get_artifacts_in_group(group.name):
+                if artifact.components:
+                    source_sets.update(group.source_sets)
+        return sorted(source_sets)
+
+    def get_all_artifacts_for_source_set(self, source_set_name: str) -> FrozenSet[str]:
+        """Get all artifacts with components for a source set."""
+        artifacts: Set[str] = set()
+        for group_name, group in self.artifact_groups.items():
+            if source_set_name in group.source_sets:
+                for artifact in self.get_artifacts_in_group(group_name):
+                    if artifact.components:
+                        artifacts.add(artifact.name)
+        return frozenset(artifacts)
+
+    @staticmethod
+    def extract_component_from_path(path: str) -> Optional[str]:
+        """Extract component name from projects/NAME/... or shared/NAME/... path."""
+        import re
+        match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
+        return match.group(1) if match else None
+
+    def get_artifact_for_path(self, path: str) -> Optional[str]:
+        """Map submodule path to artifact. Returns None if component not found."""
+        component = self.extract_component_from_path(path)
+        return self.get_artifact_for_component(component) if component else None
+
+    @staticmethod
+    def parse_changed_path(changed_path: str) -> Tuple[Optional[str], Optional[str]]:
+        """Split 'submodule/path' into (submodule, path)."""
+        parts = changed_path.split("/", 1)
+        return (parts[0], parts[1]) if len(parts) >= 2 else (changed_path, "")

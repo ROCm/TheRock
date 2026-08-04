@@ -26,11 +26,6 @@ from pathlib import PurePosixPath
 from typing import Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
 
 from _therock_utils.build_topology import BuildTopology, SourceSet
-from _therock_utils.project_artifact_map import (
-    get_artifact_for_path,
-    get_all_rocm_libraries_artifacts,
-    parse_changed_path,
-)
 
 
 @dataclass(frozen=True)
@@ -322,8 +317,8 @@ class StageImpactAnalyzer:
     ) -> bool:
         """Check if granular artifact-level analysis is possible.
 
-        Granular analysis is only supported for rocm-libraries changes where
-        all changes are within known project directories.
+        Granular analysis is supported for source sets that have artifacts
+        with component mappings defined in BUILD_TOPOLOGY.toml.
 
         Args:
             normalized_inputs: Normalized changed paths.
@@ -332,16 +327,22 @@ class StageImpactAnalyzer:
         Returns:
             True if all conditions for granular analysis are met.
         """
-        # Only rocm-libraries has granular mapping
-        if "rocm-libraries" not in matched_source_sets:
+        # Get source sets that support granular analysis
+        granular_source_sets = set(self.topology.get_source_sets_with_components())
+
+        # Check if any matched source set supports granular analysis
+        if not matched_source_sets.intersection(granular_source_sets):
             return False
 
-        # Check if any inputs are in rocm-libraries
-        has_rocm_libraries_inputs = any(
-            item.startswith("rocm-libraries/") or item == "rocm-libraries"
-            for item in normalized_inputs
-        )
-        return has_rocm_libraries_inputs
+        # Check if any inputs are in source sets with components
+        for source_set in granular_source_sets:
+            if any(
+                item.startswith(f"{source_set}/") or item == source_set
+                for item in normalized_inputs
+            ):
+                return True
+
+        return False
 
     def _resolve_impacted_artifacts(
         self, normalized_inputs: Sequence[str]
@@ -359,18 +360,21 @@ class StageImpactAnalyzer:
         impacted: Set[str] = set()
         is_conservative = False
 
+        # Get source sets that support granular analysis
+        granular_source_sets = set(self.topology.get_source_sets_with_components())
+
         for path in normalized_inputs:
-            submodule, subpath = parse_changed_path(path)
-            if submodule is None or submodule != "rocm-libraries":
+            submodule, subpath = self.topology.parse_changed_path(path)
+            if submodule is None or submodule not in granular_source_sets:
                 continue
 
-            artifact = get_artifact_for_path(submodule, subpath)
+            artifact = self.topology.get_artifact_for_path(subpath)
             if artifact is not None:
                 impacted.add(artifact)
             else:
-                # Path affects all artifacts in rocm-libraries
+                # Path affects all artifacts in this source set
                 is_conservative = True
-                impacted.update(get_all_rocm_libraries_artifacts())
+                impacted.update(self.topology.get_all_artifacts_for_source_set(submodule))
 
         return (impacted, is_conservative)
 
