@@ -1,10 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import glob
 import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -18,6 +20,20 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
+
+# Install rocke Python wheels into the test venv so `import rocke` and
+# `import kernels` resolve from site-packages when ctest runs the pytest
+# entries. The wheels are built by the rocke CMake build and staged into
+# the test artifact.
+wheel_dir = Path(THEROCK_BIN_DIR) / "hip_kernel_provider" / "wheels"
+wheels = sorted(glob.glob(str(wheel_dir / "*.whl")))
+if wheels:
+    logging.info(f"Installing rocke wheels: {wheels}")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--no-deps"] + wheels,
+        check=True,
+        env=environ_vars,
+    )
 
 cmd = [
     "ctest",
