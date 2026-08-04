@@ -128,6 +128,15 @@ _RELEASE_CDN = "https://repo.amd.com/rocm/"
 #   * The artifacts buckets - no CDN, matching the '-' column in s3_buckets.md.
 # A bucket with no matching rule falls back to its raw S3 URL, which is the
 # behavior every caller had before CDN rules existed.
+#
+# Verification status of the 12 rules below (checked against the live CloudFront
+# distributions): all 12 resolve to a served, correctly-named object. The dev and
+# nightly rules were additionally confirmed origin-identical by matching the S3
+# and CloudFront ETags. The four prerelease/release whl+tarball rules could not be
+# ETag-matched because those buckets deny anonymous HEAD (403); they were confirmed
+# structurally instead - each CDN prefix serves the same v4/ file naming and the
+# channel-appropriate versions (prerelease -> 7.14.0rcN, release -> 7.14.0). An
+# ETag cross-check by someone holding AWS credentials would close that gap.
 def _whl_cdn_rules(cdn: str) -> tuple[CdnRule, ...]:
     return (CdnRule("v4/whl/", cdn + "whl-multi-arch/"),)
 
