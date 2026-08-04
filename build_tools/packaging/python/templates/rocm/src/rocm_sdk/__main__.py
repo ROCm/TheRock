@@ -15,20 +15,32 @@ from . import _dist_info as di
 def _do_path(args: argparse.Namespace):
     from . import _devel
 
+    if args.cmake:
+        try:
+            root_path = _devel.get_devel_root()
+        except ModuleNotFoundError as e:
+            print(
+                "ERROR: `rocm-sdk path --cmake` requires the `rocm[devel]` "
+                "package, which provides the cmake config files. Please install "
+                "it with your package manager (pip, uv, etc)",
+                file=sys.stderr,
+            )
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(root_path / "lib" / "cmake")
+        return
+
     try:
         root_path = _devel.get_devel_root()
-    except ModuleNotFoundError as e:
-        print(
-            "ERROR: Could not load the `rocm[devel]` package, which is required "
-            "to access runtime tools and development files. Please install it with "
-            "your package manager (pip, uv, etc)",
-            file=sys.stderr,
-        )
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
-    if args.cmake:
-        print(root_path / "lib" / "cmake")
-    elif args.bin:
+    except ModuleNotFoundError:
+        # Devel not installed: serve runtime paths from rocm-sdk-core.
+        try:
+            root_path = _devel.get_core_root()
+        except ModuleNotFoundError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    if args.bin:
         print(root_path / "bin")
     elif args.root:
         print(root_path)

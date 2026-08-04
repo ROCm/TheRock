@@ -47,6 +47,18 @@ def _is_windows():
     return platform.system() == "Windows"
 
 
+def get_core_root() -> Path:
+    """Returns the rocm-sdk-core install root, which needs no rocm[devel]."""
+    core_spec = di.ALL_PACKAGES["core"].get_py_package()
+    if core_spec is None or core_spec.origin is None:
+        raise ModuleNotFoundError(
+            "rocm-sdk-core package is not installed. This can typically be "
+            "obtained by installing `rocm` or `rocm[libraries]` from your "
+            "package manager"
+        )
+    return Path(core_spec.origin).parent
+
+
 def get_devel_root() -> Path:
     try:
         import rocm_sdk_devel
