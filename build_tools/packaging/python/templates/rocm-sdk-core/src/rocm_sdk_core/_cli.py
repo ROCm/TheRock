@@ -115,13 +115,11 @@ def _exec(relpath: str, expand_devel=True):
     # override with expand_devel=False to avoid the expansion cost.
     full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
     if is_windows:
-        # Windows has no real exec(). os.execv would run the child in the
-        # background (https://bugs.python.org/issue19124), and os.spawnv, while
-        # it waits, does NOT quote its arguments: a space in the path (e.g. a
-        # user folder like "C:\Users\First Last") gets split so the child sees a
-        # truncated argv[0] (see ROCm/TheRock#7075). subprocess.run() both waits
-        # for the child and quotes the exe path and args correctly via
-        # subprocess.list2cmdline.
+        # Windows has no real exec() and subprocess is recommended instead.
+        # os.execv runs the child in the background (https://bugs.python.org/issue19124)
+        # os.spawnv has brittle argument handling (https://discuss.python.org/t/how-to-deal-with-unsafe-broken-os-spawn-arg-handling-behavior-on-windows/20829)
+        # which splits a space in the path (e.g. "C:\Users\First Last") so the
+        # child sees a truncated argv[0] (https://github.com/ROCm/TheRock/issues/7075).
         import subprocess
 
         sys.exit(subprocess.run([str(full_path)] + sys.argv[1:]).returncode)

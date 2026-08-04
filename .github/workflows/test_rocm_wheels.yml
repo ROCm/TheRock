@@ -120,7 +120,11 @@ jobs:
       run:
         shell: bash
     env:
-      VENV_DIR: ${{ github.workspace }}/.venv
+      # Use a venv path containing a space on Windows so that `rocm-sdk test`
+      # exercises the space-in-path handling of the console-script trampolines
+      # (users often install under paths like "C:\Users\First Last\...").
+      # See https://github.com/ROCm/TheRock/issues/7075.
+      VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
 
     steps:
       - name: Checkout
@@ -151,7 +155,7 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          python build_tools/setup_venv.py ${VENV_DIR} \
+          python build_tools/setup_venv.py "${VENV_DIR}" \
             --packages "${pkg}==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --find-links=${{ inputs.package_find_links_url }} \
@@ -177,7 +181,7 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          python build_tools/setup_venv.py ${VENV_DIR} \
+          python build_tools/setup_venv.py "${VENV_DIR}" \
             --packages "${pkg}==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --find-links=${{ inputs.package_find_links_url }}
