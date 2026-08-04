@@ -69,32 +69,6 @@
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
-# TEST-SELECTION OVERRIDES (consumed by test_tools/determine_rocm_test_dependencies.py):
-#   These three optional keys layer explicit test-selection overrides on top of the
-#   automatic consumer graph (build/therock_consumer_graph.json). All subproject names
-#   are matched case-insensitively against the lowercased consumer-graph keys.
-#
-#   test_include = ["subproject", ...]  # Optional: extra subprojects to test when this
-#       artifact changes, beyond same-stage consumers derivable from the graph. Covers
-#       test-only projects with no link-time dep edge (e.g. hip-tests, rocgdb-cpu) and
-#       same-stage reverse edges not present as forward consumers.
-#   test_exclude = ["subproject", ...]  # Optional: consumers to prune even though they
-#       appear in the graph. Applied LAST, after include and after fanout, so it can also
-#       drop a specific consumer of a fanned-out foundational dep.
-#   test_fanout_all = true              # Optional bool: when set, a change to this artifact
-#       selects ALL of its graph consumers, bypassing the same-stage cut. Opt-in for
-#       foundational deps (e.g. artifact "base": rocm-core, rocm-cmake, rocm-half,
-#       rocprofiler-register) whose consumers span every stage.
-#
-#   Per-subproject overrides (when one artifact packages several subprojects whose
-#   overrides differ) use a nested sub-table instead of the flat keys above:
-#
-#   [artifacts.<name>.test_overrides.<subproject>]
-#   test_include = ["subproject", ...]  # Same semantics as the flat keys, but scoped to
-#   test_exclude = ["subproject", ...]  # a single subproject of a multi-subproject artifact.
-#   test_fanout_all = true              # Avoids over-applying one subproject's override to
-#                                       # its siblings in the same artifact.
-#
 # ==============================================================================
 
 [metadata]
@@ -526,10 +500,6 @@ artifact_group = "base"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"  # Part of core, enabled by default
-# Foundational deps (rocm-core, rocm-cmake, rocm-half, rocprofiler-register) are all
-# packaged here; a change to any of them has no derivable same-stage cut, so fan out to
-# all graph consumers.
-test_fanout_all = true
 
 # --- Compiler Artifacts ---
 
@@ -556,19 +526,6 @@ feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
 test_artifacts = ["core-hiptests", "rocrtst"]  # When building ROCR, also build hip-tests and rocrtst
-# Override is specific to rocr-runtime; this artifact also packages hrx and rocminfo
-# (which have no override), so scope it with a sub-table rather than a flat key.
-[artifacts.core-runtime.test_overrides.rocr-runtime]
-test_include = [
-    "hip-tests",
-    "rocrtst",
-    "rocr-debug-agent",
-    "rocr-debug-agent-tests",
-    "rocgdb",
-    "ocl-clr",
-    "ocl-icd",
-    "rocprofiler-sdk",
-]
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -584,8 +541,6 @@ artifact_deps = ["base", "sysdeps", "sysdeps-libnl", "sysdeps-libmnl", "amd-llvm
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
-# Sole subproject is amdsmi; flat key is safe.
-test_include = ["hip-tests", "rocrtst"]
 
 [artifacts.core-kpack]
 artifact_group = "hip-runtime"
@@ -601,8 +556,6 @@ artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
-# Sole subproject is hip-clr; flat key is safe.
-test_include = ["hip-tests", "rocrtst", "hipinfo"]
 
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
@@ -647,17 +600,6 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
-# artifact-blas.toml packages hipBLAS, hipBLASLt, hipSPARSELt, rocBLAS, rocRoller,
-# rocSOLVER, rocSPARSE (and more). Each override below has a DIFFERENT include, so they
-# must be per-subproject sub-tables; a flat key would over-apply across siblings.
-[artifacts.blas.test_overrides.hipblaslt]
-test_include = ["hipsparselt"]
-[artifacts.blas.test_overrides.rocroller]
-test_include = ["hipblaslt"]
-[artifacts.blas.test_overrides.rocsolver]
-test_include = ["hipblas"]
-[artifacts.blas.test_overrides.rocsparse]
-test_include = ["rocsolver"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -673,9 +615,6 @@ artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
-# hipCUB and rocThrust both override include=[rocprim] (identical), and rocPRIM itself is
-# self-referential, so a flat key is safe here.
-test_include = ["rocprim"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
@@ -824,8 +763,6 @@ type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
-# Sole subproject is aqlprofile; flat key is safe.
-test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
@@ -834,10 +771,6 @@ artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-r
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
-# Override is specific to rocprofiler-sdk; this artifact also packages roctracer and
-# rocprof-trace-decoder (no override), so scope it with a sub-table.
-[artifacts.rocprofiler-sdk.test_overrides.rocprofiler-sdk]
-test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
 
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-core"
@@ -883,8 +816,6 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
-# Sole subproject is amd-dbgapi; flat key is safe.
-test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 [artifacts.rocr-debug-agent]
 artifact_group = "debug-tools"
@@ -906,8 +837,6 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
-# Sole subproject is rocgdb; flat key is safe.
-test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 # --- ROCm Emulation Tools ---
 

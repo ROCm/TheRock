@@ -27,7 +27,7 @@ benefit from further discussion.
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
-- [RFC0013: Derive Test-Subproject Selection From the Consumer Graph](./RFC0013-Consumer-Graph-Test-Selection.md)
+- [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
 
 ## Adding an RFC
 

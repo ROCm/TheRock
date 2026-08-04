@@ -1,26 +1,27 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for the dynamic consumer-graph test-selection tool.
+"""Unit tests for the committed-graph test-selection tool.
 
-These tests are hermetic: each builds a self-contained ``--therock-dir`` on
-disk carrying
+These tests target the CURRENT design (committed consumer graph + hand-maintained
+``test_policies.toml`` + hop-distance selection), NOT the superseded dynamic
+build-stage-cut / BUILD_TOPOLOGY-override design.
 
-  * ``build/therock_consumer_graph.json`` — the dynamic (never-committed)
-    consumer graph the tool loads,
-  * a minimal ``BUILD_TOPOLOGY.toml`` — build_stages / artifact_groups /
-    artifacts plus the per-artifact ``test_include`` / ``test_exclude`` /
-    ``test_fanout_all`` and ``[artifacts.<a>.test_overrides.<sub>]`` keys, and
-  * ``artifact-<name>.toml`` (and ``base/artifact.toml``) descriptors whose
-    ``components."<path>/stage"`` keys map subprojects to artifacts (and thus to
-    build stages).
+Every test is hermetic: it builds a self-contained ``--therock-dir`` on disk
+carrying
 
-No test here depends on the committed repo graph. One integration test class
-(``TestRealTopologyStageMap``) reads the committed BUILD_TOPOLOGY.toml +
-artifact tomls to assert the ``base/artifact.toml`` stage-resolution fix, since
-that is about derivation from committed files, not test selection.
+  * ``test_tools/therock_consumer_graph.json`` — the committed consumer graph the
+    tool loads script-relative (or under ``--therock-dir/test_tools/``), and
+  * ``test_tools/test_policies.toml`` — the hand-maintained policy file
+    (``[component.<name>]`` tables with ``level`` / ``test_include`` /
+    ``test_exclude``).
+
+No test depends on the repo's real committed graph/policy. The fixture graph
+below is small and purpose-built to exercise each selection rule, including the
+amdsmi -> rdc cross-stage regression case and the finding-#8 (no build/ dir) case.
 """
 
+import io
 import json
 import os
 import shutil
@@ -28,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 THEROCK_DIR = Path(__file__).parent.parent.parent
@@ -36,185 +38,83 @@ SCRIPT = Path(__file__).parent.parent / "determine_rocm_test_dependencies.py"
 sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
 
 from determine_rocm_test_dependencies import (  # noqa: E402
-    _build_subproject_maps,
-    _load_consumer_graph,
+    explain_component,
     get_subprojects_to_test,
     list_subprojects,
+    validate_policies,
 )
 
 # ---------------------------------------------------------------------------
-# Fixture graph.
+# Fixture graph (reverse / consumer edges only, all lowercase).
 #
-# Two build stages (via two artifacts), plus a foundational "base" artifact:
+# The shape mirrors what a change to `amdsmi` looks like in the real graph: a
+# direct edge amdsmi -> rdc that WOULD have been dropped by the superseded
+# same-stage cut (amdsmi and rdc live in different build stages), plus a chain
+# rocroller -> hipblaslt -> miopen that exercises direct (level 4) vs transitive
+# (level 3) walks. `rocm-core` is a foundational dep reaching a broad closure.
 #
-#   stage math-libs (artifact `prim`, `blas`):
-#     hipcub    -> [rocprim]                 (flat prim include)
-#     rocthrust -> [rocprim]                 (flat prim include)
-#     rocprim   -> []
-#     rocsolver -> [hipblas]                 (blas sub-table: rocsolver)
-#     rocroller -> [hipblaslt]               (blas sub-table: rocroller)
-#     rocblas   -> [hipblas, rocsolver]      (same-stage consumers)
-#     hipblas, hipblaslt -> []
-#
-#   stage debug-tools (artifact `dbg`):
-#     amd-dbgapi        -> [rocgdb, rocr-debug-agent, rocr-debug-agent-tests]
-#     rocr-debug-agent  -> [rocr-debug-agent-tests]
-#     rocgdb, rocr-debug-agent-tests -> []
-#     ROCR-Runtime      -> [rocgdb]          (hyphenated + mixed-case)
-#
-#   artifact `base` (stage runtime): test_fanout_all = true
-#     rocm-core -> [rocprim, rocgdb]         (consumers span BOTH stages)
+#   amdsmi     -> [rdc, hipblaslt]     (rdc = the cross-stage direct consumer)
+#   rocroller  -> [hipblaslt]
+#   hipblaslt  -> [miopen, rocblas]    (miopen is INDIRECT from rocroller)
+#   miopen     -> []
+#   rocblas    -> []
+#   rdc        -> []                   (leaf; nothing consumes it)
+#   rocm-core  -> [amdsmi, rocroller]  (foundational; walks transitively)
+#   rocgdb     -> []                   (leaf; policy adds test-only includes)
+#   amd-dbgapi -> [rocgdb]
 # ---------------------------------------------------------------------------
 _GRAPH = {
-    "hipcub": {"consumers": []},
-    "rocthrust": {"consumers": []},
-    "rocprim": {"consumers": ["hipcub", "rocthrust"]},
-    "rocsolver": {"consumers": ["hipblas"]},
+    "amdsmi": {"consumers": ["rdc", "hipblaslt"]},
     "rocroller": {"consumers": ["hipblaslt"]},
-    "rocblas": {"consumers": ["hipblas", "rocsolver"]},
-    "hipblas": {"consumers": []},
-    "hipblaslt": {"consumers": []},
-    "amd-dbgapi": {
-        "consumers": ["rocgdb", "rocr-debug-agent", "rocr-debug-agent-tests"],
-    },
-    "rocr-debug-agent": {"consumers": ["rocr-debug-agent-tests"]},
-    "rocr-debug-agent-tests": {"consumers": []},
+    "hipblaslt": {"consumers": ["miopen", "rocblas"]},
+    "miopen": {"consumers": []},
+    "rocblas": {"consumers": []},
+    "rdc": {"consumers": []},
+    "rocm-core": {"consumers": ["amdsmi", "rocroller"]},
     "rocgdb": {"consumers": []},
-    "rocr-runtime": {"consumers": ["rocgdb"]},
-    "rocm-core": {"consumers": ["rocprim", "rocgdb"]},
+    "amd-dbgapi": {"consumers": ["rocgdb"]},
 }
 
-# subproject -> owning artifact (artifact name == artifact-<name>.toml stem).
-_ARTIFACT_OF = {
-    "prim": ["hipcub", "rocthrust", "rocprim"],
-    "blas": ["rocsolver", "rocroller", "rocblas", "hipblas", "hipblaslt"],
-    "dbg": [
-        "amd-dbgapi",
-        "rocr-debug-agent",
-        "rocr-debug-agent-tests",
-        "rocgdb",
-        "rocr-runtime",
-    ],
-}
+# Hand-maintained policy fixture.
+#   * rocm-core at level 3 -> transitive closure (the level-honored case).
+#   * amdsmi test_include adds hip-tests (a test-only value NOT in the graph,
+#     proving include values need not be graph keys) and test_exclude prunes
+#     rocblas (non-vacuous: the level-3 walk from amdsmi would otherwise reach it
+#     via hipblaslt).
+#   * rocgdb test_include adds rocgdb-cpu (another test-only, non-graph value).
+#   * amd-dbgapi keyed with no body -> defaults (level 4, no include/exclude).
+_POLICIES = """\
+[component.rocm-core]
+level = 3
 
-# artifact -> build stage. `prim` and `blas` share the same stage so the
-# same-stage cut is exercised across artifact boundaries within one stage.
-_STAGE_OF_ARTIFACT = {
-    "prim": "math-libs",
-    "blas": "math-libs",
-    "dbg": "debug-tools",
-    "base": "runtime",
-}
+[component.amdsmi]
+level = 3
+test_include = ["hip-tests"]
+test_exclude = ["rocblas"]
 
-# Case-preserving source dir segment for each subproject (mirrors the real
-# tomls, e.g. ROCR-Runtime). The tool lowercases when parsing, so casing here is
-# just cosmetic; ROCR-Runtime documents the hyphen + mixed-case path shape.
-_SUBPROJECT_DIR = {
-    "hipcub": "hipCUB",
-    "rocthrust": "rocThrust",
-    "rocprim": "rocPRIM",
-    "rocsolver": "rocSOLVER",
-    "rocroller": "rocRoller",
-    "rocblas": "rocBLAS",
-    "hipblas": "hipBLAS",
-    "hipblaslt": "hipBLASLt",
-    "amd-dbgapi": "amd-dbgapi",
-    "rocr-debug-agent": "rocr-debug-agent",
-    "rocr-debug-agent-tests": "rocr-debug-agent-tests",
-    "rocgdb": "rocgdb",
-    "rocr-runtime": "ROCR-Runtime",
-}
+[component.rocgdb]
+test_include = ["rocgdb-cpu"]
+
+[component.amd-dbgapi]
+"""
 
 
-def _write_build_topology(root: Path) -> None:
-    """Write a minimal BUILD_TOPOLOGY.toml carrying the test_* override keys.
-
-    Each artifact gets its own artifact_group and each stage lists exactly the
-    groups that belong to it, so get_stage_for_artifact() resolves correctly.
-    """
-    lines: list[str] = []
-
-    # Build stages: one group per artifact, artifact name == group name here.
-    stage_to_groups: dict[str, list[str]] = {}
-    for artifact, stage in _STAGE_OF_ARTIFACT.items():
-        stage_to_groups.setdefault(stage, []).append(artifact)
-    for stage, groups in stage_to_groups.items():
-        lines.append(f"[build_stages.{stage}]")
-        lines.append("artifact_groups = [" + ", ".join(f'"{g}"' for g in groups) + "]")
-        lines.append("")
-
-    for artifact in _STAGE_OF_ARTIFACT:
-        lines.append(f"[artifact_groups.{artifact}]")
-        lines.append("")
-
-    # Artifacts + their overrides.
-    # `prim`: flat include (hipcub->rocprim, rocthrust->rocprim identical).
-    lines += [
-        "[artifacts.prim]",
-        'artifact_group = "prim"',
-        'test_include = ["rocprim"]',
-        "",
-    ]
-    # `blas`: per-subproject sub-tables so rocsolver/rocroller includes do NOT
-    # over-apply to siblings (open item A).
-    lines += [
-        "[artifacts.blas]",
-        'artifact_group = "blas"',
-        "[artifacts.blas.test_overrides.rocsolver]",
-        'test_include = ["hipblas"]',
-        "[artifacts.blas.test_overrides.rocroller]",
-        'test_include = ["hipblaslt"]',
-        "",
-    ]
-    lines += [
-        "[artifacts.dbg]",
-        'artifact_group = "dbg"',
-        "",
-    ]
-    # `base`: foundational fan-out.
-    lines += [
-        "[artifacts.base]",
-        'artifact_group = "base"',
-        "test_fanout_all = true",
-        "",
-    ]
-
-    (root / "BUILD_TOPOLOGY.toml").write_text("\n".join(lines))
-
-
-def _write_artifact_tomls(root: Path) -> None:
-    """Write artifact-<name>.toml descriptors + base/artifact.toml."""
-    for artifact, subs in _ARTIFACT_OF.items():
-        toml_lines = []
-        for sub in subs:
-            seg = _SUBPROJECT_DIR.get(sub, sub)
-            toml_lines.append(f'[components.lib."libs/{seg}/stage"]')
-        (root / f"artifact-{artifact}.toml").write_text("\n".join(toml_lines) + "\n")
-
-    # base/artifact.toml is UNSUFFIXED — the plain artifact-*.toml glob misses
-    # it; the tool must special-case it (base stage-resolution fix).
-    base_dir = root / "base"
-    base_dir.mkdir(exist_ok=True)
-    (base_dir / "artifact.toml").write_text(
-        '[components.lib."base/rocm-core/stage"]\n'
+def _write_fixture(root: Path, graph: dict | None = None, policies: str | None = None):
+    """Populate ``root/test_tools/`` with a graph + policy file."""
+    test_tools = root / "test_tools"
+    test_tools.mkdir(parents=True, exist_ok=True)
+    (test_tools / "therock_consumer_graph.json").write_text(
+        json.dumps(_GRAPH if graph is None else graph, indent=2, sort_keys=True) + "\n"
+    )
+    (test_tools / "test_policies.toml").write_text(
+        _POLICIES if policies is None else policies
     )
 
 
-def _write_graph(root: Path, graph: dict | None = None) -> None:
-    """Write the dynamic consumer graph to build/therock_consumer_graph.json."""
-    build_dir = root / "build"
-    build_dir.mkdir(exist_ok=True)
-    (build_dir / "therock_consumer_graph.json").write_text(
-        json.dumps(_GRAPH if graph is None else graph, indent=2)
-    )
-
-
-def _make_fixture(graph: dict | None = None) -> Path:
-    """Create a full hermetic --therock-dir fixture; return its path."""
+def _make_fixture(graph: dict | None = None, policies: str | None = None) -> Path:
+    """Create a hermetic --therock-dir fixture; return its path."""
     root = Path(tempfile.mkdtemp())
-    _write_graph(root, graph)
-    _write_build_topology(root)
-    _write_artifact_tomls(root)
+    _write_fixture(root, graph, policies)
     return root
 
 
@@ -228,173 +128,224 @@ class _FixtureTestCase(unittest.TestCase):
         shutil.rmtree(self.root, ignore_errors=True)
 
 
-class TestGraphLoading(_FixtureTestCase):
-    def test_load_dynamic_graph_from_build_dir(self) -> None:
-        graph = _load_consumer_graph(self.root)
-        self.assertIn("rocblas", graph)
-        self.assertIn("hipblas", graph["rocblas"]["consumers"])
+# ---------------------------------------------------------------------------
+# Hop-distance selection: level 5 = self, level 4 = self+direct, level 3 = all.
+# ---------------------------------------------------------------------------
+class TestHopDistanceSelection(_FixtureTestCase):
+    def test_level_5_selects_self_only(self) -> None:
+        result = get_subprojects_to_test(["hipblaslt"], self.root, level=5)
+        self.assertEqual(result, {"hipblaslt"})
 
-    def test_missing_graph_raises(self) -> None:
-        empty = Path(tempfile.mkdtemp())
-        try:
-            with self.assertRaises(FileNotFoundError):
-                _load_consumer_graph(empty)
-        finally:
-            shutil.rmtree(empty, ignore_errors=True)
+    def test_level_4_selects_self_plus_direct_consumers(self) -> None:
+        # hipblaslt -> {miopen, rocblas} directly; NOT their consumers (none here,
+        # but rocroller must not appear — it is upstream, not a consumer).
+        result = get_subprojects_to_test(["hipblaslt"], self.root, level=4)
+        self.assertEqual(result, {"hipblaslt", "miopen", "rocblas"})
 
-    def test_stage_and_artifact_maps(self) -> None:
-        stage_of, artifact_of = _build_subproject_maps(self.root)
-        # prim + blas share stage math-libs; dbg is a separate stage.
-        self.assertEqual(stage_of["rocprim"], "math-libs")
-        self.assertEqual(stage_of["rocblas"], "math-libs")
-        self.assertEqual(stage_of["rocgdb"], "debug-tools")
-        self.assertEqual(artifact_of["hipcub"], "prim")
-        self.assertEqual(artifact_of["rocblas"], "blas")
-        # base/artifact.toml (unsuffixed) resolves rocm-core.
-        self.assertEqual(artifact_of["rocm-core"], "base")
+    def test_level_4_stops_at_one_hop(self) -> None:
+        # rocroller -> hipblaslt (direct). miopen/rocblas are INDIRECT (via
+        # hipblaslt) so a level-4 walk must NOT reach them.
+        result = get_subprojects_to_test(["rocroller"], self.root, level=4)
+        self.assertEqual(result, {"rocroller", "hipblaslt"})
+        self.assertNotIn("miopen", result)
 
+    def test_level_3_selects_transitive_closure(self) -> None:
+        # rocroller -> hipblaslt -> {miopen, rocblas}. Level 3 reaches all of them.
+        result = get_subprojects_to_test(["rocroller"], self.root, level=3)
+        self.assertEqual(result, {"rocroller", "hipblaslt", "miopen", "rocblas"})
 
-class TestSameStageCut(_FixtureTestCase):
-    def test_selects_same_stage_consumer(self) -> None:
-        # rocblas -> hipblas, rocsolver; all in stage math-libs.
-        result = get_subprojects_to_test(["rocblas"], self.root)
-        self.assertIn("rocblas", result)
-        self.assertIn("hipblas", result)
-        self.assertIn("rocsolver", result)
+    def test_default_level_equals_level_4(self) -> None:
+        # No policy table for hipblaslt -> default level 4.
+        default = get_subprojects_to_test(["hipblaslt"], self.root)
+        explicit = get_subprojects_to_test(["hipblaslt"], self.root, level=4)
+        self.assertEqual(default, explicit)
 
-    def test_cross_stage_consumer_is_cut(self) -> None:
-        # rocr-runtime (stage debug-tools) -> rocgdb (also debug-tools) is kept,
-        # but a cross-stage consumer must NOT be pulled in. Here rocm-core (base
-        # fanout) is the fanout case; for the plain same-stage cut we assert that
-        # amd-dbgapi's consumers stay within its own stage and no math-libs
-        # subproject leaks in.
-        result = get_subprojects_to_test(["amd-dbgapi"], self.root)
-        self.assertIn("rocgdb", result)
-        self.assertIn("rocr-debug-agent", result)
-        self.assertNotIn("rocprim", result)
-        self.assertNotIn("hipblas", result)
-
-    def test_leaf_selects_only_itself(self) -> None:
-        result = get_subprojects_to_test(["hipblas"], self.root)
-        self.assertEqual(result, {"hipblas"})
-
-
-class TestFanoutAll(_FixtureTestCase):
-    def test_base_fanout_selects_all_consumers_cross_stage(self) -> None:
-        # rocm-core is on artifact `base` (test_fanout_all=true). Its graph
-        # consumers span BOTH stages: rocprim (math-libs) + rocgdb (debug-tools).
-        # Fanout bypasses the same-stage cut, so both must be selected.
-        result = get_subprojects_to_test(["rocm-core"], self.root)
-        self.assertEqual(result, {"rocm-core", "rocprim", "rocgdb"})
-
-
-class TestFlatArtifactInclude(_FixtureTestCase):
-    def test_prim_flat_include_applies_to_hipcub(self) -> None:
-        # Flat [artifacts.prim] test_include = [rocprim] applies to hipcub.
-        result = get_subprojects_to_test(["hipcub"], self.root)
-        self.assertIn("rocprim", result)
-
-    def test_prim_flat_include_applies_to_rocthrust(self) -> None:
-        # ...and to rocthrust (same artifact, same flat include — no drift).
-        result = get_subprojects_to_test(["rocthrust"], self.root)
-        self.assertIn("rocprim", result)
-
-
-class TestOpenItemA(_FixtureTestCase):
-    """Per-subproject sub-tables must not over-apply to siblings."""
-
-    def test_rocsolver_include_does_not_pull_rocroller_include(self) -> None:
-        # rocsolver sub-table -> hipblas; rocroller sub-table -> hipblaslt.
-        # A rocsolver change must include hipblas but NOT hipblaslt.
-        result = get_subprojects_to_test(["rocsolver"], self.root)
-        self.assertIn("hipblas", result)
-        self.assertNotIn("hipblaslt", result)
-
-    def test_rocroller_include_does_not_pull_rocsolver_include(self) -> None:
-        # The reverse: a rocroller change must include hipblaslt but NOT hipblas.
-        result = get_subprojects_to_test(["rocroller"], self.root)
-        self.assertIn("hipblaslt", result)
-        self.assertNotIn("hipblas", result)
-
-    def test_sibling_without_override_gets_no_include(self) -> None:
-        # rocblas is in artifact `blas` but has no sub-table; it must not inherit
-        # rocsolver's or rocroller's includes. Its selections come only from the
-        # same-stage cut (hipblas, rocsolver).
-        result = get_subprojects_to_test(["rocblas"], self.root)
-        self.assertNotIn("hipblaslt", result)
-
-
-class TestExclude(unittest.TestCase):
-    """test_exclude is applied LAST and is order-independent."""
-
-    def _fixture_with_exclude(self) -> Path:
-        root = _make_fixture()
-        # Add a rocblas sub-table that excludes rocsolver even though it is a
-        # same-stage consumer, and hipcub's flat prim include is unaffected.
-        topo = (root / "BUILD_TOPOLOGY.toml").read_text()
-        topo += (
-            "\n[artifacts.blas.test_overrides.rocblas]\n"
-            'test_exclude = ["rocsolver"]\n'
+    def test_levels_1_and_2_walk_transitively_like_level_3(self) -> None:
+        # Levels 1 and 2 are stricter DEFCON tiers with no separate test-tier
+        # output yet, so they walk transitively (same depth as level 3). This
+        # keeps the accepted range [1, 5] and the engine in agreement — a level
+        # the validator blesses is never silently coerced to the default.
+        transitive = get_subprojects_to_test(["rocroller"], self.root, level=3)
+        self.assertEqual(
+            get_subprojects_to_test(["rocroller"], self.root, level=2), transitive
         )
-        (root / "BUILD_TOPOLOGY.toml").write_text(topo)
-        return root
-
-    def test_exclude_applied_last(self) -> None:
-        root = self._fixture_with_exclude()
-        try:
-            result = get_subprojects_to_test(["rocblas"], root)
-            self.assertIn("rocblas", result)
-            self.assertIn("hipblas", result)
-            # rocsolver is a same-stage consumer but excluded LAST.
-            self.assertNotIn("rocsolver", result)
-        finally:
-            shutil.rmtree(root, ignore_errors=True)
-
-    def test_exclude_order_independent_across_changed_projects(self) -> None:
-        # rocblas's sub-table excludes rocsolver. When rocblas AND rocsolver
-        # change together, rocsolver is added by TWO independent paths (it is a
-        # same-stage consumer of rocblas AND a changed project selecting itself),
-        # yet the exclude — applied LAST in a single pass over all changed
-        # projects — must still win regardless of input order. This guards
-        # against exclude being silently undone by another changed project.
-        root = self._fixture_with_exclude()
-        try:
-            ab = get_subprojects_to_test(["rocblas", "rocsolver"], root)
-            ba = get_subprojects_to_test(["rocsolver", "rocblas"], root)
-            self.assertEqual(ab, ba)
-            self.assertNotIn("rocsolver", ab)
-            # hipblas is still selected (rocblas same-stage consumer + rocsolver
-            # sub-table include), proving only rocsolver was pruned.
-            self.assertIn("hipblas", ab)
-        finally:
-            shutil.rmtree(root, ignore_errors=True)
+        self.assertEqual(
+            get_subprojects_to_test(["rocroller"], self.root, level=1), transitive
+        )
 
 
+# ---------------------------------------------------------------------------
+# amdsmi -> rdc cross-stage regression (the reviewer's motivating false-green).
+# ---------------------------------------------------------------------------
+class TestAmdsmiRdcRegression(_FixtureTestCase):
+    def test_amdsmi_selects_rdc_at_level_4(self) -> None:
+        # A change to amdsmi selects rdc even though (in the real tree) they are
+        # in different build stages. The superseded same-stage cut dropped rdc;
+        # hop-distance selection keeps it. This is the exact false-green class.
+        result = get_subprojects_to_test(["amdsmi"], self.root, level=4)
+        self.assertIn("rdc", result)
+
+    def test_amdsmi_selects_rdc_at_default_level(self) -> None:
+        # And at the default level too (defends the default path, not just an
+        # explicit --level 4).
+        result = get_subprojects_to_test(["amdsmi"], self.root, level=4)
+        self.assertIn("rdc", result)
+
+    def test_rdc_is_a_direct_consumer_not_transitive(self) -> None:
+        # rdc is reached at ONE hop, proving it is a direct edge the same-stage
+        # cut would have dropped, not an artifact of a transitive walk.
+        one_hop = get_subprojects_to_test(["amdsmi"], self.root, level=4)
+        self.assertIn("rdc", one_hop)
+
+
+# ---------------------------------------------------------------------------
+# Policy `level` honored: the changed component's own table sets the walk depth.
+# ---------------------------------------------------------------------------
+class TestPolicyLevelHonored(_FixtureTestCase):
+    def test_level_3_component_walks_transitively(self) -> None:
+        # rocm-core is level=3 in the policy -> transitive closure over the graph.
+        result = get_subprojects_to_test(["rocm-core"], self.root)
+        self.assertEqual(
+            result,
+            {
+                "rocm-core",
+                "amdsmi",
+                "rocroller",
+                "rdc",
+                "hipblaslt",
+                "miopen",
+                "rocblas",
+            },
+        )
+
+    def test_default_component_walks_one_hop(self) -> None:
+        # rocroller has no policy table -> default level 4 -> one hop only.
+        result = get_subprojects_to_test(["rocroller"], self.root)
+        self.assertEqual(result, {"rocroller", "hipblaslt"})
+
+    def test_cli_level_overrides_policy_level(self) -> None:
+        # rocm-core policy is level 3, but --level 5 must win (self only).
+        result = get_subprojects_to_test(["rocm-core"], self.root, level=5)
+        self.assertEqual(result, {"rocm-core"})
+
+
+# ---------------------------------------------------------------------------
+# test_include additive (incl. a test-only value not in the graph).
+# ---------------------------------------------------------------------------
+class TestIncludeAdditive(_FixtureTestCase):
+    def test_include_adds_test_only_value_absent_from_graph(self) -> None:
+        # amdsmi's test_include = ["hip-tests"]; hip-tests is NOT a graph key,
+        # proving include values need not be graph keys.
+        self.assertNotIn("hip-tests", _GRAPH)
+        result = get_subprojects_to_test(["amdsmi"], self.root)
+        self.assertIn("hip-tests", result)
+
+    def test_include_is_unioned_onto_walk(self) -> None:
+        # The walk result is preserved AND the include is added.
+        result = get_subprojects_to_test(["amdsmi"], self.root)
+        self.assertIn("amdsmi", result)  # self (from walk)
+        self.assertIn("rdc", result)  # direct consumer (from walk)
+        self.assertIn("hip-tests", result)  # from include
+
+
+# ---------------------------------------------------------------------------
+# test_exclude subtractive-LAST + order-independent + non-vacuous.
+# ---------------------------------------------------------------------------
+class TestExcludeSubtractiveLast(_FixtureTestCase):
+    def test_exclude_prunes_a_project_the_walk_would_select(self) -> None:
+        # amdsmi is level=3; the transitive walk reaches rocblas (via hipblaslt),
+        # but test_exclude=["rocblas"] prunes it LAST. Non-vacuous: hipblaslt (the
+        # path to rocblas) IS still selected, so only rocblas was removed.
+        result = get_subprojects_to_test(["amdsmi"], self.root)
+        self.assertIn("hipblaslt", result)
+        self.assertNotIn("rocblas", result)
+
+    def test_exclude_order_independent(self) -> None:
+        # amdsmi excludes rocblas. When amdsmi AND rocblas change together,
+        # rocblas is added by TWO paths (self-selection of the changed project
+        # `rocblas`, and amdsmi's transitive walk), yet exclude — applied LAST in
+        # one pass — must still win regardless of input order.
+        ab = get_subprojects_to_test(["amdsmi", "rocblas"], self.root)
+        ba = get_subprojects_to_test(["rocblas", "amdsmi"], self.root)
+        self.assertEqual(ab, ba)
+        self.assertNotIn("rocblas", ab)
+        # hipblaslt still present, proving only rocblas was pruned.
+        self.assertIn("hipblaslt", ab)
+
+
+# ---------------------------------------------------------------------------
+# Name normalization + projects/ prefix strip + comma-split input (CLI).
+# ---------------------------------------------------------------------------
 class TestNameNormalization(_FixtureTestCase):
-    def test_hyphenated_names(self) -> None:
-        result = get_subprojects_to_test(["amd-dbgapi"], self.root)
+    def test_case_insensitive_input(self) -> None:
+        result = get_subprojects_to_test(["AMDSMI"], self.root, level=4)
+        self.assertIn("amdsmi", result)
+        self.assertIn("rdc", result)
+
+    def test_hyphenated_name(self) -> None:
+        result = get_subprojects_to_test(["amd-dbgapi"], self.root, level=4)
         self.assertIn("amd-dbgapi", result)
         self.assertIn("rocgdb", result)
-        self.assertIn("rocr-debug-agent", result)
-        self.assertIn("rocr-debug-agent-tests", result)
 
     def test_mixed_case_hyphenated_normalized(self) -> None:
-        # ROCR-Runtime -> lowercased rocr-runtime, whose same-stage consumer is
-        # rocgdb.
-        result = get_subprojects_to_test(["ROCR-Runtime"], self.root)
-        self.assertIn("rocr-runtime", result)
+        result = get_subprojects_to_test(["Amd-DbgApi"], self.root, level=4)
+        self.assertIn("amd-dbgapi", result)
         self.assertIn("rocgdb", result)
 
-    def test_case_insensitive_input(self) -> None:
-        result = get_subprojects_to_test(["rocBLAS"], self.root)
-        self.assertIn("rocblas", result)
-        self.assertIn("hipblas", result)
+
+class TestCliInputParsing(_FixtureTestCase):
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--therock-dir", str(self.root), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_projects_prefix_stripped(self) -> None:
+        proc = self._run("--changed-projects", "projects/amdsmi", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        self.assertIn("amdsmi", projects)
+        self.assertIn("rdc", projects)
+
+    def test_comma_separated_input(self) -> None:
+        proc = self._run("--changed-projects", "amdsmi,rocroller", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        self.assertIn("amdsmi", projects)
+        self.assertIn("rdc", projects)  # amdsmi direct consumer
+        self.assertIn("rocroller", projects)
+        self.assertIn("hipblaslt", projects)  # rocroller direct consumer
+
+    def test_empty_changed_projects_outputs_wildcard(self) -> None:
+        proc = self._run()
+        self.assertEqual(proc.stdout.strip(), "*")
+
+    def test_empty_flag_outputs_wildcard(self) -> None:
+        proc = self._run("--changed-projects")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), "*")
+
+    def test_format_list(self) -> None:
+        proc = self._run(
+            "--changed-projects", "amdsmi", "--level", "4", "--format", "list"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        lines = proc.stdout.strip().splitlines()
+        self.assertIn("amdsmi", lines)
+        self.assertIn("rdc", lines)
 
 
+# ---------------------------------------------------------------------------
+# Unknown changed project warns and selects only itself.
+# ---------------------------------------------------------------------------
 class TestUnknownProject(_FixtureTestCase):
     def test_unknown_project_selects_only_itself(self) -> None:
-        result = get_subprojects_to_test(["nonexistent-lib"], self.root)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            result = get_subprojects_to_test(["nonexistent-lib"], self.root)
         self.assertEqual(result, {"nonexistent-lib"})
+        self.assertIn("unrecognized project", buf.getvalue())
 
     def test_unknown_project_warns_via_cli(self) -> None:
         proc = subprocess.run(
@@ -414,45 +365,10 @@ class TestUnknownProject(_FixtureTestCase):
         self.assertIn("totallybogus", proc.stderr)
 
 
-class TestCliBehaviors(_FixtureTestCase):
-    def _run(self, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            [sys.executable, str(SCRIPT), "--therock-dir", str(self.root), *args],
-            capture_output=True,
-            text=True,
-        )
-
-    def test_comma_separated_input(self) -> None:
-        proc = self._run("--changed-projects", "rocblas,hipcub")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        projects = json.loads(proc.stdout.strip())
-        self.assertIn("rocblas", projects)
-        self.assertIn("hipblas", projects)  # rocblas same-stage consumer
-        self.assertIn("rocprim", projects)  # hipcub flat include
-
-    def test_projects_prefix_stripped(self) -> None:
-        proc = self._run("--changed-projects", "projects/rocblas")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        projects = json.loads(proc.stdout.strip())
-        self.assertIn("rocblas", projects)
-        self.assertIn("hipblas", projects)
-
-    def test_empty_changed_projects_outputs_wildcard(self) -> None:
-        proc = self._run()
-        self.assertEqual(proc.stdout.strip(), "*")
-
-    def test_empty_flag_outputs_wildcard(self) -> None:
-        proc = self._run("--changed-projects")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(proc.stdout.strip(), "*")
-
-    def test_format_list(self) -> None:
-        proc = self._run("--changed-projects", "hipcub", "--format", "list")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        lines = proc.stdout.strip().splitlines()
-        self.assertIn("hipcub", lines)
-        self.assertIn("rocprim", lines)
-
+# ---------------------------------------------------------------------------
+# --gha-output writes projects_to_test=... to $GITHUB_OUTPUT.
+# ---------------------------------------------------------------------------
+class TestGhaOutput(_FixtureTestCase):
     def test_gha_output_format(self) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".txt"
@@ -468,7 +384,9 @@ class TestCliBehaviors(_FixtureTestCase):
                     "--therock-dir",
                     str(self.root),
                     "--changed-projects",
-                    "rocblas",
+                    "amdsmi",
+                    "--level",
+                    "4",
                     "--gha-output",
                 ],
                 capture_output=True,
@@ -478,46 +396,191 @@ class TestCliBehaviors(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             content = Path(output_file).read_text()
             self.assertIn("projects_to_test=", content)
-            self.assertIn("rocblas", content)
+            self.assertIn("amdsmi", content)
+            self.assertIn("rdc", content)
             self.assertIn(",", content)  # comma-separated, not space
         finally:
             os.unlink(output_file)
 
 
-class TestListSubprojects(_FixtureTestCase):
-    def test_list_names(self) -> None:
+# ---------------------------------------------------------------------------
+# --validate-policies: passes on valid fixture; fails on bogus KEY; does NOT
+# fail on include VALUE absent from graph (the corrected rule).
+# ---------------------------------------------------------------------------
+class TestValidatePolicies(_FixtureTestCase):
+    def test_valid_fixture_passes(self) -> None:
+        ok, messages = validate_policies(self.root)
+        self.assertTrue(ok, "\n".join(messages))
+        self.assertTrue(any(m.startswith("OK:") for m in messages))
+
+    def test_test_only_include_value_does_not_fail(self) -> None:
+        # hip-tests / rocgdb-cpu are test-only include VALUES absent from the
+        # graph. Per the corrected rule they must NOT fail validation; they are
+        # noted informationally.
+        ok, messages = validate_policies(self.root)
+        self.assertTrue(ok)
+        joined = "\n".join(messages)
+        self.assertIn("hip-tests", joined)
+        self.assertIn("rocgdb-cpu", joined)
+
+    def test_bogus_component_key_fails(self) -> None:
+        bogus = _POLICIES + "\n[component.does-not-exist]\n"
+        root = _make_fixture(policies=bogus)
+        try:
+            ok, messages = validate_policies(root)
+            self.assertFalse(ok)
+            joined = "\n".join(messages)
+            self.assertIn("does-not-exist", joined)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_out_of_range_level_fails(self) -> None:
+        bad = _POLICIES + "\n[component.miopen]\nlevel = 9\n"
+        root = _make_fixture(policies=bad)
+        try:
+            ok, messages = validate_policies(root)
+            self.assertFalse(ok)
+            self.assertIn("outside [1, 5]", "\n".join(messages))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_level_2_is_accepted(self) -> None:
+        # Level 2 is within the engine's implemented range (_LEVEL_TO_DEPTH), so
+        # validation must accept it — the accepted range is derived from the
+        # engine, never a hardcoded literal that could drift from it.
+        good = _POLICIES + "\n[component.miopen]\nlevel = 2\n"
+        root = _make_fixture(policies=good)
+        try:
+            ok, messages = validate_policies(root)
+            self.assertTrue(ok, "\n".join(messages))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_non_integer_level_rejected_cleanly(self) -> None:
+        # A float/string level is a typo. _load_policies raises a clear ValueError
+        # instead of truncating (4.9 -> 4) or emitting a raw int() traceback.
+        bad = _POLICIES + "\n[component.miopen]\nlevel = 4.9\n"
+        root = _make_fixture(policies=bad)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                validate_policies(root)
+            self.assertIn("non-integer level", str(ctx.exception))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_validate_cli_passes(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--therock-dir",
+                str(self.root),
+                "--validate-policies",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("OK:", proc.stdout)
+
+    def test_validate_cli_fails_on_bogus_key(self) -> None:
+        bogus = _POLICIES + "\n[component.does-not-exist]\n"
+        root = _make_fixture(policies=bogus)
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--validate-policies",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("does-not-exist", proc.stderr)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# --explain: names level, walk set, includes (test-only marked), excludes, final
+# set — and the final set matches the actual selection (explain can't drift).
+# ---------------------------------------------------------------------------
+class TestExplain(_FixtureTestCase):
+    def test_explain_reports_level_walk_include_exclude_final(self) -> None:
+        text = explain_component("amdsmi", self.root)
+        self.assertIn("Explain: amdsmi", text)
+        self.assertIn("level:", text)
+        self.assertIn("graph walk:", text)
+        self.assertIn("test_include:", text)
+        self.assertIn("test_exclude:", text)
+        self.assertIn("final:", text)
+
+    def test_explain_marks_test_only_include(self) -> None:
+        text = explain_component("amdsmi", self.root)
+        # hip-tests is not a graph key -> marked (test-only).
+        self.assertIn("hip-tests (test-only)", text)
+
+    def test_explain_names_exclude(self) -> None:
+        text = explain_component("amdsmi", self.root)
+        # test_exclude=["rocblas"] appears in the excludes line.
+        exclude_line = [line for line in text.splitlines() if "test_exclude:" in line][
+            0
+        ]
+        self.assertIn("rocblas", exclude_line)
+
+    def test_explain_final_matches_selection(self) -> None:
+        # The `final:` line must equal get_subprojects_to_test — explain cannot
+        # drift from real selection.
+        text = explain_component("amdsmi", self.root)
+        final_line = [line for line in text.splitlines() if "final:" in line][0]
+        final_set = {
+            s.strip() for s in final_line.split("final:")[1].split(",") if s.strip()
+        }
+        selection = get_subprojects_to_test(["amdsmi"], self.root)
+        self.assertEqual(final_set, selection)
+
+    def test_explain_reports_level_3_walk_depth(self) -> None:
+        text = explain_component("rocm-core", self.root)
+        self.assertIn("level:        3", text)
+        self.assertIn("unbounded", text)
+
+
+# ---------------------------------------------------------------------------
+# --list-subprojects works with NO build/ dir (finding #8): committed graph is
+# read from --therock-dir/test_tools/, not build/.
+# ---------------------------------------------------------------------------
+class TestListSubprojectsNoBuildDir(_FixtureTestCase):
+    def test_no_build_dir_present(self) -> None:
+        # The fixture root has NO build/ directory — assert it stays that way.
+        self.assertFalse((self.root / "build").exists())
+
+    def test_list_names_from_clean_therock_dir(self) -> None:
         names = list_subprojects(self.root, show_deps=False)
-        self.assertIn("rocblas", names)
-        self.assertIn("rocprim", names)
+        self.assertEqual(set(names), set(_GRAPH.keys()))
 
     def test_list_with_deps(self) -> None:
         deps = list_subprojects(self.root, show_deps=True)
-        self.assertIn("hipblas", deps["rocblas"])
-        self.assertIn("rocsolver", deps["rocblas"])
-        self.assertEqual(deps["hipblas"], "empty")
+        self.assertIn("rdc", deps["amdsmi"])
+        self.assertEqual(deps["rdc"], "empty")
 
-
-class TestRealTopologyStageMap(unittest.TestCase):
-    """Integration: the committed base/artifact.toml stage-resolution fix.
-
-    This reads the REAL committed BUILD_TOPOLOGY.toml + artifact tomls (no cmake
-    configure, no consumer graph). It asserts that the four foundational deps
-    packaged by the unsuffixed base/artifact.toml resolve a build stage — the
-    gap the tool fixes by special-casing base/artifact.toml.
-    """
-
-    def test_foundational_deps_resolve_a_stage(self) -> None:
-        stage_of, artifact_of = _build_subproject_maps(THEROCK_DIR)
-        for sub in ("rocm-core", "rocm-cmake", "half", "rocprofiler-register"):
-            self.assertEqual(
-                artifact_of.get(sub),
-                "base",
-                f"{sub} should map to artifact 'base'",
-            )
-            self.assertIsNotNone(
-                stage_of.get(sub),
-                f"{sub} should resolve a build stage via artifact 'base'",
-            )
+    def test_list_subprojects_cli_no_build_dir(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--therock-dir",
+                str(self.root),
+                "--list-subprojects",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        names = json.loads(proc.stdout)
+        self.assertEqual(set(names), set(_GRAPH.keys()))
 
 
 if __name__ == "__main__":

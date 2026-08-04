@@ -4,41 +4,44 @@
 """
 Compute subproject test dependencies from the consumer graph.
 
-The consumer graph (build/therock_consumer_graph.json) is generated at CMake
-configure time by therock_emit_consumer_graph(). It is a dynamic build artifact,
-never committed: CI change-detection jobs run an on-demand `cmake` configure into
-build/ before invoking this tool. If the graph is missing, run a configure first.
+The consumer graph is a flat reverse-dependency map,
+{ subproject: { consumers: [...] } }, produced by therock_emit_consumer_graph()
+and read from disk by this tool. Each subproject's `consumers` are the projects
+that directly depend on it.
 
 Algorithm
 ---------
-1. Load the consumer graph: { subproject: { consumers: [...] } } from
-   build/therock_consumer_graph.json.
-2. Derive each subproject's build stage from the committed artifact descriptors
-   (artifact-*.toml plus the unsuffixed base/artifact.toml) + BUILD_TOPOLOGY.toml
-   (no CMake configure required for the stage map itself).
-3. For each changed subproject, add its same-stage direct consumers.
-4. Apply include/exclude/fanout overrides read from BUILD_TOPOLOGY.toml (the
-   per-artifact test_include / test_exclude / test_fanout_all keys and the
-   per-subproject [artifacts.<name>.test_overrides.<subproject>] sub-tables).
+1. Load the consumer graph.
+2. For each changed subproject, walk its `consumers` edges by HOP DISTANCE to a
+   depth set by the component's policy level (see the level ladder below). Build
+   stage is NOT consulted anywhere in selection — a change to `amdsmi` selects
+   `rdc` (its direct consumer) regardless of which build stage each lives in.
+3. UNION the per-subproject walk results across all changed subprojects.
+4. Apply include/exclude policy: union in `test_include`, then subtract
+   `test_exclude` LAST so the result is order-independent.
 
-"Same-stage" means the consumer is in the same BUILD_TOPOLOGY build stage as
-the changed subproject. Cross-stage consumers are universal deps (ROCR-Runtime,
-hip-clr, compiler); enumerating them here would pull in the whole test tree, so
-they are cut. Where a specific cross-stage or test-only coupling must still be
-tested, it is listed explicitly via a test_include override in BUILD_TOPOLOGY.toml
-(see the overrides for hip-clr / ROCR-Runtime). Foundational deps that have no
-derivable stage (or whose consumers span every stage) rely on the
-test_fanout_all override on artifact "base".
+Level ladder (walk depth over consumer edges)
+---------------------------------------------
+* Level 5 -> depth 0: self only.
+* Level 4 -> depth 1: self + direct consumers (one hop). The default.
+* Level 3 -> unbounded: self + transitive consumers (full BFS closure).
+
+The per-component level, plus test_include/test_exclude, come from the
+hand-maintained `test_tools/test_policies.toml`. A component with no table there
+uses the default level 4 (depth 1) with no include/exclude. See the schema
+contract in docs/development/test_selection_schemas.md.
 
 Example
 -------
 $ python test_tools/determine_rocm_test_dependencies.py --changed-projects rocSPARSE
-["hipsparse", "rocsparse", "rocsolver", "hipsolver"]
+["hipsparse", "rocsolver", "rocsparse"]
 """
 
 import argparse
 import json
 import sys
+import tomllib
+from collections import deque
 from pathlib import Path
 
 sys.path.insert(
@@ -46,190 +49,186 @@ sys.path.insert(
 )
 from github_actions_api import gha_set_output
 
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[1] / "build_tools" / "_therock_utils")
-)
+# Level -> BFS walk depth over `consumers` edges. depth 0 = self only,
+# depth 1 = self + direct consumers, None = unbounded (transitive closure).
+# Levels 1 and 2 are the "stricter/broader" tiers on the DEFCON ladder; until a
+# separate test-tier output exists they walk transitively (same depth as 3), so
+# the accepted policy range [1, 5] and the engine never disagree.
+_DEFAULT_LEVEL = 4
+_LEVEL_TO_DEPTH: dict[int, int | None] = {5: 0, 4: 1, 3: None, 2: None, 1: None}
+
+# Walk depth -> (label, human description). Single source of truth for how a
+# depth is rendered in --explain, keyed on the values _LEVEL_TO_DEPTH produces.
+_DEPTH_DESCRIPTION: dict[int | None, tuple[str, str]] = {
+    0: ("0", "self only"),
+    1: ("1", "self + direct consumers"),
+    None: ("unbounded", "self + transitive consumers"),
+}
 
 _CONSUMER_GRAPH_NAME = "therock_consumer_graph.json"
+_TEST_POLICIES_NAME = "test_policies.toml"
+
+# The committed consumer graph lives next to this tool in test_tools/. It is a
+# generated-only artifact (emitted by therock_emit_consumer_graph()) that is
+# committed to the repo and kept honest by the consumer_graph_drift.yml CI job.
+# Reading it script-relative lets --list-subprojects and selection work from a
+# clean checkout with no build/ directory.
+_TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
 
-def _load_consumer_graph(therock_dir: Path) -> dict:
-    """Load the dynamic consumer graph JSON from build/.
+def _test_tools_file(name: str, therock_dir: Path | None) -> Path:
+    """Resolve a committed file under test_tools/.
 
-    The graph is produced by an on-demand `cmake` configure
-    (therock_emit_consumer_graph). It is never committed; if it is missing the
-    caller must run a configure first.
+    Defaults to the copy committed next to this tool. A `--therock-dir` override
+    points at that directory's test_tools/ copy instead, so callers can select
+    against an alternate checkout.
     """
-    built = therock_dir / "build" / _CONSUMER_GRAPH_NAME
-    if not built.exists():
+    if therock_dir is None:
+        return _TEST_TOOLS_DIR / name
+    return Path(therock_dir) / "test_tools" / name
+
+
+def _consumer_graph_path(therock_dir: Path | None) -> Path:
+    """Resolve the committed consumer graph path (test_tools/<graph>.json)."""
+    return _test_tools_file(_CONSUMER_GRAPH_NAME, therock_dir)
+
+
+def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
+    """Load the committed consumer graph JSON.
+
+    The graph is committed at test_tools/therock_consumer_graph.json and read
+    directly — no cmake configure, no source fetch. Its freshness is guaranteed
+    by the consumer_graph_drift.yml CI job, which regenerates it and fails on any
+    difference.
+    """
+    graph_path = _consumer_graph_path(therock_dir)
+    if not graph_path.exists():
         raise FileNotFoundError(
-            f"Consumer graph not found at {built}.\n"
-            "It is a dynamic build artifact generated by cmake configure. Run a "
-            "configure first, e.g. `cmake -B build -GNinja -DTHEROCK_ENABLE_ALL=ON "
-            "...`, which writes build/therock_consumer_graph.json."
+            f"Consumer graph not found at {graph_path}.\n"
+            "It is a committed, generated artifact. If it is missing, regenerate "
+            "it with a configure (`cmake -B build -GNinja -DTHEROCK_ENABLE_ALL=ON "
+            "...`) and copy build/therock_consumer_graph.json to "
+            "test_tools/therock_consumer_graph.json."
         )
-    return json.loads(built.read_text())
+    return json.loads(graph_path.read_text())
 
 
-def _stage_path_subproject(component_key: str) -> str | None:
-    """Extract the subproject name from an artifact-*.toml component key.
+def _test_policies_path(therock_dir: Path | None) -> Path:
+    """Resolve the hand-maintained test-policy path (test_tools/<policies>.toml)."""
+    return _test_tools_file(_TEST_POLICIES_NAME, therock_dir)
 
-    Component keys are stage-relative paths such as "math-libs/rocRAND/stage" or
-    "dctools/rdc/stage/portable-rdc". The subproject is the path segment directly
-    before the "stage" segment. Returns None if there is no "stage" segment.
+
+def _load_policies(therock_dir: Path | None = None) -> dict[str, dict]:
+    """Return per-component policy overrides { subproject -> policy }.
+
+    Reads the hand-maintained `test_tools/test_policies.toml` — the small,
+    human-reviewed escape-hatch file that layers explicit test intent on top of
+    the generated consumer graph. Each `[component.<name>]` table becomes a
+    normalized, lowercased policy
+    { "level": int, "test_include": [...], "test_exclude": [...] } with sensible
+    defaults (missing level -> 4, missing lists -> []). See the schema contract
+    in docs/development/test_selection_schemas.md.
+
+    A missing file yields empty policies (so every component uses the default
+    level and no include/exclude) rather than crashing — useful for clean-checkout
+    introspection, though the file is committed and normally present.
     """
-    parts = component_key.split("/")
-    try:
-        stage_idx = parts.index("stage")
-    except ValueError:
-        return None
-    if stage_idx == 0:
-        return None
-    return parts[stage_idx - 1].lower()
+    policies_path = _test_policies_path(therock_dir)
+    if not policies_path.exists():
+        return {}
 
-
-def _iter_artifact_tomls(therock_dir: Path):
-    """Yield (artifact_name, toml_path) for every artifact descriptor.
-
-    Scans the suffixed `artifact-*.toml` descriptors AND the unsuffixed
-    `base/artifact.toml` (artifact name "base"). The plain glob misses
-    base/artifact.toml, which is why rocm-core/rocm-cmake/rocm-half/
-    rocprofiler-register never resolved a stage before; including it here fixes
-    that gap so those foundational deps map to the stage owning artifact "base".
-    """
-    for toml_path in therock_dir.rglob("artifact-*.toml"):
-        if "/build/" in toml_path.as_posix():
-            continue
-        yield toml_path.stem.removeprefix("artifact-"), toml_path
-
-    base_toml = therock_dir / "base" / "artifact.toml"
-    if base_toml.exists():
-        yield "base", base_toml
-
-
-def _build_subproject_maps(
-    therock_dir: Path,
-) -> tuple[dict[str, str], dict[str, str]]:
-    """Return (subproject -> build_stage, subproject -> artifact) maps.
-
-    Both are derived from the committed artifact descriptors + BUILD_TOPOLOGY.toml
-    with no CMake metadata and no configure step:
-      * subproject -> artifact: the artifact-*.toml (and base/artifact.toml)
-        `components."<path>/stage"` keys; the artifact name is the file stem minus
-        the "artifact-" prefix (or "base" for base/artifact.toml).
-      * artifact -> build_stage: BuildTopology.get_stage_for_artifact().
-
-    Subprojects that appear in no descriptor (foundation libs, third-party host
-    deps) have no derivable stage/artifact and are omitted; callers treat a
-    missing stage as "do not apply the same-stage cut" and defer to overrides.
-    """
-    try:
-        import tomllib
-    except ModuleNotFoundError:  # Python <= 3.10
-        import tomli as tomllib
-
-    try:
-        from build_topology import get_topology
-    except ImportError:
-        return {}, {}
-
-    try:
-        topology = get_topology(therock_dir / "BUILD_TOPOLOGY.toml")
-    except FileNotFoundError:
-        return {}, {}
-
-    subproject_to_stage: dict[str, str] = {}
-    subproject_to_artifact: dict[str, str] = {}
-    for artifact_name, toml_path in _iter_artifact_tomls(therock_dir):
-        stage = topology.get_stage_for_artifact(artifact_name)
-        data = tomllib.loads(toml_path.read_text())
-        for entries in data.get("components", {}).values():
-            if not isinstance(entries, dict):
-                continue
-            for component_key in entries:
-                subproject = _stage_path_subproject(component_key)
-                if not subproject:
-                    continue
-                subproject_to_artifact.setdefault(subproject, artifact_name)
-                if stage:
-                    subproject_to_stage.setdefault(subproject, stage)
-    return subproject_to_stage, subproject_to_artifact
-
-
-def _resolve_overrides(
-    changed: list[str],
-    artifact_of: dict[str, str],
-    topology,
-) -> dict[str, dict]:
-    """Resolve BUILD_TOPOLOGY overrides for each changed subproject.
-
-    Returns { subproject -> {test_include, test_exclude, test_fanout_all} } with
-    lowercased include/exclude lists. A changed subproject with no owning
-    artifact (or no topology) gets empty overrides.
-    """
-    resolved: dict[str, dict] = {}
-    for proj in changed:
-        artifact_name = artifact_of.get(proj)
-        if not artifact_name or topology is None:
-            resolved[proj] = {
-                "test_include": [],
-                "test_exclude": [],
-                "test_fanout_all": False,
-            }
-            continue
-        resolved[proj] = topology.get_test_overrides_for_subproject(
-            artifact_name, proj
+    raw = tomllib.loads(policies_path.read_text())
+    components = raw.get("component", {})
+    if not isinstance(components, dict):
+        raise ValueError(
+            "test_policies.toml: [component] must be a table of "
+            "[component.<name>] entries, not "
+            f"{type(components).__name__}"
         )
-    return resolved
+
+    policies: dict[str, dict] = {}
+    for name, body in components.items():
+        level = body.get("level", _DEFAULT_LEVEL)
+        # TOML gives an int for `level = 4`; anything else (float, string, bool)
+        # is a typo. Reject it here rather than truncating (4.9 -> 4) or raising a
+        # raw ValueError traceback from int(). `bool` is an int subclass, exclude it.
+        if not isinstance(level, int) or isinstance(level, bool):
+            raise ValueError(
+                f"test_policies.toml: component '{name}' has non-integer level "
+                f"{level!r}; level must be an integer in [1, 5]"
+            )
+        policies[name.lower()] = {
+            "level": level,
+            "test_include": [c.lower() for c in body.get("test_include", [])],
+            "test_exclude": [c.lower() for c in body.get("test_exclude", [])],
+        }
+    return policies
 
 
-def _get_topology(therock_dir: Path):
-    """Load BuildTopology or return None if unavailable."""
-    try:
-        from build_topology import get_topology
-    except ImportError:
-        return None
-    try:
-        return get_topology(therock_dir / "BUILD_TOPOLOGY.toml")
-    except FileNotFoundError:
-        return None
+def _level_for(policies: dict[str, dict], proj: str) -> int:
+    """Return the walk level for a component, defaulting to level 4."""
+    return policies.get(proj, {}).get("level", _DEFAULT_LEVEL)
 
 
-def _apply_overrides(
-    result: set, changed: list[str], overrides: dict[str, dict]
-) -> set:
-    """Apply include/exclude overrides for all changed projects in one pass.
+def _walk_consumers(graph: dict, start: str, max_depth: int | None) -> set[str]:
+    """BFS over `consumers` edges from `start`, bounded by `max_depth`.
 
-    Overrides are applied once, after all same-stage consumers have been
-    gathered, so exclude semantics are order-independent: an exclude for one
-    changed project is not silently undone by another changed project adding the
-    same consumer earlier or later in iteration. All includes are unioned first,
-    then all excludes are subtracted.
+    depth 0 = {start}; depth 1 = start + direct consumers; max_depth None =
+    unbounded transitive closure. Always includes `start` itself (so max_depth 0
+    yields {start} via the loop's depth guard). Build stage is never consulted.
+    """
+    seen = {start}
+    queue: deque[tuple[str, int]] = deque([(start, 0)])
+    while queue:
+        node, depth = queue.popleft()
+        if max_depth is not None and depth >= max_depth:
+            continue
+        for consumer in graph.get(node, {}).get("consumers", []):
+            if consumer not in seen:
+                seen.add(consumer)
+                queue.append((consumer, depth + 1))
+    return seen
+
+
+def _apply_policies(
+    result: set[str], changed: list[str], policies: dict[str, dict]
+) -> set[str]:
+    """Apply include (union) then exclude (subtract) for all changed projects.
+
+    Include/exclude are keyed on the changed subproject. Excludes are applied in
+    a second pass, after all includes, so exclude is order-independent: an
+    exclude for one changed project is not silently undone by another changed
+    project unioning the same consumer.
     """
     for proj in changed:
-        entry = overrides.get(proj, {})
-        result.update(entry.get("test_include", []))
+        result.update(policies.get(proj, {}).get("test_include", []))
     for proj in changed:
-        entry = overrides.get(proj, {})
-        result.difference_update(entry.get("test_exclude", []))
+        result.difference_update(policies.get(proj, {}).get("test_exclude", []))
     return result
 
 
 def get_subprojects_to_test(
-    changed_subprojects: list[str], therock_dir: Path | None = None
+    changed_subprojects: list[str],
+    therock_dir: Path | None = None,
+    level: int | None = None,
 ) -> set[str]:
-    """Return the set of subproject names (lowercase) to test."""
-    if therock_dir is None:
-        therock_dir = Path.cwd()
-    else:
-        therock_dir = Path(therock_dir)
+    """Return the set of subproject names (lowercase) to test.
 
+    For each changed subproject, walk its `consumers` edges by hop distance to
+    the depth set by its policy level, union across changed subprojects, then
+    apply test_include (union) and test_exclude (subtract, last).
+
+    `level` overrides the per-component level for ALL changed subprojects (used
+    for CLI/testing). When None, each component's level comes from its policy in
+    test_policies.toml (default 4).
+
+    When `therock_dir` is None the committed graph next to this tool is used, so
+    selection works from a clean checkout with no build/ directory.
+    """
     graph = _load_consumer_graph(therock_dir)
-    stage_of, artifact_of = _build_subproject_maps(therock_dir)
-    topology = _get_topology(therock_dir)
+    policies = _load_policies(therock_dir)
 
     changed_lower = [p.lower() for p in changed_subprojects]
-    overrides = _resolve_overrides(changed_lower, artifact_of, topology)
 
     # Warn on unrecognized projects (false-green typo guard).
     known = set(graph.keys())
@@ -241,50 +240,139 @@ def get_subprojects_to_test(
             file=sys.stderr,
         )
 
-    result = set(changed_lower)
+    result: set[str] = set()
     for proj in changed_lower:
-        entry = graph.get(proj, {})
-        consumers = entry.get("consumers", [])
+        proj_level = level if level is not None else _level_for(policies, proj)
+        max_depth = _LEVEL_TO_DEPTH.get(proj_level, _LEVEL_TO_DEPTH[_DEFAULT_LEVEL])
+        result |= _walk_consumers(graph, proj, max_depth)
 
-        # Foundational fan-out: a project whose owning artifact is flagged
-        # test_fanout_all in BUILD_TOPOLOGY selects ALL its graph consumers,
-        # bypassing the same-stage cut. This is the opt-in for stage-less
-        # foundational deps (rocm-cmake, rocm-core, ...) whose consumers span
-        # every stage and would otherwise be selected by nothing. It stays
-        # explicit per artifact: blanket-fanning every stage-less project would
-        # re-expand universal deps (hip-clr, therock-googletest) into the whole
-        # test tree.
-        if overrides.get(proj, {}).get("test_fanout_all"):
-            result.update(consumers)
-            continue
+    return _apply_policies(result, changed_lower, policies)
 
-        proj_stage = stage_of.get(proj)
 
-        # A stage-less project (proj_stage is None: foundational deps like
-        # rocm-core/rocm-cmake with no artifact descriptor) selects no consumers
-        # via the same-stage cut; its dependents are covered by an explicit
-        # test_fanout_all flag or test_include entries in BUILD_TOPOLOGY instead.
-        for consumer in consumers:
-            # Same-stage consumers only. Cross-stage deps (ROCR-Runtime, hip-clr,
-            # compiler) would pull in the whole test tree; specific cross-stage /
-            # test-only couplings that must run are listed as test_include
-            # overrides in BUILD_TOPOLOGY rather than enumerated here.
-            if proj_stage and stage_of.get(consumer) == proj_stage:
-                result.add(consumer)
+def explain_component(component: str, therock_dir: Path | None = None) -> str:
+    """Return a human-readable derivation of one component's test selection.
 
-    # Apply overrides once, after all same-stage consumers are gathered, so
-    # exclude is order-independent across multiple changed projects.
-    result = _apply_overrides(result, changed_lower, overrides)
+    Shows, for `component`, the fully resolved selection and how it was reached:
+    the effective policy `level` and resulting walk depth, the graph-walk (BFS)
+    result at that depth, the `test_include` values unioned in (marking any that
+    are test-only, i.e. not graph keys), the `test_exclude` values subtracted,
+    and the final selection set. Output is sorted/deterministic.
 
-    return result
+    The final set is computed by calling the real selection function
+    (`get_subprojects_to_test`) so `--explain` can never drift from what selection
+    actually computes. The graph-walk line is shown separately for insight into
+    how that final set was reached.
+    """
+    graph = _load_consumer_graph(therock_dir)
+    policies = _load_policies(therock_dir)
+
+    comp = component.lower()
+    known = set(graph.keys())
+
+    level = _level_for(policies, comp)
+    max_depth = _LEVEL_TO_DEPTH.get(level, _LEVEL_TO_DEPTH[_DEFAULT_LEVEL])
+    depth_label, depth_desc = _DEPTH_DESCRIPTION[max_depth]
+
+    include = policies.get(comp, {}).get("test_include", [])
+    exclude = policies.get(comp, {}).get("test_exclude", [])
+
+    walk = _walk_consumers(graph, comp, max_depth)
+    # Call the real selection so the final set cannot drift from CI.
+    final = get_subprojects_to_test([comp], therock_dir)
+
+    lines: list[str] = []
+    lines.append(f"Explain: {comp}")
+    if comp not in known:
+        lines.append(
+            f"  WARNING: '{comp}' is not a consumer-graph key; walk is self-only."
+        )
+    lines.append(f"  level:        {level} (walk depth {depth_label}: {depth_desc})")
+    lines.append("  graph walk:   " + ", ".join(sorted(walk)))
+    if include:
+        marked = [f"{v} (test-only)" if v not in known else v for v in sorted(include)]
+        lines.append("  test_include: " + ", ".join(marked))
+    else:
+        lines.append("  test_include: (none)")
+    if exclude:
+        lines.append("  test_exclude: " + ", ".join(sorted(exclude)))
+    else:
+        lines.append("  test_exclude: (none)")
+    lines.append("  final:        " + ", ".join(sorted(final)))
+    return "\n".join(lines)
+
+
+def validate_policies(therock_dir: Path | None = None) -> tuple[bool, list[str]]:
+    """Validate test_policies.toml against the committed consumer graph.
+
+    Referential-integrity check (RFC0013 "CI integration"): needs only the two
+    committed files, no configure/fetch. Returns (ok, messages).
+
+    FAILS (ok is False) if:
+      * any `[component.<name>]` KEY is not a consumer-graph key — a stale /
+        renamed / removed component that could never fire the selection. Each
+        offending key is listed.
+      * any `level` is not an implemented level (a key of `_LEVEL_TO_DEPTH`).
+        The range is derived from the engine, so validation can never bless a
+        level the walk would silently coerce to the default.
+
+    Does NOT fail on `test_include` / `test_exclude` VALUES absent from the graph:
+    those are legitimately test-only targets (ctest suites / tool targets like
+    rocgdb-cpu, hipinfo) the graph cannot express. Such values are collected into
+    an informational note only (never a failure).
+    """
+    graph = _load_consumer_graph(therock_dir)
+    policies = _load_policies(therock_dir)
+    graph_keys = set(graph.keys())
+
+    errors: list[str] = []
+    stale_keys = sorted(k for k in policies if k not in graph_keys)
+    for key in stale_keys:
+        errors.append(
+            f"stale component key '{key}': not a consumer-graph key "
+            "(renamed/removed component? it can never trigger selection)"
+        )
+
+    valid_levels = sorted(_LEVEL_TO_DEPTH)
+    lo, hi = valid_levels[0], valid_levels[-1]
+    bad_levels: list[str] = []
+    test_only_values: set[str] = set()
+    for name, body in sorted(policies.items()):
+        level = body.get("level", _DEFAULT_LEVEL)
+        if level not in _LEVEL_TO_DEPTH:
+            bad_levels.append(
+                f"component '{name}': level {level} is outside [{lo}, {hi}]"
+            )
+        for value in body.get("test_include", []) + body.get("test_exclude", []):
+            if value not in graph_keys:
+                test_only_values.add(value)
+    errors.extend(bad_levels)
+
+    messages: list[str] = []
+    if errors:
+        messages.append("::error::test_policies.toml validation failed:")
+        messages.extend(f"  - {e}" for e in errors)
+        return False, messages
+
+    note = ""
+    if test_only_values:
+        note = (
+            f"; {len(test_only_values)} test-only value(s) noted (not graph keys): "
+            + ", ".join(sorted(test_only_values))
+        )
+    messages.append(
+        f"OK: {len(policies)} component key(s) validated against "
+        f"{len(graph_keys)} graph node(s){note}"
+    )
+    return True, messages
 
 
 def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
-    """List all subprojects known to the consumer graph."""
-    if therock_dir is None:
-        therock_dir = Path.cwd()
+    """List all subprojects known to the consumer graph.
 
-    graph = _load_consumer_graph(Path(therock_dir))
+    When `therock_dir` is None the committed graph next to this tool is read, so
+    this works from a clean checkout with no build/ directory (finding #8).
+    """
+    graph = _load_consumer_graph(therock_dir)
 
     if show_deps:
         return {
@@ -299,7 +387,12 @@ def main():
         description="Compute subproject test dependencies from the consumer graph"
     )
     parser.add_argument(
-        "--therock-dir", type=str, default=".", help="TheRock directory"
+        "--therock-dir",
+        type=str,
+        default=None,
+        help="TheRock directory. When omitted, the committed consumer graph next "
+        "to this tool (test_tools/therock_consumer_graph.json) is used, so this "
+        "works from a clean checkout with no build/ directory.",
     )
     parser.add_argument(
         "--changed-projects",
@@ -308,6 +401,28 @@ def main():
         metavar="PROJECT",
         help="Project(s) that changed. Accepts space- or comma-separated list. "
         "Supports 'rocblas' or 'projects/rocblas' format.",
+    )
+    parser.add_argument(
+        "--level",
+        type=int,
+        choices=sorted(_LEVEL_TO_DEPTH),
+        help="Override the walk level for all changed projects (default: each "
+        "component's policy level, or 4). 5=self, 4=direct, 3=transitive.",
+    )
+    parser.add_argument(
+        "--explain",
+        type=str,
+        metavar="COMPONENT",
+        help="Print the fully resolved test selection for COMPONENT and how it "
+        "was derived (level, graph walk, includes/excludes, final set), using "
+        "the same resolution code path as real selection.",
+    )
+    parser.add_argument(
+        "--validate-policies",
+        action="store_true",
+        help="Validate test_policies.toml against the committed consumer graph "
+        "(each component key must be a graph key; levels must be in [1, 5]). "
+        "Needs only the committed files; exits non-zero on any violation.",
     )
     parser.add_argument(
         "--list-subprojects", action="store_true", help="List all known subprojects"
@@ -330,7 +445,18 @@ def main():
     )
 
     args = parser.parse_args()
-    therock_dir = Path(args.therock_dir).resolve()
+    therock_dir = Path(args.therock_dir).resolve() if args.therock_dir else None
+
+    if args.validate_policies:
+        ok, messages = validate_policies(therock_dir)
+        stream = sys.stdout if ok else sys.stderr
+        for line in messages:
+            print(line, file=stream)
+        sys.exit(0 if ok else 1)
+
+    if args.explain:
+        print(explain_component(args.explain, therock_dir))
+        return
 
     if args.list_subprojects:
         result = list_subprojects(therock_dir, show_deps=args.show_deps)
@@ -356,7 +482,7 @@ def main():
             print("*")
         return
 
-    result = get_subprojects_to_test(changed, therock_dir)
+    result = get_subprojects_to_test(changed, therock_dir, level=args.level)
     projects_to_test = ",".join(sorted(result))
 
     if args.gha_output:

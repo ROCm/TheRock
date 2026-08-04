@@ -1,0 +1,108 @@
+# Hand-maintained test-selection policy.
+#
+# This is the small, human-reviewed escape-hatch file that layers explicit test
+# intent on top of the generated consumer graph
+# (test_tools/therock_consumer_graph.json). It is consumed by
+# test_tools/determine_rocm_test_dependencies.py. Unlike the graph, this file is
+# authored by hand and reviewed like code.
+#
+# Schema (see docs/development/test_selection_schemas.md for the full contract):
+#
+#   [component.<lowercased-name>]     # <name> MUST be a key in the consumer graph
+#   level = <int 1-5>                 # Optional. Walk depth over consumer edges.
+#                                     #   Default 4 (omit when 4). 5 = self only,
+#                                     #   4 = self + direct consumers (one hop),
+#                                     #   3 = self + transitive consumers (closure).
+#                                     #   2 and 1 are accepted and currently alias
+#                                     #   3 (transitive) until the test-tier output
+#                                     #   lands; see docs/development/
+#                                     #   test_selection_schemas.md.
+#   test_include = ["name", ...]      # Optional. Extra subprojects to test on a
+#                                     #   change, ADDITIVE (unioned onto the walk).
+#   test_exclude = ["name", ...]      # Optional. Consumers to prune. SUBTRACTIVE,
+#                                     #   applied LAST (after walk + include).
+#
+# Resolution order: walk to the component's level -> union test_include ->
+# subtract test_exclude (last). Every component KEY must name a real
+# consumer-graph key (it is the change trigger; a cross-file validation, task #5,
+# fails the build otherwise). test_include / test_exclude VALUES need NOT be graph
+# keys: their whole purpose is to name test-only targets the graph cannot express
+# (e.g. ctest suites like rocgdb-cpu). There is no `test_fanout_all`: "test all
+# downstream consumers" is expressed as `level = 3`.
+
+# --- Foundational deps: transitive fan-out (level = 3) -------------------------
+# These base subprojects have consumers spanning the whole tree; a change to any
+# of them should test the full downstream closure, so they walk transitively
+# (level 3 = unbounded BFS closure). NOTE: this is BROADER than the old
+# test_fanout_all, which selected only DIRECT consumers (one hop); level 3 walks
+# the entire transitive closure. The wider scope is intentional for these deps.
+
+[component.rocm-core]
+level = 3
+
+[component.rocm-cmake]
+level = 3
+
+[component.rocm-half]
+level = 3
+
+[component.rocprofiler-register]
+level = 3
+
+# --- Test-only / non-derivable inclusions -------------------------------------
+# Couplings the reverse-dependency graph cannot express (test-only projects with
+# no link-time edge, or real reverse edges absent from the forward deps).
+
+[component.rocr-runtime]
+test_include = [
+    "hip-tests",
+    "rocrtst",
+    "rocr-debug-agent",
+    "rocr-debug-agent-tests",
+    "rocgdb",
+    "ocl-clr",
+    "ocl-icd",
+    "rocprofiler-sdk",
+]
+
+[component.hip-clr]
+# hipinfo is a hip-clr tool/test target, not a declared subproject, so it is not a
+# graph key -- but include VALUES may name test-only targets, so it is kept.
+test_include = ["hip-tests", "rocrtst", "hipinfo"]
+
+[component.amdsmi]
+test_include = ["hip-tests", "rocrtst"]
+
+[component.rocprofiler-sdk]
+test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
+
+[component.aqlprofile]
+test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
+
+# rocgdb-cpu / rocgdb-gpu are ctest test-tier targets of rocgdb, not declared
+# subprojects, so they are not graph keys -- but that is exactly what test_include
+# is for (test-only targets the graph cannot express). Kept as include values.
+
+[component.amd-dbgapi]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+
+[component.rocgdb]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+
+[component.hipblaslt]
+test_include = ["hipsparselt"]
+
+[component.hipcub]
+test_include = ["rocprim"]
+
+[component.rocthrust]
+test_include = ["rocprim"]
+
+[component.rocroller]
+test_include = ["hipblaslt"]
+
+[component.rocsolver]
+test_include = ["hipblas"]
+
+[component.rocsparse]
+test_include = ["rocsolver"]

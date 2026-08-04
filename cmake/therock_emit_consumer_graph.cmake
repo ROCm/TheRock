@@ -20,15 +20,19 @@
 #     ...
 #   }
 #
-# The graph carries only consumer edges.  The subproject -> build-stage mapping
-# needed for the same-stage test-selection cut is derived separately by the
-# Python tooling from the committed artifact-*.toml descriptors + BUILD_TOPOLOGY,
-# so it is intentionally NOT duplicated here.
+# The graph carries only consumer (reverse-dependency) edges.  No build-stage,
+# artifact, or other facts are duplicated here — each keeps its own single source
+# of truth.  Test selection walks these consumer edges by hop distance
+# (see test_tools/determine_rocm_test_dependencies.py).
 #
-# The graph is a DYNAMIC configure-time artifact: it is written into the CMake
-# binary dir (build/therock_consumer_graph.json) on demand and is NEVER
-# committed.  The CI change-detection job runs an on-demand cmake configure to
-# regenerate it before the Python test-selection tool reads it.
+# Lifecycle: this configure-time emit writes build/therock_consumer_graph.json,
+# but that copy is a GENERATED artifact used to refresh the COMMITTED graph at
+# test_tools/therock_consumer_graph.json.  The committed copy is what the per-PR
+# change-detection job reads directly — no fetch, no configure on the hot path.
+# A low-frequency drift-check job (.github/workflows/consumer_graph_drift.yml)
+# regenerates the graph from a configure, normalizes it, and fails if it differs
+# from the committed copy, prompting the contributor to regenerate and re-commit.
+# The committed graph is generated-only and must NEVER be hand-edited.
 function(therock_emit_consumer_graph output_file)
   get_property(_all GLOBAL PROPERTY THEROCK_ALL_SUBPROJECTS)
 

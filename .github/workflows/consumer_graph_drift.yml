@@ -1,0 +1,65 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Drift check for the committed consumer graph
+# (test_tools/therock_consumer_graph.json).
+#
+# The graph is emitted at CMake configure time by therock_emit_consumer_graph()
+# and committed so the per-PR change-detection job can read it without a fetch or
+# configure (see .github/workflows/test_artifacts.yml). This low-frequency job
+# regenerates the graph from a full-tree configure, normalizes it the SAME way as
+# the committed copy, and FAILS if they differ — prompting the contributor to
+# regenerate and re-commit. This confines the ~6-minute configure cost to a
+# graph-affecting change instead of every PR (see RFC0013 "CI integration").
+#
+# Runs only when files that can change the graph are touched.
+
+name: Consumer Graph Drift Check
+
+on:
+  pull_request:
+    paths:
+      - "**/CMakeLists.txt"
+      - "cmake/therock_emit_consumer_graph.cmake"
+      - "cmake/therock_subproject.cmake"
+      - "test_tools/therock_consumer_graph.json"
+      - ".github/workflows/consumer_graph_drift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  consumer_graph_drift:
+    name: "Consumer graph drift check"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Fetch sources
+        # The consumer graph is populated by every therock_cmake_subproject_declare()
+        # call, so all subproject source trees must be present for a complete graph.
+        run: python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1
+
+      - name: Configure (emits the consumer graph)
+        # Configure only, no build. This emits build/therock_consumer_graph.json as a
+        # configure-time side effect. THEROCK_ENABLE_ALL=ON ensures every subproject
+        # is declared so the emitted graph matches the committed full-tree copy.
+        run: |
+          cmake -B build -S . -GNinja \
+            -DTHEROCK_ENABLE_ALL=ON \
+            -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+
+      - name: Check committed consumer graph is up to date
+        # Compares the freshly emitted graph (build/) against the committed copy
+        # (test_tools/) after normalizing both the same way, and fails on any real
+        # edge change. Logic lives in a unit-tested script, not inline here.
+        run: python3 ./build_tools/github_actions/check_consumer_graph_drift.py --check
