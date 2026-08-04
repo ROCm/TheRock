@@ -1281,6 +1281,15 @@ def do_build_pytorch(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
+    # TEST-ONLY (do not merge): pinpoint the remaining Windows DLL load failure
+    # before the (possibly failing) sanity check below. Non-fatal.
+    if is_windows:
+        try:
+            diag = Path(__file__).parent / "_win_dll_diagnostic.py"
+            run_command([sys.executable, str(diag)], cwd=tempfile.gettempdir())
+        except Exception as e:
+            print(f"Windows DLL diagnostic failed (non-fatal): {e}")
+
     print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
     sanity_check_output = capture(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
