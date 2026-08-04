@@ -2,7 +2,7 @@
 
 - **Authors:** Brian Harrison (bharriso), Tony Davis (tony-davis)
 - **Created:** 2026-06-04
-- **Modified:** 2026-07-28
+- **Modified:** 2026-08-04
 - **Status:** Draft
 - **Discussion:** TBD (GitHub Discussion link to be added)
 
@@ -45,19 +45,20 @@ than an afterthought: a flag that outlives its purpose is debt, not a feature.
 
 ### Glossary
 
-| Term                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Flag**                                      | A named boolean toggle gating an in-development change. Temporary by design: it carries an owner and an expiry and is retired once its default is promoted and settles, so it is not a permanent or supported configuration knob (the `long-lived` kill switch is the sole exception). Two kinds: runtime and build-time.                                                                                                                                    |
-| **Flag flip**                                 | Changing a flag's effective default (for example, OFF to ON) for a branch or channel.                                                                                                                                                                                                                                                                                                                                                                        |
-| **Binary-neutral**                            | A change that does not alter emitted artifacts, ABI, or build topology, and can therefore be gated at runtime.                                                                                                                                                                                                                                                                                                                                               |
-| **Canary**                                    | The soak-and-staging branch. The team flips the current promotion batch to ON here, so it soaks for one cadence cycle before the default is swapped on `main`. A flag may be OFF on both `main` and canary; canary is not an "everything on" branch, nor the mechanism for both-state CI coverage.                                                                                                                                                           |
-| **Soak**                                      | The period a flipped default spends on canary, with builds and tests green, before promotion.                                                                                                                                                                                                                                                                                                                                                                |
-| **Promotion**                                 | Swapping a soaked, green flag default from canary onto mainline by means of the automated train.                                                                                                                                                                                                                                                                                                                                                             |
-| **Mainline**                                  | `main`, the trunk; the default state users receive from stable and nightly builds.                                                                                                                                                                                                                                                                                                                                                                           |
-| **Kill switch**                               | Reverting a flag to OFF in the field without a rebuild (runtime) or by revert and rebuild (build-time).                                                                                                                                                                                                                                                                                                                                                      |
-| **Both-state CI**                             | Running CI for a single change in both flag states, ON and OFF, so neither code path goes stale. A team-owned mechanism on a team's own PR or branch, triggered by the `ci:flag-both-state` label (with the single flag named in the PR description) or a dispatch input, or by a flip branch. Distinct from canary, which soaks only a candidate default. Costs one build and two test runs for a runtime flag; two builds and tests for a build-time flag. |
-| **Standalone build**                          | Building a ROCm library on its own, outside a full TheRock assembly, where there is no shipped `share/therock/feature_flags.json` and no TheRock header on the include path. The reader contract degrades silently: the project carries its own copy of the header (or its own reader), and every flag resolves to its compile-time default unless overridden by `ROCM_FEATURE_<NAME>`.                                                                      |
-| **Reference header (`rocm_feature_flags.h`)** | An example implementation of the reader contract that TheRock publishes for projects to copy into their own tree or reimplement against their existing environment-flag system. Not shipped, linked, or auto-included; there is no `.so` and no package dependency.                                                                                                                                                                                          |
+| Term                                          | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Flag**                                      | A named, typed control gating an in-development change. `BOOL` is the default and the normal case for lifecycle purposes; build-time flags may also be `INTEGER` with a `VALID_VALUES` set (PR #6984). Temporary by design: it carries an owner and an expiry and is retired once its default is promoted and settles, so it is not a permanent or supported configuration knob (the `long-lived` kill switch is the sole exception). Two kinds: runtime and build-time.                   |
+| **Flag flip**                                 | Changing a flag's effective default (for example, OFF to ON) for a branch or channel.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Binary-neutral**                            | A change that does not alter emitted artifacts, ABI, or build topology, and can therefore be gated at runtime.                                                                                                                                                                                                                                                                                                                                                                             |
+| **Canary**                                    | The soak-and-staging branch. The team flips the current promotion batch to ON here, so it soaks for one cadence cycle before the default is swapped on `main`. A flag may be OFF on both `main` and canary; canary is not an "everything on" branch, nor the mechanism for both-state CI coverage.                                                                                                                                                                                         |
+| **Soak**                                      | The period a flipped default spends on canary, with builds and tests green, before promotion.                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Promotion**                                 | Swapping a soaked, green flag default from canary onto mainline by means of the automated train.                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Mainline**                                  | `main`, the trunk; the default state users receive from stable and nightly builds.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Kill switch**                               | Reverting a flag to OFF in the field without a rebuild (runtime) or by revert and rebuild (build-time).                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Both-state CI**                             | Running CI for a single change in both flag states, ON and OFF, so neither code path goes stale. A team-owned mechanism on a team's own PR or branch, triggered by the `ci:flag-both-state` label (with the single flag named in the PR description) or a dispatch input, or by a flip branch. Distinct from canary, which soaks only a candidate default. Costs one build and two test runs for a runtime flag; two builds and tests for a build-time flag.                               |
+| **Standalone build**                          | Building a ROCm library on its own, outside a full TheRock assembly, where there is no build-flag provider state, no shipped `share/therock/feature_flags.json`, and no TheRock header on the include path. Build-time: `rocm_resolve_build_flag()` creates the project's own cache variable and uses the project default. Runtime: the project carries its own copy of the reader header, and every flag resolves to its compile-time default unless overridden by `ROCM_FEATURE_<NAME>`. |
+| **Build-flag provider protocol**              | The versioned, typed contract by which TheRock hands resolved build-time flag values to a project being built inside it (PR #6984): TheRock emits `rocm_build_flags_state.cmake`, and the project resolves each flag through `rocm_resolve_build_flag()` from its super-repository's verbatim copy of `ROCMBuildFlags.cmake`. Fail-closed and build-time only; never installed.                                                                                                            |
+| **Reference header (`rocm_feature_flags.h`)** | An example implementation of the *runtime* reader contract that TheRock publishes for projects to copy into their own tree or reimplement against their existing environment-flag system. Not shipped, linked, or auto-included; there is no `.so` and no package dependency. The runtime analogue of `ROCMBuildFlags.cmake`, and copied in for the same reason.                                                                                                                           |
 
 ## Goals
 
@@ -73,8 +74,9 @@ than an afterthought: a flag that outlives its purpose is debt, not a feature.
 ## Non-Goals
 
 - Replacing the existing `FLAGS.cmake` registry; this RFC extends it.
+- Defining the build-time declaration or consumption mechanism. [PR #6984](https://github.com/ROCm/TheRock/pull/6984) does that (typed `BOOL`/`INTEGER` flags, provider state, `rocm_resolve_build_flag()`, and the fail-closed `ROCM_BUILD_FLAG(name)` accessor). This RFC adopts it and adds the lifecycle layer above it.
 - Defining the CI data and notification substrate; that is RFC0011 (Quartz), whose signals this RFC consumes.
-- Percentage or telemetry-driven rollout (a gradual percentage ramp). Flags here are binary on or off; no telemetry pipeline exists in ROCm today to drive a percentage ramp.
+- Percentage or telemetry-driven rollout (a gradual percentage ramp). A flag here resolves to one discrete value for a whole build or process (usually on or off), not to a per-user or per-request sample; no telemetry pipeline exists in ROCm today to drive a percentage ramp.
 - Artifact-level RC-to-final promotion (`build_tools/packaging/promote_*`); that remains as-is, and this RFC adds branch-level flag promotion alongside it.
 - Mandating that every existing flag immediately gain a runtime equivalent.
 - Treating flags as a permanent or user-facing configuration surface. A flag is temporary scaffolding with a mandatory expiry and retirement, not a supported long-term tuning knob; the explicitly marked `long-lived` kill switch is the sole exception.
@@ -179,6 +181,8 @@ serves all states, revert is immediate and remote, and there is no combinatorial
 |                             | **Runtime flag (preferred)**                                    | **Build-time flag**                                                      |
 | --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Lives in                    | TheRock runtime registry, shipped as `feature_flags.json` (NEW) | `FLAGS.cmake` registry (EXISTING)                                        |
+| Value type                  | `BOOL` (`0`/`1`)                                                | `BOOL` or `INTEGER` with `VALID_VALUES` (PR #6984)                       |
+| Consumed via                | vendored `rocm_feature_flags.h` or an equivalent reader (NEW)   | `rocm_resolve_build_flag()` from `ROCMBuildFlags.cmake` (PR #6984)       |
 | Set by                      | environment override, installed JSON, or compile default        | `-DTHEROCK_FLAG_*`, `DEFAULT_VALUE` in `FLAGS.cmake`, or compile default |
 | Change in field             | Yes: edit JSON or environment, no rebuild                       | No: revert, rebuild, and re-promote                                      |
 | Binary impact               | Binary-neutral (one binary, all states)                         | May change artifacts, ABI, or topology                                   |
@@ -203,9 +207,22 @@ canonical "yes" case is Multi-Arch Packaging (`KPACK_SPLIT_ARTIFACTS`; see Worke
 
 ### Where flags are declared
 
-All flags start in TheRock as the single source of truth. TheRock owns the mechanism
-(registry, manifest, CI, promotion). Project teams consume the flag in their code and own its
-behavior and lifecycle. Teams choose the kind, preferring runtime.
+TheRock owns the *mechanism*: the declaration surface, the typed provider protocol, the manifest,
+CI, and promotion. It does not have to be the origination point for every flag. A flag may be
+declared either in TheRock's registry or in the consuming super-repository (rocm-libraries,
+rocm-systems), whichever is closer to the team doing the work. In an integrated build TheRock's
+value is authoritative regardless of where the flag was declared; in a standalone build the
+project's own default applies. Project teams consume the flag in their code and own its behavior
+and lifecycle. Teams choose the kind, preferring runtime.
+
+> **Why origination is not restricted to TheRock.** Requiring every flag to start in TheRock reads
+> cleanly, but it interlocks the two repositories at exactly the wrong moment: a team cannot begin
+> guarding code until a declaration lands in TheRock *and* that TheRock version reaches their
+> branch. The typed provider protocol (PR #6984) removes the need for that interlock, because a
+> project resolves a flag through `rocm_resolve_build_flag()` with its own default and defers to the
+> provider when one is present. TheRock remains the single source of truth for the *global
+> inventory* (every flag, wherever declared, is aggregated into the manifest and the hygiene audit);
+> it is not the mandatory birthplace.
 
 #### Adding a flag does not block development
 
@@ -224,20 +241,30 @@ intentionally decoupled:
    neither the declaration nor the feature. A team can land the flag and guard its code first, then
    add CI.
 
-So starting a new feature depends on just two things: the flag declaration landing in TheRock, and
-the TheRock submodule bump reaching the consuming repository (for example, rocm-libraries; see the
-"Starting a new feature" playbook). Neither is a chokepoint: the declaration is reviewed promptly,
-and the default-off flag protects the feature the moment the bump lands.
+So starting a new feature depends on one thing: a default-off declaration landing somewhere the team
+can reach. If the flag is declared in the consuming super-repository, that is a single PR in the
+repository the team already works in, and there is no cross-repo wait at all. If it is declared in
+TheRock, the team advances the TheRock version its branch resolves against (in rocm-libraries, by
+resyncing with `develop`, which moves the merge-base that
+[PR #9602](https://github.com/ROCm/rocm-libraries/pull/9602) pins the TheRock ref to) rather than
+waiting on the 12-hour submodule bump cron. Either way it is self-service and neither path is a
+review chokepoint.
 
 ```
-TheRock registry (build-time FLAGS.cmake  OR  runtime registry)
-        │  declares NAME + metadata + default
+Declared in TheRock (FLAGS.cmake / runtime registry)
+   OR in the consuming super-repo (rocm-libraries, rocm-systems)
+        │  NAME + TYPE + metadata + default
         ▼
-ships state  ──► therock_manifest.json["flags"]  (build-time, EXISTING)
-             └─► feature_flags.json              (runtime, NEW)
+TheRock aggregates the global inventory and emits provider state
+        │
+        ├─► rocm_build_flags_state.cmake     (build-time provider state, PR #6984)
+        ├─► therock_manifest.json["flags"]   (build-time as-built, EXISTING)
+        └─► feature_flags.json               (runtime, NEW)
         │
         ▼
-Project code consumes flag at a guarded entry point and owns the behavior.
+Project code resolves the flag (rocm_resolve_build_flag / runtime reader):
+provider value wins in an integrated build, the project default in a standalone
+build. The project guards one entry point and owns the behavior.
 ```
 
 ## Runtime Feature Flags
@@ -337,6 +364,33 @@ that step, and it ships without additional configuration.
 > own per-component override file under its own tree (for example, `lib/<lib>/feature_flags.json`):
 > that library then adds one `include` line to its component toml. The global file needs none.
 
+### Distribution boundary (runtime state is a deliberate exception)
+
+The build-flag provider protocol (PR #6984) draws a hard line: `ROCMBuildFlags.cmake`, the provider
+state file, and any generated private flag header are **build-time inputs only**. They are never
+installed, never exported as a target, and never appear in an installed package config, so an
+application calling `find_package()` on an installed ROCm library acquires no build-system
+dependency. This RFC adopts that boundary unchanged for build-time flags.
+
+Runtime flags deliberately sit on the other side of it, and the difference is the whole point of the
+kind:
+
+|               | Build-time provider state                                                                                                           | Runtime `feature_flags.json`                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consumed when | Configuring and compiling the library                                                                                               | Running the installed library                                                                                                                                     |
+| Installed?    | No, by design                                                                                                                       | Yes, by design                                                                                                                                                    |
+| Why           | A resolved value is baked into the binary; shipping the input would export build plumbing to `find_package()` users for no benefit. | A value that cannot be read after install is not a runtime flag. The installed JSON *is* the no-rebuild channel default, and removing it removes the kill switch. |
+
+So the two are consistent rather than contradictory: **nothing that participates in producing a
+binary is installed, and the only installed artifact is the state that must be readable after the
+binary exists.** The runtime side keeps the rest of the boundary intact: `rocm_feature_flags.h` is
+copied in rather than shipped, there is no `.so` to link, no exported target, and no
+`find_dependency()`. The installed surface is one data file plus the manifest block that records it.
+
+The corollary from PR #6984 still binds: a flag that must affect a public header or ABI is outside
+both contracts and needs a separate, project-owned installed configuration contract. Such a change
+is a build-time litmus "yes" (question 3) and is not a runtime flag.
+
 ### Consumption (library-agnostic)
 
 A library reads a flag at a single guarded entry point, using either a vendored copy of the example
@@ -349,7 +403,16 @@ A library reads a flag at a single guarded entry point, using either a vendored 
 - **resolves each flag by the order below,** returning the first source that defines it and otherwise
   the compile-time default.
 - **treats a missing or unparseable file as not present:** a silent fallback to the default, never an
-  error.
+  error. This is deliberate, and it is the one place the runtime contract diverges from the
+  build-time protocol's fail-closed posture: a runtime reader must work in a standalone build where
+  no JSON exists, so a missing file cannot be an error. The divergence is scoped to the file, not to
+  the flag name (next bullet).
+- **fails closed on the flag *name*, not on the file.** A misspelled or unregistered flag name must
+  be detectable rather than resolving silently to a default forever. Consumers should name flags
+  through a generated, per-project accessor rather than a bare string or a plain `#if`, so that an
+  unknown name is a compile error, exactly as the build-time protocol's function-like
+  `ROCM_BUILD_FLAG(name)` macro achieves (PR #6984). `rocm-feature-flags --list` reports any name
+  present in an installed or redirected JSON that is not in the manifest's `runtime_flags` block.
 - **re-reads the environment on each query** (no internal static cache), so that an operator's
   `ROCM_FEATURE_*` change takes effect on the next process start without a rebuild; a caller may
   cache the resolved value if it chooses.
@@ -397,16 +460,37 @@ operator surface.
 ## Build-Time Feature Flags
 
 This is the existing `FLAGS.cmake` system, extended with metadata. It is used only when a litmus
-question requires it.
+question requires it. The declaration surface and the mechanism by which a project consumes a value
+are **not** proposed here: PR #6984 defines them, and this RFC layers lifecycle metadata on top
+without changing them.
+
+### Mechanism (PR #6984; this RFC does not redefine it)
+
+| Piece                            | What it does                                                                                                                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TYPE` on `therock_declare_flag` | `BOOL` (default) or `INTEGER` with an optional `VALID_VALUES` set. BOOL normalizes to `0`/`1`; INTEGER requires canonical signed base-10.                                                                                                   |
+| `rocm_build_flags_state.cmake`   | Versioned provider state emitted by `therock_finalize_flags()` into the build tree, written as plain `set()` calls so a CMake 3.7 project needs no JSON parser. Ends with a completion marker.                                              |
+| `ROCMBuildFlags.cmake`           | The consumer API. TheRock's copy is canonical; each consuming super-repository carries a verbatim copy. No external dependencies.                                                                                                           |
+| `rocm_resolve_build_flag()`      | Resolves one flag. Provider value is authoritative in an integrated build (and defining the project's own cache variable is then an error, so nothing silently shadows TheRock); the project's cache variable and default apply standalone. |
+| `ROCM_BUILD_FLAG(name)`          | The generated function-like C/C++ accessor. An unknown name is a syntax error in both normal code and `#if`, instead of the preprocessor's silent undefined-to-zero.                                                                        |
+| `base/aux-overlay`               | The canonical worked example, with permanent C and C++ conformance canaries compiled unconditionally.                                                                                                                                       |
+
+Two properties of that design carry consequences for this RFC and are adopted as given: it is
+**fail-closed** (a missing, incomplete, duplicate, malformed, or type-mismatched value is a
+configure error, not a default), and it is **build-time only** (never installed; see Distribution
+boundary above).
 
 ### Metadata extension (NEW)
 
-Extend `therock_declare_flag` with `OWNER`, `CREATED`, `EXPIRES`, and `STAGE`, keeping `ISSUE`
-(required for non-mainline stages) and `DESCRIPTION`:
+Extend `therock_declare_flag` with `OWNER`, `CREATED`, `EXPIRES`, and `STAGE`, keeping `TYPE`,
+`VALID_VALUES`, `ISSUE` (required for non-mainline stages), and `DESCRIPTION`. The lifecycle
+metadata is orthogonal to the type: an `INTEGER` flag has an owner, an expiry, and a stage on the
+same terms as a `BOOL` one.
 
 ```cmake
 therock_declare_flag(
   NAME          KPACK_SPLIT_ARTIFACTS
+  TYPE          BOOL
   DEFAULT_VALUE ON
   OWNER         packaging-team
   CREATED       2025-11-20
@@ -415,6 +499,12 @@ therock_declare_flag(
   DESCRIPTION   "Split target-specific artifacts into generic and arch-specific components"
 )
 ```
+
+> **Note on non-BOOL flags and the promotion train.** The canary train promotes a *default*, which
+> is well-defined for any type: a soaking `INTEGER` flag has a candidate default value rather than a
+> candidate ON. Both-state CI, however, is defined for two states. For an `INTEGER` flag it exercises
+> the current default and the candidate value, not the full `VALID_VALUES` cross-product; exhaustive
+> coverage of a multi-valued flag is the owning team's responsibility and is out of scope here.
 
 `therock_report_flags()` is extended to print owner, stage, and expiry; the manifest `flags` block is
 extended to carry the same metadata. `therock_finalize_flags()` (new behavior) warns when a flag is
@@ -429,10 +519,11 @@ pattern. This is tracked as a phase-1 task.
 
 ### Setting build-time flag state
 
-| Mechanism                        | Reviewable?                     | Use                                                                          |
-| -------------------------------- | ------------------------------- | ---------------------------------------------------------------------------- |
-| `-DTHEROCK_FLAG_<NAME>` (CLI)    | Not applicable (per-invocation) | Developer or one-off CI build.                                               |
-| `DEFAULT_VALUE` in `FLAGS.cmake` | Yes (reviewed diff)             | The reviewed default; changed on `canary` to soak, and on `main` to promote. |
+| Mechanism                          | Reviewable?                     | Use                                                                                                                                    |
+| ---------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `-DTHEROCK_FLAG_<NAME>` (CLI)      | Not applicable (per-invocation) | Developer or one-off CI build.                                                                                                         |
+| `DEFAULT_VALUE` in `FLAGS.cmake`   | Yes (reviewed diff)             | The reviewed default; changed on `canary` to soak, and on `main` to promote.                                                           |
+| The project's own `CACHE_VARIABLE` | Yes (reviewed diff)             | Standalone builds only. Setting it in an integrated build is a configure error by design, so it can never shadow the promoted default. |
 
 ## Flag Lifecycle and Hygiene
 
@@ -878,25 +969,29 @@ you should not need to read the rest of this RFC to follow one. Conventions: `<N
 
 1. **Pick the kind** with the decision rule (Flag Taxonomy). Default to runtime; pick build-time only
    if a litmus question is "yes" (an artifact, topology, or ABI change).
-1. **Declare the flag in TheRock, default OFF,** with metadata: `OWNER`, `CREATED`, `EXPIRES`,
-   `STAGE: in-development`, `ISSUE`:
+1. **Declare the flag, default OFF,** with metadata: `OWNER`, `CREATED`, `EXPIRES`,
+   `STAGE: in-development`, `ISSUE`. Declare it wherever is closer to your work (see "Where flags are
+   declared"); both are valid and TheRock aggregates the inventory either way:
    - runtime: `therock_declare_runtime_flag(NAME <NAME> DEFAULT_VALUE OFF …)` in `RUNTIME_FLAGS.cmake`
-   - build-time: `therock_declare_flag(NAME <NAME> DEFAULT_VALUE OFF …)` in `FLAGS.cmake`
+   - build-time: `therock_declare_flag(NAME <NAME> TYPE BOOL DEFAULT_VALUE OFF …)` in `FLAGS.cmake`
    - This PR can land immediately; it is a priority review and is not release-manager-gated (see
      "Adding a flag does not block development").
-1. **Wait for the TheRock submodule bump** to carry the new flag into your consuming repository (for
-   example, rocm-libraries). The default-off flag now exists for you to guard against. (These two
-   steps, the declaration landing and the bump, are the only prerequisites to starting, and neither
-   is a review chokepoint.)
+1. **If you declared in TheRock, advance the TheRock version your branch resolves against** so the
+   new flag is visible to your repository. In rocm-libraries this is a resync with `develop`, which
+   moves the merge-base the TheRock ref is pinned to
+   ([PR #9602](https://github.com/ROCm/rocm-libraries/pull/9602)); you do not wait on the 12-hour
+   bump cron. If you declared in your own super-repository, skip this step entirely.
 1. **Guard your code at exactly one entry point.** Runtime: a single check via a vendored copy of the
    example `rocm_feature_flags.h` (or your own reader or existing environment-flag system), for
-   example hipDNN's `validateBeforeAdding`. Build-time: one `#define` or CMake-gated branch. Do not
-   sprinkle conditionals.
+   example hipDNN's `validateBeforeAdding`. Build-time: resolve the flag once with
+   `rocm_resolve_build_flag()` (from your super-repository's copy of `ROCMBuildFlags.cmake`),
+   configure it into a private generated header, and branch on `ROCM_BUILD_FLAG(<NAME>)`; see
+   `base/aux-overlay` for the worked example. Do not sprinkle conditionals.
 1. **Land your feature default-OFF on trunk.** Mainline stays OFF; nothing changes for users. You can
    now iterate behind the flag.
 
-**Completion criteria:** the flag exists in TheRock (default OFF), the bump has reached your
-repository, your new code is guarded at one entry point, and trunk is green with the feature OFF.
+**Completion criteria:** the flag exists (default OFF) and is visible to your repository, your new
+code is guarded at one entry point, and trunk is green with the feature OFF.
 
 ### Playbook B: testing a new feature in both states
 
@@ -1077,10 +1172,11 @@ identical. No per-repo reimplementation, no drift.
 
 ### Where flags live
 
-| Option                                      | Pros                                                             | Cons                                                         | Verdict   |
-| ------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ | --------- |
-| **TheRock single source of truth (chosen)** | One registry; uniform metadata, manifest, and CI; teams consume. | Cross-repo declare-then-consume indirection.                 | Chosen.   |
-| Per-project registries                      | Local autonomy.                                                  | No global inventory; duplicated mechanism; no central audit. | Rejected. |
+| Option                                                                       | Pros                                                                                                                                             | Cons                                                                                                                     | Verdict   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------- |
+| **TheRock owns the mechanism; a flag may originate in either repo (chosen)** | One mechanism, one aggregated inventory, uniform metadata and CI, and no cross-repo wait to start work. Matches PR #6984's dual-mode resolution. | Inventory aggregation must reach into the consuming super-repos, not just read `FLAGS.cmake`.                            | Chosen.   |
+| TheRock is the mandatory origination point                                   | Simplest possible inventory; one file to read.                                                                                                   | Interlocks the repos at the worst moment: a team cannot guard code until a declaration lands *and* reaches their branch. | Rejected. |
+| Per-project registries with no central mechanism                             | Local autonomy.                                                                                                                                  | No global inventory; duplicated mechanism; no central audit.                                                             | Rejected. |
 
 ### Both-state CI (team-owned; decoupled from canary)
 
@@ -1101,7 +1197,8 @@ identical. No per-repo reimplementation, no drift.
 
 | Phase                                                                | Deliverables                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **P1: metadata, hygiene, and RBAC**                                  | Extend `therock_declare_flag` with OWNER, CREATED, EXPIRES, and STAGE; surface them in `therock_report_flags()` and the manifest; add an expiry warning and non-mainline `ISSUE` enforcement; fold `THEROCK_FLAG_INCLUDE_PROFILER` into the registry; add `.github/CODEOWNERS` entries (release-manager group) for `FLAGS.cmake`, `RUNTIME_FLAGS.cmake`, and the multi-arch CI (`configure_multi_arch_ci.py`, `.github/workflows/multi_arch_ci.yml`); update `docs/development/flags.md`.                                                                                                                                                                                                                                                                                                              |
+| **P0: land the typed provider protocol**                             | PR #6984 (typed `BOOL`/`INTEGER` declarations, `rocm_build_flags_state.cmake`, `ROCMBuildFlags.cmake` plus `rocm_resolve_build_flag()`, the `ROCM_BUILD_FLAG(name)` accessor, and the `base/aux-overlay` conformance canaries). Not owned by this RFC; everything below assumes it. Follow-on within P0: allow a flag to originate in a consuming super-repository as well as in TheRock.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **P1: metadata, hygiene, and RBAC**                                  | Extend `therock_declare_flag` with OWNER, CREATED, EXPIRES, and STAGE (alongside the `TYPE` and `VALID_VALUES` from P0); surface them in `therock_report_flags()` and the manifest; add an expiry warning and non-mainline `ISSUE` enforcement; aggregate flags declared in consuming super-repositories into the same inventory, report, and manifest so origination location does not create a blind spot; fold `THEROCK_FLAG_INCLUDE_PROFILER` into the registry; add `.github/CODEOWNERS` entries (release-manager group) for `FLAGS.cmake`, `RUNTIME_FLAGS.cmake`, and the multi-arch CI (`configure_multi_arch_ci.py`, `.github/workflows/multi_arch_ci.yml`); update `docs/development/flags.md`.                                                                                               |
 | **P2: generic runtime contract**                                     | `RUNTIME_FLAGS.cmake` plus `therock_declare_runtime_flag` plus `therock_finalize_runtime_flags()`; emit the shared `share/therock/feature_flags.json` from the `base/aux-overlay` step alongside the manifest (it ships automatically via aux-overlay's existing `**/*` catch-all, with no toml change); add `runtime_flags` to the manifest; document the reader contract (location, `dladdr` discovery, `ROCM_FEATURE_*` precedence) and publish the example reference `rocm_feature_flags.h` (copied-in, not shipped or linked) with a standalone-build fallback note; the `rocm-feature-flags --list` helper; wire the first instantiation (hipDNN at `validateBeforeAdding`, using its own consumer).                                                                                             |
 | **P3: canary branch, team-owned both-state CI, and canary currency** | Create `canary` (soak-only) and add it to the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml` so that CI runs on it; document the soak convention (the current batch flipped ON, else matching main); add the shared helper `build_tools/github_actions/flag_both_state.py` (generic-label plus PR-body flag parsing, registry-validated, plus OFF/ON leg expansion; runtime equals one build and two test runs, build-time equals two builds, scoped); wire it into TheRock's `configure_multi_arch_ci.py`; land thin call-site adoption PRs in rocm-libraries and rocm-systems (`.github/scripts/therock_configure_ci.py` plus `therock_matrix.py`) that call the same helper; add the scheduled frequent rebase of `canary` onto `main` (only difference being the flag defaults). |
 | **P4: automated promotion job**                                      | Add a `schedule` trigger to `multi_arch_ci.yml` (routed to the nightly tier `configure_multi_arch_ci.py` already supports), then attach the promotion job to that scheduled run (cron and period to be determined): the canary soak-signal gate plus the promotion PR (release-manager-merged, not auto-merged) plus the flag-debt audit (the flag's gated code is already on `main` by the rebase model).                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1119,11 +1216,15 @@ identical. No per-repo reimplementation, no drift.
 1. **The global `share/therock/feature_flags.json` ships automatically** via `base/aux-overlay`'s existing `**/*` catch-all (the same path as the manifest), with no `.toml` change. Only optional, opt-in per-library override files add their own `include`.
 1. **Promotion cadence is fixed and automated:** the job opens the PR, a release manager merges it, and the frequent rebase keeps canary current with no manual reset.
 1. **Both-state CI is team-owned and decoupled from canary,** triggered via the `ci:flag-both-state` label (the flag named in the PR description) or dispatch and/or a flip branch: runtime equals one build and two test runs; build-time equals two builds.
+1. **The build-time mechanism is PR #6984's typed provider protocol, adopted as-is.** This RFC does not define a competing declaration or consumption surface. It adds lifecycle metadata, hygiene, canary, promotion, and both-state CI on top, and adopts the protocol's fail-closed posture and distribution boundary.
+1. **A flag may originate in TheRock or in a consuming super-repository.** TheRock owns the mechanism and the aggregated inventory, not the mandatory birthplace. Restricting origination to TheRock would interlock the repositories at the point where a team is trying to start work.
 
 ### Open for reviewer input
 
 1. **Canary soak test scope:** which tests run on canary, whether and what additional testing is stacked on top, and the soak-cycle length. The minimum is canary builds and tests green; this can optionally be deepened with the per-branch `latest_good@canary.json` (P5). The exact test set, any additional stacked testing, and the cycle length are open.
 1. **Promotion cadence period:** weekly, bi-weekly, or monthly (and the exact schedule on the multi-arch CI). Only "fixed and automated" is settled; the period and schedule are open.
+1. **How the inventory aggregates flags declared outside TheRock.** Because origination is allowed in either place, the hygiene audit and the manifest need to see super-repo-declared flags. Options: TheRock scans the checked-out consuming super-repositories at configure time; each super-repo emits its own declarations into the provider handshake; or the audit runs per-repo and reports into a shared place. Preference not settled; PR #6984's follow-on work will constrain the answer.
+1. **Whether runtime flags should also be typed.** Build-time flags are `BOOL` or `INTEGER` (PR #6984). The runtime contract here is BOOL-only, which keeps `ROCM_FEATURE_<NAME>=0|1` and the JSON simple. Symmetry argues for typing runtime flags too; simplicity and the fact that no runtime use case yet needs a non-BOOL value argue for waiting. The RFC deliberately does not preclude it: nothing in the JSON, the manifest block, or the precedence order depends on the value being boolean.
 1. **When and where to build the per-PR both-state label mechanism:** wire the `ci:flag-both-state` label (the flag named in the PR body) via the shared `flag_both_state.py` helper now, or rely initially on flip branches and add the label later. Flip branches need no new CI wiring; the label is the more ergonomic per-PR path. Because the helper is repo-agnostic and both consumer repos already parse steering labels (rocm-libraries `test:*`, rocm-systems `ci:skip`) and rocm-libraries already injects `-DTHEROCK_FLAG_*=ON` (the rocKE precedent), the build-time label path is adoptable in both today, before the runtime contract (P2) lands. Open: whether to land all three call sites in P3 together, or TheRock first with consumers fast-following.
 
 ## Summary
@@ -1138,6 +1239,14 @@ owner, expiry, and stage metadata, and adds a generic runtime-flag contract: a s
 Libraries copy the header or reimplement the contract; there is no shipped, linked, or
 auto-included dependency, and standalone builds fall back to compile-time defaults. hipDNN is
 the first adopter, using its own `EngineOverrideConfig` and `validateBeforeAdding` path.
+
+**What it does not add.** The build-time declaration and consumption mechanism is PR #6984's typed
+provider protocol (`TYPE BOOL|INTEGER`, `rocm_build_flags_state.cmake`, `ROCMBuildFlags.cmake` plus
+`rocm_resolve_build_flag()`, and the fail-closed `ROCM_BUILD_FLAG(name)` accessor), adopted as-is.
+This RFC is the lifecycle layer on top of it, and it inherits that protocol's two governing
+properties: fail closed, and never install a build-time input. A flag may originate in TheRock or in
+a consuming super-repository; TheRock owns the mechanism and the aggregated inventory, not the
+birthplace.
 
 **How a flag is promoted.** A fixed, automated canary-to-mainline train (period to be
 determined) runs as a scheduled step on the multi-arch CI, on a `schedule` trigger added to
@@ -1166,7 +1275,7 @@ Full detail in Maintainer Playbooks.
 
 | To do this                         | Do the following                                                                                                                                                                                                                   | Success criterion                                                                                 |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock (lands quickly); after the bump reaches your repository, guard your code at one check; ship it OFF on trunk.                                               | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
+| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock or in your own super-repository (lands quickly); guard your code at one check; ship it OFF on trunk.                                                       | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
 | **Test it both ways**              | Add the `ci:flag-both-state` label and a `Flag: <NAME>` line to the PR description (or use a flip branch). Runtime: one build, tests run twice with `ROCM_FEATURE_<NAME>=0` then `=1`. Build-time: build OFF and ON, testing each. | The affected tests are green in both states on CI.                                                |
 | **Turn it on for everyone**        | Open a PR flipping the default ON into `canary` (`STAGE: canary`); let it soak one cycle green; the automated job opens the `main` PR; a release manager (not you) merges it.                                                      | The default-ON change is merged on `main` by a release manager, and the nightly is green.         |
 | **Turn it off quickly (it broke)** | Set `ROCM_FEATURE_<NAME>=0` on the affected host (minutes, no rebuild). For everyone: land a PR setting the default back to OFF; existing installs need a respin.                                                                  | The bad path no longer runs.                                                                      |
@@ -1180,6 +1289,8 @@ promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
 - RFC0008: Multi-Architecture Packaging with Kpack (`docs/rfcs/RFC0008-Multi-Arch-Packaging.md`); build-time exemplar.
 - RFC0011: Quartz, Central CI/CD Data Hub (`latest_good.json` green signal).
 - TheRock: `FLAGS.cmake`, `cmake/therock_flag_utils.cmake`, `BRANCH_FLAGS.cmake`, `build_tools/generate_therock_manifest.py`, `docs/development/flags.md`.
+- [PR #6984](https://github.com/ROCm/TheRock/pull/6984), "add typed ROCm build flag provider protocol"; the build-time mechanism this RFC layers on top of: `cmake/ROCMBuildFlags.cmake`, `rocm_resolve_build_flag()`, the generated `rocm_build_flags_state.cmake`, the `ROCM_BUILD_FLAG(name)` accessor, `base/aux-overlay` conformance canaries, and the distribution boundary.
+- [rocm-libraries PR #9602](https://github.com/ROCm/rocm-libraries/pull/9602), merge-base-time TheRock ref resolution (`.github/scripts/resolve_therock_ref.py`); why advancing the TheRock version a branch resolves against is self-service rather than a wait on the bump cron.
 - TheRock CI and cross-repo: `build_tools/github_actions/configure_multi_arch_ci.py`, `build_tools/github_actions/configure_ci_path_filters.py`, `build_tools/github_actions/amdgpu_family_matrix.py`, the proposed `build_tools/github_actions/flag_both_state.py` (shared both-state helper), `.github/workflows/multi_arch_ci.yml`, `.github/workflows/multi_arch_ci_asan.yml`, `.github/workflows/bump_submodules.yml`, `build_tools/github_actions/bump_automation.py`, `.github/CODEOWNERS`, `docs/development/ci_behavior_manipulation.md`, `docs/packaging/versioning.md`.
 - Consumer CI orchestrators (both-state adoption call sites): `rocm-libraries/.github/scripts/therock_configure_ci.py` and `therock_matrix.py`; `rocm-systems/.github/scripts/therock_configure_ci.py` and `therock_matrix.py`.
 - TheRock artifacts: `base/artifact.toml` (the `base/aux-overlay` component's `**/*` catch-all that ships `share/therock/**` automatically), `base/aux-overlay/CMakeLists.txt` (where the manifest, and the proposed `feature_flags.json`, is generated and installed to `share/therock`), `build_tools/_therock_utils/artifact_builder.py` (the default `lib` component is `.so`-only, relevant only to opt-in per-library override files), `docs/development/artifacts.md`, `ml-libs/artifact-hipdnn.toml`.
@@ -1200,3 +1311,4 @@ promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
 - **2026-07-27**: Both-state CI multi-repo amendment (Tony Davis). Makes team-owned both-state CI a repo-agnostic contract with one shared TheRock helper (`build_tools/github_actions/flag_both_state.py`) that TheRock, rocm-libraries, and rocm-systems all call, so the mechanism reaches the consumer repos where flag-guarded work actually lives rather than TheRock's CI alone (Goal 5, Implementation hooks, the new Multi-repo adoption subsection with the helper sketch and consumer call site, a rocm-libraries adoption worked example, P3, and Open Question 3). Also reconciles stale CI filenames: `configure_ci.py` was deleted in favor of `multi_arch_ci.yml` (PR #5794), so references now point at `configure_multi_arch_ci.py`, and the canary/long-lived-branch coverage is described by the `on.push.branches` list in `.github/workflows/multi_arch_ci.yml` (the `long_lived_full_match` symbol no longer exists in the tree).
 - **2026-07-27**: Correctness and editorial pass on the multi-repo amendment. (1) Scheduled-CI grounding: no workflow fires `configure_multi_arch_ci.py` on a schedule today (the only scheduled workflows are `bump_submodules.yml` and `gitleaks_main.yml`; `multi_arch_ci_asan.yml` carries no cron), so the promotion job is now framed as requiring a new `schedule` trigger on `multi_arch_ci.yml` routed to the nightly tier the orchestrator already supports, rather than attaching to an already-scheduled run (fact table, cadence, Promotion job, P4, Summary). (2) Consumer-orchestrator symmetry: corrected the overstated claim that rocm-systems mirrors rocm-libraries; rocm-systems builds legs inline in `retrieve_projects` with no `collect_projects_to_run` and no rocKE/`THEROCK_FLAG_*` precedent, so its call site differs while consuming the same helper (Multi-repo adoption bullets and table, the call-site note, the adoption exemplar, Open Question 3). Fixed the steering-label vocabulary (rocm-libraries `test:*`/`test_type:*` plus `skip-therockci`; rocm-systems `ci:skip`) and pointed the helper's unit-test analogue at TheRock's `tests/configure_multi_arch_ci_test.py`. (3) Clarified that flags are ephemeral by design and retired after promotion, not a permanent or supported configuration surface, with the `long-lived` kill switch as the sole exception (Overview callout, Glossary, a new Non-Goal). (4) Editorial: removed em-dashes throughout for a more conventional register; no structural changes.
 - **2026-07-28**: Both-state trigger ergonomics (Tony Davis). Replaces the per-flag `flag:<NAME>:both` label with a single generic `ci:flag-both-state` label as the switch, plus a `Flag: <NAME>` line in the PR description naming the one flag, validated against the flag registry. This removes per-flag label maintenance (GitHub can only apply labels that already exist, so a brand-new flag's label would not exist until someone created it per repo), keeps the permission gate on the label (applying a label needs triage/write access while a PR body does not), and matches the repo `ci:*` label convention. The shared helper gains `parse_both_state_request(pr_labels, pr_body, known_flags)`, and `expand_flag_both_state` now takes a single validated `flag_name`; exactly one flag per PR is supported by design, with single-state pinning left to flip branches (Glossary, Goal 5, Trigger, Implementation hooks and helper sketch, consumer call site, adoption exemplar, Playbooks A and D, P3, Open Question 3, Summary, and Quick reference).
+- **2026-08-04**: Align with the typed build flag provider protocol, [PR #6984](https://github.com/ROCm/TheRock/pull/6984) (Tony Davis). PR #6984 lands the build-time declaration and consumption mechanism this RFC had only sketched, so the RFC now defers to it rather than proposing a parallel surface, and is positioned as the lifecycle layer above it. Four substantive changes. (1) **Origination is no longer TheRock-only.** "All flags start in TheRock as the single source of truth" is replaced by "TheRock owns the mechanism and the aggregated inventory; a flag may originate in TheRock or in a consuming super-repository," following the author's stated intent on #6984 to let a flag originate in either place "so we aren't so strictly interlocked." This removes the declare-then-wait round trip that blocked a team from guarding code until a TheRock declaration both landed and reached their branch; where a TheRock declaration is still involved, advancing the pinned TheRock ref is self-service via a resync with `develop` ([rocm-libraries PR #9602](https://github.com/ROCm/rocm-libraries/pull/9602)) rather than a wait on the 12-hour bump cron (Where flags are declared, "Adding a flag does not block development", the declaration diagram, Playbook A steps 2 and 3, the Where-flags-live alternatives table, P1 inventory aggregation, a new resolved decision, a new open question, Summary, Quick reference). (2) **Flags are typed, not boolean.** The Glossary, taxonomy table, and `therock_declare_flag` example now carry `TYPE` (`BOOL` default, `INTEGER` with `VALID_VALUES`), with a note on what a multi-valued flag means for the promotion train and for both-state CI (the current default versus the candidate value, not the full cross-product). Runtime flags stay BOOL-only for now, deliberately without precluding typing later (new open question). (3) **The distribution boundary is adopted, and the runtime exception is justified explicitly.** #6984 forbids installing build-time inputs; this RFC ships an installed `feature_flags.json`. A new "Distribution boundary" subsection states the rule for build-time flags unchanged and explains why runtime state is on the other side of the line by construction (a value unreadable after install is not a runtime flag), so the two read as consistent rather than contradictory. (4) **Fail-closed on flag names.** The runtime reader keeps its silent fallback on a missing or unparseable file (a standalone build has none), but a misspelled or unregistered flag *name* must now be detectable, mirroring the intent of #6984's function-like `ROCM_BUILD_FLAG(name)` accessor; `rocm-feature-flags --list` reports names absent from the manifest. Also adds a P0 phase for #6984 itself, two resolved decisions, and reference entries for #6984 and #9602.
