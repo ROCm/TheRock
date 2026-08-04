@@ -2087,6 +2087,39 @@ class VerifyNoRunpathTest(unittest.TestCase):
                 self.assertTrue(self._make(d).verify_no_runpath())
         self.assertEqual(mock_run.call_count, 2)
 
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fixed_path_rpath_is_reported_but_not_fatal(self, mock_run):
+        # An rpath with a non-$ORIGIN (fixed/absolute) entry is warned about but
+        # does not fail the check.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [/opt/rocm/lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_fixed_rpath_entries_helper(self):
+        # Helper flags only entries that lack $ORIGIN, preserving order.
+        fn = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._fixed_rpath_entries
+        )
+        # Pure $ORIGIN-relative rpath -> nothing flagged.
+        self.assertEqual(
+            fn(" 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:$ORIGIN/../lib64]\n"),
+            [],
+        )
+        # Mixed rpath -> only the fixed entries are returned.
+        self.assertEqual(
+            fn(
+                " 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:/opt/rocm/lib:/usr/lib]\n"
+            ),
+            ["/opt/rocm/lib", "/usr/lib"],
+        )
+        # No rpath value present -> empty.
+        self.assertEqual(fn(" 0x01 (NEEDED) Shared library: [libc.so.6]\n"), [])
+
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
         "verify_no_runpath",
