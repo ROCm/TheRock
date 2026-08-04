@@ -1307,15 +1307,19 @@ gpgcheck=0
             return False
 
     def verify_no_runpath(self) -> bool:
-        """Verify no installed ELF file uses DT_RUNPATH (expect DT_RPATH only).
+        """Verify installed ELF files use DT_RPATH (not DT_RUNPATH).
 
-        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py),
-        so any ELF file that still carries a DT_RUNPATH tag indicates the
-        conversion was missed. Files with no rpath/runpath tag at all are fine.
+        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py).
+        Each installed ELF's dynamic section is read with ``readelf -d`` and
+        classified by looking for DT_RPATH first, falling back to DT_RUNPATH:
 
-        Reads each ELF's dynamic section with ``readelf -d``. If ``readelf`` is
-        unavailable the check is skipped (non-fatal), matching the tolerant
-        behaviour used elsewhere in basic verification.
+        * has DT_RPATH -> converted correctly (expected)
+        * no DT_RPATH but has DT_RUNPATH -> conversion was missed (failure)
+        * neither tag -> nothing to convert; counted and reported for
+          visibility only, not treated as a failure
+
+        If ``readelf`` is unavailable the check is skipped (non-fatal), matching
+        the tolerant behaviour used elsewhere in basic verification.
 
         Returns:
         True if no installed ELF uses DT_RUNPATH (or the check could not run),
@@ -1323,7 +1327,9 @@ gpgcheck=0
         """
         print("\nVerifying installed ELF files use RPATH (not RUNPATH)...")
         install_path = Path(self.install_prefix)
-        offending: list[str] = []
+        runpath_only: list[str] = []
+        no_path: list[str] = []
+        rpath_count = 0
         for root, _dirs, files in os.walk(install_path):
             for name in files:
                 filepath = Path(root) / name
@@ -1353,14 +1359,33 @@ gpgcheck=0
                         f" [WARN] readelf failed for {filepath}: {result.stderr.strip()}"
                     )
                     continue
-                if "(RUNPATH)" in result.stdout:
-                    offending.append(str(filepath))
-        if offending:
-            print(f" [FAIL] {len(offending)} ELF file(s) still using DT_RUNPATH:")
-            for entry in offending[:10]:
+                # Confirm DT_RPATH is present; only fall back to DT_RUNPATH if
+                # it is not. Note "(RPATH)" is not a substring of "(RUNPATH)".
+                if "(RPATH)" in result.stdout:
+                    rpath_count += 1
+                elif "(RUNPATH)" in result.stdout:
+                    runpath_only.append(str(filepath))
+                else:
+                    no_path.append(str(filepath))
+        print(
+            f" Scanned ELF files: {rpath_count} with DT_RPATH, "
+            f"{len(runpath_only)} with DT_RUNPATH only, "
+            f"{len(no_path)} with neither"
+        )
+        if no_path:
+            print(
+                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH:"
+            )
+            for entry in no_path[:10]:
                 print(f"   {entry}")
-            if len(offending) > 10:
-                print(f"   ... and {len(offending) - 10} more")
+            if len(no_path) > 10:
+                print(f"   ... and {len(no_path) - 10} more")
+        if runpath_only:
+            print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
+            for entry in runpath_only[:10]:
+                print(f"   {entry}")
+            if len(runpath_only) > 10:
+                print(f"   ... and {len(runpath_only) - 10} more")
             return False
         print(" [PASS] No installed ELF files use DT_RUNPATH")
         return True

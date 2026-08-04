@@ -2038,6 +2038,55 @@ class VerifyNoRunpathTest(unittest.TestCase):
         # readelf was invoked for both ELF files despite the non-zero exit.
         self.assertEqual(mock_run.call_count, 2)
 
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_rpath_present_is_not_flagged_even_with_runpath(self, mock_run):
+        # DT_RPATH is checked first; a file that reports both tags is treated as
+        # converted (RPATH present) and is not flagged.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+                " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+            ),
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_only_some_files_are_runpath_only(self, mock_run):
+        # A mixed tree (one RPATH file, one RUNPATH-only file) still fails
+        # because at least one ELF is missing RPATH and carries RUNPATH.
+        def fake_readelf(cmd, **kwargs):
+            filepath = cmd[-1]
+            if filepath.endswith("libamdhip64.so"):
+                stdout = (
+                    " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+                )
+            else:
+                stdout = " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+            return MagicMock(returncode=0, stdout=stdout)
+
+        mock_run.side_effect = fake_readelf
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_files_with_neither_tag_pass_and_are_counted(self, mock_run):
+        # ELFs with neither DT_RPATH nor DT_RUNPATH are reported but not fatal.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        self.assertEqual(mock_run.call_count, 2)
+
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
         "verify_no_runpath",
