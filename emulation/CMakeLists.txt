@@ -39,6 +39,7 @@ if(THEROCK_ENABLE_ROCJITSU)
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
       librocjitsu.so
+      librocjitsu_hooks.so
   )
   therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
     LIB_NAMES
@@ -53,6 +54,7 @@ if(THEROCK_ENABLE_ROCJITSU)
       dev
       lib
       run
+      test
     SUBPROJECT_DEPS
       rocjitsu
   )
