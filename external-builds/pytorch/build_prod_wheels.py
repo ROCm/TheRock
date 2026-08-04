@@ -195,6 +195,12 @@ LINUX_LIBRARY_PRELOADS = [
 WINDOWS_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
+    # rocblas and rocsolver are direct load-time deps of torch_hip.dll on
+    # Windows (verified via dumpbin). Preload them (after amdhip64, and rocblas
+    # before rocsolver which depends on it) so they are resolved in-namespace
+    # before torch loads torch_hip.dll. On Linux these resolve via RPATH.
+    "rocblas",
+    "rocsolver",
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -521,6 +527,40 @@ def do_install_rocm(args: argparse.Namespace):
     pip_args.extend([f"rocm[{extras}]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
+
+    # TEST-ONLY SHIM (do not merge): simulate a post-ROCm/TheRock#7027 nightly.
+    # #7027 registers rocblas/rocsolver as rocm_sdk LibraryEntry shortnames in
+    # _dist_info.py, but that only lands in the *installed* rocm_sdk once a new
+    # nightly ships. Until then, inject the two registrations into the freshly
+    # installed rocm_sdk so initialize_process(preload_shortnames=[...]) can
+    # resolve them and we can end-to-end validate the #191632 + #7027 theory.
+    _test_register_rocblas_rocsolver()
+
+
+def _test_register_rocblas_rocsolver():
+    """TEST-ONLY: add rocblas/rocsolver LibraryEntry to installed rocm_sdk."""
+    patch_script = textwrap.dedent(
+        """
+        import importlib.util, pathlib, sys
+        spec = importlib.util.find_spec("rocm_sdk._dist_info")
+        p = pathlib.Path(spec.origin)
+        text = p.read_text()
+        if 'LibraryEntry("rocblas"' in text:
+            print("rocblas already registered; no shim needed")
+            sys.exit(0)
+        marker = 'LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")\\n'
+        if marker not in text:
+            print("ERROR: hipdnn marker not found in _dist_info.py", file=sys.stderr)
+            sys.exit(1)
+        inject = (
+            'LibraryEntry("rocblas", "libraries", "librocblas.so*", "rocblas*.dll")\\n'
+            'LibraryEntry("rocsolver", "libraries", "librocsolver.so*", "rocsolver*.dll")\\n'
+        )
+        p.write_text(text.replace(marker, marker + inject))
+        print(f"Injected rocblas/rocsolver LibraryEntry into {p}")
+        """
+    )
+    run_command([sys.executable, "-c", patch_script], cwd=Path.cwd())
 
 
 def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: str):
