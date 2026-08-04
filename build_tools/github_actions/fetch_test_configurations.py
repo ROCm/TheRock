@@ -158,6 +158,9 @@ _rocgdb_common = {
 # gfx94x CI families that schedule the rocprofiler-sdk-spm pinned job.
 _SPM_TEST_FAMILIES = {"gfx94X-dcgpu"}
 
+# TODO - Set True once the pinned SPM runner and driver version are confirmed with infra.
+_SPM_CI_ENABLED = False
+
 # Pinned runner for SPM tests. Confirm with infra before changing.
 _ROCPROFILER_SDK_SPM_TEST_RUNNER = "linux-gfx942-gpu-rocm-spm"
 
@@ -877,6 +880,12 @@ def run():
             continue
 
         if key == "rocprofiler-sdk-spm":
+            if not _SPM_CI_ENABLED:
+                logging.info(
+                    f"Excluding job {job_name}: SPM CI is disabled "
+                    "(set _SPM_CI_ENABLED=True to enable)"
+                )
+                continue
             if amdgpu_families not in _SPM_TEST_FAMILIES:
                 logging.info(
                     f"Excluding job {job_name}: SPM tests only run for gfx94x families"

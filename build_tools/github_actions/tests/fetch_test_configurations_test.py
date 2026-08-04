@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import unittest
+from unittest import mock
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -562,7 +563,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fake_get_all_families
         )
 
-        fetch_test_configurations.run()
+        with mock.patch.object(fetch_test_configurations, "_SPM_CI_ENABLED", True):
+            fetch_test_configurations.run()
         components = self._get_components()
 
         spm = next(j for j in components if j["job_name"] == "rocprofiler-sdk-spm")
@@ -570,6 +572,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             spm["test_runner"],
             fetch_test_configurations._ROCPROFILER_SDK_SPM_TEST_RUNNER,
         )
+
+    def test_rocprofiler_sdk_spm_disabled_by_default(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("rocprofiler-sdk-spm", names)
 
     def test_rocprofiler_sdk_spm_excluded_for_non_gfx94x_family(self):
         os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
