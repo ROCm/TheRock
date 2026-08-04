@@ -307,10 +307,14 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # rocgdb test-filter standardization (RFC0010): both jobs share one tier
-    # definition (ROCgdb's .github/test-runner/test_categories.yaml, installed
-    # next to the testsuite) and split it by --domain. --tier defaults to
-    # 'quick' here; nightly/extended pipelines can raise it later.
+    # rocgdb test-filter standardization (RFC0010): all three jobs share one
+    # tier definition (ROCgdb's .github/test-runner/test_categories.yaml,
+    # installed next to the testsuite) and split it into disjoint runner
+    # categories via --domain. --tier defaults to 'quick' here; nightly/extended
+    # pipelines can raise it later.
+    #   cpu      - non-GPU (gdb.dwarf2) tests on CPU-only runners
+    #   gpu      - gdb.rocm tests minus the corefile subset, on GPU runners
+    #   corefile - the gdb.rocm corefile tests (require allow_rocm_core_tests)
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
@@ -321,6 +325,16 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tier quick --domain gpu",
+    },
+    # NOTE: the corefile tests exercise host core-dump handling and therefore
+    # need a GPU runner whose host kernel core_pattern / ulimit are provisioned
+    # to write plain core files (plus the coremerge tool). Until a dedicated
+    # core-dump runner pool/label exists it lands on the standard GPU runner;
+    # tests self-skip via `require allow_rocm_core_tests` when unsupported.
+    "rocgdb-corefile": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tier quick --domain corefile",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
