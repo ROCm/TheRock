@@ -184,22 +184,24 @@ def write_gha_build_summary(
 ):
     log(f"Adding links to job summary for {output_root.prefix}")
 
-    log_index_url = output_root.log_index(artifact_group).https_url
+    # Every URL here is a link a human clicks in the job summary, so it goes
+    # through .public_url to pick up the bucket's CDN when it has one.
+    log_index_url = output_root.log_index(artifact_group).public_url
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
     observability_path = build_dir / "logs" / "build_observability.html"
     if observability_path.is_file():
-        analysis_url = output_root.build_observability(artifact_group).https_url
+        analysis_url = output_root.build_observability(artifact_group).public_url
         gha_append_step_summary(f"[Build Observability]({analysis_url})")
     else:
         log("[INFO] Build Observability: Not generated")
 
     # Only add artifact links if the job not failed
     if not job_status or job_status == "success":
-        artifact_url = output_root.artifact_index().https_url
+        artifact_url = output_root.artifact_index().public_url
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
-    manifest_url = output_root.manifest(artifact_group).https_url
+    manifest_url = output_root.manifest(artifact_group).public_url
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 

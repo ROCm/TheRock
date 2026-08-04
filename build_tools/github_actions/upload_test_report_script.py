@@ -108,7 +108,9 @@ def run(args: argparse.Namespace):
     create_index_file(args)
     upload_test_report(args.report_path, dest_s3_uri)
 
-    report_url = output_root.log_file(args.subfolder, args.index_file_name).https_url
+    # Job summary link for a human to click: resolve through the bucket's CDN
+    # when it has one.
+    report_url = output_root.log_file(args.subfolder, args.index_file_name).public_url
     gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 

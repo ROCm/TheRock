@@ -659,6 +659,11 @@ def _package_install_url(bucket: str, prefix: str, pkg_type: str) -> str:
     For RPM repos, dnf/yum baseurl must point to the x86_64/ subdirectory
     (the directory containing repodata/). For DEB repos, apt points to the
     repo root (it resolves dists/ itself).
+
+    This is an apt/dnf baseurl consumed by a package manager, not a link a human
+    clicks, so it stays on the raw S3 URL rather than .public_url: CI reads the
+    backing bucket directly to avoid CloudFront data-transfer charges. See
+    docs/development/s3_buckets.md ("Public URLs and CDN").
     """
     base = StorageLocation(bucket, prefix).https_url
     if pkg_type == "rpm":
