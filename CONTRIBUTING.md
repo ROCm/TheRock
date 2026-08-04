@@ -131,6 +131,73 @@ for maintainers).
 
 ## Development workflows and contributing guide
 
+### Finding an issue to work on
+
+If you want to contribute but don't have a specific problem in mind, the
+[issue tracker](https://github.com/ROCm/TheRock/issues) is the best place to
+start. Issues that several people have confirmed, or that a maintainer has
+already investigated, are usually the most productive ones to pick up.
+
+Two labels mark work that we are actively hoping someone from the community
+will take:
+
+| Label                                                                                                                 | What it means                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`help wanted`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22)           | The problem is understood well enough for someone outside the core team to pick it up, and no maintainer is actively working on it. Start here. |
+| [`good first issue`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22good+first+issue%22) | Approachable for a newcomer: small in scope and unlikely to need wide-ranging changes across the build. These usually also carry `help wanted`. |
+
+Triaged issues carry additional labels that describe the problem, which you can
+combine with the two above to find something in an area you already know:
+
+- `status: triage`, `status: assessed`, and `status: fix submitted` show how far
+  along an issue is. `status: assessed` means the root cause is already known,
+  which usually makes an issue much easier to pick up.
+- `project: *` (for example `project: clr`, `project: rocblas`) identify the
+  affected component.
+- `gfx*` (for example `gfx110X-dgpu`, `gfx1151`) identify the affected GPU
+  family, which matters because many issues can only be reproduced on specific
+  hardware.
+- `platform: Linux`, `platform: Windows`, and `platform: WSL` identify the
+  affected host platform.
+- `ecosystem: *` (for example `ecosystem: PyTorch`, `ecosystem: vLLM`) identify
+  the downstream project a user hit the problem through.
+- `build issue`, `CICD`, `documentation`, and `test-debt` are good places to
+  look for contributions that don't require specific GPU hardware.
+
+If an issue looks like a good fit but is missing information you need, ask for
+it in the issue thread. If you think an issue deserves the `help wanted` or
+`good first issue` label, or that the label no longer applies, say so on the
+issue and a maintainer will take another look.
+
+#### Do I need to ask before working on an issue?
+
+No, but please leave a comment on the issue saying that you are picking it up so
+other contributors and maintainers don't duplicate your effort. We don't lock
+issues to a single person, and an existing assignee doesn't stop you from
+opening a pull request. If multiple pull requests address the same issue, we
+take the highest quality one (or the first one, if they are comparable).
+
+A few things worth knowing before you start:
+
+- For anything larger than a small fix, describe your intended approach on the
+  issue before writing much code. That is the cheapest point at which a
+  maintainer can redirect you away from an approach we can't accept. See also
+  [Using GitHub Issues for feature development](#using-github-issues-for-feature-development).
+- Issues without `help wanted` are still fair game, but they may already be in
+  progress internally, blocked on an upstream component, or not something we are
+  ready to take a fix for yet. Ask on the issue first.
+- Many issues filed here are ultimately bugs in a component that TheRock builds
+  from a submodule (LLVM, the ROCm math libraries, and so on), so the fix may
+  need to land in that upstream repository rather than in this one. Maintainers
+  can point you at the right place.
+- Reproducing an issue often requires specific AMD hardware. If you don't have
+  the matching GPU, adding a precise reproduction, narrowing down a regression
+  range, or improving the diagnostics is still valuable work on its own.
+
+When your change is ready, follow
+[Creating pull requests](#creating-pull-requests) and link the issue from the
+pull request description.
+
 ### Using GitHub Issues for bug reporting
 
 Before filing a new issue, please search through
