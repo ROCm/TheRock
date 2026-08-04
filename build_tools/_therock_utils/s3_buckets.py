@@ -4,9 +4,16 @@
 """Inventory of S3 buckets used by CI/CD systems and related functions.
 
 See docs/development/s3_buckets.md.
+
+Repositories outside TheRock that reuse these build tools against their own
+buckets can extend the in-tree inventory with a JSON registry file, pointed at
+by the ``THEROCK_S3_BUCKETS_FILE`` environment variable or by an explicit
+``--bucket-config-file`` argument. See ``load_bucket_registry_file`` for the
+schema and merge rules.
 """
 
 from dataclasses import dataclass, field, replace
+import json
 import os
 import sys
 
@@ -236,26 +243,341 @@ _ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
 
 
-_bucket_registry_cache: dict[str, S3BucketConfig] | None = None
+# ---------------------------------------------------------------------------
+# Bucket registry
+#
+# The in-tree inventory above, optionally extended by a downstream JSON file.
+# ---------------------------------------------------------------------------
+
+BUCKET_REGISTRY_ENV_VAR = "THEROCK_S3_BUCKETS_FILE"
+
+_SUPPORTED_REGISTRY_VERSIONS = (1,)
+
+_REGISTRY_TOP_LEVEL_KEYS = {
+    "version",
+    "buckets",
+    "artifacts_buckets",
+    "release_buckets",
+}
+_REGISTRY_BUCKET_KEYS = {
+    "name",
+    "region",
+    "iam_account",
+    "iam_role",
+    "key_prefix",
+    "cdn_rules",
+    "namespace_external_repos",
+    "override",
+}
+_REGISTRY_CDN_RULE_KEYS = {"key_prefix", "url_prefix"}
+
+# Selection slots for get_artifacts_bucket_config. "ci" and "ci-external" are
+# separate slots because the shared external bucket is chosen by fork state
+# rather than by release type, and a downstream overriding one should have to
+# say what it wants for the other rather than inherit it silently.
+_ARTIFACTS_SELECTION_SLOTS = _ALLOWED_ARTIFACT_RELEASE_TYPES | {"ci-external"}
 
 
-def _bucket_registry() -> dict[str, S3BucketConfig]:
-    """Bucket configs by name, built on first use.
+class BucketRegistryError(Exception):
+    """A bucket registry file is missing, malformed, or internally inconsistent."""
+
+
+@dataclass(frozen=True)
+class _BucketRegistry:
+    """Resolved bucket inventory plus any downstream selection overrides."""
+
+    buckets: dict[str, S3BucketConfig]
+    artifacts_buckets: dict[str, str]
+    release_buckets: dict[str, dict[str, str]]
+
+
+_registry_cache: _BucketRegistry | None = None
+_bucket_config_file_override: str | None = None
+
+
+def set_bucket_config_file(path: str | os.PathLike | None) -> None:
+    """Point the registry at an explicit file, overriding the environment variable.
+
+    Backs the ``--bucket-config-file`` argument. Like ``THEROCK_S3_BUCKETS_FILE``
+    this sets process-wide state - it writes a module global that every later
+    lookup reads - but the value is stated by the invocation rather than
+    inherited from the environment, so it cannot be picked up unnoticed from a
+    parent process. Prefer it wherever a single invocation should be
+    self-describing; the environment variable exists for wrapper scripts that
+    shell out to many entry points and cannot pass a flag to each.
+
+    Passing None clears the override and falls back to the environment variable.
+    """
+    global _bucket_config_file_override
+    _bucket_config_file_override = os.fspath(path) if path is not None else None
+    reset_bucket_registry()
+
+
+def _registry_file_path() -> str | None:
+    """The registry file to load, if any. The explicit override wins."""
+    env_value = os.environ.get(BUCKET_REGISTRY_ENV_VAR) or None
+    if _bucket_config_file_override is not None:
+        if env_value and env_value != _bucket_config_file_override:
+            _log(
+                f"[INFO] Bucket registry: using --bucket-config-file "
+                f"{_bucket_config_file_override!r}, ignoring "
+                f"{BUCKET_REGISTRY_ENV_VAR}={env_value!r}"
+            )
+        return _bucket_config_file_override
+    return env_value
+
+
+def _reject_unknown_keys(obj: dict, allowed: set[str], what: str, path: str) -> None:
+    """Fail on keys we do not recognize.
+
+    A typo'd ``cdn_rule`` would otherwise mean "this bucket has no CDN", which is
+    exactly the silently-wrong-URL failure this whole mechanism exists to prevent.
+    """
+    unknown = sorted(set(obj) - allowed)
+    if unknown:
+        raise BucketRegistryError(
+            f"{path}: unknown {what} key(s): {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(allowed))}"
+        )
+
+
+def _parse_cdn_rules(entries, bucket_name: str, path: str) -> tuple[CdnRule, ...]:
+    if not isinstance(entries, list):
+        raise BucketRegistryError(
+            f"{path}: bucket {bucket_name!r} 'cdn_rules' must be a list"
+        )
+    rules = []
+    for index, entry in enumerate(entries):
+        where = f"bucket {bucket_name!r} cdn_rules[{index}]"
+        if not isinstance(entry, dict):
+            raise BucketRegistryError(f"{path}: {where} must be an object")
+        _reject_unknown_keys(entry, _REGISTRY_CDN_RULE_KEYS, where, path)
+        for key in sorted(_REGISTRY_CDN_RULE_KEYS):
+            if key not in entry:
+                raise BucketRegistryError(f"{path}: {where} is missing {key!r}")
+        try:
+            rules.append(CdnRule(entry["key_prefix"], entry["url_prefix"]))
+        except (ValueError, AttributeError) as e:
+            raise BucketRegistryError(f"{path}: {where}: {e}") from e
+    return tuple(rules)
+
+
+def _parse_bucket(entry, path: str) -> tuple[S3BucketConfig, bool]:
+    """Parse one bucket entry. Returns (config, override_requested)."""
+    if not isinstance(entry, dict):
+        raise BucketRegistryError(f"{path}: each entry in 'buckets' must be an object")
+    name = entry.get("name")
+    if not isinstance(name, str) or not name:
+        raise BucketRegistryError(
+            f"{path}: each entry in 'buckets' needs a non-empty string 'name'"
+        )
+    _reject_unknown_keys(entry, _REGISTRY_BUCKET_KEYS, f"bucket {name!r}", path)
+
+    key_prefix = entry.get("key_prefix", "")
+    if not isinstance(key_prefix, str):
+        raise BucketRegistryError(
+            f"{path}: bucket {name!r} 'key_prefix' must be a string"
+        )
+
+    namespace_external_repos = entry.get("namespace_external_repos", False)
+    if not isinstance(namespace_external_repos, bool):
+        raise BucketRegistryError(
+            f"{path}: bucket {name!r} 'namespace_external_repos' must be a boolean"
+        )
+
+    # S3BucketConfig.__post_init__ validates and normalizes key_prefix; wrap its
+    # ValueError with the file path, the same way _parse_cdn_rules does for CdnRule.
+    try:
+        config = S3BucketConfig(
+            name=name,
+            region=entry.get("region", "us-east-2"),
+            iam_account=entry.get("iam_account", "692859939525"),
+            iam_role=entry.get("iam_role"),
+            key_prefix=key_prefix,
+            cdn_rules=_parse_cdn_rules(entry.get("cdn_rules", []), name, path),
+            namespace_external_repos=namespace_external_repos,
+        )
+    except ValueError as e:
+        raise BucketRegistryError(f"{path}: bucket {name!r}: {e}") from e
+    return config, bool(entry.get("override", False))
+
+
+def _parse_selection_map(
+    raw,
+    allowed_keys: set[str],
+    buckets: dict[str, S3BucketConfig],
+    what: str,
+    path: str,
+) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        raise BucketRegistryError(f"{path}: {what!r} must be an object")
+    _reject_unknown_keys(raw, allowed_keys, what, path)
+    result = {}
+    for key, value in raw.items():
+        if not isinstance(value, str):
+            raise BucketRegistryError(
+                f"{path}: {what}[{key!r}] must be a bucket name string"
+            )
+        if value not in buckets:
+            raise BucketRegistryError(
+                f"{path}: {what}[{key!r}] names unregistered bucket {value!r}. "
+                f"Add it to 'buckets' in the same file."
+            )
+        result[key] = value
+    return result
+
+
+def load_bucket_registry_file(path: str) -> _BucketRegistry:
+    """Load a registry file and merge it over the in-tree inventory.
+
+    Schema::
+
+        {
+          "version": 1,
+          "buckets": [
+            {
+              "name": "therock-npi-artifacts",
+              "key_prefix": "v3/artifacts/",
+              "iam_role": "therock-npi",
+              "cdn_rules": [
+                {"key_prefix": "v3/artifacts/",
+                 "url_prefix": "https://genesis.example.com/artifacts/"}
+              ]
+            }
+          ],
+          "artifacts_buckets": {
+            "ci": "therock-npi-artifacts",
+            "ci-external": "therock-npi-artifacts"
+          },
+          "release_buckets": {"nightly": {"python": "therock-npi-python"}}
+        }
+
+    ``buckets`` registers bucket metadata. ``artifacts_buckets`` and
+    ``release_buckets`` override *selection*: which bucket the lookup functions
+    choose, which registration alone cannot express because those functions
+    compute a name from a formula.
+
+    Note the two CI slots. ``get_artifacts_bucket_config`` picks ``ci-external``
+    for fork PRs *and* for any repository other than ROCm/TheRock, so a
+    downstream repo lands there for all of its own CI. Set both slots (to the
+    same bucket, if fork PRs need no separate destination). They are separate
+    keys on purpose: overriding only ``ci`` must not silently redirect
+    untrusted fork uploads into a trusted bucket.
+
+    Merge rules:
+
+    * Additive. A name already in the in-tree inventory is rejected unless the
+      entry sets ``"override": true``, in which case it fully replaces the
+      in-tree entry (no field-wise merge) and the replacement is logged.
+      Silently retargeting a production bucket from an inherited environment
+      variable is the worst failure this mechanism could have, so it is opt-in
+      and loud.
+    * Unknown keys at any level are an error, not ignored.
+    * Selection overrides must name a bucket registered in the same file or
+      in-tree.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError as e:
+        raise BucketRegistryError(f"Bucket registry file not found: {path}") from e
+    except json.JSONDecodeError as e:
+        raise BucketRegistryError(f"{path}: invalid JSON: {e}") from e
+    except OSError as e:
+        raise BucketRegistryError(f"{path}: could not be read: {e}") from e
+
+    if not isinstance(data, dict):
+        raise BucketRegistryError(f"{path}: top level must be a JSON object")
+    _reject_unknown_keys(data, _REGISTRY_TOP_LEVEL_KEYS, "top-level", path)
+
+    version = data.get("version")
+    if version not in _SUPPORTED_REGISTRY_VERSIONS:
+        raise BucketRegistryError(
+            f"{path}: unsupported 'version' {version!r}; "
+            f"this build supports {list(_SUPPORTED_REGISTRY_VERSIONS)}"
+        )
+
+    buckets = {c.name: c for c in s3_bucket_configs}
+    in_tree_names = set(buckets)
+    seen_in_file: set[str] = set()
+
+    raw_buckets = data.get("buckets", [])
+    if not isinstance(raw_buckets, list):
+        raise BucketRegistryError(f"{path}: 'buckets' must be a list")
+    for entry in raw_buckets:
+        config, override_requested = _parse_bucket(entry, path)
+        if config.name in seen_in_file:
+            raise BucketRegistryError(
+                f"{path}: bucket {config.name!r} is defined more than once"
+            )
+        seen_in_file.add(config.name)
+        if config.name in in_tree_names:
+            if not override_requested:
+                raise BucketRegistryError(
+                    f"{path}: bucket {config.name!r} already exists in TheRock's "
+                    f'inventory. Set "override": true on this entry to replace it.'
+                )
+            _log(
+                f"[WARNING] Bucket registry: {path} replaces TheRock's built-in "
+                f"config for bucket {config.name!r}"
+            )
+        buckets[config.name] = config
+
+    artifacts_buckets = _parse_selection_map(
+        data.get("artifacts_buckets", {}),
+        _ARTIFACTS_SELECTION_SLOTS,
+        buckets,
+        "artifacts_buckets",
+        path,
+    )
+
+    raw_release = data.get("release_buckets", {})
+    if not isinstance(raw_release, dict):
+        raise BucketRegistryError(f"{path}: 'release_buckets' must be an object")
+    _reject_unknown_keys(raw_release, _ALLOWED_RELEASE_TYPES, "release_buckets", path)
+    release_buckets = {
+        release_type: _parse_selection_map(
+            inner,
+            _ALLOWED_RELEASE_BUCKET_TYPES,
+            buckets,
+            f"release_buckets[{release_type!r}]",
+            path,
+        )
+        for release_type, inner in raw_release.items()
+    }
+
+    _log(f"[INFO] Bucket registry: loaded {len(seen_in_file)} bucket(s) from {path}")
+    return _BucketRegistry(buckets, artifacts_buckets, release_buckets)
+
+
+def _registry() -> _BucketRegistry:
+    """The resolved registry, built on first use.
 
     Built lazily rather than at import time so that a malformed downstream
     registry file raises where a caller can report it, instead of breaking the
     import of every module that reaches for a bucket config at module scope.
     """
-    global _bucket_registry_cache
-    if _bucket_registry_cache is None:
-        _bucket_registry_cache = {c.name: c for c in s3_bucket_configs}
-    return _bucket_registry_cache
+    global _registry_cache
+    if _registry_cache is None:
+        path = _registry_file_path()
+        if path:
+            _registry_cache = load_bucket_registry_file(path)
+        else:
+            _registry_cache = _BucketRegistry(
+                {c.name: c for c in s3_bucket_configs}, {}, {}
+            )
+    return _registry_cache
+
+
+def _bucket_registry() -> dict[str, S3BucketConfig]:
+    """Bucket configs by name."""
+    return _registry().buckets
 
 
 def reset_bucket_registry() -> None:
     """Discard the cached registry so it is rebuilt on next use (for tests)."""
-    global _bucket_registry_cache
-    _bucket_registry_cache = None
+    global _registry_cache
+    _registry_cache = None
 
 
 def lookup_bucket_config(name: str) -> S3BucketConfig | None:
@@ -274,7 +596,8 @@ def require_bucket_config(name: str) -> S3BucketConfig:
         known = ", ".join(sorted(_bucket_registry()))
         raise KeyError(
             f"Unknown S3 bucket {name!r}. Known buckets: {known}. "
-            f"Buckets outside TheRock can be registered via a JSON registry file."
+            f"Buckets outside TheRock can be registered via a JSON registry file "
+            f"named by {BUCKET_REGISTRY_ENV_VAR} or --bucket-config-file."
         )
     return config
 
@@ -326,13 +649,17 @@ def get_artifacts_bucket_config(
             f"expected one of {_ALLOWED_ARTIFACT_RELEASE_TYPES}"
         )
 
-    if release_type == "ci":
-        if is_pr_from_fork or repository != "ROCm/TheRock":
-            bucket_name = "therock-ci-artifacts-external"
-        else:
-            bucket_name = "therock-ci-artifacts"
+    if release_type == "ci" and (is_pr_from_fork or repository != "ROCm/TheRock"):
+        slot = "ci-external"
+        bucket_name = "therock-ci-artifacts-external"
     else:
+        slot = release_type
         bucket_name = f"therock-{release_type}-artifacts"
+
+    # A downstream registry file can override which bucket a slot selects;
+    # registering a bucket by name is not enough, because the name is computed
+    # here from a formula the downstream repo does not follow.
+    bucket_name = _registry().artifacts_buckets.get(slot, bucket_name)
     return require_bucket_config(bucket_name)
 
 
@@ -347,7 +674,8 @@ def get_release_bucket_config(
         bucket_type: "tarball", "python", or "packages".
 
     Returns:
-        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``.
+        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``,
+        unless a registry file redirects that slot via ``release_buckets``.
 
     Raises:
         ValueError: If release_type or bucket_type is invalid.
@@ -363,6 +691,10 @@ def get_release_bucket_config(
             f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
         )
     bucket_name = f"therock-{release_type}-{bucket_type}"
+    # See the note in get_artifacts_bucket_config: selection, not registration.
+    bucket_name = (
+        _registry().release_buckets.get(release_type, {}).get(bucket_type, bucket_name)
+    )
     return require_bucket_config(bucket_name)
 
 

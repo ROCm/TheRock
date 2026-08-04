@@ -70,6 +70,7 @@ from _therock_utils.artifact_backend import (
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
 from _therock_utils.hash_util import calculate_hash
+from _therock_utils.s3_buckets import set_bucket_config_file
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
@@ -1153,6 +1154,15 @@ def _add_backend_args(parser: argparse.ArgumentParser):
         default=os.getenv("THEROCK_LOCAL_STAGING_DIR"),
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
+    parser.add_argument(
+        "--bucket-config-file",
+        type=Path,
+        default=None,
+        help="JSON file registering S3 buckets outside TheRock's inventory, and "
+        "optionally overriding which bucket each release type selects. Takes "
+        "precedence over the THEROCK_S3_BUCKETS_FILE environment variable. "
+        "See build_tools/_therock_utils/s3_buckets.py for the schema.",
+    )
 
 
 def main(argv: Optional[List[str]] = None):
@@ -1338,6 +1348,16 @@ def main(argv: Optional[List[str]] = None):
     local_staging_dir = getattr(args, "local_staging_dir", None)
     if local_staging_dir:
         os.environ["THEROCK_LOCAL_STAGING_DIR"] = str(local_staging_dir)
+
+    # Point the bucket registry at an explicit file, if one was given. Note this
+    # IS process-wide: it sets a module global that every backend built below
+    # reads, including both ends of `copy`. That is intended - the registry
+    # answers "which buckets exist and where do they map", which is one fact per
+    # process. What varies per end of a `copy` is the transport, which is why
+    # that is a separate flag (--source-transport) rather than more registry state.
+    bucket_config_file = getattr(args, "bucket_config_file", None)
+    if bucket_config_file:
+        set_bucket_config_file(bucket_config_file)
 
     args.func(args)
 
