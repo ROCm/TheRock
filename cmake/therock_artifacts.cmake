@@ -64,6 +64,33 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # Skip split when every subproject feeding this artifact is excluded from all of the split targets
+  if(_should_split AND ARG_SUBPROJECT_DEPS AND THEROCK_AMDGPU_TARGETS
+     AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+    set(_split_target_intersects FALSE)
+    foreach(_sp_dep ${ARG_SUBPROJECT_DEPS})
+      get_target_property(_sp_active_targets "${_sp_dep}" THEROCK_ACTIVE_AMDGPU_TARGETS)
+      if(_sp_active_targets)
+        foreach(_split_target ${THEROCK_AMDGPU_TARGETS})
+          if("${_split_target}" IN_LIST _sp_active_targets)
+            set(_split_target_intersects TRUE)
+            break()
+          endif()
+        endforeach()
+      endif()
+      if(_split_target_intersects)
+        break()
+      endif()
+    endforeach()
+    if(NOT _split_target_intersects)
+      message(STATUS
+        "Artifact ${slice_name}: no split target (${THEROCK_AMDGPU_TARGETS}) is in "
+        "any subproject's effective target set; skipping kpack split")
+      set(_should_split FALSE)
+    endif()
+  endif()
+
+
   # Record artifact→subprojects mapping for manifest generation.
   # This allows Python scripts to dynamically discover which subprojects
   # belong to each artifact without hardcoding in BUILD_TOPOLOGY.toml.
