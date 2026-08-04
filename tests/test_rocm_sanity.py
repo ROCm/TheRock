@@ -55,6 +55,15 @@ def rocm_info_output():
         return None
 
 
+@pytest.fixture(scope="session")
+def clinfo_output():
+    try:
+        return str(run_command([f"{THEROCK_BIN_DIR}/clinfo"]).stdout)
+    except Exception as e:
+        logger.info(str(e))
+        return None
+
+
 class TestROCmSanity:
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
@@ -80,6 +89,35 @@ class TestROCmSanity:
         check.is_not_none(
             re.search(to_search, rocm_info_output),
             f"Failed to search for {to_search} in rocminfo output",
+        )
+
+    # clinfo enumerates the GPU through the OpenCL ICD loader -> libamdocl64.so,
+    # exercising the full OpenCL runtime path that rocminfo does not.
+    # Windows OpenCL uses a different (PAL) runtime backend not validated here.
+    @pytest.mark.skipif(is_windows(), reason="Windows OpenCL uses the PAL backend")
+    @pytest.mark.skipif(
+        is_asan(),
+        reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.parametrize(
+        "to_search",
+        [
+            (r"Platform\s*Name:\s*AMD Accelerated Parallel Processing"),
+            (r"Device\s*Type:\s*CL_DEVICE_TYPE_GPU"),
+            (r"Name:\s*gfx"),
+        ],
+        ids=[
+            "clinfo - AMD Platform Search",
+            "clinfo - GPU Device Type Search",
+            "clinfo - GFX Name Search",
+        ],
+    )
+    def test_clinfo_output(self, clinfo_output, to_search):
+        if not clinfo_output:
+            pytest.fail("Command clinfo failed to run")
+        check.is_not_none(
+            re.search(to_search, clinfo_output),
+            f"Failed to search for {to_search} in clinfo output",
         )
 
     # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds

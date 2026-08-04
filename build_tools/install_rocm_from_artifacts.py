@@ -388,6 +388,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-kpack_lib",
         "core-ocl_lib",
         "core-ocl_dev",
+        "core-ocl_run",  # clinfo + ICD vendor registration, for the OpenCL sanity test
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
