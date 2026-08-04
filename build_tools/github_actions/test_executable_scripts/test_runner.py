@@ -40,6 +40,7 @@ VALID_TEST_CATEGORIES = {
     "ffm-full",
     # emulation categories (AM/rocjitsu)
     "emu-quick",
+    "emu-full",
 }
 # Normalize + validate TEST_TYPE once at module load so all downstream
 # consumers (apply_component_overrides at import time, main() at run
