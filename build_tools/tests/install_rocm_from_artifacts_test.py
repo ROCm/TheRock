@@ -394,6 +394,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocalution=False,
         rocwmma=False,
         libhipcxx=False,
+        hipthreads=False,
         tests=False,
     )
     defaults.update(overrides)

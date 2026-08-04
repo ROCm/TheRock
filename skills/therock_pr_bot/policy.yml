@@ -5,7 +5,7 @@ pr:
   #
   # WHY: These bots open routine, high-volume dependency-bump PRs (e.g.
   # "Bumps ROCm/rocm-systems from a0952b2 to 971dc69") that don't follow the
-  # human branch/title/description conventions and don't need the full policy
+  # human title/description conventions and don't need the full policy
   # gate. Auto-approving them keeps the bot from blocking trusted automation and
   # spamming "Not ready to Review" on every bump.
   #
@@ -16,11 +16,7 @@ pr:
   bump_bot_authors:
     - assistant-librarian
     - systems-assistant
-
-  # PR title rules
-  title:
-    title_min_length: 10
-    title_max_length: 100
+    - dependabot
 
   # Require a meaningful description
   description:
@@ -119,6 +115,7 @@ pr:
       # Path-based: any file under a 'test/gtest/' directory is a unit test
       # (e.g. projects/miopen/test/gtest/unit_conv_solver_ConvWinoRageRxS.cpp).
       - '**/test/gtest/**'
+      - '*_gtest.*'
     # Unit tests are required for source code ANYWHERE in the repository — there
     # are NO folder-based exemptions. A test file may also live in any folder;
     # it is recognised by its name or path pattern, not its location alone.

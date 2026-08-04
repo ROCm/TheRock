@@ -1132,10 +1132,12 @@ function(therock_cmake_subproject_activate target_name)
   add_custom_target("${target_name}+dist")
 
   # expunge target
+  # The prebuilt marker sits next to the stage dir, not inside it, so it has to
+  # be deleted here too or the project stays disabled.
   add_custom_target(
     "${target_name}+expunge"
     COMMAND
-      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
+      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}" "${_prebuilt_file}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 

@@ -129,7 +129,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -218,7 +218,7 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -508,7 +508,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -671,6 +671,32 @@ test_matrix = {
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # hipthreads lit tests
+    "hipthreads": {
+        "job_name": "hipthreads",
+        "fetch_artifact_args": "--hipthreads --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipthreads.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # hipthreads example apps (build + run consumer samples against the artifact).
+    "hipthreads_examples": {
+        "job_name": "hipthreads_examples",
+        # --prim pulls rocThrust/rocPrim (roc::rocthrust); --rand pulls hipRAND
+        # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
+        "fetch_artifact_args": "--hipthreads --prim --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,

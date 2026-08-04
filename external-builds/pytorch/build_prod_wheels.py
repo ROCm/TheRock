@@ -161,9 +161,14 @@ is_windows = platform.system() == "Windows"
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
-# List of library preloads for Linux to generate into _rocm_init.py
+# List of library preloads for Linux to generate into _rocm_init.py.
+# These are loaded with RTLD_GLOBAL on `import torch` via _rocm_init.py so
+# that their symbols are available via dlsym(RTLD_DEFAULT, ...) without
+# requiring a successful dlopen by unversioned name (which fails in wheel
+# installs where only the versioned .so exists in the runtime package).
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
+    "amd_smi",
     "amdhip64",
     "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
@@ -281,6 +286,57 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
     print(f"Version suffix is: {version_suffix}")
     return version_suffix
+
+
+def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
+    """Return the short git commit for a source dir, or "" if unresolved."""
+    # Pass safe.directory via `-c` (scoped to this single git invocation)
+    # instead of `git config --global` so we don't mutate global system state.
+    # This keeps the lookup working even when the checkout is owned by another
+    # user (e.g. in CI).
+    commit = capture(
+        [
+            "git",
+            "-c",
+            f"safe.directory={source_dir}",
+            "rev-parse",
+            f"--short={length}",
+            "HEAD",
+        ],
+        cwd=source_dir,
+    )
+    if not commit:
+        print(f"WARNING: could not resolve source commit in '{source_dir}'")
+    return commit
+
+
+def compute_build_version(
+    source_dir: Path, version_suffix: str, release_type: str
+) -> str:
+    """Compute a wheel version, tagging dev builds with the source commit.
+
+    Reads `<source_dir>/version.txt` as the base version and appends
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
+    builds the 8-char source commit is merged into that single local segment,
+    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
+    torchvision) records exactly which source commit produced it. PyTorch's
+    setup.py validates the version as PEP 440, which only allows a commit hash
+    in the local segment (after `+`).
+    TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
+    upfront, manifest-based version computation lands so the built version
+    always matches what the manifest records.
+    """
+    base_version = (source_dir / "version.txt").read_text().strip()
+    build_version = base_version + version_suffix
+    if release_type == "dev":
+        commit = get_source_commit_short(source_dir)
+        if commit:
+            # version_suffix is a local identifier like `+rocm7.10.0`; merge the
+            # commit into that single local segment (PEP 440 allows one `+`).
+            local = version_suffix.lstrip("+")
+            local_parts = [p for p in (f"git{commit}", local) if p]
+            build_version = f"{base_version}+{'.'.join(local_parts)}"
+    return build_version
 
 
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
@@ -959,9 +1015,10 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    # Compute version.
-    pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the torch source commit).
+    pytorch_build_version = compute_build_version(
+        pytorch_dir, args.version_suffix, args.release_type
+    )
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1133,6 +1190,21 @@ def do_build_pytorch(
     run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
 
     build_command = [sys.executable, "-m", "build", "--wheel", "--no-isolation"]
+    pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
+    if "scikit_build_core.build" in pytorch_pyproject_text:
+        # scikit-build-core applies Git ignore rules when constructing the wheel,
+        # dropping generated, gitignored runtime files. This workaround can be
+        # removed once these fixes are merged and commonly available:
+        # https://github.com/pytorch/pytorch/pull/191625
+        # https://github.com/pytorch/pytorch/pull/191629
+        build_command.append(
+            "-Cwheel.force-include.torch/_rocm_init.py=torch/_rocm_init.py"
+        )
+        if is_windows:
+            build_command.append(
+                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
+                "torch/lib/libomp140.x86_64.dll"
+            )
     if is_windows:
         # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
@@ -1183,9 +1255,10 @@ def do_build_pytorch(
 def do_build_pytorch_audio(
     args: argparse.Namespace, pytorch_audio_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the audio source commit).
+    build_version = compute_build_version(
+        pytorch_audio_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -1222,9 +1295,10 @@ def do_build_pytorch_audio(
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the vision source commit).
+    build_version = compute_build_version(
+        pytorch_vision_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
@@ -1457,6 +1531,16 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--version-suffix",
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
+    )
+    build_p.add_argument(
+        "--release-type",
+        choices=["ci", "dev", "nightly", "prerelease"],
+        default="nightly",
+        help="Release type of the build. For `dev` builds the torch wheel "
+        "version is tagged with the 8-char torch source commit in the local "
+        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
+        "The default is non-appending so other callers (CI, nightly, "
+        "prerelease) keep their plain `<base>+<suffix>` versions.",
     )
     build_p.add_argument(
         "--clean",
