@@ -32,6 +32,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable MX (microscaling) data-type support for GEMM in the hipDNN hipBLASLt provider"
+  CMAKE_VARS
+    HIPBLASLTPROVIDER_ENABLE_MX_GEMM=ON
+  SUB_PROJECTS
+    hipblasltprovider
+)
+
+therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
   DEFAULT_VALUE OFF
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"

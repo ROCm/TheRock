@@ -380,6 +380,8 @@ def _run_kpack_split(
             "nlohmann-json",
             # rocshmem only provides a static library.
             "rocshmem",
+            # hipthreads only provides a static library.
+            "hipthreads",
             # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
@@ -520,12 +522,13 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "lib",
         "run",
     ]
+    hotswap = an.name == "rocjitsu-hotswap" and an.component == "lib"
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
         "core-ocl",
     ] and an.component in ["dev"]
-    return core or hip_dev
+    return core or hotswap or hip_dev
 
 
 def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:

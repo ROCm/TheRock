@@ -35,7 +35,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -109,7 +109,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
@@ -236,6 +236,18 @@ jobs:
 
       - name: Determine JAX package versions
         run: |
+          # The plugin/pjrt wheels embed the ROCm major version in their package
+          # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
+          # built against.
+          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${rocm_major%%.*}"
+          if [ -z "${rocm_major}" ]; then
+            echo "::error::rocm_version is required to determine the JAX plugin package name"
+            exit 1
+          fi
+          echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
+          echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
+
           # Use versions passed from the build workflow when available.
           # For manual workflow_dispatch, compute the version suffix using
           # compute_jax_package_version.py (matches rocm-jax ci_build format).
@@ -260,10 +272,12 @@ jobs:
           echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           echo "  JAX_VERSION=${JAX_VERSION}"
+          echo "  JAX_PLUGIN_PACKAGE=${JAX_PLUGIN_PACKAGE}"
+          echo "  JAX_PJRT_PACKAGE=${JAX_PJRT_PACKAGE}"
           # Install plugin/pjrt from the GPU-family index
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
-            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+            "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
+            "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
           # For JAX <= 0.9.0, jaxlib is built and installed from GPU index.
           # For JAX >= 0.9.1, jaxlib is not built - install jax and jaxlib from upstream PyPI.
           if [ -n "${JAXLIB_VERSION}" ]; then

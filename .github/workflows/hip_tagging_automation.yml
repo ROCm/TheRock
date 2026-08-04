@@ -10,6 +10,9 @@ on:
     paths:
         - rocm-systems
 
+permissions:
+  contents: read
+
 jobs:
   tag-rocm-systems:
     runs-on: ubuntu-24.04

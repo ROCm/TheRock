@@ -84,6 +84,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
@@ -362,7 +363,6 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: ${{ matrix.python_version }}
       jax_repository: ${{ matrix.jax_repository }}
-      build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}

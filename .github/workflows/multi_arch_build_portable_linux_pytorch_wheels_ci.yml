@@ -30,7 +30,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.10"
+        default: "release/2.11"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -81,7 +81,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.10"
+        default: "release/2.11"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -102,6 +102,9 @@ on:
           - sccache
           - ccache
         default: sccache
+
+permissions:
+  contents: read
 
 run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 

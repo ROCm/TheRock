@@ -67,6 +67,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
@@ -75,6 +78,7 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     permissions:
+      contents: read
       id-token: write
     defaults:
       run:

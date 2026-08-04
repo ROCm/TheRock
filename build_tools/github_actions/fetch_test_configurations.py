@@ -218,7 +218,7 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
+        "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -486,6 +486,20 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
+    # rocSHMEM tests
+    "rocshmem": {
+        "job_name": "rocshmem",
+        "fetch_artifact_args": "--rocshmem --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # rocSHMEM functional/unit tests launch via mpirun with RANKS 2..64, so
+        # they need a multi-GPU runner (same setup as rccl).
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # rocprofiler-sdk tests
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",
@@ -494,7 +508,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -533,7 +547,7 @@ test_matrix = {
         "job_name": "hipdnn-integration-tests",
         "fetch_artifact_args": "--hipdnn --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -657,6 +671,32 @@ test_matrix = {
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # hipthreads lit tests
+    "hipthreads": {
+        "job_name": "hipthreads",
+        "fetch_artifact_args": "--hipthreads --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipthreads.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # hipthreads example apps (build + run consumer samples against the artifact).
+    "hipthreads_examples": {
+        "job_name": "hipthreads_examples",
+        # --prim pulls rocThrust/rocPrim (roc::rocthrust); --rand pulls hipRAND
+        # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
+        "fetch_artifact_args": "--hipthreads --prim --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
