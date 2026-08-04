@@ -39,15 +39,12 @@ from github_actions.github_actions_api import (
 )
 
 
-# TODO: wrap `ArtifactBackend` (or `S3Backend`) class here? Or use `BucketMetadata`?
-#       (we have a few classes tracking similar metadata and reimplementing URL schemes)
 @dataclass
 class ArtifactRunInfo:
     """Information about a workflow run's artifacts."""
 
     git_commit_sha: str
     github_repository_name: str
-    external_repo: str  # e.g. "ROCm-TheRock" (used for namespacing, may be empty)
 
     platform: str  # "linux" or "windows"
     artifact_group: str  # e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan"
@@ -58,23 +55,42 @@ class ArtifactRunInfo:
     workflow_run_conclusion: str | None  # "success", "failure", None if in_progress
     workflow_run_html_url: str
 
-    s3_bucket: str  # e.g. "therock-ci-artifacts"
+    output_root: WorkflowOutputRoot
+    """Canonical path computation for this run.
+
+    The S3 properties below delegate here rather than re-deriving the layout, so
+    that a bucket with a non-empty ``key_prefix`` is handled correctly instead of
+    silently producing a path that does not exist.
+    """
 
     @property
     def git_commit_url(self) -> str:
         return f"https://github.com/{self.github_repository_name}/commit/{self.git_commit_sha}"
 
     @property
+    def external_repo(self) -> str:
+        """e.g. 'ROCm-TheRock/' (used for namespacing, may be empty)."""
+        return self.output_root.external_repo
+
+    @property
+    def s3_bucket(self) -> str:
+        """e.g. 'therock-ci-artifacts'."""
+        return self.output_root.bucket
+
+    @property
     def s3_path(self) -> str:
-        return f"{self.external_repo}{self.workflow_run_id}-{self.platform}/"
+        return f"{self.output_root.prefix}/"
 
     @property
     def s3_uri(self) -> str:
-        return f"s3://{self.s3_bucket}/{self.s3_path}"
+        return self.output_root.root().s3_uri
 
     @property
     def s3_index_url(self) -> str:
-        return f"https://{self.s3_bucket}.s3.amazonaws.com/{self.s3_path}index.html"
+        # Raw S3 URL, not .public_url: this is the target of an existence probe
+        # (see check_if_artifacts_exist), where a CDN cache could report an object
+        # that has since been deleted, or miss one just written.
+        return self.output_root.artifact_index().https_url
 
     def print(self):
         """Prints artifact info in a human-readable format."""
@@ -173,15 +189,12 @@ def find_artifacts_for_commit(
             github_repository=github_repository_name,
             workflow_run=workflow_run,
         )
-        external_repo = output_root.external_repo
-        bucket = output_root.bucket
         for group in artifact_groups:
             if group in found:
                 continue
             info = ArtifactRunInfo(
                 git_commit_sha=commit,
                 github_repository_name=github_repository_name,
-                external_repo=external_repo,
                 workflow_file_name=workflow_file_name,
                 workflow_run_id=str(workflow_run["id"]),
                 workflow_run_status=workflow_run.get("status", "unknown"),
@@ -189,7 +202,7 @@ def find_artifacts_for_commit(
                 workflow_run_html_url=workflow_run.get("html_url", ""),
                 platform=platform,
                 artifact_group=group,
-                s3_bucket=bucket,
+                output_root=output_root,
             )
             if check_if_artifacts_exist(info):
                 found[group] = info

@@ -22,6 +22,7 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from _therock_utils.s3_buckets import S3BucketConfig, require_bucket_config
 
 
 def _make_local_root(run_id="test-run-123", platform="linux"):
@@ -680,7 +681,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_when_no_local_dir(self, mock_retrieve):
         """Test that S3Backend is created when THEROCK_LOCAL_STAGING_DIR is not set."""
-        mock_retrieve.return_value = ("", "test-bucket")
+        mock_retrieve.return_value = ("", S3BucketConfig(name="test-bucket"))
         with mock.patch.dict(
             os.environ,
             {"THEROCK_RUN_ID": "s3-run-id"},
@@ -699,7 +700,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
         When running on a fork (GITHUB_REPOSITORY=SomeUser/TheRock), passing
         github_repository="ROCm/TheRock" should use the main repo's bucket.
         """
-        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
         with mock.patch.dict(
             os.environ,
             {

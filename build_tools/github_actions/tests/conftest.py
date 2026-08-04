@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Pytest configuration for build_tools tests."""
+"""Pytest configuration for build_tools/github_actions tests.
+
+This is a separate pytest testpath from build_tools/tests (see the ``testpaths``
+list in build_tools/pyproject.toml), so it needs its own copy of the fixtures
+that must apply to every test in the process.
+"""
 
 import sys
 from pathlib import Path
@@ -9,7 +14,7 @@ from pathlib import Path
 import pytest
 
 # Add build_tools to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from _therock_utils.s3_buckets import reset_bucket_registry
 
