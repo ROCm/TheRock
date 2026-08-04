@@ -125,6 +125,7 @@ jobs:
       # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").
       # See https://github.com/ROCm/TheRock/issues/7075.
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
+      PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
 
     steps:
       - name: Checkout
@@ -193,6 +194,34 @@ jobs:
 
       - name: Test rocm[libraries,devel]
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      # Install rocm[profiler] on its own into a fresh venv. Per
+      # docs/packaging/python_packaging.md, rocm[profiler] alone must pull in
+      # rocm-sdk-core and be sufficient to run the profiler tools - this step
+      # validates that documented minimal install. rocm-profiler is a generic
+      # (non-target-specific) package, so no device_extras are appended.
+      - name: Install rocm[profiler]
+        id: install_profiler
+        # rocm[profiler] is not built on Windows, so skip the whole flow there
+        # (the two dependent steps gate on this step's success).
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: |
+          python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
+            --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Show installed packages (profiler)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
+        run: |
+          pip freeze
+
+      - name: Test rocm[profiler]
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test
