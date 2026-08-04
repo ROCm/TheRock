@@ -43,9 +43,10 @@ Both servers run in the `therock-runners-prod` cluster as separate, isolated
 instances (dev vs release), so presubmit/fork traffic on the dev cache never
 pollutes release builds. The release server (`bazelremote-svc-rel`) must exist
 for `github-oss-release` (nightly / prerelease / stable) to cache — if it is
-absent those builds run cold. This is now monitored by a Grafana alert
-("Bazel-remote release cache (bazelremote-svc-rel) down or absent"), so the
-degradation is no longer silent.
+absent those builds run cold. Its absence is alerted by a Grafana rule
+("Bazel-remote release cache (bazelremote-svc-rel) down or absent") added in
+[ROCm/TheRock-Infra#566](https://github.com/ROCm/TheRock-Infra/pull/566), so the
+degradation is not silent.
 
 #### Access tier (read-only presubmit / read-write trusted)
 
