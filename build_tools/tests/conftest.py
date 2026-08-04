@@ -11,7 +11,7 @@ import pytest
 # Add build_tools to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from _therock_utils.s3_buckets import reset_bucket_registry
+from _therock_utils.s3_buckets import set_bucket_config_file
 
 
 @pytest.fixture(autouse=True)
@@ -19,10 +19,10 @@ def _reset_bucket_registry():
     """Rebuild the S3 bucket registry around every test.
 
     The registry is cached after first use, so a test that points
-    THEROCK_S3_BUCKETS_FILE at a fixture would otherwise leak its buckets into
-    every test that runs after it in the same process. Reset on both sides so
-    the leak cannot travel in either direction.
+    THEROCK_S3_BUCKETS_FILE (or --bucket-config-file) at a fixture would
+    otherwise leak its buckets into every test that runs after it in the same
+    process. Reset on both sides so the leak cannot travel in either direction.
     """
-    reset_bucket_registry()
+    set_bucket_config_file(None)
     yield
-    reset_bucket_registry()
+    set_bucket_config_file(None)
