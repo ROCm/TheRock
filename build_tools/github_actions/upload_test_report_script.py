@@ -100,7 +100,7 @@ def run(args: argparse.Namespace):
     # is omitted or empty; otherwise legacy base_uri + log_destination (backward compat).
     log_dest = (args.log_destination or "").strip()
     if log_dest:
-        base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
+        base_uri = output_root.root().s3_uri
         dest_s3_uri = f"{base_uri.rstrip('/')}/{log_dest.lstrip('/')}"
     else:
         dest_s3_uri = output_root.log_dir(args.subfolder).s3_uri
