@@ -60,5 +60,7 @@ then
        ;;
    esac
 else
-    do_update_alternatives
+    if [ "$1" -eq 0 ]; then
+        do_update_alternatives
+    fi
 fi

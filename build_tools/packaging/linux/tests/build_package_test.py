@@ -45,6 +45,7 @@ TEST_BUILD_ARCH = "x86_64"
 EMPTY_GFX_ARCH = ""
 
 PKG_FFT = "amdrocm-fft"
+PKG_CORE = "amdrocm-core"
 PKG_CORE_SDK = "amdrocm-core-sdk"
 PKG_DEVELOPER_TOOLS = "amdrocm-developer-tools"
 PKG_RUNTIME = "amdrocm-runtime"
@@ -56,6 +57,8 @@ FFT_DEVICE_PACKAGE = "amdrocm-fft7.1-gfx1100"
 FFT_META_PACKAGE = "amdrocm-fft7.1"
 CORE_SDK_DEVICE_PACKAGE = "amdrocm-core-sdk7.1-gfx1100"
 DEVELOPER_TOOLS_PACKAGE = "amdrocm-developer-tools7.1"
+RUNTIME_PACKAGE = "amdrocm-runtime7.1"
+RUNTIME_LDCONFIG_FILE = "10-amdrocm-runtime7.1.conf"
 
 STAGING_PAYLOAD_NAME = "libdummy.so"
 STAGING_PAYLOAD_BYTES = b"\x00"
@@ -315,6 +318,12 @@ def _read_spec_file(pkg_name: str, config: PackageConfig) -> str:
     return spec_path.read_text(encoding="utf-8")
 
 
+def _package_dir(pkg_name: str, config: PackageConfig) -> Path:
+    """Return the generated versioned package build directory."""
+    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+    return Path(config.dest_dir) / config.pkg_type / updated
+
+
 def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) -> None:
     """Stage FFT artifacts for kpack tests; optionally include host/generic tree."""
     _stage_package_artifacts(
@@ -379,6 +388,36 @@ class ArtifactStagingTest(BuildPackageTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Maintainer scripts — alternatives changes must refresh the loader cache
+# ---------------------------------------------------------------------------
+class MaintainerScriptTest(BuildPackageTestCase):
+    """Core package lifecycle scripts refresh ldconfig after alternatives."""
+
+    def test_core_deb_scripts_refresh_ldconfig(self) -> None:
+        cfg = _kpack_config(self.temp_dir)
+        deb_dir = self.temp_dir / "debian"
+        deb_dir.mkdir()
+
+        deb_package.generate_debian_postscripts(
+            get_package_info(PKG_CORE), deb_dir, cfg
+        )
+
+        self.assertIn("ldconfig", (deb_dir / "postinst").read_text())
+        self.assertNotIn("ldconfig", (deb_dir / "prerm").read_text())
+        self.assertIn("ldconfig", (deb_dir / "postrm").read_text())
+
+    def test_core_rpm_scripts_refresh_ldconfig(self) -> None:
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+
+        scripts = rpm_package.generate_rpm_postscripts(get_package_info(PKG_CORE), cfg)
+
+        self.assertIn("ldconfig", scripts["%post"])
+        self.assertNotIn("ldconfig", scripts["%preun"])
+        self.assertIn('if [ "$1" -eq 0 ]', scripts["%preun"])
+        self.assertIn("ldconfig", scripts["%postun"])
+
+
+# ---------------------------------------------------------------------------
 # create_versioned_deb_package — real control file generation
 # ---------------------------------------------------------------------------
 class CreateVersionedDebPackageTest(BuildPackageTestCase):
@@ -418,6 +457,31 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         self.assertEqual(_control_field(control, "Package"), FFT_HOST_PACKAGE)
         self.assertEqual(_control_field(control, "Architecture"), "amd64")
         self.assertIn("amdrocm-runtime", _control_field(control, "Depends"))
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_runtime_installs_loader_config_and_scripts(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            pkg_name=PKG_RUNTIME,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        runtime_cfg = replace(cfg, gfx_arch=GFX_HOST)
+
+        deb_package.create_versioned_deb_package(
+            pkg_name=PKG_RUNTIME, config=runtime_cfg
+        )
+
+        package_dir = _package_dir(PKG_RUNTIME, runtime_cfg)
+        config_file = package_dir / "etc" / "ld.so.conf.d" / RUNTIME_LDCONFIG_FILE
+        self.assertEqual(config_file.read_text(encoding="utf-8"), "/opt/rocm/lib\n")
+        self.assertIn("./etc  /", (package_dir / "debian" / "install").read_text())
+        self.assertIn("ldconfig", (package_dir / "debian" / "postinst").read_text())
+        self.assertIn("ldconfig", (package_dir / "debian" / "postrm").read_text())
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
@@ -532,6 +596,34 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
         self.assertEqual(_spec_field(spec, "Name"), FFT_HOST_PACKAGE)
         self.assertEqual(_spec_field(spec, "BuildArch"), TEST_BUILD_ARCH)
         self.assertIn("amdrocm-runtime", _spec_field(spec, "Requires"))
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_runtime_installs_loader_config_and_scripts(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_package_artifacts(
+            pkg_name=PKG_RUNTIME,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
+            enable_kpack=True,
+        )
+        runtime_cfg = replace(cfg, gfx_arch=GFX_HOST)
+
+        rpm_package.create_versioned_rpm_package(
+            pkg_name=PKG_RUNTIME, config=runtime_cfg
+        )
+
+        spec = _read_spec_file(PKG_RUNTIME, runtime_cfg)
+        self.assertEqual(_spec_field(spec, "Name"), RUNTIME_PACKAGE)
+        self.assertIn(
+            f"%config(noreplace) /etc/ld.so.conf.d/{RUNTIME_LDCONFIG_FILE}", spec
+        )
+        self.assertIn("/opt/rocm/lib", spec)
+        self.assertIn("%post\n", spec)
+        self.assertIn("%postun\n", spec)
+        self.assertIn("ldconfig", spec)
 
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")

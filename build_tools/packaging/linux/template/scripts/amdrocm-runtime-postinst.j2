@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+
+{% if target == "deb" %}
+case "$1" in
+    configure)
+        ldconfig
+        ;;
+esac
+{% else %}
+ldconfig
+{% endif %}

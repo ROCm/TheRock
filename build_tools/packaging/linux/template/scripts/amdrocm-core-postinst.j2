@@ -79,6 +79,7 @@ do_update_alternatives(){
             echo "$PKG_INSTALL_PREFIX/bin/$i not found, but that is OK" >&2
         fi
     done
+    command -v ldconfig >/dev/null && ldconfig
     true
 }
 

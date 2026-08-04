@@ -1,3 +1,6 @@
+{%- if has_ldconfig_file %}
+./etc  /
+{%- endif %}
 {%- if has_regular_files %}
 .{{path}}/*  {{path}}
 {%- endif %}
