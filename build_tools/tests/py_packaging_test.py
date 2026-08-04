@@ -537,6 +537,14 @@ class DevicePackagingTest(TmpDirTestCase):
         artifact_dir = self._setup_kpack_split_artifacts()
         params = self._make_params(artifact_dir, kpack_split=True)
 
+        # Verify xnack-suffixed targets produce valid package names by stripping
+        # the suffix (e.g., 'gfx942:xnack+' -> 'rocm-sdk-device-gfx942')
+        device_entry = params.dist_info.ALL_PACKAGES["device"]
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942:xnack+"),
+            "rocm-sdk-device-gfx942",
+        )
+
         dev = PopulatedDistPackage(
             params, logical_name="device", target_family="gfx942"
         )

@@ -96,7 +96,8 @@ class PackageEntry:
             )
         kwargs = {}
         if target_family is not None:
-            kwargs["target_family"] = target_family
+            # Strip xnack suffix (e.g., 'gfx942:xnack+' -> 'gfx942') for valid package names
+            kwargs["target_family"] = target_family.split(":")[0]
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
