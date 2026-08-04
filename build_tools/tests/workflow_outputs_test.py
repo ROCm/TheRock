@@ -9,8 +9,14 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils import s3_buckets, workflow_outputs
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
+from _therock_utils.s3_buckets import (
+    CdnRule,
+    S3BucketConfig,
+    require_bucket_config,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +80,46 @@ class TestWorkflowOutputRootPrefix(unittest.TestCase):
         root = self._make_root()
         with self.assertRaises(AttributeError):
             root.run_id = "99999"
+
+    # -- key_prefix --
+
+    def test_prefix_defaults_to_no_key_prefix(self):
+        """Omitting key_prefix must reproduce the pre-existing layout exactly."""
+        self.assertEqual(self._make_root().key_prefix, "")
+        self.assertEqual(self._make_root().prefix, "12345-linux")
+
+    def test_prefix_with_key_prefix(self):
+        root = self._make_root(key_prefix="v3/artifacts/")
+        self.assertEqual(root.prefix, "v3/artifacts/12345-linux")
+
+    def test_prefix_with_key_prefix_and_external_repo(self):
+        """key_prefix is the bucket's layout; external_repo namespaces within it."""
+        root = self._make_root(
+            key_prefix="v3/artifacts/", external_repo="Fork-TheRock/"
+        )
+        self.assertEqual(root.prefix, "v3/artifacts/Fork-TheRock/12345-linux")
+
+    def test_key_prefix_reaches_location_methods(self):
+        """relative_path must be the full S3 key, not a key missing its prefix."""
+        root = self._make_root(key_prefix="v3/artifacts/")
+        self.assertEqual(
+            root.artifact("blas_lib_gfx94X.tar.xz").relative_path,
+            "v3/artifacts/12345-linux/blas_lib_gfx94X.tar.xz",
+        )
+        self.assertEqual(
+            root.log_file("gfx94X-dcgpu", "build.log").relative_path,
+            "v3/artifacts/12345-linux/logs/gfx94X-dcgpu/build.log",
+        )
+        self.assertEqual(
+            root.artifact_index().s3_uri,
+            "s3://therock-ci-artifacts/v3/artifacts/12345-linux/index.html",
+        )
+
+    def test_key_prefix_local_path_uses_posix_separators_on_all_platforms(self):
+        """A slashed key_prefix must not break local staging paths on Windows."""
+        root = self._make_root(key_prefix="v3/artifacts/")
+        result = root.artifact("a.tar.xz").local_path(Path("/tmp/staging"))
+        self.assertEqual(result, Path("/tmp/staging/v3/artifacts/12345-linux/a.tar.xz"))
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +346,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_basic_does_not_trigger_api(self, mock_retrieve):
         """By default, run_id is NOT passed as workflow_run_id."""
-        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
         root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
         self.assertEqual(root.bucket, "therock-ci-artifacts")
         self.assertEqual(root.external_repo, "")
@@ -316,7 +362,10 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_lookup_workflow_run_triggers_api(self, mock_retrieve):
         """With lookup_workflow_run=True, run_id IS passed as workflow_run_id."""
-        mock_retrieve.return_value = ("Fork-Repo/", "therock-ci-artifacts-external")
+        mock_retrieve.return_value = (
+            "Fork-Repo/",
+            require_bucket_config("therock-ci-artifacts-external"),
+        )
         root = WorkflowOutputRoot.from_workflow_run(
             run_id="99999",
             platform="windows",
@@ -335,7 +384,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_with_workflow_run_dict(self, mock_retrieve):
         """When workflow_run is provided, it's passed through (no API call)."""
-        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
         fake_run = {"id": 12345}
         root = WorkflowOutputRoot.from_workflow_run(
             run_id="12345",
@@ -352,7 +401,7 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_lookup_ignored_when_workflow_run_provided(self, mock_retrieve):
         """lookup_workflow_run is irrelevant when workflow_run is provided."""
-        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        mock_retrieve.return_value = ("", require_bucket_config("therock-ci-artifacts"))
         fake_run = {"id": 12345}
         root = WorkflowOutputRoot.from_workflow_run(
             run_id="12345",
@@ -368,6 +417,112 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
             workflow_run=fake_run,
             release_type=None,
         )
+
+
+class TestKeyPrefixAndCdnRoundTrip(unittest.TestCase):
+    """key_prefix and cdn_rules are independent, and compose correctly.
+
+    This is the downstream (rocm-npi-dev) shape: a bucket whose objects all live
+    under a versioned key prefix, fronted by a CDN that serves that prefix at its
+    root. The prefix must appear in the S3 key and be stripped from the CDN URL.
+    """
+
+    KEY_PREFIX = "v3/artifacts/"
+    CDN = "https://artifacts.example.com/"
+
+    def _register(self, **overrides):
+        config = S3BucketConfig(
+            name="downstream-artifacts",
+            key_prefix=self.KEY_PREFIX,
+            cdn_rules=(CdnRule(self.KEY_PREFIX, self.CDN),),
+            **overrides,
+        )
+        patcher = mock.patch.object(
+            s3_buckets,
+            "s3_bucket_configs",
+            list(s3_buckets.s3_bucket_configs) + [config],
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        s3_buckets.reset_bucket_registry()
+        self.addCleanup(s3_buckets.reset_bucket_registry)
+        return config
+
+    def test_prefix_in_s3_key_stripped_in_cdn_url(self):
+        config = self._register()
+        root = WorkflowOutputRoot(
+            bucket=config.name,
+            external_repo="",
+            run_id="12345",
+            platform="linux",
+            key_prefix=config.key_prefix,
+        )
+        loc = root.artifact("blas_lib_gfx94X.tar.xz")
+
+        # The prefix is part of the S3 key...
+        self.assertEqual(
+            loc.s3_uri,
+            "s3://downstream-artifacts/v3/artifacts/12345-linux/blas_lib_gfx94X.tar.xz",
+        )
+        self.assertEqual(
+            loc.https_url,
+            "https://downstream-artifacts.s3.amazonaws.com/"
+            "v3/artifacts/12345-linux/blas_lib_gfx94X.tar.xz",
+        )
+        # ...and is stripped by the CDN rule, which serves it at the root.
+        self.assertEqual(
+            loc.public_url,
+            "https://artifacts.example.com/12345-linux/blas_lib_gfx94X.tar.xz",
+        )
+
+    def test_independent_of_each_other(self):
+        """A bucket may have cdn_rules with no key_prefix, and vice versa.
+
+        TheRock's own release buckets are the first case; deriving one field from
+        the other would break them.
+        """
+        release = require_bucket_config("therock-nightly-python")
+        self.assertEqual(release.key_prefix, "")
+        self.assertTrue(release.cdn_rules)
+
+        artifacts = require_bucket_config("therock-ci-artifacts")
+        self.assertEqual(artifacts.key_prefix, "")
+        self.assertEqual(artifacts.cdn_rules, ())
+
+
+class TestNamespaceExternalRepos(unittest.TestCase):
+    """external_repo is driven by the bucket config flag, not a literal name."""
+
+    def _retrieve(self, config, github_repository):
+        with mock.patch.object(
+            workflow_outputs,
+            "get_artifacts_bucket_config_for_workflow_run",
+            return_value=config,
+        ):
+            return workflow_outputs._retrieve_bucket_info(
+                github_repository=github_repository
+            )
+
+    def test_shared_external_bucket_namespaces(self):
+        config = require_bucket_config("therock-ci-artifacts-external")
+        self.assertTrue(config.namespace_external_repos)
+        external_repo, returned = self._retrieve(config, "SomeUser/TheRock")
+        self.assertEqual(external_repo, "SomeUser-TheRock/")
+        self.assertIs(returned, config)
+
+    def test_dedicated_bucket_does_not_namespace(self):
+        config = require_bucket_config("therock-ci-artifacts")
+        self.assertFalse(config.namespace_external_repos)
+        external_repo, returned = self._retrieve(config, "ROCm/TheRock")
+        self.assertEqual(external_repo, "")
+        self.assertIs(returned, config)
+
+    def test_returns_config_not_name(self):
+        """The whole config is returned so from_workflow_run can read key_prefix."""
+        config = S3BucketConfig(name="downstream", key_prefix="v3/artifacts/")
+        _, returned = self._retrieve(config, "ROCm/TheRock")
+        self.assertIsInstance(returned, S3BucketConfig)
+        self.assertEqual(returned.key_prefix, "v3/artifacts/")
 
 
 if __name__ == "__main__":

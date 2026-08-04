@@ -51,7 +51,10 @@ import platform as platform_module
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.s3_buckets import get_artifacts_bucket_config_for_workflow_run
+from _therock_utils.s3_buckets import (
+    S3BucketConfig,
+    get_artifacts_bucket_config_for_workflow_run,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -82,15 +85,32 @@ class WorkflowOutputRoot:
     platform: str
     """Platform name ('linux' or 'windows')."""
 
+    key_prefix: str = ""
+    """Key prefix the bucket stores everything under (e.g. 'v3/artifacts/').
+
+    Materialized from ``S3BucketConfig.key_prefix``, the same way ``bucket`` is
+    materialized from ``S3BucketConfig.name``. Empty for all of TheRock's own
+    buckets. Must end with '/' when non-empty.
+
+    This is distinct from ``external_repo``: ``key_prefix`` is a property of the
+    bucket's layout, while ``external_repo`` namespaces one fork's uploads within
+    that layout. Downstream repositories that share a bucket under a versioned
+    prefix set the former and leave the latter meaning what it says.
+    """
+
     # -- Root -------------------------------------------------------------------
 
     @property
     def prefix(self) -> str:
         """Relative path prefix for this run (no trailing slash).
 
-        This is the common root for all outputs from this run.
+        This is the common root for all outputs from this run. The bucket's
+        ``key_prefix`` is folded in here rather than applied by each backend, so
+        that the ``relative_path`` of every ``StorageLocation`` below *is* the
+        full S3 key and needs no further adjustment by callers that consume raw
+        keys.
         """
-        return f"{self.external_repo}{self.run_id}-{self.platform}"
+        return f"{self.key_prefix}{self.external_repo}{self.run_id}-{self.platform}"
 
     def root(self) -> StorageLocation:
         """Location for the run output root (where build artifacts live)."""
@@ -313,17 +333,18 @@ class WorkflowOutputRoot:
         workflow_run_id = (
             run_id if lookup_workflow_run and workflow_run is None else None
         )
-        external_repo, bucket = _retrieve_bucket_info(
+        external_repo, bucket_config = _retrieve_bucket_info(
             github_repository=github_repository,
             workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
             release_type=release_type,
         )
         return cls(
-            bucket=bucket,
+            bucket=bucket_config.name,
             external_repo=external_repo,
             run_id=run_id,
             platform=platform,
+            key_prefix=bucket_config.key_prefix,
         )
 
     @classmethod
@@ -355,16 +376,18 @@ def _retrieve_bucket_info(
     workflow_run_id: str | None = None,
     workflow_run: dict | None = None,
     release_type: str | None = None,
-) -> tuple[str, str]:
-    """Determine S3 bucket and external_repo prefix for a workflow run.
+) -> tuple[str, S3BucketConfig]:
+    """Determine S3 bucket config and external_repo prefix for a workflow run.
 
     This is an internal implementation detail — use
     `WorkflowOutputRoot.from_workflow_run` instead.
 
     Returns:
-        Tuple of ``(external_repo, bucket)`` where:
+        Tuple of ``(external_repo, bucket_config)`` where:
         - external_repo: ``''`` for ROCm/TheRock, or ``'{owner}-{repo}/'``
-        - bucket: S3 bucket name
+        - bucket_config: the resolved ``S3BucketConfig``. The whole config is
+          returned rather than just the name so the caller can also pick up
+          ``key_prefix``.
     """
     if not github_repository:
         github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
@@ -378,7 +401,7 @@ def _retrieve_bucket_info(
     owner, repo_name = github_repository.split("/")
     external_repo = (
         f"{owner}-{repo_name}/"
-        if artifact_bucket_config.name == "therock-ci-artifacts-external"
+        if artifact_bucket_config.namespace_external_repos
         else ""
     )
-    return (external_repo, artifact_bucket_config.name)
+    return (external_repo, artifact_bucket_config)
