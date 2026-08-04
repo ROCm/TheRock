@@ -151,44 +151,36 @@ def generate_cmake_args(
     project_names: List[str] = None,
     build_dir: Path = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage or projects."""
+    """Generate CMake arguments for building a specific stage or projects/artifacts."""
     args = []
 
     if stage_name and project_names:
         desc = f"stage {stage_name} + projects: {', '.join(project_names)}"
     elif stage_name:
         desc = stage_name
+    elif project_names:
+        desc = f"projects: {', '.join(project_names)}"
     else:
-        desc = f"projects: {', '.join(project_names or [])}"
+        desc = "empty"
     if include_comments:
         args.append(f"# CMake arguments for {desc}")
         args.append("")
 
-    # GPU families for shard-specific targets
     if amdgpu_families:
         args.append(f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}")
-
-    # GPU families for dist targets (all architectures in the distribution)
-    # Quote the value since it contains semicolons (CMake list separator)
     if dist_amdgpu_families:
         args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
-
-    # Manylinux Python executables for per-Python-version builds
-    # Quote values since they contain semicolons (CMake list separator)
     if manylinux:
         args.append(f'-DTHEROCK_DIST_PYTHON_EXECUTABLES="{DIST_PYTHON_EXECUTABLES}"')
-        args.append(
-            f'-DTHEROCK_SHARED_PYTHON_EXECUTABLES="{SHARED_PYTHON_EXECUTABLES}"'
-        )
+        args.append(f'-DTHEROCK_SHARED_PYTHON_EXECUTABLES="{SHARED_PYTHON_EXECUTABLES}"')
 
-    # Disable all features by default, then enable only what we need
     if include_comments:
         args.append("")
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # Get features to enable
-    # --projects narrows down features; --stage alone enables all stage features
+    # --projects resolves names (artifacts, components, subprojects) to features
+    # --stage enables all artifacts in stage
     if project_names:
         features = get_project_features(
             topology, project_names, platform_name=platform_name, build_dir=build_dir

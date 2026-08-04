@@ -403,6 +403,9 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -497,6 +500,9 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -504,6 +510,8 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["rebuild_artifacts"] = ",".join(self.rebuild_artifacts)
+        d["reusable_artifacts"] = ",".join(self.reusable_artifacts)
         return d
 
 
@@ -887,6 +895,8 @@ def decide_jobs(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
+        rebuild_artifacts=list(auto_stage_reuse.rebuild_artifacts),
+        reusable_artifacts=list(auto_stage_reuse.reusable_artifacts),
     )
 
     # Test ROCm.
@@ -1150,6 +1160,8 @@ def _expand_build_config_for_platform(
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
+        reusable_artifacts=jobs.build_rocm.reusable_artifacts,
     )
 
 
