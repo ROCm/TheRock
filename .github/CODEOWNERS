@@ -17,6 +17,11 @@
 /build_tools/build_python_packages.py   @ScottTodd @marbre
 /external-builds/pytorch                @ScottTodd
 
+# Release promotion scripts.
+/build_tools/packaging/download_python_packages.py  @HereThereBeDragons @araravik-psd @jeniferc99
+/build_tools/packaging/promote_packages.py          @HereThereBeDragons @araravik-psd @jeniferc99
+/build_tools/packaging/upload_release_packages.py   @HereThereBeDragons @araravik-psd @jeniferc99
+
 # A few central CI system components that must align with
 # https://github.com/ROCm/TheRock/blob/main/docs/development/ci_overview.md
 /.github/workflows/setup_multi_arch.yml                   @ScottTodd
