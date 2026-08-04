@@ -1063,6 +1063,12 @@ gpgcheck=0
         * neither tag -> nothing to convert; counted and reported for
           visibility only, not treated as a failure
 
+        For files that do have DT_RPATH, the rpath value is additionally
+        inspected for entries that are not ``$ORIGIN``-relative (i.e. fixed or
+        absolute paths). A relocatable package should only use
+        ``$ORIGIN``-relative rpaths, so fixed paths are reported for visibility
+        but are not treated as a failure here.
+
         If ``readelf`` is unavailable the check is skipped (non-fatal), matching
         the tolerant behaviour used elsewhere in basic verification.
 
@@ -1074,6 +1080,7 @@ gpgcheck=0
         install_path = Path(self.install_prefix)
         runpath_only: list[str] = []
         no_path: list[str] = []
+        fixed_rpath: list[tuple[str, list[str]]] = []
         rpath_count = 0
         for root, _dirs, files in os.walk(install_path):
             for name in files:
@@ -1108,6 +1115,9 @@ gpgcheck=0
                 # it is not. Note "(RPATH)" is not a substring of "(RUNPATH)".
                 if "(RPATH)" in result.stdout:
                     rpath_count += 1
+                    fixed = self._fixed_rpath_entries(result.stdout)
+                    if fixed:
+                        fixed_rpath.append((str(filepath), fixed))
                 elif "(RUNPATH)" in result.stdout:
                     runpath_only.append(str(filepath))
                 else:
@@ -1125,6 +1135,15 @@ gpgcheck=0
                 print(f"   {entry}")
             if len(no_path) > 10:
                 print(f"   ... and {len(no_path) - 10} more")
+        if fixed_rpath:
+            print(
+                f" [WARN] {len(fixed_rpath)} ELF file(s) have DT_RPATH entries that are "
+                "not $ORIGIN-relative (fixed/absolute paths):"
+            )
+            for path, entries in fixed_rpath[:10]:
+                print(f"   {path}: {':'.join(entries)}")
+            if len(fixed_rpath) > 10:
+                print(f"   ... and {len(fixed_rpath) - 10} more")
         if runpath_only:
             print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
             for entry in runpath_only[:10]:
@@ -1134,6 +1153,21 @@ gpgcheck=0
             return False
         print(" [PASS] No installed ELF files use DT_RUNPATH")
         return True
+
+    @staticmethod
+    def _fixed_rpath_entries(readelf_output: str) -> list[str]:
+        """Return DT_RPATH entries that are not ``$ORIGIN``-relative.
+
+        Parses the ``Library rpath: [...]`` value from ``readelf -d`` output and
+        returns each colon-separated entry that does not reference ``$ORIGIN``
+        (i.e. fixed or absolute paths). Returns an empty list if there is no
+        rpath value or all entries are ``$ORIGIN``-relative.
+        """
+        match = re.search(r"\(RPATH\)\s+Library rpath: \[([^\]]*)\]", readelf_output)
+        if not match:
+            return []
+        entries = [entry for entry in match.group(1).split(":") if entry]
+        return [entry for entry in entries if "$ORIGIN" not in entry]
 
 
 _CLI_EXAMPLES_EPILOG = """
