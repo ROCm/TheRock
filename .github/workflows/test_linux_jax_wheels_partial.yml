@@ -300,17 +300,36 @@ jobs:
             --xla_gpu_enable_command_buffer=
 
         run: |
-          set -euxo pipefail
+          set -uxo pipefail
 
           unset ROCM_ROOT
           unset HIP_DEVICE_LIB_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
 
-          python -c "import jax; print(jax.local_devices())"
+          probe() {
+            echo "=== PROBE $1 ==="
+            shift
+            "$@" python -X faulthandler -c "import jax; print('IMPORT OK', jax.__version__)" \
+              || echo "PROBE RESULT: import crashed ($?)"
+            "$@" python -X faulthandler -c "import jax; print('DEVICES', jax.local_devices())" \
+              || echo "PROBE RESULT: local_devices crashed ($?)"
+          }
 
-          echo "=== Starting full test suite ==="
-          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          pip list 2>/dev/null | grep -iE "^(numpy|scipy|ml.dtypes|jax|jaxlib|opt.einsum)" || true
+
+          probe "baseline (job env)" env
+          probe "allocator unset" env -u XLA_PYTHON_CLIENT_ALLOCATOR
+          probe "hip/hsa trio as 0,0,1" env ROCPROFILER_QUEUE_INTERPOSITION=0 DEBUG_HIP_DYNAMIC_QUEUES=0 HSA_NO_SCRATCH_RECLAIM=1
+          probe "allocator unset + trio" env -u XLA_PYTHON_CLIENT_ALLOCATOR ROCPROFILER_QUEUE_INTERPOSITION=0 DEBUG_HIP_DYNAMIC_QUEUES=0 HSA_NO_SCRATCH_RECLAIM=1
+
+          echo "=== installing JAX's own test deps (the #6558 delta) ==="
+          python -m pip install uv~=0.11.2
+          python -m uv pip install -r jax/build/test-requirements.txt
+          lock="jax/build/requirements_lock_${PYTHON_VERSION/./_}.txt"
+          python -m uv pip install --upgrade -c "$lock" scipy pytest
+          pip list 2>/dev/null | grep -iE "^(numpy|scipy|ml.dtypes|jax|jaxlib|opt.einsum)" || true
+
+          probe "after jax test deps (job env)" env
+
+          echo "=== probes done ==="
