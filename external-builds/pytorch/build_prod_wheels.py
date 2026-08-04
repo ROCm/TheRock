@@ -1245,6 +1245,16 @@ def do_build_pytorch(
                 "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
                 "torch/lib/libomp140.x86_64.dll"
             )
+            # aotriton_v2.dll is a direct load-time dependency of torch_hip.dll
+            # when Flash Attention is enabled. CMake installs it into
+            # torch/lib, but scikit-build-core drops it from the wheel (same
+            # gitignore-driven class of bug as _rocm_init.py), so torch_hip.dll
+            # fails to load with WinError 126. Force-include it when present.
+            if use_flash_attention == "1":
+                build_command.append(
+                    "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
+                    "torch/lib/aotriton_v2.dll"
+                )
     if is_windows:
         # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
