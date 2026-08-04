@@ -1490,5 +1490,99 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx1101", result)
 
 
+class XnackArtifactMatchingTest(unittest.TestCase):
+    """Unit tests for xnack-suffixed artifact matching in artifact_manager.
+
+    These tests mirror the tests in fetch_artifacts_test.py since the
+    _get_base_arch and _matches_target functions are duplicated.
+    """
+
+    def setUp(self):
+        import artifact_manager as am
+
+        self.am = am
+
+    def testGetBaseArch_HandlesEdgeCases(self):
+        """Test _get_base_arch with empty and various inputs."""
+        self.assertEqual(self.am._get_base_arch(""), "")
+        self.assertEqual(self.am._get_base_arch(":xnack+"), ":xnack+")
+        self.assertEqual(self.am._get_base_arch("gfx942"), "gfx942")
+        self.assertEqual(self.am._get_base_arch("gfx942:xnack+"), "gfx942")
+        self.assertEqual(self.am._get_base_arch("gfx950:xnack-"), "gfx950")
+
+    def testMatchesTarget_HandlesEdgeCases(self):
+        """Test _matches_target with empty and various inputs."""
+        requested = {"generic", "gfx942"}
+        self.assertFalse(self.am._matches_target("", requested))
+        self.assertTrue(self.am._matches_target("gfx942", requested))
+        self.assertTrue(self.am._matches_target("gfx942:xnack+", requested))
+
+    def testFindAvailableArtifacts_MatchesXnackVariants(self):
+        """Test that requesting base arch also matches xnack-suffixed variants."""
+        available = {
+            "blas_lib_generic.tar.zst",
+            "blas_lib_gfx942.tar.zst",
+            "blas_test_gfx942.tar.zst",
+            "rccl_test_gfx942:xnack+.tar.zst",
+            "rccl_lib_gfx942:xnack-.tar.zst",
+            "blas_lib_gfx950.tar.zst",
+        }
+        result = self.am.find_available_artifacts(
+            artifact_names={"blas", "rccl"},
+            target_families=["generic", "gfx942"],
+            available=available,
+        )
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_lib_gfx942.tar.zst", result)
+        self.assertIn("blas_test_gfx942.tar.zst", result)
+        self.assertIn("rccl_test_gfx942:xnack+.tar.zst", result)
+        self.assertIn("rccl_lib_gfx942:xnack-.tar.zst", result)
+        self.assertNotIn("blas_lib_gfx950.tar.zst", result)
+
+    def testFindAvailableArtifacts_ExplicitXnackTargetMatchesBase(self):
+        """Test that requesting xnack variant explicitly also matches base arch."""
+        available = {
+            "blas_lib_generic.tar.zst",
+            "blas_lib_gfx950.tar.zst",
+            "rccl_test_gfx950:xnack+.tar.zst",
+        }
+        result = self.am.find_available_artifacts(
+            artifact_names={"blas", "rccl"},
+            target_families=["generic", "gfx950:xnack+"],
+            available=available,
+        )
+        self.assertIn("blas_lib_generic.tar.zst", result)
+        self.assertIn("blas_lib_gfx950.tar.zst", result)
+        self.assertIn("rccl_test_gfx950:xnack+.tar.zst", result)
+
+    def testFindAvailableArtifacts_PrefersZstOverXz(self):
+        """Test that .tar.zst is preferred over .tar.xz."""
+        available = {
+            "fft_lib_gfx942.tar.zst",
+            "fft_lib_gfx942.tar.xz",
+        }
+        result = self.am.find_available_artifacts(
+            artifact_names={"fft"},
+            target_families=["gfx942"],
+            available=available,
+        )
+        self.assertEqual(result, ["fft_lib_gfx942.tar.zst"])
+
+    def testFindAvailableArtifacts_ExcludesComponents(self):
+        """Test that excluded_components filters out matching artifacts."""
+        available = {
+            "fft_lib_gfx942.tar.zst",
+            "fft_test_gfx942.tar.zst",
+            "fft_test_gfx942:xnack+.tar.zst",
+        }
+        result = self.am.find_available_artifacts(
+            artifact_names={"fft"},
+            target_families=["gfx942"],
+            available=available,
+            excluded_components={"test"},
+        )
+        self.assertEqual(result, ["fft_lib_gfx942.tar.zst"])
+
+
 if __name__ == "__main__":
     unittest.main()
