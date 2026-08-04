@@ -33,11 +33,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
@@ -70,7 +65,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
+                    "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
                 },
             ],
@@ -98,7 +93,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.10", "release/2.13"):
+        for pytorch_git_ref in ("release/2.13",):
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
@@ -182,7 +177,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type=release_type,
                     python_versions=["3.12"],
-                    pytorch_git_refs=["release/2.10"],
+                    pytorch_git_refs=["release/2.11"],
                     amdgpu_families="gfx94X-dcgpu",
                     platform=platform,
                 )

@@ -140,9 +140,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
-        if config.enable_rpath:
-            for path in sourcedir_list:
-                convert_runpath_to_rpath(path)
     else:
         # Get -> Transform -> Join (no transform needed for RPM)
         provides = process_name_field(pkg_info, "Provides")
