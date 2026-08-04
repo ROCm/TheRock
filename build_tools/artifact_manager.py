@@ -77,7 +77,11 @@ ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
 
 def _get_base_arch(target: str) -> str:
-    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'."""
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
+
+    Note: This strips everything after the first colon. Any suffix (not just
+    xnack) will be removed, e.g., 'gfx942:foo' -> 'gfx942'.
+    """
     if not target:
         return ""
     base = target.split(":")[0]
@@ -85,7 +89,17 @@ def _get_base_arch(target: str) -> str:
 
 
 def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
-    """Match if the artifact's base arch equals any requested target's base arch."""
+    """Match if the artifact's base arch equals any requested target's base arch.
+
+    Uses base-arch matching: both the artifact target and requested targets are
+    stripped to their base arch before comparison. This means requesting 'gfx942'
+    will match 'gfx942', 'gfx942:xnack+', 'gfx942:xnack-', or any 'gfx942:*' variant.
+
+    Known limitation: All colon-suffixed variants of the same base arch will match.
+    For example, requesting 'gfx942' matches 'gfx942:xnack+', 'gfx942:xnack-',
+    'gfx942:abc', etc. This is intentional to ensure all relevant artifacts are
+    fetched for a given GPU architecture.
+    """
     if not artifact_target:
         return False
     requested_bases = {_get_base_arch(t) for t in requested_targets}
@@ -164,7 +178,8 @@ def find_available_artifacts(
     and components. Uses base-arch matching: requesting a base arch (e.g., "gfx942")
     will also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
 
-    Prefers .tar.zst over .tar.xz when both exist.
+    Prefers .tar.zst over .tar.xz when both exist, because zstd offers faster
+    decompression and better compression ratios for our artifact workloads.
     """
     excluded_components = excluded_components or set()
     targets_to_match = set(target_families)
@@ -173,7 +188,7 @@ def find_available_artifacts(
     matched = []
     seen = set()
 
-    # Sort with .tar.zst before .tar.xz so dedup prefers zstd
+    # Sort .tar.zst before .tar.xz so dedup prefers zstd (faster decompression)
     def _sort_key(f: str) -> tuple:
         base = f.rsplit(".tar", 1)[0]
         priority = 0 if f.endswith(".tar.zst") else 1
