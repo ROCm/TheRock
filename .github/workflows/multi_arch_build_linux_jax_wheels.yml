@@ -238,7 +238,6 @@ jobs:
             --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
-            --progress=plain \
             .
 
       - name: Determine wheel version suffix
