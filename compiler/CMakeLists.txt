@@ -159,6 +159,15 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_activate(amd-llvm)
 
 
+  # Comgr's gtest suite needs a googletest provider. therock-googletest is
+  # declared before compiler/ (see the root CMakeLists.txt) so amd-comgr can
+  # depend on the single shared instance rather than a compiler-local copy.
+  set(_comgr_gtest_deps)
+  if(THEROCK_BUILD_COMGR_TESTS)
+    set(_comgr_gtest_deps therock-googletest)
+  endif()
+
+
   ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
@@ -174,6 +183,13 @@ if(THEROCK_ENABLE_COMPILER)
         -DHOTSWAP_BUILD_TOOL=ON
         "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
     endif()
+  endif()
+
+  # Optionally override the comgr DLL/shared-library output name (Windows). Kept
+  # in sync with the CLR load side via the same THEROCK_COMGR_DLL_NAME option.
+  set(_comgr_dll_name_cmake_args)
+  if(THEROCK_COMGR_DLL_NAME)
+    list(APPEND _comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
   endif()
 
   therock_cmake_subproject_declare(amd-comgr
@@ -192,8 +208,10 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_hotswap_cmake_args}
+      ${_comgr_dll_name_cmake_args}
     BUILD_DEPS
       rocm-cmake
+      ${_comgr_gtest_deps}
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
@@ -219,6 +237,10 @@ if(THEROCK_ENABLE_COMPILER)
         "${CMAKE_CTEST_COMMAND}"
         --test-dir "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
         --output-on-failure
+      COMMAND
+        "${CMAKE_COMMAND}"
+        --build "${CMAKE_BINARY_DIR}/compiler/amd-comgr/build"
+        --target test-unit
     )
   endif()
 

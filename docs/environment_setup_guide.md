@@ -30,6 +30,23 @@ cmake --build /therock/output/build
 
 If having trouble building on a system, we will typically want to eliminate environmental issues by building under a clean/known docker image first using the above procedure. If this succeeds but the build fails on your system, it may still be an issue that we want to know more about, as there can always be bugs related to conflicting package versions, etc. However, it is a much more open ended problem to debug a user issue in the field based on system state that cannot be recreated.
 
+## Required Build Toolchains
+
+### Rust 1.95
+
+Rust 1.95 and Cargo are required to build the Mirage emulator from source on
+Linux. Install the required toolchain with [`rustup`](https://rustup.rs/):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+  sh -s -- --default-toolchain 1.95.0
+source "$HOME/.cargo/env"
+rustc --version
+cargo --version
+```
+
+If `rustup` is already installed, only `rustup install 1.95` is needed.
+
 ## Alternative Configurations
 
 ### Manylinux x86-64
@@ -219,6 +236,12 @@ Pick whichever applies to your host:
 ### Resource Utilization
 
 ROCm is a very resource hungry project to build. The `compiler/amd-llvm` component alone involves linking multi-gigabyte binaries that can consume 4-8 GB of RAM per link job, and LLVM's configure+bootstrap phase is especially memory-intensive. On systems with a high core:memory ratio (e.g., 16+ cores with 32 GB RAM), Ninja's default `nproc`-level parallelism will frequently exceed available memory and get killed by `systemd-oomd` or the kernel OOM killer.
+
+#### Disk space
+
+You will need sufficient storage (200GB+) for a full source build. This scales with the number of GPU targets (`THEROCK_AMDGPU_FAMILIES`) and any downstream framework builds (e.g. PyTorch).
+
+- Fetching sources alone (via `fetch_sources.py`) requires roughly 30GB, before any build output.
 
 #### Controlling Build Parallelism
 

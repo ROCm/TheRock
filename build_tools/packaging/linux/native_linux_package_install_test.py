@@ -45,7 +45,7 @@ Prerequisites:
 - Python packages: listed in build_tools/packaging/linux/tests/requirements.txt.
   Install with: pip install -r build_tools/packaging/linux/tests/requirements.txt
   (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
-  Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
+  Equivalent one-liner: pip install requests prettytable PyYAML
 
 CI typically runs this module under pytest (same file; reporting handled by pytest)::
 
@@ -134,6 +134,7 @@ Example invocations:
 import argparse
 import os
 import re
+import stat
 import subprocess
 import sys
 import traceback
@@ -186,7 +187,10 @@ ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
-RDHC_TIMEOUT_SEC = 30
+# rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
+# short in container CI (timeouts under load). Optional cluster checks are skipped
+# separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
+RDHC_TIMEOUT_SEC = 600  # 10 minutes
 VERIFY_MIN_COMPONENTS = 2
 _TEST_TYPE_MAP = {
     "": "sanity",
@@ -903,6 +907,11 @@ gpgcheck=0
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
 
+        # Verify installed files are owned by root:root and have safe
+        # permissions (no group/other-writable paths or setuid/setgid bits),
+        # which guards against local PATH-hijack privilege escalation.
+        security_ok = self.verify_installed_file_security()
+
         # Check installed packages
         print("\nChecking installed packages:")
         try:
@@ -964,11 +973,238 @@ gpgcheck=0
             except OSError as e:
                 print(f" [WARN] Could not run rocminfo: {e}")
 
-        if found_count >= VERIFY_MIN_COMPONENTS:
-            print("\n[PASS] Basic verification PASSED")
-            return True
-        print("\n[FAIL] Basic verification FAILED (insufficient components)")
-        return False
+        if found_count < VERIFY_MIN_COMPONENTS:
+            print("\n[FAIL] Basic verification FAILED (insufficient components)")
+            return False
+        if not security_ok:
+            print(
+                "\n[FAIL] Basic verification FAILED "
+                "(files not owned by root or with insecure permissions)"
+            )
+            return False
+        print("\n[PASS] Basic verification PASSED")
+        return True
+
+    @staticmethod
+    def _format_flagged_reason(st: os.stat_result) -> str:
+        """Format an owner/group/mode + 'why flagged' annotation from a stat result.
+
+        Renders which rule(s) a path violated (non-root owner, group/other
+        writable, setuid/setgid on a regular file) so the CI log shows *why*
+        each path was flagged rather than just its name. Mirrors the flagging
+        logic: symlink mode bits are ignored (only ownership is meaningful for
+        links) and the setuid/setgid rule applies to regular files only, since
+        setgid on a directory is a normal, benign group-inheritance pattern.
+
+        Returns the bare annotation body (no surrounding parentheses) so callers
+        can wrap it as needed.
+        """
+        mode = st.st_mode
+        reasons = []
+        if st.st_uid != 0 or st.st_gid != 0:
+            reasons.append("non-root-owner")
+        if not stat.S_ISLNK(mode):
+            if mode & 0o002:
+                reasons.append("other-writable")
+            if mode & 0o020:
+                reasons.append("group-writable")
+            if stat.S_ISREG(mode) and mode & (stat.S_ISUID | stat.S_ISGID):
+                reasons.append("setuid/setgid")
+        why = ",".join(reasons) if reasons else "?"
+        return f"uid={st.st_uid} gid={st.st_gid} mode={stat.S_IMODE(mode):04o} -> {why}"
+
+    @classmethod
+    def _describe_flagged_path(cls, path: str) -> str:
+        """Best-effort ``(owner/group/mode -> why)`` annotation for a ``find`` hit.
+
+        ``find`` prints only names, so re-``lstat`` the path to explain why it
+        was flagged. The prefix itself is often a symlink that ``find -H``
+        follows and flags via its *target*; ``lstat`` would only see the link's
+        meaningless ``0777`` bits, so for a symlink we additionally ``stat`` the
+        target and report that. Never raises: on any error it returns an
+        annotation noting the failure so reporting is unaffected.
+        """
+        try:
+            st = os.lstat(path)
+        except OSError as e:
+            return f"(stat failed: {e.strerror or e})"
+        if stat.S_ISLNK(st.st_mode):
+            try:
+                target = os.stat(path)
+            except OSError as e:
+                return f"(symlink; target stat failed: {e.strerror or e})"
+            return f"(symlink target: {cls._format_flagged_reason(target)})"
+        return f"({cls._format_flagged_reason(st)})"
+
+    def verify_installed_file_security(self) -> bool:
+        """Verify installed files are owned by root:root with safe permissions.
+
+        Combines two related install-tree security checks into a single
+        traversal. A path under the prefix is flagged when any of the following
+        holds:
+
+        - Ownership: its owner uid or group gid is not 0 (not ``root:root``);
+          a non-root-owned path can be tampered with by that owner.
+        - Writability: it is writable by group or other (mode bits ``0o022``).
+          This would let an unprivileged user drop or replace a binary in a
+          directory on ``PATH`` and have another user (or root) execute it.
+          ROCm ships no group/other-writable paths (including sticky
+          directories), so any such path is flagged.
+        - setuid/setgid on a **regular file**: it carries mode bits ``0o6000``,
+          a direct privilege-escalation surface. This rule applies to regular
+          files only: setgid on a *directory* is a normal, benign
+          group-inheritance pattern (``drwxr-sr-x``) and is not flagged.
+
+        Symbolic links are exempt from the permission rules: on Linux a
+        symlink's own mode bits are always ``lrwxrwxrwx`` and are ignored by
+        the kernel (the target's permissions govern access), so checking them
+        would produce false positives. The install prefix itself is commonly a
+        symlink (e.g. ``/opt/rocm/core`` -> ``/opt/rocm/core-X.Y``), so
+        ``find -H`` follows that top-level link to scan the real tree while not
+        following links found *inside* the tree. ``-xdev`` keeps the scan on the
+        prefix's own filesystem so bind mounts inside the tree are not crossed.
+
+        Uses ``find`` (C-level traversal) for speed on large install trees and
+        falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
+        so the check is not silently skipped.
+
+        Returns:
+        True if no offending path is found (or the check could not be run),
+        False if any offending path is found.
+        """
+        print("\nVerifying installed files are owned by root with safe permissions...")
+        install_prefix = str(Path(self.install_prefix))
+        try:
+            result = subprocess.run(
+                [
+                    "find",
+                    # follow the prefix if it is a symlink, but not links inside
+                    "-H",
+                    install_prefix,
+                    # do not cross into other filesystems mounted under prefix
+                    "-xdev",
+                    "(",
+                    # not owned by root:root
+                    "(",
+                    "!",
+                    "-uid",
+                    "0",
+                    "-o",
+                    "!",
+                    "-gid",
+                    "0",
+                    ")",
+                    "-o",
+                    # insecure permissions
+                    "(",
+                    # group/other-writable on any non-symlink (a symlink's own
+                    # mode bits are meaningless; the target is checked on its own)
+                    "(",
+                    "!",
+                    "-type",
+                    "l",
+                    "-perm",
+                    "/022",
+                    ")",
+                    "-o",
+                    # setuid/setgid on a regular file only; setgid on a
+                    # directory (drwxr-sr-x) is a benign group-inheritance
+                    # pattern and must not be flagged.
+                    "(",
+                    "-type",
+                    "f",
+                    "-perm",
+                    "/6000",
+                    ")",
+                    ")",
+                    ")",
+                    "-print",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except OSError as e:
+            # find not available on this host; fall back to a Python walk so the
+            # check still runs rather than being silently skipped.
+            print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
+            return self._verify_installed_file_security_python(Path(install_prefix))
+
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial results; surface that rather than passing
+        # silently on an incomplete scan.
+        if result.returncode != 0:
+            print(f" [WARN] find exited {result.returncode}: {result.stderr[:200]}")
+        elif result.stderr.strip():
+            print(f" [WARN] find reported: {result.stderr[:200]}")
+
+        bad = [line for line in result.stdout.splitlines() if line]
+        if bad:
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
+            for line in bad[:10]:
+                print(f"   {line} {self._describe_flagged_path(line)}")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root with safe permissions")
+        return True
+
+    def _verify_installed_file_security_python(self, install_path: Path) -> bool:
+        """Pure-Python fallback for the install-tree security check.
+
+        Walks the install tree with ``os.walk`` (does not follow symlinked
+        directories found inside the tree) and ``os.lstat`` each entry, applying
+        the same rules as :meth:`verify_installed_file_security`: flag entries
+        not owned by ``root:root``, group/other-writable entries, and
+        setuid/setgid *regular files*. Symlinks are exempt from the permission
+        rules since their mode bits are meaningless on Linux, and setgid
+        directories are not flagged (a benign group-inheritance pattern).
+        Slower than ``find`` on large trees but portable.
+
+        Returns:
+        True if no offending path is found, False if any offending path is found.
+        """
+        # Store (path, stat) so printing can annotate why each path was flagged
+        # without re-stat'ing (the stat result here is authoritative).
+        bad: list[tuple[Path, os.stat_result]] = []
+        for root, dirs, files in os.walk(install_path):
+            for name in dirs + files:
+                entry = Path(root) / name
+                try:
+                    st = os.lstat(entry)
+                except OSError:
+                    continue
+                mode = st.st_mode
+                not_root = st.st_uid != 0 or st.st_gid != 0
+                if stat.S_ISLNK(mode):
+                    # A symlink's own mode bits are always 0o777 and ignored by
+                    # the kernel; only ownership is meaningful for links.
+                    if not_root:
+                        bad.append((entry, st))
+                    continue
+                group_other_writable = bool(mode & 0o022)
+                # setgid on a directory is benign; only flag setuid/setgid on
+                # regular files (a real privilege-escalation surface).
+                setid_file = stat.S_ISREG(mode) and bool(
+                    mode & (stat.S_ISUID | stat.S_ISGID)
+                )
+                if not_root or group_other_writable or setid_file:
+                    bad.append((entry, st))
+        if bad:
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
+            for entry, st in bad[:10]:
+                print(f"   {entry} ({self._format_flagged_reason(st)})")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root with safe permissions")
+        return True
 
     def run_full_verification(self) -> bool:
         """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
@@ -1003,7 +1239,12 @@ gpgcheck=0
         cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
+        test_args = [
+            "--rocm-install-prefix",
+            rocm_install_prefix_arg,
+            "--all",
+            "--skip-optional-cluster-checks",
+        ]
         print(
             f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
         )

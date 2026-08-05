@@ -69,6 +69,7 @@ ROCM_COMPONENT_DIRS = {
     "profiler",
     "ml-libs",
     "media-libs",
+    "cv-libs",
     "storage-libs",
 }
 

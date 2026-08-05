@@ -24,6 +24,17 @@ include = [
 ]
 optional = true
 
+# origami
+[components.dbg."math-libs/BLAS/origami/stage"]
+[components.dev."math-libs/BLAS/origami/stage"]
+[components.lib."math-libs/BLAS/origami/stage"]
+[components.doc."math-libs/BLAS/origami/stage"]
+[components.test."math-libs/BLAS/origami/stage"]
+include = [
+  "bin/origami-tests*",
+  "bin/origami/**",
+]
+
 # hipBLAS
 [components.lib."math-libs/BLAS/hipBLAS/stage"]
 exclude = [
@@ -57,6 +68,7 @@ include = [
 include = [
   "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
+  "lib/hipblaslt/rocisa/**",
 ]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
