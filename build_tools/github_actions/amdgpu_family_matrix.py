@@ -298,6 +298,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
+            # Only run tests on submodule bumps (builds always run)
+            "submodule_bump_tests_only": True,
         },
         "windows": {
             "test-runs-on": "",
