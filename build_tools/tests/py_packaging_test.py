@@ -543,6 +543,18 @@ class DevicePackagingTest(TmpDirTestCase):
             device_entry.get_dist_package_name("gfx942:xnack+"),
             "rocm-sdk-device-gfx942",
         )
+        # Verify get_dist_package_require also strips xnack suffix
+        self.assertTrue(
+            device_entry.get_dist_package_require("gfx942:xnack+").startswith(
+                "rocm-sdk-device-gfx942=="
+            ),
+        )
+        # Verify get_py_package_name also strips xnack suffix
+        self.assertTrue(
+            device_entry.get_py_package_name("gfx942:xnack+").startswith(
+                "_rocm_sdk_device_gfx942"
+            ),
+        )
 
         dev = PopulatedDistPackage(
             params, logical_name="device", target_family="gfx942"
@@ -664,6 +676,14 @@ class DevicePackagingTest(TmpDirTestCase):
         # Should NOT match non-library artifact name.
         an_core = ArtifactName("core-hip", "lib", "gfx942")
         self.assertFalse(device_artifact_filter("gfx942", an_core))
+
+        # Should match xnack variant of the same base target (merges into one package).
+        an_xnack = ArtifactName("blas", "lib", "gfx942:xnack+")
+        self.assertTrue(device_artifact_filter("gfx942", an_xnack))
+
+        # Should NOT match xnack variant of a different base target.
+        an_xnack_other = ArtifactName("blas", "lib", "gfx950:xnack+")
+        self.assertFalse(device_artifact_filter("gfx942", an_xnack_other))
 
     def test_core_artifact_filter_includes_only_rocjitsu_hotswap(self):
         """The core wheel ships the HSA hotswap hook without the rocjitsu library."""
@@ -1407,6 +1427,16 @@ class PlatformMarkerTest(TmpDirTestCase):
         # Cross-platform target has no marker.
         self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
 
+        # Verify xnack-suffixed targets in platform lists are matched by base target.
+        xnack_dist_info = self._make_dist_info(
+            linux_target_families=["gfx942:xnack+", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(
+            xnack_dist_info.get_target_family_platform_marker("gfx942"),
+            'sys_platform == "linux"',
+        )
+
     def test_no_marker_when_per_platform_lists_unknown(self):
         """Single-platform builds don't pass the new kwargs; no markers
         are added, so existing (non-multi-arch) sdists are unchanged.
@@ -1538,6 +1568,21 @@ class PerTargetExtrasTest(TmpDirTestCase):
                 + extras["device-gfx1100"]
                 + extras["device-gfx1102"]
             ),
+        )
+
+        # Verify xnack-suffixed targets produce valid extra names by stripping
+        # the suffix (e.g., 'device-gfx942' not 'device-gfx942:xnack+')
+        xnack_dist_info = self._make_dist_info(
+            linux_target_families=["gfx942:xnack+", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        xnack_extras = xnack_dist_info.build_per_target_extras()
+        self.assertIn("device-gfx942", xnack_extras)
+        self.assertNotIn("device-gfx942:xnack+", xnack_extras)
+        xnack_req = xnack_extras["device-gfx942"][0]
+        self.assertTrue(
+            xnack_req.startswith("rocm-sdk-device-gfx942=="),
+            f"Expected stripped package name in requirement, got: {xnack_req}",
         )
 
     def test_no_markers_when_per_platform_lists_unknown(self):
