@@ -66,7 +66,6 @@ def normalize_target_list(
 # version_suffix - Used along with package name
 # install_prefix - Install prefix for the package
 # gfx_arch - gfxarch used for building package
-# enable_rpath - To enable RPATH packages
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
@@ -83,7 +82,6 @@ class PackageConfig:
     version_suffix: str
     install_prefix: str
     gfx_arch: str
-    enable_rpath: bool = False
     versioned_pkg: bool = True
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
@@ -392,7 +390,6 @@ def update_package_name(pkg_name, config: PackageConfig):
 
     Based on conditions, the function may append:
     - ROCm version
-    - '-rpath'
     - Graphics architecture (gfxarch)
 
     Parameters:
@@ -416,9 +413,6 @@ def update_package_name(pkg_name, config: PackageConfig):
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
-
-    if config.enable_rpath:
-        pkg_suffix = f"-rpath{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
     updated_pkgname = pkg_name
