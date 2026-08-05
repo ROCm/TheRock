@@ -324,6 +324,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
+    name: "Quartz - completed - build JAX Wheels"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

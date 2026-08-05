@@ -258,6 +258,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [configure_test_matrix, test_sanity_check, test_components]
+    name: "Quartz - completed - test ROCm artifacts"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

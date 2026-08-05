@@ -38,6 +38,7 @@ permissions:
 jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release Windows"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
@@ -195,6 +196,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
+    name: "Quartz - completed - release Windows"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

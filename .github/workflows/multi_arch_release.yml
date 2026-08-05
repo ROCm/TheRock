@@ -109,6 +109,7 @@ run-name: >-
 jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
@@ -184,6 +185,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup, linux_release, windows_release]
+    name: "Quartz - completed - release"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

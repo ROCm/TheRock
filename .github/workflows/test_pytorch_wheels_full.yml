@@ -436,6 +436,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [prepare_matrix, test_wheels, test_summary]
+    name: "Quartz - completed - test PyTorch wheels (full suite)"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

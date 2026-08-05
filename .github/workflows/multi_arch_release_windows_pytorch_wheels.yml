@@ -165,6 +165,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
+    name: "Quartz - completed - release PyTorch wheels"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

@@ -56,6 +56,7 @@ permissions:
 jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
@@ -300,6 +301,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

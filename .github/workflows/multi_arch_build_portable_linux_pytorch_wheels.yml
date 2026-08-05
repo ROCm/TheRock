@@ -568,6 +568,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels, dispatch_pytorch_wheels_full_test]
+    name: "Quartz - completed - build PyTorch wheels"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

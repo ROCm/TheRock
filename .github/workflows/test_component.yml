@@ -46,6 +46,7 @@ permissions:
 jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - test ROCm component"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
@@ -251,6 +252,7 @@ jobs:
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [test_component]
+    name: "Quartz - completed - test ROCm component"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
