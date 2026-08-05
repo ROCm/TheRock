@@ -1255,6 +1255,15 @@ def do_build_pytorch(
                     "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
                     "torch/lib/aotriton_v2.dll"
                 )
+                # aotriton_v2.dll links liblzma.dll (used to decompress its
+                # GPU kernels). On Windows PyTorch builds this from its bundled
+                # xz into build/xz-install/bin, and it is never copied into
+                # torch/lib, so aotriton_v2.dll fails to load with WinError 126.
+                # Force-include it into torch/lib next to aotriton_v2.dll.
+                build_command.append(
+                    "-Cwheel.force-include.build/xz-install/bin/liblzma.dll="
+                    "torch/lib/liblzma.dll"
+                )
     if is_windows:
         # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
