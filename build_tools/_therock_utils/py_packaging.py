@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import shlex
+import stat
 import subprocess
 import shutil
 import sys
@@ -490,6 +491,10 @@ class PopulatedDistPackage:
         # We have to patch many files, so we do not hard-link: always copy.
         log(f"  MATERIALIZE: {relpath} (from {src_path})", vlog=2)
         shutil.copy2(src_path, dest_path)
+        # copy2 preserves source mode bits. Some upstream files (e.g. LLVM's
+        # OMPD gdb module) are installed read-only, and patchelf below opens the
+        # file for writing, so guarantee the owner-write bit first.
+        os.chmod(dest_path, os.stat(dest_path).st_mode | stat.S_IWUSR)
         if self.files.has(relpath):
             log(f"WARNING: Path already materialized: {relpath}")
         else:

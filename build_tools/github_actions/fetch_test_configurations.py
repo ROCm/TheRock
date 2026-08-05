@@ -590,11 +590,12 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hip-kernel-provider tests
     "hipkernelprovider": {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -721,6 +722,20 @@ test_matrix = {
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rpp": {
+        "job_name": "rpp",
+        "fetch_artifact_args": "--rpp --tests",
+        # Sized for comprehensive/full, which runs the perf suites serially and
+        # upstream allows 4000s each. quick and standard are far under this.
+        # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
+        # of the correctness suite.
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

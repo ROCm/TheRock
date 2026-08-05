@@ -562,13 +562,16 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rpp")
             # test_rpp.py compiles the test suite against the installed tree,
             # so the _lib expansion below is not sufficient:
-            #   rpp_dev  - lib/cmake/rpp for find_package(rpp), plus headers.
-            #   base_dev - include/half/half.hpp, which api/rppdefs.h includes
-            #              to define Rpp16f.
-            # OpenMP needs nothing extra here: libomp.so and omp.h both ship
-            # in amd-llvm_lib, already fetched via base_artifact_patterns.
+            #   rpp_dev      - lib/cmake/rpp for find_package(rpp), plus headers.
+            #   base_dev     - include/half/half.hpp, which api/rppdefs.h
+            #                  includes to define Rpp16f.
+            #   amd-llvm_dev - lib/llvm/lib/cmake/AMDDeviceLibs. rpp-config.cmake
+            #                  calls find_dependency(HIP), and hip-config-amd.cmake
+            #                  in turn resolves AMDDeviceLibs through the
+            #                  lib/cmake/AMDDeviceLibs shim in base_lib.
             argv.append("rpp_dev")
             argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")

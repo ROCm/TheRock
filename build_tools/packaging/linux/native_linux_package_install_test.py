@@ -139,7 +139,7 @@ import subprocess
 import sys
 import traceback
 from argparse import ArgumentParser, Namespace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -1073,7 +1073,10 @@ gpgcheck=0
         False if any offending path is found.
         """
         print("\nVerifying installed files are owned by root with safe permissions...")
-        install_prefix = str(Path(self.install_prefix))
+        # PurePosixPath, not Path: this is a path on the target Linux filesystem
+        # handed to find(1). Path follows the local flavour, so on Windows it
+        # renders "\opt\rocm\core" and the scan silently targets the wrong path.
+        install_prefix = str(PurePosixPath(self.install_prefix))
         try:
             result = subprocess.run(
                 [
