@@ -132,7 +132,7 @@ class Parameters:
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
         dist_info_base = DIST_INFO_PATH.read_text()
-        dist_info_base += f"__version__ = {repr(f'{version}{version_suffix}')}\n"
+        dist_info_base += f"__version__ = {repr(version)}\n"
         dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = {repr(version_suffix)}\n"
         self.dist_info_base_contents = dist_info_base
 
@@ -169,12 +169,13 @@ class Parameters:
         self.dist_info_contents = dist_info_contents
 
         # Dynamically load the dist_info module for use during populate.
-        # exec() runs only the static template file — all user-controlled values
-        # are assigned directly as attributes, eliminating code injection risk.
+        # exec() runs only the static template file (no user input); all
+        # user-controlled values are assigned directly as attributes below,
+        # never synthesized into source text, eliminating code injection risk.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(DIST_INFO_PATH.read_text(), self.dist_info.__dict__)  # static file only
-        self.dist_info.__version__ = f"{version}{version_suffix}"
+        exec(DIST_INFO_PATH.read_text(), self.dist_info.__dict__)  # static template only, no user input
+        self.dist_info.__version__ = version
         self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix
         if kpack_split:
             self.dist_info.ALL_PACKAGES["libraries"].dist_package_template = (
@@ -182,12 +183,9 @@ class Parameters:
             )
         if self.default_target_family is not None:
             self.dist_info.DEFAULT_TARGET_FAMILY = self.default_target_family
-        for target_family in self.available_target_families:
-            self.dist_info.AVAILABLE_TARGET_FAMILIES.append(target_family)
-        for target_family in self.linux_target_families:
-            self.dist_info.LINUX_TARGET_FAMILIES.append(target_family)
-        for target_family in self.windows_target_families:
-            self.dist_info.WINDOWS_TARGET_FAMILIES.append(target_family)
+        self.dist_info.AVAILABLE_TARGET_FAMILIES.extend(self.available_target_families)
+        self.dist_info.LINUX_TARGET_FAMILIES.extend(self.linux_target_families)
+        self.dist_info.WINDOWS_TARGET_FAMILIES.extend(self.windows_target_families)
 
     def filter_artifacts(
         self,
