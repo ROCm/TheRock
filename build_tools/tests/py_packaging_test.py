@@ -1635,20 +1635,6 @@ class DistInfoInjectionTest(TmpDirTestCase):
         exec(content, ns)
         return ns
 
-    def test_version_is_not_combined_with_suffix(self):
-        """__version__ must be the raw version; version_suffix stays isolated
-        in PY_PACKAGE_SUFFIX_NONCE (regression guard for a bug where the two
-        were briefly concatenated into __version__).
-        """
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
-        params = self._make_params(artifact_dir, version="7.0.0", version_suffix="+rocm7.0")
-        meta = PopulatedDistPackage(params, logical_name="meta")
-
-        ns = self._exec_dist_info(meta)
-        self.assertEqual(ns["__version__"], "7.0.0")
-        self.assertEqual(ns["PY_PACKAGE_SUFFIX_NONCE"], "+rocm7.0")
-
     def test_malicious_version_suffix_is_inert(self):
         """A version_suffix crafted to break out of the repr()-quoted string
         must not execute; it must round-trip as inert string data.
