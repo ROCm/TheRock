@@ -494,6 +494,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -1154,6 +1155,9 @@ def _expand_build_config_for_platform(
     # Python package build is disabled. Then multi_arch_ci_* can also condition
     # build_python_packages on that decision.
 
+    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    is_asan = suffix == "asan"
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
@@ -1161,7 +1165,8 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
+        build_native_linux=True,
+        build_python_packages=(not is_asan),
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,

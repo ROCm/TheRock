@@ -938,6 +938,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_python_packages=True,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
@@ -969,6 +970,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_python_packages=True,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
@@ -1658,9 +1660,15 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_windows.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        # build_native_linux is Linux-only. JAX builds are release-only and
-        # Linux-only for now, so Windows CI workflows do not consume them.
-        unused_fields = {"build_native_linux", "build_jax", "jax_build_matrix"}
+        # build_native_linux and build_python_packages are Linux-only. JAX builds
+        # are release-only and Linux-only for now, so Windows CI workflows do not
+        # consume them.
+        unused_fields = {
+            "build_native_linux",
+            "build_python_packages",
+            "build_jax",
+            "jax_build_matrix",
+        }
         self.assertEqual(
             yaml_fields,
             python_fields - unused_fields,
