@@ -92,6 +92,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     TEST_SUBPROJECTS
       rocgdb-cpu
       rocgdb-gpu
+      rocgdb-corefile
       rocr-debug-agent-tests
   )
 
@@ -327,6 +328,7 @@ if(THEROCK_ENABLE_ROCGDB)
     TEST_SUBPROJECTS
       rocgdb-cpu
       rocgdb-gpu
+      rocgdb-corefile
   )
 
   # We may want to adjust this to optimize rebuilds.
