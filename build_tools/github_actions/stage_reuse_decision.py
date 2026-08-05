@@ -474,7 +474,11 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     extra "passing build" check is needed here.
     """
 
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    # THEROCK_REPOSITORY is set by setup_multi_arch.yml to the repository input
+    # (ROCm/TheRock for external repos, or github.repository for normal runs).
+    github_repository = os.environ.get(
+        "THEROCK_REPOSITORY", os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    )
     branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
     workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None

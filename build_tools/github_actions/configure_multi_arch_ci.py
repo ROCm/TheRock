@@ -162,6 +162,10 @@ class CIInputs:
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
 
+    # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
+    # Non-empty when an external repo calls TheRock workflows
+    external_repo: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -265,6 +269,7 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
 
 
@@ -313,6 +318,17 @@ class GitContext:
         where we don't want to diff against a prior commit.
         """
         return GitContext()
+
+    @staticmethod
+    def from_external_repo(external_repo_name: str) -> "GitContext":
+        """Create context for external repo builds (e.g., rocm-libraries).
+
+        For external repos, we treat the repo name as the changed file so that
+        stage reuse analysis can determine which TheRock stages are affected.
+        The external repo name maps to a submodule in TheRock.
+        """
+        print(f"External repo detected: {external_repo_name}")
+        return GitContext(changed_files=[external_repo_name])
 
     @property
     def has_submodule_changes(self) -> bool | None:
@@ -577,6 +593,9 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+
+    For external repo builds, path filtering is skipped since the external repo
+    name is used for stage reuse analysis, not for CI skip decisions.
     """
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
@@ -601,6 +620,12 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
+
+    # External repo builds skip path filtering - they always run CI and use
+    # stage reuse to determine which stages to rebuild.
+    if ci_inputs.external_repo:
+        print("  External repo build: skipping path filter checks, using stage reuse")
+        return False
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -900,14 +925,17 @@ def decide_jobs(
     baseline_repository = ci_inputs.baseline_repository
     baseline_run_id = ci_inputs.baseline_run_id
 
-    # Apply automatic stage reuse when running in the same repo as baseline.
-    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if not baseline_repository or baseline_repository == current_repo:
-        # reuse-stage mode returns non-empty applied_reuse_stages.
-        for stage in auto_stage_reuse.applied_reuse_stages:
-            stage_decisions.setdefault(stage, JobAction.PREBUILT)
-        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-            baseline_run_id = auto_stage_reuse.baseline_run_id
+    # Apply automatic stage reuse. For external repos (rocm-libraries, rocm-systems),
+    # we reuse stages from TheRock baselines. For same-repo runs, baseline_repository
+    # is empty or matches the current repo.
+    # reuse-stage mode returns non-empty applied_reuse_stages.
+    for stage in auto_stage_reuse.applied_reuse_stages:
+        stage_decisions.setdefault(stage, JobAction.PREBUILT)
+    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+        baseline_run_id = auto_stage_reuse.baseline_run_id
+        # For external repos, use their baseline_repository (ROCm/TheRock)
+        if ci_inputs.baseline_repository:
+            baseline_repository = ci_inputs.baseline_repository
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -1413,15 +1441,23 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
-    # The "run everything" is initial state for superrepo multi-arch CI migration.
-    # We will eventually support path filtering and component selection.
-    # TODO: Provide custom decision logic to run specific components and paths
-    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+    # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
+    if ci_inputs.external_repo:
+        # External repo: use repo name for stage reuse analysis.
+        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+            repo_full_name = external_repo.get("repository", "")
+            external_repo_name = (
+                repo_full_name.split("/")[-1] if "/" in repo_full_name else ""
+            )
+        except (json.JSONDecodeError, TypeError):
+            external_repo_name = ""
 
-    if skip_path_filters:
-        # External repo: skip path filtering, run everything
-        git_context = GitContext.empty()
+        if external_repo_name:
+            git_context = GitContext.from_external_repo(external_repo_name)
+        else:
+            git_context = GitContext.empty()
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
