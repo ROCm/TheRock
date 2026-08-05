@@ -933,9 +933,6 @@ def decide_jobs(
         stage_decisions.setdefault(stage, JobAction.PREBUILT)
     if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
         baseline_run_id = auto_stage_reuse.baseline_run_id
-        # For external repos, use their baseline_repository (ROCm/TheRock)
-        if ci_inputs.baseline_repository:
-            baseline_repository = ci_inputs.baseline_repository
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
