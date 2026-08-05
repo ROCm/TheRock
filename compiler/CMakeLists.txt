@@ -185,6 +185,13 @@ if(THEROCK_ENABLE_COMPILER)
     endif()
   endif()
 
+  # Optionally override the comgr DLL/shared-library output name (Windows). Kept
+  # in sync with the CLR load side via the same THEROCK_COMGR_DLL_NAME option.
+  set(_comgr_dll_name_cmake_args)
+  if(THEROCK_COMGR_DLL_NAME)
+    list(APPEND _comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
+  endif()
+
   therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -201,6 +208,7 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_hotswap_cmake_args}
+      ${_comgr_dll_name_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}

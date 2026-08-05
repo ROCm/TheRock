@@ -103,7 +103,10 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
+      # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
+        --cap-add=SYS_PTRACE
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -114,19 +117,27 @@ jobs:
     defaults:
       run:
         shell: bash
+    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
+    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
+    # itself, so we only set the extras the runner does not manage.
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      # Pin OpenBLAS threads to 1 for deterministic reductions; otherwise
+      # OpenBLAS defaults to the CPU core count, producing non-deterministic
+      # results in tests like test_entropy_monte_carlo.
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -147,11 +158,11 @@ jobs:
             --torch-version=${{ inputs.torch_version }} \
             --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
             --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }} \
             --device-extras="${{ steps.expand.outputs.device_extras }}"
 
       - name: Set git options
         run: |
+          git config --global --add safe.directory $PWD
           git config --global core.longpaths true
 
       # Here we checkout the same version of PyTorch that wheels were built from
@@ -182,6 +193,9 @@ jobs:
       - name: Set up virtual environment
         timeout-minutes: 15
         run: |
+          # The torch wheel already depends on the matching rocm runtime
+          # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
+          # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
             --index-url=${{ inputs.package_index_url }} \
@@ -192,6 +206,11 @@ jobs:
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
+
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
 
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
@@ -205,13 +224,33 @@ jobs:
             --log-cli-level=INFO \
             -v
 
+      # Rather than calling pytest or PyTorch's run_test.py directly, we use a
+      # test runner script that invokes run_test.py after first handling our
+      # custom skip-list integration, serialized execution, GPU selection, and
+      # more. The list of included test suites is limited here compared to in
+      # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py \
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
             --device-query "${{ inputs.device_query }}" \
             --gpu-policy "${{ inputs.gpu_policy }}" \
+            --include \
+              test_nn \
+              test_torch \
+              test_cuda \
+              test_unary_ufuncs \
+              test_binary_ufuncs \
+              test_autograd \
             -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
+            --continue-on-collection-errors
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ inputs.amdgpu_family }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30

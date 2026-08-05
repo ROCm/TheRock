@@ -27,10 +27,6 @@ on:
         description: "Repository containing the JAX release branch."
         type: string
         required: true
-      build_mode:
-        description: "Build mode. CI currently supports manylinux only."
-        type: string
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -81,12 +77,6 @@ on:
         description: "GitHub repository in owner/repo format containing the JAX release branch."
         type: string
         default: "ROCm/jax"
-      build_mode:
-        description: "Build mode."
-        type: choice
-        options:
-          - manylinux
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -134,20 +124,21 @@ jobs:
 
     steps:
       - name: Checkout TheRock
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout rocm-jax
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        id: checkout_jax
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax-source
           repository: ${{ inputs.jax_repository }}
@@ -160,20 +151,13 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      - name: Validate CI build mode
-        run: |
-          if [ "${{ inputs.build_mode }}" != "manylinux" ]; then
-            echo "Only build_mode=manylinux is supported by this CI workflow."
-            exit 1
-          fi
 
       - name: Build manylinux image
         working-directory: jax-source
@@ -225,7 +209,7 @@ jobs:
                 --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
-                --bazel_options=--//jaxlib/tools:jaxlib_git_hash=$(git rev-parse HEAD) \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path=$(pwd)/dist

@@ -294,6 +294,15 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
+    def test_asan_pr_with_ci_asan_label_runs(self):
+        """ASAN PR with ci:asan label runs CI even without submodule changes."""
+        inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
     def test_asan_pr_with_submodule_change_runs(self):
         """ASAN PR with submodule changes runs CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
@@ -1113,17 +1122,17 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
             ],
@@ -1133,7 +1142,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
+                    "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
                 }
             ],

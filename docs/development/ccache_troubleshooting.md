@@ -152,7 +152,7 @@ dctx = zstandard.ZstdDecompressor()
 with open("ccache_logs.tar.zst", "rb") as f:
     reader = dctx.stream_reader(f)
     with tarfile.open(fileobj=reader, mode="r|") as tf:
-        tf.extractall("output_dir")
+        tf.extractall("output_dir", filter="tar")
 ```
 
 ### Using the analysis scripts

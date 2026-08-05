@@ -35,7 +35,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -109,7 +109,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
@@ -169,27 +169,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax (plugin + build scripts)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX extended tests repo
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
           check-latest: true
@@ -224,6 +224,18 @@ jobs:
 
       - name: Determine JAX package versions
         run: |
+          # The plugin/pjrt wheels embed the ROCm major version in their package
+          # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
+          # built against.
+          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${rocm_major%%.*}"
+          if [ -z "${rocm_major}" ]; then
+            echo "::error::rocm_version is required to determine the JAX plugin package name"
+            exit 1
+          fi
+          echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
+          echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
+
           # Use versions passed from the build workflow when available.
           # For manual workflow_dispatch, compute the version suffix using
           # compute_jax_package_version.py (matches rocm-jax ci_build format).
@@ -248,10 +260,12 @@ jobs:
           echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           echo "  JAX_VERSION=${JAX_VERSION}"
+          echo "  JAX_PLUGIN_PACKAGE=${JAX_PLUGIN_PACKAGE}"
+          echo "  JAX_PJRT_PACKAGE=${JAX_PJRT_PACKAGE}"
           # Install plugin/pjrt from the GPU-family index
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
-            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+            "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
+            "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
           # For JAX <= 0.9.0, jaxlib is built and installed from GPU index.
           # For JAX >= 0.9.1, jaxlib is not built - install jax and jaxlib from upstream PyPI.
           if [ -n "${JAXLIB_VERSION}" ]; then
@@ -260,6 +274,13 @@ jobs:
           else
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
           fi
+
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
       - name: Run JAX tests
         env:
