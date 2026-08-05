@@ -540,8 +540,19 @@ class DevicePackagingTest(TmpDirTestCase):
         # Verify xnack-suffixed targets produce valid package names by stripping
         # the suffix (e.g., 'gfx942:xnack+' -> 'rocm-sdk-device-gfx942')
         device_entry = params.dist_info.ALL_PACKAGES["device"]
+        # Test xnack+ suffix
         self.assertEqual(
             device_entry.get_dist_package_name("gfx942:xnack+"),
+            "rocm-sdk-device-gfx942",
+        )
+        # Test xnack- suffix
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942:xnack-"),
+            "rocm-sdk-device-gfx942",
+        )
+        # Test base target without suffix
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942"),
             "rocm-sdk-device-gfx942",
         )
         # Verify get_dist_package_require also strips xnack suffix
