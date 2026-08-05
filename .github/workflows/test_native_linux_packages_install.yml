@@ -107,15 +107,6 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
-      - name: Notify Quartz - started
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
-        with:
-          run_phase: started
-          reporting_workflow: test_native_linux_packages_install.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -231,20 +222,3 @@ jobs:
         id: summary
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
-
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [prepare_install_context, test_native_linux_packages_install]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: Notify Quartz - completed
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
-        with:
-          run_phase: completed
-          reporting_workflow: test_native_linux_packages_install.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

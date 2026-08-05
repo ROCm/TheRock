@@ -59,6 +59,8 @@ jobs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_native_linux_packages.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build rpm/deb packages"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
@@ -68,12 +70,13 @@ jobs:
       PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
-      - name: Notify Quartz - started
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
-          reporting_workflow: multi_arch_build_native_linux_packages.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
@@ -155,13 +158,14 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: Notify Quartz - completed
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}
-          reporting_workflow: multi_arch_build_native_linux_packages.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}

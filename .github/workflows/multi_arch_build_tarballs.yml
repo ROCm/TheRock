@@ -90,16 +90,19 @@ jobs:
     outputs:
       tarball_urls: ${{ steps.upload.outputs.tarball_urls }}
     env:
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_tarballs.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build tarballs"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
-      - name: Notify Quartz - started
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
-          reporting_workflow: multi_arch_build_tarballs.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
@@ -144,13 +147,14 @@ jobs:
             --platform="${{ inputs.platform }}" \
             --release-type="${{ inputs.release_type }}"
 
-      - name: Notify Quartz - completed
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}
-          reporting_workflow: multi_arch_build_tarballs.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}

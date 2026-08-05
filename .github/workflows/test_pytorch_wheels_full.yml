@@ -145,9 +145,10 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - name: Notify Quartz - started
+      - name: "Quartz - started - test PyTorch wheels (full suite)"
+        continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
           reporting_workflow: test_pytorch_wheels_full.yml
@@ -439,8 +440,8 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
     steps:
-      - name: Notify Quartz - completed
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+      - name: "Quartz - completed - test PyTorch wheels (full suite)"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           reporting_workflow: test_pytorch_wheels_full.yml

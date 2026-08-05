@@ -119,9 +119,10 @@ jobs:
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
-      - name: Notify Quartz - started
+      - name: "Quartz - started - release PyTorch wheels"
+        continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
@@ -184,8 +185,8 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
     steps:
-      - name: Notify Quartz - completed
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+      - name: "Quartz - completed - release PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml

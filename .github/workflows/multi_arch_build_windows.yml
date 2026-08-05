@@ -70,8 +70,8 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
     steps:
-      - name: Notify Quartz - started
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+      - name: "Quartz - started - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_windows.yml
@@ -191,8 +191,8 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
     steps:
-      - name: Notify Quartz - completed
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+      - name: "Quartz - completed - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_windows.yml

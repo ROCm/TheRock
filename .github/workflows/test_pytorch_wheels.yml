@@ -123,6 +123,8 @@ jobs:
     # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
     # itself, so we only set the extras the runner does not manage.
     env:
+      QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       # Pin OpenBLAS threads to 1 for deterministic reductions; otherwise
@@ -132,12 +134,13 @@ jobs:
       PYTORCH_NUM_PYTEST_RERUNS: "2"
 
     steps:
-      - name: Notify Quartz - started
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: started
-          reporting_workflow: test_pytorch_wheels.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
@@ -275,13 +278,14 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: Notify Quartz - completed
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/TheRock/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@main
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}
-          reporting_workflow: test_pytorch_wheels.yml
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
