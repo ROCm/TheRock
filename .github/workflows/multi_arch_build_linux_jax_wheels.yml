@@ -144,8 +144,8 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     container:
       image: ubuntu:24.04
-      # Mount Docker socket to enable docker commands for building manylinux images
-      options: -v /var/run/docker.sock:/var/run/docker.sock
+      # Privileged mode required for Docker-in-Docker builds
+      options: --privileged
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
@@ -160,8 +160,21 @@ jobs:
         run: |
           apt-get update
           apt-get install -y git docker.io
-          # Ensure docker socket is accessible
-          chmod 666 /var/run/docker.sock || true
+
+      - name: Start Docker daemon
+        run: |
+          # Start Docker daemon in background for Docker-in-Docker builds
+          dockerd &
+          # Wait for Docker to be ready
+          for i in $(seq 1 30); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker daemon is ready"
+              break
+            fi
+            echo "Waiting for Docker daemon... ($i/30)"
+            sleep 1
+          done
+          docker info
 
       - name: Checkout TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
