@@ -424,10 +424,7 @@ blowing the per-PR SLA. Transitive closure is retained, but as the opt-in **leve
 the direct-consumer (one-hop) default, the transitive (level-3) walk, each
 test-policy key, the per-component level, and the resolution order (walk → include
 → exclude). It also covers the policy-validation check (an override naming an
-unknown component fails) and the `--explain` output. The
-`TEST_OVERRIDE_CHANGED_PROJECTS` env override in the external-repo CI configuration
-allows forcing a specific `changed_projects` value to exercise the selection
-end-to-end in a real CI run without an actual source change.
+unknown component fails) and the `--explain` output.
 
 ## Open questions
 
