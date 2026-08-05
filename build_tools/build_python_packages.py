@@ -324,6 +324,8 @@ def _run_kpack_split(
     lib.rpath_dep(core, "lib")
     lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
     lib.rpath_dep(core, "lib/host-math/lib")
+    # rpp needs libomp, which ships in core under lib/llvm/lib.
+    lib.rpath_dep(core, "lib/llvm/lib")
     lib.populate_runtime_files(
         params.filter_artifacts(
             filter=functools.partial(libraries_artifact_filter, "generic"),
@@ -410,6 +412,8 @@ def _run_legacy(
         lib.rpath_dep(core, "lib")
         lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
         lib.rpath_dep(core, "lib/host-math/lib")
+        # rpp needs libomp, which ships in core under lib/llvm/lib.
+        lib.rpath_dep(core, "lib/llvm/lib")
         lib.populate_runtime_files(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
@@ -544,6 +548,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "hipkernelprovider",
             "rand",
             "rccl",
+            "rpp",
         ]
         and an.component
         in [
