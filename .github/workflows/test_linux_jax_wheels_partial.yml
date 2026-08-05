@@ -101,7 +101,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
-        default: "rocm-jaxlib-v0.9.1"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Built JAX version"
         type: string
@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
+    name: Test JAX | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
 
@@ -157,27 +157,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax
           repository: ROCm/jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
           check-latest: true
@@ -196,6 +196,18 @@ jobs:
 
       - name: Determine JAX package versions
         run: |
+          # The plugin/pjrt wheels embed the ROCm major version in their package
+          # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
+          # built against.
+          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${rocm_major%%.*}"
+          if [ -z "${rocm_major}" ]; then
+            echo "::error::rocm_version is required to determine the JAX plugin package name"
+            exit 1
+          fi
+          echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
+          echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
+
           if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
             echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
             echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
@@ -237,8 +249,8 @@ jobs:
 
           pip install \
             --index-url "${WHEEL_INDEX_URL}" \
-            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
-            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
+            "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
+            "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
 
           if [ -n "${JAXLIB_VERSION}" ]; then
             pip install \
@@ -251,6 +263,13 @@ jobs:
               "jax==${JAX_VERSION}" \
               "jaxlib==${JAX_VERSION}"
           fi
+
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
       - name: Run JAX tests
         timeout-minutes: 60
@@ -282,8 +301,6 @@ jobs:
           unset HIP_DEVICE_LIB_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
           unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
-          unset HIP_VISIBLE_DEVICES
-          unset ROCR_VISIBLE_DEVICES
 
           python -c "import jax; print(jax.local_devices())"
 

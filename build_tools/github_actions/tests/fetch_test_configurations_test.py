@@ -80,6 +80,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("windows", job["platform"])
 
+    def test_rocprofiler_sdk_submits_to_cdash(self):
+        config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
+        self.assertIn("--enable-cdash", config["test_script"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
@@ -307,10 +311,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called for rccl multi-gpu
+            # Verify select_weighted_label was called for the multi-gpu jobs.
+            # With rocshmem added there is more than one multi-GPU job (rccl and
+            # rocshmem), each using a "<job_name>-multi-gpu" context.
             multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
-            self.assertEqual(len(multi_gpu_calls), 1)
-            self.assertEqual(multi_gpu_calls[0][1], "rccl-multi-gpu")
+            multi_gpu_contexts = {c[1] for c in multi_gpu_calls}
+            self.assertIn("rccl-multi-gpu", multi_gpu_contexts)
+            self.assertIn("rocshmem-multi-gpu", multi_gpu_contexts)
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
