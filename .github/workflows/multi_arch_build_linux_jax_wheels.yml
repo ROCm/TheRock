@@ -160,6 +160,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y git docker.io
+          # Ensure docker socket is accessible
+          chmod 666 /var/run/docker.sock || true
 
       - name: Checkout TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
