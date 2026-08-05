@@ -126,9 +126,11 @@ class Parameters:
         self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
-        # Load and interpolate the _dist_info.py template.
-        # All user-controlled values are wrapped in repr() to prevent injection
-        # when the file is later imported by setup.py at install time.
+        # Load and interpolate the _dist_info.py template. version, version_suffix,
+        # and target_family are wrapped in repr() so unexpected characters can't
+        # break out of the generated source when it's later imported by setup.py
+        # at install time — the main practical risk being target_family, parsed
+        # from artifact directory names via ArtifactName's permissive regex.
         # Base: version and nonce only — no family lines. Used as the starting
         # point for restrict_families packages so they can write clean family
         # content without a .clear() dance.
@@ -170,9 +172,10 @@ class Parameters:
         self.dist_info_contents = dist_info_contents
 
         # Dynamically load the dist_info module for use during populate.
-        # exec() runs only the static template file (no user input); all
-        # user-controlled values are assigned directly as attributes below,
-        # never synthesized into source text, eliminating code injection risk.
+        # exec() runs only the static template file; version, version_suffix,
+        # and target_family are assigned directly as attributes below, never
+        # synthesized into source text, eliminating code injection risk
+        # regardless of where those values originated.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
         exec(DIST_INFO_PATH.read_text(), self.dist_info.__dict__)  # static template only, no user input
