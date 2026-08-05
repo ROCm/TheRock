@@ -178,7 +178,9 @@ class Parameters:
         # regardless of where those values originated.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(DIST_INFO_PATH.read_text(), self.dist_info.__dict__)  # static template only, no user input
+        exec(
+            DIST_INFO_PATH.read_text(), self.dist_info.__dict__
+        )  # static template only, no user input
         self.dist_info.__version__ = version
         self.dist_info.PY_PACKAGE_SUFFIX_NONCE = version_suffix
         if kpack_split:

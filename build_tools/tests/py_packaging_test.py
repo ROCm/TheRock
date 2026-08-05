@@ -1109,7 +1109,9 @@ class RestrictFamiliesTest(TmpDirTestCase):
         payload = "'; SENTINEL['pwned'] = True; x = '"
         artifact_dir = self.temp_dir / "artifacts"
         self._add_artifact(artifact_dir, "base", "lib", "gfx942")
-        params = self._make_params(artifact_dir, version="7.0.0", version_suffix=payload)
+        params = self._make_params(
+            artifact_dir, version="7.0.0", version_suffix=payload
+        )
         meta = PopulatedDistPackage(params, logical_name="meta")
 
         sentinel = {"pwned": False}
