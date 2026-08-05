@@ -29,55 +29,70 @@
 # keys: their whole purpose is to name test-only targets the graph cannot express
 # (e.g. ctest suites like rocgdb-cpu). There is no `test_fanout_all`: "test all
 # downstream consumers" is expressed as `level = 3`.
+#
+# Components are DEFCON 4 by default (level 4 = self + direct consumers, so the
+# level key is omitted). A few broad-blast-radius runtimes set level = 3 (full
+# transitive consumer closure) to auto-derive their large downstream set instead
+# of listing it by hand. The test_include lists carry the downstream "Dependents"
+# that the reverse-dependency graph cannot derive on its own, so that (graph walk)
+# UNION (test_include) covers the dependent set from the "DEFCON Enablement:
+# Gating Levels" tracking page.
 
-# --- Foundational deps: transitive fan-out (level = 3) -------------------------
-# These base subprojects have consumers spanning the whole tree; a change to any
-# of them should test the full downstream closure, so they walk transitively
-# (level 3 = unbounded BFS closure). NOTE: this is BROADER than the old
-# test_fanout_all, which selected only DIRECT consumers (one hop); level 3 walks
-# the entire transitive closure. The wider scope is intentional for these deps.
+# --- Foundational runtimes: broad downstream dependent sets --------------------
+# rocr-runtime / hip-clr / amd-llvm sit under most of the tree. Their direct
+# graph consumers miss many real downstream projects (framework-facing libs, test
+# harnesses), so the DEFCON 4 dependent list is carried explicitly here.
 
-[component.rocm-core]
+[component.rocr-runtime]
+# Broad blast radius: level 3 walks the full transitive consumer closure, which
+# auto-derives the bulk of the DEFCON 4 dependent set. Only the couplings the
+# graph has no path for are pinned below (amd-dbgapi, ocl-icd, rocgdb).
 level = 3
+test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
 
-[component.rocm-cmake]
-level = 3
+[component.hip-clr]
+# hipinfo is a hip-clr tool/test target, not a declared subproject, so it is not a
+# graph key -- but include VALUES may name test-only targets, so it is kept.
+test_include = [
+    "hipblasltprovider",
+    "hipdnn_samples",
+    "hipinfo",
+    "miopenprovider",
+    "rdc",
+    "rocrtst",
+]
 
-[component.rocm-half]
-level = 3
-
-[component.rocprofiler-register]
-level = 3
+[component.amd-llvm]
+test_include = [
+    "hip-tests",
+    "rccl",
+    "rocgdb",
+    "rocprofiler-compute",
+    "rocprofiler-sdk",
+    "rocprofiler-systems",
+]
 
 # --- Test-only / non-derivable inclusions -------------------------------------
 # Couplings the reverse-dependency graph cannot express (test-only projects with
 # no link-time edge, or real reverse edges absent from the forward deps).
 
-[component.rocr-runtime]
-test_include = [
-    "hip-tests",
-    "rocrtst",
-    "rocr-debug-agent",
-    "rocr-debug-agent-tests",
-    "rocgdb",
-    "ocl-clr",
-    "ocl-icd",
-    "rocprofiler-sdk",
-]
-
-[component.hip-clr]
-# hipinfo is a hip-clr tool/test target, not a declared subproject, so it is not a
-# graph key -- but include VALUES may name test-only targets, so it is kept.
-test_include = ["hip-tests", "rocrtst", "hipinfo"]
+[component.rocm-core]
+test_include = ["rdc", "rocm_smi_lib", "roctracer"]
 
 [component.amdsmi]
-test_include = ["hip-tests", "rocrtst"]
+test_include = ["hip-tests"]
 
 [component.rocprofiler-sdk]
-test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
+test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]
+
+[component.rocprofiler-register]
+test_include = ["hipfile"]
 
 [component.aqlprofile]
-test_include = ["rocprofiler-systems", "rocprofiler-systems-examples"]
+test_include = ["rocprofiler-systems-examples"]
+
+[component.roctracer]
+test_include = ["hip-clr", "rocprofiler-sdk"]
 
 # rocgdb-cpu / rocgdb-gpu are ctest test-tier targets of rocgdb, not declared
 # subprojects, so they are not graph keys -- but that is exactly what test_include
@@ -89,20 +104,37 @@ test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 [component.rocgdb]
 test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
-[component.hipblaslt]
-test_include = ["hipsparselt"]
+# --- Math / ML library couplings ----------------------------------------------
+
+[component.hipblas]
+test_include = ["hipsolver"]
 
 [component.hipcub]
 test_include = ["rocprim"]
+
+[component.hiprand]
+test_include = ["miopen", "rocprim"]
+
+[component.hipsparse]
+test_include = ["rocsparse"]
+
+[component.libhipcxx]
+test_include = ["rocthrust"]
+
+[component.miopen]
+test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
+
+[component.hipkernelprovider]
+test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
 
 [component.rocthrust]
 test_include = ["rocprim"]
 
 [component.rocroller]
-test_include = ["hipblaslt"]
+test_include = ["hipdnn", "miopen"]
 
-[component.rocsolver]
-test_include = ["hipblas"]
+[component.rocrand]
+test_include = ["hipfft", "rocfft", "rocprim"]
 
 [component.rocsparse]
-test_include = ["rocsolver"]
+test_include = ["rocblas", "rocprim", "rocsolver"]
