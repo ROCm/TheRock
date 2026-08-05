@@ -1842,15 +1842,14 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIn("test-runs-on-labels", gfx94x_linux)
         self.assertIn("test-runs-on-multi-gpu-labels", gfx94x_linux)
 
-        # Verify we have 3 labels for 1-gpu
+        # Verify we have 2 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 3)
+        self.assertEqual(len(labels), 2)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
         # Verify counts are positive integers
         for label_config in labels:
