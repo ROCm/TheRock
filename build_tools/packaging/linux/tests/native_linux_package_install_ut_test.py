@@ -1080,6 +1080,50 @@ class RunBasicVerificationTest(unittest.TestCase):
             self.assertTrue(t.run_basic_verification())
 
 
+class LinuxTargetPathTest(unittest.TestCase):
+    """Tests for _linux_target_path() — POSIX paths for Linux install targets."""
+
+    def test_preserves_forward_slash_prefix(self):
+        self.assertEqual(
+            native_linux_package_install_test._linux_target_path("/opt/rocm/core"),
+            "/opt/rocm/core",
+        )
+
+    def test_normalizes_backslashes(self):
+        # Simulates pathlib.Path flavour on a Windows pytest runner.
+        self.assertEqual(
+            native_linux_package_install_test._linux_target_path("\\opt\\rocm\\core"),
+            "/opt/rocm/core",
+        )
+
+
+class BuildFindSecurityCommandTest(unittest.TestCase):
+    """Tests for _build_find_security_command() — find argv without subprocess."""
+
+    _PREFIX = "/opt/rocm/core"
+
+    def test_command_shape(self):
+        cmd = native_linux_package_install_test._build_find_security_command(
+            self._PREFIX
+        )
+        self.assertEqual(cmd[:3], ["find", "-H", self._PREFIX])
+        self.assertEqual(cmd[-1], "-print")
+        self.assertIn("-xdev", cmd)
+        self.assertIn("-uid", cmd)
+        self.assertIn("-gid", cmd)
+        self.assertIn("/022", cmd)
+        self.assertIn("/6000", cmd)
+        setid_idx = cmd.index("/6000")
+        self.assertEqual(cmd[setid_idx - 3 : setid_idx], ["-type", "f", "-perm"])
+        self.assertNotIn("-1000", cmd)
+
+    def test_prefix_uses_posix_path_on_all_platforms(self):
+        cmd = native_linux_package_install_test._build_find_security_command(
+            self._PREFIX
+        )
+        self.assertEqual(cmd[2], "/opt/rocm/core")
+
+
 class VerifyInstalledFileSecurityTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.verify_installed_file_security()."""
 
@@ -1128,35 +1172,15 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
             self.assertFalse(self._make().verify_installed_file_security())
 
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_builds_expected_find_command(self, mock_run):
-        # Verify the single find invocation follows the prefix symlink (-H),
-        # stays on one filesystem (-xdev), checks ownership (uid/gid), writable
-        # (0o022) on non-symlinks (! -type l) and setid (0o6000) on regular
-        # files only (-type f).
+    def test_invokes_find_with_built_command(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        expected = native_linux_package_install_test._build_find_security_command(
+            "/opt/rocm/core"
+        )
         with _suppress_script_output():
             self._make("/opt/rocm/core").verify_installed_file_security()
-        cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[0], "find")
-        self.assertEqual(cmd[1], "-H")
-        self.assertEqual(cmd[2], "/opt/rocm/core")
-        self.assertIn("-xdev", cmd)
-        self.assertIn("-uid", cmd)
-        self.assertIn("-gid", cmd)
-        self.assertIn("/022", cmd)
-        self.assertIn("/6000", cmd)
-        self.assertIn("!", cmd)
-        # symlinks are excluded from the writable portion (! -type l)
-        self.assertIn("-type", cmd)
-        self.assertIn("l", cmd)
-        # setuid/setgid is scoped to regular files (-type f) so benign setgid
-        # directories (drwxr-sr-x) are not flagged.
-        self.assertIn("f", cmd)
-        setid_idx = cmd.index("/6000")
-        self.assertEqual(cmd[setid_idx - 3 : setid_idx], ["-type", "f", "-perm"])
-        # no sticky-bit special-casing anymore
-        self.assertNotIn("-1000", cmd)
-        # no in-process timeout (style guide: no timeouts on basic binutils)
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0], expected)
         self.assertNotIn("timeout", mock_run.call_args[1])
 
     @patch.object(
@@ -1174,6 +1198,11 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertTrue(self._make().verify_installed_file_security())
         mock_fallback.assert_called_once()
+        fallback_path = mock_fallback.call_args[0][0]
+        self.assertEqual(
+            native_linux_package_install_test._linux_target_path(str(fallback_path)),
+            "/opt/rocm/core",
+        )
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -1188,6 +1217,11 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertFalse(self._make().verify_installed_file_security())
         mock_fallback.assert_called_once()
+        fallback_path = mock_fallback.call_args[0][0]
+        self.assertEqual(
+            native_linux_package_install_test._linux_target_path(str(fallback_path)),
+            "/opt/rocm/core",
+        )
 
     @patch("native_linux_package_install_test.os.lstat")
     @patch("native_linux_package_install_test.os.walk")

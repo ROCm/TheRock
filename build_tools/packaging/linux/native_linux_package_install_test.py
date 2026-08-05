@@ -139,7 +139,7 @@ import subprocess
 import sys
 import traceback
 from argparse import ArgumentParser, Namespace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -294,6 +294,66 @@ def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
     except subprocess.TimeoutExpired:
         process.kill()
         raise
+
+
+def _linux_target_path(prefix: str) -> str:
+    """Return ``prefix`` as a POSIX path for the target Linux install tree.
+
+    Install prefixes are paths on the Linux filesystem under test (e.g. for
+    ``find(1)`` or rdhc CLI args), not on the local runner. ``pathlib.Path``
+    follows the runner's flavour, so on Windows it would render
+    ``\\opt\\rocm\\core`` instead of ``/opt/rocm/core``.
+    """
+    return str(PurePosixPath(prefix.replace("\\", "/")))
+
+
+def _build_find_security_command(install_prefix: str) -> list[str]:
+    """Build the ``find(1)`` argv for :meth:`verify_installed_file_security`."""
+    prefix = _linux_target_path(install_prefix)
+    return [
+        "find",
+        # follow the prefix if it is a symlink, but not links inside
+        "-H",
+        prefix,
+        # do not cross into other filesystems mounted under prefix
+        "-xdev",
+        "(",
+        # not owned by root:root
+        "(",
+        "!",
+        "-uid",
+        "0",
+        "-o",
+        "!",
+        "-gid",
+        "0",
+        ")",
+        "-o",
+        # insecure permissions
+        "(",
+        # group/other-writable on any non-symlink (a symlink's own
+        # mode bits are meaningless; the target is checked on its own)
+        "(",
+        "!",
+        "-type",
+        "l",
+        "-perm",
+        "/022",
+        ")",
+        "-o",
+        # setuid/setgid on a regular file only; setgid on a
+        # directory (drwxr-sr-x) is a benign group-inheritance
+        # pattern and must not be flagged.
+        "(",
+        "-type",
+        "f",
+        "-perm",
+        "/6000",
+        ")",
+        ")",
+        ")",
+        "-print",
+    ]
 
 
 class NativeLinuxPackageInstallTest:
@@ -1073,53 +1133,11 @@ gpgcheck=0
         False if any offending path is found.
         """
         print("\nVerifying installed files are owned by root with safe permissions...")
-        install_prefix = str(Path(self.install_prefix))
+        install_prefix = _linux_target_path(self.install_prefix)
+        find_cmd = _build_find_security_command(self.install_prefix)
         try:
             result = subprocess.run(
-                [
-                    "find",
-                    # follow the prefix if it is a symlink, but not links inside
-                    "-H",
-                    install_prefix,
-                    # do not cross into other filesystems mounted under prefix
-                    "-xdev",
-                    "(",
-                    # not owned by root:root
-                    "(",
-                    "!",
-                    "-uid",
-                    "0",
-                    "-o",
-                    "!",
-                    "-gid",
-                    "0",
-                    ")",
-                    "-o",
-                    # insecure permissions
-                    "(",
-                    # group/other-writable on any non-symlink (a symlink's own
-                    # mode bits are meaningless; the target is checked on its own)
-                    "(",
-                    "!",
-                    "-type",
-                    "l",
-                    "-perm",
-                    "/022",
-                    ")",
-                    "-o",
-                    # setuid/setgid on a regular file only; setgid on a
-                    # directory (drwxr-sr-x) is a benign group-inheritance
-                    # pattern and must not be flagged.
-                    "(",
-                    "-type",
-                    "f",
-                    "-perm",
-                    "/6000",
-                    ")",
-                    ")",
-                    ")",
-                    "-print",
-                ],
+                find_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
