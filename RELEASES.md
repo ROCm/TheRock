@@ -453,6 +453,22 @@ print(jax.devices())
 # [RocmDevice(id=0), RocmDevice(id=1), ...]
 ```
 
+> [!NOTE]
+> On ROCm 10, a released `jaxlib` (0.10.0 through 0.11.0) does not know the
+> `jax_rocm10_plugin` name, so the GPU kernel modules resolve to `None` and no FFI
+> handlers are registered. Symptoms are `'NoneType' object has no attribute ...` and
+> `No FFI handler registered for hipsolver_*`. Those versions predate the upstream fix
+> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)); until a `jaxlib`
+> carrying it ships, teach the installed copy about the new major:
+>
+> ```bash
+> python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+>     --plugin-package "jax_rocm${ROCM_MAJOR}_plugin"
+> ```
+>
+> The script edits the installed files in place, is idempotent, and is a no-op on ROCm 7
+> or once a fixed `jaxlib` is installed.
+
 ### Installing multi-arch native packages
 
 Native packages are installable via operating system package managers.
