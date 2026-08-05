@@ -1673,35 +1673,33 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 class TestFamilyTestFilters(unittest.TestCase):
     """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
 
-    def test_real_family_gfx90a_nightly_check_only(self):
-        """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
-        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+    def test_real_family_gfx90a_postsubmit(self):
+        """Integration test: gfx90a is in postsubmit matrix."""
+        # gfx90a is in postsubmit matrix, so it runs on push events
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="pull_request",  # Non-schedule run
-            commit_ref="feature-branch",
+            event_name="push",
+            commit_ref="main",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
         )
-        targets = cm.select_targets(ci_inputs)
         git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx90a in the linux build config
+        gfx90a_info = None
         if outputs.builds.linux:
-            gfx90a_info = None
             for family_info in outputs.builds.linux.per_family_info:
                 if family_info["amdgpu_family"] == "gfx90a":
                     gfx90a_info = family_info
                     break
 
         self.assertIsNotNone(gfx90a_info)
-        self.assertEqual(gfx90a_info["test-runs-on"], "")
+        # gfx90a should have test-runs-on set in postsubmit
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-    def test_workflow_dispatch_allows_nightly_check_only_family(self):
-        """workflow_dispatch should allow testing nightly_check_only families."""
-        # gfx90a has nightly_check_only_for_family=True for linux
+    def test_workflow_dispatch_allows_gfx90a(self):
+        """workflow_dispatch should allow testing gfx90a."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
