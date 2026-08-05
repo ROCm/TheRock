@@ -11,7 +11,9 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from find_artifacts_for_commit import (
     ArtifactRunInfo,
+    check_if_artifacts_exist,
     find_artifacts_for_commit,
+    find_artifacts_for_run,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_api import (
@@ -388,6 +390,378 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].workflow_run_id, str(self.FAKE_RUN_NEWER["id"]))
+
+
+class ConcreteArtifactInspectionTest(unittest.TestCase):
+    def _info(
+        self,
+        *,
+        artifact_group: str = "gfx94X-dcgpu",
+        amdgpu_targets: tuple[str, ...] = (),
+        required_patterns: tuple[str, ...] = (),
+    ) -> ArtifactRunInfo:
+        return ArtifactRunInfo(
+            git_commit_sha="abc123",
+            github_repository_name="ROCm/TheRock",
+            external_repo="",
+            platform="linux",
+            artifact_group=artifact_group,
+            workflow_file_name="multi_arch_ci.yml",
+            workflow_run_id="123",
+            workflow_run_status="completed",
+            workflow_run_conclusion="success",
+            workflow_run_html_url="https://example.invalid/run/123",
+            s3_bucket="therock-ci-artifacts",
+            amdgpu_targets=amdgpu_targets,
+            required_artifact_patterns=required_patterns,
+            _output_root=mock.sentinel.output_root,
+        )
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_lists_concrete_artifacts(self, mock_backend_class):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+            "rocblas_lib_gfx94X-dcgpu.tar.zst",
+        ]
+        info = self._info()
+
+        self.assertTrue(check_if_artifacts_exist(info))
+        self.assertEqual(
+            info.artifact_filenames,
+            (
+                "base_lib_generic.tar.zst",
+                "rocblas_lib_gfx94X-dcgpu.tar.zst",
+            ),
+        )
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_generic_only_does_not_prove_gpu_group(
+        self,
+        mock_backend_class,
+    ):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+        ]
+        info = self._info()
+
+        self.assertFalse(check_if_artifacts_exist(info))
+        self.assertEqual(info.artifact_filenames, ())
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_individual_target_matches_xnack_variant(
+        self,
+        mock_backend_class,
+    ):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+            "rocblas_lib_gfx942:xnack+.tar.zst",
+        ]
+        info = self._info(
+            amdgpu_targets=("gfx942",),
+        )
+
+        self.assertTrue(check_if_artifacts_exist(info))
+        self.assertIn(
+            "rocblas_lib_gfx942:xnack+.tar.zst",
+            info.artifact_filenames,
+        )
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_missing_required_pattern_rejects_run(
+        self,
+        mock_backend_class,
+    ):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+            "rocblas_lib_gfx94X-dcgpu.tar.zst",
+        ]
+        info = self._info(
+            required_patterns=(r"^amd-llvm_.*_generic\.tar\.(zst|xz)$",),
+        )
+
+        self.assertFalse(check_if_artifacts_exist(info))
+        self.assertEqual(
+            info.missing_required_artifact_patterns,
+            (r"^amd-llvm_.*_generic\.tar\.(zst|xz)$",),
+        )
+
+    @mock.patch(
+        "find_artifacts_for_commit.expand_families",
+        return_value=["gfx942"],
+    )
+    @mock.patch(
+        "find_artifacts_for_commit.amdgpu_family_map",
+        return_value={"gfx94X-dcgpu": ["gfx942"]},
+    )
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_family_is_expanded_to_individual_target(
+        self,
+        mock_backend_class,
+        mock_family_map,
+        mock_expand_families,
+    ):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+            "rocblas_lib_gfx942.tar.zst",
+        ]
+
+        info = self._info(
+            artifact_group="gfx94X-dcgpu",
+        )
+
+        self.assertTrue(check_if_artifacts_exist(info))
+        self.assertEqual(
+            info.artifact_filenames,
+            (
+                "base_lib_generic.tar.zst",
+                "rocblas_lib_gfx942.tar.zst",
+            ),
+        )
+
+        mock_expand_families.assert_called_once_with(
+            ["gfx94X-dcgpu"],
+            {"gfx94X-dcgpu": ["gfx942"]},
+            strict=False,
+        )
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_real_family_mapping_matches_concrete_target(
+        self,
+        mock_backend_class,
+    ):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.zst",
+            "rocblas_lib_gfx942.tar.zst",
+        ]
+
+        info = self._info(
+            artifact_group="gfx94X-dcgpu",
+        )
+
+        self.assertTrue(check_if_artifacts_exist(info))
+        self.assertEqual(
+            info.artifact_filenames,
+            (
+                "base_lib_generic.tar.zst",
+                "rocblas_lib_gfx942.tar.zst",
+            ),
+        )
+
+
+class ArtifactRequestValidationTest(unittest.TestCase):
+    def test_commit_lookup_rejects_targets_for_multiple_groups(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "only with one artifact group",
+        ):
+            find_artifacts_for_commit(
+                commit="abc123",
+                artifact_groups=[
+                    "gfx94X-dcgpu",
+                    "gfx120X-all",
+                ],
+                amdgpu_targets=["gfx942"],
+            )
+
+    def test_run_lookup_rejects_targets_for_multiple_groups(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "only with one artifact group",
+        ):
+            find_artifacts_for_run(
+                workflow_run_id="123",
+                artifact_groups=[
+                    "gfx94X-dcgpu",
+                    "gfx120X-all",
+                ],
+                amdgpu_targets=["gfx942"],
+            )
+
+
+class SingleRunArtifactSelectionTest(unittest.TestCase):
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    def test_single_run_does_not_combine_workflow_runs(
+        self,
+        mock_query_runs,
+        mock_check,
+        mock_output_root,
+    ):
+        mock_query_runs.return_value = [
+            {
+                "id": 200,
+                "status": "completed",
+                "conclusion": "success",
+                "html_url": "https://example.invalid/200",
+                "run_attempt": 2,
+            },
+            {
+                "id": 100,
+                "status": "completed",
+                "conclusion": "success",
+                "html_url": "https://example.invalid/100",
+                "run_attempt": 1,
+            },
+        ]
+
+        mock_output_root.return_value.external_repo = ""
+        mock_output_root.return_value.bucket = "therock-ci-artifacts"
+
+        def check(info):
+            if info.workflow_run_id == "200":
+                return info.artifact_group == "gfx110X-all"
+            return True
+
+        mock_check.side_effect = check
+
+        results = find_artifacts_for_commit(
+            commit="abc123",
+            artifact_groups=[
+                "gfx110X-all",
+                "gfx120X-all",
+            ],
+            require_single_run=True,
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            {info.workflow_run_id for info in results},
+            {"100"},
+        )
+
+
+class SuccessfulRunFilterTest(unittest.TestCase):
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
+    @mock.patch(
+        "find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    def test_require_successful_run_skips_queued_run(
+        self,
+        mock_query_runs,
+        mock_check_artifacts,
+        mock_output_root,
+    ):
+        mock_query_runs.return_value = [
+            {
+                "id": 200,
+                "status": "queued",
+                "conclusion": None,
+                "html_url": "https://example.invalid/200",
+                "run_attempt": 2,
+            },
+            {
+                "id": 100,
+                "status": "completed",
+                "conclusion": "success",
+                "html_url": "https://example.invalid/100",
+                "run_attempt": 1,
+            },
+        ]
+
+        mock_output_root.return_value.external_repo = ""
+        mock_output_root.return_value.bucket = "therock-ci-artifacts"
+
+        results = find_artifacts_for_commit(
+            commit="abc123",
+            artifact_groups=["gfx94X-dcgpu"],
+            require_successful_run=True,
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].workflow_run_id,
+            "100",
+        )
+
+        # The queued run is filtered before artifact storage is inspected.
+        self.assertEqual(
+            mock_output_root.call_count,
+            1,
+        )
+        self.assertEqual(
+            mock_check_artifacts.call_count,
+            1,
+        )
+
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
+    @mock.patch(
+        "find_artifacts_for_commit.check_if_artifacts_exist",
+        return_value=True,
+    )
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    def test_default_preserves_in_progress_artifact_inspection(
+        self,
+        mock_query_runs,
+        mock_check_artifacts,
+        mock_output_root,
+    ):
+        mock_query_runs.return_value = [
+            {
+                "id": 200,
+                "status": "queued",
+                "conclusion": None,
+                "html_url": "https://example.invalid/200",
+                "run_attempt": 2,
+            },
+        ]
+
+        mock_output_root.return_value.external_repo = ""
+        mock_output_root.return_value.bucket = "therock-ci-artifacts"
+
+        results = find_artifacts_for_commit(
+            commit="abc123",
+            artifact_groups=["gfx94X-dcgpu"],
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].workflow_run_id,
+            "200",
+        )
+        mock_check_artifacts.assert_called_once()
+
+
+class ExplicitRunLookupTest(unittest.TestCase):
+    @mock.patch("find_artifacts_for_commit._find_artifacts_in_workflow_runs")
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_run_by_id")
+    def test_run_id_inspects_only_selected_run(
+        self,
+        mock_query_run,
+        mock_find_in_runs,
+    ):
+        workflow_run = {
+            "id": 123,
+            "head_sha": "abc123",
+            "status": "completed",
+            "conclusion": "success",
+        }
+        mock_query_run.return_value = workflow_run
+        mock_find_in_runs.return_value = [mock.sentinel.info]
+
+        results = find_artifacts_for_run(
+            workflow_run_id="123",
+            artifact_groups=["gfx94X-dcgpu"],
+            require_successful_run=True,
+        )
+
+        self.assertEqual(results, [mock.sentinel.info])
+        mock_query_run.assert_called_once_with(
+            github_repository="ROCm/TheRock",
+            workflow_run_id="123",
+        )
+
+        call_args = mock_find_in_runs.call_args.kwargs
+        self.assertEqual(call_args["commit"], "abc123")
+        self.assertEqual(call_args["workflow_runs"], [workflow_run])
+        self.assertEqual(
+            call_args["artifact_groups"],
+            ["gfx94X-dcgpu"],
+        )
+        self.assertTrue(call_args["require_single_run"])
+        self.assertTrue(call_args["require_successful_run"])
 
 
 if __name__ == "__main__":
