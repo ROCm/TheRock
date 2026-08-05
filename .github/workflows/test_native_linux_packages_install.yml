@@ -107,7 +107,6 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -133,8 +132,6 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' || 'ubuntu-24.04' }}
-    outputs:
-      summary: ${{ steps.summary.outputs.summary }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
@@ -217,8 +214,3 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
-
-      - name: Capture job summary
-        id: summary
-        if: always()
-        run: python build_tools/github_actions/capture_job_summary.py

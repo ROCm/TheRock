@@ -269,9 +269,6 @@ jobs:
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
 
       - name: Capture job summary
         id: summary
