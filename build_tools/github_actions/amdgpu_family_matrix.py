@@ -213,7 +213,6 @@ amdgpu_family_info_matrix_presubmit = {
                     "label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
                     "count": 28,
                 },  # ccs-csp
-                {"label": "linux-gfx942-1gpu-ossci-rocm", "count": 5},  # vultr
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
