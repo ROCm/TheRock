@@ -225,6 +225,41 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertIsNone(inputs.base_ref)
 
+    def test_external_repo_reads_from_env(self):
+        """External repo JSON is read from EXTERNAL_REPO env var."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "EXTERNAL_REPO": '{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+            },
+        )
+        self.assertEqual(
+            inputs.external_repo, '{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+        )
+
+    def test_external_repo_defaults_to_empty(self):
+        """External repo defaults to empty string when not set."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+        )
+        self.assertEqual(inputs.external_repo, "")
+
+
+class TestGitContext(unittest.TestCase):
+    """Test GitContext methods."""
+
+    def test_from_external_repo_creates_context_with_repo_name(self):
+        """from_external_repo creates context with repo name as changed file."""
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+
+    def test_from_external_repo_empty_name(self):
+        """from_external_repo handles empty name."""
+        git = cm.GitContext.from_external_repo("")
+        self.assertEqual(git.changed_files, [""])
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
@@ -329,6 +364,17 @@ class TestShouldSkipCI(unittest.TestCase):
             submodule_paths=["rocm-libraries"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_external_repo_skips_path_filter(self, mock_filter):
+        """External repo builds skip path filtering and always run CI."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+        # Path filter should not be called for external repos
+        mock_filter.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
