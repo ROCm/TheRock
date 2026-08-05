@@ -1383,22 +1383,18 @@ gpgcheck=0
             f"{len(no_path)} with neither"
         )
         if no_path:
+            # Count only; the individual files are not interesting to list.
             print(
-                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH:"
+                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH"
             )
-            for entry in no_path[:10]:
-                print(f"   {entry}")
-            if len(no_path) > 10:
-                print(f"   ... and {len(no_path) - 10} more")
         if fixed_rpath:
+            # List every offending file and its non-$ORIGIN entries in full.
             print(
                 f" [WARN] {len(fixed_rpath)} ELF file(s) have DT_RPATH entries that are "
                 "not $ORIGIN-relative (fixed/absolute paths):"
             )
-            for path, entries in fixed_rpath[:10]:
+            for path, entries in fixed_rpath:
                 print(f"   {path}: {':'.join(entries)}")
-            if len(fixed_rpath) > 10:
-                print(f"   ... and {len(fixed_rpath) - 10} more")
         if runpath_only:
             print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
             for entry in runpath_only[:10]:
