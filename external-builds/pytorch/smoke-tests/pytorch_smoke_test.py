@@ -183,9 +183,6 @@ class TestRocmSdkLibraries:
         rocm_sdk_libraries is not importable.
     """
 
-    # ctypes.CDLL(None) is the Python equivalent of dlsym(RTLD_DEFAULT, ...)
-    _rtld_default = ctypes.CDLL(None)
-
     # Symbols from rocm-sdk-core — always installed with torch, no skip needed.
     _CORE_PRELOAD_SYMBOLS = [
         (
@@ -207,7 +204,12 @@ class TestRocmSdkLibraries:
 
     @pytest.mark.parametrize("lib,symbol", _CORE_PRELOAD_SYMBOLS)
     def test_core_preloaded_symbol_resolvable_via_rtld_default(self, lib, symbol):
-        fn = getattr(self._rtld_default, symbol, None)
+        # ctypes.CDLL(None) is the Python equivalent of dlsym(RTLD_DEFAULT, ...).
+        # Instantiated here (not as a class attribute) so it is only evaluated at
+        # test execution time — after the class-level skipif has taken effect —
+        # avoiding a TypeError on Windows where ctypes.CDLL(None) returns None.
+        rtld_default = ctypes.CDLL(None)
+        fn = getattr(rtld_default, symbol, None)
         addr = ctypes.cast(fn, ctypes.c_void_p).value
         assert addr, (
             f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
@@ -223,7 +225,8 @@ class TestRocmSdkLibraries:
     )
     @pytest.mark.parametrize("lib,symbol", _LIBRARIES_PRELOAD_SYMBOLS)
     def test_libraries_preloaded_symbol_resolvable_via_rtld_default(self, lib, symbol):
-        fn = getattr(self._rtld_default, symbol, None)
+        rtld_default = ctypes.CDLL(None)
+        fn = getattr(rtld_default, symbol, None)
         addr = ctypes.cast(fn, ctypes.c_void_p).value
         assert addr, (
             f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "

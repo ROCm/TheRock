@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.jax_ref }} | Python ${{ inputs.python_version }} | ${{ inputs.test_amdgpu_family }}
+    name: Test JAX | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
     outputs:
@@ -278,6 +278,13 @@ jobs:
               "jax==${JAX_VERSION}" \
               "jaxlib==${JAX_VERSION}"
           fi
+
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
       - name: Run JAX tests
         timeout-minutes: 60
