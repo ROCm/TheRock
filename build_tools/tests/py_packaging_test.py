@@ -942,10 +942,13 @@ class RequiredDistPackagesTest(TmpDirTestCase):
 
 
 class RestrictFamiliesTest(TmpDirTestCase):
-    """Tests for restrict_families=True in PopulatedDistPackage.
+    """Tests for _dist_info.py generation in PopulatedDistPackage.
 
     These tests verify that per-family meta (rocm) packages bake the correct
-    DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES into _dist_info.py.
+    DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES into _dist_info.py,
+    and (SEC-00224) that user-controlled values reaching that generation
+    (version_suffix, artifact-derived target_family) can't break out of the
+    repr()-quoted source text exec()'d from the on-disk file.
     """
 
     def _add_artifact(
@@ -961,23 +964,31 @@ class RestrictFamiliesTest(TmpDirTestCase):
         stage.mkdir(parents=True, exist_ok=True)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path) -> Parameters:
+    def _make_params(
+        self,
+        artifact_dir: Path,
+        version: str = "0.0.1.test",
+        version_suffix: str = "",
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
             dest_dir=dest_dir,
-            version="0.0.1.test",
-            version_suffix="",
+            version=version,
+            version_suffix=version_suffix,
             artifacts=ArtifactCatalog(artifact_dir),
         )
 
-    def _exec_dist_info(self, meta: PopulatedDistPackage) -> dict:
+    def _exec_dist_info(
+        self, meta: PopulatedDistPackage, ns: dict | None = None
+    ) -> dict:
         """Read and exec the generated _dist_info.py; return the namespace."""
         dist_info_path = (
             meta.path / "src" / meta.entry.pure_py_package_name / "_dist_info.py"
         )
         content = dist_info_path.read_text()
-        ns: dict = {}
+        if ns is None:
+            ns = {}
         exec(content, ns)
         return ns
 
@@ -1090,6 +1101,80 @@ class RestrictFamiliesTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         self.assertNotIn("AVAILABLE_TARGET_FAMILIES.clear()", content)
         self.assertNotIn("gfx94X-dcgpu", content)
+
+    def test_malicious_version_suffix_is_inert(self):
+        """A version_suffix crafted to break out of the repr()-quoted string
+        must not execute; it must round-trip as inert string data.
+        """
+        payload = "'; SENTINEL['pwned'] = True; x = '"
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
+        params = self._make_params(artifact_dir, version="7.0.0", version_suffix=payload)
+        meta = PopulatedDistPackage(params, logical_name="meta")
+
+        sentinel = {"pwned": False}
+        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
+
+        self.assertFalse(
+            sentinel["pwned"],
+            "Malicious version_suffix executed instead of being treated as data",
+        )
+        self.assertEqual(ns["__version__"], "7.0.0")
+        self.assertEqual(ns["PY_PACKAGE_SUFFIX_NONCE"], payload)
+
+    def test_malicious_artifact_target_family_is_inert(self):
+        """A GPU target_family parsed from a real artifact directory name (the
+        actually-exploitable, artifact-derived vector — not a workflow_dispatch
+        input) must round-trip as inert string data even when crafted to break
+        out of the repr()-quoted list literal.
+
+        Directory names here can't contain '_' (ArtifactName's parser splits
+        {name}_{component}_{target_family} on it, same as any real artifact
+        directory), so the payload avoids it, matching what an attacker could
+        actually place in an artifact directory name.
+        """
+        payload = "gfx942');SENTINEL['pwned']=True;x=('"
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", payload)
+        params = self._make_params(artifact_dir)
+        meta = PopulatedDistPackage(params, logical_name="meta")
+
+        sentinel = {"pwned": False}
+        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
+
+        self.assertFalse(
+            sentinel["pwned"],
+            "Malicious target_family executed instead of being treated as data",
+        )
+        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], [payload])
+
+    def test_dist_info_object_matches_generated_file(self):
+        """params.dist_info (in-memory, built via direct attribute assignment
+        onto the static template) and the _dist_info.py written to disk (built
+        via repr()-encoded source text) must agree on every user-controlled
+        field, so the two initialization paths can't silently drift apart the
+        way they did when a version bug was previously introduced in only one
+        of the two places.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
+        self._add_artifact(artifact_dir, "base", "lib", "gfx1100")
+        params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
+
+        ns: dict = {}
+        exec(params.dist_info_contents, ns)
+
+        self.assertEqual(ns["__version__"], params.dist_info.__version__)
+        self.assertEqual(
+            ns["PY_PACKAGE_SUFFIX_NONCE"], params.dist_info.PY_PACKAGE_SUFFIX_NONCE
+        )
+        self.assertEqual(
+            ns["DEFAULT_TARGET_FAMILY"], params.dist_info.DEFAULT_TARGET_FAMILY
+        )
+        self.assertEqual(
+            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
+            sorted(params.dist_info.AVAILABLE_TARGET_FAMILIES),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1575,138 +1660,6 @@ class PerTargetExtrasTest(TmpDirTestCase):
         self.assertTrue(
             req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
             f"Unexpected Requires-Dist shape: {req}",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Security tests: SEC-00224 — exec() injection via user-controlled values
-# ---------------------------------------------------------------------------
-
-
-class DistInfoInjectionTest(TmpDirTestCase):
-    """Regression tests for SEC-00224.
-
-    _dist_info.py is generated by interpolating version/version_suffix/
-    target_family into source text that is later exec()'d — once here, by
-    Parameters, to build the in-memory params.dist_info, and again by each
-    package's setup.py at install time, from the copy written to disk.
-    repr()-encoding every interpolated value is what keeps that safe.
-
-    These tests build real Parameters/PopulatedDistPackage objects with
-    malicious values reaching the actual production code paths (rather than
-    reimplementing repr()/exec() inline, which would only prove repr() works
-    in general, not that this code uses it correctly), then exec() the real
-    generated _dist_info.py. A pre-populated SENTINEL dict is passed as the
-    exec() namespace so that if a payload ever did execute, it would flip an
-    in-process flag we can assert on — no payload here ever shells out.
-    """
-
-    def _add_artifact(
-        self, artifact_dir: Path, name: str, component: str, target_family: str
-    ):
-        """Create a minimal artifact directory (no files needed)."""
-        subdir = artifact_dir / f"{name}_{component}_{target_family}"
-        stage = subdir / "stage"
-        stage.mkdir(parents=True, exist_ok=True)
-        (subdir / "artifact_manifest.txt").write_text("stage\n")
-
-    def _make_params(
-        self, artifact_dir: Path, version: str = "7.0.0", version_suffix: str = ""
-    ) -> Parameters:
-        dest_dir = self.temp_dir / "packages"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        return Parameters(
-            dest_dir=dest_dir,
-            version=version,
-            version_suffix=version_suffix,
-            artifacts=ArtifactCatalog(artifact_dir),
-        )
-
-    def _exec_dist_info(
-        self, meta: PopulatedDistPackage, ns: dict | None = None
-    ) -> dict:
-        """Read and exec the generated _dist_info.py; return the namespace."""
-        dist_info_path = (
-            meta.path / "src" / meta.entry.pure_py_package_name / "_dist_info.py"
-        )
-        content = dist_info_path.read_text()
-        if ns is None:
-            ns = {}
-        exec(content, ns)
-        return ns
-
-    def test_malicious_version_suffix_is_inert(self):
-        """A version_suffix crafted to break out of the repr()-quoted string
-        must not execute; it must round-trip as inert string data.
-        """
-        payload = "'; SENTINEL['pwned'] = True; x = '"
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
-        params = self._make_params(artifact_dir, version="7.0.0", version_suffix=payload)
-        meta = PopulatedDistPackage(params, logical_name="meta")
-
-        sentinel = {"pwned": False}
-        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
-
-        self.assertFalse(
-            sentinel["pwned"],
-            "Malicious version_suffix executed instead of being treated as data",
-        )
-        self.assertEqual(ns["__version__"], "7.0.0")
-        self.assertEqual(ns["PY_PACKAGE_SUFFIX_NONCE"], payload)
-
-    def test_malicious_artifact_target_family_is_inert(self):
-        """A GPU target_family parsed from a real artifact directory name (the
-        actually-exploitable, artifact-derived vector — not a workflow_dispatch
-        input) must round-trip as inert string data even when crafted to break
-        out of the repr()-quoted list literal.
-
-        Directory names here can't contain '_' (ArtifactName's parser splits
-        {name}_{component}_{target_family} on it, same as any real artifact
-        directory), so the payload avoids it, matching what an attacker could
-        actually place in an artifact directory name.
-        """
-        payload = "gfx942');SENTINEL['pwned']=True;x=('"
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(artifact_dir, "base", "lib", payload)
-        params = self._make_params(artifact_dir)
-        meta = PopulatedDistPackage(params, logical_name="meta")
-
-        sentinel = {"pwned": False}
-        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
-
-        self.assertFalse(
-            sentinel["pwned"],
-            "Malicious target_family executed instead of being treated as data",
-        )
-        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], [payload])
-
-    def test_dist_info_object_matches_generated_file(self):
-        """params.dist_info (in-memory, built via direct attribute assignment
-        onto the static template) and the _dist_info.py written to disk (built
-        via repr()-encoded source text) must agree on every user-controlled
-        field, so the two initialization paths can't silently drift apart the
-        way they did when a version bug was previously introduced in only one
-        of the two places.
-        """
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
-        self._add_artifact(artifact_dir, "base", "lib", "gfx1100")
-        params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
-
-        ns: dict = {}
-        exec(params.dist_info_contents, ns)
-
-        self.assertEqual(ns["__version__"], params.dist_info.__version__)
-        self.assertEqual(
-            ns["PY_PACKAGE_SUFFIX_NONCE"], params.dist_info.PY_PACKAGE_SUFFIX_NONCE
-        )
-        self.assertEqual(
-            ns["DEFAULT_TARGET_FAMILY"], params.dist_info.DEFAULT_TARGET_FAMILY
-        )
-        self.assertEqual(
-            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
-            sorted(params.dist_info.AVAILABLE_TARGET_FAMILIES),
         )
 
 
