@@ -124,7 +124,7 @@ for more background on these `rocm` packages.
 > https://github.com/pytorch/vision/issues/9165 for details.
 
 > [!WARNING]
-> On Windows, when building with "--enable-pytorch-flash-attention-windows",
+> On Windows, when building with "--enable-pytorch-flash-attention",
 > Make sure to use [ninja 1.13.1](https://github.com/ninja-build/ninja/releases/tag/v1.13.1) or above.
 >
 > NOTE: If you use ccache and face "invalid argument" errors during the aotriton build,
