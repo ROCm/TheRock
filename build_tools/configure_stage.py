@@ -270,10 +270,10 @@ def main(argv: List[str] = None):
     parser.add_argument(
         "--projects",
         type=str,
-        nargs="+",
-        metavar="PROJECT",
-        help="Project/subproject names to enable (e.g., rocblas miopen hipfft). "
-        "Enables building specific projects without requiring --stage.",
+        default="",
+        metavar="PROJECTS",
+        help="Comma-separated project/subproject names to enable (e.g., rocblas,miopen,hipfft). "
+        "Enables building specific projects without requiring --stage. Empty string is ignored.",
     )
     parser.add_argument(
         "--list-projects",
@@ -296,18 +296,25 @@ def main(argv: List[str] = None):
 
     args = parser.parse_args(argv)
 
+    # Parse comma-separated projects into a list, filtering empty strings
+    project_list = (
+        [p.strip() for p in args.projects.split(",") if p.strip()]
+        if args.projects
+        else []
+    )
+
     if (
         not args.list_stages
         and not args.list_projects
         and not args.skip_stages
         and args.stage is None
-        and args.projects is None
+        and not project_list
     ):
         parser.error(
             "--stage or --projects is required unless --list-stages, --list-projects, or --skip-stages is specified"
         )
 
-    if args.skip_stages and not args.projects:
+    if args.skip_stages and not project_list:
         parser.error("--skip-stages requires --projects")
 
     topology = get_topology()
@@ -343,20 +350,20 @@ def main(argv: List[str] = None):
         parser.error(f"Unknown stage '{args.stage}'. Available stages: {available}")
 
     # Normalize project names (handle paths like "projects/hip" -> "hip")
-    if args.projects:
-        args.projects = [normalize_project_name(p) for p in args.projects]
+    if project_list:
+        project_list = [normalize_project_name(p) for p in project_list]
 
     # Validate projects if provided (fast-fail on unknown projects)
-    if args.projects:
+    if project_list:
         alias_map = topology.get_alias_to_artifact_map(args.build_dir)
-        unknown = [p for p in args.projects if p.lower() not in alias_map]
+        unknown = [p for p in project_list if p.lower() not in alias_map]
         if unknown:
             parser.error(f"Unknown project(s): {', '.join(unknown)}")
 
     # Output skip-stages if requested
     if args.skip_stages:
         required_stages = topology.get_stages_for_projects(
-            args.projects, args.build_dir
+            project_list, args.build_dir
         )
         all_stages = topology.get_all_stage_names()
         skip = sorted(all_stages - required_stages)
@@ -372,7 +379,7 @@ def main(argv: List[str] = None):
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
         manylinux=args.manylinux,
-        project_names=args.projects,
+        project_names=project_list if project_list else None,
         build_dir=args.build_dir,
     )
 

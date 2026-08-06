@@ -319,13 +319,6 @@ class StageImpactAnalyzer:
 
         Granular analysis is supported for source sets that have artifacts
         with component mappings defined in BUILD_TOPOLOGY.toml.
-
-        Args:
-            normalized_inputs: Normalized changed paths.
-            matched_source_sets: Source sets matched from inputs.
-
-        Returns:
-            True if all conditions for granular analysis are met.
         """
         # Get source sets that support granular analysis
         granular_source_sets = set(self.topology.get_source_sets_with_components())
@@ -349,13 +342,8 @@ class StageImpactAnalyzer:
     ) -> Tuple[Set[str], bool]:
         """Map changed paths to specific artifacts.
 
-        Args:
-            normalized_inputs: Normalized changed paths.
-
-        Returns:
-            A tuple of (impacted_artifacts, is_conservative).
-            - impacted_artifacts: Set of artifact names that are impacted.
-            - is_conservative: True if any path triggered a conservative fallback.
+        Returns (impacted_artifacts, is_conservative) where is_conservative
+        is True if any path triggered a fallback to rebuilding all artifacts.
         """
         impacted: Set[str] = set()
         is_conservative = False
@@ -379,14 +367,7 @@ class StageImpactAnalyzer:
         return (impacted, is_conservative)
 
     def _get_stage_artifacts(self, stage_names: Set[str]) -> Set[str]:
-        """Get all artifacts produced by a set of stages.
-
-        Args:
-            stage_names: Set of stage names.
-
-        Returns:
-            Set of artifact names produced by those stages.
-        """
+        """Get all artifacts produced by a set of stages."""
         artifacts: Set[str] = set()
         for stage_name in stage_names:
             stage = self.topology.build_stages.get(stage_name)

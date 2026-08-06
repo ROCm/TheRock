@@ -148,18 +148,10 @@ jobs:
 
       - name: Get stage configuration
         id: stage_config
-        env:
-          REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
         run: |
-          # If rebuild_artifacts is set, use --projects to build only specific artifacts
-          PROJECTS_ARG=""
-          if [ -n "$REBUILD_ARTIFACTS" ]; then
-            # Convert comma-separated to space-separated for --projects
-            PROJECTS_ARG="--projects $(echo $REBUILD_ARTIFACTS | tr ',' ' ')"
-          fi
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
-            $PROJECTS_ARG \
+            --projects="${{ inputs.rebuild_artifacts }}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --manylinux \

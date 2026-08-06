@@ -84,21 +84,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
-          STAGES="${{ fromJSON(inputs.build_config).prebuilt_stages }}"
-          ARTIFACTS="${{ fromJSON(inputs.build_config).reusable_artifacts }}"
-          STAGE_ARG=""
-          ARTIFACT_ARG=""
-          if [ -n "$STAGES" ]; then
-            STAGE_ARG="--stage=$STAGES"
-          fi
-          if [ -n "$ARTIFACTS" ]; then
-            ARTIFACT_ARG="--artifacts=$ARTIFACTS"
-          fi
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
             --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
-            $STAGE_ARG \
-            $ARTIFACT_ARG \
+            --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
+            --artifacts="${{ fromJSON(inputs.build_config).reusable_artifacts }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
 
