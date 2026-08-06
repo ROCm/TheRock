@@ -22,6 +22,7 @@ from _therock_utils.build_topology import (
     ArtifactGroup,
     Artifact,
     BuildTopology,
+    get_topology,
 )
 from topology_to_cmake import generate_feature_declarations
 
@@ -1002,6 +1003,19 @@ class BuildTopologyTest(unittest.TestCase):
         # Foundation stage should need nothing
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
+
+
+class RealTopologyTest(unittest.TestCase):
+    """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
+
+    def test_hipkernelprovider_is_split_per_arch(self):
+        # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
+        # so hipkernelprovider must stay target-specific and kpack-split; reverting
+        # either drops the per-arch bundles from the device artifacts.
+        topology = get_topology()
+        hkp = topology.artifacts["hipkernelprovider"]
+        self.assertEqual(hkp.type, "target-specific")
+        self.assertIn("hipkernelprovider", hkp.split_databases)
 
 
 if __name__ == "__main__":
