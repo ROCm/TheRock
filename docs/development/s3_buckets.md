@@ -95,8 +95,10 @@ the `therock-{release_type}` IAM role while stable `release` buckets are
 manually promoted from prereleases via IAM user policies (see
 [`how_to_do_release.md`](/build_tools/packaging/how_to_do_release.md)).
 
-Python, tarball, and native package buckets are fronted by CloudFront CDNs —
-prefer the CDN URLs for reading (e.g. `pip install --index-url`).
+Python, tarball, and native package buckets are fronted by CloudFront CDNs.
+Developer-facing documentation and manual installs should use the CDN URLs;
+CI may read the backing S3 buckets directly to avoid CloudFront data-transfer
+charges.
 
 | Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

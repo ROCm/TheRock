@@ -11,6 +11,7 @@ These tests cover:
 
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -656,6 +657,23 @@ class DevicePackagingTest(TmpDirTestCase):
         # Should NOT match non-library artifact name.
         an_core = ArtifactName("core-hip", "lib", "gfx942")
         self.assertFalse(device_artifact_filter("gfx942", an_core))
+
+    def test_core_artifact_filter_includes_only_rocjitsu_hotswap(self):
+        """The core wheel ships the HSA hotswap hook without the rocjitsu library."""
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import core_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        self.assertTrue(
+            core_artifact_filter(ArtifactName("rocjitsu-hotswap", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "run", "generic"))
+        )
 
     def test_device_dist_info_has_libraries_py_package_name(self):
         """Device package _dist_info.py must contain LIBRARIES_PY_PACKAGE_NAME."""
@@ -1730,6 +1748,58 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+
+# ---------------------------------------------------------------------------
+# Tests for materialize permission handling
+# ---------------------------------------------------------------------------
+
+
+def _scandir_entry(path: Path) -> os.DirEntry:
+    with os.scandir(path.parent) as it:
+        for entry in it:
+            if entry.name == path.name:
+                return entry
+    raise FileNotFoundError(path)
+
+
+class MaterializeReadOnlySourceTest(TmpDirTestCase):
+    """Regression test for materializing a read-only upstream file.
+
+    shutil.copy2 preserves the source mode bits, so a read-only source (e.g.
+    LLVM's OMPD gdb module, or any file owned by another user in a shared
+    build tree) was copied read-only. The subsequent patchelf pass then could
+    not open the file for writing. _populate_file must restore the owner-write
+    bit on the materialized file regardless of the source permissions.
+    """
+
+    def test_readonly_source_becomes_owner_writable(self):
+        # Build a package instance without running __init__ (which needs a full
+        # dist_info catalog); _populate_file only touches self.files.
+        pkg = PopulatedDistPackage.__new__(PopulatedDistPackage)
+        pkg.files = PopulatedFiles()
+
+        # Use a .txt source so get_file_type() returns "text" and the ELF
+        # rpath path (patchelf) is skipped — we only exercise the copy+chmod.
+        src = self.write_file("readonly.txt", "payload")
+        # Owner read-only (no write bit); this is the exact condition the fix
+        # handles. 0o400 rather than 0o444 keeps the temp file non-world-readable.
+        os.chmod(src, 0o400)
+
+        dest_path = self.temp_dir / "dest" / "readonly.txt"
+        pkg._populate_file(
+            "readonly.txt",
+            dest_path,
+            _scandir_entry(src),
+            resolve_src=False,
+        )
+
+        mode = stat.S_IMODE(os.stat(dest_path).st_mode)
+        self.assertEqual(dest_path.read_text(), "payload")
+        self.assertTrue(
+            mode & stat.S_IWUSR,
+            f"expected owner-write bit to be set, got mode {oct(mode)}",
+        )
 
 
 if __name__ == "__main__":
