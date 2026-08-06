@@ -486,7 +486,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             # No hardware available for testing yet; build-only.
             "test-runs-on": "",
-            "family": "gpu-generic",
+            "family": "gpugeneric",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,

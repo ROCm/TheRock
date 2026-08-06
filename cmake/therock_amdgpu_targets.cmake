@@ -259,63 +259,95 @@ therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY
 
 # amdgcnspirv architecture-independent portable SPIR-V target
 # Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
-therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
   PLATFORM_INDEPENDENT
+  # Classification legend for the notes below:
+  #   ! - target neutral, @ - generic, ? - unknown, "" - target-specific, * per-arch
+  # Tracking issue for enabling SPIR-V across components:
+  #   https://github.com/ROCm/TheRock/issues/6918
   EXCLUDE_TARGET_PROJECTS
-    MIOpen # https://github.com/ROCm/TheRock/issues/6918
-    ROCR-Runtime # https://github.com/ROCm/TheRock/issues/6918
-    aqlprofile # https://github.com/ROCm/TheRock/issues/6918
-    composable_kernel # https://github.com/ROCm/TheRock/issues/6918
-    hip-clr # https://github.com/ROCm/TheRock/issues/6918
-    hip-tests # https://github.com/ROCm/TheRock/issues/6918
-    hipBLAS # https://github.com/ROCm/TheRock/issues/6918
-    hipBLAS-common # https://github.com/ROCm/TheRock/issues/6918
-    hipBLASLt # https://github.com/ROCm/TheRock/issues/6918
-    hipCUB # https://github.com/ROCm/TheRock/issues/6918
-    hipDNN # https://github.com/ROCm/TheRock/issues/6918
-    hipDNN_samples # https://github.com/ROCm/TheRock/issues/6918
-    hipFFT # https://github.com/ROCm/TheRock/issues/6918
-    hipInfo # https://github.com/ROCm/TheRock/issues/6918
-    hipRAND # https://github.com/ROCm/TheRock/issues/6918
-    hipSOLVER # https://github.com/ROCm/TheRock/issues/6918
-    hipSPARSE # https://github.com/ROCm/TheRock/issues/6918
-    hipSPARSELt # https://github.com/ROCm/TheRock/issues/6918
-    hipTensor # https://github.com/ROCm/TheRock/issues/6918
-    hipblasltprovider # https://github.com/ROCm/TheRock/issues/6918
-    hipdnn_integration_tests # https://github.com/ROCm/TheRock/issues/6918
-    hipfile # https://github.com/ROCm/TheRock/issues/6918
-    hipkernelprovider # https://github.com/ROCm/TheRock/issues/6918
-    libhipcxx # https://github.com/ROCm/TheRock/issues/6918
-    miopenprovider # https://github.com/ROCm/TheRock/issues/6918
-    mirage # https://github.com/ROCm/TheRock/issues/6918
-    mxDataGenerator # https://github.com/ROCm/TheRock/issues/6918
-    ocl-clr # https://github.com/ROCm/TheRock/issues/6918
-    rccl # https://github.com/ROCm/TheRock/issues/6918
-    rccl-tests # https://github.com/ROCm/TheRock/issues/6918
-    rdc # https://github.com/ROCm/TheRock/issues/6918
-    rocALUTION # https://github.com/ROCm/TheRock/issues/6918
-    rocBLAS # https://github.com/ROCm/TheRock/issues/6918
-    rocFFT # https://github.com/ROCm/TheRock/issues/6918
-    rocPRIM # https://github.com/ROCm/TheRock/issues/6918
-    rocPRIM_tests # https://github.com/ROCm/TheRock/issues/6918
-    rocRAND # https://github.com/ROCm/TheRock/issues/6918
-    rocRoller # https://github.com/ROCm/TheRock/issues/6918
-    rocSOLVER # https://github.com/ROCm/TheRock/issues/6918
-    rocSPARSE # https://github.com/ROCm/TheRock/issues/6918
-    rocThrust # https://github.com/ROCm/TheRock/issues/6918
-    rocWMMA # https://github.com/ROCm/TheRock/issues/6918
-    rocdecode # https://github.com/ROCm/TheRock/issues/6918
-    rocjitsu # https://github.com/ROCm/TheRock/issues/6918
-    rocjpeg # https://github.com/ROCm/TheRock/issues/6918
-    rocm-kpack # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-sdk # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-systems # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-systems-examples # https://github.com/ROCm/TheRock/issues/6918
-    rocr-debug-agent-tests # https://github.com/ROCm/TheRock/issues/6918
-    rocrtst # https://github.com/ROCm/TheRock/issues/6918
-    rocshmem # https://github.com/ROCm/TheRock/issues/6918
-    roctracer # https://github.com/ROCm/TheRock/issues/6918
+    MIOpen #<
+    ROCR-Runtime #!
+    aqlprofile #@
+    composable_kernel #<
+    hip-clr #?
+    hip-tests #?
+    hipBLAS #*
+    hipBLAS-common #?
+    hipBLASLt #?
+    hipCUB #?
+    hipDNN #!
+    hipDNN_samples #<
+    hipFFT #*
+    hipInfo #!
+    hipRAND #*
+    hipSOLVER #<
+    hipSPARSE #<
+    hipSPARSELt #<
+    hipTensor #<
+    hipblasltprovider #<
+    hipdnn_integration_tests #<
+    hipfile #!
+    hipkernelprovider #<
+    libhipcxx #<
+    miopenprovider #!
+    mirage #!
+    mxDataGenerator #?
+    ocl-clr #?
+    rccl #<
+    rccl-tests #?
+    rdc #!
+    rocALUTION #<
+    rocBLAS #* # excluded; builds via DEFAULT_GPU_TARGETS gfx1100 fallback
+    rocFFT #*
+    # rocPRIM #< ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    rocPRIM_tests #< # hangs amd-llvm-spirv backend on heavy template kernels
+    # rocRAND #* ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    rocRoller #?
+    rocSOLVER #<
+    rocSPARSE #<
+    rocThrust #? # hangs amd-llvm-spirv backend on heavy template kernels
+    rocWMMA #<
+    rocdecode #!
+    rocjitsu #!
+    rocjpeg #!
+    # rocm-kpack # keep enabled; kpack split is guarded per-artifact
+    rocprofiler-compute #!
+    rocprofiler-sdk #!
+    rocprofiler-systems #!
+    rocprofiler-systems-examples #!
+    rocr-debug-agent
+    rocr-debug-agent-tests #!
+    rocrtst #!
+    rocshmem #!
+    roctracer #?
+
+    # --- ADDSPV: additionally excluded so that an ENABLE_ALL build for
+    # amdgcnspirv contains the same set of projects as a compiler-only build.
+    # These are runtime / kernel / tooling / third-party components not part of
+    # the SPIR-V compiler slice. Each name is a verified existing subproject.
+    amd-dbgapi
+    amdsmi
+    hipify
+    hipthreads
+    ocl-icd
+    origami
+    rocgdb
+    rocminfo
+    rocprof-trace-decoder
+    therock-SuiteSparse
+    therock-amd-mesa
+    therock-elfio
+    therock-expat
+    therock-gmp
+    therock-host-blas
+    therock-host-blas64
+    therock-hwloc
+    therock-libpciaccess
+    therock-mpfr
+    therock-ncurses
+    therock-spdlog
+    therock-util-linux
 )
 
 # Optional extension targets (used for out of tree target development).
