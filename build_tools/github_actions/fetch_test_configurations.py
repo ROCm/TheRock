@@ -702,6 +702,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
