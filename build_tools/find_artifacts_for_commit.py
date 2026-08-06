@@ -34,6 +34,8 @@ import re
 import sys
 from typing import Sequence
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from _therock_utils.artifact_backend import S3Backend
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
@@ -186,8 +188,11 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
     if info._output_root is None:
         return False
 
-    backend = S3Backend(output_root=info._output_root)
-    available_filenames = backend.list_artifacts()
+    try:
+        backend = S3Backend(output_root=info._output_root)
+        available_filenames = backend.list_artifacts()
+    except (BotoCoreError, ClientError):
+        return False
 
     matching_filenames = _filter_artifact_filenames(
         available_filenames,
