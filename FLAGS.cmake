@@ -41,9 +41,15 @@ therock_declare_flag(
     hipblasltprovider
 )
 
+# CI-SIGNAL BRANCH ONLY. DO NOT MERGE.
+# HIPKERNELPROVIDER_ENABLE_ROCKE is flipped ON here so PR CI builds the rocKE
+# engine, stages its Python wheels, and generates the rocKE CTest entries. That
+# is the only configuration in which the hipkernelprovider wheel-install wrapper
+# from users/bharriso/hipkernelprovider-rocke-env-wrapper is actually exercised.
+# The default returns to OFF on main.
 therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
   CMAKE_VARS
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
