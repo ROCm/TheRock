@@ -15,6 +15,31 @@ include(therock_flag_utils)
 # Flag declarations
 ###############################################################################
 
+# Build flag infrastructure conformance canaries. These are consumed by the
+# unconditional aux-overlay compile check. They deliberately exercise both
+# BOOL values and INTEGER serialization. Do not remove or repurpose them.
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+  TYPE BOOL
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build flag infrastructure false-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+  TYPE BOOL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build flag infrastructure true-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+  TYPE INTEGER
+  DEFAULT_VALUE -17
+  VALID_VALUES -17
+  DESCRIPTION "Build flag infrastructure integer conformance canary"
+)
+
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
   DEFAULT_VALUE ON
