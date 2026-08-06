@@ -580,11 +580,8 @@ def should_skip_ci(
     # This avoids running expensive ASAN builds on every PR.
     # Labels that enable ASAN CI:
     #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
-    #   - ci:run-all-archs: used by submodule bump automation PRs
     has_asan_label = (
-        "ci:asan" in ci_inputs.pr_labels
-        or "ci:host-asan" in ci_inputs.pr_labels
-        or "ci:run-all-archs" in ci_inputs.pr_labels
+        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
     if (
         ci_inputs.is_pull_request
@@ -592,7 +589,7 @@ def should_skip_ci(
         and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan', 'ci:host-asan', or 'ci:run-all-archs' to enable)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
