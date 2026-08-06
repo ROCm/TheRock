@@ -46,8 +46,10 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
     [--rocwmma | --no-rocwmma]
+    [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
+    [--hipthreads | --no-hipthreads]
     [--tests | --no-tests]
     [--base-only]
 
@@ -424,7 +426,9 @@ def retrieve_artifacts_by_run_id(args):
             args.rocrtst,
             args.rocalution,
             args.rocwmma,
+            args.rpp,
             args.libhipcxx,
+            args.hipthreads,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -554,11 +558,48 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.rpp:
+            extra_artifacts.append("rpp")
+            # test_rpp.py compiles the test suite against the installed tree,
+            # so the _lib expansion below is not sufficient:
+            #   rpp_dev      - lib/cmake/rpp for find_package(rpp), plus headers.
+            #   base_dev     - include/half/half.hpp, which api/rppdefs.h
+            #                  includes to define Rpp16f.
+            #   amd-llvm_dev - lib/llvm/lib/cmake/AMDDeviceLibs. rpp-config.cmake
+            #                  calls find_dependency(HIP), and hip-config-amd.cmake
+            #                  in turn resolves AMDDeviceLibs through the
+            #                  lib/cmake/AMDDeviceLibs shim in base_lib.
+            argv.append("rpp_dev")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+        if args.hipthreads:
+            extra_artifacts.append("hipthreads")
+            # hipthreads ships a static library (libhipthreads.a) and headers in
+            # its _dev component, and its lit suite includes the libhipcxx
+            # headers, so both _dev artifacts are required at test time.
+            argv.append("hipthreads_dev")
+            argv.append("core-hip_run")
+            extra_artifacts.append("libhipcxx")
+            argv.append("libhipcxx_dev")
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
+            argv.append("base_dev_generic")
+            if args.prim:
+                # The hipthreads example apps link roc::rocthrust and call
+                # find_package(rocthrust/rocprim CONFIG); those headers and
+                # CMake package configs live in prim's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("prim_dev")
+            if args.rand:
+                # The InOneWeekend example includes <hiprand/hiprand.hpp>; the
+                # hipRAND/rocRAND headers live in rand's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("rand_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
@@ -951,9 +992,23 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--rpp",
+        default=False,
+        help="Include 'rpp' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipthreads",
+        default=False,
+        help="Include 'hipthreads' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
