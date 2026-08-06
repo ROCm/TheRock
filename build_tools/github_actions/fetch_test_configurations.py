@@ -652,6 +652,12 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # yama ptrace_scope and perf_event_paranoid are global kernel sysctls that
+        # a container reads through a read-only /proc/sys and cannot change, so
+        # capabilities are the only way to satisfy these gates. PERFMON is
+        # preferred over the equally effective but far broader SYS_ADMIN; see
+        # the kernel's Documentation/admin-guide/perf-security.rst.
+        "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
