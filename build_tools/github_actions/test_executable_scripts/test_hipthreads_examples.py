@@ -20,6 +20,7 @@ import logging
 import os
 import platform
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -173,6 +174,13 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
     binary = build_dir / "bin" / f"{example['binary']}{EXE_SUFFIX}"
     if not binary.exists():
         raise FileNotFoundError(f"Built binary not found: {binary}")
+
+    if IS_WINDOWS:
+        # Copy artifact DLLs next to the exe so it loads the HIP runtime under test,
+        # not a driver's amdhip64_7.dll shadowing it from System32 (TheRock#7132).
+        for dll in (OUTPUT_ARTIFACTS_PATH / "bin").glob("*.dll"):
+            shutil.copy2(dll, binary.parent)
+
     return binary
 
 
