@@ -123,6 +123,66 @@ jobs:
             --release-type="${{ inputs.release_type }}" \
             --kpack-split="${{ needs.build_python_packages.outputs.kpack_split }}"
 
+  build_msi_packages:
+    name: Build MSI Packages (${{ matrix.family_info.amdgpu_family }})
+    needs: [build_artifacts]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    timeout-minutes: 60
+    permissions:
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
+    env:
+      DIST_DIR: "${{ github.workspace }}\\dist"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python requirements
+        run: pip install -r requirements.txt
+
+      - name: Install WiX
+        run: |
+          dotnet tool install --version 6.0.0 --global wix
+          wix extension add -g WixToolset.UI.wixext/6.0.0
+          wix extension add -g WixToolset.Dependency.wixext/6.0.0
+
+      - name: Fetch and flatten artifacts
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${{ github.run_id }}" \
+            --stage=all \
+            --amdgpu-families="${{ matrix.family_info.amdgpu_family }}" \
+            --expand-family-to-targets \
+            --flatten \
+            --output-dir="${{ env.DIST_DIR }}"
+
+      - name: Build MSI Packages
+        shell: cmd
+        run: .\build_tools\packaging\windows\build-all.bat "${{ env.DIST_DIR }}" /no_pause
+
+      - name: Upload MSI Packages as artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: msi-packages-${{ matrix.family_info.amdgpu_family }}
+          path: ${{ env.DIST_DIR }}\*.msi
+          if-no-files-found: warn
+
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
