@@ -10,8 +10,10 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.cmake_amdgpu_targets import (
+    GENERIC_FAMILY,
     AmdgpuTargetInfo,
     build_family_to_targets,
+    generic_targets,
     parse_amdgpu_targets_cmake,
 )
 
@@ -106,6 +108,18 @@ class BuildFamilyToTargetsTest(unittest.TestCase):
         ]
         mapping = build_family_to_targets(infos)
         self.assertEqual(mapping["gfx942"].count("gfx942"), 1)
+
+
+class GenericTargetsTest(unittest.TestCase):
+    def test_returns_generic_family_members(self):
+        mapping = {
+            GENERIC_FAMILY: ["amdgcnspirv"],
+            "gfx110X-all": ["gfx1100", "gfx1101"],
+        }
+        self.assertEqual(generic_targets(mapping), {"amdgcnspirv"})
+
+    def test_empty_when_no_generic_family(self):
+        self.assertEqual(generic_targets({"gfx942": ["gfx942"]}), set())
 
 
 if __name__ == "__main__":

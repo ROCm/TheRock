@@ -134,6 +134,39 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
+    def test_filters_arch_independent_family(self):
+        # gpu-generic (portable SPIR-V) is never a PyTorch device target and is
+        # dropped for every ref, even those with no other unsupported families.
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12"],
+            amdgpu_families="gfx94X-dcgpu;gpu-generic",
+            platform="linux",
+        )
+
+        self.assertEqual(
+            matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                }
+            ],
+        )
+
+    def test_arch_independent_only_families_drops_row(self):
+        # A build requesting only gpu-generic yields no PyTorch rows.
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12"],
+            amdgpu_families="gpu-generic",
+            platform="linux",
+        )
+        self.assertEqual(matrix, [])
+
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
         # JSON for use in workflow files like:

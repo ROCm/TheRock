@@ -1,7 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(THEROCK_ENABLE_HIPFILE)
+therock_project_has_no_targets(_skip_hipfile hipfile)
+if(THEROCK_ENABLE_HIPFILE AND NOT _skip_hipfile)
   ##############################################################################
   # hipFile
   ##############################################################################

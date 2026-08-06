@@ -52,6 +52,11 @@ CI_PYTORCH_REFS = {
     "windows": ["release/2.11"],
 }
 
+# Architecture-independent families (portable IR such as SPIR-V) emit no per-arch
+# device code and are never a valid PyTorch device build target; excluded for all
+# refs and platforms.
+ARCH_INDEPENDENT_FAMILIES = {"gpu-generic"}
+
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
@@ -159,8 +164,10 @@ def generate_pytorch_matrix_for_release_type(
     matrix: list[dict[str, str]] = []
     for py in versions:
         for ref in refs:
-            exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
-            families = _filter_families(amdgpu_families, exclude)
+            exclude = set(UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set()))
+            families = _filter_families(
+                amdgpu_families, exclude | ARCH_INDEPENDENT_FAMILIES
+            )
             if not families:
                 continue
             # These row keys are the contract with workflow files which use them

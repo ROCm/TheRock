@@ -1588,6 +1588,20 @@ function(therock_filter_amdgpu_targets out_var project_name)
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
 endfunction()
 
+# TRUE when a per-arch target list was requested but the project excludes all of
+# it (e.g. the portable amdgcnspirv target). FALSE for ordinary gfx builds and
+# for generic stages where no per-arch targets are requested.
+function(therock_project_has_no_targets out_var project_name)
+  set(_result FALSE)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_filtered "${project_name}" ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _filtered)
+      set(_result TRUE)
+    endif()
+  endif()
+  set("${out_var}" "${_result}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
