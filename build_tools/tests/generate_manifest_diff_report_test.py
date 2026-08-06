@@ -1,5 +1,6 @@
 """Tests for generate_manifest_diff_report.py."""
 
+import argparse
 import os
 import sys
 import unittest
@@ -9,19 +10,35 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from generate_manifest_diff_report import (
+    build_commit_range_summary,
+    build_pr_comment_body,
     create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
     generate_non_superrepo_html,
+    generate_step_summary,
     get_api_base_from_url,
+    handle_post_comment,
     is_revert,
+    main,
     ManifestDiff,
     parse_args,
+    PR_COMMENT_MARKER,
     resolve_commits,
     Submodule,
 )
+
+
+def _make_output_root(run_id="12345", platform="linux"):
+    return WorkflowOutputRoot(
+        bucket="therock-ci-artifacts",
+        external_repo="",
+        run_id=run_id,
+        platform=platform,
+    )
 
 
 # =============================================================================
@@ -365,6 +382,174 @@ class HtmlReportStructureTest(unittest.TestCase):
         self.assertIn("component-row", html)
         self.assertIn("data-component=", html)
         self.assertIn("test-submodule", html)
+
+
+class BuildCommitRangeSummaryTest(unittest.TestCase):
+    """Tests for build_commit_range_summary()."""
+
+    def test_includes_short_shas_and_singular_changed_count(self):
+        diff = ManifestDiff(
+            start_commit="a" * 40,
+            end_commit="b" * 40,
+            submodules={
+                "changed-sub": Submodule(
+                    name="changed-sub",
+                    sha="c" * 40,
+                    api_base="https://api.github.com/repos/ROCm/changed-sub",
+                    branch="main",
+                    status="changed",
+                ),
+                "unchanged-sub": Submodule(
+                    name="unchanged-sub",
+                    sha="d" * 40,
+                    api_base="https://api.github.com/repos/ROCm/unchanged-sub",
+                    branch="main",
+                    status="unchanged",
+                ),
+            },
+        )
+
+        summary = build_commit_range_summary(diff)
+
+        self.assertIn(f"`{diff.start_commit[:8]}`", summary)
+        self.assertIn(f"`{diff.end_commit[:8]}`", summary)
+        self.assertIn("1 submodule changed", summary)
+
+    def test_zero_and_plural_changed_counts(self):
+        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
+        self.assertIn("0 submodules changed", build_commit_range_summary(diff))
+
+        for name in ("s1", "s2"):
+            diff.submodules[name] = Submodule(
+                name=name,
+                sha="e" * 40,
+                api_base="https://api.github.com/repos/ROCm/" + name,
+                branch="main",
+                status="changed",
+            )
+        self.assertIn("2 submodules changed", build_commit_range_summary(diff))
+
+
+class GenerateStepSummaryReusesCommitRangeSummaryTest(unittest.TestCase):
+    """generate_step_summary() should embed build_commit_range_summary()'s text
+    verbatim rather than re-deriving equivalent formatting, so both surfaces
+    (the job step summary and the bump-PR comment) agree exactly."""
+
+    def test_step_summary_includes_commit_range_summary_line(self):
+        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
+        expected_line = build_commit_range_summary(diff)
+
+        with mock.patch(
+            "generate_manifest_diff_report.gha_append_step_summary"
+        ) as append_summary:
+            generate_step_summary(diff)
+
+        append_summary.assert_called_once()
+        posted_summary = append_summary.call_args[0][0]
+        self.assertIn(expected_line, posted_summary)
+
+
+# =============================================================================
+# --action post_comment Tests
+# =============================================================================
+
+
+class BuildPrCommentBodyTest(unittest.TestCase):
+    """Tests for build_pr_comment_body()."""
+
+    def test_includes_marker_link_and_summary(self):
+        body = build_pr_comment_body(
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/logs/manifest-diff/index.html",
+            "**Commit Range:** `abc12345` -> `def67890` (2 submodules changed)",
+        )
+
+        self.assertIn(PR_COMMENT_MARKER, body)
+        self.assertIn(
+            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/logs/manifest-diff/index.html",
+            body,
+        )
+        self.assertIn("2 submodules changed", body)
+        # Marker must appear so gha_update_pr_comment can find/update this comment.
+        self.assertTrue(body.startswith(PR_COMMENT_MARKER))
+
+    def test_omits_summary_line_when_blank(self):
+        body = build_pr_comment_body("https://example.com/index.html", "")
+
+        self.assertIn(PR_COMMENT_MARKER, body)
+        self.assertIn("https://example.com/index.html", body)
+        self.assertNotIn("Commit Range", body)
+
+
+class HandlePostCommentTest(unittest.TestCase):
+    """Tests for handle_post_comment(): URL computation + comment dispatch."""
+
+    def test_posts_comment_with_computed_report_url(self):
+        args = argparse.Namespace(
+            run_id="99999",
+            pr_number=1234,
+            commit_range_summary="**Commit Range:** `aaa` -> `bbb` (1 submodule changed)",
+            github_repository="ROCm/TheRock",
+            platform="linux",
+        )
+
+        with mock.patch(
+            "generate_manifest_diff_report.WorkflowOutputRoot.from_workflow_run",
+            return_value=_make_output_root(run_id="99999"),
+        ) as from_workflow_run, mock.patch(
+            "generate_manifest_diff_report.gha_update_pr_comment"
+        ) as gha_update_pr_comment:
+            handle_post_comment(args)
+
+        from_workflow_run.assert_called_once_with(run_id="99999", platform="linux")
+        gha_update_pr_comment.assert_called_once()
+        call_kwargs = gha_update_pr_comment.call_args.kwargs
+        self.assertEqual(call_kwargs["pr_number"], 1234)
+        self.assertEqual(call_kwargs["marker"], PR_COMMENT_MARKER)
+        self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
+        self.assertIn("99999-linux/logs/manifest-diff/index.html", call_kwargs["body"])
+        self.assertIn("1 submodule changed", call_kwargs["body"])
+
+
+class MainDispatchTest(unittest.TestCase):
+    """Tests that main() routes --action post_comment correctly, including
+    the validation that's only meaningful for that action."""
+
+    def test_post_comment_action_dispatches_to_handler(self):
+        with mock.patch(
+            "generate_manifest_diff_report.handle_post_comment", return_value=0
+        ) as handle_post_comment_mock:
+            result = main(
+                [
+                    "--action",
+                    "post_comment",
+                    "--run-id",
+                    "123",
+                    "--pr-number",
+                    "456",
+                ]
+            )
+
+        self.assertEqual(result, 0)
+        handle_post_comment_mock.assert_called_once()
+        called_args = handle_post_comment_mock.call_args[0][0]
+        self.assertEqual(called_args.run_id, "123")
+        self.assertEqual(called_args.pr_number, 456)
+
+    def test_post_comment_action_requires_run_id(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            result = main(["--action", "post_comment", "--pr-number", "1"])
+
+        self.assertEqual(result, 1)
+
+    def test_post_comment_action_requires_pr_number(self):
+        result = main(["--action", "post_comment", "--run-id", "123"])
+
+        self.assertEqual(result, 1)
+
+    def test_default_action_is_generate(self):
+        args = parse_args(["--end", "abc123"])
+
+        self.assertEqual(args.action, "generate")
 
 
 if __name__ == "__main__":

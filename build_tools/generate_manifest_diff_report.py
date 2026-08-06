@@ -3,7 +3,17 @@
 Compares submodule versions and generates HTML reports showing commit changes
 for each component between builds.
 
-Arguments:
+Actions (--action):
+  generate               (default) Build the report + step summary. Uses the
+                         arguments below.
+  post_comment           Post/update the report link as a comment on a
+                         submodule-bump PR. Runs as a separate step, after
+                         --action generate's report has been uploaded to S3
+                         (see manifest-diff.yml) -- uses --run-id/--pr-number/
+                         --commit-range-summary/--github-repository/--platform
+                         instead of the generate-only arguments below.
+
+Arguments (--action generate):
   --start                Start commit SHA or workflow run ID (required unless using
                          --find-last-run or --pr-base-ref).
   --end                  End commit SHA or workflow run ID (required).
@@ -31,11 +41,14 @@ Example usage:
   python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run multi_arch_ci.yml
   python build_tools/generate_manifest_diff_report.py --end def456 --pr-base-ref main
   python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
+  python build_tools/generate_manifest_diff_report.py --action post_comment --run-id 123 --pr-number 456
 """
 
 # Standard library imports
 import argparse
 import html
+import os
+import platform
 import sys
 import urllib.parse
 from dataclasses import dataclass, field
@@ -49,12 +62,15 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent
 sys.path.insert(0, str(THIS_SCRIPT_DIR))
 
 # Local imports
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_api import (
     gha_append_step_summary,
     gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
     gha_send_request,
+    gha_set_output,
+    gha_update_pr_comment,
 )
 
 # GitHub API constants
@@ -78,6 +94,10 @@ PER_PAGE = 100  # Commits per page (GitHub API maximum is 100)
 
 # Report identifiers
 UNASSIGNED_KEY = "Unassigned"
+
+# Marker for the sticky comment --action post_comment posts/updates on
+# submodule-bump PRs, linking to the manifest-diff report.
+PR_COMMENT_MARKER = "<!-- therock-report-manifest-diff -->"
 
 # File paths
 HTML_TEMPLATE_PATH = THIS_SCRIPT_DIR / "manifest_diff_report_template.html"
@@ -195,9 +215,19 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Generate manifest diff report")
     parser.add_argument(
+        "--action",
+        default="generate",
+        choices=["generate", "post_comment"],
+        help=(
+            "'generate' (default): build the report + step summary. "
+            "'post_comment': post/update the report link as a bump-PR "
+            "comment (see the --action post_comment argument group)."
+        ),
+    )
+    parser.add_argument(
         "--start", required=False, help="Start workflow ID or commit SHA"
     )
-    parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
+    parser.add_argument("--end", required=False, help="End workflow ID or commit SHA")
     parser.add_argument(
         "--find-last-run",
         help=(
@@ -232,6 +262,41 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--output-dir",
         type=Path,
         help="Output directory for the report (default: TheRock root directory)",
+    )
+
+    # --- --action post_comment only ---
+    parser.add_argument(
+        "--run-id",
+        default=os.environ.get("GITHUB_RUN_ID"),
+        help=(
+            "[post_comment] GitHub Actions run ID whose report was uploaded "
+            "(default: $GITHUB_RUN_ID)."
+        ),
+    )
+    parser.add_argument(
+        "--pr-number",
+        type=int,
+        help="[post_comment] Pull request number to comment on.",
+    )
+    parser.add_argument(
+        "--commit-range-summary",
+        default="",
+        help=(
+            "[post_comment] One-line commit-range/changed-count summary, "
+            "typically the 'commit_range_summary' step output that --action "
+            "generate writes via gha_set_output(). Omitted from the comment "
+            "body if blank."
+        ),
+    )
+    parser.add_argument(
+        "--github-repository",
+        default="ROCm/TheRock",
+        help="[post_comment] Repository in 'owner/repo' format.",
+    )
+    parser.add_argument(
+        "--platform",
+        default=platform.system().lower(),
+        help="[post_comment] Platform for workflow output paths.",
     )
     return parser.parse_args(argv)
 
@@ -1397,12 +1462,25 @@ def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> 
     return HtmlReportGenerator(diff, output_dir).generate()
 
 
+def build_commit_range_summary(diff: ManifestDiff) -> str:
+    """One-line commit-range + changed-submodule-count summary.
+
+    Shared by generate_step_summary() (the full job-summary report) and
+    handle_post_comment() (the bump-PR comment, --action post_comment), so
+    both surfaces show identical text without duplicating this formatting.
+    """
+    changed_count = len(diff.changed)
+    plural = "" if changed_count == 1 else "s"
+    return (
+        f"**Commit Range:** `{diff.start_commit[:8]}` -> `{diff.end_commit[:8]}` "
+        f"({changed_count} submodule{plural} changed)"
+    )
+
+
 def generate_step_summary(diff: ManifestDiff) -> None:
     """Generate GitHub Actions step summary using the shared utility."""
     summary = "# TheRock Manifest Diff Report\n\n"
-    summary += (
-        f"**Commit Range:** `{diff.start_commit[:8]}` -> `{diff.end_commit[:8]}`\n\n"
-    )
+    summary += f"{build_commit_range_summary(diff)}\n\n"
     summary += "## Submodule Changes\n\n"
 
     # Submodule changes
@@ -1475,6 +1553,53 @@ def generate_step_summary(diff: ManifestDiff) -> None:
 
 
 # =============================================================================
+# Bump-PR Comment (--action post_comment)
+# =============================================================================
+
+
+def build_pr_comment_body(report_url: str, commit_range_summary: str) -> str:
+    """Build the sticky bump-PR comment body: marker + report link + summary."""
+    lines = [
+        PR_COMMENT_MARKER,
+        "### TheRock Manifest Diff Report",
+        f"[View report]({report_url})",
+    ]
+    if commit_range_summary:
+        lines.append(commit_range_summary)
+    return "\n\n".join(lines) + "\n"
+
+
+def handle_post_comment(args: argparse.Namespace) -> int:
+    """Post/update the manifest-diff report link as a comment on a bump PR.
+
+    Runs as its own step/process, after the report generated by --action
+    generate has been uploaded to S3 (see manifest-diff.yml) -- the
+    ManifestDiff computed there is long gone by the time this runs, so the
+    report URL is recomputed from --run-id/--platform the same way
+    upload_test_report_script.py computed it when uploading (same run ID,
+    subfolder, and filename), and the one-line summary is threaded through
+    via --commit-range-summary rather than recomputed here.
+    """
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=args.run_id, platform=args.platform
+    )
+    report_url = output_root.log_file("manifest-diff", "index.html").https_url
+    body = build_pr_comment_body(report_url, args.commit_range_summary)
+
+    gha_update_pr_comment(
+        pr_number=args.pr_number,
+        marker=PR_COMMENT_MARKER,
+        body=body,
+        github_repository=args.github_repository,
+    )
+    print(
+        f"Posted manifest-diff report link to {args.github_repository}#"
+        f"{args.pr_number}: {report_url}"
+    )
+    return 0
+
+
+# =============================================================================
 # Entry Point
 # =============================================================================
 
@@ -1482,6 +1607,23 @@ def generate_step_summary(diff: ManifestDiff) -> None:
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     args = parse_args(argv)
+
+    if args.action == "post_comment":
+        if not args.run_id:
+            print(
+                "--run-id is required for --action post_comment (or set "
+                "$GITHUB_RUN_ID)",
+                file=sys.stderr,
+            )
+            return 1
+        if not args.pr_number:
+            print(
+                "--pr-number is required for --action post_comment",
+                file=sys.stderr,
+            )
+            return 1
+        return handle_post_comment(args)
+
     start_commit, end_commit = resolve_commits(args)
     if start_commit is None:
         # No comparison was performed (e.g. --find-last-run with no prior
@@ -1496,6 +1638,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n=== Generating Step Summary ===")
     generate_step_summary(diff)
+    # Exposed for the --action post_comment step, which runs in a separate
+    # process and wants this same one-line summary without recomputing a
+    # ManifestDiff.
+    gha_set_output({"commit_range_summary": build_commit_range_summary(diff)})
 
     print("\n=== Done ===")
     return 0

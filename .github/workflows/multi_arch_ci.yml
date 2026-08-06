@@ -162,6 +162,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      pull-requests: write
 
   ci_summary:
     name: CI Summary
