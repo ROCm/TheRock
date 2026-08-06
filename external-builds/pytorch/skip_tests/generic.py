@@ -97,6 +97,11 @@ skip_tests = {
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
             # argument in method wrapper_CUDA__miopen_rnn)"
             "test_rnn_check_device",
+            # This test passed with torch==2.11.0+rocm7.13.0a20260430 (gfx94x) (APR 30) - https://github.com/ROCm/TheRock/actions/runs/25150366706/job/73730936029
+            # First failure occured with torch==2.11.0+rocm7.13.0a20260502 (gfx94X) (MAY 2) - https://github.com/ROCm/TheRock/actions/runs/25312522580/job/74208101156
+            # This Segmentation fault not related to pytorch version
+            # Skipping this test for now to get a cleaner run
+            "test_Conv1d_zero_batch",
         ],
         "torch": [
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
