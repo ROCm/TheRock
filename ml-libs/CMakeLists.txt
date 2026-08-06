@@ -177,6 +177,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
     RUNTIME_DEPS
       hip-clr
       hipDNN
+      rocRAND
     TEST_SUBPROJECTS
       miopenprovider
   )
