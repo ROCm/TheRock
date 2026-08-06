@@ -285,40 +285,26 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
 
-    def test_asan_pr_without_submodule_change_skips(self):
-        """ASAN PR without submodule changes skips CI."""
+    def test_asan_pr_without_label_skips(self):
+        """ASAN PR without enabling label skips CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
-            submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
     def test_asan_pr_with_ci_asan_label_runs(self):
-        """ASAN PR with ci:asan label runs CI even without submodule changes."""
+        """ASAN PR with ci:asan label runs CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
-            submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
-    def test_asan_pr_with_submodule_change_runs(self):
-        """ASAN PR with submodule changes runs CI."""
-        inputs = self._inputs(build_variant="asan", pr_labels=[])
-        git = cm.GitContext(
-            changed_files=["rocm-libraries", "CMakeLists.txt"],
-            submodule_paths=["rocm-libraries", "rocm-systems"],
-        )
-        self.assertFalse(cm.should_skip_ci(inputs, git))
-
-    def test_asan_non_pr_runs_regardless_of_submodule(self):
-        """ASAN on schedule/push runs regardless of submodule changes."""
+    def test_asan_non_pr_runs(self):
+        """ASAN on schedule/push runs regardless of labels."""
         inputs = self._inputs(event_name="schedule", build_variant="asan")
-        git = cm.GitContext(
-            changed_files=None,
-            submodule_paths=["rocm-libraries"],
-        )
+        git = cm.GitContext(changed_files=None)
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     def test_release_pr_without_submodule_change_runs(self):

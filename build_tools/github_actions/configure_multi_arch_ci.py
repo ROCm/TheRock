@@ -576,24 +576,28 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present or ci:asan/ci:host-asan label is set.
-    # This avoids running expensive ASAN builds on every PR while still
-    # catching ASAN issues when library code (submodules) changes.
-    # The ci:asan or ci:host-asan labels allow manual triggering of ASAN CI on any PR.
-    has_asan_label = "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    # Skip ASAN on PRs unless an enabling label is present.
+    # This avoids running expensive ASAN builds on every PR.
+    # Labels that enable ASAN CI:
+    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    #   - ci:run-all-archs: used by submodule bump automation PRs
+    has_asan_label = (
+        "ci:asan" in ci_inputs.pr_labels
+        or "ci:host-asan" in ci_inputs.pr_labels
+        or "ci:run-all-archs" in ci_inputs.pr_labels
+    )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.has_submodule_changes is False
         and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' or 'ci:host-asan' label to force)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan', 'ci:host-asan', or 'ci:run-all-archs' to enable)"
         )
         return True
 
     if has_asan_label and ci_inputs.build_variant == "asan":
-        print(f"  Running: ASAN CI triggered by PR label")
+        print("  Running: ASAN CI triggered by PR label")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
