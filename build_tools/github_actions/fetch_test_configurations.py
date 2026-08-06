@@ -965,6 +965,7 @@ def run():
     # Each component gets its own independent random draw based on configured weights
     # For ASAN builds, use the sandbox runner to isolate potentially failing tests
     is_asan_build = build_variant in ("asan", "host-asan")
+    components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
         if "multi_gpu_runner" in component:
@@ -975,6 +976,12 @@ def run():
                 )
             elif test_runs_on_multi_gpu_default:
                 component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
+            else:
+                # No multi-GPU runner configured for this family; skip the component
+                logging.info(
+                    f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
+                )
+                continue
         else:
             # For ASAN builds, use the sandbox runner if available
             if is_asan_build and test_runs_on_sandbox:
@@ -988,9 +995,12 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+        components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
-    all_components = [_build_container_options(c, platform) for c in all_components]
+    all_components = [
+        _build_container_options(c, platform) for c in components_with_runners
+    ]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
     sanity_component = next(
