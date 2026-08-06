@@ -173,6 +173,10 @@ description = "Communication libraries (generic, single job parallel to math-lib
 artifact_groups = ["comm-libs"]
 type = "generic"
 
+[build_stages.cv-libs]
+description = "Computer Vision Libraries"
+artifact_groups = ["cv-libs"]
+
 [build_stages.storage-libs]
 description = "Storage libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["storage-libs"]
@@ -321,6 +325,13 @@ description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.cv-libs]
+description = "Computer Vision Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -665,6 +676,13 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 components = ["libhipcxx"]
 
+[artifacts.hipthreads]
+# target-neutral: libhipthreads.a is a static archive of device bitcode that is
+# identical across per-arch shards. Built for all targets once.
+artifact_group = "math-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
@@ -717,6 +735,16 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 split_databases = ["hipkernelprovider"]
 components = ["hip-kernel-provider"]
+
+# --- Computer Vision Integration ---
+
+[artifacts.rpp]
+artifact_group = "cv-libs"
+type = "target-neutral"
+# half headers come from base; amd-llvm arrives transitively via core-hip.
+artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
+feature_group = "CV_LIBS"
+# No disable_platforms: Windows is opt-in via -DTHEROCK_ENABLE_RPP=ON.
 
 # --- Media Integration ---
 
@@ -860,6 +888,13 @@ disable_platforms = ["windows"]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+[artifacts.rocjitsu-hotswap]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = ["rocjitsu"]
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 

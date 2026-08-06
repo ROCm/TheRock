@@ -294,6 +294,15 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
+    def test_asan_pr_with_ci_asan_label_runs(self):
+        """ASAN PR with ci:asan label runs CI even without submodule changes."""
+        inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
+            submodule_paths=["rocm-libraries", "rocm-systems"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
     def test_asan_pr_with_submodule_change_runs(self):
         """ASAN PR with submodule changes runs CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
@@ -1113,11 +1122,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
@@ -1138,7 +1142,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
+                    "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
                 }
             ],
@@ -1669,35 +1673,40 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 class TestFamilyTestFilters(unittest.TestCase):
     """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
 
-    def test_real_family_gfx90a_nightly_check_only(self):
-        """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
-        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+    def test_real_family_gfx90a_postsubmit(self):
+        """Integration test: gfx90a is in postsubmit matrix with submodule changes."""
+        # gfx90a is in postsubmit matrix, so it runs on push events.
+        # It has submodule_bump_tests_only=True, so tests only run when
+        # submodule changes are detected.
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="pull_request",  # Non-schedule run
-            commit_ref="feature-branch",
+            event_name="push",
+            commit_ref="main",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
         )
-        targets = cm.select_targets(ci_inputs)
-        git_context = cm.GitContext.empty()
+        # gfx90a has submodule_bump_tests_only=True, so we need submodule changes
+        # for tests to be enabled. Simulate a submodule bump.
+        git_context = cm.GitContext(
+            changed_files=["some-submodule"],
+            submodule_paths=["some-submodule"],
+        )
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx90a in the linux build config
+        gfx90a_info = None
         if outputs.builds.linux:
-            gfx90a_info = None
             for family_info in outputs.builds.linux.per_family_info:
                 if family_info["amdgpu_family"] == "gfx90a":
                     gfx90a_info = family_info
                     break
 
         self.assertIsNotNone(gfx90a_info)
-        self.assertEqual(gfx90a_info["test-runs-on"], "")
+        # gfx90a should have test-runs-on set in postsubmit when submodule changes
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-    def test_workflow_dispatch_allows_nightly_check_only_family(self):
-        """workflow_dispatch should allow testing nightly_check_only families."""
-        # gfx90a has nightly_check_only_for_family=True for linux
+    def test_workflow_dispatch_allows_gfx90a(self):
+        """workflow_dispatch should allow testing gfx90a."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
@@ -1810,7 +1819,7 @@ class TestFamilyTestFilters(unittest.TestCase):
 
 
 class TestMultiLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of multi-label runner configurations.
+    """Test count-based random selection of multi-label runner configurations.
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1838,19 +1847,19 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIn("test-runs-on-labels", gfx94x_linux)
         self.assertIn("test-runs-on-multi-gpu-labels", gfx94x_linux)
 
-        # Verify we have 3 labels for 1-gpu
+        # Verify we have 2 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 3)
+        self.assertEqual(len(labels), 2)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to ~1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_gfx94x_multi_gpu_has_label_config(self):
         """Verify gfx94x has the multi-gpu label configuration."""
@@ -1867,14 +1876,15 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to 1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_expand_build_configs_uses_default_runner(self):
         """expand_build_configs uses the default test-runs-on label.
 
-        Note: Per-component weighted runner selection is handled in
+        Note: Per-component count-based runner selection is handled in
         fetch_test_configurations.py, not in expand_build_configs.
         """
         ci_inputs = cm.CIInputs(
@@ -1932,7 +1942,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 class TestBuildRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of build runners (Azure vs AWS).
+    """Test count-based random selection of build runners (Azure vs AWS).
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1948,24 +1958,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self._orig_env)
 
-    def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: 100% AWS for default Linux builds."""
+    def test_select_build_runner_weight_selection(self):
+        """Test weight-based selection for build runners."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.3):
-            self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
-            )
-
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.75):
+        # With only one runner (weight=1.0), any random value selects it
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )
 
         # Windows still uses Azure
-        with patch("random.random", return_value=0.95):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
@@ -1974,7 +1978,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
         """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
         from amdgpu_family_matrix import select_build_runner
 
-        with patch("random.random", return_value=0.99):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
                 "azure-linux-scale-rocm-heavy-ramdisk",

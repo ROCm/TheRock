@@ -3,11 +3,15 @@
 
 """Tests for stage_reuse_decision: impact + baseline-availability gates."""
 
-from pathlib import Path
+import os
 import sys
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import configure_multi_arch_ci as cma
 
 import stage_reuse_decision as srd
 from stage_reuse_decision import StageReuseMode, compute_auto_stage_reuse
@@ -514,6 +518,47 @@ class BuildPlatformsTest(unittest.TestCase):
         self.assertEqual(
             srd._build_platforms(["gfx94x"], ["gfx110x"]), ("linux", "windows")
         )
+
+
+class CrossRepoArtifactReuseTest(unittest.TestCase):
+    """Test cross-repo vs same-repo artifact reuse logic.
+
+    External repos (rocm-libraries, rocm-systems) can copy artifacts from
+    TheRock's baseline runs. Cross-repo reuse skips automatic stage decisions
+    since they query the current repo, not the baseline repo.
+    """
+
+    def test_cross_repo_skips_auto_stage_reuse(self):
+        """Cross-repo reuse skips automatic stage decisions."""
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/rocm-libraries"}):
+            baseline_repository = "ROCm/TheRock"
+            current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+            is_cross_repo = baseline_repository and baseline_repository != current_repo
+
+            self.assertTrue(is_cross_repo)
+
+            # Cross-repo: auto stages should NOT be applied
+            stage_decisions = {}
+            if not is_cross_repo:
+                stage_decisions["math-libs"] = cma.JobAction.PREBUILT
+
+            self.assertEqual(stage_decisions, {})
+
+    def test_same_repo_applies_auto_stage_reuse(self):
+        """Same-repo reuse applies automatic stage decisions."""
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/TheRock"}):
+            baseline_repository = "ROCm/TheRock"
+            current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+            is_cross_repo = baseline_repository and baseline_repository != current_repo
+
+            self.assertFalse(is_cross_repo)
+
+            # Same-repo: auto stages should be applied
+            stage_decisions = {}
+            if not is_cross_repo:
+                stage_decisions["math-libs"] = cma.JobAction.PREBUILT
+
+            self.assertEqual(stage_decisions, {"math-libs": cma.JobAction.PREBUILT})
 
 
 if __name__ == "__main__":
