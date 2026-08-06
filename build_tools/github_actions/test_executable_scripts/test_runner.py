@@ -173,6 +173,11 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   instrumented-function listings). "--output-on-failure" is always passed, so
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
+#
+# - ctest_label_override: String. Replaces the TEST_TYPE-derived tier label in
+#   the ctest "-L" include set, pinning the component to a single label
+#   regardless of TEST_TYPE. Intended for narrowing a run to one suite; the
+#   tier-derived "-LE" exclusions and GPU suite selection are unaffected.
 COMPONENT_OVERRIDES = {
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
@@ -221,6 +226,11 @@ COMPONENT_OVERRIDES = {
         # function listings, etc). Drop -V to keep CI logs readable;
         # --output-on-failure still surfaces output for any failing test.
         "ctest_verbose": False,
+        # TEMPORARY: restrict the run to the no-op capability probes in
+        # tests/pytest/test_conditions.py, which report which system/kernel
+        # gates this runner satisfies. Drop this key to restore the normal
+        # TEST_TYPE tier selection.
+        "ctest_label_override": "conditions",
     },
     # rocwmma installs three independent CTestTestfile.cmake fragments:
     #   bin/rocwmma/             - per-target plain runs + regression_tests
@@ -508,7 +518,12 @@ def build_ctest_command(
     # a single -LE regex.  Multiple -LE flags are ANDed by ctest, which would
     # only exclude tests matching ALL patterns.  We need OR semantics instead.
     le_patterns = []
-    include_labels = [category]
+    label_override = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
+        "ctest_label_override"
+    )
+    if label_override:
+        print(f"# Overriding category label '{category}' with: {label_override}")
+    include_labels = [label_override or category]
 
     # Exclude {category}_exclude and {category}_therock_ci_exclude when present.
     for category_exclude_label in (

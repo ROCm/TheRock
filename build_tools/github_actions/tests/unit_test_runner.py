@@ -166,6 +166,18 @@ class BuildCtestCommandTest(unittest.TestCase):
         finally:
             test_runner.test_component_job_name = original
 
+    def test_label_override_replaces_category(self):
+        # rocprofiler-systems pins the include label via COMPONENT_OVERRIDES.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "rocprofiler-systems"
+            cmd = self._build("quick", "", set())
+            labels = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-L"]
+            self.assertIn("^conditions$", labels)
+            self.assertNotIn("^quick$", labels)
+        finally:
+            test_runner.test_component_job_name = original
+
     def test_therock_ci_exclude_label_applied(self):
         exclude_labels = {"quick_therock_ci_exclude"}
         cmd = self._build("quick", "", set(), exclude_labels)
