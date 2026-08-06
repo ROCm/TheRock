@@ -590,12 +590,13 @@ test_matrix = {
             "windows": 1,
         },
     },
-    # hip-kernel-provider tests
+    # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
+    # rocKE wheels, then delegates to test_runner.py.
     "hipkernelprovider": {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
