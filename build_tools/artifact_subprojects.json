@@ -168,6 +168,9 @@
   "rocwmma": [
     "rocWMMA"
   ],
+  "rpp": [
+    "rpp"
+  ],
   "sparse": [
     "hipSPARSELt",
     "rocSPARSE"

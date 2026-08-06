@@ -129,7 +129,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7063e922b4b9145c92f20011674571f1c97b8fad6faaeb0b7d2d165b0bd9ae8b",  # 2026-04-02T21:47:07.506375216Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -590,11 +590,12 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hip-kernel-provider tests
     "hipkernelprovider": {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -721,6 +722,20 @@ test_matrix = {
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rpp": {
+        "job_name": "rpp",
+        "fetch_artifact_args": "--rpp --tests",
+        # Sized for comprehensive/full, which runs the perf suites serially and
+        # upstream allows 4000s each. quick and standard are far under this.
+        # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
+        # of the correctness suite.
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

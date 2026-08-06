@@ -131,6 +131,53 @@ for maintainers).
 
 ## Development workflows and contributing guide
 
+### Finding an issue to work on
+
+If you want to contribute but don't have a specific problem in mind, the
+[issue tracker](https://github.com/ROCm/TheRock/issues) is the best place to
+start. These two labels mark work we hope someone outside the core team will
+pick up:
+
+| Label                                                                                                                 | What it means                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [`help wanted`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22)           | Understood well enough for someone outside the core team to pick up, and no maintainer is working on it. Start here. |
+| [`good first issue`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22good+first+issue%22) | Small in scope and unlikely to need wide-ranging changes across the build. Usually also carries `help wanted`.       |
+
+Triaged issues carry other labels you can combine with those two to find
+something in an area you already know:
+
+- `status: *` shows how far along an issue is. `status: assessed` means the root
+  cause is already known.
+- `project: *`, `gfx*`, `platform: *`, and `ecosystem: *` identify the affected
+  component, GPU family, host platform, and downstream project.
+- `build issue`, `CICD`, `documentation`, and `test-debt` are good places to look
+  for contributions that don't need specific GPU hardware.
+
+> [!TIP]
+> Don't have the hardware to reproduce an issue? A precise reproduction, a
+> narrowed-down regression range, or better diagnostics are valuable
+> contributions on their own.
+
+If an issue is missing information you need, or you think it deserves one of the
+labels above, say so in the thread and a maintainer will take another look.
+
+#### Do I need to ask before working on an issue?
+
+No, but please comment on the issue to say you are picking it up so others don't
+duplicate your effort. We don't lock issues to one person, and an existing
+assignee doesn't stop you from opening a pull request. If multiple pull requests
+address the same issue, we take the highest quality one (or the first one, if
+they are comparable).
+
+> [!NOTE]
+> Issues without `help wanted` are still fair game, but they may already be in
+> progress internally or blocked on an upstream change, so ask first. Some
+> issues filed here are ultimately bugs in a component that TheRock builds from
+> a submodule, in which case the fix belongs in that repository instead.
+
+When your change is ready, follow
+[Creating pull requests](#creating-pull-requests).
+
 ### Using GitHub Issues for bug reporting
 
 Before filing a new issue, please search through
