@@ -197,8 +197,25 @@ jobs:
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+          TEST_LOG_FILE: ${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results/test-stdout.log
         run: |
-          ${{ fromJSON(inputs.component).test_script }}
+          mkdir -p "${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results"
+          python ./build_tools/memory_monitor.py --phase "Test ${{ fromJSON(inputs.component).job_name }}" -- \
+            bash -c '${{ fromJSON(inputs.component).test_script }}' 2>&1 | tee "$TEST_LOG_FILE"
+
+      - name: Report failed tests
+        if: ${{ !success() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled') }}
+        env:
+          # Map step outcomes to exit codes for fallback reporting
+          # failure = 1, cancelled (timeout) = 124 (standard timeout exit code)
+          TEST_EXIT_CODE: ${{ steps.test.outcome == 'cancelled' && '124' || '1' }}
+          TEST_LOG_FILE: ${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results/test-stdout.log
+        run: |
+          python ./test_tools/report_failed_tests.py \
+            --stdout-log "$TEST_LOG_FILE" \
+            --output-file "${{ env.OUTPUT_ARTIFACTS_DIR }}/test-results/test-metrics.json" \
+            --step-name "${{ fromJSON(inputs.component).job_name }}" \
+            --exit-code "$TEST_EXIT_CODE"
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
