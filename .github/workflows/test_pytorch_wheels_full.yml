@@ -191,6 +191,7 @@ jobs:
       CI: "1"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
+      TORCH_SERIALIZATION_DEBUG: "1"
       # Pin OpenBLAS threads to 1 for deterministic reductions; without this,
       # OpenBLAS defaults to the number of CPU cores, which causes
       # non-deterministic results in tests like test_entropy_monte_carlo.
@@ -261,6 +262,7 @@ jobs:
           echo "ROCM_CMAKE_PREFIX=${ROCM_CMAKE_PREFIX}"
 
           ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps"
+          ROCM_CORE="${ROCM_HOME%/*}/_rocm_sdk_core"
           ROCM_SYSDEPS_INCLUDE="${ROCM_SYSDEPS}/include"
           ROCM_SYSDEPS_PKGCONFIG="${ROCM_SYSDEPS}/lib/pkgconfig"
 
@@ -280,14 +282,31 @@ jobs:
           echo "CPLUS_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${CPLUS_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
           echo "C_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${C_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
           echo "PKG_CONFIG_PATH=${ROCM_SYSDEPS_PKGCONFIG}:${PKG_CONFIG_PATH:-}" >> "${GITHUB_ENV}"
-          echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
-          echo "LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib:${ROCM_CORE}/lib:${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LIBRARY_PATH=${ROCM_HOME}/lib:${ROCM_CORE}/lib:${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
           echo "USE_MSLK=0" >> "${GITHUB_ENV}"
 
           # Use ROCm's clang for JIT C++ compilation (torch.utils.cpp_extension)
           # instead of requiring gcc/build-essential.
           echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
           echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
+
+      - name: Install C++ build tools and register test library paths
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends pkg-config
+          PY_BIN="$(readlink -f "$(command -v python)")"
+          PY_LIBDIR="$(ldd "${PY_BIN}" 2>/dev/null | awk '/libpython/ {print $3}' | head -n1 | xargs -r dirname)"
+          # Register lib dirs in the loader cache, not just LD_LIBRARY_PATH: test_export_opinfo
+          # spawns a subprocess with a wiped env that still imports torch (needs ROCm libs + libpython).
+          {
+            echo "${ROCM_HOME}/lib"
+            echo "${ROCM_CORE}/lib"
+            echo "${ROCM_HOME}/lib/host-math/lib"
+            echo "${ROCM_HOME}/lib/rocm_sysdeps/lib"
+            [ -n "${PY_LIBDIR}" ] && echo "${PY_LIBDIR}"
+          } > /etc/ld.so.conf.d/rocm-pytorch-tests.conf
+          ldconfig
 
       # export_test_times.py must run from the PyTorch repo root with
       # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
