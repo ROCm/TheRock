@@ -3029,7 +3029,8 @@
       }
 
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-debugger-test",
