@@ -7,8 +7,11 @@
 
 import contextlib
 import importlib.util
+import io
 import os
 import stat
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -2144,6 +2147,94 @@ class VerifyNoRunpathTest(unittest.TestCase):
             with _suppress_script_output():
                 self.assertFalse(t.run_basic_verification())
         mock_rpath.assert_called_once()
+
+
+_ELF_TOOLCHAIN_AVAILABLE = bool(shutil.which("cc") and shutil.which("readelf"))
+
+
+@unittest.skipUnless(
+    _ELF_TOOLCHAIN_AVAILABLE,
+    "requires a C compiler (cc) and readelf to build/inspect real ELF fixtures",
+)
+class VerifyNoRunpathRealElfTest(unittest.TestCase):
+    """End-to-end tests for verify_no_runpath() against real ELF files.
+
+    Unlike VerifyNoRunpathTest, which mocks readelf, these compile small shared
+    objects with known DT_RPATH/DT_RUNPATH tags and run the real ``readelf`` so
+    the actual subprocess code path is exercised. They are skipped where ``cc``
+    or ``readelf`` are unavailable (for example the windows-2022 CI leg). Error
+    paths that cannot be produced from a real file (readelf missing, non-zero
+    exit) remain covered by the mocked VerifyNoRunpathTest.
+    """
+
+    def _compile_so(self, directory, name, *link_flags):
+        # $ORIGIN is passed literally (no shell), so the linker records it as-is.
+        src = Path(directory) / "src.c"
+        if not src.exists():
+            src.write_text("int f(void) { return 0; }\n")
+        out = Path(directory) / name
+        subprocess.run(
+            ["cc", "-shared", "-fPIC", "-o", str(out), *link_flags, str(src)],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return out
+
+    def _make(self, install_prefix):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def test_real_rpath_origin_relative_passes(self):
+        # DT_RPATH with an $ORIGIN-relative value -> pass.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--disable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_runpath_fails(self):
+        # DT_RUNPATH (new dtags) with no DT_RPATH -> conversion missed -> fail.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librunpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--enable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    def test_real_neither_tag_passes(self):
+        # No rpath/runpath tag at all -> pass (nothing to convert).
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(d, "libnone.so")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_fixed_rpath_is_reported_but_not_fatal(self):
+        # DT_RPATH with a non-$ORIGIN (absolute) entry -> warned, not fatal.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "libfixed.so",
+                "-Wl,-rpath,/opt/rocm/lib",
+                "-Wl,--disable-new-dtags",
+            )
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = self._make(d).verify_no_runpath()
+        output = buf.getvalue()
+        self.assertTrue(result)
+        self.assertIn("not $ORIGIN-relative", output)
+        self.assertIn("/opt/rocm/lib", output)
 
 
 if __name__ == "__main__":
