@@ -13,9 +13,6 @@ skip_tests = {
             # TestCuda - conflicts with how our test script and runners are
             # configured.
             "test_hip_device_count",
-            # TestCudaAllocator - passes on single run, crashes if run in a
-            # group. TypeError: 'CustomDecompTable' object is not a mapping
-            "test_memory_compile_regions",
             # TestMemPool - RuntimeError: Error building extension
             # 'dummy_allocator'. The hipblas.h include error persists in the
             # ROCm SDK environment:
