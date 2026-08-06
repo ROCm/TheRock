@@ -122,8 +122,8 @@ jobs:
     name: Build JAX | ${{ inputs.artifact_group }} | jax ${{ inputs.jax_ref }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     container:
-      image: ubuntu:24.04
-      # Privileged mode required for Docker-in-Docker builds
+      # Docker-in-Docker image with Docker daemon pre-configured
+      image: docker:27.5.1-dind@sha256:b31bd84afbcd88e20e2a96f073f6dc3b9aa32a7a276c9050b13d96823e499f41
       options: --privileged
     outputs:
       package_find_links_url: ${{ steps.upload_jax_wheels.outputs.package_find_links_url }}
@@ -137,15 +137,10 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y git docker.io
-
       - name: Start Docker daemon
         run: |
-          # Start Docker daemon in background for Docker-in-Docker builds
-          dockerd &
+          # Start Docker daemon in background (dind image has dockerd available)
+          dockerd-entrypoint.sh dockerd &
           # Wait for Docker to be ready
           for i in $(seq 1 30); do
             if docker info >/dev/null 2>&1; then
@@ -156,6 +151,10 @@ jobs:
             sleep 1
           done
           docker info
+
+      - name: Install dependencies
+        run: |
+          apk add --no-cache git python3 py3-pip bash
 
       - name: Checkout TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
