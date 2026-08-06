@@ -661,23 +661,38 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
-    def test_external_repo_stage_reuse_uses_repo_as_changed_file(self):
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_external_repo_stage_reuse_uses_repo_as_changed_file(self, mock_reuse):
         """External repo builds pass repo name to stage-impact analysis.
 
         When an external repo (e.g., rocm-libraries) triggers a build, the repo
         name should be treated as a changed file for stage-impact analysis.
-        Unaffected stages should be marked as PREBUILT from the baseline.
+        This is a plumbing test that verifies the correct arguments are passed
+        to compute_auto_stage_reuse.
         """
+        # Setup mock to return a valid AutoStageReuse result
+        mock_reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.DRY_RUN,
+            candidate_stages=(),
+            rebuild_stages=(),
+            full_rebuild_required=False,
+            baseline_run_id="12345",
+            baseline_html_url=None,
+            available_stages=(),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-rt",),
+            reasons=(),
+        )
+
         # Create git context as if from external repo
         git = cm.GitContext.from_external_repo("rocm-libraries")
 
-        # The changed_files should contain the repo name
+        # Verify GitContext is set up correctly
         self.assertEqual(git.changed_files, ["rocm-libraries"])
         self.assertEqual(git.submodule_paths, ["rocm-libraries"])
         self.assertTrue(git.has_submodule_changes)
 
-        # When decide_jobs processes this, it should pass the repo name
-        # to stage-impact analysis (via auto_stage_reuse)
+        # Call decide_jobs with external repo context
         result = cm.decide_jobs(
             self._inputs(
                 external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
@@ -686,8 +701,16 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
 
-        # auto_stage_reuse should have processed the external repo context
+        # Verify compute_auto_stage_reuse was called with correct arguments
+        mock_reuse.assert_called_once()
+        call_kwargs = mock_reuse.call_args.kwargs
+        # The changed_files should be passed through for stage-impact analysis
+        self.assertEqual(call_kwargs["changed_files"], ["rocm-libraries"])
+
+        # Verify the result contains the mocked reuse data
         self.assertIsNotNone(result.auto_stage_reuse)
+        self.assertEqual(result.auto_stage_reuse.applied_reuse_stages, ("compiler-rt",))
+        self.assertEqual(result.auto_stage_reuse.baseline_run_id, "12345")
 
 
 # ---------------------------------------------------------------------------

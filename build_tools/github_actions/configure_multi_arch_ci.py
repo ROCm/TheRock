@@ -1429,17 +1429,18 @@ def main():
         # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
         try:
             external_repo = json.loads(ci_inputs.external_repo)
-            repo_full_name = external_repo.get("repository", "")
-            external_repo_name = (
-                repo_full_name.split("/")[-1] if "/" in repo_full_name else ""
-            )
-        except (json.JSONDecodeError, TypeError):
-            external_repo_name = ""
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError(
+                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
+            ) from exc
 
-        if external_repo_name:
-            git_context = GitContext.from_external_repo(external_repo_name)
-        else:
-            git_context = GitContext.empty()
+        repo_full_name = external_repo.get("repository", "")
+        if not repo_full_name:
+            raise ValueError(
+                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
+            )
+        external_repo_name = repo_full_name.split("/")[-1]
+        git_context = GitContext.from_external_repo(external_repo_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
