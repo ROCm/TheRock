@@ -323,12 +323,17 @@ class GitContext:
     def from_external_repo(external_repo_name: str) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
-        For external repos, we treat the repo name as the changed file so that
-        stage reuse analysis can determine which TheRock stages are affected.
-        The external repo name maps to a submodule in TheRock.
+        For external repos, we treat the repo name as both a changed file and
+        a submodule path so that:
+        1. Stage reuse analysis can determine which TheRock stages are affected
+        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
+           families to run their tests
         """
         print(f"External repo detected: {external_repo_name}")
-        return GitContext(changed_files=[external_repo_name])
+        return GitContext(
+            changed_files=[external_repo_name],
+            submodule_paths=[external_repo_name],
+        )
 
     @property
     def has_submodule_changes(self) -> bool | None:

@@ -64,10 +64,8 @@ SKIPPABLE_PATH_PATTERNS = [
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
-# NOTE: .github/workflows/therock* is intentionally excluded since workflow
-# changes should still use stage reuse to determine which stages to rebuild.
-# The workflow itself doesn't affect TheRock build stages.
 FULL_TEST_TRIGGER_PATTERNS = [
+    ".github/workflows/therock*",
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",

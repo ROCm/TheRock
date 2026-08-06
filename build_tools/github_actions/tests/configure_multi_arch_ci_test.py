@@ -254,11 +254,18 @@ class TestGitContext(unittest.TestCase):
         """from_external_repo creates context with repo name as changed file."""
         git = cm.GitContext.from_external_repo("rocm-libraries")
         self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+
+    def test_from_external_repo_has_submodule_changes(self):
+        """from_external_repo sets has_submodule_changes to True."""
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+        self.assertTrue(git.has_submodule_changes)
 
     def test_from_external_repo_empty_name(self):
         """from_external_repo handles empty name."""
         git = cm.GitContext.from_external_repo("")
         self.assertEqual(git.changed_files, [""])
+        self.assertEqual(git.submodule_paths, [""])
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +646,34 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_external_repo_stage_reuse_uses_repo_as_changed_file(self):
+        """External repo builds pass repo name to stage-impact analysis.
+
+        When an external repo (e.g., rocm-libraries) triggers a build, the repo
+        name should be treated as a changed file for stage-impact analysis.
+        Unaffected stages should be marked as PREBUILT from the baseline.
+        """
+        # Create git context as if from external repo
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+
+        # The changed_files should contain the repo name
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+        self.assertTrue(git.has_submodule_changes)
+
+        # When decide_jobs processes this, it should pass the repo name
+        # to stage-impact analysis (via auto_stage_reuse)
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+
+        # auto_stage_reuse should have processed the external repo context
+        self.assertIsNotNone(result.auto_stage_reuse)
 
 
 # ---------------------------------------------------------------------------
