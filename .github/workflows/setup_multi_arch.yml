@@ -184,6 +184,8 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          # Token for GitHub API calls (branch history, baseline workflow runs)
+          GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
           EXTERNAL_REPO: ${{ inputs.external_repo }}
           CI_CONFIG_PATH: ci-config
