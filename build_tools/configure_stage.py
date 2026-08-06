@@ -2,10 +2,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate CMake configuration for building a specific stage or projects.
+"""Generate CMake configuration for building a specific stage or artifacts.
 
 This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts
-should be enabled for a specific build stage or set of projects, and outputs
+should be enabled for a specific build stage or set of artifacts, and outputs
 the appropriate CMake arguments.
 
 Usage:
@@ -15,9 +15,9 @@ Usage:
         --amdgpu-families gfx94X-dcgpu \
         --output-cmake-args /tmp/stage_args.txt
 
-    # Generate CMake args for specific projects
-    python configure_stage.py --projects rocblas miopen --oneline
-    # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_MIOPEN=ON
+    # Generate CMake args for specific artifacts
+    python configure_stage.py --artifacts blas,fft --oneline
+    # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_FFT=ON
 
     # List available projects/subprojects
     python configure_stage.py --list-projects
@@ -268,12 +268,12 @@ def main(argv: List[str] = None):
         "the manylinux build container)",
     )
     parser.add_argument(
-        "--projects",
+        "--artifacts",
         type=str,
         default="",
-        metavar="PROJECTS",
-        help="Comma-separated project/subproject names to enable (e.g., rocblas,miopen,hipfft). "
-        "Enables building specific projects without requiring --stage. Empty string is ignored.",
+        metavar="ARTIFACTS",
+        help="Comma-separated artifact names to enable (e.g., blas,fft,miopen). "
+        "Enables building specific artifacts without requiring --stage. Empty string is ignored.",
     )
     parser.add_argument(
         "--list-projects",
@@ -296,10 +296,10 @@ def main(argv: List[str] = None):
 
     args = parser.parse_args(argv)
 
-    # Parse comma-separated projects into a list, filtering empty strings
-    project_list = (
-        [p.strip() for p in args.projects.split(",") if p.strip()]
-        if args.projects
+    # Parse comma-separated artifacts into a list, filtering empty strings
+    artifact_list = (
+        [a.strip() for a in args.artifacts.split(",") if a.strip()]
+        if args.artifacts
         else []
     )
 
@@ -308,13 +308,13 @@ def main(argv: List[str] = None):
         and not args.list_projects
         and not args.skip_stages
         and args.stage is None
-        and not project_list
+        and not artifact_list
     ):
         parser.error(
             "--stage or --projects is required unless --list-stages, --list-projects, or --skip-stages is specified"
         )
 
-    if args.skip_stages and not project_list:
+    if args.skip_stages and not artifact_list:
         parser.error("--skip-stages requires --projects")
 
     topology = get_topology()
@@ -350,20 +350,20 @@ def main(argv: List[str] = None):
         parser.error(f"Unknown stage '{args.stage}'. Available stages: {available}")
 
     # Normalize project names (handle paths like "projects/hip" -> "hip")
-    if project_list:
-        project_list = [normalize_project_name(p) for p in project_list]
+    if artifact_list:
+        artifact_list = [normalize_project_name(p) for p in artifact_list]
 
     # Validate projects if provided (fast-fail on unknown projects)
-    if project_list:
+    if artifact_list:
         alias_map = topology.get_alias_to_artifact_map(args.build_dir)
-        unknown = [p for p in project_list if p.lower() not in alias_map]
+        unknown = [p for p in artifact_list if p.lower() not in alias_map]
         if unknown:
             parser.error(f"Unknown project(s): {', '.join(unknown)}")
 
     # Output skip-stages if requested
     if args.skip_stages:
         required_stages = topology.get_stages_for_projects(
-            project_list, args.build_dir
+            artifact_list, args.build_dir
         )
         all_stages = topology.get_all_stage_names()
         skip = sorted(all_stages - required_stages)
@@ -379,7 +379,7 @@ def main(argv: List[str] = None):
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
         manylinux=args.manylinux,
-        project_names=project_list if project_list else None,
+        project_names=artifact_list if artifact_list else None,
         build_dir=args.build_dir,
     )
 

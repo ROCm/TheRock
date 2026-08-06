@@ -151,7 +151,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
-            --projects="${{ inputs.rebuild_artifacts }}" \
+            --artifacts="${{ inputs.rebuild_artifacts }}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --manylinux \
