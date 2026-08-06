@@ -71,6 +71,25 @@ if THEROCK_CLANG_PATH.exists():
 if host_triple:
     THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
 
+# Determine host triple
+if THEROCK_CLANG_PATH.exists():
+    try:
+        host_triple = subprocess.run(
+            [str(THEROCK_CLANG_PATH), "--print-target-triple"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(
+            f"'{THEROCK_CLANG_PATH} --print-target-triple' failed; "
+            "this suggests a broken toolchain."
+        ) from exc
+
+if host_triple:
+    THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_PATH / "llvm" / "lib" / host_triple
+
 # Tests skipped under ASan (known failing/unstable in the ASan configuration).
 ASAN_EXCLUDED_TESTS = [
     "rocprofiler_sdk.unit.spm_core.check_packet_generation",
