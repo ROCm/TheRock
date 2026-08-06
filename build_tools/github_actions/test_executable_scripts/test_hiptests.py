@@ -71,6 +71,9 @@ TEST_TO_IGNORE = {
             "Unit_NonHost_Printf_loop",
             "Unit_NonHost_Printf_multiple_Threads",
             "Unit_NonHost_Printf_BufferAvailability",
+            # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+            "Unit_hip_linker_spirv_input",
+            "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
         ]
     },
     "gfx94X-dcgpu": {
@@ -79,12 +82,17 @@ TEST_TO_IGNORE = {
             "Unit_NonHost_Printf_loop",
             "Unit_NonHost_Printf_multiple_Threads",
             "Unit_NonHost_Printf_BufferAvailability",
+            # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+            "Unit_hip_linker_spirv_input",
+            "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
         ]
     },
     "gfx110X-all": {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+            # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+            "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
         ]
     },
     "gfx125X-dcgpu": {
