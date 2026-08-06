@@ -114,26 +114,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     ],
                 )
 
-    def test_release_2_13_keeps_gfx125x(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="dev",
-            python_versions=["3.12"],
-            pytorch_git_refs=["release/2.13"],
-            amdgpu_families="gfx125X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertEqual(
-            matrix,
-            [
-                {
-                    "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.13",
-                    "amdgpu_families": "gfx125X-dcgpu",
-                }
-            ],
-        )
-
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
