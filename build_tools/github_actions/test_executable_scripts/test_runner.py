@@ -83,6 +83,7 @@ COMPONENT_DIR_MAPPING = {
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hipblasltprovider": "hipblaslt_plugin",
+    "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
     # Multi-GPU split jobs reuse the single-GPU component's test directory/binary.
     "hipfft-multi-gpu": "hipfft",
