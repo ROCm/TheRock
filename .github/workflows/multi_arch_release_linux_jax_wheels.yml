@@ -96,7 +96,8 @@ jobs:
 
   build_jax_wheels:
     needs: setup_matrix
-    name: Build | py ${{ matrix.python_version }} | jax ${{ matrix.jax_ref }}
+    # The build and the tests for this cell are both shown under this name.
+    name: Release | py ${{ matrix.python_version }} | JAX ${{ matrix.jax_label }}
     strategy:
       fail-fast: false
       matrix:

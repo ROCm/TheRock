@@ -212,6 +212,29 @@ For more detailed build options, see the `ROCm/jax` repository and the
    sh ci/run_pytest_rocm.sh
    ```
 
+### Teaching an installed JAX about a new ROCm major version
+
+The plugin wheels carry the ROCm major version in their package name
+(`jax_rocm7_plugin`, `jax_rocm10_plugin`), and `jaxlib` looks that name up from a
+list of majors that existed when it was released. A newly bumped major is not
+found, so the GPU kernel modules resolve to `None` and `jax.devices()` fails with
+`'NoneType' object has no attribute ...`.
+
+[`patch_installed_jax_rocm_plugin_names.py`](./patch_installed_jax_rocm_plugin_names.py)
+adds the name to the installed `jaxlib`, and to the PJRT shim on wheels that
+predate the fix in ROCm/jax:
+
+```bash
+python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+    --plugin-package jax_rocm10_plugin
+```
+
+Run it between installing the wheels and running anything that imports `jax`. It
+edits the installed files in place, is idempotent, and detects the fixes that
+obsolete it, so it becomes a no-op once a `jaxlib` carrying
+[jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634) is installed. The
+ROCm 7 wheels need none of this.
+
 ## Nightly releases
 
 ### Gating releases with JAX tests
