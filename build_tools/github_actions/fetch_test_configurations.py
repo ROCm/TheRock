@@ -688,6 +688,11 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # TODO(#7157): Compiler ww28 SMP 2.5 (TheRock#7052) — remove after fix.
+        # On Windows, lit fails to build its compiler-check program at link time,
+        # so lit.cfg cannot load and no test runs. There is nothing to skip, so
+        # the whole job is marked expected-to-fail.
+        "expect_failure_platform": ["windows"],
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
     "hipthreads_examples": {
@@ -924,6 +929,13 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # If the test is known-broken on this platform, run it but do not gate
+            # CI on the result (continue-on-error + "(xfail)" in the job name).
+            if platform in selected_matrix[key].get("expect_failure_platform", []):
+                logging.info(f"Marking job {job_name} as xfail on platform {platform}")
+                job_config_data["expect_failure"] = True
+
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
