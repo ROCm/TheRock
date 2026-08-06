@@ -532,7 +532,8 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
             if is_external_repo:
                 logger.warning(
                     "%s empty branch history for external repo; "
-                    "failing closed - no baseline will be selected."
+                    "failing closed - no baseline will be selected.",
+                    LOG_PREFIX,
                 )
                 return lambda required_artifacts: None
             effective_commit_sha = None
