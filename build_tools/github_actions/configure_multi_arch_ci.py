@@ -620,6 +620,8 @@ def should_skip_ci(
 
     # External repo builds skip path filtering - they always run CI and use
     # stage reuse to determine which stages to rebuild.
+    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
+    # CI for docs-only changes, experimental projects, etc.
     if ci_inputs.external_repo:
         print("  External repo build: skipping path filter checks, using stage reuse")
         return False
