@@ -23,21 +23,6 @@ Prerequisites (system packages)
   RHEL/Fedora:    sudo dnf install gcc binutils patchelf python3
 
 Verify:  command -v gcc readelf patchelf python3
-
-How to run
-----------
-  From repo root::
-
-    python3 build_tools/packaging/linux/tests/runpath_to_rpath_test.py -v
-
-  From build_tools/packaging/linux/tests::
-
-    python3 runpath_to_rpath_test.py -v
-
-Files in this directory
------------------------
-  runpath_to_rpath_test.py  - this test module
-  hello_lib.c               - minimal shared-library source built in setUp
 """
 
 import re
