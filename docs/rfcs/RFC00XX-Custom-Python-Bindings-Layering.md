@@ -8,15 +8,10 @@ discussion: https://github.com/ROCm/TheRock/issues/6048
 
 # Custom Python Bindings Layering
 
-> **RFC number is a placeholder.** This document is filed as `RFC00XX` while it
-> is under review. Several RFCs are in flight concurrently and the numbering
-> space is contended — `RFC0013` is claimed by both this PR and
-> [PR #6904](https://github.com/ROCm/TheRock/pull/6904) (ROCm Core Docker
-> Standards), and `RFC0012` was similarly double-claimed earlier. The final
-> number will be assigned immediately before merge, once the surrounding RFCs
-> have landed and the next free number is unambiguous. The same placeholder
-> convention is used by
-> [PR #6034](https://github.com/ROCm/TheRock/pull/6034) and
+> **The RFC number is a placeholder.** `RFC0013` is claimed by both this PR and
+> [PR #6904](https://github.com/ROCm/TheRock/pull/6904), and several RFCs are in
+> flight against a contended numbering space, so the number is assigned at merge.
+> Same convention as [PR #6034](https://github.com/ROCm/TheRock/pull/6034) and
 > [PR #6118](https://github.com/ROCm/TheRock/pull/6118).
 
 This RFC proposes the ownership and packaging model for ROCm library Python bindings that are not generated C API wrappers. hipDNN is the motivating example, but the model is intended to apply to any ROCm library that needs a custom Python binding layer over component-specific C, C++, or higher-level APIs.
@@ -63,7 +58,7 @@ The high-level questions this raises, and this RFC's answers:
 
 - **New packages or existing packages?** New packages. A custom frontend is neither an SDK wheel (it is not a native ROCm artifact) nor a generated binding (it is hand-authored over a C++ API). Folding it into `rocm-sdk-*` reintroduces the failure documented in [#5678](https://github.com/ROCm/TheRock/issues/5678); folding it into `hip-python` puts a hand-authored, component-owned API surface inside a generated one.
 - **Who drives the development model?** The component team, inside `rocm-bindings`. TheRock and the SDK provide the native artifacts the binding builds against and loads at runtime; they do not own the binding's Python version matrix, ABI strategy, or release metadata. See [Proposed layering](#proposed-layering).
-- **What are the dependencies between them?** A custom frontend wheel depends on the ROCm SDK **runtime** wheels for native libraries. It does **not** require `hip-python`. It **may** depend on `hip-python` when it wants generated C API access alongside its custom surface — see [Mixing generated and custom bindings](#mixing-generated-and-custom-bindings). Nothing in this RFC makes `hip-python` a mandatory dependency of a custom binding, and nothing forbids it.
+- **What are the dependencies between them?** A custom frontend wheel depends on the ROCm SDK **runtime** wheels for native libraries. It does **not** require `hip-python`. It **may** depend on `hip-python` when it wants generated C API access alongside its custom surface. See [Mixing generated and custom bindings](#mixing-generated-and-custom-bindings). Nothing in this RFC makes `hip-python` a mandatory dependency of a custom binding, and nothing forbids it.
 - **Self-contained or SDK-dependent?** SDK-dependent. `pip install hipdnn-frontend` pulls the ROCm runtime wheels through `Requires-Dist` rather than vendoring ROCm shared libraries. See [`hipdnn-frontend` runtime dependency loading](#hipdnn-frontend-runtime-dependency-loading).
 
 ## Motivation
@@ -134,9 +129,9 @@ ROCm/rocm-bindings/
     ...                              # generated Python bindings for HIP and library C APIs
 ```
 
-The layout groups by component first and language second (`<component>/python/...`) so that a future Rust or C# binding for the same component is a sibling of `python/` rather than a parallel top-level tree. `backend` and `frontend` name the *role* in the binding stack — the native extension producer and the user-facing wheel — and deliberately avoid naming the binding technology, so a component that uses pybind11, Cython, or raw CPython C API instead of nanobind fits the same layout unchanged.
+The layout groups by component first and language second (`<component>/python/...`) so that a future Rust or C# binding for the same component is a sibling of `python/` rather than a parallel top-level tree. `backend` and `frontend` name the *role* in the binding stack, the native extension producer and the user-facing wheel. They deliberately avoid naming the binding technology, so a component that uses pybind11, Cython, or raw CPython C API instead of nanobind fits the same layout unchanged.
 
-Note the term collision: hipDNN's own native libraries are already called `hipdnn_backend` and `hipdnn_frontend`. In this layout `python/backend` and `python/frontend` refer to the *binding* roles, not to those native libraries. For hipDNN specifically the two happen to align — the binding frontend wraps the native frontend — but that is coincidence, and a component whose binding names differ from its native library names is not required to rename anything.
+Note the term collision: hipDNN's own native libraries are already called `hipdnn_backend` and `hipdnn_frontend`. In this layout `python/backend` and `python/frontend` refer to the *binding* roles, not to those native libraries. For hipDNN specifically the two happen to align, since the binding frontend wraps the native frontend, but that is coincidence. A component whose binding names differ from its native library names is not required to rename anything.
 
 `python/backend` intentionally has no `pyproject.toml` in the target layout. It is a CMake/native artifact producer, not a Python wheel project. The `pyproject.toml` belongs to `python/frontend`, which builds the installable wheel from a staged extension artifact.
 
@@ -182,7 +177,7 @@ This is a deliberate reversal of the earlier direction. TheRock briefly built an
   whl-next/
 ```
 
-`extras/` is the right home under RFC0012's own definition — projects released independently, on their own cadence, rather than pinned to the Core SDK release train. The `omnistat/` entry is the existing precedent for a wheel-only extras project with no native packages. Per-project subfolders are retained under `extras/` so bucket permissions can be granted per project, which matters here because the bindings repository will have a different owner set than the SDK.
+`extras/` is the right home under RFC0012's own definition: projects released independently, on their own cadence, rather than pinned to the Core SDK release train. The `omnistat/` entry is the existing precedent for a wheel-only extras project with no native packages. Per-project subfolders are retained under `extras/` so bucket permissions can be granted per project, which matters here because the bindings repository will have a different owner set than the SDK.
 
 Consequences of that placement, all inherited from RFC0012 rather than invented here:
 
@@ -195,7 +190,7 @@ Consequences of that placement, all inherited from RFC0012 rather than invented 
 1. Whether the folder is `extras/rocm-bindings/` (one folder for the whole bindings repository) or `extras/<component>-bindings/` (one per component). The former is simpler and matches the single-repository model; the latter gives per-component bucket permissions. Recommendation: start with the single folder and split only if permissions demand it.
 1. Whether an RFC0012 amendment is needed to name bindings in the `extras/` enumeration, or whether the existing "projects released independently" definition is sufficient without a doc change. Recommendation: a one-line addition to RFC0012's `extras/` list once this RFC is accepted.
 1. Which streams bindings publish to. Recommendation: `nightly` and `stable` initially; `dev` only if per-commit binding builds prove useful.
-1. The relationship to the existing PyPI presence. `hip-python` has published to PyPI/TestPyPI since 2023 and would gain a `repo.amd.com` channel on relocation. Whether PyPI remains a mirror, becomes the primary for bindings, or is retired is a decision for the `hip-python` owners in [PR #5609](https://github.com/ROCm/TheRock/pull/5609), but it must be answered — two independent channels publishing the same distribution name is a defect, not a feature.
+1. The relationship to the existing PyPI presence. `hip-python` has published to PyPI/TestPyPI since 2023 and would gain a `repo.amd.com` channel on relocation. Whether PyPI remains a mirror, becomes the primary for bindings, or is retired is a decision for the `hip-python` owners in [PR #5609](https://github.com/ROCm/TheRock/pull/5609), but it must be answered. Two independent channels publishing the same distribution name is a defect, not a feature.
 
 ### Cadence and pinning
 
@@ -207,7 +202,7 @@ The bindings repository picks its own release cadence and its own ROCm Core SDK 
 
 ## Compatibility across the repository split
 
-Once bindings live in a separate repository from the native libraries, the dependency flow is `rocm-libraries` → TheRock → `rocm-bindings`. The bindings repository is a downstream consumer of the public API that `rocm-libraries` produces, and it builds against released artifacts rather than against source.
+Once bindings live in a separate repository from the native libraries, the dependency flow is `rocm-libraries` -> TheRock -> `rocm-bindings`. The bindings repository is a downstream consumer of the public API that `rocm-libraries` produces, and it builds against released artifacts rather than against source.
 
 That has a direct consequence for where regressions should be caught. Anything the bindings layer detects is one of two things: a breaking change to the public API that slipped through, or a critical defect in the native library. In either case, finding it at the bindings layer points to a gap in component-level testing. The bindings are too far downstream to be the right place to *first* catch a native regression.
 
@@ -215,18 +210,18 @@ So the model is not "use the bindings repository as the safety net":
 
 - **`rocm-libraries` carries the public-API test coverage.** The public API is the contract; forward/backward-compatibility discipline belongs on that surface, in the repository that owns it. A binding update must not be able to break silently because the native side had no coverage of the API it depends on.
 - **Synchronization happens at release boundaries.** The binding validates against the ROCm release artifacts it declares support for, at the cadence described above.
-- **Version declarations make skew loud rather than silent.** Every layer declares the minimum version of each direct versioned input, and builds fail on mismatch — see [Version skew across layers](#version-skew-across-layers).
+- **Version declarations make skew loud rather than silent.** Every layer declares the minimum version of each direct versioned input, and builds fail on mismatch. See [Version skew across layers](#version-skew-across-layers).
 - **Manual pre-integration is a backstop, not the mechanism.** A component team landing a risky native API change can build the binding against a local ROCm build before the artifacts publish (see the local override path in [Cross-repo API sequencing](#cross-repo-api-sequencing)). That de-risks a specific change; it is not a substitute for native-side coverage.
 
 ## Mixing generated and custom bindings
 
-A component may need both a generated C API surface and a small amount of hand-written binding code. The concrete case raised in review is hipFile: one or two functions need special error handling in the C binding layer before returning to Python — capturing `errno` or `hipPeekAtLastError()` — which a mechanically generated 1:1 wrapper does not produce.
+A component may need both a generated C API surface and a small amount of hand-written binding code. The concrete case raised in review is hipFile: one or two functions need special error handling in the C binding layer before returning to Python, capturing `errno` or `hipPeekAtLastError()`, which a mechanically generated 1:1 wrapper does not produce.
 
 This is explicitly allowed. A user-facing Python API may depend on both a generated binding package and a custom extension. Nothing in this layering forces an all-or-nothing choice, and requiring a component to hand-write a complete binding just to special-case two functions would be a bad outcome.
 
 The ordering preference, strongest first:
 
-1. **Extend the generated binding.** If the behavior is general — error capture on a call that can fail — it likely belongs in `hip-python`'s hand-coded override mechanism, which already exists for exactly this purpose. This keeps one binding package per C API and avoids a second artifact. Requires agreement from the `hip-python` owners.
+1. **Extend the generated binding.** If the behavior is general, such as error capture on a call that can fail, it likely belongs in `hip-python`'s hand-coded override mechanism, which already exists for exactly this purpose. This keeps one binding package per C API and avoids a second artifact. Requires agreement from the `hip-python` owners.
 1. **Add a narrow custom extension alongside the generated binding.** When the override path is unavailable or the behavior is genuinely component-specific, the component adds a small extension under `rocm-bindings/<component>/python/backend` covering only the functions that need it, and a frontend wheel that re-exports the generated bindings for everything else. The frontend wheel is then the single user-facing import, with `Requires-Dist` on both the generated binding package and its own staged extension.
 1. **Full custom binding.** Only when the component's user-facing API is fundamentally not a C API wrapper. hipDNN is this case: its product surface is the C++ frontend graph API, and a generated `hipdnn_backend.h` wrapper is a different, complementary deliverable.
 
@@ -238,13 +233,13 @@ Packaging consequence for case 2: the frontend wheel has a `Requires-Dist` on th
 
 [PR #5609](https://github.com/ROCm/TheRock/pull/5609) proposes the `hip-python` integration and is in discussion. The boundary this RFC asserts, from the custom-bindings side:
 
-- `hip-python` and the `rocm-bindings-*` wheels are **generated C API bindings**. Where they list a component — including hipDNN — that denotes generated wrappers over that component's C headers.
+- `hip-python` and the `rocm-bindings-*` wheels are **generated C API bindings**. Where they list a component, including hipDNN, that denotes generated wrappers over that component's C headers.
 - Generated bindings over `hipdnn_backend.h` are a legitimate and useful deliverable. They do **not** replace `hipdnn_frontend`, which is a hand-written extension over the C++ frontend graph API (`Graph`, `TensorAttributes`, operation attributes, execution helpers). The two are separate packages with different ownership, different release policy, and different ABI strategies.
 - A component appearing in a generated-bindings package list is not a statement that the component's Python story is complete.
 
 Two contracts must be reconciled between the two RFCs before either is implemented, because a user can install both into one environment:
 
-1. **Runtime library resolution.** This RFC specifies explicit `Requires-Dist` on the ROCm runtime wheels plus `rocm_sdk.initialize_process(..., check_version=...)`. A binding that instead falls back silently from wheel-installed ROCm to a system `/opt/rocm` will, in a mixed environment, load a different ROCm than its sibling — the failure family already seen in [#5678](https://github.com/ROCm/TheRock/issues/5678) and [#6314](https://github.com/ROCm/TheRock/issues/6314). The two packages must agree on one resolution order and one version-check policy.
+1. **Runtime library resolution.** This RFC specifies explicit `Requires-Dist` on the ROCm runtime wheels plus `rocm_sdk.initialize_process(..., check_version=...)`. A binding that instead falls back silently from wheel-installed ROCm to a system `/opt/rocm` will, in a mixed environment, load a different ROCm than its sibling. That is the failure family already seen in [#5678](https://github.com/ROCm/TheRock/issues/5678) and [#6314](https://github.com/ROCm/TheRock/issues/6314). The two packages must agree on one resolution order and one version-check policy.
 1. **Repository naming.** Both RFCs use the name `rocm-bindings`, for different contents. This RFC uses it for a repository hosting per-component binding projects plus a relocated `hip-python`. The generated-bindings RFC additionally uses `rocm-bindings-*` as a wheel-name prefix meaning "generated C API bindings". A repository whose name implies all bindings, containing wheels whose shared prefix implies only generated ones, will be misread. Resolving this is a naming decision for both sets of authors; this RFC does not presume the answer.
 
 ## Current hipDNN state
@@ -274,7 +269,7 @@ Current facts:
 - It sets `INSTALL_RPATH "$ORIGIN"`, so the extension resolves `libhipdnn_backend` as a sibling when co-installed. This is the fix for the CI-path RPATH leak reported in [#5678](https://github.com/ROCm/TheRock/issues/5678).
 - `python/frontend_wheel_package/pack_frontend_wheel.py` stages the built extension into an importable `hipdnn_frontend` package and delegates to `python -m build --wheel`, generating a `setup.py` that sets `py_limited_api = "cp312"` and forces a platform wheel via `has_ext_modules`.
 - `python/frontend_wheel_package/src/hipdnn_frontend/__init__.py` already implements the runtime initialization pattern this RFC codifies: preload via `rocm_sdk.initialize_process(preload_shortnames=...)` when ROCm SDK wheels are present, otherwise fall back to `ROCM_PATH`/`HIP_PATH`/`ROCM_HOME` with `os.add_dll_directory()` on Windows.
-- `python/frontend_wheel_package/pyproject.toml` declares `name = "hipdnn-frontend"`, `requires-python = ">=3.12"`, and pytest markers. It is development metadata and is not yet the release-wheel contract — notably it carries no `Requires-Dist` on the ROCm runtime.
+- `python/frontend_wheel_package/pyproject.toml` declares `name = "hipdnn-frontend"`, `requires-python = ">=3.12"`, and pytest markers. It is development metadata and is not yet the release-wheel contract; notably it carries no `Requires-Dist` on the ROCm runtime.
 - **TheRock no longer builds or packages hipDNN Python bindings.** [PR #6425](https://github.com/ROCm/TheRock/pull/6425) (merged 2026-07-13) removed the TheRock-side wheel packer, the frontend pytest script, the CI matrix entry, the `share/hipdnn/python/**` artifact rules, and the `third-party/nanobind` and `third-party/robin-map` subprojects. The transitional packer this RFC previously described as "to be retired" is already gone.
 
 Target changes:
@@ -284,7 +279,7 @@ Target changes:
 - Keep native hipDNN APIs and CMake exports in `rocm-libraries/projects/hipdnn`.
 - Add the artifact manifest, the `Requires-Dist` ROCm runtime declaration, and the wheel-tag validation described below; these do not exist today.
 
-Because the current tree is already a standalone CMake extension project plus a separate staging/packaging project, the relocation preserves the existing build topology. The pieces this RFC adds are the manifest contract, the runtime dependency declaration, and the validation matrix — not a new build model.
+Because the current tree is already a standalone CMake extension project plus a separate staging/packaging project, the relocation preserves the existing build topology. The pieces this RFC adds are the manifest contract, the runtime dependency declaration, and the validation matrix, not a new build model.
 
 ## Build-time dependency resolution and runtime loading
 
@@ -528,11 +523,11 @@ TheRock could add `rocm-bindings` as a submodule and build binding wheels alongs
 
 This was tried and reverted. [PR #5429](https://github.com/ROCm/TheRock/pull/5429) wired hipDNN binding builds, packaging, and wheel-validation CI into TheRock; [PR #6425](https://github.com/ROCm/TheRock/pull/6425) removed all of it. The reasons the model did not hold:
 
-- It puts the Python ABI matrix in the layer that does not own it, which produced [#5678](https://github.com/ROCm/TheRock/issues/5678) — a cp312-only extension leaking into `rocm-sdk-devel` and breaking `rocm-sdk test`.
+- It puts the Python ABI matrix in the layer that does not own it, which produced [#5678](https://github.com/ROCm/TheRock/issues/5678): a cp312-only extension leaking into `rocm-sdk-devel` and breaking `rocm-sdk test`.
 - It forces every binding release onto the SDK cadence, including binding-only fixes.
 - It requires TheRock to carry binding-only build dependencies (`nanobind`, `robin-map` were added as `third-party` subprojects, then removed).
 
-The counter-argument is real: a separate repository means the sequencing friction described in [Cross-repo API sequencing](#cross-repo-api-sequencing). The mitigations there — declared minimum versions, fail-fast, local override paths — are the accepted cost.
+The counter-argument is real: a separate repository means the sequencing friction described in [Cross-repo API sequencing](#cross-repo-api-sequencing). The mitigations there (declared minimum versions, fail-fast, local override paths) are the accepted cost.
 
 ### Directory layout alternatives
 
@@ -630,7 +625,7 @@ Mitigations:
 
 ### Divergent runtime resolution between binding packages
 
-A user can install a custom frontend wheel and a generated `hip-python` binding into the same environment. If they disagree about how to find ROCm — one preferring wheel-installed libraries with a version check, the other silently falling back to a system `/opt/rocm` — the process can end up with two ROCm versions loaded, or with a binding bound to a ROCm the user did not install.
+A user can install a custom frontend wheel and a generated `hip-python` binding into the same environment. If they disagree about how to find ROCm, with one preferring wheel-installed libraries and a version check while the other silently falls back to a system `/opt/rocm`, the process can end up with two ROCm versions loaded, or with a binding bound to a ROCm the user did not install.
 
 Mitigations:
 
@@ -655,20 +650,20 @@ Either way, the developer document should link back to this RFC and avoid restat
 
 ## Related documents
 
-- [`docs/rfcs/README.md`](/docs/rfcs/README.md) — RFC process and metadata expectations.
-- [`docs/rfcs/RFC0003-Build-Tree-Normalization.md`](/docs/rfcs/RFC0003-Build-Tree-Normalization.md) — build tree/source organization background, including forward compatibility with language binding layers.
-- [`docs/rfcs/RFC0008-Multi-Arch-Packaging.md`](/docs/rfcs/RFC0008-Multi-Arch-Packaging.md) — device package split that binding wheels inherit through their ROCm runtime dependency.
-- [`docs/rfcs/RFC0010-Test-Scripts-Migration.md`](/docs/rfcs/RFC0010-Test-Scripts-Migration.md) — precedent for moving ownership to the repository where code and tests co-evolve.
-- [`docs/rfcs/RFC0012-Repo-Structure.md`](/docs/rfcs/RFC0012-Repo-Structure.md) — approved repository/index structure on `repo.amd.com`; defines the `whl/` and `whl-next/` indices this RFC publishes into.
-- [`docs/development/build_system.md`](/docs/development/build_system.md) — build/runtime dependency distinction and CMake `find_package()` dependency resolution.
-- [`docs/packaging/python_packaging.md`](/docs/packaging/python_packaging.md) — ROCm Python packaging model, `rocm_sdk`, and framework build/runtime initialization guidance.
-- [`docs/development/artifacts.md`](/docs/development/artifacts.md) — TheRock artifact components and runtime/devel split.
-- [PR #5609](https://github.com/ROCm/TheRock/pull/5609) — HIP Python integration RFC (generated C API bindings); in discussion.
-- [PR #6425](https://github.com/ROCm/TheRock/pull/6425) — removal of hipDNN Python bindings from TheRock; establishes the separate-repository direction this RFC builds on.
-- [Issue #5678](https://github.com/ROCm/TheRock/issues/5678) — hipDNN frontend extension shipped in `rocm-sdk-devel` with a dead RPATH and cp312 lock.
-- [Issue #5701](https://github.com/ROCm/TheRock/issues/5701) — recorded policy for Python extensions shipped inside ROCm SDK wheels.
+- [`docs/rfcs/README.md`](/docs/rfcs/README.md): RFC process and metadata expectations.
+- [`docs/rfcs/RFC0003-Build-Tree-Normalization.md`](/docs/rfcs/RFC0003-Build-Tree-Normalization.md): build tree/source organization background, including forward compatibility with language binding layers.
+- [`docs/rfcs/RFC0008-Multi-Arch-Packaging.md`](/docs/rfcs/RFC0008-Multi-Arch-Packaging.md): device package split that binding wheels inherit through their ROCm runtime dependency.
+- [`docs/rfcs/RFC0010-Test-Scripts-Migration.md`](/docs/rfcs/RFC0010-Test-Scripts-Migration.md): precedent for moving ownership to the repository where code and tests co-evolve.
+- [`docs/rfcs/RFC0012-Repo-Structure.md`](/docs/rfcs/RFC0012-Repo-Structure.md): approved repository/index structure on `repo.amd.com`; defines the `whl/` and `whl-next/` indices this RFC publishes into.
+- [`docs/development/build_system.md`](/docs/development/build_system.md): build/runtime dependency distinction and CMake `find_package()` dependency resolution.
+- [`docs/packaging/python_packaging.md`](/docs/packaging/python_packaging.md): ROCm Python packaging model, `rocm_sdk`, and framework build/runtime initialization guidance.
+- [`docs/development/artifacts.md`](/docs/development/artifacts.md): TheRock artifact components and runtime/devel split.
+- [PR #5609](https://github.com/ROCm/TheRock/pull/5609): HIP Python integration RFC (generated C API bindings); in discussion.
+- [PR #6425](https://github.com/ROCm/TheRock/pull/6425): removal of hipDNN Python bindings from TheRock; establishes the separate-repository direction this RFC builds on.
+- [Issue #5678](https://github.com/ROCm/TheRock/issues/5678): hipDNN frontend extension shipped in `rocm-sdk-devel` with a dead RPATH and cp312 lock.
+- [Issue #5701](https://github.com/ROCm/TheRock/issues/5701): recorded policy for Python extensions shipped inside ROCm SDK wheels.
 
 ## Revision history
 
 - 2026-06-23: Initial draft (Brian Harrison)
-- 2026-08-06: Address review feedback. Add the background section on how the ROCm Python surfaces relate; adopt the `<component>/python/[backend,frontend]` layout; add the release channel/cadence section grounded in RFC0012; add sections on cross-repo compatibility, mixing generated and custom bindings, and the relationship to `hip-python`; reconcile the Python ABI strategy with the recorded SDK policy in #5701; refresh the hipDNN current-state section for the restructured source tree and the merged TheRock revert (#6425); hyperlink related documents. Filed under a placeholder RFC number pending assignment at merge.
+- 2026-08-06: Address review feedback (Brian Harrison). Add the background section on the ROCm Python surfaces, the release channel section, and sections on cross-repo compatibility, mixing generated and custom bindings, and the relationship to `hip-python`. Adopt the `<component>/python/[backend,frontend]` layout. Reconcile the Python ABI strategy with #5701. Refresh the hipDNN current-state section for the restructured source tree and the merged TheRock revert (#6425). Move to a placeholder RFC number.
