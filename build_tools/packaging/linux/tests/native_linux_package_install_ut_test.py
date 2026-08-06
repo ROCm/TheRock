@@ -9,13 +9,15 @@ import contextlib
 import importlib.util
 import io
 import os
-import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Used only by the real-ELF fixture tests (VerifyNoRunpathRealElfTest) below.
+import shutil
+import subprocess
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
