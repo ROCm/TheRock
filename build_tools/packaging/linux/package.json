@@ -1630,7 +1630,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools ",
-    "Description_Long": "Contains rocprofiler-sdk, aqlprofile, roctracer and rocprof-trace-decoder",
+    "Description_Long": "Contains rocprofiler-sdk, aqlprofile, roctracer, rocprof-trace-decoder and profiler-hub",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1692,6 +1692,20 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1718,7 +1732,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools test",
-    "Description_Long": "Contains tests for rocprofiler-compute and rocprofiler-systems",
+    "Description_Long": "Contains tests for rocprofiler-compute, rocprofiler-systems and profiler-hub",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1764,6 +1778,17 @@
         "Artifact_Subdir": [
           {
             "Name": "aqlprofile",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
             "Components": [
               "test"
             ]
