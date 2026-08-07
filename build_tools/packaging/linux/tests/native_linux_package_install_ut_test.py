@@ -905,7 +905,9 @@ class RunTestsTestTypeTest(unittest.TestCase):
             with_uninstall=False,
         )
 
-    def _args_for_uninstall_run_tests(self, test_type: str, *, with_uninstall: bool = False):
+    def _args_for_uninstall_run_tests(
+        self, test_type: str, *, with_uninstall: bool = False
+    ):
         """Args for run_tests() paths that exercise --with-uninstall.
 
         ``rocm_version`` is set here (not in ``_base_args``) so Step 1 does not
