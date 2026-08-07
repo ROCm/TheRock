@@ -120,6 +120,7 @@ jobs:
         run: |
           ./build_tools/setup_ccache.py \
             --release-type "${{ inputs.release_type }}" \
+            ${{ github.event_name == 'pull_request' && '--read-only' || '' }} \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
