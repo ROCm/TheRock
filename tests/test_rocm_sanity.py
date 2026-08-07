@@ -64,13 +64,20 @@ def _opencl_env():
     relying on a system-wide /etc or registry ICD registration (absent in the
     CI container).
     """
-    if is_windows():
-        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
-    else:
-        vendor = THEROCK_BIN_DIR.parent / "lib" / "libamdocl64.so"
     env = os.environ.copy()
-    if vendor.exists():
-        env["OCL_ICD_FILENAMES"] = str(vendor)
+    if is_windows():
+        # Bare-metal runner: the driver registers amdocl64 system-wide, so point
+        # at the build's vendor only if present; otherwise fall back to the loader.
+        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+        if vendor.exists():
+            env["OCL_ICD_FILENAMES"] = str(vendor)
+        return env
+    # Linux runs in a container with no system ICD registration, so the vendor
+    # is required; fail loud rather than letting the search asserts fail opaquely.
+    vendor = THEROCK_BIN_DIR.parent / "lib" / "opencl" / "libamdocl64.so"
+    if not vendor.exists():
+        raise FileNotFoundError(f"amdocl64 vendor runtime not found at {vendor}")
+    env["OCL_ICD_FILENAMES"] = str(vendor)
     return env
 
 
