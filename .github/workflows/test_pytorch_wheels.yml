@@ -142,7 +142,7 @@ jobs:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
       - name: Checkout
@@ -285,5 +285,5 @@ jobs:
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
           workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

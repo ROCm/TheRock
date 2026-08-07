@@ -153,7 +153,7 @@ jobs:
           run_phase: started
           reporting_workflow: test_pytorch_wheels_full.yml
           workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
       - name: Checkout
@@ -448,5 +448,5 @@ jobs:
           reporting_workflow: test_pytorch_wheels_full.yml
           workflow_inputs: ${{ toJSON(inputs) }}
           workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_id: ${{ secrets.GH_APP_HAULY_ID }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
