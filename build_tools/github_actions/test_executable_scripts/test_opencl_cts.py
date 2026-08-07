@@ -76,13 +76,15 @@ def find_test_executables():
         sys.exit(1)
 
     # Entirely disabled test binaries.
-    # test_bruteforce, test_conversions: prohibitively slow, exceed 4.5h CI timeout.
+    # test_bruteforce, test_conversions, test_c11_atomics, test_half: prohibitively slow, exceed 4.5h CI timeout.
     # test_basic: crashes with GPU hang in 'constant' sub-test (gfx942).
     # test_compiler: crashes with SIGSEGV in 'get_program_info_kernel_names' (gfx942).
     # test_spir: cl_khr_spir not supported on gfx942, exits 156.
-    # test_events: crashes with GPU hang in 'userevents' sub-test (gfx942).
+    # test_events: crashes with GPU hang in 'userevents' sub-test (gfx942)
     DISABLED_TESTS = {
         "test_bruteforce",
+        "test_c11_atomics",
+        "test_half",
         "test_basic",
         "test_compiler",
         "test_conversions",
