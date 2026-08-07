@@ -186,12 +186,9 @@ def build_environment(rocm_path, component_name):
     env = os.environ.copy()
     component_root = resolve_component_path(component_name, rocm_path)
 
-    existing_pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        f"{component_root}{os.pathsep}{existing_pythonpath}"
-        if existing_pythonpath
-        else str(component_root)
-    )
+    # The component root is present only to expose the raw rocisa package until
+    # rocisa has distribution packaging. Do not inherit checkout/source paths.
+    env["PYTHONPATH"] = str(component_root)
     env["ROCM_PATH"] = str(rocm_path)
 
     # _rocisa links libamdhip64.so (in lib/), tensilelite-client links libomp.so
@@ -214,49 +211,74 @@ def build_environment(rocm_path, component_name):
             ],
         )
     )
+    config_path = component_root / "test_categories.yaml"
+    if config_path.is_file():
+        config = load_test_categories_yaml(config_path)
+        apply_execution_environment(env, rocm_path, config)
     return env
 
 
-if __name__ == "__main__":
-    TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
-    AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-    THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+def apply_execution_environment(env, rocm_path, config):
+    """Apply artifact-owned environment settings to the shared phase environment."""
+    exec_settings = config.get("execution_settings", {})
+    for key, value in (exec_settings.get("environment", {}) or {}).items():
+        value = str(value).replace("{ROCM_PATH}", str(rocm_path))
+        env[key] = value
+        logging.info(f"Set environment variable: {key}={value}")
 
-    if not TEST_COMPONENT_NAME:
-        _fail("TEST_COMPONENT environment variable is required but not set.")
-    if not THEROCK_BIN_DIR:
-        _fail("THEROCK_BIN_DIR environment variable is required but not set.")
 
-    rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
-    component_path = resolve_component_path(TEST_COMPONENT_NAME, rocm_path)
+def run_phase(
+    component_name,
+    test_type,
+    amdgpu_families,
+    rocm_path,
+    env,
+    *,
+    test_paths_override=None,
+    marker_expression_override=None,
+    pytest_args_override=None,
+):
+    """Run one configured pytest phase and return pytest's status."""
+    component_path = resolve_component_path(component_name, rocm_path)
     if not component_path.is_dir():
         _fail(f"Component test directory does not exist: {component_path}")
 
-    logging.info(f"Component: {TEST_COMPONENT_NAME} ({component_path})")
-    logging.info(f"Test category: {TEST_TYPE}")
+    logging.info(f"Component: {component_name} ({component_path})")
+    logging.info(f"Test category: {test_type or '(dedicated phase)'}")
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     all_categories = config.get("test_categories", {})
-    category_config = all_categories.get(TEST_TYPE)
-    if not category_config:
+    category_config = all_categories.get(test_type, {}) if test_type else {}
+    if test_type and not category_config:
         _fail(
-            f"No configuration found for test category '{TEST_TYPE}'. "
+            f"No configuration found for test category '{test_type}'. "
             f"Available categories: {sorted(all_categories)}"
         )
 
-    test_paths = category_config.get("test_paths", [])
+    test_paths = (
+        test_paths_override
+        if test_paths_override is not None
+        else category_config.get("test_paths", [])
+    )
     if not test_paths:
-        _fail(f"Category '{TEST_TYPE}' defines no test_paths")
+        _fail(f"Pytest phase '{test_type or 'dedicated'}' defines no test_paths")
 
-    gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
-    marker_expr = build_marker_expression(category_config, gpu_arch)
+    gpu_arch = extract_gpu_arch(amdgpu_families)
+    marker_expr = (
+        marker_expression_override
+        if marker_expression_override is not None
+        else build_marker_expression(category_config, gpu_arch)
+    )
 
     # Extra pytest CLI options for this category, with {ROCM_PATH} substitution.
-    pytest_args = [
-        str(arg).replace("{ROCM_PATH}", str(rocm_path))
-        for arg in (category_config.get("pytest_args", []) or [])
-    ]
+    pytest_args = (
+        pytest_args_override
+        if pytest_args_override is not None
+        else [
+            str(arg).replace("{ROCM_PATH}", str(rocm_path))
+            for arg in (category_config.get("pytest_args", []) or [])
+        ]
+    )
 
     exec_settings = config.get("execution_settings", {})
     # Per-test timeout and worker count resolve as: env override > YAML > default.
@@ -264,9 +286,12 @@ if __name__ == "__main__":
     # overrides let CI steps / reproduce_test_failure.py tune them without a
     # rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds (passed to
     # pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
-    timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or exec_settings.get(
-        "category_timeouts", {}
-    ).get(TEST_TYPE)
+    category_timeout = (
+        exec_settings.get("category_timeouts", {}).get(test_type)
+        if test_type
+        else None
+    )
+    timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or category_timeout
     # parallel_workers may be overridden per category (e.g. GPU GEMM tests want
     # more xdist workers than the default), falling back to the global setting.
     num_workers = get_env_int_override("PYTEST_NUM_WORKERS") or category_config.get(
@@ -275,24 +300,44 @@ if __name__ == "__main__":
 
     junit_dir = os.getenv("JUNIT_XML_DIR")
     junit_xml = (
-        str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
+        str(Path(junit_dir) / f"{component_name}.xml") if junit_dir else None
     )
 
-    env = build_environment(rocm_path, TEST_COMPONENT_NAME)
-    for key, value in (exec_settings.get("environment", {}) or {}).items():
-        value = str(value).replace("{ROCM_PATH}", str(rocm_path))
-        env[key] = value
-        logging.info(f"Set environment variable: {key}={value}")
+    apply_execution_environment(env, rocm_path, config)
 
-    sys.exit(
-        run_pytest(
-            test_paths,
-            marker_expr,
-            pytest_args,
-            junit_xml,
-            timeout,
-            num_workers,
-            component_path,
-            env,
-        )
+    return run_pytest(
+        test_paths,
+        marker_expr,
+        pytest_args,
+        junit_xml,
+        timeout,
+        num_workers,
+        component_path,
+        env,
     )
+
+
+def main():
+    component_name = os.getenv("TEST_COMPONENT")
+    test_type = os.getenv("TEST_TYPE", "quick")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+
+    if not component_name:
+        _fail("TEST_COMPONENT environment variable is required but not set.")
+    if not therock_bin_dir:
+        _fail("THEROCK_BIN_DIR environment variable is required but not set.")
+
+    rocm_path = Path(therock_bin_dir).resolve().parent
+    env = build_environment(rocm_path, component_name)
+    return run_phase(
+        component_name,
+        test_type,
+        amdgpu_families,
+        rocm_path,
+        env,
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

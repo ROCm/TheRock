@@ -173,8 +173,65 @@ class BuildEnvironmentTest(unittest.TestCase):
 
         env = pytest_runner.build_environment(rocm, "tensilelite")
 
-        self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
+        self.assertEqual(
+            env["PYTHONPATH"],
+            str((rocm / "share/hipblaslt/tensilelite").resolve()),
+        )
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+
+class RunPhaseTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = Path("/tmp") / f"pr_phase_{os.getpid()}"
+        self._component = self._tmp / "share/hipblaslt/tensilelite"
+        self._component.mkdir(parents=True, exist_ok=True)
+        (self._component / "tests").mkdir()
+        (self._component / "compat/tests").mkdir(parents=True)
+        (self._component / "test_categories.yaml").write_text(
+            "test_categories:\n"
+            "  quick:\n"
+            "    test_paths: ['tests']\n"
+            "    pytest_args: ['--base-option']\n"
+            "execution_settings:\n"
+            "  parallel_workers: 1\n"
+            "  environment:\n"
+            "    TENSILE_TEST_ROOT: '{ROCM_PATH}/configured'\n"
+        )
+
+    def tearDown(self):
+        for path in sorted(self._tmp.rglob("*"), reverse=True):
+            path.rmdir() if path.is_dir() else path.unlink()
+        self._tmp.rmdir()
+
+    def test_compatibility_override_keeps_generic_pytest_policy(self):
+        with mock.patch.object(pytest_runner, "run_pytest", return_value=9) as run:
+            status = pytest_runner.run_phase(
+                "tensilelite",
+                None,
+                None,
+                self._tmp,
+                {},
+                test_paths_override=["compat/tests"],
+                marker_expression_override="",
+                pytest_args_override=["--run-compat"],
+            )
+
+        self.assertEqual(status, 9)
+        self.assertEqual(run.call_args.args[0], ["compat/tests"])
+        self.assertEqual(run.call_args.args[1], "")
+        self.assertEqual(run.call_args.args[2], ["--run-compat"])
+
+    def test_build_environment_is_final_before_phase_execution(self):
+        env = pytest_runner.build_environment(self._tmp, "tensilelite")
+
+        self.assertEqual(env["ROCM_PATH"], str(self._tmp))
+        self.assertEqual(
+            env["PYTHONPATH"],
+            str((self._tmp / "share/hipblaslt/tensilelite").resolve()),
+        )
+        self.assertEqual(
+            env["TENSILE_TEST_ROOT"], str(self._tmp / "configured")
+        )
 
 
 class RunPytestTest(unittest.TestCase):
