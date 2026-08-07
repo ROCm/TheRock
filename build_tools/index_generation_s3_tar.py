@@ -100,14 +100,7 @@ def generate_index_s3(
 
     # Page title
     bucket_lower = bucket_name.lower()
-    if "dev" in bucket_lower:
-        page_title = "ROCm SDK dev tarballs"
-    elif "nightly" in bucket_lower or "nightlies" in bucket_lower:
-        page_title = "ROCm SDK nightly tarballs"
-    elif "prerelease" in bucket_lower:
-        page_title = "ROCm SDK prerelease tarballs"
-    else:
-        page_title = "ROCm SDK tarballs"
+    page_title = "Tarballs"
 
     # Prepare filter options and files array for JS
     gpu_families = extract_gpu_details(files)
