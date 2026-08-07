@@ -2,10 +2,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Integration tests for ``runpath_to_rpath.py``.
+"""Unit tests for ``runpath_to_rpath.py`` using real ELF fixtures.
 
-These tests build real shared libraries on the host, inspect them with readelf,
-and exercise the runpath_to_rpath conversion logic end-to-end.
+Module-level tests build small shared libraries on the host, inspect them with
+readelf, and exercise ``runpath_to_rpath`` conversion logic via patchelf.
+
+Post-install verification on packaged ROCm libraries is tracked in TheRock#7035.
 
 What is tested
 --------------
@@ -42,7 +44,7 @@ import runpath_to_rpath  # noqa: E402
 FIXTURE_SRC = THIS_SCRIPT_DIR / "hello_lib.c"
 RPATH_VALUE = "$ORIGIN/lib"
 REQUIRED_TOOLS = ("gcc", "readelf", "patchelf")
-HAS_INTEGRATION_TOOLS = all(shutil.which(tool) for tool in REQUIRED_TOOLS)
+HAS_ELF_TOOLS = all(shutil.which(tool) for tool in REQUIRED_TOOLS)
 
 
 def _elf_rpath_info(path: Path):
@@ -75,9 +77,9 @@ def _build_fixture_libs(out_dir: Path):
     return runpath_so, rpath_so
 
 
-@unittest.skipUnless(HAS_INTEGRATION_TOOLS, f"requires: {', '.join(REQUIRED_TOOLS)}")
+@unittest.skipUnless(HAS_ELF_TOOLS, f"requires: {', '.join(REQUIRED_TOOLS)}")
 class TestRunpathToRpath(unittest.TestCase):
-    """Integration tests for runpath_to_rpath using real ELF libraries."""
+    """Unit tests for runpath_to_rpath with gcc-built fixture libraries."""
 
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
