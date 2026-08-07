@@ -41,8 +41,6 @@ if(THEROCK_ENABLE_RAND)
       ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipRAND
   )
   therock_cmake_subproject_glob_c_sources(rocRAND
     SUBDIRS
@@ -74,7 +72,6 @@ if(THEROCK_ENABLE_RAND)
     RUNTIME_DEPS
       hip-clr
       rocRAND
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS
@@ -120,10 +117,6 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipCUB
-      rocThrust
-      rocSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -176,7 +169,6 @@ if(THEROCK_ENABLE_PRIM)
         ${_primlibs_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
-      TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(rocPRIM_tests
       SUBDIRS
@@ -207,8 +199,6 @@ if(THEROCK_ENABLE_PRIM)
       ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(hipCUB
     SUBDIRS
@@ -240,8 +230,6 @@ if(THEROCK_ENABLE_PRIM)
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
-    TEST_SUBPROJECTS
-      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
@@ -310,8 +298,6 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       hipRAND
-    TEST_SUBPROJECTS
-      hipFFT
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -345,7 +331,6 @@ if(THEROCK_ENABLE_FFT)
     RUNTIME_DEPS
       hip-clr
       rocFFT
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipFFT
     SUBDIRS
@@ -440,7 +425,6 @@ if(THEROCK_ENABLE_ROCWMMA)
       hip-clr
       rocBLAS
       ${_rocwmma_optional_deps}
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
@@ -550,7 +534,6 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-llvm
       hip-clr
       ${libhipcxx_runtime_deps}
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
