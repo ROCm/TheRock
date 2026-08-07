@@ -150,6 +150,14 @@ def generate_index_s3(
             function renderFiles(fileList) {{
                 const ul = document.getElementById('fileList');
                 ul.innerHTML = '';
+
+                if (fileList.length === 0) {{
+                    const li = document.createElement('li');
+                    li.textContent = 'No tarballs available.';
+                    ul.appendChild(li);
+                    return;
+                }}
+
                 fileList.forEach(file => {{
                     const li = document.createElement('li');
                     const href = encodeURIComponent(file.name).replace(/%2F/g, '/');
