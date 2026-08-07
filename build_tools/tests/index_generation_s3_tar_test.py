@@ -94,10 +94,7 @@ class IndexGenerationS3TarTest(unittest.TestCase):
 
         self.assertEqual(
             result,
-            (
-                f"https://{self.bucket_name}.s3.amazonaws.com/"
-                f"{self.index_key}"
-            ),
+            (f"https://{self.bucket_name}.s3.amazonaws.com/" f"{self.index_key}"),
         )
         self.assertEqual(self.s3_client.put_object.call_count, 2)
 
