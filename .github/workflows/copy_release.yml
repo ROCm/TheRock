@@ -1,51 +1,31 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Copy release to dev bucket
+name: Stage ROCm 10.0.0rc0 prerelease packages in dev
 
 on:
   workflow_dispatch:
-    inputs:
-      rocm_version:
-        description: ROCm version to copy from nightly releases to dev releases, e.g. 7.14.0a20260617 (see https://rocm.nightlies.amd.com/whl-multi-arch/)
-        type: string
-      python_version:
-        type: choice
-        options:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        default: "3.12"
-      include_torch:
-        description: Copy 'torch' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
-      include_jax:
-        description: Copy 'jax' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
+
 permissions:
   contents: read
 
-run-name: >-
-  Copy nightly -> dev |
-  rocm ${{ inputs.rocm_version }} |
-  py ${{ inputs.python_version }} |
-  extras: ${{
-    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
-    inputs.include_torch && 'PyTorch' ||
-    inputs.include_jax && 'JAX' ||
-    'none'
-  }}
+run-name: Stage ROCm 10.0.0rc0 prerelease packages in dev
 
 jobs:
-  copy_python_packages:
-    name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+  copy_and_verify:
+    name: Copy prerelease packages and verify dev-only installs
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      SOURCE_PREFIX: s3://therock-prerelease-python/v4/whl
+      DEST_PREFIX: s3://therock-dev-python/v4/whl
+      DEST_S3_URL: https://therock-dev-python.s3.us-east-2.amazonaws.com/v4/whl/
+      DEV_INDEX: https://rocm.devreleases.amd.com/whl-multi-arch/
+      ROCM_VERSION: 10.0.0rc0
+      TORCH_VERSION: 2.13.0+gita0d443cc.rocm10.0.0rc0
+      TORCH_GIT_SHA: a0d443cc9b9a8b280841b8f5cc8e1c50cb45e1ca
+      PIP_CACHE_DIR: /tmp/pip-cache
 
     steps:
       - name: Checkout Repository
@@ -61,35 +41,117 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
-      - name: Select Python version
+      - name: Copy exact ROCm package closure to dev
         run: |
-          python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+          echo "COPY_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
 
-      - name: Copy ROCm packages between S3 buckets
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "rocm*${{ inputs.rocm_version }}*"
+          while IFS= read -r filename
+          do
+            aws s3 cp \
+              "${SOURCE_PREFIX}/${filename}" \
+              "${DEST_PREFIX}/${filename}" \
+              --only-show-errors
 
-      - name: Copy torch wheels between S3 buckets
-        if: ${{ inputs.include_torch }}
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            source_etag="$(aws s3api head-object \
+              --bucket therock-prerelease-python \
+              --key "v4/whl/${filename}" \
+              --query ETag --output text)"
+            dest_etag="$(aws s3api head-object \
+              --bucket therock-dev-python \
+              --key "v4/whl/${filename}" \
+              --query ETag --output text)"
+            test "${source_etag}" = "${dest_etag}"
+            echo "${filename}: ${dest_etag}"
+          done <<'EOF'
+          rocm-10.0.0rc0.tar.gz
+          rocm_bootstrap-0.1.0-py3-none-any.whl
+          rocm_sdk_core-10.0.0rc0-py3-none-linux_x86_64.whl
+          rocm_sdk_devel-10.0.0rc0-py3-none-linux_x86_64.whl
+          rocm_sdk_libraries-10.0.0rc0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx942-10.0.0rc0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx950-10.0.0rc0-py3-none-linux_x86_64.whl
+          EOF
 
-      - name: Copy JAX wheels between S3 buckets
-        if: ${{ inputs.include_jax }}
+      - name: Wait for dev index regeneration
+        shell: python
         run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+          import email.utils
+          import os
+          import time
+          import urllib.request
+
+          started = int(os.environ["COPY_STARTED_EPOCH"])
+          expected = {
+              "rocm": "rocm-10.0.0rc0.tar.gz",
+              "rocm-bootstrap": "rocm_bootstrap-0.1.0-py3-none-any.whl",
+              "rocm-sdk-core": (
+                  "rocm_sdk_core-10.0.0rc0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-devel": (
+                  "rocm_sdk_devel-10.0.0rc0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-libraries": (
+                  "rocm_sdk_libraries-10.0.0rc0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-device-gfx942": (
+                  "rocm_sdk_device_gfx942-10.0.0rc0-"
+                  "py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-device-gfx950": (
+                  "rocm_sdk_device_gfx950-10.0.0rc0-"
+                  "py3-none-linux_x86_64.whl"
+              ),
+          }
+          base = os.environ["DEST_S3_URL"]
+          for _ in range(36):
+              missing = []
+              for package, filename in expected.items():
+                  try:
+                      response = urllib.request.urlopen(
+                          f"{base}{package}/index.html", timeout=30
+                      )
+                      page = response.read().decode()
+                      modified = email.utils.parsedate_to_datetime(
+                          response.headers["Last-Modified"]
+                      ).timestamp()
+                  except Exception:
+                      missing.append(package)
+                      continue
+                  if modified < started or filename not in page:
+                      missing.append(package)
+              if not missing:
+                  print("Fresh dev indexes contain the ROCm package closure")
+                  break
+              print(f"Waiting for index regeneration; missing: {missing}")
+              time.sleep(10)
+          else:
+              raise RuntimeError("Dev index did not regenerate within six minutes")
+
+      - name: Verify dev-only package installations
+        run: |
+          for gfx in gfx942 gfx950
+          do
+            venv="/tmp/pytorch-validation-${gfx}"
+            python build_tools/setup_venv.py "${venv}" \
+              --packages "torch[device-${gfx}]==${TORCH_VERSION} rocm[devel,device-${gfx}]==${ROCM_VERSION}" \
+              --index-url="${DEV_INDEX}"
+            "${venv}/bin/python" - "${gfx}" <<'PY'
+          import importlib.metadata
+          import os
+          import sys
+
+          import torch
+
+          gfx = sys.argv[1]
+          assert torch.__version__ == os.environ["TORCH_VERSION"], torch.__version__
+          assert torch.version.git_version == os.environ["TORCH_GIT_SHA"], (
+              torch.version.git_version
+          )
+          assert importlib.metadata.version("rocm") == os.environ["ROCM_VERSION"]
+          assert (
+              importlib.metadata.version(f"rocm-sdk-device-{gfx}")
+              == os.environ["ROCM_VERSION"]
+          )
+          print(gfx, torch.__version__, torch.version.git_version, torch.version.hip)
+          PY
+          done
