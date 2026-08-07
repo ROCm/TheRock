@@ -77,11 +77,6 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
     ("rocrtst", "lib"),
-    # rpp is built here; native package coverage follows in a separate PR.
-    ("rpp", "dev"),
-    ("rpp", "doc"),
-    ("rpp", "lib"),
-    ("rpp", "test"),
     ("support", "dev"),
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),

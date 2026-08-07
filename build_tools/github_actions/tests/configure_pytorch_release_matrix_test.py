@@ -99,7 +99,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     release_type="dev",
                     python_versions=["3.12"],
                     pytorch_git_refs=[pytorch_git_ref],
-                    amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu",
+                    amdgpu_families="gfx94X-dcgpu;gfx90c",
                     platform="linux",
                 )
 

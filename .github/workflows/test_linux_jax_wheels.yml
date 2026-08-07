@@ -276,6 +276,13 @@ jobs:
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
           fi
 
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
+
       - name: Run JAX tests
         env:
           JAX_PLATFORMS: rocm

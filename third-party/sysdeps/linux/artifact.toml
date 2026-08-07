@@ -33,6 +33,10 @@ include = [
 ]
 [components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 
+# libiberty
+[components.lib."third-party/sysdeps/linux/libiberty/build/stage"]
+[components.dev."third-party/sysdeps/linux/libiberty/build/stage"]
+
 # liblzma
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
 [components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
