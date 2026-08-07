@@ -237,9 +237,7 @@ class BuildTopology:
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
-                disable_processors=artifact_data.get(
-                    "disable_processors", []
-                ),
+                disable_processors=artifact_data.get("disable_processors", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
@@ -1275,9 +1273,7 @@ class BuildTopology:
                 artifact = self.artifacts[artifact_name]
                 if platform_name and platform_name in artifact.disable_platforms:
                     continue
-                if self.is_artifact_disabled_on_processor(
-                    artifact, processor_name
-                ):
+                if self.is_artifact_disabled_on_processor(artifact, processor_name):
                     continue
                 features.add(self.get_artifact_feature_name(artifact))
 

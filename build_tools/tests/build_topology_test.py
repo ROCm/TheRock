@@ -1004,7 +1004,6 @@ class BuildTopologyTest(unittest.TestCase):
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
 
-
     def test_parse_disable_processors(self):
         """Test parsing disable_processors from TOML."""
         self.write_topology(

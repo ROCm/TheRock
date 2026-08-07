@@ -230,9 +230,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
             f.write(f"  DISABLE_PLATFORMS {' '.join(disable_platforms)}\n")
 
         if disable_processors:
-            f.write(
-                f"  DISABLE_PROCESSORS {' '.join(disable_processors)}\n"
-            )
+            f.write(f"  DISABLE_PROCESSORS {' '.join(disable_processors)}\n")
 
         f.write(")\n")
 
