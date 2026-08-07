@@ -63,14 +63,8 @@ test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 [component.hipblas]
 test_include = ["hipsolver"]
 
-[component.hipcub]
-test_include = ["rocprim"]
-
 [component.hiprand]
 test_include = ["miopen", "rocprim"]
-
-[component.hipsparse]
-test_include = ["rocsparse"]
 
 [component.libhipcxx]
 test_include = ["rocthrust"]
@@ -80,9 +74,6 @@ test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
 
 [component.hipkernelprovider]
 test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
-
-[component.rocthrust]
-test_include = ["rocprim"]
 
 [component.rocroller]
 test_include = ["hipdnn", "miopen"]
