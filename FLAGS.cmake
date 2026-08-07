@@ -51,6 +51,8 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+# Gates the generic kernel ingestor platform described in RFC 0017:
+# rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
 therock_declare_flag(
   NAME HIPDNN_ENABLE_KERNEL_INGESTOR
   DEFAULT_VALUE OFF
