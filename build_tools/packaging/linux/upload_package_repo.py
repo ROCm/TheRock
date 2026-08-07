@@ -6,29 +6,18 @@
 """
 Packaging + repository upload tool.
 
-Usage (multi-arch CI — new-style, preferred):
+Usage:
   python ./build_tools/packaging/linux/upload_package_repo.py \
     --pkg-type deb \
-    --run-id 16418185899
+    --run-id 16418185899 \
+    --package-dir /path/to/packages
 
-  Bucket + prefix are resolved automatically via WorkflowOutputRoot using
-  the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
-    - CI builds    → therock-ci-artifacts / <run_id>-linux/packages/deb
-    - dev builds   → therock-dev-artifacts / <run_id>-linux/packages/deb
-    - nightly      → therock-nightly-artifacts / <run_id>-linux/packages/deb
-    - prerelease   → therock-prerelease-artifacts / <run_id>-linux/packages/deb
-
-Usage (single-arch release — legacy, build_native_linux_packages.yml):
-  python ./build_tools/packaging/linux/upload_package_repo.py \
-    --pkg-type deb \
-    --s3-bucket therock-nightly-packages \
-    --amdgpu-family gfx94X-dcgpu \
-    --artifact-id 16418185899 \
-    --job nightly
-
-  Legacy upload locations:
-    dev/nightly  → s3bucket/<pkg_type>/<YYYYMMDD>-<artifact_id>
-    prerelease   → s3bucket/v3/packages/<pkg_type>
+Bucket + prefix are resolved automatically via WorkflowOutputRoot using
+the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
+  - CI builds    → therock-ci-artifacts / <run_id>-linux/packages/deb
+  - dev builds   → therock-dev-artifacts / <run_id>-linux/packages/deb
+  - nightly      → therock-nightly-artifacts / <run_id>-linux/packages/deb
+  - prerelease   → therock-prerelease-artifacts / <run_id>-linux/packages/deb
 """
 
 import argparse
@@ -514,10 +503,6 @@ def find_package_dir():
     return base
 
 
-def yyyymmdd():
-    return datetime.datetime.utcnow().strftime("%Y%m%d")
-
-
 def s3_object_exists(s3, bucket, key):
     try:
         s3.head_object(Bucket=bucket, Key=key)
@@ -719,77 +704,28 @@ def _resolve_upload_target(
     Returns:
         Tuple of (bucket, prefix, install_url, dedupe, job_type)
     """
-    if args.run_id:
-        # New-style: derive bucket + prefix from WorkflowOutputRoot.
-        # This is the single source of truth for CI path layout.
-        root = WorkflowOutputRoot.from_workflow_run(
-            run_id=args.run_id, platform="linux"
-        )
-        loc = root.native_linux_packages(pkg_type)
-        job_type = os.environ.get("RELEASE_TYPE", "ci")
-        install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
-        return loc.bucket, loc.relative_path, install_url, True, job_type
-
-    if args.s3_prefix:
-        # Legacy: explicit prefix provided by get_s3_config.py
-        return (
-            args.s3_bucket,
-            args.s3_prefix,
-            _package_install_url(args.s3_bucket, args.s3_prefix, pkg_type),
-            True,
-            args.job,
-        )
-
-    if args.job in ("nightly", "dev"):
-        prefix = f"{pkg_type}/{yyyymmdd()}-{args.artifact_id}"
-        return (
-            args.s3_bucket,
-            prefix,
-            _package_install_url(args.s3_bucket, prefix, pkg_type),
-            True,
-            args.job,
-        )
-
-    if args.job == "prerelease":
-        prefix = f"v3/packages/{pkg_type}"
-        return (
-            args.s3_bucket,
-            prefix,
-            _package_install_url(args.s3_bucket, prefix, pkg_type),
-            True,
-            args.job,
-        )
-
-    raise ValueError(f"Unknown job type: {args.job!r}")
+    # Derive bucket + prefix from WorkflowOutputRoot.
+    # This is the single source of truth for CI path layout.
+    root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
+    loc = root.native_linux_packages(pkg_type)
+    job_type = os.environ.get("RELEASE_TYPE", "ci")
+    install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
+    return loc.bucket, loc.relative_path, install_url, True, job_type
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
 
-    # New-style args: use WorkflowOutputRoot for bucket/prefix resolution.
-    # When --run-id is provided, bucket and prefix are derived automatically
-    # from CI context (GITHUB_REPOSITORY, RELEASE_TYPE, fork detection).
+    # Use WorkflowOutputRoot for bucket/prefix resolution.
+    # Bucket and prefix are derived automatically from CI context
+    # (GITHUB_REPOSITORY, RELEASE_TYPE, fork detection).
     parser.add_argument(
         "--run-id",
-        help="GitHub Actions workflow run ID (enables WorkflowOutputRoot path resolution)",
+        required=True,
+        help="GitHub Actions workflow run ID (required for WorkflowOutputRoot path resolution)",
     )
 
-    # Legacy args: kept for backward compatibility with build_native_linux_packages.yml
-    parser.add_argument("--s3-bucket")
-    parser.add_argument("--amdgpu-family", required=False)  # unused, kept for compat
-    parser.add_argument("--artifact-id")
-    parser.add_argument(
-        "--job",
-        default="dev",
-        choices=["dev", "nightly", "prerelease"],
-        help="Job type (legacy, used when --run-id is not provided)",
-    )
-    parser.add_argument(
-        "--s3-prefix",
-        required=False,
-        help="Override S3 prefix (legacy, used when --run-id is not provided)",
-    )
     parser.add_argument(
         "--package-dir",
         required=True,
@@ -821,25 +757,56 @@ def main():
     print(f"Package repository URL: {install_url}")
     _emit_github_output("package_repository_url", install_url)
 
-    # Upload packaging logs and write step summary (only available with new-style --run-id)
-    log_index_url = None
-    if args.run_id:
-        output_root = WorkflowOutputRoot.from_workflow_run(
-            run_id=args.run_id, platform="linux"
-        )
-        backend = create_storage_backend()
-        log_index_url = upload_packaging_logs(
-            package_dir, args.pkg_type, output_root, backend
-        )
-        if log_index_url:
-            _emit_github_output("packaging_logs_url", log_index_url)
+    # Upload packaging logs and write step summary
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=args.run_id, platform="linux"
+    )
+    backend = create_storage_backend()
+    log_index_url = upload_packaging_logs(
+        package_dir, args.pkg_type, output_root, backend
+    )
+    if log_index_url:
+        _emit_github_output("packaging_logs_url", log_index_url)
 
     # Write GitHub Actions step summary
     pkg_type_upper = args.pkg_type.upper()
-    gha_append_step_summary(f"### {pkg_type_upper} Package Build Results")
-    gha_append_step_summary(f"[Package Repository]({install_url})")
+    if args.pkg_type == "deb":
+        install_instructions = f"""### {pkg_type_upper} Package Build Results
+
+[Package Repository]({install_url})
+
+```bash
+# Add the repository
+echo "deb [trusted=yes] {install_url} stable main" | \\
+    sudo tee /etc/apt/sources.list.d/therock.list
+sudo apt update
+
+# Install packages
+sudo apt install <package-name>
+```
+"""
+    else:
+        install_instructions = f"""### {pkg_type_upper} Package Build Results
+
+[Package Repository]({install_url})
+
+```bash
+# Add the repository
+sudo tee /etc/yum.repos.d/therock.repo << 'EOF'
+[therock]
+name=TheRock
+baseurl={install_url}
+enabled=1
+gpgcheck=0
+EOF
+
+# Install packages
+sudo dnf install <package-name>
+```
+"""
     if log_index_url:
-        gha_append_step_summary(f"[Packaging Logs]({log_index_url})")
+        install_instructions += f"\n[Packaging Logs]({log_index_url})\n"
+    gha_append_step_summary(install_instructions)
 
 
 if __name__ == "__main__":
