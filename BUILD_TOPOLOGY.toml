@@ -629,6 +629,7 @@ source_paths = ["hip-tests"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
+python_requires = ["-r projects/hipblaslt/tensilelite/requirements.txt"]
 split_databases = ["rocblas", "hipblaslt"]
 source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
 
