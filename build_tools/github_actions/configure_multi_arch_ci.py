@@ -1236,8 +1236,8 @@ def expand_build_configs(
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
+    # Otherwise, push and pull_request events run "host-asan"
+    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
         build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
