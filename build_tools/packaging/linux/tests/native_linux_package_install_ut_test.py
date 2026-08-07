@@ -7,6 +7,7 @@
 
 import contextlib
 import importlib.util
+import io
 import os
 import stat
 import sys
@@ -14,6 +15,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Used only by the real-ELF fixture tests (VerifyNoRunpathRealElfTest) below.
+import shutil
+import subprocess
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -1875,6 +1880,294 @@ class RunStreamingTest(unittest.TestCase):
         with self.assertRaises(sp.TimeoutExpired):
             native_linux_package_install_test._run_streaming(["slow-cmd"], 30)
         mock_proc.kill.assert_called_once()
+
+
+class VerifyNoRunpathTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_no_runpath()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def _elf_tree(self, d):
+        # Create two files with ELF magic and one non-ELF file under d.
+        (Path(d) / "bin").mkdir()
+        (Path(d) / "lib").mkdir()
+        (Path(d) / "bin" / "hipcc").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "lib" / "libamdhip64.so").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "readme.txt").write_text("not an elf file")
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_no_elf_uses_runpath(self, mock_run):
+        # readelf output showing (RPATH) for every ELF -> pass.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf invoked for the two ELF files only, not the .txt file.
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_an_elf_uses_runpath(self, mock_run):
+        # Any (RUNPATH) line marks the file as offending -> fail.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_elf_has_no_dynamic_path(self, mock_run):
+        # ELF with neither RPATH nor RUNPATH is acceptable.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_skips_non_elf_files(self, mock_run):
+        # A tree with no ELF files performs no readelf calls and passes.
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "a.txt").write_text("plain")
+            (Path(d) / "b.json").write_text("{}")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        mock_run.assert_not_called()
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_readelf_unavailable(self, mock_run):
+        # If readelf cannot be executed (OSError), the check is skipped (non-fatal).
+        mock_run.side_effect = OSError("readelf not found")
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_skips_file_when_readelf_returns_nonzero(self, mock_run):
+        # readelf returning non-zero (corrupt ELF, etc.) is non-fatal; the file
+        # is skipped with a warning and the overall check still passes.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="readelf: Error: Not an ELF file\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf was invoked for both ELF files despite the non-zero exit.
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_rpath_present_is_not_flagged_even_with_runpath(self, mock_run):
+        # DT_RPATH is checked first; a file that reports both tags is treated as
+        # converted (RPATH present) and is not flagged.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+                " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+            ),
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_only_some_files_are_runpath_only(self, mock_run):
+        # A mixed tree (one RPATH file, one RUNPATH-only file) still fails
+        # because at least one ELF is missing RPATH and carries RUNPATH.
+        def fake_readelf(cmd, **kwargs):
+            filepath = cmd[-1]
+            if filepath.endswith("libamdhip64.so"):
+                stdout = (
+                    " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+                )
+            else:
+                stdout = " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+            return MagicMock(returncode=0, stdout=stdout)
+
+        mock_run.side_effect = fake_readelf
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_files_with_neither_tag_pass_and_are_counted(self, mock_run):
+        # ELFs with neither DT_RPATH nor DT_RUNPATH are reported but not fatal.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fixed_path_rpath_is_reported_but_not_fatal(self, mock_run):
+        # An rpath with a non-$ORIGIN (fixed/absolute) entry is warned about but
+        # does not fail the check.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [/opt/rocm/lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_fixed_rpath_entries_helper(self):
+        # Helper flags only entries that lack $ORIGIN, preserving order.
+        fn = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._fixed_rpath_entries
+        )
+        # Pure $ORIGIN-relative rpath -> nothing flagged.
+        self.assertEqual(
+            fn(" 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:$ORIGIN/../lib64]\n"),
+            [],
+        )
+        # Mixed rpath -> only the fixed entries are returned.
+        self.assertEqual(
+            fn(
+                " 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:/opt/rocm/lib:/usr/lib]\n"
+            ),
+            ["/opt/rocm/lib", "/usr/lib"],
+        )
+        # No rpath value present -> empty.
+        self.assertEqual(fn(" 0x01 (NEEDED) Shared library: [libc.so.6]\n"), [])
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_no_runpath",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_runpath_check_fails(
+        self, mock_run, mock_rpath
+    ):
+        # Even with enough components present, a failed RUNPATH check fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_rpath.assert_called_once()
+
+
+_ELF_TOOLCHAIN_AVAILABLE = bool(shutil.which("cc") and shutil.which("readelf"))
+
+
+@unittest.skipUnless(
+    _ELF_TOOLCHAIN_AVAILABLE,
+    "requires a C compiler (cc) and readelf to build/inspect real ELF fixtures",
+)
+class VerifyNoRunpathRealElfTest(unittest.TestCase):
+    """End-to-end tests for verify_no_runpath() against real ELF files.
+
+    Unlike VerifyNoRunpathTest, which mocks readelf, these compile small shared
+    objects with known DT_RPATH/DT_RUNPATH tags and run the real ``readelf`` so
+    the actual subprocess code path is exercised. They are skipped where ``cc``
+    or ``readelf`` are unavailable (for example the windows-2022 CI leg). Error
+    paths that cannot be produced from a real file (readelf missing, non-zero
+    exit) remain covered by the mocked VerifyNoRunpathTest.
+    """
+
+    def _compile_so(self, directory, name, *link_flags):
+        # $ORIGIN is passed literally (no shell), so the linker records it as-is.
+        src = Path(directory) / "src.c"
+        if not src.exists():
+            src.write_text("int f(void) { return 0; }\n")
+        out = Path(directory) / name
+        subprocess.run(
+            ["cc", "-shared", "-fPIC", "-o", str(out), *link_flags, str(src)],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return out
+
+    def _make(self, install_prefix):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def test_real_rpath_origin_relative_passes(self):
+        # DT_RPATH with an $ORIGIN-relative value -> pass.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--disable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_runpath_fails(self):
+        # DT_RUNPATH (new dtags) with no DT_RPATH -> conversion missed -> fail.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librunpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--enable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    def test_real_neither_tag_passes(self):
+        # No rpath/runpath tag at all -> pass (nothing to convert).
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(d, "libnone.so")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_fixed_rpath_is_reported_but_not_fatal(self):
+        # DT_RPATH with a non-$ORIGIN (absolute) entry -> warned, not fatal.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "libfixed.so",
+                "-Wl,-rpath,/opt/rocm/lib",
+                "-Wl,--disable-new-dtags",
+            )
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = self._make(d).verify_no_runpath()
+        output = buf.getvalue()
+        self.assertTrue(result)
+        self.assertIn("not $ORIGIN-relative", output)
+        self.assertIn("/opt/rocm/lib", output)
 
 
 if __name__ == "__main__":
