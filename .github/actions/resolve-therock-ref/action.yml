@@ -1,0 +1,66 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Resolve TheRock Ref
+description: |
+  Resolve the ROCm/TheRock commit an external repo CI run should build against.
+
+  For pull_request events, pins TheRock to the tip of main as it existed at
+  the PR branch's merge-base time. This keeps the ROCm build stable while
+  authoring and debugging a PR.
+
+  For other events (push, workflow_dispatch, schedule), uses the live tip of main.
+
+inputs:
+  github-token:
+    description: GitHub token for API access
+    required: true
+  base-sha:
+    description: Base SHA for PR (github.event.pull_request.base.sha)
+    required: false
+    default: ""
+  head-sha:
+    description: Head SHA for PR (github.event.pull_request.head.sha)
+    required: false
+    default: ""
+  therock-ref-override:
+    description: Optional explicit TheRock ref (branch/tag/SHA) to build against
+    required: false
+    default: ""
+  therock-repo:
+    description: TheRock repository (default ROCm/TheRock)
+    required: false
+    default: "ROCm/TheRock"
+  therock-branch:
+    description: TheRock branch to resolve from (default main)
+    required: false
+    default: "main"
+  staleness-threshold-days:
+    description: Warn if resolved commit is older than this many days
+    required: false
+    default: "14"
+
+outputs:
+  therock-ref:
+    description: Resolved TheRock commit SHA
+    value: ${{ steps.resolve.outputs.therock_ref }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: pip install requests
+
+    - name: Resolve TheRock ref
+      id: resolve
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        THEROCK_REF_OVERRIDE: ${{ inputs.therock-ref-override }}
+        THEROCK_REPO: ${{ inputs.therock-repo }}
+        THEROCK_BRANCH: ${{ inputs.therock-branch }}
+        STALENESS_THRESHOLD_DAYS: ${{ inputs.staleness-threshold-days }}
+      run: python ${{ github.action_path }}/resolve_therock_ref.py
