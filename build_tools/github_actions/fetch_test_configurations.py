@@ -703,30 +703,33 @@ test_matrix = {
             "linux": 1,
         },
     },
-    # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
-    "libhipcxx_amdclang": {
-        "job_name": "libhipcxx_amdclang",
-        "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
-        },
-    },
-    # libhipcxx hiprtc tests
-    "libhipcxx_hiprtc": {
-        "job_name": "libhipcxx_hiprtc",
-        "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 20,
-        "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
-        },
-    },
+    # Disabled while the libhipcxx build is disabled in math-libs/CMakeLists.txt
+    # (ROCM-29174): the artifacts are never produced, so both scripts fail hard.
+    #
+    # # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
+    # "libhipcxx_amdclang": {
+    #     "job_name": "libhipcxx_amdclang",
+    #     "fetch_artifact_args": "--libhipcxx --tests",
+    #     "timeout_minutes": 30,
+    #     "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
+    #     "platform": ["linux", "windows"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
+    # # libhipcxx hiprtc tests
+    # "libhipcxx_hiprtc": {
+    #     "job_name": "libhipcxx_hiprtc",
+    #     "fetch_artifact_args": "--libhipcxx --tests",
+    #     "timeout_minutes": 20,
+    #     "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
+    #     "platform": ["linux"],
+    #     "total_shards_dict": {
+    #         "linux": 1,
+    #         "windows": 1,
+    #     },
+    # },
     # hipthreads lit tests
     "hipthreads": {
         "job_name": "hipthreads",
