@@ -99,7 +99,6 @@ def generate_index_s3(
         raise FileNotFoundError(f"No .tar.gz files found in bucket {bucket_name}.")
 
     # Page title
-    bucket_lower = bucket_name.lower()
     page_title = "Tarballs"
 
     # Prepare filter options and files array for JS
