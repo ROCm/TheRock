@@ -64,6 +64,80 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # Skip split when every subproject feeding this artifact is excluded from all of the split targets
+  if(_should_split AND ARG_SUBPROJECT_DEPS AND THEROCK_AMDGPU_TARGETS
+     AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+    # Guard v3: restrict the intersection check to the subproject deps that
+    # actually FEED the split.
+    #
+    # Guard v2 (original) iterated over ALL SUBPROJECT_DEPS and kept the split if
+    # ANY dep's effective (post-filter/post-fallback) target set intersected the
+    # requested split targets. That is too permissive for database splits: the
+    # `blas` artifact lists non-excluded deps (notably `origami`) whose active
+    # target set DOES include amdgcnspirv, so the guard never fired -- even
+    # though the rocblas/hipblaslt/hipsparselt databases actually being split
+    # come from subprojects (rocBLAS/hipBLASLt/hipSPARSELt) that are excluded
+    # from amdgcnspirv and built via their gfx1100 DEFAULT_GPU_TARGETS fallback.
+    # Those fat binaries contain zero amdgcnspirv device code, so
+    # split_artifacts.py aborts with "no device code objects matched
+    # --gpu-targets (amdgcnspirv)". See #6918 / #7101.
+    #
+    # When the artifact declares split-databases, only the database-providing
+    # subprojects contribute the fat binaries the splitter transforms, so match
+    # them (case-insensitively) by name and check the intersection against those
+    # only. Otherwise fall back to considering all deps as before.
+    set(_split_relevant_deps)
+    if(_split_databases)
+      string(TOLOWER "${_split_databases}" _split_databases_lower)
+      foreach(_sp_dep ${ARG_SUBPROJECT_DEPS})
+        string(TOLOWER "${_sp_dep}" _sp_dep_lower)
+        if("${_sp_dep_lower}" IN_LIST _split_databases_lower)
+          list(APPEND _split_relevant_deps "${_sp_dep}")
+        endif()
+      endforeach()
+      # Fail-safe: if no dep name matched any split-database name (e.g. a
+      # database is provided by a dep whose subproject target name doesn't
+      # case-insensitively equal the database name), we cannot affirmatively
+      # identify the DB-providing deps -- fall back to considering ALL deps
+      # (v2 behavior) so we only ever skip when we can PROVE the relevant deps
+      # have no matching target. Never skip a legitimate split on a name miss.
+      if(NOT _split_relevant_deps)
+        message(STATUS
+          "Artifact ${slice_name}: split-databases (${_split_databases}) did not "
+          "match any SUBPROJECT_DEPS by name; considering all deps for the "
+          "split-skip check (fail-safe).")
+        set(_split_relevant_deps ${ARG_SUBPROJECT_DEPS})
+      endif()
+    else()
+      set(_split_relevant_deps ${ARG_SUBPROJECT_DEPS})
+    endif()
+
+    set(_split_target_intersects FALSE)
+    # Guard v2 iterated over ALL deps; kept here (commented) for reference.
+    # foreach(_sp_dep ${ARG_SUBPROJECT_DEPS})
+    foreach(_sp_dep ${_split_relevant_deps})
+      get_target_property(_sp_active_targets "${_sp_dep}" THEROCK_ACTIVE_AMDGPU_TARGETS)
+      if(_sp_active_targets)
+        foreach(_split_target ${THEROCK_AMDGPU_TARGETS})
+          if("${_split_target}" IN_LIST _sp_active_targets)
+            set(_split_target_intersects TRUE)
+            break()
+          endif()
+        endforeach()
+      endif()
+      if(_split_target_intersects)
+        break()
+      endif()
+    endforeach()
+    if(NOT _split_target_intersects)
+      message(STATUS
+        "Artifact ${slice_name}: no split target (${THEROCK_AMDGPU_TARGETS}) is in "
+        "any subproject's effective target set; skipping kpack split")
+      set(_should_split FALSE)
+    endif()
+  endif()
+
+
   # Record artifact→subprojects mapping for manifest generation.
   # This allows Python scripts to dynamically discover which subprojects
   # belong to each artifact without hardcoding in BUILD_TOPOLOGY.toml.

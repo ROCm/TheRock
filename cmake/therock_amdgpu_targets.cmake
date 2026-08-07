@@ -24,7 +24,7 @@ set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
 #   not be set on any fully supported targets.
 function(therock_add_amdgpu_target gfx_target product_name)
   cmake_parse_arguments(PARSE_ARGV 2 ARG
-    ""
+    "PLATFORM_INDEPENDENT"
     ""
     "FAMILY;EXCLUDE_TARGET_PROJECTS"
   )
@@ -256,6 +256,99 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
+
+# amdgcnspirv architecture-independent portable SPIR-V target
+# Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
+  PLATFORM_INDEPENDENT
+  # Classification legend for the notes below:
+  #   ! - target neutral, @ - generic, ? - unknown, "" - target-specific, * per-arch
+  # Tracking issue for enabling SPIR-V across components:
+  #   https://github.com/ROCm/TheRock/issues/6918
+  EXCLUDE_TARGET_PROJECTS
+    MIOpen #<
+    ROCR-Runtime #!
+    aqlprofile #@
+    composable_kernel #<
+    hip-clr #?
+    hip-tests #?
+    hipBLAS #*
+    hipBLAS-common #?
+    hipBLASLt #?
+    # hipCUB #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    hipDNN #!
+    hipDNN_samples #<
+    hipFFT #*
+    hipInfo #!
+    hipRAND #*
+    hipSOLVER #<
+    hipSPARSE #<
+    hipSPARSELt #<
+    hipTensor #<
+    hipblasltprovider #<
+    hipdnn_integration_tests #<
+    hipfile #!
+    hipkernelprovider #<
+    libhipcxx #<
+    miopenprovider #!
+    mirage #!
+    mxDataGenerator #?
+    ocl-clr #?
+    rccl #<
+    rccl-tests #?
+    rdc #!
+    rocALUTION #<
+    rocBLAS #* # excluded; builds via DEFAULT_GPU_TARGETS gfx1100 fallback
+    rocFFT #*
+    # rocPRIM #< ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    # rocPRIM_tests #< ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    # rocRAND #* ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    rocRoller #?
+    rocSOLVER #<
+    rocSPARSE #<
+    # rocThrust #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    rocWMMA #<
+    rocdecode #!
+    rocjitsu #!
+    rocjpeg #!
+    # rocm-kpack # keep enabled; kpack split is guarded per-artifact
+    rocprofiler-compute #!
+    rocprofiler-sdk #!
+    rocprofiler-systems #!
+    rocprofiler-systems-examples #!
+    rocr-debug-agent
+    rocr-debug-agent-tests #!
+    rocrtst #!
+    rocshmem #!
+    roctracer #?
+
+    # --- ADDSPV: additionally excluded so that an ENABLE_ALL build for
+    # amdgcnspirv contains the same set of projects as a compiler-only build.
+    # These are runtime / kernel / tooling / third-party components not part of
+    # the SPIR-V compiler slice. Each name is a verified existing subproject.
+    amd-dbgapi
+    amdsmi
+    hipify
+    hipthreads
+    ocl-icd
+    origami
+    rocgdb
+    rocminfo
+    rocprof-trace-decoder
+    therock-SuiteSparse
+    therock-amd-mesa
+    therock-elfio
+    therock-expat
+    therock-gmp
+    therock-host-blas
+    therock-host-blas64
+    therock-hwloc
+    therock-libpciaccess
+    therock-mpfr
+    therock-ncurses
+    therock-spdlog
+    therock-util-linux
+)
 
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
