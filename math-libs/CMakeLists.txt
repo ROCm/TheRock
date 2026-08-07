@@ -510,7 +510,9 @@ if(THEROCK_ENABLE_ROCALUTION)
   )
 endif(THEROCK_ENABLE_ROCALUTION)
 
-if(THEROCK_ENABLE_LIBHIPCXX)
+#if(THEROCK_ENABLE_LIBHIPCXX)
+# disable libhipcxx temporarily for ROCm builds
+if(FALSE)
   ##############################################################################
   # libhipcxx
   ##############################################################################
