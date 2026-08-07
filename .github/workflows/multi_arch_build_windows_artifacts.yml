@@ -105,6 +105,7 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: B:\build
       CACHE_DIR: ${{ github.workspace }}/.cache
+      ROCM_LIBRARIES_SOURCE_DIR: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).source_package == 'ROCM_LIBRARIES' && fromJSON(inputs.external_repo_config).checkout_path || 'rocm-libraries' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -214,6 +215,7 @@ jobs:
             --artifacts="${REBUILD_ARTIFACTS}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --rocm-libraries-source-dir="${ROCM_LIBRARIES_SOURCE_DIR}" \
             --gha-output
 
       - name: Install stage python deps
@@ -235,7 +237,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             -DTHEROCK_WINDOWS_LINK_CPU_AFFINITY=ON \
-            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).source_package != 'ROCM_LIBRARIES' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 

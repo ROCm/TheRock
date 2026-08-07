@@ -77,6 +77,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
+      ROCM_LIBRARIES_SOURCE_DIR: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).source_package == 'ROCM_LIBRARIES' && fromJSON(inputs.external_repo_config).checkout_path || 'rocm-libraries' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
@@ -215,6 +216,7 @@ jobs:
             --stage="${STAGE_NAME}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --platform=linux \
+            --rocm-libraries-source-dir="${ROCM_LIBRARIES_SOURCE_DIR}" \
             --gha-output
 
       - name: Install stage python deps
@@ -298,7 +300,7 @@ jobs:
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
                 ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-                ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+                ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).source_package != 'ROCM_LIBRARIES' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
                 ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
                 ${{ steps.stage_config.outputs.cmake_args }}
             '
