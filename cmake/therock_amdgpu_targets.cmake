@@ -275,7 +275,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
     hipBLAS #*
     hipBLAS-common #?
     hipBLASLt #?
-    hipCUB #?
+    # hipCUB #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
     hipDNN #!
     hipDNN_samples #<
     hipFFT #*
@@ -301,12 +301,12 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
     rocBLAS #* # excluded; builds via DEFAULT_GPU_TARGETS gfx1100 fallback
     rocFFT #*
     # rocPRIM #< ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
-    # rocPRIM_tests #< ADDSPV: un-excluded
+    # rocPRIM_tests #< ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
     # rocRAND #* ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
     rocRoller #?
     rocSOLVER #<
     rocSPARSE #<
-    rocThrust #?
+    # rocThrust #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
     rocWMMA #<
     rocdecode #!
     rocjitsu #!
