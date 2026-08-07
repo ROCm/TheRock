@@ -268,10 +268,14 @@ class TeeStream:
 # ---------------------------------------------------------------------------
 
 
+_tee_write_lock = threading.Lock()
+
+
 class _TeeWriter(threading.Thread):
     """Background thread that reads from a pipe and writes to multiple destinations.
 
     This enables capturing subprocess output that writes directly to file descriptors.
+    Uses a module-level lock to prevent interleaved writes from stdout/stderr threads.
     """
 
     def __init__(self, read_fd: int, outputs: list[TextIO], name: str = "TeeWriter"):
@@ -288,12 +292,13 @@ class _TeeWriter(threading.Thread):
                     if not data:
                         break
                     text = data.decode("utf-8", errors="replace")
-                    for out in self.outputs:
-                        try:
-                            out.write(text)
-                            out.flush()
-                        except (IOError, ValueError):
-                            pass
+                    with _tee_write_lock:
+                        for out in self.outputs:
+                            try:
+                                out.write(text)
+                                out.flush()
+                            except (IOError, ValueError):
+                                pass
                 except OSError:
                     break
         finally:
@@ -304,6 +309,139 @@ class _TeeWriter(threading.Thread):
 
     def stop(self) -> None:
         self._stop_event.set()
+
+
+@contextmanager
+def _capture_console_windows(
+    log_path: Path,
+    also_to_console: bool,
+) -> Iterator[Path]:
+    """Windows implementation using SetStdHandle for subprocess capture."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.windll.kernel32
+
+    # Configure ctypes function signatures for 64-bit handle safety
+    kernel32.GetStdHandle.argtypes = [wintypes.DWORD]
+    kernel32.GetStdHandle.restype = wintypes.HANDLE
+    kernel32.SetStdHandle.argtypes = [wintypes.DWORD, wintypes.HANDLE]
+    kernel32.SetStdHandle.restype = wintypes.BOOL
+
+    STD_OUTPUT_HANDLE = wintypes.DWORD(-11)
+    STD_ERROR_HANDLE = wintypes.DWORD(-12)
+    INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+
+    # Save originals
+    orig_stdout_handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    orig_stderr_handle = kernel32.GetStdHandle(STD_ERROR_HANDLE)
+
+    # Validate handles
+    if orig_stdout_handle == INVALID_HANDLE_VALUE:
+        raise OSError("GetStdHandle failed for stdout")
+    if orig_stderr_handle == INVALID_HANDLE_VALUE:
+        raise OSError("GetStdHandle failed for stderr")
+    orig_stdout = sys.stdout
+    orig_stderr = sys.stderr
+    orig_stdout_fd = os.dup(1)
+    orig_stderr_fd = os.dup(2)
+
+    # Create pipes
+    stdout_read, stdout_write = os.pipe()
+    stderr_read, stderr_write = os.pipe()
+
+    log_fh = None
+    tee_threads = []
+    console_stdout = None
+    console_stderr = None
+
+    try:
+        log_fh = open(log_path, "w", encoding="utf-8")
+
+        if also_to_console:
+            console_stdout = os.fdopen(os.dup(orig_stdout_fd), "w", closefd=True)
+            console_stderr = os.fdopen(os.dup(orig_stderr_fd), "w", closefd=True)
+            stdout_outputs = [console_stdout, log_fh]
+            stderr_outputs = [console_stderr, log_fh]
+        else:
+            stdout_outputs = [log_fh]
+            stderr_outputs = [log_fh]
+
+        # Start tee threads
+        stdout_tee = _TeeWriter(stdout_read, stdout_outputs, "StdoutTee")
+        stderr_tee = _TeeWriter(stderr_read, stderr_outputs, "StderrTee")
+        tee_threads = [stdout_tee, stderr_tee]
+        stdout_tee.start()
+        stderr_tee.start()
+
+        # Redirect fds
+        os.dup2(stdout_write, 1)
+        os.dup2(stderr_write, 2)
+        os.close(stdout_write)
+        os.close(stderr_write)
+
+        # Redirect Windows console handles for subprocess capture
+        stdout_handle = wintypes.HANDLE(msvcrt.get_osfhandle(1))
+        stderr_handle = wintypes.HANDLE(msvcrt.get_osfhandle(2))
+        kernel32.SetStdHandle(STD_OUTPUT_HANDLE, stdout_handle)
+        kernel32.SetStdHandle(STD_ERROR_HANDLE, stderr_handle)
+
+        # Redirect Python streams
+        sys.stdout = io.TextIOWrapper(
+            io.FileIO(1, "w", closefd=False),
+            encoding="utf-8",
+            errors="replace",
+            line_buffering=True,
+        )
+        sys.stderr = io.TextIOWrapper(
+            io.FileIO(2, "w", closefd=False),
+            encoding="utf-8",
+            errors="replace",
+            line_buffering=True,
+        )
+
+        # Update logging handlers
+        root = logging.getLogger()
+        old_handlers = [
+            (h, h.stream) for h in root.handlers if isinstance(h, logging.StreamHandler)
+        ]
+        for handler, _ in old_handlers:
+            handler.stream = sys.stderr
+
+        try:
+            yield log_path
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            for handler, old_stream in old_handlers:
+                handler.stream = old_stream
+
+    finally:
+        # Restore Windows console handles
+        kernel32.SetStdHandle(STD_OUTPUT_HANDLE, orig_stdout_handle)
+        kernel32.SetStdHandle(STD_ERROR_HANDLE, orig_stderr_handle)
+
+        # Restore fds
+        os.dup2(orig_stdout_fd, 1)
+        os.dup2(orig_stderr_fd, 2)
+        os.close(orig_stdout_fd)
+        os.close(orig_stderr_fd)
+
+        # Restore Python streams
+        sys.stdout = orig_stdout
+        sys.stderr = orig_stderr
+
+        for t in tee_threads:
+            t.stop()
+            t.join(timeout=5.0)
+
+        if console_stdout:
+            console_stdout.close()
+        if console_stderr:
+            console_stderr.close()
+        if log_fh:
+            log_fh.close()
 
 
 @contextmanager
@@ -362,7 +500,16 @@ def capture_console(
     # Ensure parent directory exists
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save original file descriptors
+    # Use Windows-specific implementation for subprocess capture support
+    if sys.platform == "win32":
+        try:
+            with _capture_console_windows(log_path, also_to_console):
+                yield log_path
+        finally:
+            _decrement_capture_depth()
+        return
+
+    # POSIX implementation - save original file descriptors
     orig_stdout_fd = os.dup(1)
     orig_stderr_fd = os.dup(2)
     orig_stdout = sys.stdout
@@ -447,7 +594,7 @@ def capture_console(
         # Wait for tee threads to finish (they'll exit when pipes close)
         for t in tee_threads:
             t.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
 
         # Close log file
         if log_fh:
