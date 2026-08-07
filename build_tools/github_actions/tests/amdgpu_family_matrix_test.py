@@ -162,6 +162,7 @@ class TestExternalConfig(unittest.TestCase):
         # Should contain entries from local presubmit matrix
         self.assertIn("gfx94x", result)
 
+    @unittest.skip("Disabled on the release branch, ignoring external config")
     def test_get_build_runner_labels_uses_external_config_when_available(self):
         """get_build_runner_labels uses external config when available."""
         fake_config = {

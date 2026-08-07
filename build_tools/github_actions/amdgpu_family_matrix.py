@@ -105,7 +105,7 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
-            {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-prod-rc", "weight": 1.0},
         ],
         "sanitizer": [
             {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
@@ -605,9 +605,14 @@ def get_build_runner_labels():
     Attempts to load external config from CI_CONFIG_PATH. Falls back to local
     definitions if external config is unavailable.
     """
-    external_config = load_external_runner_config()
+    # external_config = load_external_runner_config()
 
-    if external_config is not None:
-        return external_config.get("build_runners", {})
+    # if external_config is not None:
+    #     return external_config.get("build_runners", {})
+
+    # Bypass external runner config and always use our version on this
+    # release branch.
+    # TODO: apply a similar change structurally so release builds use
+    # values from release branches rather than an external floating data source?
 
     return BUILD_RUNNER_LABELS
