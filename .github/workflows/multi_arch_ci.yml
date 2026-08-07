@@ -81,6 +81,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
