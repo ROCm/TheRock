@@ -157,6 +157,8 @@ if(_enable_rocRoller)
   )
 endif()
 
+# TODO: Update the rocm-libraries submodule SHA after the TensileLite packaging
+# stack is rebased and finalized.
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
