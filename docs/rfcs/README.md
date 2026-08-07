@@ -27,6 +27,7 @@ benefit from further discussion.
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
+- [RFC0013: ROCm Core SDK & Runtime Container Standardization](./RFC0013-ROCm-Core-Docker-Standards.md)
 
 ## Adding an RFC
 
