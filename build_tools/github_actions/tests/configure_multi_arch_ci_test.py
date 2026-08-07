@@ -1959,13 +1959,13 @@ class TestBuildRunnerSelection(unittest.TestCase):
         # Any random value should select AWS for Linux
         with patch("random.random", return_value=0.3):
             self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod-rc"
             )
 
         # Any random value should select AWS for Linux
         with patch("random.random", return_value=0.75):
             self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
+                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod-rc"
             )
 
         # Windows still uses Azure

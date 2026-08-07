@@ -56,7 +56,7 @@ jobs:
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
-    runs-on: aws-linux-scale-rocm-prod
+    runs-on: aws-linux-scale-rocm-prod-rc
     permissions:
       contents: read
       id-token: write
