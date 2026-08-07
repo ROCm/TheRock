@@ -27,6 +27,7 @@ benefit from further discussion.
 - [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
+- [RFC0016: HIP Python Integration into TheRock](./RFC0016-HIP-Python-TheRock-Integration.md)
 
 ## Adding an RFC
 
