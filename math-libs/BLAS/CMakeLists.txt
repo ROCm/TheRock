@@ -42,6 +42,38 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 
 
 ##############################################################################
+# stinkytofu
+##############################################################################
+
+therock_cmake_subproject_declare(stinkytofu
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/stinkytofu"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/stinkytofu"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DSTINKYTOFU_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+    -DSTINKYTOFU_BUILD_PYTHON=OFF
+    -DBUILD_SHARED_LIBS=ON
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-googletest
+  RUNTIME_DEPS
+    amd-comgr
+)
+therock_cmake_subproject_glob_c_sources(stinkytofu
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(stinkytofu stinkytofu lib/cmake/stinkytofu)
+therock_cmake_subproject_build_test(stinkytofu
+  COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+)
+therock_cmake_subproject_activate(stinkytofu)
+list(APPEND _blas_subproject_names stinkytofu)
+
+
+##############################################################################
 # rocRoller
 ##############################################################################
 
@@ -181,6 +213,7 @@ therock_cmake_subproject_declare(hipBLASLt
   BUILD_DEPS
     hipBLAS-common
     rocm-cmake
+    stinkytofu
     therock-googletest
     therock-msgpack-cxx
     ${hipBLASLt_rocRoller_build_deps}
