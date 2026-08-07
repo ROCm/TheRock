@@ -2,206 +2,257 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""
-Test runner for TensileLite and rocisa Python tests using pre-built artifacts.
-
-Runs against installed artifacts from the hipBLASLt test component:
-  share/hipblaslt/tensilelite/Tensile/     — Tensile Python package
-  share/hipblaslt/tensilelite/rocisa/       — rocisa Python package + _rocisa.abi3.so
-  share/hipblaslt/tensilelite/rocisa_tests/ — rocisa pytest modules
-
-Test order (fail fast):
-- rocisa (build dependency of TensileLite)
-- TensileLite unit tests
-- TensileLite common GEMM tests (gfx1250 in AMDGPU_FAMILIES)
-
-CI: All GPU archs (unit tests), GPU emulation (gfx1250 common tests)
-
-Usage: python test_tensilelite.py
-"""
+"""Install and test TensileLite wheels from reconstructed ROCm artifacts."""
 
 import logging
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+from packaging.utils import canonicalize_name, parse_wheel_filename
+from packaging.version import InvalidVersion, Version
+
+import pytest_runner
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-# GPU families where unit tests are skipped. These families run under emulation
-# where hip-python is unavailable and no arch-specific unit tests exist.
-# TODO: move this skip logic into the pytest conftest so the wrapper stays thin.
-UNIT_TEST_SKIP_FAMILIES = {"gfx1250"}
+CANONICAL_PROJECT = canonicalize_name("tensilelite")
+COMPATIBILITY_PROJECT = canonicalize_name("tensilelite_tensile_compat")
+EXPECTED_PROJECTS = {CANONICAL_PROJECT, COMPATIBILITY_PROJECT}
+CLIENT_VERSION_TIMEOUT_SECONDS = 5
 
-# Per-test timeout (seconds); slow tests are killed, rest continue.
-FFM_PER_TEST_TIMEOUT = int(os.getenv("FFM_PER_TEST_TIMEOUT", "300"))
 
-# TENSILE_NUM_PYTEST_WORKERS: number of pytest-xdist processes running tests in parallel.
-NUM_PYTEST_WORKERS = os.getenv("TENSILE_NUM_PYTEST_WORKERS", "16")
+class TensileLiteRunnerError(RuntimeError):
+    """An artifact contract failure with a user-facing diagnostic."""
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", str(THEROCK_DIR / "build" / "bin"))
 
-rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
-tensilelite_root = rocm_path / "share" / "hipblaslt" / "tensilelite"
+@dataclass(frozen=True)
+class ReleaseWheels:
+    canonical: Path
+    compatibility: Path
 
-if not tensilelite_root.is_dir():
-    raise FileNotFoundError(
-        f"TensileLite test artifacts not found at {tensilelite_root}. "
-        "Ensure the build used -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=ON."
+
+def is_loader_failure(stderr: str) -> bool:
+    """Recognize native loader diagnostics emitted before client main()."""
+    stderr_lower = stderr.lower()
+    loader_fragments = (
+        "error while loading shared libraries",
+        "cannot open shared object file",
+        "library not loaded",
+        "dll load failed",
+        "the code execution cannot proceed",
     )
+    return any(fragment in stderr_lower for fragment in loader_fragments)
 
-env = os.environ.copy()
-existing_pythonpath = env.get("PYTHONPATH")
-env["PYTHONPATH"] = (
-    f"{tensilelite_root}{os.pathsep}{existing_pythonpath}"
-    if existing_pythonpath
-    else str(tensilelite_root)
-)
-env["ROCM_PATH"] = str(rocm_path)
 
-# _rocisa links libamdhip64.so, tensilelite-client links libomp.so.
-lib_path = rocm_path / "lib"
-llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
-existing_ld_path = env.get("LD_LIBRARY_PATH", "")
-env["LD_LIBRARY_PATH"] = os.pathsep.join(
-    filter(None, [str(lib_path), str(llvm_lib_path), existing_ld_path])
-)
-
-# GPU unit tests use amdclang++ to assemble kernels.
-existing_path = env.get("PATH", "")
-env["PATH"] = os.pathsep.join(
-    filter(
-        None,
-        [
-            str(rocm_path / "bin"),
-            str(rocm_path / "lib" / "llvm" / "bin"),
-            existing_path,
-        ],
-    )
-)
-
-# Smoke test: verify install layout and stable ABI.
-logging.info("=== Verifying artifact install layout ===")
-rocisa_dir = tensilelite_root / "rocisa"
-logging.info(
-    f"rocisa directory contents: {[f.name for f in rocisa_dir.iterdir() if not f.name.startswith('__')]}"
-)
-abi3_files = list(rocisa_dir.glob("*.abi3.*"))
-if abi3_files:
-    logging.info(f"Stable ABI confirmed: {[f.name for f in abi3_files]}")
-else:
-    logging.warning("No .abi3 extension found — stable ABI may not be enabled")
-subprocess.check_call(
-    [
-        sys.executable,
-        "-c",
-        "import Tensile, rocisa, rocisa.instruction; "
-        "print('Tensile:', Tensile.ROOT_PATH); print('rocisa:', rocisa.__file__)",
-    ],
-    cwd=str(THEROCK_DIR),
-    env=env,
-)
-
-# Determine arch before running tests — gfx1250 uses subprocess.run for rocisa
-# so common GEMM tests run regardless of rocisa outcome. Other archs keep
-# check_call (fail-fast: rocisa failure → abort before unit tests).
-amdgpu_family = os.getenv("AMDGPU_FAMILIES", "")
-common_tests = tensilelite_root / "Tensile" / "Tests" / "common"
-run_common_tests = common_tests.is_dir() and "gfx1250" in amdgpu_family
-
-logging.info("=== Running rocisa tests ===")
-if run_common_tests:
-    rocisa_result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-v",
-            str(tensilelite_root / "rocisa_tests"),
-        ],
-        cwd=str(THEROCK_DIR),
-        env=env,
-    )
-    if rocisa_result.returncode != 0:
-        logging.warning(
-            f"rocisa tests failed (exit {rocisa_result.returncode}), continuing to common tests"
+def query_client_version(client_path: Path, env: dict[str, str]) -> Version:
+    """Return the native client's canonical PEP 440 version."""
+    command = [str(client_path), "--version"]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=CLIENT_VERSION_TIMEOUT_SECONDS,
+            check=False,
+            env=env,
         )
-else:
-    subprocess.check_call(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-v",
-            str(tensilelite_root / "rocisa_tests"),
-        ],
-        cwd=str(THEROCK_DIR),
-        env=env,
+    except FileNotFoundError as exc:
+        raise TensileLiteRunnerError(
+            f"Failed to launch TensileLite client; file not found: {client_path}"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version timed out after "
+            f"{CLIENT_VERSION_TIMEOUT_SECONDS} seconds: {client_path}"
+        ) from exc
+    except OSError as exc:
+        raise TensileLiteRunnerError(
+            f"Failed to load or launch TensileLite client {client_path}: {exc}"
+        ) from exc
+
+    if result.returncode < 0:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version terminated by signal "
+            f"{-result.returncode}: {client_path}"
+        )
+    if result.returncode != 0 and is_loader_failure(result.stderr):
+        raise TensileLiteRunnerError(
+            f"Failed to load TensileLite client {client_path}: {result.stderr!r}"
+        )
+    if result.returncode != 0:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version exited with status "
+            f"{result.returncode}: {client_path}"
+        )
+    if result.stderr:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version wrote unexpected stderr: "
+            f"{result.stderr!r}"
+        )
+
+    lines = result.stdout.splitlines()
+    if not lines or (len(lines) == 1 and not lines[0]):
+        raise TensileLiteRunnerError(
+            "TensileLite client --version produced no version line"
+        )
+    if len(lines) != 1:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version must produce exactly one stdout line; "
+            f"got {len(lines)}: {result.stdout!r}"
+        )
+    version_text = lines[0]
+    if version_text != version_text.strip():
+        raise TensileLiteRunnerError(
+            "TensileLite client --version produced a non-canonical line: "
+            f"{version_text!r}"
+        )
+    try:
+        return Version(version_text)
+    except InvalidVersion as exc:
+        raise TensileLiteRunnerError(
+            "TensileLite client --version produced malformed PEP 440 version: "
+            f"{version_text!r}"
+        ) from exc
+
+
+def discover_release_wheels(
+    wheels_dir: Path, expected_version: Version
+) -> ReleaseWheels:
+    """Select exactly one canonical and compatibility wheel for the client."""
+    wheels_by_project: dict[str, list[tuple[Path, Version]]] = {
+        project: [] for project in EXPECTED_PROJECTS
+    }
+    for wheel_path in sorted(wheels_dir.glob("*.whl")):
+        try:
+            project_name, version, _build, _tags = parse_wheel_filename(
+                wheel_path.name
+            )
+        except ValueError as exc:
+            raise TensileLiteRunnerError(
+                f"Malformed wheel filename in TensileLite artifact: {wheel_path}"
+            ) from exc
+        project_name = canonicalize_name(project_name)
+        if project_name not in EXPECTED_PROJECTS:
+            raise TensileLiteRunnerError(
+                "Unexpected wheel project in TensileLite artifact: "
+                f"{project_name} ({wheel_path})"
+            )
+        wheels_by_project[project_name].append((wheel_path, version))
+
+    selected: dict[str, Path] = {}
+    for project_name, candidates in wheels_by_project.items():
+        if not candidates:
+            raise TensileLiteRunnerError(
+                f"No {project_name} wheel found in {wheels_dir}"
+            )
+        if len(candidates) != 1:
+            raise TensileLiteRunnerError(
+                f"Expected exactly one {project_name} wheel in {wheels_dir}; "
+                f"found {[path.name for path, _version in candidates]}"
+            )
+        wheel_path, wheel_version = candidates[0]
+        if wheel_version != expected_version:
+            raise TensileLiteRunnerError(
+                f"{project_name} wheel version {wheel_version} does not match "
+                f"TensileLite client version {expected_version}: {wheel_path}"
+            )
+        selected[project_name] = wheel_path
+
+    return ReleaseWheels(
+        canonical=selected[CANONICAL_PROJECT],
+        compatibility=selected[COMPATIBILITY_PROJECT],
     )
 
-# TensileLite Python unit tests (includes GPU subtile tests).
-# TODO(TheRock#3288): gfx950-dcgpu is excluded from PR CI (ci.yml) due to runner
-# capacity — GPU subtile tests only exercise on nightly/scheduled builds.
-skip_unit = UNIT_TEST_SKIP_FAMILIES & set(amdgpu_family.split(","))
-if not skip_unit:
-    logging.info("=== Running TensileLite unit tests ===")
-    # Snapshot characterization tests own their .ambr baselines under tox, which
-    # selects a superset of cases. Running just Tensile/Tests/unit via pytest can
-    # leave some snapshots orphaned (unused); syrupy fails the session on those by
-    # default, so warn instead of failing on snapshots we don't exercise here.
-    subprocess.check_call(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-v",
-            "--snapshot-warn-unused",
-            str(tensilelite_root / "Tensile" / "Tests" / "unit"),
-        ],
-        cwd=str(THEROCK_DIR),
-        env=env,
-    )
-else:
-    logging.info("=== Skipping unit tests (emulation mode) ===")
 
-# TensileLite common (GEMM) tests — gfx1250 only, requires GPU or emulator.
-# Scope to Tensile/Tests/common (not Tensile/Tests) to avoid rocisa singleton
-# poisoning: unit test modules call validateToolchain()/makeIsaInfoMap() at
-# import time, caching all-false ISA caps that break subsequent common tests.
-client_path = rocm_path / "libexec" / "hipblaslt" / "tensilelite" / "tensilelite-client"
-
-if run_common_tests:
-    test_profile = os.getenv("TEST_PROFILE", "default")
-    logging.info(
-        f"=== Running TensileLite common gfx1250 tests (TEST_PROFILE={test_profile}) ==="
-    )
-    cxx = rocm_path / "bin" / "amdclang++"
-    junit_xml_dir = os.getenv("JUNIT_XML_DIR", "")
-    common_cmd = [
+def install_wheel(wheel_path: Path, env: dict[str, str]) -> int:
+    """Force-install one exact artifact wheel with the active interpreter."""
+    command = [
         sys.executable,
         "-m",
-        "pytest",
-        "-v",
-        "--durations=0",
-        f"--timeout={FFM_PER_TEST_TIMEOUT}",
-        "-n",
-        NUM_PYTEST_WORKERS,
-        str(common_tests),
-        "-m",
-        "gfx1250",
+        "pip",
+        "install",
+        "--force-reinstall",
+        "--no-deps",
+        str(wheel_path),
     ]
-    if junit_xml_dir:
-        common_cmd.append(f"--junit-xml={junit_xml_dir}/tensilelite.xml")
-    if client_path.is_file():
-        common_cmd += [f"--prebuilt-client={client_path}"]
-        common_cmd += ["--global-parameters=LibraryFormat='msgpack'"]
-    if cxx.is_file():
-        common_cmd += [f"--tensile-options=--cxx-compiler,{cxx},--gpu-targets,gfx1250"]
-    # HSA_MODEL_NUM_THREADS: number of threads inside the FFM emulator per process.
-    env["HSA_MODEL_NUM_THREADS"] = os.getenv("HSA_MODEL_NUM_THREADS", "8")
-    common_result = subprocess.run(common_cmd, cwd=str(THEROCK_DIR), env=env)
-    # Exit with common test result — this is the primary outcome.
-    # rocisa failure is logged above but does not override the common test exit code.
-    sys.exit(common_result.returncode)
+    logging.info("Installing artifact wheel: %s", wheel_path)
+    try:
+        return subprocess.run(command, check=False, env=env).returncode
+    except OSError as exc:
+        raise TensileLiteRunnerError(
+            f"Failed to launch pip for artifact wheel {wheel_path}: {exc}"
+        ) from exc
+
+
+def run_test_phases(
+    rocm_path: Path,
+    test_type: str,
+    amdgpu_families: str | None,
+    env: dict[str, str],
+) -> int:
+    """Install canonical then compatibility wheels and run their test phases."""
+    component_root = pytest_runner.resolve_component_path("tensilelite", rocm_path)
+    client_name = (
+        "tensilelite-client.exe" if os.name == "nt" else "tensilelite-client"
+    )
+    client_path = rocm_path / "libexec" / "hipblaslt" / "tensilelite" / client_name
+
+    client_version = query_client_version(client_path, env)
+    wheels = discover_release_wheels(component_root / "wheels", client_version)
+
+    canonical_install_status = install_wheel(wheels.canonical, env)
+    if canonical_install_status != 0:
+        return canonical_install_status
+    canonical_status = pytest_runner.run_phase(
+        "tensilelite",
+        test_type,
+        amdgpu_families,
+        rocm_path,
+        env,
+    )
+    if canonical_status != 0:
+        return canonical_status
+
+    compatibility_install_status = install_wheel(wheels.compatibility, env)
+    if compatibility_install_status != 0:
+        return compatibility_install_status
+    return pytest_runner.run_phase(
+        "tensilelite",
+        None,
+        amdgpu_families,
+        rocm_path,
+        env,
+        test_paths_override=["compat/tests"],
+        marker_expression_override="",
+        pytest_args_override=["--run-compat"],
+    )
+
+
+def main() -> int:
+    if os.getenv("TEST_COMPONENT") != "tensilelite":
+        logging.error("TEST_COMPONENT must be set to 'tensilelite'")
+        return 1
+    therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+    if not therock_bin_dir:
+        logging.error("THEROCK_BIN_DIR environment variable is required but not set.")
+        return 1
+
+    rocm_path = Path(therock_bin_dir).resolve().parent
+    env = pytest_runner.build_environment(rocm_path, "tensilelite")
+    try:
+        return run_test_phases(
+            rocm_path=rocm_path,
+            test_type=os.getenv("TEST_TYPE", "quick"),
+            amdgpu_families=os.getenv("AMDGPU_FAMILIES"),
+            env=env,
+        )
+    except TensileLiteRunnerError as exc:
+        logging.error("TensileLite artifact test setup failed: %s", exc)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
