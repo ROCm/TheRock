@@ -710,6 +710,11 @@
       "therock-amd-mesa"
     ]
   },
+  "therock-libiberty": {
+    "consumers": [
+      "rocprofiler-systems"
+    ]
+  },
   "therock-liblzma": {
     "consumers": [
       "rocgdb",
