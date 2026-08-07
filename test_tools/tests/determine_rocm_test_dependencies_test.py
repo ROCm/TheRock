@@ -45,22 +45,19 @@ from determine_rocm_test_dependencies import (  # noqa: E402
 )
 
 # ---------------------------------------------------------------------------
-# Fixture graph (reverse / consumer edges only, all lowercase).
+# Fixture graph (reverse / consumer edges only, all lowercase). The
+# rocroller -> hipblaslt -> miopen chain exercises direct (level 4) vs transitive
+# (level 3) walks; amdsmi -> rdc is a direct edge; rocm-core reaches a broad
+# closure.
 #
-# The shape mirrors what a change to `amdsmi` looks like in the real graph: a
-# direct edge amdsmi -> rdc that WOULD have been dropped by the superseded
-# same-stage cut (amdsmi and rdc live in different build stages), plus a chain
-# rocroller -> hipblaslt -> miopen that exercises direct (level 4) vs transitive
-# (level 3) walks. `rocm-core` is a foundational dep reaching a broad closure.
-#
-#   amdsmi     -> [rdc, hipblaslt]     (rdc = the cross-stage direct consumer)
+#   amdsmi     -> [rdc, hipblaslt]
 #   rocroller  -> [hipblaslt]
-#   hipblaslt  -> [miopen, rocblas]    (miopen is INDIRECT from rocroller)
+#   hipblaslt  -> [miopen, rocblas]    (miopen is indirect from rocroller)
 #   miopen     -> []
 #   rocblas    -> []
-#   rdc        -> []                   (leaf; nothing consumes it)
-#   rocm-core  -> [amdsmi, rocroller]  (foundational; walks transitively)
-#   rocgdb     -> []                   (leaf; policy adds test-only includes)
+#   rdc        -> []
+#   rocm-core  -> [amdsmi, rocroller]
+#   rocgdb     -> []
 #   amd-dbgapi -> [rocgdb]
 # ---------------------------------------------------------------------------
 _GRAPH = {
@@ -161,8 +158,8 @@ class TestHopDistanceSelection(_FixtureTestCase):
         self.assertEqual(default, explicit)
 
     def test_levels_1_and_2_walk_transitively_like_level_3(self) -> None:
-        # Levels 1 and 2 are stricter DEFCON tiers with no separate test-tier
-        # output yet, so they walk transitively (same depth as level 3). This
+        # Levels 1 and 2 are stricter tiers with no separate test-tier output
+        # yet, so they walk transitively (same depth as level 3). This
         # keeps the accepted range [1, 5] and the engine in agreement — a level
         # the validator blesses is never silently coerced to the default.
         transitive = get_subprojects_to_test(["rocroller"], self.root, level=3)
@@ -175,25 +172,19 @@ class TestHopDistanceSelection(_FixtureTestCase):
 
 
 # ---------------------------------------------------------------------------
-# amdsmi -> rdc cross-stage regression (the reviewer's motivating false-green).
+# A direct consumer is selected regardless of build stage (amdsmi -> rdc).
 # ---------------------------------------------------------------------------
 class TestAmdsmiRdcRegression(_FixtureTestCase):
     def test_amdsmi_selects_rdc_at_level_4(self) -> None:
-        # A change to amdsmi selects rdc even though (in the real tree) they are
-        # in different build stages. The superseded same-stage cut dropped rdc;
-        # hop-distance selection keeps it. This is the exact false-green class.
         result = get_subprojects_to_test(["amdsmi"], self.root, level=4)
         self.assertIn("rdc", result)
 
     def test_amdsmi_selects_rdc_at_default_level(self) -> None:
-        # And at the default level too (defends the default path, not just an
-        # explicit --level 4).
-        result = get_subprojects_to_test(["amdsmi"], self.root, level=4)
+        result = get_subprojects_to_test(["amdsmi"], self.root)
         self.assertIn("rdc", result)
 
     def test_rdc_is_a_direct_consumer_not_transitive(self) -> None:
-        # rdc is reached at ONE hop, proving it is a direct edge the same-stage
-        # cut would have dropped, not an artifact of a transitive walk.
+        # rdc is reached at one hop, not via a transitive walk.
         one_hop = get_subprojects_to_test(["amdsmi"], self.root, level=4)
         self.assertIn("rdc", one_hop)
 
@@ -505,6 +496,74 @@ class TestValidatePolicies(_FixtureTestCase):
 
 
 # ---------------------------------------------------------------------------
+# The real committed test_policies.toml validates against the real committed
+# graph, so a stale policy key is caught.
+# ---------------------------------------------------------------------------
+class TestRealCommittedPolicies(unittest.TestCase):
+    def test_committed_policies_validate_against_committed_graph(self) -> None:
+        ok, messages = validate_policies(THEROCK_DIR)
+        self.assertTrue(ok, "\n".join(messages))
+
+
+# ---------------------------------------------------------------------------
+# Identifier-space contract: inputs must be consumer-graph keys. The function only
+# lowercases; the CLI also strips a leading `projects/`. Subtree paths and
+# hyphenated matrix keys are NOT graph keys and must be mapped by the caller.
+# ---------------------------------------------------------------------------
+class TestIdentifierSpaceContract(_FixtureTestCase):
+    def test_graph_key_input_resolves(self) -> None:
+        selected = get_subprojects_to_test(["amdsmi"], self.root, level=4)
+        self.assertIn("amdsmi", selected)
+        self.assertIn("rdc", selected)
+
+    def test_subtree_path_is_not_a_graph_key(self) -> None:
+        # The CLI strips `projects/` -> `clr`, still not the graph key `hip-clr`,
+        # so it selects only itself with a warning.
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--therock-dir",
+                str(self.root),
+                "--changed-projects",
+                "projects/clr",
+                "--level",
+                "4",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        selected = set(json.loads(proc.stdout.strip()))
+        self.assertEqual(selected, {"clr"})
+        self.assertIn("unrecognized", proc.stderr.lower())
+
+    def test_shared_prefix_not_stripped(self) -> None:
+        # Only `projects/` is stripped, not `shared/`. `shared/rocroller` is not a
+        # graph key, so it does not resolve to `rocroller`.
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            selected = get_subprojects_to_test(["shared/rocroller"], self.root, level=4)
+        self.assertNotIn("hipblaslt", selected)  # rocroller's real consumer
+        self.assertIn("unrecognized", buf.getvalue().lower())
+
+    def test_graph_keys_use_underscores_not_matrix_hyphens(self) -> None:
+        # Selection returns graph keys (underscore-form), not the hyphenated CI
+        # matrix keys — asserting the skew a future mapping step must bridge.
+        graph = {
+            "miopen": {"consumers": ["hipdnn_integration_tests"]},
+            "hipdnn_integration_tests": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="[component.miopen]\n")
+        try:
+            selected = get_subprojects_to_test(["miopen"], root, level=4)
+            self.assertIn("hipdnn_integration_tests", selected)
+            self.assertNotIn("hipdnn-integration-tests", selected)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
 # --explain: names level, walk set, includes (test-only marked), excludes, final
 # set — and the final set matches the actual selection (explain can't drift).
 # ---------------------------------------------------------------------------
@@ -544,7 +603,7 @@ class TestExplain(_FixtureTestCase):
 
     def test_explain_reports_level_3_walk_depth(self) -> None:
         text = explain_component("rocm-core", self.root)
-        self.assertIn("level:        3", text)
+        self.assertIn("level:\t3", text)
         self.assertIn("unbounded", text)
 
 

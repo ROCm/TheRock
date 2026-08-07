@@ -3,36 +3,18 @@
 
 # therock_emit_consumer_graph(output_file)
 #
-# Serializes the THEROCK_ALL_SUBPROJECTS / THEROCK_CONSUMERS_OF_* global
-# property registry (populated by therock_cmake_subproject_declare) to a
-# JSON file at <output_file>.
+# Serializes the consumer graph (from the THEROCK_ALL_SUBPROJECTS /
+# THEROCK_DIRECT_CONSUMERS_OF_* global properties) to JSON at <output_file>. Call
+# at the end of the top-level CMakeLists.txt, after all subprojects are declared.
 #
-# Must be called AFTER all therock_cmake_subproject_declare() calls have run
-# (i.e. at the end of the top-level CMakeLists.txt).  The output is a
-# configure-time side-effect (not a build target), analogous to
-# compile_commands.json.
+# Schema (reverse-dependency edges only):
+#   { "<subproject>": { "consumers": ["<consumer>", ...] }, ... }
 #
-# JSON schema:
-#   {
-#     "<subproject-lowercase>": {
-#       "consumers": ["<consumer-lowercase>", ...]
-#     },
-#     ...
-#   }
-#
-# The graph carries only consumer (reverse-dependency) edges.  No build-stage,
-# artifact, or other facts are duplicated here — each keeps its own single source
-# of truth.  Test selection walks these consumer edges by hop distance
-# (see test_tools/determine_rocm_test_dependencies.py).
-#
-# Lifecycle: this configure-time emit writes build/therock_consumer_graph.json,
-# but that copy is a GENERATED artifact used to refresh the COMMITTED graph at
-# test_tools/therock_consumer_graph.json.  The committed copy is what the per-PR
-# change-detection job reads directly — no fetch, no configure on the hot path.
-# A low-frequency drift-check job (.github/workflows/consumer_graph_drift.yml)
-# regenerates the graph from a configure, normalizes it, and fails if it differs
-# from the committed copy, prompting the contributor to regenerate and re-commit.
-# The committed graph is generated-only and must NEVER be hand-edited.
+# The emit writes build/therock_consumer_graph.json, which refreshes the committed
+# copy at test_tools/therock_consumer_graph.json. The committed copy is read
+# directly by CI (no configure on the hot path) and kept honest by the drift check
+# in .github/workflows/test_consumer_graph_drift.yml. It is generated-only; never
+# hand-edit it.
 function(therock_emit_consumer_graph output_file)
   get_property(_all GLOBAL PROPERTY THEROCK_ALL_SUBPROJECTS)
 
@@ -40,7 +22,7 @@ function(therock_emit_consumer_graph output_file)
   set(_first_proj TRUE)
 
   foreach(_proj IN LISTS _all)
-    get_property(_consumers GLOBAL PROPERTY "THEROCK_CONSUMERS_OF_${_proj}")
+    get_property(_consumers GLOBAL PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_proj}")
     if(_consumers)
       list(REMOVE_DUPLICATES _consumers)
     endif()

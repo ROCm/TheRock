@@ -99,31 +99,21 @@ hand-maintained list is required.
 
 ## Proposal
 
-### Two files with opposite lifecycles
+### Two files
 
-Test selection is split across two files, deliberately kept separate:
+Test selection is split across two files:
 
-1. **`therock_consumer_graph.json` — generated, CI-owned.** The full reverse
-   dependency graph, emitted from the build system. Never hand-edited; a CI drift
-   check regenerates it and fails on any difference (see CI integration).
-1. **`test_policies.toml` — hand-maintained, human-reviewed.** The small set of
-   escape hatches the graph cannot derive: each component's gating level (how far
-   to walk the graph) and any `test_include` / `test_exclude`.
+1. **`therock_consumer_graph.json` — generated.** The full reverse-dependency
+   graph, emitted from the build system. Never hand-edited; a CI drift check
+   regenerates it and fails on any difference (see CI integration).
+1. **`test_policies.toml` — hand-maintained.** What the graph cannot derive: each
+   component's gating level (how far to walk the graph) and any
+   `test_include` / `test_exclude`.
 
-They are separate files because they have **opposite lifecycles**. The graph is
-machine-generated and must never be hand-edited — edits would be clobbered on
-regeneration, and the whole point is that it cannot silently drift from the build
-definitions. The policy file is human intent that CI cannot derive. Combining them
-would create a file that is half-generated and half-authored, which the drift check
-cannot cleanly "regenerate and diff": it would have to diff *around* the
-hand-authored regions. Keeping them apart lets the graph be fully CI-owned
-(regenerate-and-fail-on-diff) and the policy be fully human-owned (reviewed like
-code). This mirrors ScottTodd's "generated from build-system knowledge, with a few
-escape hatches" framing: the graph is the generated knowledge, the policy file is
-the escape hatches.
-
-The tradeoff is two places to look and cross-file referential integrity to
-maintain; both are addressed in CI integration and Testing below.
+They are kept separate so the graph can be regenerated and diffed by CI without
+touching hand-authored content, and the policy can be reviewed like code. The
+tradeoff — two places to look, and keeping policy references in sync with the
+graph — is handled by the drift check and validation below.
 
 ### Overview
 
@@ -162,14 +152,21 @@ CMake populates it during declaration:
 
 ```cmake
 set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
-foreach(_dep IN LISTS ARG_BUILD_DEPS ARG_RUNTIME_DEPS)
-  set_property(GLOBAL APPEND PROPERTY "THEROCK_CONSUMERS_OF_${_dep}" "${target_name}")
+# BUILD_DEPS / RUNTIME_DEPS plus the compiler consumed via COMPILER_TOOLCHAIN
+# (amd-hip -> hip-clr, amd-llvm -> amd-llvm) are all recorded as direct edges.
+foreach(_dep IN LISTS _consumer_deps)
+  set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
 endforeach()
 ```
 
-The graph carries only the reverse edges. Nothing else about a subproject
-(build stage, artifact) is duplicated into it, so the graph stays minimal and each
-other fact keeps its existing single source of truth.
+Edges are recorded as **direct** consumers (`THEROCK_DIRECT_CONSUMERS_OF_*`); the
+full consumer set is obtained by walking the emitted graph. The compiler is
+consumed via `COMPILER_TOOLCHAIN` rather than `BUILD_DEPS` / `RUNTIME_DEPS`, so it
+is mapped to its backing subproject and recorded too — otherwise a compiler change
+would register only its short direct-dep list instead of the whole tree it
+compiles. Nothing else about a subproject (build stage, artifact) is duplicated
+into the graph, so it stays minimal and each other fact keeps its single source of
+truth.
 
 ### Selection: walk the graph by hop-distance
 
@@ -186,23 +183,15 @@ consumer edges. The number of hops is set by the component's gating level:
   or `ROCR-Runtime` this is most of the tree — which is the point of level 3, and
   why it is opt-in per component rather than the default.
 
-A declared `BUILD_DEPS` / `RUNTIME_DEPS` edge is deliberate, so a consumer that
-depends on the changed project — directly or transitively — genuinely *can* be
-broken by it. The graph is therefore the source of truth for "what could this
-change affect"; the gating level chooses **how far along those edges to walk**,
-trading cost against blast-radius coverage. The default stops at one hop to keep
-per-PR test cost proportional to the change; widening a component to level 3 is an
-explicit, reviewable change to its level, not a property of the graph's shape.
-
-> **Why not a build-stage boundary?** An earlier draft cut selection at the
-> `BUILD_TOPOLOGY` build-stage boundary (select only same-stage consumers). That
-> was wrong: cross-stage dependencies are commonplace and intentional (nearly
-> everything depends on the compiler `amd-hip`, the runtime `hip-clr`, and the
-> profiler `rocprofiler-sdk`), so a stage cut discards real edges. Concretely, it
-> would *miss* the amdsmi → rdc breakage class (they are in different stages,
-> `compiler-runtime` vs `dctools-core`, so the cut drops `rdc` despite the direct
-> edge), and it selects *nothing* for stage-less foundational deps like `hip-clr`.
-> Direct-vs-indirect hop distance is the correct boundary; build stage is not.
+A declared dependency edge — `BUILD_DEPS` / `RUNTIME_DEPS`, or the compiler via
+`COMPILER_TOOLCHAIN` — is deliberate, so a consumer that depends on the changed
+project, directly or transitively, genuinely can be broken by it. (This is why a
+compiler change at level 3 reaches most of the tree: its `COMPILER_TOOLCHAIN`
+edges are recorded like any other.) The gating level chooses how far along those
+edges to walk. The default stops at one hop to keep per-PR test cost proportional
+to the change; widening a component to level 3 is an explicit change to its level.
+Selection never consults the build stage — cross-stage dependencies are
+commonplace, so a stage boundary would drop real edges (see Alternative C).
 
 ### Overrides
 
@@ -217,18 +206,11 @@ couplings the reverse edges cannot express:
   Applied **last** so it can drop a specific consumer of an otherwise-selected
   set.
 
-Note that `test_fanout_all` from the earlier draft is **removed**: it existed only
-to escape the same-stage cut for foundational deps, and "select all consumers" is
-now simply level 3 (transitive walk). A foundational dep that genuinely needs
-broad testing is set to level 3 rather than carrying a bespoke fanout flag.
-
-These declarations, together with each component's gating level, live in a
-**dedicated test-policy file** rather than in `BUILD_TOPOLOGY.toml`. Test policy
-(what to test, how far to walk) is a different concern from build topology (how
-artifacts are grouped and staged); keeping it separate avoids overloading the
-topology tables and gives one clear place to answer "what testing does a change to
-this component trigger?". A sketch (exact schema is an [open
-question](#open-questions)):
+These declarations and each component's gating level live in a dedicated
+test-policy file rather than in `BUILD_TOPOLOGY.toml`: what to test is a different
+concern from how artifacts are grouped and staged, and keying by component name
+gives one clear place to answer "what does a change to this component test?". A
+sketch (exact schema is an [open question](#open-questions)):
 
 ```toml
 # test_policies.toml
@@ -240,16 +222,14 @@ test_include = ["hipsparselt"]
 level = 3                      # foundational dep: walk transitive consumers
 ```
 
-Keying by component (subproject) name sidesteps the multi-subproject-artifact
-problem the earlier `BUILD_TOPOLOGY.toml` draft had, where one artifact packaging
-several subprojects needed per-subproject sub-tables to avoid over-applying an
-override to siblings.
-
-Because the policy file references components by name, its keys and
-`test_include` / `test_exclude` values must stay in sync with the graph: an entry
-naming a renamed or removed component would otherwise sit stale and unnoticed. A
-validation step checks every policy key/value against the current graph and fails
-if any names an unknown component (see CI integration).
+Because the policy file references components by name, each `[component.<name>]`
+key must stay in sync with the graph: a key naming a renamed or removed component
+would otherwise sit stale and never fire. A validation step checks every component
+key against the current graph and fails on any unknown key (see CI integration).
+The `test_include` / `test_exclude` *values* are intentionally not required to be
+graph keys — their purpose is to name test-only targets the graph cannot express
+(ctest suites like `rocgdb-cpu`, or tool targets like `hipinfo`), so they pass
+through to selection as-is.
 
 **Resolution order.** With a per-component level *and* include/exclude layered on
 the generated graph, results must be deterministic: walk the graph to the
@@ -325,9 +305,8 @@ a workflow dispatch.
 1. **A per-component level** (default 4 when unset — "Phase 1 starts every
    component at level 4"). Its home is an [open question](#open-questions); the
    value is a single scalar per component either way.
-1. **A depth-parameterized walk** in `get_subprojects_to_test()`: the selection
-   becomes a BFS over `consumers` whose max depth is the level (4 → depth 1,
-   3 → unbounded), replacing the special-cased branches of the earlier draft.
+1. **A depth-parameterized walk** in `get_subprojects_to_test()`: a BFS over
+   `consumers` whose max depth is the level (4 → depth 1, 3 → unbounded).
 1. **A `frameworks` group** for level 2 (the PyTorch / JAX / hipDNN-facing
    consumers).
 
@@ -432,8 +411,8 @@ unknown component fails) and the `--explain` output.
   hand-maintained file separate from the generated graph (settling the "topology is
   the wrong home" concern and the generated-vs-authored split). Still open: keyed
   strictly by subproject name, or by path glob so a directory of code can map to a
-  level? And where the file lives — repo root vs. `test_tools/` (ScottTodd leaned
-  toward more of this logic living in `test_tools/`).
+  level? The file currently lives in `test_tools/`, co-located with the graph and
+  the selection tooling that reads it.
 - **Per-PR test-time targets.** Each level should be sized against the CI/gating
   program's per-PR test-time targets. Those targets exist but are maintained
   outside this repo; this RFC should cite them once they can be linked, and the
@@ -449,10 +428,21 @@ unknown component fails) and the `--explain` output.
 - **Cross-repo selection.** How should the graph interact with external-repo CI
   (rocm-systems / rocm-libraries) where only a subset of source is present at
   configure time?
+- **Identifier-space mapping.** Selection uses three identifier spaces that do
+  not currently share an authoritative mapping: external-repo *subtree paths*
+  (`projects/clr`, `shared/rocroller`), the *consumer-graph keys* the selector
+  walks (`hip-clr`, `rocroller`, and underscore-form test targets like
+  `hipdnn_integration_tests`), and the *test-matrix keys* the runner schedules on
+  (hyphenated, e.g. `hipdnn-integration-tests`). `get_subprojects_to_test` today
+  expects graph keys and only strips a leading `projects/`, so unmapped inputs
+  select nothing beyond themselves and underscore/hyphen skew drops matrix jobs.
+  A normalization layer (subtree path -> graph key -> matrix key) is needed; it is
+  sequenced with the external-repo CI work rather than this change.
 - **Test tiers for levels 1/2/5.** The depth ladder covers levels 3-5 by
   selection radius, but true level 5 (unit-only) and level 1 (full QA / nightly)
   need a per-project `test_tier` output the test-runner job honors. Should that
   tier plumbing be part of this feature or a dedicated follow-up RFC?
-- **Level naming in open source.** The "DEFCON" label is internal. Should the
-  public RFC and code use a different name for the gating levels? (Pending input
-  from @ScottTodd / @astyrrian1.)
+- **Level naming in open source.** The "DEFCON" label originated as an internal
+  name. Should the public RFC and code adopt a different name for the gating
+  levels? The mechanism does not depend on the label, so renaming is a mechanical
+  substitution once a name is chosen.

@@ -1,83 +1,38 @@
-# Hand-maintained test-selection policy.
+# Hand-maintained test-selection policy, read by
+# test_tools/determine_rocm_test_dependencies.py. It overrides the generated
+# consumer graph (test_tools/therock_consumer_graph.json) where the graph alone is
+# not enough. Schema and resolution order are documented in
+# docs/rfcs/RFC0013-Consumer-Based-Test-Selection.md.
 #
-# This is the small, human-reviewed escape-hatch file that layers explicit test
-# intent on top of the generated consumer graph
-# (test_tools/therock_consumer_graph.json). It is consumed by
-# test_tools/determine_rocm_test_dependencies.py. Unlike the graph, this file is
-# authored by hand and reviewed like code.
-#
-# Schema (see docs/development/test_selection_schemas.md for the full contract):
-#
-#   [component.<lowercased-name>]     # <name> MUST be a key in the consumer graph
-#   level = <int 1-5>                 # Optional. Walk depth over consumer edges.
-#                                     #   Default 4 (omit when 4). 5 = self only,
-#                                     #   4 = self + direct consumers (one hop),
-#                                     #   3 = self + transitive consumers (closure).
-#                                     #   2 and 1 are accepted and currently alias
-#                                     #   3 (transitive) until the test-tier output
-#                                     #   lands; see docs/development/
-#                                     #   test_selection_schemas.md.
-#   test_include = ["name", ...]      # Optional. Extra subprojects to test on a
-#                                     #   change, ADDITIVE (unioned onto the walk).
-#   test_exclude = ["name", ...]      # Optional. Consumers to prune. SUBTRACTIVE,
-#                                     #   applied LAST (after walk + include).
-#
-# Resolution order: walk to the component's level -> union test_include ->
-# subtract test_exclude (last). Every component KEY must name a real
-# consumer-graph key (it is the change trigger; a cross-file validation, task #5,
-# fails the build otherwise). test_include / test_exclude VALUES need NOT be graph
-# keys: their whole purpose is to name test-only targets the graph cannot express
-# (e.g. ctest suites like rocgdb-cpu). There is no `test_fanout_all`: "test all
-# downstream consumers" is expressed as `level = 3`.
-#
-# Components are DEFCON 4 by default (level 4 = self + direct consumers, so the
-# level key is omitted). A few broad-blast-radius runtimes set level = 3 (full
-# transitive consumer closure) to auto-derive their large downstream set instead
-# of listing it by hand. The test_include lists carry the downstream "Dependents"
-# that the reverse-dependency graph cannot derive on its own, so that (graph walk)
-# UNION (test_include) covers the dependent set from the "DEFCON Enablement:
-# Gating Levels" tracking page.
+# Each table:
+#   [component.<name>]  <name> must be a graph key (validated).
+#   level = <1-5>       Walk depth. Default 4 (self + direct consumers). 5 = self
+#                       only; 3 = self + all transitive consumers.
+#   test_include        Extra targets to test; values need not be graph keys.
+#   test_exclude        Targets to drop after the walk and includes.
 
-# --- Foundational runtimes: broad downstream dependent sets --------------------
-# rocr-runtime / hip-clr / amd-llvm sit under most of the tree. Their direct
-# graph consumers miss many real downstream projects (framework-facing libs, test
-# harnesses), so the DEFCON 4 dependent list is carried explicitly here.
+# --- Foundational runtimes ----------------------------------------------------
+# Used by most of the tree, so they test their full transitive downstream.
 
 [component.rocr-runtime]
-# Broad blast radius: level 3 walks the full transitive consumer closure, which
-# auto-derives the bulk of the DEFCON 4 dependent set. Only the couplings the
-# graph has no path for are pinned below (amd-dbgapi, ocl-icd, rocgdb).
 level = 3
 test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
 
 [component.hip-clr]
-# hipinfo is a hip-clr tool/test target, not a declared subproject, so it is not a
-# graph key -- but include VALUES may name test-only targets, so it is kept.
-test_include = [
-    "hipblasltprovider",
-    "hipdnn_samples",
-    "hipinfo",
-    "miopenprovider",
-    "rdc",
-    "rocrtst",
-]
+# Backs the "amd-hip" toolchain most of the tree builds with.
+level = 3
+# Only the couplings the walk does not already reach: hipinfo is a hip-clr tool
+# target (not a graph key); rocrtst has no graph path from hip-clr.
+test_include = ["hipinfo", "rocrtst"]
 
 [component.amd-llvm]
-test_include = [
-    "hip-tests",
-    "rccl",
-    "rocgdb",
-    "rocprofiler-compute",
-    "rocprofiler-sdk",
-    "rocprofiler-systems",
-]
+# The compiler builds ~everything; its consumers come from the graph via
+# COMPILER_TOOLCHAIN edges, so no hand-list is needed.
+level = 3
 
 # --- Test-only / non-derivable inclusions -------------------------------------
-# Couplings the reverse-dependency graph cannot express (test-only projects with
-# no link-time edge, or real reverse edges absent from the forward deps).
-
-[component.rocm-core]
-test_include = ["rdc", "rocm_smi_lib", "roctracer"]
+# Couplings the graph cannot express (test-only targets, or edges not declared as
+# build/runtime deps).
 
 [component.amdsmi]
 test_include = ["hip-tests"]
@@ -94,9 +49,8 @@ test_include = ["rocprofiler-systems-examples"]
 [component.roctracer]
 test_include = ["hip-clr", "rocprofiler-sdk"]
 
-# rocgdb-cpu / rocgdb-gpu are ctest test-tier targets of rocgdb, not declared
-# subprojects, so they are not graph keys -- but that is exactly what test_include
-# is for (test-only targets the graph cannot express). Kept as include values.
+# rocgdb-cpu / rocgdb-gpu are ctest targets of rocgdb, not subprojects, so they
+# are named here rather than derived from the graph.
 
 [component.amd-dbgapi]
 test_include = ["rocgdb-cpu", "rocgdb-gpu"]

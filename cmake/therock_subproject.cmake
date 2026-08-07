@@ -198,6 +198,19 @@ function(therock_subproject_fetch target_name)
   file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
+# Maps a COMPILER_TOOLCHAIN name to the subproject that backs it: "amd-hip" ->
+# hip-clr, "amd-llvm" -> amd-llvm, anything else (or none) -> empty. Used by both
+# the consumer-graph registration and the toolchain configuration.
+function(therock_compiler_toolchain_subproject out_var compiler_toolchain)
+  if(compiler_toolchain STREQUAL "amd-hip")
+    set("${out_var}" "hip-clr" PARENT_SCOPE)
+  elseif(compiler_toolchain STREQUAL "amd-llvm")
+    set("${out_var}" "amd-llvm" PARENT_SCOPE)
+  else()
+    set("${out_var}" "" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # therock_cmake_subproject_declare
 # This declares a cmake based subproject by setting a number of key properties
 # and setting up boiler-plate targets.
@@ -550,12 +563,19 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
 
-  # Register this subproject in the global consumer registry so that
-  # therock_emit_consumer_graph() can later derive "who to test when X changes"
-  # without requiring a hand-maintained TEST_SUBPROJECTS list.
+  # Record direct-consumer edges for the consumer graph emitted by
+  # therock_emit_consumer_graph(). The compiler is a dependency too, but is
+  # declared via COMPILER_TOOLCHAIN rather than BUILD_DEPS/RUNTIME_DEPS.
   set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
-  foreach(_dep IN LISTS ARG_BUILD_DEPS ARG_RUNTIME_DEPS)
-    set_property(GLOBAL APPEND PROPERTY "THEROCK_CONSUMERS_OF_${_dep}" "${target_name}")
+  set(_consumer_deps ${ARG_BUILD_DEPS} ${ARG_RUNTIME_DEPS})
+  therock_compiler_toolchain_subproject(_toolchain_dep "${ARG_COMPILER_TOOLCHAIN}")
+  if(_toolchain_dep)
+    list(APPEND _consumer_deps "${_toolchain_dep}")
+  endif()
+  foreach(_dep IN LISTS _consumer_deps)
+    if(NOT _dep STREQUAL target_name)  # a project is never its own consumer
+      set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
+    endif()
   endforeach()
 
   if(ARG_ACTIVATE)
@@ -1755,11 +1775,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    if(compiler_toolchain STREQUAL "amd-hip")
-      set(_toolchain_subproject "hip-clr")
-    else()
-      set(_toolchain_subproject "amd-llvm")
-    endif()
+    therock_compiler_toolchain_subproject(_toolchain_subproject "${compiler_toolchain}")
     _therock_assert_is_cmake_subproject("${_toolchain_subproject}")
     get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_amd_llvm_stamp_dir "${_toolchain_subproject}" THEROCK_STAMP_DIR)

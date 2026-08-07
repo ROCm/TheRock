@@ -3,41 +3,30 @@
 # SPDX-License-Identifier: MIT
 """Drift check for the committed consumer graph.
 
-The consumer graph is emitted at CMake configure time by
-therock_emit_consumer_graph() and committed to
-test_tools/therock_consumer_graph.json so the per-PR change-detection job can
-read it without a fetch or configure. This script keeps that committed copy
-honest: `--check` regenerates nothing itself but compares the freshly emitted
-graph (written to build/ by a configure) against the committed copy after
-normalizing BOTH the same way, and fails on any real edge change. `--write`
-copies the emitted graph over the committed copy in normalized form, so the
-fix for a drift failure is a single command rather than a re-implemented
-normalize one-liner.
-
-Normalization (sorted keys, sorted consumer lists, 2-space indent, trailing
-newline) makes the check insensitive to the emitter's registration-order output
-so it only fails on a genuine dependency-edge change.
+Keeps test_tools/therock_consumer_graph.json in sync with a freshly emitted graph
+(written to build/ by a configure). `--check` compares the two, failing on any
+edge change; `--write` overwrites the committed copy. Both normalize (sorted keys
+and consumer lists, 2-space indent, trailing newline) so only genuine
+dependency-edge changes register, not the emitter's registration order.
 """
 
 import argparse
 import difflib
 import json
+import os
 import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_COMMITTED_PATH = _REPO_ROOT / "test_tools" / "therock_consumer_graph.json"
-_EMITTED_PATH = _REPO_ROOT / "build" / "therock_consumer_graph.json"
+_GRAPH_FILENAME = "therock_consumer_graph.json"
+_COMMITTED_PATH = _REPO_ROOT / "test_tools" / _GRAPH_FILENAME
+# Which build tree holds the freshly emitted graph; overridable via --build-dir.
+_DEFAULT_BUILD_DIR = Path(os.environ.get("THEROCK_BUILD_DIR", _REPO_ROOT / "build"))
 
 
 def normalize(path: Path) -> str:
-    """Return the graph at `path` as canonical JSON text.
-
-    Sorted keys, sorted consumer lists, 2-space indent, trailing newline. This
-    is the single source of truth for the committed graph's on-disk form: both
-    the drift comparison and `--write` use it, so the committed copy and the
-    check can never disagree on formatting.
-    """
+    """Return the graph as canonical JSON: sorted keys and consumer lists,
+    2-space indent, trailing newline. Used by both --check and --write."""
     graph = json.loads(path.read_text())
     norm = {
         key: {"consumers": sorted(graph[key].get("consumers", []))}
@@ -64,7 +53,7 @@ def check(committed_path: Path, emitted_path: Path) -> int:
     print("    python3 ./build_tools/fetch_sources.py")
     print(
         "    cmake -B build -GNinja -DTHEROCK_ENABLE_ALL=ON "
-        "-DTHEROCK_AMDGPU_FAMILIES=gfx110X-all"
+        "-DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu"
     )
     print(
         "    python3 ./build_tools/github_actions/check_consumer_graph_drift.py --write"
@@ -108,16 +97,27 @@ def main(argv: list[str]) -> int:
         help="Path to the committed consumer graph (default: test_tools/).",
     )
     parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=_DEFAULT_BUILD_DIR,
+        help=(
+            "Build directory holding the freshly emitted graph "
+            "(default: $THEROCK_BUILD_DIR or build/). Ignored if --emitted is set."
+        ),
+    )
+    parser.add_argument(
         "--emitted",
         type=Path,
-        default=_EMITTED_PATH,
-        help="Path to the freshly emitted consumer graph (default: build/).",
+        default=None,
+        help="Explicit path to the emitted graph (overrides --build-dir).",
     )
     args = parser.parse_args(argv)
 
+    emitted = args.emitted or (args.build_dir / _GRAPH_FILENAME)
+
     if args.write:
-        return write(args.committed, args.emitted)
-    return check(args.committed, args.emitted)
+        return write(args.committed, emitted)
+    return check(args.committed, emitted)
 
 
 if __name__ == "__main__":

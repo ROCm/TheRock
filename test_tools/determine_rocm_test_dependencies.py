@@ -12,13 +12,11 @@ that directly depend on it.
 Algorithm
 ---------
 1. Load the consumer graph.
-2. For each changed subproject, walk its `consumers` edges by HOP DISTANCE to a
-   depth set by the component's policy level (see the level ladder below). Build
-   stage is NOT consulted anywhere in selection — a change to `amdsmi` selects
-   `rdc` (its direct consumer) regardless of which build stage each lives in.
+2. For each changed subproject, walk its `consumers` edges to a depth set by the
+   component's policy level (see the level ladder below).
 3. UNION the per-subproject walk results across all changed subprojects.
 4. Apply include/exclude policy: union in `test_include`, then subtract
-   `test_exclude` LAST so the result is order-independent.
+   `test_exclude` last so the result is order-independent.
 
 Level ladder (walk depth over consumer edges)
 ---------------------------------------------
@@ -29,7 +27,7 @@ Level ladder (walk depth over consumer edges)
 The per-component level, plus test_include/test_exclude, come from the
 hand-maintained `test_tools/test_policies.toml`. A component with no table there
 uses the default level 4 (depth 1) with no include/exclude. See the schema
-contract in docs/development/test_selection_schemas.md.
+reference in docs/rfcs/RFC0013-Consumer-Based-Test-Selection.md.
 
 Example
 -------
@@ -49,16 +47,16 @@ sys.path.insert(
 )
 from github_actions_api import gha_set_output
 
-# Level -> BFS walk depth over `consumers` edges. depth 0 = self only,
-# depth 1 = self + direct consumers, None = unbounded (transitive closure).
-# Levels 1 and 2 are the "stricter/broader" tiers on the DEFCON ladder; until a
-# separate test-tier output exists they walk transitively (same depth as 3), so
-# the accepted policy range [1, 5] and the engine never disagree.
+# Level -> BFS walk depth over `consumers` edges:
+#   depth 0    = self only
+#   depth 1    = self + direct consumers
+#   unbounded  = self + transitive consumers (full closure)
+# Levels 1 and 2 walk transitively (same as 3) until a separate test-tier output
+# distinguishes them.
 _DEFAULT_LEVEL = 4
 _LEVEL_TO_DEPTH: dict[int, int | None] = {5: 0, 4: 1, 3: None, 2: None, 1: None}
 
-# Walk depth -> (label, human description). Single source of truth for how a
-# depth is rendered in --explain, keyed on the values _LEVEL_TO_DEPTH produces.
+# Walk depth -> (label, human description), used to render --explain.
 _DEPTH_DESCRIPTION: dict[int | None, tuple[str, str]] = {
     0: ("0", "self only"),
     1: ("1", "self + direct consumers"),
@@ -68,11 +66,8 @@ _DEPTH_DESCRIPTION: dict[int | None, tuple[str, str]] = {
 _CONSUMER_GRAPH_NAME = "therock_consumer_graph.json"
 _TEST_POLICIES_NAME = "test_policies.toml"
 
-# The committed consumer graph lives next to this tool in test_tools/. It is a
-# generated-only artifact (emitted by therock_emit_consumer_graph()) that is
-# committed to the repo and kept honest by the consumer_graph_drift.yml CI job.
-# Reading it script-relative lets --list-subprojects and selection work from a
-# clean checkout with no build/ directory.
+# The committed graph and policy live next to this tool in test_tools/. Reading
+# them script-relative lets selection work from a clean checkout with no build/.
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
 
@@ -96,10 +91,8 @@ def _consumer_graph_path(therock_dir: Path | None) -> Path:
 def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
     """Load the committed consumer graph JSON.
 
-    The graph is committed at test_tools/therock_consumer_graph.json and read
-    directly — no cmake configure, no source fetch. Its freshness is guaranteed
-    by the consumer_graph_drift.yml CI job, which regenerates it and fails on any
-    difference.
+    Read directly from test_tools/ — no configure, no source fetch. Freshness is
+    enforced by the test_consumer_graph_drift.yml CI job.
     """
     graph_path = _consumer_graph_path(therock_dir)
     if not graph_path.exists():
@@ -121,21 +114,18 @@ def _test_policies_path(therock_dir: Path | None) -> Path:
 def _load_policies(therock_dir: Path | None = None) -> dict[str, dict]:
     """Return per-component policy overrides { subproject -> policy }.
 
-    Reads the hand-maintained `test_tools/test_policies.toml` — the small,
-    human-reviewed escape-hatch file that layers explicit test intent on top of
-    the generated consumer graph. Each `[component.<name>]` table becomes a
+    Reads test_tools/test_policies.toml. Each `[component.<name>]` table becomes a
     normalized, lowercased policy
-    { "level": int, "test_include": [...], "test_exclude": [...] } with sensible
-    defaults (missing level -> 4, missing lists -> []). See the schema contract
-    in docs/development/test_selection_schemas.md.
-
-    A missing file yields empty policies (so every component uses the default
-    level and no include/exclude) rather than crashing — useful for clean-checkout
-    introspection, though the file is committed and normally present.
+    { "level": int, "test_include": [...], "test_exclude": [...] } (missing level
+    -> 4, missing lists -> []). The file is committed and must be present; a
+    missing file is an error. Schema: RFC0013-Consumer-Based-Test-Selection.md.
     """
     policies_path = _test_policies_path(therock_dir)
     if not policies_path.exists():
-        return {}
+        raise FileNotFoundError(
+            f"Test policy file not found at {policies_path}.\n"
+            "It is a committed file expected to be present in every checkout."
+        )
 
     raw = tomllib.loads(policies_path.read_text())
     components = raw.get("component", {})
@@ -149,9 +139,7 @@ def _load_policies(therock_dir: Path | None = None) -> dict[str, dict]:
     policies: dict[str, dict] = {}
     for name, body in components.items():
         level = body.get("level", _DEFAULT_LEVEL)
-        # TOML gives an int for `level = 4`; anything else (float, string, bool)
-        # is a typo. Reject it here rather than truncating (4.9 -> 4) or raising a
-        # raw ValueError traceback from int(). `bool` is an int subclass, exclude it.
+        # Reject non-int levels (bool is an int subclass, so exclude it too).
         if not isinstance(level, int) or isinstance(level, bool):
             raise ValueError(
                 f"test_policies.toml: component '{name}' has non-integer level "
@@ -224,13 +212,21 @@ def get_subprojects_to_test(
 
     When `therock_dir` is None the committed graph next to this tool is used, so
     selection works from a clean checkout with no build/ directory.
+
+    Inputs and outputs are consumer-graph keys (the lowercased subproject names in
+    therock_consumer_graph.json). This function only lowercases; the CLI also
+    strips a leading `projects/`. Callers holding other identifiers must map them
+    to graph keys first — notably, subtree paths like `projects/clr` (-> `hip-clr`)
+    or `shared/rocroller`, and the hyphenated CI test-matrix keys
+    (`hipdnn-integration-tests` vs the graph's `hipdnn_integration_tests`). That
+    mapping is tracked separately.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
 
     changed_lower = [p.lower() for p in changed_subprojects]
 
-    # Warn on unrecognized projects (false-green typo guard).
+    # Warn on unrecognized projects (typo guard).
     known = set(graph.keys())
     unknown = [p for p in changed_lower if p not in known]
     if unknown:
@@ -284,20 +280,20 @@ def explain_component(component: str, therock_dir: Path | None = None) -> str:
     lines.append(f"Explain: {comp}")
     if comp not in known:
         lines.append(
-            f"  WARNING: '{comp}' is not a consumer-graph key; walk is self-only."
+            f"\tWARNING: '{comp}' is not a consumer-graph key; walk is self-only."
         )
-    lines.append(f"  level:        {level} (walk depth {depth_label}: {depth_desc})")
-    lines.append("  graph walk:   " + ", ".join(sorted(walk)))
+    lines.append(f"\tlevel:\t{level} (walk depth {depth_label}: {depth_desc})")
+    lines.append("\tgraph walk:\t" + ", ".join(sorted(walk)))
     if include:
         marked = [f"{v} (test-only)" if v not in known else v for v in sorted(include)]
-        lines.append("  test_include: " + ", ".join(marked))
+        lines.append("\ttest_include:\t" + ", ".join(marked))
     else:
-        lines.append("  test_include: (none)")
+        lines.append("\ttest_include:\t(none)")
     if exclude:
-        lines.append("  test_exclude: " + ", ".join(sorted(exclude)))
+        lines.append("\ttest_exclude:\t" + ", ".join(sorted(exclude)))
     else:
-        lines.append("  test_exclude: (none)")
-    lines.append("  final:        " + ", ".join(sorted(final)))
+        lines.append("\ttest_exclude:\t(none)")
+    lines.append("\tfinal:\t" + ", ".join(sorted(final)))
     return "\n".join(lines)
 
 
@@ -449,10 +445,11 @@ def main():
 
     if args.validate_policies:
         ok, messages = validate_policies(therock_dir)
-        stream = sys.stdout if ok else sys.stderr
+        if not ok:
+            raise SystemExit("\n".join(messages))
         for line in messages:
-            print(line, file=stream)
-        sys.exit(0 if ok else 1)
+            print(line)
+        return
 
     if args.explain:
         print(explain_component(args.explain, therock_dir))

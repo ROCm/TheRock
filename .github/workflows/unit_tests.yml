@@ -37,14 +37,6 @@ jobs:
     - name: Install python deps
       run: pip install -r requirements-test.txt
 
-    # Referential-integrity check for test_tools/test_policies.toml against the
-    # committed consumer graph. This runs on EVERY PR (unlike the path-gated
-    # consumer_graph_drift.yml) because a stale policy key silently disables test
-    # selection for that component. It needs only the two committed files — no
-    # source fetch, no cmake configure. See RFC0013 "CI integration".
-    - name: Validate test policies against consumer graph
-      run: python test_tools/determine_rocm_test_dependencies.py --validate-policies
-
     # Note: build_tools/github_actions/ contains complicated tests in some
     # subdirectories that do not support pytest:
     #   build_tools/github_actions/benchmarks/scripts/
@@ -58,6 +50,10 @@ jobs:
 
     - name: Test scan_tools
       working-directory: build_tools/scan_tools
+      run: python -m pytest -vv
+
+    - name: Test test_tools
+      working-directory: test_tools
       run: python -m pytest -vv
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require

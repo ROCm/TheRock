@@ -18,6 +18,8 @@
   "amd-llvm": {
     "consumers": [
       "amd-comgr",
+      "amd-dbgapi",
+      "amdsmi",
       "aqlprofile",
       "hip-clr",
       "hipcc",
@@ -25,8 +27,14 @@
       "hipthreads",
       "libhipcxx",
       "ocl-clr",
+      "rdc",
+      "rocgdb",
+      "rocminfo",
+      "rocr-debug-agent",
       "rocr-runtime",
-      "rocrtst"
+      "rocrtst",
+      "therock-elfio",
+      "therock-spdlog"
     ]
   },
   "amdsmi": {
@@ -66,9 +74,11 @@
       "hipblas",
       "hipblas-common",
       "hipblaslt",
+      "hipblasltprovider",
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
@@ -80,6 +90,8 @@
       "hipthreads",
       "libhipcxx",
       "miopen",
+      "miopenprovider",
+      "mxdatagenerator",
       "origami",
       "rccl",
       "rccl-tests",
@@ -93,6 +105,7 @@
       "rocprofiler-compute",
       "rocprofiler-sdk",
       "rocprofiler-systems",
+      "rocprofiler-systems-examples",
       "rocr-debug-agent-tests",
       "rocrand",
       "rocroller",
