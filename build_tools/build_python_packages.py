@@ -379,6 +379,8 @@ def _run_kpack_split(
             "prim",
             "rocwmma",
             "libhipcxx",
+            # Header-only ELF reader.
+            "elfio",
             # Third party dependencies needed by hipDNN consumers.
             "flatbuffers",
             "nlohmann-json",
