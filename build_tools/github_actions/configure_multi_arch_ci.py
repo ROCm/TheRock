@@ -576,23 +576,25 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
-    # This avoids running expensive ASAN builds on every PR while still
-    # catching ASAN issues when library code (submodules) changes.
-    # The ci:asan label allows manual triggering of ASAN CI on any PR.
+    # Skip ASAN on PRs unless an enabling label is present.
+    # This avoids running expensive ASAN builds on every PR.
+    # Labels that enable ASAN CI:
+    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    has_asan_label = (
+        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.has_submodule_changes is False
-        and "ci:asan" not in ci_inputs.pr_labels
+        and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
-    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
-        print("  Running: 'ci:asan' PR label triggers ASAN CI")
+    if has_asan_label and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN CI triggered by PR label")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -1235,10 +1237,20 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push and pull_request events run "host-asan"
-    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
-        build_variant = "host-asan"
+    # ASAN variant selection:
+    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
+    # 2. ci:host-asan label -> host-asan (explicit)
+    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    if build_variant == "asan":
+        if "ci:asan" in ci_inputs.pr_labels:
+            print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan" in ci_inputs.pr_labels:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (ci:host-asan label)")
+        elif ci_inputs.is_push or ci_inputs.is_pull_request:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
