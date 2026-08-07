@@ -656,7 +656,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
   # Set composable_kernel as a build dependency only when it's available.
   set(hiptensor_build_deps)
   if(_ck_enabled)
-    list(APPEND hiptensor_build_deps composable_kernel)
+    list(APPEND _hiptensor_build_deps composable_kernel)
   endif()
 
   therock_cmake_subproject_declare(hipTensor
@@ -677,7 +677,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
-      ${hiptensor_build_deps}
+      ${_hiptensor_build_deps}
     RUNTIME_DEPS
       hip-clr
   )
