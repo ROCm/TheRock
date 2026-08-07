@@ -18,9 +18,7 @@ jobs:
     permissions:
       id-token: write
     env:
-      SOURCE_PREFIX: s3://therock-prerelease-python/v4/whl
-      DEST_PREFIX: s3://therock-dev-python/v4/whl
-      DEST_S3_URL: https://therock-dev-python.s3.us-east-2.amazonaws.com/v4/whl/
+      SOURCE_ROOT: https://rocm.prereleases.amd.com/whl-multi-arch/
       DEV_INDEX: https://rocm.devreleases.amd.com/whl-multi-arch/
       ROCM_VERSION: 10.0.0rc0
       TORCH_VERSION: 2.13.0+gita0d443cc.rocm10.0.0rc0
@@ -47,21 +45,23 @@ jobs:
 
           while IFS= read -r filename
           do
-            aws s3 cp \
-              "${SOURCE_PREFIX}/${filename}" \
-              "${DEST_PREFIX}/${filename}" \
-              --only-show-errors
+            local_path="/tmp/${filename}"
+            curl --fail --location \
+              --retry 5 --retry-all-errors \
+              --output "${local_path}" \
+              "${SOURCE_ROOT}${filename}"
 
-            source_etag="$(aws s3api head-object \
-              --bucket therock-prerelease-python \
-              --key "v4/whl/${filename}" \
-              --query ETag --output text)"
-            dest_etag="$(aws s3api head-object \
+            checksum="$(openssl dgst -sha256 -binary "${local_path}" | base64 -w0)"
+            uploaded_checksum="$(aws s3api put-object \
               --bucket therock-dev-python \
               --key "v4/whl/${filename}" \
-              --query ETag --output text)"
-            test "${source_etag}" = "${dest_etag}"
-            echo "${filename}: ${dest_etag}"
+              --body "${local_path}" \
+              --checksum-algorithm SHA256 \
+              --checksum-sha256 "${checksum}" \
+              --query ChecksumSHA256 --output text)"
+            test "${checksum}" = "${uploaded_checksum}"
+            echo "${filename}: sha256 ${checksum}"
+            rm "${local_path}"
           done <<'EOF'
           rocm-10.0.0rc0.tar.gz
           rocm_bootstrap-0.1.0-py3-none-any.whl
@@ -102,7 +102,7 @@ jobs:
                   "py3-none-linux_x86_64.whl"
               ),
           }
-          base = os.environ["DEST_S3_URL"]
+          base = os.environ["DEV_INDEX"]
           for _ in range(36):
               missing = []
               for package, filename in expected.items():
