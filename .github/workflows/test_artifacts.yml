@@ -127,13 +127,13 @@ jobs:
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout CI config
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ROCm/therock-ci-config
           ref: main
@@ -141,7 +141,7 @@ jobs:
         continue-on-error: true
 
       - name: Setting up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.12
 
@@ -217,21 +217,21 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   0. For workflow_dispatch, honor the explicit test_runs_on input if provided
-      #   1. Benchmark components use the dedicated benchmark runner
-      #   2. Multi-GPU components use the multi-GPU runner
-      #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
-      #   4. Per-component runner (set by fetch_test_configurations.py)
+      #   1. Multi-GPU components use the multi-GPU runner (required for correct execution)
+      #   2. For workflow_dispatch, honor the explicit test_runs_on input if provided
+      #   3. Benchmark components use the dedicated benchmark runner
+      #   4. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
+      #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
+          (matrix.components.multi_gpu_runner != '' &&
+            matrix.components.multi_gpu_runner) ||
           (github.event_name == 'workflow_dispatch' &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
           (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
-          (matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner) ||
           (matrix.components.linux_cpu_runner == true &&
             'azure-linux-scale-rocm') ||
           matrix.components.test_runner

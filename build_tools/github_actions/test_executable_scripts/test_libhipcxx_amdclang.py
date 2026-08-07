@@ -85,30 +85,37 @@ is_linux = platform.system() == "Linux"
 
 compiler_ext = ".exe" if is_windows else ""
 
-HIPCC_BINARY_NAME = f"hipcc{compiler_ext}"
-
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
+
+# On Windows amdclang++ lives in lib/llvm/bin/, not bin/.
 if is_windows:
-    environ_vars["HIPCXX"] = str(
-        OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
-    )
+    AMDCLANGPP = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
+    environ_vars["HIPCXX"] = str(AMDCLANGPP)
     print("HIPCXX:", environ_vars["HIPCXX"], str(OUTPUT_ARTIFACTS_PATH))
+else:
+    AMDCLANGPP = THEROCK_BIN_PATH / "amdclang++"
 
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DHIP_HIPCC_EXECUTABLE={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME).as_posix()}",
-    f"-DCMAKE_CXX_COMPILER={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME)}",
-    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT.as_posix()}",
-    f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+    f"-DCMAKE_CXX_COMPILER={AMDCLANGPP}",
+    "-GNinja",
+    "..",
 ]
+
+# Pass the detected GPU arch, or fall back to "native" which tells
+# amdclang++ to query the HIP runtime at compile time. This handles
+# MxGPU virtual GPUs on Windows where offload-arch.exe fails but the
+# HIP runtime correctly identifies the GPU (e.g. gfx1101).
+if gpu_arch is not None:
+    cmd.append(f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}")
+else:
+    cmd.append("-DCMAKE_HIP_ARCHITECTURES=native")
 
 # Add rc compiler for windows
 if is_windows:
     cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
-
-cmd.extend(["-GNinja", ".."])
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
@@ -122,9 +129,8 @@ else:
     cmd = [
         "bash",
         "../ci/test_libhipcxx.sh",
-        "-cmake-options",
-        f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     ]
+
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)

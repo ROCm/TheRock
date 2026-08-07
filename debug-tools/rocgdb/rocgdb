@@ -56,7 +56,9 @@ validate_executable() {
         return 1
     fi
 
-    if "$executable" --version >/dev/null 2>&1; then
+    # Suppress ASAN leak detection for the version check only because rocgdb is
+    # not leak-free and the leak report would cause --version to appear to fail.
+    if ASAN_OPTIONS="${ASAN_OPTIONS:+${ASAN_OPTIONS}:}detect_leaks=0" "$executable" --version >/dev/null 2>&1; then
         log_message "Running $executable --version works."
         return 0
     else
