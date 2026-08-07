@@ -216,19 +216,25 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      # Route to the appropriate runner:
-      #   1. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   2. For workflow_dispatch, honor the explicit test_runs_on input if provided
-      #   3. Benchmark components use the dedicated benchmark runner
-      #   4. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
-      #   5. Per-component runner (set by fetch_test_configurations.py)
+      # Runner selection priority rules:
+      #
+      # 1. USER-TRIGGERED runs (workflow_dispatch or workflow_call): Honor test_runs_on
+      #    input to allow users to test specific runners. This is detected by checking
+      #    that github.actor does NOT contain 'github-actions' (bots like 'github-actions[bot]').
+      #
+      # 2. BOT-TRIGGERED runs (e.g., nightly runs from rockrel) and other events:
+      #    Follow component-based priority:
+      #    a. Multi-GPU components (rccl, rocshmem) use multi_gpu_runner
+      #    b. Benchmark components use benchmark_runs_on
+      #    c. CPU-only components use azure-linux-scale-rocm
+      #    d. All others use per-component test_runner from fetch_test_configurations.py
       test_runs_on: >-
         ${{
-          (matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner) ||
-          (github.event_name == 'workflow_dispatch' &&
+          (!contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
+          (matrix.components.multi_gpu_runner != '' &&
+            matrix.components.multi_gpu_runner) ||
           (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
