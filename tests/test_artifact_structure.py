@@ -23,10 +23,15 @@ Tests:
 
 Usage:
     THEROCK_ARTIFACTS_DIR=/path/to/archives \\
+        THEROCK_ARTIFACTS_PLATFORM=linux \\
         python -m pytest tests/test_artifact_structure.py -v --log-cli-level=info
 
 THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 (*.tar.zst or *.tar.xz) as produced by the build pipeline.
+
+THEROCK_ARTIFACTS_PLATFORM should be set to 'windows' or 'linux' for
+platform-specific tests (e.g., OCL packaging validation). Tests requiring
+this variable will skip if unset.
 """
 
 import dataclasses
@@ -468,3 +473,174 @@ class TestArtifactStructure:
             "Checked %d archives, all components covered by package.json",
             len(archive_index),
         )
+
+    def test_ocl_excluded_from_production_packages(self):
+        """Validate OCL files are excluded from production Python packages on Windows.
+
+        This test inspects the final production Python packages (wheels/sdists)
+        created by build_python_packages.py and verifies that OCL-related files
+        are NOT present on Windows.
+
+        On Windows, OCL is delivered via drivers, not in ROCm packages.
+        On Linux, OCL is part of the ROCm distribution.
+
+        Requires:
+        - THEROCK_ARTIFACTS_PLATFORM environment variable (values: windows, linux)
+        - THEROCK_PACKAGES_DIR environment variable pointing to the dist/ directory
+          containing built Python packages (wheels/sdists)
+        """
+        platform = os.getenv("THEROCK_ARTIFACTS_PLATFORM", "").lower()
+        packages_dir = os.getenv("THEROCK_PACKAGES_DIR", "")
+
+        if not platform:
+            pytest.skip(
+                "THEROCK_ARTIFACTS_PLATFORM not set "
+                "(required values: windows, linux)"
+            )
+
+        if not packages_dir:
+            pytest.skip(
+                "THEROCK_PACKAGES_DIR not set "
+                "(should point to dist/ directory with Python packages)"
+            )
+
+        if platform not in ("windows", "linux"):
+            pytest.fail(
+                f"Invalid THEROCK_ARTIFACTS_PLATFORM: {platform}, "
+                f"expected 'windows' or 'linux'"
+            )
+
+        packages_path = Path(packages_dir)
+        if not packages_path.is_dir():
+            pytest.fail(f"THEROCK_PACKAGES_DIR is not a directory: {packages_path}")
+
+        # Find production ROCm packages only (not test packages)
+        # Production packages: rocm-*.whl, rocm_sdk_core-*.whl, rocm_sdk_libraries-*.whl
+        # Exclude: test packages, device-specific wheels, devel packages
+        import zipfile
+        import tarfile
+
+        production_patterns = [
+            "rocm-[0-9]*.tar.gz",  # Main ROCm sdist
+            "rocm_sdk_core-[0-9]*.whl",  # Core production wheel
+            "rocm_sdk_libraries-[0-9]*.whl",  # Libraries production wheel
+        ]
+
+        production_packages = []
+        for pattern in production_patterns:
+            production_packages.extend(packages_path.glob(pattern))
+
+        if not production_packages:
+            pytest.skip(
+                f"No production ROCm packages found in {packages_path}. "
+                f"Expected patterns: {', '.join(production_patterns)}"
+            )
+
+        logger.info(
+            "Found %d production ROCm package(s) in %s: %s",
+            len(production_packages),
+            packages_path,
+            [p.name for p in production_packages],
+        )
+
+        # OCL-related file patterns to search for (platform-specific)
+        # These would indicate OCL is present in the package
+        if platform == "windows":
+            # Windows OCL patterns (DLL files and headers)
+            ocl_patterns = [
+                "OpenCL.dll",
+                "opencl.dll",
+                "amdocl64.dll",
+                "amdocl32.dll",
+                "amdocl",
+                "opencl",
+                "/ocl/",
+                "\\ocl\\",
+                "CL/cl.h",
+                "CL\\cl.h",
+                "CL/opencl.h",
+                "CL\\opencl.h",
+            ]
+        else:  # Linux
+            # Linux OCL patterns (SO files and headers)
+            ocl_patterns = [
+                "libOpenCL.so",
+                "libamdocl",
+                "amdocl",
+                "opencl",
+                "/ocl/",
+                "CL/cl.h",
+                "CL/opencl.h",
+            ]
+
+        ocl_violations: list[tuple[str, str]] = []  # (package_name, ocl_file_path)
+
+        # Check each production package
+        for pkg_path in production_packages:
+            try:
+                if pkg_path.suffix == ".whl":
+                    # Check wheel
+                    with zipfile.ZipFile(pkg_path, "r") as zf:
+                        file_list = zf.namelist()
+                        for file_path in file_list:
+                            file_lower = file_path.lower()
+                            for pattern in ocl_patterns:
+                                if pattern.lower() in file_lower:
+                                    ocl_violations.append((pkg_path.name, file_path))
+                                    break
+                elif pkg_path.suffix == ".gz" and pkg_path.name.endswith(".tar.gz"):
+                    # Check sdist
+                    with tarfile.open(pkg_path, "r:*") as tf:
+                        file_list = tf.getnames()
+                        for file_path in file_list:
+                            file_lower = file_path.lower()
+                            for pattern in ocl_patterns:
+                                if pattern.lower() in file_lower:
+                                    ocl_violations.append((pkg_path.name, file_path))
+                                    break
+            except Exception as e:
+                logger.warning("Failed to read package %s: %s", pkg_path.name, e)
+
+        # Platform-specific validation
+        if platform == "windows":
+            # Windows: No OCL files should be present in any package
+            if ocl_violations:
+                violations_by_package = defaultdict(list)
+                for pkg_name, file_path in ocl_violations:
+                    violations_by_package[pkg_name].append(file_path)
+
+                violation_lines = []
+                for pkg_name in sorted(violations_by_package.keys()):
+                    violation_lines.append(f"\n  Package: {pkg_name}")
+                    for file_path in sorted(violations_by_package[pkg_name]):
+                        violation_lines.append(f"    - {file_path}")
+
+                violation_summary = "\n".join(violation_lines)
+                pytest.fail(
+                    f"Found {len(ocl_violations)} OCL file(s) in {len(violations_by_package)} "
+                    f"Windows production package(s).\n"
+                    f"OCL is delivered via Windows drivers and must not be in ROCm packages:"
+                    f"{violation_summary}"
+                )
+
+            logger.info(
+                "Checked %d production package(s) on Windows: no OCL files found (correct)",
+                len(production_packages),
+            )
+
+        else:  # platform == "linux"
+            # Linux: OCL files should be present in production packages
+            if not ocl_violations:
+                pytest.fail(
+                    f"No OCL files found in any Linux production package.\n"
+                    f"OCL must be included in Linux ROCm distribution.\n"
+                    f"Checked {len(production_packages)} production package(s): "
+                    f"{[p.name for p in production_packages]}"
+                )
+
+            packages_with_ocl = {pkg_name for pkg_name, _ in ocl_violations}
+            logger.info(
+                "Checked %d production package(s) on Linux: found OCL files in %d package(s) (correct)",
+                len(production_packages),
+                len(packages_with_ocl),
+            )
