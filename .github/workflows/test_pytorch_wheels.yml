@@ -203,22 +203,24 @@ jobs:
 
       - name: Install test requirements
         run: |
-          # Some pinned test requirements have no cp314 wheel and build from source.
-          # The test container ships clang but not gcc, and setuptools/distutils
-          # defaults to sysconfig's baked CC=gcc. Point it at the clang that is
-          # already installed. Scoped to this step so it does not affect the tests.
-          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+          # Some pinned test requirements have no cp314 wheel and build from
+          # source. Scoped to this step so it does not affect the tests.
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            # cl.exe is not on PATH. Activate MSVC so meson picks cl over the
+            # MinGW gcc that chocolatey puts on PATH; meson tries cl first.
+            vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            vcvars=$("${vswhere}" -latest -products '*' \
+              -find 'VC\Auxiliary\Build\vcvars64.bat' | tr -d '\r')
+            pip_install() { cmd //c "call \"${vcvars}\" >NUL && python -m pip install $*"; }
+          else
+            # The container ships clang but not gcc; setuptools defaults to gcc.
             export CC=clang
             export CXX=clang++
-          elif [[ "${RUNNER_OS}" == "Windows" ]]; then
-            export CC=cl
-            export CXX=cl
+            pip_install() { python -m pip install "$@"; }
           fi
-          python -m pip install -r external-builds/pytorch/requirements-test.txt
-          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+          pip_install -r external-builds/pytorch/requirements-test.txt
+          pip_install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
-          unset CC
-          unset CXX
 
       - name: Driver / GPU sanity check
         timeout-minutes: 3
