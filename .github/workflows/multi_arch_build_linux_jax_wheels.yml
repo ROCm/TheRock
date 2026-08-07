@@ -226,25 +226,6 @@ jobs:
                 --jax-source /workspace/jax-source \
                 --rocm-root "${ROCM_ROOT}"
 
-                echo "=== JAX revision ==="
-                git rev-parse HEAD
-                git log -1 --oneline
-
-                echo "=== ROCm SDK Clang ==="
-                echo "ROCM_ROOT=${ROCM_ROOT}"
-                echo "ROCM_CLANG=${ROCM_CLANG}"
-                "${ROCM_CLANG}" --version
-
-                echo "=== JAX ROCm Bazel config ==="
-                grep -nE \
-                  "clang_local|rocm_base|CLANG_COMPILER_PATH|rocm_release_wheel|fuse-ld" \
-                  build/rocm/rocm.bazelrc || true
-
-                echo "=== XLA workspace ==="
-                grep -nE \
-                  "xla/archive|XLA_COMMIT|strip_prefix" \
-                  third_party/xla/workspace.bzl || true
-
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \

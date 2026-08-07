@@ -22,6 +22,10 @@ LLVM_BLOCK_START = "# Install LLVM 18 from source"
 LLVM_BLOCK_END = "# ld.lld (hermetic linker)"
 
 ROCM_RELEASE_CONFIG = "build:rocm_release_wheel"
+
+HERMETIC_CLANG_CONFIG = "--config=rocm_clang_hermetic"
+LOCAL_CLANG_CONFIG = "--config=rocm_clang_local"
+
 LLD_RELEASE_CONFIG = f"{ROCM_RELEASE_CONFIG} --linkopt=-fuse-ld=lld"
 
 
@@ -167,6 +171,14 @@ def configure_build(
             f"{ROCM_RELEASE_CONFIG} "
         ):
             release_config_lines += 1
+
+            # JAX 0.10.2+ defaults ROCm release wheels to the hermetic
+            # toolchain. Use the local ROCm crosstool so CLANG_COMPILER_PATH
+            # can point to Clang from the installed ROCm SDK.
+            lines[index] = line.replace(
+                HERMETIC_CLANG_CONFIG,
+                LOCAL_CLANG_CONFIG,
+            )
 
     if updated_clang_paths != 1:
         raise RuntimeError(
