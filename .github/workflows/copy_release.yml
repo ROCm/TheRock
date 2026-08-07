@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Stage ROCm 7.14 gfx950 stable packages in dev
+name: Isolate ROCm 7.14 staging and restore ROCm 10 dev
 
 on:
   workflow_dispatch:
@@ -9,21 +9,24 @@ on:
 permissions:
   contents: read
 
-run-name: Stage ROCm 7.14 gfx950 stable packages in dev
+run-name: Isolate ROCm 7.14 staging and restore ROCm 10 dev
 
 jobs:
   copy_and_verify:
-    name: Copy stable packages and verify dev-only gfx950 install
+    name: Stage ROCm 7.14, clean dev, and verify both releases
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
     env:
       SOURCE_ROOT: https://repo.amd.com/rocm/whl-multi-arch/
       DEV_INDEX: https://rocm.devreleases.amd.com/whl-multi-arch/
+      STAGING_INDEX: https://rocm.devreleases.amd.com/whl-staging-multi-arch/
       ROCM_VERSION: 7.14.0
       TORCH_VERSION: 2.13.0+gita0d443cc.rocm7.14.0
       TORCH_GIT_SHA: a0d443cc9b9a8b280841b8f5cc8e1c50cb45e1ca
       TRITON_VERSION: 3.8.0+git4cff872c.rocm7.14.0
+      ROCM10_VERSION: 10.0.0rc0
+      ROCM10_TORCH_VERSION: 2.13.0+gita0d443cc.rocm10.0.0rc0
       PIP_CACHE_DIR: /tmp/pip-cache
 
     steps:
@@ -40,7 +43,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
-      - name: Copy exact ROCm gfx950 package closure to dev
+      - name: Copy exact ROCm gfx950 package closure to staging
         run: |
           echo "COPY_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
 
@@ -55,7 +58,7 @@ jobs:
             checksum="$(openssl dgst -sha256 -binary "${local_path}" | base64 -w0)"
             uploaded_checksum="$(aws s3api put-object \
               --bucket therock-dev-python \
-              --key "v4/whl/${filename}" \
+              --key "v4/whl-staging/${filename}" \
               --body "${local_path}" \
               --checksum-algorithm SHA256 \
               --checksum-sha256 "${checksum}" \
@@ -65,13 +68,38 @@ jobs:
             rm "${local_path}"
           done <<'EOF'
           rocm-7.14.0.tar.gz
+          rocm_bootstrap-0.1.0-py3-none-any.whl
           rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl
           rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl
           rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl
           rocm_sdk_device_gfx950-7.14.0-py3-none-linux_x86_64.whl
           EOF
 
-      - name: Wait for complete dev index
+      - name: Copy exact PyTorch gfx950 packages to staging
+        run: |
+          while IFS= read -r filename
+          do
+            source_etag="$(aws s3api head-object \
+              --bucket therock-dev-python \
+              --key "v4/whl/${filename}" \
+              --query ETag --output text)"
+            aws s3 cp \
+              "s3://therock-dev-python/v4/whl/${filename}" \
+              "s3://therock-dev-python/v4/whl-staging/${filename}" \
+              --only-show-errors
+            staging_etag="$(aws s3api head-object \
+              --bucket therock-dev-python \
+              --key "v4/whl-staging/${filename}" \
+              --query ETag --output text)"
+            test "${source_etag}" = "${staging_etag}"
+            echo "${filename}: ${staging_etag}"
+          done <<'EOF'
+          torch-2.13.0+gita0d443cc.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          amd_torch_device_gfx950-2.13.0+gita0d443cc.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          triton-3.8.0+git4cff872c.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          EOF
+
+      - name: Wait for complete staging index
         shell: python
         run: |
           import email.utils
@@ -81,49 +109,39 @@ jobs:
 
           started = int(os.environ["COPY_STARTED_EPOCH"])
           expected = {
-              "rocm": ("rocm-7.14.0.tar.gz", True),
-              "rocm-bootstrap": (
-                  "rocm_bootstrap-0.1.0-py3-none-any.whl",
-                  False,
-              ),
+              "rocm": "rocm-7.14.0.tar.gz",
+              "rocm-bootstrap": "rocm_bootstrap-0.1.0-py3-none-any.whl",
               "rocm-sdk-core": (
-                  "rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl",
-                  True,
+                  "rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl"
               ),
               "rocm-sdk-devel": (
-                  "rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl",
-                  True,
+                  "rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl"
               ),
               "rocm-sdk-libraries": (
-                  "rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl",
-                  True,
+                  "rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl"
               ),
               "rocm-sdk-device-gfx950": (
                   "rocm_sdk_device_gfx950-7.14.0-"
-                  "py3-none-linux_x86_64.whl",
-                  True,
+                  "py3-none-linux_x86_64.whl"
               ),
               "torch": (
                   f"torch-{os.environ['TORCH_VERSION']}-"
-                  "cp312-cp312-linux_x86_64.whl",
-                  False,
+                  "cp312-cp312-linux_x86_64.whl"
               ),
               "amd-torch-device-gfx950": (
                   "amd_torch_device_gfx950-"
                   f"{os.environ['TORCH_VERSION']}-"
-                  "cp312-cp312-linux_x86_64.whl",
-                  False,
+                  "cp312-cp312-linux_x86_64.whl"
               ),
               "triton": (
                   f"triton-{os.environ['TRITON_VERSION']}-"
-                  "cp312-cp312-linux_x86_64.whl",
-                  False,
+                  "cp312-cp312-linux_x86_64.whl"
               ),
           }
-          base = os.environ["DEV_INDEX"]
-          for _ in range(60):
+          base = os.environ["STAGING_INDEX"]
+          for _ in range(72):
               missing = []
-              for package, (filename, require_fresh) in expected.items():
+              for package, filename in expected.items():
                   try:
                       response = urllib.request.urlopen(
                           f"{base}{package}/index.html", timeout=30
@@ -135,21 +153,21 @@ jobs:
                   except Exception:
                       missing.append(package)
                       continue
-                  if filename not in page or (require_fresh and modified < started):
+                  if filename not in page or modified < started:
                       missing.append(package)
               if not missing:
-                  print("Dev index contains the complete gfx950 package closure")
+                  print("Staging index contains the complete gfx950 closure")
                   break
               print(f"Waiting for index regeneration; missing: {missing}")
               time.sleep(10)
           else:
-              raise RuntimeError("Dev index did not complete within ten minutes")
+              raise RuntimeError("Staging index did not complete within 12 minutes")
 
-      - name: Verify dev-only gfx950 package installation
+      - name: Verify unpinned ROCm 7.14 staging installation
         run: |
           python build_tools/setup_venv.py /tmp/pytorch-validation-gfx950 \
-            --packages "torch[device-gfx950]==${TORCH_VERSION} rocm[devel,device-gfx950]==${ROCM_VERSION}" \
-            --index-url="${DEV_INDEX}"
+            --packages "torch[device-gfx950]==${TORCH_VERSION} rocm[devel,device-gfx950]" \
+            --index-url="${STAGING_INDEX}"
           /tmp/pytorch-validation-gfx950/bin/python - <<'PY'
           import importlib.metadata
           import os
@@ -167,3 +185,100 @@ jobs:
           )
           print(torch.__version__, torch.version.git_version, torch.version.hip)
           PY
+
+      - name: Remove ROCm 7.14 runtime packages from non-staging dev
+        run: |
+          echo "DELETE_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
+          while IFS= read -r filename
+          do
+            aws s3 rm \
+              "s3://therock-dev-python/v4/whl/${filename}" \
+              --only-show-errors
+          done <<'EOF'
+          rocm-7.14.0.tar.gz
+          rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx950-7.14.0-py3-none-linux_x86_64.whl
+          EOF
+
+      - name: Wait for non-staging dev cleanup
+        shell: python
+        run: |
+          import email.utils
+          import os
+          import time
+          import urllib.request
+
+          deleted = int(os.environ["DELETE_STARTED_EPOCH"])
+          removed = {
+              "rocm": "rocm-7.14.0.tar.gz",
+              "rocm-sdk-core": (
+                  "rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-devel": (
+                  "rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-libraries": (
+                  "rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl"
+              ),
+              "rocm-sdk-device-gfx950": (
+                  "rocm_sdk_device_gfx950-7.14.0-"
+                  "py3-none-linux_x86_64.whl"
+              ),
+          }
+          base = os.environ["DEV_INDEX"]
+          for _ in range(72):
+              stale = []
+              for package, filename in removed.items():
+                  try:
+                      response = urllib.request.urlopen(
+                          f"{base}{package}/index.html", timeout=30
+                      )
+                      page = response.read().decode()
+                      modified = email.utils.parsedate_to_datetime(
+                          response.headers["Last-Modified"]
+                      ).timestamp()
+                  except Exception:
+                      stale.append(package)
+                      continue
+                  if filename in page or modified < deleted:
+                      stale.append(package)
+              if not stale:
+                  print("Non-staging dev index no longer exposes ROCm 7.14")
+                  break
+              print(f"Waiting for dev cleanup; stale: {stale}")
+              time.sleep(10)
+          else:
+              raise RuntimeError("Dev index did not clean up within 12 minutes")
+
+      - name: Verify unpinned ROCm 10 dev installations
+        run: |
+          for gfx in gfx942 gfx950
+          do
+            venv="/tmp/rocm10-validation-${gfx}"
+            python build_tools/setup_venv.py "${venv}" \
+              --packages "torch[device-${gfx}]==${ROCM10_TORCH_VERSION} rocm[devel,device-${gfx}]" \
+              --index-url="${DEV_INDEX}"
+            "${venv}/bin/python" - "${gfx}" <<'PY'
+          import importlib.metadata
+          import os
+          import sys
+
+          import torch
+
+          gfx = sys.argv[1]
+          assert torch.__version__ == os.environ["ROCM10_TORCH_VERSION"], (
+              torch.__version__
+          )
+          assert torch.version.git_version == os.environ["TORCH_GIT_SHA"], (
+              torch.version.git_version
+          )
+          assert importlib.metadata.version("rocm") == os.environ["ROCM10_VERSION"]
+          assert (
+              importlib.metadata.version(f"rocm-sdk-device-{gfx}")
+              == os.environ["ROCM10_VERSION"]
+          )
+          print(gfx, torch.__version__, torch.version.git_version, torch.version.hip)
+          PY
+          done
