@@ -53,7 +53,7 @@ jobs:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: "ROCm"
-          # We will reuse the rocm-systems token for rocgdb for now.
+          # We will reuse the rocm-systems token for rocgdb and mesa-fork for now.
           repositories: "rocm-systems,rocgdb,mesa-fork,TheRock"
 
       - name: Generate GitHub App token rocm-libraries

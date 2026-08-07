@@ -367,7 +367,7 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
     if submodule in ("all", "mesa-fork"):
         create_therock_bump(
-            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["systems"]
+            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["mesa-fork"]
         )
 
 
@@ -462,6 +462,7 @@ def main() -> None:
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
+    parser.add_argument("--mesa_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -471,6 +472,7 @@ def main() -> None:
         "systems": args.systems_token,
         "libraries": args.libraries_token,
         "rocgdb": args.rocgdb_token,
+        "mesa-fork": args.mesa_token,
     }
 
     if args.event_type == "schedule":
