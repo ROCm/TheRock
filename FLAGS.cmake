@@ -52,6 +52,17 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPDNN_ENABLE_KERNEL_INGESTOR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
+  CMAKE_VARS
+    HIPDNN_ENABLE_KERNEL_INGESTOR=ON
+  SUB_PROJECTS
+    hipDNN
+    hipkernelprovider
+)
+
+therock_declare_flag(
   NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
   DEFAULT_VALUE OFF
   DESCRIPTION "Build MIOpen as a public wrapper (libMIOpen.so) over a private implementation library (libMIOpen_private.so), with optional runtime forwarding to hipDNN. See rocm-libraries MIOpen RFC 0001."
