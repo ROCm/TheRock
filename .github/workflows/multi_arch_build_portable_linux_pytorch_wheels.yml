@@ -201,7 +201,19 @@ jobs:
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       triton_version: ${{ steps.pytorch-versions.outputs.triton_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
+      - name: "Quartz - started - build PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -434,6 +446,11 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   configure_pytorch_tests:
     name: Configure PyTorch Tests
     runs-on: ubuntu-24.04
@@ -442,6 +459,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -467,6 +485,11 @@ jobs:
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform linux
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
     if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
@@ -477,6 +500,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_pytorch_tests.outputs.matrix) }}
     uses: ./.github/workflows/test_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -540,3 +564,21 @@ jobs:
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref }}"
             }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels, dispatch_pytorch_wheels_full_test]
+    name: "Quartz - completed - build PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

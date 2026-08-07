@@ -57,6 +57,8 @@ jobs:
     runs-on:
       group: ROCR-Runtime-libhsakmt-WSL
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
       id-token: write
@@ -64,6 +66,8 @@ jobs:
       run:
         shell: bash
     env:
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_wsl_rocdxg_artifacts.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build WSL ROCDXG artifacts"
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
@@ -77,6 +81,17 @@ jobs:
       WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
@@ -335,3 +350,21 @@ jobs:
             --stage="${{ inputs.stage_name }}" \
             --build-dir="${wsl_build_dir}" \
             --amdgpu-family=""
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
