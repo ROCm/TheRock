@@ -311,6 +311,38 @@ class HandlePushTest(unittest.TestCase):
         # bail out before cloning the upstream repo.
         mock_tmp.assert_not_called()
 
+    def test_mesa_fork_submodule_only_closes_stale_prs_then_returns(self):
+        """mesa-fork is submodule-only: handle_push must close stale PRs using
+        the systems token and skip cloning the upstream repo."""
+
+        def changed(before, after, path):
+            return path == "third-party/sysdeps/linux/amd-mesa/mesa-fork"
+
+        with patch("bump_automation.submodule_changed", side_effect=changed):
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs") as mock_close:
+                    with patch(
+                        "bump_automation.tempfile.TemporaryDirectory"
+                    ) as mock_tmp:
+                        handle_push(
+                            "before",
+                            "after",
+                            {
+                                "systems": "systems-token",
+                                "libraries": "libraries-token",
+                                "rocgdb": "rocgdb-token",
+                                "mesa-fork": "systems-token",
+                            },
+                        )
+
+        mock_close.assert_called_once()
+        # mesa-fork reuses the systems token.
+        self.assertEqual(mock_close.call_args.args[2], "systems-token")
+        # submodule-only: must not clone any upstream repo.
+        mock_tmp.assert_not_called()
+
 
 class CreateTheRockBumpTest(unittest.TestCase):
     def test_skips_when_pr_already_open(self):
@@ -426,6 +458,41 @@ class HandleScheduleTest(unittest.TestCase):
         called_submodules = [c.args[0] for c in mock_bump.call_args_list]
         self.assertNotIn("rocm-systems", called_submodules)
         self.assertNotIn("rocm-libraries", called_submodules)
+
+    def test_mesa_fork_maps_to_correct_submodule_and_token(self):
+        """handle_schedule('mesa-fork') must call create_therock_bump with
+        'third-party/sysdeps/linux/amd-mesa/mesa-fork' and tokens['mesa-fork']."""
+        tokens = {
+            "systems": "systems-token",
+            "libraries": "libraries-token",
+            "rocgdb": "rocgdb-token",
+            "mesa-fork": "mesa-fork-token",
+        }
+        with patch("bump_automation.create_therock_bump") as mock_bump:
+            from bump_automation import handle_schedule
+
+            handle_schedule(tokens, "mesa-fork")
+
+        mock_bump.assert_called_once_with(
+            "third-party/sysdeps/linux/amd-mesa/mesa-fork", "mesa-fork-token"
+        )
+
+    def test_mesa_fork_does_not_invoke_other_submodules(self):
+        tokens = {
+            "systems": "systems-token",
+            "libraries": "libraries-token",
+            "rocgdb": "rocgdb-token",
+            "mesa-fork": "mesa-fork-token",
+        }
+        with patch("bump_automation.create_therock_bump") as mock_bump:
+            from bump_automation import handle_schedule
+
+            handle_schedule(tokens, "mesa-fork")
+
+        called_submodules = [c.args[0] for c in mock_bump.call_args_list]
+        self.assertNotIn("rocm-systems", called_submodules)
+        self.assertNotIn("rocm-libraries", called_submodules)
+        self.assertNotIn("debug-tools/rocgdb/source", called_submodules)
 
 
 class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
