@@ -654,7 +654,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
 
   # Set composable_kernel as a build dependency only when it's available.
-  set(hiptensor_build_deps)
+  set(_hiptensor_build_deps)
   if(_ck_enabled)
     list(APPEND _hiptensor_build_deps composable_kernel)
   endif()
