@@ -16,7 +16,7 @@ THEROCK_MAIN_BRANCH = "main"
 BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
-CI_LABEL = "ci:run-all-archs"
+CI_LABELS = ["ci:run-all-archs", "ci:asan"]
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -337,15 +337,15 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
 
         try:
-            # Add ci:run-all-archs label to the PR
+            # Add CI labels to the PR (run-all-archs + asan for full coverage)
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": [CI_LABEL]},
+                data={"labels": CI_LABELS},
             )
         except RuntimeError as e:
-            print(f"[WARN] Failed to apply ci:run-all-archs to PR #{pr['number']}: {e}")
+            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 
