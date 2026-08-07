@@ -142,7 +142,10 @@ def _compute_artifacts_from_changed_projects(
     all_stage_artifacts: set[str] = set()
     for stage in topology.get_build_stages():
         if stage.name in affected_stages:
-            all_stage_artifacts.update(a.name for a in stage.artifacts)
+            # Get artifacts via artifact_groups
+            for group_name in stage.artifact_groups:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    all_stage_artifacts.add(artifact.name)
 
     # Map changed projects to artifacts
     rebuild_artifacts: set[str] = set()
