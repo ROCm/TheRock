@@ -1,0 +1,136 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Builds one UCCL wheel containing the supported CDNA GPU targets. Upstream
+# UCCL's build.sh launches its own Docker container, so this job must run on
+# a bare runner with Docker available.
+
+name: Build Linux UCCL Wheels
+
+on:
+  workflow_call:
+    inputs:
+      build_runs_on:
+        description: Runner label for the build job (Docker required; no GPU required).
+        type: string
+        default: azure-linux-scale-rocm
+      python_version:
+        type: string
+        default: "3.12"
+      rocm_arches:
+        description: Comma-separated concrete GPU targets compiled into the wheel.
+        type: string
+        default: gfx90a,gfx942,gfx950,gfx1250
+      rocm_index_url:
+        description: ROCm multi-architecture Python package index.
+        type: string
+        default: https://rocm.prereleases.amd.com/whl-multi-arch/
+      uccl_git_ref:
+        description: UCCL commit, tag, or branch to build.
+        type: string
+        default: d56e3492f7990d337b4383141eb6217a08259c13
+      artifact_name:
+        description: Name of the GitHub Actions wheel artifact.
+        type: string
+        default: uccl-wheel-multiarch
+      repository:
+        description: Repository to checkout; defaults to github.repository.
+        type: string
+      ref:
+        description: TheRock branch, tag, or SHA to checkout.
+        type: string
+    outputs:
+      artifact_name:
+        description: Name of the uploaded UCCL wheel artifact.
+        value: ${{ jobs.build_wheel.outputs.artifact_name }}
+
+  workflow_dispatch:
+    inputs:
+      build_runs_on:
+        description: Runner label for the build job (Docker required; no GPU required).
+        required: true
+        type: string
+        default: azure-linux-scale-rocm
+      python_version:
+        required: true
+        type: string
+        default: "3.12"
+      rocm_arches:
+        description: Comma-separated concrete GPU targets compiled into the wheel.
+        required: true
+        type: string
+        default: gfx90a,gfx942,gfx950,gfx1250
+      rocm_index_url:
+        description: ROCm multi-architecture Python package index.
+        required: true
+        type: string
+        default: https://rocm.prereleases.amd.com/whl-multi-arch/
+      uccl_git_ref:
+        description: UCCL commit, tag, or branch to build.
+        required: true
+        type: string
+        default: d56e3492f7990d337b4383141eb6217a08259c13
+      artifact_name:
+        description: Name of the GitHub Actions wheel artifact.
+        required: true
+        type: string
+        default: uccl-wheel-multiarch
+
+permissions:
+  contents: read
+
+run-name: Build Linux UCCL Wheels (py${{ inputs.python_version }}, ${{ inputs.rocm_arches }})
+
+jobs:
+  build_wheel:
+    name: Build UCCL | py ${{ inputs.python_version }}
+    runs-on: ${{ inputs.build_runs_on }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      ROCM_ARCHES: ${{ inputs.rocm_arches }}
+      ROCM_INDEX_URL: ${{ inputs.rocm_index_url }}
+      UCCL_GIT_REF: ${{ inputs.uccl_git_ref }}
+    outputs:
+      artifact_name: ${{ inputs.artifact_name }}
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify Docker is available
+        run: |
+          docker --version
+          docker info
+
+      - name: Checkout UCCL source
+        run: |
+          python external-builds/uccl/uccl_repo.py checkout \
+            --repo-hashtag "${UCCL_GIT_REF}"
+
+      - name: Build multi-architecture UCCL wheel
+        run: |
+          python external-builds/uccl/build_prod_wheels.py \
+            --output-dir "${GITHUB_WORKSPACE}/uccl-wheels" \
+            --python-version "${PYTHON_VERSION}" \
+            --index-url "${ROCM_INDEX_URL}" \
+            --rocm-arches "${ROCM_ARCHES}"
+
+      - name: Upload UCCL wheel artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ github.workspace }}/uccl-wheels/uccl-*.whl
+          if-no-files-found: error
+          retention-days: 7

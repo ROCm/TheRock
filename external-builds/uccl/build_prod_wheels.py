@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-r"""Builds production UCCL wheel based on the rocm wheels.
+r"""Build a production, multi-architecture UCCL wheel from ROCm wheels.
 
 The UCCL project already has a TheRock build target that is currently
 based on the prerelease (or nightly) wheels.
@@ -22,15 +22,14 @@ own and specify with `--uccl-dir` during the build step.
 python uccl_repo.py checkout
 ```
 
-2. Build UCCL for a single gfx architecture.
+2. Build UCCL for the supported CDNA architectures.
 
 Typical usage to build:
 
 ```
 # On Linux, using the default path for the repository:
 python build_prod_wheels.py \
-    --output-dir $HOME/tmp/pyout \
-    --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+    --output-dir /tmp/pyout
 ```
 
 ## Building Linux portable wheels
@@ -40,8 +39,6 @@ additional processing is required.
 """
 
 import argparse
-from datetime import date
-import json
 import os
 from pathlib import Path
 import platform
@@ -50,12 +47,31 @@ import shutil
 import shlex
 import subprocess
 import sys
-import tempfile
-import textwrap
 
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
+
+DEFAULT_ROCM_ARCHES = "gfx90a,gfx942,gfx950,gfx1250"
+DEFAULT_ROCM_INDEX_URL = "https://rocm.prereleases.amd.com/whl-multi-arch/"
+ROCM_ARCH_RE = re.compile(r"gfx[0-9a-f]+")
+
+
+def parse_rocm_arches(value: str) -> str:
+    """Validate and normalize UCCL's comma-separated ROCm target list."""
+    arches = [arch.strip().lower() for arch in value.split(",")]
+    if not arches or any(not arch for arch in arches):
+        raise argparse.ArgumentTypeError(
+            "ROCm architectures must be a comma-separated list"
+        )
+    invalid = [arch for arch in arches if ROCM_ARCH_RE.fullmatch(arch) is None]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            "Invalid ROCm architecture(s): " + ", ".join(invalid)
+        )
+    if len(arches) != len(set(arches)):
+        raise argparse.ArgumentTypeError("ROCm architectures must not be duplicated")
+    return ",".join(arches)
 
 
 def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
@@ -99,10 +115,16 @@ def do_build(args: argparse.Namespace):
     uccl_dir: Path | None = args.uccl_dir
 
     if is_windows:
-        print("WARNING: UCCL does not builds on Windows.", file=sys.stderr)
+        raise RuntimeError("UCCL does not build on Windows")
 
-    # Build UCCL
     if uccl_dir:
+        build_script = uccl_dir / "build.sh"
+        if not build_script.is_file():
+            raise FileNotFoundError(f"UCCL build script not found: {build_script}")
+
+        # build.sh forwards PYTORCH_ROCM_ARCH into the build container. UCCL's
+        # ep/setup.py turns each comma-separated entry into --offload-arch.
+        build_env = {"PYTORCH_ROCM_ARCH": args.rocm_arches}
         run_command(
             [
                 "./build.sh",
@@ -113,13 +135,17 @@ def do_build(args: argparse.Namespace):
                 args.image,
             ],
             cwd=uccl_dir,
+            env=build_env,
         )
 
         built_wheel = find_built_wheel(uccl_dir / "wheelhouse-therock", "uccl")
         print(f"Found built wheel: {built_wheel}")
         copy_to_output(args, built_wheel)
     else:
-        print("--- Not building UCCL (no --uccl-dir)")
+        raise FileNotFoundError(
+            "UCCL source directory was not found; run "
+            "'python uccl_repo.py checkout' or pass --uccl-dir"
+        )
 
 
 def main(argv: list[str]):
@@ -149,7 +175,18 @@ def main(argv: list[str]):
         help="Python version to use for the build",
     )
     p.add_argument(
-        "--index-url", required=True, help="Base URL of the Python Package Index."
+        "--index-url",
+        default=DEFAULT_ROCM_INDEX_URL,
+        help=f"Python package index URL (default: {DEFAULT_ROCM_INDEX_URL})",
+    )
+    p.add_argument(
+        "--rocm-arches",
+        default=os.environ.get("PYTORCH_ROCM_ARCH", DEFAULT_ROCM_ARCHES),
+        type=parse_rocm_arches,
+        help=(
+            "Comma-separated ROCm targets compiled into the wheel "
+            f"(default: {DEFAULT_ROCM_ARCHES})"
+        ),
     )
 
     args = p.parse_args(argv)
