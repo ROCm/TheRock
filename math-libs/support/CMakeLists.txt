@@ -15,6 +15,7 @@ therock_cmake_subproject_declare(mxDataGenerator
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
+    amd-llvm
     therock-googletest
   TEST_SUBPROJECTS
 )
