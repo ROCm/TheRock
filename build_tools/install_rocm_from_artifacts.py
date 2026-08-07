@@ -467,6 +467,8 @@ def retrieve_artifacts_by_run_id(args):
             # --test-engine; without _run, ctest finds the entry but errors with
             # "Unable to find executable: ../hipdnn_integration_tests".
             argv.append("hipdnn-integration-tests_run")
+            # The test binaries link librocrand.
+            argv.append("rand_lib")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.hipfile:
