@@ -616,6 +616,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
+python_requires = ["-r projects/hipblaslt/tensilelite/requirements.txt"]
 split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
 
 [artifacts.rand]
