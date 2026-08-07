@@ -129,7 +129,7 @@ jobs:
       - name: "Quartz - started - test ROCm artifacts"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
         with:
           run_phase: started
           reporting_workflow: test_artifacts.yml
@@ -264,7 +264,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - test ROCm artifacts"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
         with:
           run_phase: completed
           reporting_workflow: test_artifacts.yml

@@ -62,7 +62,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - started - release Linux"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_linux.yml
@@ -307,7 +307,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release Linux"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@main
+        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_linux.yml
