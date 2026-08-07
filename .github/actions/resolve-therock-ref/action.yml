@@ -12,17 +12,6 @@ description: |
   For other events (push, workflow_dispatch, schedule), uses the live tip of main.
 
 inputs:
-  github-token:
-    description: GitHub token for API access
-    required: true
-  base-sha:
-    description: Base SHA for PR (github.event.pull_request.base.sha)
-    required: false
-    default: ""
-  head-sha:
-    description: Head SHA for PR (github.event.pull_request.head.sha)
-    required: false
-    default: ""
   therock-ref-override:
     description: Optional explicit TheRock ref (branch/tag/SHA) to build against
     required: false
@@ -56,9 +45,9 @@ runs:
       id: resolve
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        BASE_SHA: ${{ inputs.base-sha }}
-        HEAD_SHA: ${{ inputs.head-sha }}
+        GITHUB_TOKEN: ${{ github.token }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         THEROCK_REF_OVERRIDE: ${{ inputs.therock-ref-override }}
         THEROCK_REPO: ${{ inputs.therock-repo }}
         THEROCK_BRANCH: ${{ inputs.therock-branch }}
