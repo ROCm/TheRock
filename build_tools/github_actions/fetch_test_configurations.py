@@ -199,14 +199,23 @@ test_matrix = {
             "windows": 5,
         },
         "exclude_family": {
+            # rocroller does not support gfx110X architectures (see TheRock#6693)
             # rocroller does not plan to support Linux and Windows gfx115X architectures
             "linux": [
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
             ],
             "windows": [
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
@@ -263,6 +272,10 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 6,
             "windows": 1,
+        },
+        "exclude_family": {
+            # hipBLASLt does not support gfx103X (see TheRock#1062)
+            "linux": ["gfx1030"],
         },
     },
     # SOLVER tests
@@ -389,9 +402,18 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
+            # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
+            # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
             # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
+                "gfx908",
+                "gfx90a",
+                "gfx1030",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
@@ -400,6 +422,13 @@ test_matrix = {
                 "gfx1201",
             ],
             "windows": [
+                "gfx908",
+                "gfx90a",
+                "gfx1030",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
@@ -614,6 +643,10 @@ test_matrix = {
             "linux": 5,
             "windows": 2,
         },
+        "exclude_family": {
+            # rocWMMA does not support gfx103X (see TheRock#1944)
+            "linux": ["gfx1030"],
+        },
     },
     # rocALUTION tests
     "rocalution": {
@@ -639,6 +672,23 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {"linux": 1},
+        "exclude_family": {
+            # rocprofiler-compute only supports gfx908, gfx90a, gfx942, gfx950, gfx1250
+            # (see TheRock#2892)
+            "linux": [
+                "gfx1030",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+                "gfx1200",
+                "gfx1201",
+            ],
+        },
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
@@ -776,6 +826,10 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        "exclude_family": {
+            # hipTensor does not support gfx103X (see TheRock#2074)
+            "linux": ["gfx1030"],
+        },
     },
 }
 
@@ -854,11 +908,25 @@ def run():
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
 
-        # If the test is disabled for a particular platform, skip the test
+        # If the test is disabled for a particular platform, skip the test.
+        # Check both the family group string (e.g. "gfx120X-all") and the individual
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201") against the
+        # exclude list, since CI may pass either form via AMDGPU_FAMILIES.
+        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        _family_gfx_targets = []
+        if amdgpu_families and shortened_family and shortened_family in all_families:
+            _family_gfx_targets = (
+                all_families[shortened_family]
+                .get(platform, {})
+                .get("fetch-gfx-targets", [])
+            )
+        _is_excluded = amdgpu_families in _exclude_list or any(
+            t in _exclude_list for t in _family_gfx_targets
+        )
         if (
             "exclude_family" in selected_matrix[key]
             and platform in selected_matrix[key]["exclude_family"]
-            and amdgpu_families in selected_matrix[key]["exclude_family"][platform]
+            and _is_excluded
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
