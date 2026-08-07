@@ -51,8 +51,8 @@ from github_actions_api import gha_set_output
 #   depth 0    = self only
 #   depth 1    = self + direct consumers
 #   unbounded  = self + transitive consumers (full closure)
-# Levels 1 and 2 walk transitively (same as 3) until a separate test-tier output
-# distinguishes them.
+# Levels 1 and 2 currently alias to level 3 (transitive).
+# TODO: distinguish them via a per-project test-tier output (e.g. full-QA/nightly).
 _DEFAULT_LEVEL = 4
 _LEVEL_TO_DEPTH: dict[int, int | None] = {5: 0, 4: 1, 3: None, 2: None, 1: None}
 
