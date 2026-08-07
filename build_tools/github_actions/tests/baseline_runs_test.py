@@ -29,7 +29,7 @@ def _workflow_run(
         "status": status,
         "conclusion": conclusion,
         "html_url": f"https://github.com/ROCm/TheRock/actions/runs/{run_id}",
-        "head_sha": head_sha or f"sha-{run_id}",
+        "head_sha": f"sha-{run_id}" if head_sha is None else head_sha,
         "head_branch": "main",
         "run_attempt": run_attempt,
         "created_at": created_at,
@@ -519,68 +519,83 @@ class BaselineRunsTest(unittest.TestCase):
 
 
 class CommitCompatibilityTest(unittest.TestCase):
-    HISTORY = ["sha-new", "sha-current", "sha-old", "sha-older"]
-
-    def test_same_commit_is_valid(self):
+    def test_exact_commit_match_is_valid(self):
         result = baseline_runs.validate_commit_compatibility(
             candidate_head_sha="sha-current",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=self.HISTORY,
+            expected_head_sha="sha-current",
         )
-        self.assertEqual(result.relationship, "same")
+
+        self.assertEqual(
+            result.expected_head_sha,
+            "sha-current",
+        )
+        self.assertEqual(
+            result.candidate_head_sha,
+            "sha-current",
+        )
+        self.assertEqual(
+            result.relationship,
+            "same",
+        )
         self.assertTrue(result.is_valid)
 
-    def test_ancestor_commit_is_valid(self):
+    def test_different_commit_is_invalid(self):
+        for candidate_sha in (
+            "sha-ancestor",
+            "sha-descendant",
+            "sha-divergent",
+            "sha-missing",
+        ):
+            with self.subTest(candidate_sha=candidate_sha):
+                result = baseline_runs.validate_commit_compatibility(
+                    candidate_head_sha=candidate_sha,
+                    expected_head_sha="sha-current",
+                )
+
+                self.assertEqual(
+                    result.expected_head_sha,
+                    "sha-current",
+                )
+                self.assertEqual(
+                    result.candidate_head_sha,
+                    candidate_sha,
+                )
+                self.assertEqual(
+                    result.relationship,
+                    "different",
+                )
+                self.assertFalse(result.is_valid)
+
+    def test_sha_comparison_is_normalized(self):
         result = baseline_runs.validate_commit_compatibility(
-            candidate_head_sha="sha-old",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=self.HISTORY,
+            candidate_head_sha=" SHA-CURRENT ",
+            expected_head_sha="sha-current",
         )
-        self.assertEqual(result.relationship, "ancestor")
+
+        self.assertEqual(
+            result.relationship,
+            "same",
+        )
         self.assertTrue(result.is_valid)
 
-    def test_descendant_commit_is_invalid(self):
-        result = baseline_runs.validate_commit_compatibility(
-            candidate_head_sha="sha-new",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=self.HISTORY,
-        )
-        self.assertEqual(result.relationship, "descendant_or_divergent")
-        self.assertFalse(result.is_valid)
-
-    def test_unknown_candidate_is_invalid(self):
-        result = baseline_runs.validate_commit_compatibility(
-            candidate_head_sha="sha-divergent",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=self.HISTORY,
-        )
-        self.assertEqual(result.relationship, "unknown")
-        self.assertFalse(result.is_valid)
-
-    def test_current_outside_window_is_unknown(self):
-        result = baseline_runs.validate_commit_compatibility(
-            candidate_head_sha="sha-old",
-            current_commit_sha="sha-missing",
-            ordered_commit_shas=self.HISTORY,
-        )
-        self.assertEqual(result.relationship, "unknown")
-        self.assertFalse(result.is_valid)
-
-    def test_sha_comparison_is_case_insensitive(self):
-        result = baseline_runs.validate_commit_compatibility(
-            candidate_head_sha="SHA-CURRENT",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=self.HISTORY,
-        )
-        self.assertEqual(result.relationship, "same")
-        self.assertTrue(result.is_valid)
-
-    def test_empty_sha_raises(self):
-        with self.assertRaisesRegex(ValueError, "current_commit_sha"):
+    def test_empty_expected_head_sha_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_head_sha",
+        ):
             baseline_runs.validate_commit_compatibility(
-                candidate_head_sha="sha-old",
-                current_commit_sha="",
-                ordered_commit_shas=self.HISTORY,
+                candidate_head_sha="sha-current",
+                expected_head_sha="",
+            )
+
+    def test_empty_candidate_head_sha_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "candidate_head_sha",
+        ):
+            baseline_runs.validate_commit_compatibility(
+                candidate_head_sha="",
+                expected_head_sha="sha-current",
             )
 
 
@@ -660,7 +675,7 @@ class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
 
         return backend_factory, workflow_jobs_fetcher
 
-    def test_select_baseline_run_skips_incompatible_commit(self):
+    def test_select_baseline_run_rejects_non_exact_commits(self):
         runs = [
             _workflow_run("newer", head_sha="sha-newer"),
             _workflow_run("ancestor", head_sha="sha-ancestor"),
@@ -678,12 +693,30 @@ class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
         baseline = baseline_runs.select_baseline_run(
             required_artifacts=[RequiredArtifact("base", "generic")],
             platform="linux",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=[
-                "sha-newer",
-                "sha-current",
-                "sha-ancestor",
-            ],
+            expected_head_sha="sha-current",
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
+    def test_select_baseline_run_accepts_exact_commit(self):
+        runs = [
+            _workflow_run("exact", head_sha="sha-current"),
+        ]
+        artifacts = {
+            "exact": ["base_lib_generic.tar.zst"],
+        }
+        jobs = {
+            "exact": [_workflow_job("Build")],
+        }
+        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            expected_head_sha="sha-current",
             workflow_runs=runs,
             backend_factory=backend_factory,
             workflow_jobs_fetcher=workflow_jobs_fetcher,
@@ -691,39 +724,104 @@ class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
 
         self.assertIsNotNone(baseline)
         assert baseline is not None
-        self.assertEqual(baseline.run_id, "ancestor")
+        self.assertEqual(baseline.run_id, "exact")
+        self.assertEqual(baseline.head_sha, "sha-current")
+
+        self.assertIsNotNone(baseline.commit_compatibility)
         assert baseline.commit_compatibility is not None
-        self.assertEqual(baseline.commit_compatibility.relationship, "ancestor")
+        self.assertEqual(
+            baseline.commit_compatibility.relationship,
+            "same",
+        )
 
-    def test_select_baseline_run_requires_ordered_commits_for_commit_rule(self):
-        with self.assertRaisesRegex(ValueError, "ordered_commit_shas"):
+    def test_select_baseline_run_rejects_empty_expected_head_sha(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_head_sha",
+        ):
             baseline_runs.select_baseline_run(
-                required_artifacts=[RequiredArtifact("base", "generic")],
+                required_artifacts=[
+                    RequiredArtifact(
+                        "base",
+                        "generic",
+                    )
+                ],
                 platform="linux",
-                current_commit_sha="sha-current",
-                workflow_runs=[_workflow_run("1")],
-                backend_factory=lambda *a: FakeBackend([]),
-                workflow_jobs_fetcher=lambda *a: [],
+                expected_head_sha="",
             )
 
-    def test_select_baseline_run_rejects_empty_current_commit_sha(self):
-        # Empty current_commit_sha still enables the check; fail fast at the
-        # API boundary instead of when the first candidate is inspected.
-        with self.assertRaisesRegex(ValueError, "current_commit_sha"):
-            baseline_runs.select_baseline_run(
-                required_artifacts=[RequiredArtifact("base", "generic")],
-                platform="linux",
-                current_commit_sha="",
-                ordered_commit_shas=["sha-current"],
-                workflow_runs=[_workflow_run("1")],
-                backend_factory=lambda *a: FakeBackend([]),
-                workflow_jobs_fetcher=lambda *a: [],
-            )
+    def test_select_baseline_run_skips_run_with_empty_head_sha(self):
+        runs = [
+            _workflow_run(
+                "no-sha",
+                head_sha="",
+            ),
+            _workflow_run(
+                "exact",
+                head_sha="sha-current",
+            ),
+        ]
+        artifacts = {
+            "no-sha": ["base_lib_generic.tar.zst"],
+            "exact": ["base_lib_generic.tar.zst"],
+        }
+        jobs = {
+            "no-sha": [_workflow_job("Build")],
+            "exact": [_workflow_job("Build")],
+        }
+        backend_factory, workflow_jobs_fetcher = self._factories(
+            artifacts,
+            jobs,
+        )
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact(
+                    "base",
+                    "generic",
+                )
+            ],
+            platform="linux",
+            expected_head_sha="sha-current",
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+
+        self.assertEqual(
+            baseline.run_id,
+            "exact",
+        )
+        self.assertEqual(
+            baseline.head_sha,
+            "sha-current",
+        )
+
+        self.assertIsNotNone(
+            baseline.commit_compatibility,
+        )
+        assert baseline.commit_compatibility is not None
+
+        self.assertEqual(
+            baseline.commit_compatibility.relationship,
+            "same",
+        )
 
     def test_select_baseline_run_skips_stale_runs(self):
         runs = [
-            _workflow_run("stale", created_at="2026-06-10T20:00:00Z"),
-            _workflow_run("fresh", created_at="2026-06-17T10:00:00Z"),
+            _workflow_run(
+                "stale",
+                head_sha="sha-current",
+                created_at="2026-06-10T20:00:00Z",
+            ),
+            _workflow_run(
+                "fresh",
+                head_sha="sha-current",
+                created_at="2026-06-17T10:00:00Z",
+            ),
         ]
         artifacts = {
             "stale": ["base_lib_generic.tar.zst"],
@@ -733,13 +831,30 @@ class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
             "stale": [_workflow_job("Build")],
             "fresh": [_workflow_job("Build")],
         }
-        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
+        backend_factory, workflow_jobs_fetcher = self._factories(
+            artifacts,
+            jobs,
+        )
 
         baseline = baseline_runs.select_baseline_run(
-            required_artifacts=[RequiredArtifact("base", "generic")],
+            required_artifacts=[
+                RequiredArtifact(
+                    "base",
+                    "generic",
+                )
+            ],
             platform="linux",
+            expected_head_sha="sha-current",
             max_age_hours=24,
-            now=datetime(2026, 6, 17, 20, 0, 0, tzinfo=timezone.utc),
+            now=datetime(
+                2026,
+                6,
+                17,
+                20,
+                0,
+                0,
+                tzinfo=timezone.utc,
+            ),
             workflow_runs=runs,
             backend_factory=backend_factory,
             workflow_jobs_fetcher=workflow_jobs_fetcher,
@@ -747,38 +862,28 @@ class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
 
         self.assertIsNotNone(baseline)
         assert baseline is not None
-        self.assertEqual(baseline.run_id, "fresh")
+
+        self.assertEqual(
+            baseline.run_id,
+            "fresh",
+        )
+
+        self.assertIsNotNone(
+            baseline.run_recency,
+        )
         assert baseline.run_recency is not None
-        self.assertTrue(baseline.run_recency.is_valid)
-
-    def test_select_baseline_run_skips_run_with_empty_head_sha(self):
-        runs = [
-            _workflow_run("no-sha", head_sha=""),
-            _workflow_run("ancestor", head_sha="sha-ancestor"),
-        ]
-        artifacts = {
-            "no-sha": ["base_lib_generic.tar.zst"],
-            "ancestor": ["base_lib_generic.tar.zst"],
-        }
-        jobs = {
-            "no-sha": [_workflow_job("Build")],
-            "ancestor": [_workflow_job("Build")],
-        }
-        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
-
-        baseline = baseline_runs.select_baseline_run(
-            required_artifacts=[RequiredArtifact("base", "generic")],
-            platform="linux",
-            current_commit_sha="sha-current",
-            ordered_commit_shas=["sha-current", "sha-ancestor"],
-            workflow_runs=runs,
-            backend_factory=backend_factory,
-            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        self.assertTrue(
+            baseline.run_recency.is_valid,
         )
 
-        self.assertIsNotNone(baseline)
-        assert baseline is not None
-        self.assertEqual(baseline.run_id, "ancestor")
+        self.assertIsNotNone(
+            baseline.commit_compatibility,
+        )
+        assert baseline.commit_compatibility is not None
+        self.assertEqual(
+            baseline.commit_compatibility.relationship,
+            "same",
+        )
 
 
 class RunTimingTest(unittest.TestCase):

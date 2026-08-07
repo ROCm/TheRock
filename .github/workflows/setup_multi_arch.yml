@@ -50,16 +50,18 @@ on:
           be reused; "reuse-stage" actually reuses them.
         type: string
         default: "dry-run"
+      stage_reuse_diff_base:
+        description: >-
+          Git commit or ref used as both the changed-file diff base and the
+          exact automatic stage-reuse baseline. Intended for same-repository
+          workflow_dispatch runs; empty disables automatic dispatch reuse.
+        type: string
+        default: ""
       stage_reuse_max_age_hours:
         description: >-
          Automatic stage reuse: reject baseline runs older than this many hours. default: "72"
         type: string
         default: "72"
-      stage_reuse_commit_history:
-        description: >-
-          Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
-        type: string
-        default: "50"
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -147,8 +149,9 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-          # We need the parent commit to do a diff
-          fetch-depth: 2
+          # Fetch full history so diff-base commits can be resolved for path filtering
+          # and exact automatic stage-reuse validation.
+          fetch-depth: 0
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -176,10 +179,9 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          STAGE_REUSE_DIFF_BASE: ${{ inputs.stage_reuse_diff_base }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
-          STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For cross-repo artifact reuse, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
           THEROCK_REPOSITORY: ${{ inputs.repository }}
