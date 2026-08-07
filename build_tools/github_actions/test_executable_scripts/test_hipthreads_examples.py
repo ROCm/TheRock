@@ -15,12 +15,12 @@ copies the source tree, including examples/, into the build dir which the test
 artifact globs as hipthreads/**/*).
 """
 
+import ctypes
 import json
 import logging
 import os
 import platform
 import shlex
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -76,6 +76,19 @@ RUN_TIMEOUT_SECONDS = 1800
 
 IS_WINDOWS = platform.system() == "Windows"
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
+
+
+def set_dll_directory(path: str | None) -> None:
+    """Add a DLL search dir ahead of System32.
+
+    PATH can't override a stale amdhip64_7.dll in System32; SetDllDirectoryW can,
+    without copying DLLs into the artifact (TheRock#7132). None restores default.
+    """
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.SetDllDirectoryW.argtypes = [ctypes.c_wchar_p]
+    kernel32.SetDllDirectoryW.restype = ctypes.c_bool
+    if not kernel32.SetDllDirectoryW(path):
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 def load_rocm_version() -> str:
@@ -175,12 +188,6 @@ def configure_and_build(example: dict, gpu_arch: str, environ_vars: dict) -> Pat
     if not binary.exists():
         raise FileNotFoundError(f"Built binary not found: {binary}")
 
-    if IS_WINDOWS:
-        # Copy artifact DLLs next to the exe so it loads the HIP runtime under test,
-        # not a driver's amdhip64_7.dll shadowing it from System32 (TheRock#7132).
-        for dll in (OUTPUT_ARTIFACTS_PATH / "bin").glob("*.dll"):
-            shutil.copy2(dll, binary.parent)
-
     return binary
 
 
@@ -255,6 +262,9 @@ if IS_WINDOWS:
     os.environ["PATH"] = (
         str(OUTPUT_ARTIFACTS_PATH / "bin") + os.pathsep + os.environ.get("PATH", "")
     )
+    # Select the artifact HIP runtime ahead of System32 for every child we spawn
+    # (offload-arch, cmake/clang, the examples). See set_dll_directory.
+    set_dll_directory(str(OUTPUT_ARTIFACTS_PATH / "bin"))
 
 gpu_arch = get_gpu_architecture_portable(OUTPUT_ARTIFACTS_DIR)
 if not gpu_arch:
