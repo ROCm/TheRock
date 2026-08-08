@@ -303,7 +303,7 @@ base/
   therock_artifact_base.toml
 runtime/
   [rocr-runtime] -> projects/rocr-runtime
-  [rocminfo] -> projects/rocminfo
+  [rocminfo] -> projects/rocminfo #Do we need this project? Is all the functionality covered by AMD-SMI
   [clr] -> projects/clr
   [hip] -> projects/hip
   [hip-tests] -> projects/hip-tests
@@ -318,6 +318,7 @@ profiler/
   [aqlprofile/] -> projects/aqlprofile
   [sdk/] -> projects/rocprofiler-sdk
   [tracer/] -> projects/roctracer
+#rocm-systems, rocm-compute?
   therock_artifact_rocprofiler-sdk.toml
   therock.cmake
   therock_subprojects.cmake
@@ -332,55 +333,56 @@ shared/
   mxdatagenerator/
   rocroller/
   tensile/
+  common/ #Utilities used by multiple projects e.g. RAII GPU buffer classes
   therock.cmake
   therock_subprojects.cmake
 
-gemmla/
+gemm-linalg/
   common/
-    [hipblas-common] -> project/hipblas-common
+    [blas-common] -> project/hipblas-common
     therock.cmake
     therock_subprojects.cmake
     therock_artifact_gemmla-common.toml
-  gemm-dense/
+  dense-blas/
     [rocblas] -> projects/rocblas
+    [hipblas] -> projects/hipblas
     [hipblaslt] -> projects/hipblaslt
     therock.cmake
     therock_subprojects.cmake
-    therock_artifact_gemm-dense.toml
-  gemm-sparse/
+    therock_artifact_blas.toml
+  sparse-blas/
     [rocsparse] -> projects/rocsparse
     [hipsparselt] -> projects/hipsparselt
     [hipsparse] -> projects/hipsparse
     therock.cmake
     therock_subprojects.cmake
-    therock_artifact_gemm-sparse.toml
-  la/
+    therock_artifact_sparse.toml
+  solver/
     [rocsolver] -> projects/rocsolver
     [hipsolver] -> projects/hipsolver
     therock.cmake
     therock_subprojects.cmake
     therock_artifact_la.toml
-  gemm-api/
-    [hipblas] -> projects/hipblas
-    therock.cmake
-    therock_subprojects.cmake
-    therock_artifact_gemm-api.toml
 
-kernel-libs/
-  [rocrand] -> projects/rocrand
-  [hiprand] -> projects/hiprand
-  [rocfft] -> projects/rocfft
-  [hipfft] -> projects/hipfft
+fft/
+  [hipfft] -> projects/hipfft #Merge rocFFT into one folder
   therock.cmake
   therock_subprojects.cmake
-  therock_artifact_fft.toml
+  therock_artifact_fft.toml 
+
+rand/
+  [rocrand] -> projects/rocrand # Should we merge into hiprand?
+  [hiprand] -> projects/hiprand
+  therock.cmake
+  therock_subprojects.cmake
   therock_artifact_rand.toml
 
-compute-libs/
+core-compute-libs/
   [rocprim] -> projects/rocprim
   [hipcub] -> projects/hipcub
   [rocthrust] -> projects/rocthrust
   [composable-kernel] -> projects/composable-kernel (plan TBD, shown for illustration)
+  [libhipxx] (planned prior to 8.0.0)
   therock.cmake
   therock_subprojects.cmake
   therock_artifact_prim.toml
