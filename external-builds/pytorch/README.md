@@ -31,15 +31,15 @@ This incorporates advice from:
 The following projects and features are packaged and released through TheRock's
 stable, nightly, and dev release channels.
 
-| Project / feature | Linux support | Windows support                                                                             |
-| ----------------- | ------------- | ------------------------------------------------------------------------------------------- |
-| torch             | ✅ Supported  | ✅ Supported                                                                                |
-| ↳ aotriton        | ✅ Supported  | ✅ Supported                                                                                |
-| ↳ triton          | ✅ Supported  | 🚧 In progress - [triton-windows#2](https://github.com/triton-lang/triton-windows/issues/2) |
-| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported                                                                            |
-| torchaudio        | ✅ Supported  | ✅ Supported                                                                                |
-| torchvision       | ✅ Supported  | ✅ Supported                                                                                |
-| apex              | ✅ Supported  | ❌ Not supported                                                                            |
+| Project / feature | Linux support | Windows support                                                           |
+| ----------------- | ------------- | ------------------------------------------------------------------------- |
+| torch             | ✅ Supported  | ✅ Supported                                                              |
+| ↳ aotriton        | ✅ Supported  | ✅ Supported                                                              |
+| ↳ triton          | ✅ Supported  | ✅ Supported (nightly only — see [Triton on Windows](#triton-on-windows)) |
+| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported                                                          |
+| torchaudio        | ✅ Supported  | ✅ Supported                                                              |
+| torchvision       | ✅ Supported  | ✅ Supported                                                              |
+| apex              | ✅ Supported  | ❌ Not supported                                                          |
 
 The following projects are not currently packaged and released by TheRock, functionality may vary.
 
@@ -191,6 +191,59 @@ mix/match build steps.
     --output-dir %HOME%/tmp/pyout
   ```
 
+### Triton on Windows
+
+Windows nightly builds use the community
+[triton-windows](https://github.com/triton-lang/triton-windows) fork instead of
+[ROCm/triton](https://github.com/ROCm/triton). The resulting wheel is published
+as **`triton_windows`** (the import name remains `triton`).
+
+When building from source, check out triton after torch and pass `--build-triton`:
+
+```batch
+python pytorch_triton_repo.py checkout --checkout-dir C:/b/triton --torch-dir C:/b/pytorch
+python build_prod_wheels.py build ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
+    --pytorch-dir C:/b/pytorch ^
+    --pytorch-audio-dir C:/b/audio ^
+    --pytorch-vision-dir C:/b/vision ^
+    --triton-dir C:/b/triton ^
+    --build-triton ^
+    --output-dir %HOME%/tmp/pyout
+```
+
+Additional requirements for local Triton builds:
+
+- Run from a **Visual Studio Developer Command Prompt** (or after `vcvars64.bat`)
+  so MSVC is on `PATH`.
+- The build downloads a pinned LLVM toolchain (~500 MB) from
+  `oaitriton.blob.core.windows.net`, keyed by `cmake/llvm-hash.txt` in the
+  triton-windows checkout. The tree is cached next to the triton checkout as
+  `llvm-<hash>-windows-x64`.
+- Version suffixes follow the same ROCm composite scheme as other external Python
+  packages; see [Python package versioning](../../docs/packaging/versioning.md#pytorch-versions).
+
+AMD is contributing to upstream production readiness; see
+[triton-windows#2](https://github.com/triton-lang/triton-windows/issues/2).
+
+> [!NOTE]
+> On Linux, `build_prod_wheels.py` adds `triton==...` to the `torch` wheel's
+> install requirements so `pip install torch` pulls Triton automatically. On
+> Windows the same mechanism uses `triton_windows==...`. Upstream PyTorch wheels
+> do not declare these dependencies; TheRock adds them so `pip install torch`
+> from our indices pulls the matching Triton build.
+
+#### Commit pins
+
+Windows nightly builds pin [triton-windows](https://github.com/triton-lang/triton-windows)
+via [`ci_commit_pins/triton-windows.txt`](ci_commit_pins/triton-windows.txt)
+(instead of Linux [ROCm/triton](https://github.com/ROCm/triton) and
+[`.ci/docker/ci_commit_pins/triton.txt`](https://github.com/pytorch/pytorch/blob/nightly/.ci/docker/ci_commit_pins/triton.txt)).
+
+Stable `release/*` Windows wheels do not build Triton in CI today. The
+[supported PyTorch versions](#supported-pytorch-versions) table lists
+triton-windows only on the **nightly** row for that reason.
+
 ## Running/testing PyTorch
 
 ### Prerequisites
@@ -289,6 +342,13 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 ```
 
 ## Nightly releases
+
+For Windows workflows, `triton_windows` is built only when
+`pytorch_git_ref` is `nightly` (upstream `pytorch/pytorch` nightlies). For
+stable `release/*` refs from [ROCm/pytorch](https://github.com/ROCm/pytorch),
+the build currently produces `torch`, `torchaudio`, and `torchvision` without
+Triton. Windows nightly releases publish `triton_windows` to the unified
+multi-arch index at `https://rocm.nightlies.amd.com/whl-multi-arch/`.
 
 ### Gating releases with Pytorch tests
 
