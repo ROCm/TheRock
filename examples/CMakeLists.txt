@@ -23,14 +23,35 @@ else()
   )
 endif()
 
-# hipTensor is only built when composable_kernel is also built (CK is a hard
-# build dependency). _ck_enabled, set by math-libs/CMakeLists.txt, is OFF when
-# CK was filtered out for the selected gfx targets, in which case hipTensor is
-# not declared even though THEROCK_ENABLE_HIPTENSOR is ON. Reflect the actual
-# built status so the example does not find_package() a missing hiptensor.
+# Per-arch libraries disabled for the selected targets (e.g. the portable
+# amdgcnspirv target) are not built, so the example must not find_package() them.
+function(_therock_example_available out_var enabled project_name)
+  therock_project_disabled(_skip "${project_name}")
+  if(_skip)
+    set("${out_var}" OFF PARENT_SCOPE)
+  else()
+    set("${out_var}" "${enabled}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+_therock_example_available(_blas_available "${THEROCK_ENABLE_BLAS}" rocBLAS)
+_therock_example_available(_fft_available "${THEROCK_ENABLE_FFT}" rocFFT)
+_therock_example_available(_hipdnn_available "${THEROCK_ENABLE_HIPDNN}" hipDNN)
+_therock_example_available(_miopen_available "${THEROCK_ENABLE_MIOPEN}" MIOpen)
+_therock_example_available(_prim_available "${THEROCK_ENABLE_PRIM}" rocPRIM)
+_therock_example_available(_rand_available "${THEROCK_ENABLE_RAND}" rocRAND)
+_therock_example_available(_rccl_available "${THEROCK_ENABLE_RCCL}" rccl)
+_therock_example_available(_rocwmma_available "${THEROCK_ENABLE_ROCWMMA}" rocWMMA)
+_therock_example_available(_rocalution_available "${THEROCK_ENABLE_ROCALUTION}" rocALUTION)
+_therock_example_available(_libhipcxx_available "${THEROCK_ENABLE_LIBHIPCXX}" libhipcxx)
+_therock_example_available(_solver_available "${THEROCK_ENABLE_SOLVER}" rocSOLVER)
+_therock_example_available(_sparse_available "${THEROCK_ENABLE_SPARSE}" rocSPARSE)
+
+# hipTensor is additionally gated on composable_kernel (a hard build dependency);
+# _ck_enabled is set by math-libs/CMakeLists.txt.
 set(_hiptensor_available OFF)
 if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
-  set(_hiptensor_available ON)
+  _therock_example_available(_hiptensor_available ON hipTensor)
 endif()
 
 # Examples are configured against the installed ROCm prefix. The
@@ -46,21 +67,20 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/cpp-sdk-user"
           "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/cpp-sdk-user"
           "-DGENERATOR=${CMAKE_GENERATOR}"
-          "-DTHEROCK_ENABLE_BLAS=${THEROCK_ENABLE_BLAS}"
-          "-DTHEROCK_ENABLE_FFT=${THEROCK_ENABLE_FFT}"
+          "-DTHEROCK_ENABLE_BLAS=${_blas_available}"
+          "-DTHEROCK_ENABLE_FFT=${_fft_available}"
           "-DTHEROCK_ENABLE_HIP=${THEROCK_ENABLE_HIP_RUNTIME}"
-          "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
-          "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
-          "-DTHEROCK_ENABLE_MIOPEN=${THEROCK_ENABLE_MIOPEN}"
+          "-DTHEROCK_ENABLE_HIPDNN=${_hipdnn_available}"
+          "-DTHEROCK_ENABLE_MIOPEN=${_miopen_available}"
           "-DTHEROCK_ENABLE_HIPTENSOR=${_hiptensor_available}"
-          "-DTHEROCK_ENABLE_PRIM=${THEROCK_ENABLE_PRIM}"
-          "-DTHEROCK_ENABLE_RAND=${THEROCK_ENABLE_RAND}"
-          "-DTHEROCK_ENABLE_RCCL=${THEROCK_ENABLE_RCCL}"
-          "-DTHEROCK_ENABLE_ROCWMMA=${THEROCK_ENABLE_ROCWMMA}"
-          "-DTHEROCK_ENABLE_ROCALUTION=${THEROCK_ENABLE_ROCALUTION}"
-          "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
-          "-DTHEROCK_ENABLE_SOLVER=${THEROCK_ENABLE_SOLVER}"
-          "-DTHEROCK_ENABLE_SPARSE=${THEROCK_ENABLE_SPARSE}"
+          "-DTHEROCK_ENABLE_PRIM=${_prim_available}"
+          "-DTHEROCK_ENABLE_RAND=${_rand_available}"
+          "-DTHEROCK_ENABLE_RCCL=${_rccl_available}"
+          "-DTHEROCK_ENABLE_ROCWMMA=${_rocwmma_available}"
+          "-DTHEROCK_ENABLE_ROCALUTION=${_rocalution_available}"
+          "-DTHEROCK_ENABLE_LIBHIPCXX=${_libhipcxx_available}"
+          "-DTHEROCK_ENABLE_SOLVER=${_solver_available}"
+          "-DTHEROCK_ENABLE_SPARSE=${_sparse_available}"
           ${HIP_CMAKE_ARGS}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/clean_configure_test_project.cmake"
   )

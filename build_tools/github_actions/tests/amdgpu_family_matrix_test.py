@@ -91,6 +91,38 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                     self.fail(f"{target_name}/{platform} has empty build_variants")
 
 
+class TestAmdgcnSpirvTarget(unittest.TestCase):
+    """Validate the build-only ``amdgcnspirv`` SPIR-V target.
+
+    SPIR-V is a platform-independent target: it is compiled but has no
+    hardware to run tests on, so it must appear as a Linux-only, build-only
+    entry mapped to the ``gpu-generic`` family.
+    """
+
+    def test_amdgcnspirv_present_in_presubmit_and_nightly(self):
+        """``amdgcnspirv`` is selectable on presubmit and nightly triggers."""
+        presubmit = get_all_families_for_trigger_types(["presubmit"])
+        self.assertIn("amdgcnspirv", presubmit)
+        nightly = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        self.assertIn("amdgcnspirv", nightly)
+
+    def test_amdgcnspirv_is_linux_only(self):
+        """SPIR-V has no Windows entry (nothing Windows-specific to build)."""
+        entry = ALL_FAMILIES["amdgcnspirv"]
+        self.assertIn("linux", entry)
+        self.assertNotIn("windows", entry)
+
+    def test_amdgcnspirv_is_build_only(self):
+        """SPIR-V is build-only: no test runner and no GPU targets to fetch."""
+        linux = ALL_FAMILIES["amdgcnspirv"]["linux"]
+        self.assertEqual(linux["family"], "gpu-generic")
+        self.assertEqual(linux["test-runs-on"], "")
+        self.assertEqual(linux["fetch-gfx-targets"], [])
+        self.assertEqual(linux["build_variants"], ["release"])
+
+
 class TestExternalConfig(unittest.TestCase):
     """Tests for external config loading functionality."""
 

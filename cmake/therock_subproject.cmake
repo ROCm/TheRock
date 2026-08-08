@@ -1614,6 +1614,27 @@ function(therock_filter_amdgpu_targets out_var project_name)
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
 endfunction()
 
+# TRUE when every requested per-arch target disables the project via
+# DISABLE_TARGET_PROJECTS (e.g. a device library under the portable amdgcnspirv
+# target). FALSE for ordinary gfx builds and for generic stages where no per-arch
+# targets are requested. Gate a subproject's declaration with this to keep it out
+# of builds where it is meaningless by design.
+function(therock_project_disabled out_var project_name)
+  set(_result FALSE)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    get_property(_disables GLOBAL PROPERTY
+      "THEROCK_AMDGPU_PROJECT_TARGET_DISABLES_${project_name}")
+    if(_disables)
+      set(_remaining ${THEROCK_AMDGPU_TARGETS})
+      list(REMOVE_ITEM _remaining ${_disables})
+      if(NOT _remaining)
+        set(_result TRUE)
+      endif()
+    endif()
+  endif()
+  set("${out_var}" "${_result}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")

@@ -27,7 +27,11 @@ from pathlib import Path
 import sys
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
-from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.cmake_amdgpu_targets import (
+    amdgpu_family_map,
+    expand_families,
+    generic_targets,
+)
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
 
 
@@ -213,6 +217,16 @@ def run(args: argparse.Namespace):
         if family_map is None:
             family_map = amdgpu_family_map()
         windows_targets = expand_families(args.windows_amdgpu_families, family_map)
+
+    # Architecture-independent targets (e.g. amdgcnspirv) emit no per-arch device
+    # code, so they yield no split device artifacts and no device wheels. Drop
+    # them so completeness checks and wheel assembly don't expect a device set.
+    if family_map is not None:
+        generic = generic_targets(family_map)
+        if linux_targets is not None:
+            linux_targets = [t for t in linux_targets if t not in generic]
+        if windows_targets is not None:
+            windows_targets = [t for t in windows_targets if t not in generic]
 
     artifacts = ArtifactCatalog(args.artifact_dir)
     validate_kpack_split_target_completeness(

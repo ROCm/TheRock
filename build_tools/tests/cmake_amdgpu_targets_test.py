@@ -10,8 +10,10 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.cmake_amdgpu_targets import (
+    GENERIC_FAMILY,
     AmdgpuTargetInfo,
     build_family_to_targets,
+    generic_targets,
     parse_amdgpu_targets_cmake,
 )
 
@@ -52,6 +54,22 @@ class ParseAmdgpuTargetsCmakeTest(unittest.TestCase):
         self.assertEqual(len(infos), 1)
         self.assertEqual(infos[0].gfx_target, "gfx900")
         self.assertEqual(infos[0].families, ["dgpu-all", "gfx900-dgpu"])
+
+    def test_family_stops_at_disable_keyword(self):
+        # FAMILY must not absorb DISABLE_TARGET_PROJECTS entries (amdgcnspirv shape).
+        infos = self._parse(
+            """\
+            therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
+              EXCLUDE_TARGET_PROJECTS
+                hip-clr
+              DISABLE_TARGET_PROJECTS
+                rocBLAS rocFFT
+            )
+            """
+        )
+        self.assertEqual(len(infos), 1)
+        self.assertEqual(infos[0].gfx_target, "amdgcnspirv")
+        self.assertEqual(infos[0].families, ["gpu-generic"])
 
     def test_no_family(self):
         # Targets without an explicit FAMILY still parse correctly.
@@ -106,6 +124,18 @@ class BuildFamilyToTargetsTest(unittest.TestCase):
         ]
         mapping = build_family_to_targets(infos)
         self.assertEqual(mapping["gfx942"].count("gfx942"), 1)
+
+
+class GenericTargetsTest(unittest.TestCase):
+    def test_returns_generic_family_members(self):
+        mapping = {
+            GENERIC_FAMILY: ["amdgcnspirv"],
+            "gfx110X-all": ["gfx1100", "gfx1101"],
+        }
+        self.assertEqual(generic_targets(mapping), {"amdgcnspirv"})
+
+    def test_empty_when_no_generic_family(self):
+        self.assertEqual(generic_targets({"gfx942": ["gfx942"]}), set())
 
 
 if __name__ == "__main__":

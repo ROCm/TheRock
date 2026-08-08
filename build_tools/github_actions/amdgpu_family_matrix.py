@@ -287,6 +287,16 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "amdgcnspirv": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            "test-runs-on": "",
+            "family": "gpu-generic",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
+        },
+    },
 }
 
 
@@ -471,6 +481,15 @@ amdgpu_family_info_matrix_nightly = {
             # and PyTorch builds.
             "test-runs-on": "",
             "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
+    "amdgcnspirv": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            "test-runs-on": "",
+            "family": "gpu-generic",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },

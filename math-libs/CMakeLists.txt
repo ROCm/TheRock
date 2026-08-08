@@ -1,7 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(THEROCK_ENABLE_RAND)
+therock_project_disabled(_skip_rand rocRAND)
+if(THEROCK_ENABLE_RAND AND NOT _skip_rand)
   # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
   # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
   # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
@@ -98,7 +99,8 @@ if(THEROCK_ENABLE_RAND)
   )
 endif(THEROCK_ENABLE_RAND)
 
-if(THEROCK_ENABLE_PRIM)
+therock_project_disabled(_skip_prim rocPRIM)
+if(THEROCK_ENABLE_PRIM AND NOT _skip_prim)
   ##############################################################################
   # rocPRIM
   ##############################################################################
@@ -260,7 +262,8 @@ if(THEROCK_ENABLE_PRIM)
   )
 endif(THEROCK_ENABLE_PRIM)
 
-if(THEROCK_ENABLE_FFT)
+therock_project_disabled(_skip_fft rocFFT)
+if(THEROCK_ENABLE_FFT AND NOT _skip_fft)
   if(WIN32)
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
@@ -357,12 +360,15 @@ if(THEROCK_ENABLE_FFT)
   )
 endif(THEROCK_ENABLE_FFT)
 
-if(THEROCK_ENABLE_BLAS)
+# rocBLAS anchors the whole BLAS cascade (support/origami included).
+therock_project_disabled(_skip_blas rocBLAS)
+if(THEROCK_ENABLE_BLAS AND NOT _skip_blas)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
 
-if(THEROCK_ENABLE_ROCWMMA)
+therock_project_disabled(_skip_rocwmma rocWMMA)
+if(THEROCK_ENABLE_ROCWMMA AND NOT _skip_rocwmma)
   set(_rocwmma_build_samples ON)
   set(_rocwmma_build_tests ${THEROCK_BUILD_TESTING})
   set(_rocwmma_enable_benchmarks ${THEROCK_ROCWMMA_ENABLE_BENCHMARKS})
@@ -442,7 +448,8 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
-if(THEROCK_ENABLE_ROCALUTION)
+therock_project_disabled(_skip_rocalution rocALUTION)
+if(THEROCK_ENABLE_ROCALUTION AND NOT _skip_rocalution)
   ##############################################################################
   # rocALUTION
   ##############################################################################
@@ -631,7 +638,8 @@ if(_ck_enabled)
   )
 endif()
 
-if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
+therock_project_disabled(_skip_hiptensor hipTensor)
+if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR AND NOT _skip_hiptensor)
   ##############################################################################
   # hipTensor
   ##############################################################################
@@ -677,7 +685,8 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   )
 endif()
 
-if(THEROCK_ENABLE_HIPTHREADS)
+therock_project_disabled(_skip_hipthreads hipthreads)
+if(THEROCK_ENABLE_HIPTHREADS AND NOT _skip_hipthreads)
   ##############################################################################
   # hipthreads
   ##############################################################################
