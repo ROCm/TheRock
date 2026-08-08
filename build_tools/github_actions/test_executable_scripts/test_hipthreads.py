@@ -26,6 +26,27 @@ from pathlib import Path
 
 from libhipcxx_utils import get_gpu_architecture_portable, prepend_env_path
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
+
+# TODO(#7157): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+# create_late.pass.cpp is marked XFAIL upstream, but the new compiler makes it
+# pass, and lit fails the run on that unexpected pass. Skip it rather than using
+# --xfail-not: the old compiler on main still fails it, and there --xfail-not would
+# report a real failure.
+LIT_FILTER_OUT = {
+    "gfx94X-dcgpu": {
+        "linux": [
+            r"create_late\.pass\.cpp",
+        ],
+    },
+    "gfx950-dcgpu": {
+        "linux": [
+            r"create_late\.pass\.cpp",
+        ],
+    },
+}
+
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -191,7 +212,12 @@ cmd = [
     "-v",
     "-j",
     "1",
-    str(HIPTHREADS_SOURCE_DIR / "test"),
 ]
+filter_patterns = LIT_FILTER_OUT.get(AMDGPU_FAMILIES, {}).get(os_type, [])
+if filter_patterns:
+    combined = "|".join(f"({pattern})" for pattern in filter_patterns)
+    cmd.extend(["--filter-out", combined])
+    logging.info(f"++ Excluding hipthreads lit tests matching: {combined}")
+cmd.append(str(HIPTHREADS_SOURCE_DIR / "test"))
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
