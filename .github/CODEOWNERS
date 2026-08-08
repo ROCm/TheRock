@@ -11,6 +11,22 @@
 # This file accumulated unrelated code, tighten reviews until cleaned up.
 /build_tools/github_actions/github_actions_api.py       @ScottTodd
 
+# Python packages. Changes to these paths must align with
+# https://github.com/ROCm/TheRock/blob/main/docs/packaging/python_packaging.md
+/build_tools/packaging/python           @ScottTodd @marbre
+/build_tools/build_python_packages.py   @ScottTodd @marbre
+/external-builds/pytorch                @ScottTodd
+
+# Release promotion scripts.
+/build_tools/packaging/download_python_packages.py  @HereThereBeDragons @araravik-psd @JeniferC99
+/build_tools/packaging/promote_packages.py          @HereThereBeDragons @araravik-psd @JeniferC99
+/build_tools/packaging/upload_release_packages.py   @HereThereBeDragons @araravik-psd @JeniferC99
+
+# A few central CI system components that must align with
+# https://github.com/ROCm/TheRock/blob/main/docs/development/ci_overview.md
+/.github/workflows/setup_multi_arch.yml                   @ScottTodd
+/build_tools/github_actions/configure_multi_arch_ci.py    @ScottTodd
+
 # Debug tools configs and ROCgdb cmake wrapper.
 /debug-tools            @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger
 /debug-tools/rocgdb     @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger

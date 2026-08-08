@@ -46,6 +46,12 @@ on:
         description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
         type: string
         required: true
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -98,16 +104,30 @@ on:
         description: PyTorch ref to checkout (for example, "release/2.12").
         type: string
         default: "release/2.12"
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: >-
+          URL for pip --find-links to install ROCm packages (flat page). Use
+          this OR rocm_package_index_url, not both. One of the two must be set
+          (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        description: >-
+          URL for pip --index-url to install ROCm packages (PEP 503 index). Use
+          this OR rocm_package_find_links_url, not both. One of the two must be
+          set (there is no default): point it at the ROCm channel/build to build
+          against.
         type: string
         default: ""
       release_type:
@@ -117,11 +137,17 @@ on:
           - dev
         default: dev
       repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        description: >-
+          TheRock repository to check out the build scripts/workflow from (NOT
+          the PyTorch source). Leave blank to use this repository. To build a
+          different PyTorch branch, set pytorch_git_ref instead.
         type: string
         default: ""
       ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        description: >-
+          Branch, tag, or SHA of TheRock (the repository above) to check out.
+          Leave blank to use the triggering ref. This does NOT select the
+          PyTorch source ref; use pytorch_git_ref for that.
         type: string
         default: ""
       cache_type:
@@ -168,7 +194,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -178,7 +204,7 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -240,9 +266,13 @@ jobs:
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
           git config --global core.longpaths true
+          pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
+          if [ -z "${pytorch_origin}" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
@@ -265,7 +295,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
@@ -292,23 +322,36 @@ jobs:
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       - name: Build PyTorch wheels
+        # Default to the nightly multi-arch ROCm index when neither source is
+        # provided so a bare manual dispatch works; setting either input
+        # overrides it. The default is applied here rather than on the input
+        # because GitHub reverts an emptied input back to its declared default,
+        # which would make the two inputs impossible to use exclusively.
         shell: cmd
+        env:
+          # Use the index if given; else the find-links page; else default to
+          # the nightly multi-arch index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           set "CACHE_FLAG="
           if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
           if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
 
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
+          REM build_prod_wheels.py forwards each of these to pip and ignores an
+          REM empty value, so pass both and supply whichever source applies:
+          REM --index-url for a PEP 503 index, --find-links for a flat page.
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --index-url="${{ inputs.rocm_package_index_url }}" ^
-            --find-links="${{ inputs.rocm_package_find_links_url }}" ^
+            --index-url="%ROCM_INDEX_URL%" ^
+            --find-links="%ROCM_FIND_LINKS%" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
-            --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
+            --release-type="${{ inputs.release_type }}" ^
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
             ${{ env.optional_build_prod_arguments }}
 
@@ -438,13 +481,13 @@ jobs:
       matrix: ${{ steps.configure.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout CI config
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ROCm/therock-ci-config
           ref: main
@@ -481,6 +524,5 @@ jobs:
       # checkout_from_manifest.py --no-hipify --no-submodules so tests use the
       # exact source commit that produced the package under test.
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
-      multi_arch: true
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}

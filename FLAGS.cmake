@@ -32,6 +32,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable MX (microscaling) data-type support for GEMM in the hipDNN hipBLASLt provider"
+  CMAKE_VARS
+    HIPBLASLTPROVIDER_ENABLE_MX_GEMM=ON
+  SUB_PROJECTS
+    hipblasltprovider
+)
+
+therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
   DEFAULT_VALUE OFF
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
@@ -39,6 +49,16 @@ therock_declare_flag(
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
   SUB_PROJECTS
     hipkernelprovider
+)
+
+therock_declare_flag(
+  NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build MIOpen as a public wrapper (libMIOpen.so) over a private implementation library (libMIOpen_private.so), with optional runtime forwarding to hipDNN. See rocm-libraries MIOpen RFC 0001."
+  CMAKE_VARS
+    MIOPEN_ENABLE_HIPDNN_WRAPPER=ON
+  SUB_PROJECTS
+    MIOpen
 )
 
 therock_declare_flag(

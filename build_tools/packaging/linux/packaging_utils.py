@@ -51,7 +51,7 @@ def normalize_target_list(
         raw = [str(a) for a in value]
 
     tokens = [
-        tok.lower() if lowercase else tok
+        (tok.split(":", 1)[0].lower() if lowercase else tok.split(":", 1)[0])
         for item in raw
         for tok in _GFX_ARCH_SPLIT_RE.split(item)
         if tok
@@ -66,7 +66,6 @@ def normalize_target_list(
 # version_suffix - Used along with package name
 # install_prefix - Install prefix for the package
 # gfx_arch - gfxarch used for building package
-# enable_rpath - To enable RPATH packages
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
@@ -83,7 +82,6 @@ class PackageConfig:
     version_suffix: str
     install_prefix: str
     gfx_arch: str
-    enable_rpath: bool = False
     versioned_pkg: bool = True
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
@@ -392,7 +390,6 @@ def update_package_name(pkg_name, config: PackageConfig):
 
     Based on conditions, the function may append:
     - ROCm version
-    - '-rpath'
     - Graphics architecture (gfxarch)
 
     Parameters:
@@ -416,9 +413,6 @@ def update_package_name(pkg_name, config: PackageConfig):
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
-
-    if config.enable_rpath:
-        pkg_suffix = f"-rpath{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
     updated_pkgname = pkg_name
@@ -911,7 +905,13 @@ def filter_components_fromartifactory(
 
             # In kpack mode, skip non-gfxarch artifacts when building gfx-specific packages
             # This prevents generic artifacts from being included in both base and arch-specific packages
-            if enable_kpack and gfx_arch not in (GFX_HOST, GFX_META) and not is_gfxarch:
+            # For non-gfxarch packages (gfx_arch=""), we SHOULD include Artifact_Gfxarch=False artifacts
+            if (
+                enable_kpack
+                and gfx_arch
+                and gfx_arch not in (GFX_HOST, GFX_META)
+                and not is_gfxarch
+            ):
                 print(
                     f"{pkg_name} : Skipping artifact '{artifact_prefix}' for {gfx_arch} package "
                     f"(Artifact_Gfxarch=False, should only be in generic package)"
@@ -927,30 +927,32 @@ def filter_components_fromartifactory(
             component_list = subdir["Components"]
 
             for component in component_list:
-                source_dir = (
-                    Path(artifacts_dir)
-                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
-                )
-                filename = source_dir / "artifact_manifest.txt"
-                if not filename.exists():
-                    print(f"{pkg_name} : Missing {filename}")
-                    continue
-                try:
-                    with filename.open("r", encoding="utf-8") as file:
-                        for line in file:
+                # Find base artifact and all xnack variants (e.g., :xnack+, :xnack-)
+                base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
+                artifact_dirs = [Path(artifacts_dir) / base_pattern]
+                artifact_dirs.extend(Path(artifacts_dir).glob(f"{base_pattern}:*"))
 
-                            match_found = (
-                                isinstance(artifact_subdir, str)
-                                and (artifact_subdir.lower() + "/") in line.lower()
-                            )
+                for source_dir in artifact_dirs:
+                    filename = source_dir / "artifact_manifest.txt"
+                    if not filename.exists():
+                        print(f"{pkg_name} : Missing {filename}")
+                        continue
+                    try:
+                        with filename.open("r", encoding="utf-8") as file:
+                            for line in file:
 
-                            if match_found and line.strip():
-                                print("Matching line:", line.strip())
-                                source_path = source_dir / line.strip()
-                                sourcedir_list.append(source_path)
-                except OSError as e:
-                    print(f"Could not read manifest {filename}: {e}")
-                    continue
+                                match_found = (
+                                    isinstance(artifact_subdir, str)
+                                    and (artifact_subdir.lower() + "/") in line.lower()
+                                )
+
+                                if match_found and line.strip():
+                                    print("Matching line:", line.strip())
+                                    source_path = source_dir / line.strip()
+                                    sourcedir_list.append(source_path)
+                    except OSError as e:
+                        print(f"Could not read manifest {filename}: {e}")
+                        continue
 
     return sourcedir_list
 

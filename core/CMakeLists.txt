@@ -275,6 +275,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
+  # Optionally override the comgr DLL name that CLR dynamically loads (Windows).
+  # Kept in sync with the comgr build side via the same THEROCK_COMGR_DLL_NAME
+  # option, so the name CLR loads matches the name comgr is built as.
+  set(_clr_comgr_dll_name_cmake_args)
+  if(THEROCK_COMGR_DLL_NAME)
+    list(APPEND _clr_comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
+  endif()
+
 
 
   therock_cmake_subproject_declare(hip-clr
@@ -291,6 +299,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
       "-DROCM_KPACK_ENABLED=ON"
+      "-DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}"
+      ${_clr_comgr_dll_name_cmake_args}
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
@@ -576,7 +586,6 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-catch2
     RUNTIME_DEPS
       hip-clr

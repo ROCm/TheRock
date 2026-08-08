@@ -126,9 +126,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
-        if build_config.enable_rpath:
-            convert_runpath_to_rpath(package_dir)
-
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
 

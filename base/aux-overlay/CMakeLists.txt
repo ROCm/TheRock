@@ -56,7 +56,7 @@ if(NOT WIN32)
   include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
   set(rocm_config_name "rocm.cfg")
   set(rocm_config_dir "${CMAKE_CURRENT_BINARY_DIR}/lib/llvm/bin")
-  set(rocm_config_content "-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
+  set(rocm_config_content "$-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
 
   # Generate rocm.cfg
   file(MAKE_DIRECTORY "${rocm_config_dir}")

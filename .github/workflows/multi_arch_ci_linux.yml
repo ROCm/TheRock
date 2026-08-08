@@ -12,9 +12,9 @@ on:
           JSON object with build configuration for this platform. Fields:
           artifact_group, per_family_info, dist_amdgpu_families,
           build_variant_label, build_variant_cmake_preset,
-          build_variant_suffix, build_pytorch,
+          build_variant_suffix, build_pytorch, build_jax,
           build_native_linux, test_python_packages_matrix,
-          pytorch_build_matrix,
+          pytorch_build_matrix, jax_build_matrix,
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
@@ -60,15 +60,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # Run in container to access AWS credentials mounted from the host runner.
     container:
       image: python:3.12-slim
-      options: -v /runner/config:/home/awsconfig/
-    env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
     steps:
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -88,6 +84,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
@@ -200,6 +197,23 @@ jobs:
       contents: read
       id-token: write
 
+  test_native_packages_rhel8:
+    needs: [build_native_rpm_packages]
+    name: Test RPM Install - rhel8
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
+    with:
+      package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
+      release_type: ci
+      os_profile: rhel8
+      artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      test_type: sanity
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
   test_native_packages_rhel10:
     needs: [build_native_rpm_packages]
     name: Test RPM Install - rhel10
@@ -277,7 +291,6 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
@@ -315,6 +328,35 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  build_jax_wheels:
+    needs: [build_python_packages]
+    name: Build JAX Wheels
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_jax == true &&
+        toJSON(fromJSON(inputs.build_config).jax_build_matrix) != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_config).jax_build_matrix }}
+    uses: ./.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml
+    with:
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      python_version: ${{ matrix.python_version }}
+      jax_repository: ${{ matrix.jax_repository }}
+      gfx_arch: ${{ matrix.gfx_arch }}
+      jax_ref: ${{ matrix.jax_ref }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
