@@ -45,6 +45,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
     [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
@@ -425,6 +426,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocalution,
+            args.kfdtest,
             args.rocwmma,
             args.rpp,
             args.libhipcxx,
@@ -555,6 +557,11 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
@@ -981,6 +988,13 @@ def main(argv):
         "--rocalution",
         default=False,
         help="Include 'rocalution' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
