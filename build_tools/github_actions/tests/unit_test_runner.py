@@ -191,6 +191,44 @@ class BuildCtestCommandTest(unittest.TestCase):
         idx = cmd.index("-L")
         self.assertEqual(cmd[idx + 1], "^full$")
 
+    def test_multi_gpu_component_uses_namespaced_label(self):
+        # Multi-GPU split jobs must query the "multigpu_<category>" label so they
+        # run only the multi-GPU subset defined in the component's yaml.
+        original = test_runner.test_component_job_name
+        try:
+            for component in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
+                test_runner.test_component_job_name = component
+                cmd = self._build("full", "", set())
+                idx = cmd.index("-L")
+                self.assertEqual(
+                    cmd[idx + 1], "^multigpu_full$", f"failed for {component}"
+                )
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_multi_gpu_component_namespaces_exclude_labels(self):
+        # Exclude labels are derived from the namespaced primary label too.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "hipfft-multi-gpu"
+            cmd = self._build("full", "", set(), {"multigpu_full_exclude"})
+            le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+            le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+            self.assertIn("multigpu_full_exclude", le_patterns)
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_single_gpu_component_uses_base_label(self):
+        # Non multi-GPU components keep the base "<category>" label.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "hipfft"
+            cmd = self._build("full", "", set())
+            idx = cmd.index("-L")
+            self.assertEqual(cmd[idx + 1], "^full$")
+        finally:
+            test_runner.test_component_job_name = original
+
     def test_include_labels_are_anchored(self):
         # ctest -L is a partial regex match, so include labels must be anchored
         # (^...$) to avoid e.g. "full" matching "multigpu_full" or "ffm-full".
