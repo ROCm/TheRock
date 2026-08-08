@@ -494,7 +494,12 @@ if(THEROCK_ENABLE_ROCALUTION)
   )
 endif(THEROCK_ENABLE_ROCALUTION)
 
-if(THEROCK_ENABLE_LIBHIPCXX)
+# libhipcxx is temporarily disabled for ROCm builds (ROCM-29174). Hard-disabled
+# rather than defaulting the flag off, since hipthreads REQUIRES libhipcxx and
+# therock_finalize_features() force-enables it back on. Matching CI test jobs are
+# commented out in build_tools/github_actions/fetch_test_configurations.py.
+#if(THEROCK_ENABLE_LIBHIPCXX)
+if(FALSE)
   ##############################################################################
   # libhipcxx
   ##############################################################################
