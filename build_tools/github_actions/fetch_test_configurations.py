@@ -145,6 +145,10 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Image adds the system OpenCL ICD loader (ocl-icd-libopencl1) on top of
+        # the base image, so the clinfo sanity check has a loader without TheRock
+        # bundling one. Linux only; ignored on Windows (uses the system loader).
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
         "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
