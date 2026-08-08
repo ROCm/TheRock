@@ -608,6 +608,8 @@ def retrieve_artifacts_by_run_id(args):
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
+        if args.opencl_cts:
+            extra_artifact_patterns.append("opencl-cts_test")
 
         argv.extend(extra_artifact_patterns)
     else:
@@ -1016,6 +1018,13 @@ def main(argv):
         "--tests",
         default=False,
         help="Include all test artifacts for enabled libraries",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--opencl-cts",
+        default=False,
+        help="Include 'opencl-cts' test artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
