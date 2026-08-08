@@ -8,8 +8,9 @@ This script is a pipeline of data transformations:
 
     1. Parse Inputs    — read GitHub event context → CIInputs, GitContext
     2. Check Skip CI   — gate: should we skip CI entirely?
-    3. Decide Jobs     — changed files + topology → per-job-group decisions
-    4. Select Targets  — trigger type + labels → per-platform GPU families
+    3. Select Targets  — trigger type + labels → per-platform GPU families
+    4. Decide Jobs     — changed files + topology + targets → per-job-group
+                         decisions
     5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
@@ -66,13 +67,19 @@ from configure_ci_path_filters import (
     get_git_submodule_paths,
     is_ci_run_required,
 )
-from configure_jax_release_matrix import generate_jax_matrix
+from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+)
+from stage_reuse_decision import (
+    AutoStageReuse,
+    StageReuseMode,
+    compute_auto_stage_reuse,
+    render_step_summary,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -151,6 +158,8 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse)
+    baseline_repository: str = ""
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -250,6 +259,7 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
         )
 
 
@@ -396,6 +406,10 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse).
+    # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
+    # TheRock's baseline runs instead of their own.
+    baseline_repository: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -446,6 +460,9 @@ class JobDecisions:
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
     build_jax: JobGroupDecision
+    # Automatic stage-reuse analysis, carried so its report can be appended to
+    # the step summary after the main CI summary.
+    auto_stage_reuse: AutoStageReuse | None = None
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -487,6 +504,7 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -558,18 +576,23 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present.
+    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
     # This avoids running expensive ASAN builds on every PR while still
     # catching ASAN issues when library code (submodules) changes.
-    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
-    #       If overly expensive, remove that option
+    # The ci:asan label allows manual triggering of ASAN CI on any PR.
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and git_context.has_submodule_changes is False
+        and "ci:asan" not in ci_inputs.pr_labels
     ):
-        print("  Skipping: ASAN PR without submodule changes")
+        print(
+            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+        )
         return True
+
+    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
+        print("  Running: 'ci:asan' PR label triggers ASAN CI")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -589,7 +612,156 @@ def should_skip_ci(
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Decide Jobs
+# Step 3: Select Targets
+# ---------------------------------------------------------------------------
+
+
+def _validate_family_names(
+    names: list[str],
+    known: dict[str, dict],
+) -> None:
+    """Raise ValueError if any family name is not in the known matrix."""
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        raise ValueError(
+            f"Unknown GPU families: {unknown}. "
+            f"Known families: {sorted(known.keys())}"
+        )
+
+
+def _filter_families_by_platform(
+    family_names: list[str],
+    platform: str,
+    all_families: dict[str, dict],
+) -> list[str]:
+    """Return only the family names that have an entry for the given platform."""
+    return [
+        name
+        for name in family_names
+        if name in all_families and platform in all_families[name]
+    ]
+
+
+def select_targets(ci_inputs: CIInputs) -> TargetSelection:
+    """Determine GPU families per platform based on trigger type and inputs.
+
+    Trigger types run progressively larger sets of builds and tests:
+
+    - pull_request: Smallest default set (presubmit families). Designed for
+      fast feedback on proposed changes. PR labels can opt in to additional
+      families (gfx* labels) or the full set (ci:run-all-archs).
+    - push: Broader coverage (presubmit + postsubmit families). Runs on
+      code that has landed, so we want more thorough validation than PRs
+      without paying the full nightly cost.
+    - schedule: Full coverage (all families including nightly-only). Catches
+      regressions on targets that are too slow or expensive for every push.
+    - workflow_dispatch: Full manual control. Per-platform family inputs are
+      taken directly from the workflow inputs, giving the caller the ability
+      to either replicate what CI does on PRs/push or build/test a narrow
+      set of targets for investigation.
+
+    Returns per-platform family lists, filtered to only include families
+    that have a platform entry in amdgpu_family_matrix.py.
+    """
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+
+    # Select family names per platform based on trigger type.
+    # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
+    if ci_inputs.is_workflow_dispatch:
+        # Manual trigger: caller specifies exact families per platform.
+        # "all" = all known families. "none" or empty = skip platform.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
+            windows_names = list(all_families.keys())
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
+    elif ci_inputs.is_pull_request:
+        # Smallest default set for fast PR feedback. PR labels can extend
+        # the set below (gfx* for individual families, ci:run-all-archs
+        # for everything).
+        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
+        linux_names = list(defaults)
+        windows_names = list(defaults)
+    elif ci_inputs.is_push:
+        # Broader than PR: presubmit + postsubmit. Code has landed, so
+        # we validate on more targets (e.g. gfx950) without paying full
+        # nightly cost.
+        defaults = list(
+            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
+        )
+        linux_names = list(defaults)
+        windows_names = list(defaults)
+    elif ci_inputs.is_schedule:
+        # Schedule trigger: use explicit inputs if provided, else all families.
+        # "all" or empty = all known families. "none" = skip platform.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = list(all_families.keys())
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif not linux_names:
+            linux_names = list(all_families.keys())
+        elif linux_names == ["none"]:
+            linux_names = []
+
+        if windows_names == ["all"]:
+            windows_names = list(all_families.keys())
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif not windows_names:
+            windows_names = list(all_families.keys())
+        elif windows_names == ["none"]:
+            windows_names = []
+    else:
+        raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
+
+    # PR labels can extend the family set (both platforms)
+    if ci_inputs.is_pull_request:
+        for label in ci_inputs.pr_labels:
+            if label == "ci:run-all-archs":
+                # Override to all families.
+                linux_names = list(all_families.keys())
+                windows_names = list(all_families.keys())
+                print("  Label 'ci:run-all-archs' -> all families")
+                break
+            if label.startswith("gfx"):
+                # Trim suffixes from labels since amdgpu_family_matrix.py
+                # specifies families with no suffix (e.g. `gfx94x`) but
+                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # Note: labels are normalized to lowercase during parsing.
+                target = label.split("-")[0]
+                linux_names.append(target)
+                windows_names.append(target)
+                print(f"  Label '{label}' -> adding target {target}")
+
+    # De-dup, validate, then filter by platform availability.
+    linux_names = list(dict.fromkeys(linux_names))
+    windows_names = list(dict.fromkeys(windows_names))
+    _validate_family_names(linux_names, all_families)
+    _validate_family_names(windows_names, all_families)
+    # TODO: For workflow_dispatch, a family requested for a specific platform
+    # but not available there (e.g. gfx94x on windows) is silently dropped.
+    # Consider validating per-platform and reporting the mismatch.
+    # We could also filter per-platform in get_all_families_for_trigger_types.
+    linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
+    windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
+
+    return TargetSelection(
+        linux_families=linux_names,
+        windows_families=windows_names,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 4: Decide Jobs
 # ---------------------------------------------------------------------------
 
 
@@ -686,22 +858,54 @@ def _determine_test_type(
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
+    targets: TargetSelection,
 ) -> JobDecisions:
-    """Determine which job groups to run, skip, or satisfy with prebuilt files."""
+    """Determine which job groups to run, skip, or satisfy with prebuilt files.
+    ``targets`` (the per-platform family selection from ``select_targets()``)
+    scopes automatic stage reuse to the platforms and families actually being
+    built, so a stage is only reused when its artifacts exist for every one of
+    those platforms.
+    """
 
     # Build ROCm.
-    # TODO(#3399): Use changed files and build_topology.py to:
-    #   1. set per-stage prebuilt decisions
-    #   2. skip job groups that aren't reachable from the changed files
-    # Parse explicit prebuilt stages from workflow_dispatch input.
+    # Parse explicit prebuilt stages from workflow_dispatch input. These are
+    # the MANUAL inputs and are always honored, unchanged, in every mode.
+
     stage_decisions: dict[str, JobAction] = {}
     if ci_inputs.prebuilt_stages:
         for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
+
+    # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
+    # which stages WOULD be reused and apply nothing; in "reuse-stage" the
+    # eligible stages are merged into stage_decisions so the orchestrator skips
+    # their builds and copies artifacts instead. The platforms and families to
+    # verify come straight from the resolved target selection.
+
+    auto_stage_reuse = compute_auto_stage_reuse(
+        changed_files=git_context.changed_files,
+        mode=StageReuseMode.from_environ(),
+        linux_amdgpu_families=targets.linux_families,
+        windows_amdgpu_families=targets.windows_families,
+    )
+
+    baseline_repository = ci_inputs.baseline_repository
+    baseline_run_id = ci_inputs.baseline_run_id
+
+    # Apply automatic stage reuse when running in the same repo as baseline.
+    current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not baseline_repository or baseline_repository == current_repo:
+        # reuse-stage mode returns non-empty applied_reuse_stages.
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
-        baseline_run_id=ci_inputs.baseline_run_id,
+        baseline_run_id=baseline_run_id,
+        baseline_repository=baseline_repository,
     )
 
     # Test ROCm.
@@ -739,140 +943,7 @@ def decide_jobs(
         build_pytorch=JobGroupDecision(action=build_pytorch_action),
         test_pytorch=JobGroupDecision(action=build_pytorch_action),
         build_jax=JobGroupDecision(action=build_jax_action),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Select Targets
-# ---------------------------------------------------------------------------
-
-
-def _validate_family_names(
-    names: list[str],
-    known: dict[str, dict],
-) -> None:
-    """Raise ValueError if any family name is not in the known matrix."""
-    unknown = [name for name in names if name not in known]
-    if unknown:
-        raise ValueError(
-            f"Unknown GPU families: {unknown}. "
-            f"Known families: {sorted(known.keys())}"
-        )
-
-
-def _filter_families_by_platform(
-    family_names: list[str],
-    platform: str,
-    all_families: dict[str, dict],
-) -> list[str]:
-    """Return only the family names that have an entry for the given platform."""
-    return [
-        name
-        for name in family_names
-        if name in all_families and platform in all_families[name]
-    ]
-
-
-def select_targets(ci_inputs: CIInputs) -> TargetSelection:
-    """Determine GPU families per platform based on trigger type and inputs.
-
-    Trigger types run progressively larger sets of builds and tests:
-
-    - pull_request: Smallest default set (presubmit families). Designed for
-      fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
-    - push: Broader coverage (presubmit + postsubmit families). Runs on
-      code that has landed, so we want more thorough validation than PRs
-      without paying the full nightly cost.
-    - schedule: Full coverage (all families including nightly-only). Catches
-      regressions on targets that are too slow or expensive for every push.
-    - workflow_dispatch: Full manual control. Per-platform family inputs are
-      taken directly from the workflow inputs, giving the caller the ability
-      to either replicate what CI does on PRs/push or build/test a narrow
-      set of targets for investigation.
-
-    Returns per-platform family lists, filtered to only include families
-    that have a platform entry in amdgpu_family_matrix.py.
-    """
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
-
-    # Select family names per platform based on trigger type.
-    # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
-    if ci_inputs.is_workflow_dispatch:
-        # Manual trigger: caller specifies exact families per platform.
-        # "all" = all known families. "none" or empty = skip platform.
-        linux_names = list(ci_inputs.linux_amdgpu_families)
-        windows_names = list(ci_inputs.windows_amdgpu_families)
-        if linux_names == ["all"]:
-            linux_names = list(all_families.keys())
-            print("  linux_amdgpu_families='all' -> all Linux families")
-        elif linux_names == ["none"]:
-            linux_names = []
-        if windows_names == ["all"]:
-            windows_names = list(all_families.keys())
-            print("  windows_amdgpu_families='all' -> all Windows families")
-        elif windows_names == ["none"]:
-            windows_names = []
-    elif ci_inputs.is_pull_request:
-        # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
-        # for everything).
-        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
-        linux_names = list(defaults)
-        windows_names = list(defaults)
-    elif ci_inputs.is_push:
-        # Broader than PR: presubmit + postsubmit. Code has landed, so
-        # we validate on more targets (e.g. gfx950) without paying full
-        # nightly cost.
-        defaults = list(
-            get_all_families_for_trigger_types(["presubmit", "postsubmit"]).keys()
-        )
-        linux_names = list(defaults)
-        windows_names = list(defaults)
-    elif ci_inputs.is_schedule:
-        # Full nightly coverage: every known family, including targets
-        # that are too slow or expensive for per-push CI.
-        linux_names = list(all_families.keys())
-        windows_names = list(all_families.keys())
-    else:
-        raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
-
-    # PR labels can extend the family set (both platforms)
-    if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.startswith("gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
-
-    # De-dup, validate, then filter by platform availability.
-    linux_names = list(dict.fromkeys(linux_names))
-    windows_names = list(dict.fromkeys(windows_names))
-    _validate_family_names(linux_names, all_families)
-    _validate_family_names(windows_names, all_families)
-    # TODO: For workflow_dispatch, a family requested for a specific platform
-    # but not available there (e.g. gfx94x on windows) is silently dropped.
-    # Consider validating per-platform and reporting the mismatch.
-    # We could also filter per-platform in get_all_families_for_trigger_types.
-    linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
-    windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
-
-    return TargetSelection(
-        linux_families=linux_names,
-        windows_families=windows_names,
+        auto_stage_reuse=auto_stage_reuse,
     )
 
 
@@ -969,11 +1040,12 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on push (postsubmit)
-            if not ci_inputs.is_push:
+            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
+            # due to limited ASAN runner capacity and stability concerns.
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
@@ -1065,7 +1137,12 @@ def _expand_build_config_for_platform(
     jax_build_matrix: list[dict[str, str]] = []
     build_jax = jobs.build_jax.action == JobAction.RUN and platform == "linux"
     if build_jax:
-        jax_build_matrix = generate_jax_matrix(ci_inputs.python_versions or None)
+        jax_build_matrix = generate_jax_matrix_for_release_type(
+            release_type=ci_inputs.release_type,
+            platform=platform,
+            python_versions=ci_inputs.python_versions or None,
+        )
+
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
@@ -1093,6 +1170,7 @@ def _expand_build_config_for_platform(
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        baseline_repository=jobs.build_rocm.baseline_repository,
     )
 
 
@@ -1158,8 +1236,8 @@ def expand_build_configs(
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
+    # Otherwise, push and pull_request events run "host-asan"
+    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
         build_variant = "host-asan"
 
     linux_config: BuildConfig | None = None
@@ -1252,6 +1330,11 @@ def write_outputs(
         )
     )
 
+    # Append the automatic stage-reuse analysis after the main summary so the
+    # two read top-to-bottom in the job step summary.
+    if outputs.jobs is not None and outputs.jobs.auto_stage_reuse is not None:
+        gha_append_step_summary(render_step_summary(outputs.jobs.auto_stage_reuse))
+
 
 # ---------------------------------------------------------------------------
 # Pipeline orchestration
@@ -1274,13 +1357,15 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
-    print("\n=== Deciding job configuration ===")
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
-    jobs.log()
-
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
+
+    print("\n=== Deciding job configuration ===")
+    # Target selection runs first so automatic stage reuse can scope its
+    # prebuilt artifact checks to those targets.
+    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs.log()
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(

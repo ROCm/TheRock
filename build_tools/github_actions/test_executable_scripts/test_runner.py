@@ -72,6 +72,7 @@ COMPONENT_DIR_MAPPING = {
     "hipcub": "hipcub",
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
+    "hipdnn-integration-tests": "hipdnn_integration_tests_ctest",
     "miopen_plugin": "miopen_legacy_plugin",
     "miopenprovider": "miopen_plugin",
     "rocsparse": "rocsparse",
@@ -82,6 +83,7 @@ COMPONENT_DIR_MAPPING = {
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hipblasltprovider": "hipblaslt_plugin",
+    "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
     # Add more mappings as needed
 }
@@ -193,10 +195,23 @@ COMPONENT_OVERRIDES = {
         "test_dir": ["share", "rocprofiler-systems", "tests"],
         "additional_env_paths": {
             "PATH": [["bin"]],
-            "LD_LIBRARY_PATH": [["share", "rocprofiler-systems", "examples", "lib"]],
+            "LD_LIBRARY_PATH": [
+                [
+                    "lib",
+                    "rocprofiler-systems",
+                ],  # Prioritize the bundled Dyninst runtime
+                ["share", "rocprofiler-systems", "examples", "lib"],
+            ],
         },
         "env": {
             "ROCPROFSYS_INSTALL_DIR": "{rocm_path}",
+            # Open MPI bakes its build-time install prefix (the manylinux
+            # container path) into its binaries, so plugin/help-file discovery
+            # fails outside the container. Override it with the ROCm install
+            # tree so MPI-based tests run.
+            "OPAL_PREFIX": "{rocm_path}",
+            "PRTE_PREFIX": "{rocm_path}",
+            "PMIX_PREFIX": "{rocm_path}",
         },
         # rocprofiler-systems tests instrument processes and attach to a shared
         # profiling backend; running them concurrently causes flaky failures.
@@ -246,6 +261,22 @@ COMPONENT_OVERRIDES = {
                     "host-math",
                     "lib",
                 ],
+            ],
+        },
+    },
+    # rocshmem's functional/unit test wrappers run rocshmem_info to auto-detect
+    # the backend. rocshmem_info is installed via install(PROGRAMS ...) (not as a
+    # target), so it keeps its build-tree RPATH and can't find its shared libs
+    # (libamdhip64.so.7, librocm_sysdeps_numa.so.1, ...) in the relocated test
+    # artifact. Prepend the install lib dir and the bundled sysdeps lib dir to
+    # LD_LIBRARY_PATH so the probe resolves the ROCm runtime + sysdeps libs.
+    # (The test binaries themselves install to bin/ as targets and resolve libs
+    # via their relocatable RPATH, so this only fixes the backend-detection probe.)
+    "rocshmem": {
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [
+                ["lib"],
+                ["lib", "rocm_sysdeps", "lib"],
             ],
         },
     },
