@@ -57,6 +57,20 @@ def main(cl_args: list[str]):
             default=DEFAULT_HASHTAG,
             help="Git repository ref/tag to checkout",
         )
+        command_parser.add_argument(
+            "--patch-dir",
+            type=Path,
+            default=THIS_DIR / "patches",
+            help="Base directory of TheRock-carried patches. Patches are laid out "
+            "as '<patch-dir>/<patchset>/<repo-or-submodule-relpath>/{base,hipified}/"
+            "*.patch' and applied with `git am` (mirrors external-builds/uccl).",
+        )
+        command_parser.add_argument(
+            "--patchset",
+            default=None,
+            help="Patchset directory name (defaults to the --repo-hashtag mangled "
+            "to a version, e.g. 'release/2.12' -> '2.12').",
+        )
 
     p = argparse.ArgumentParser("pytorch_torch_repo.py")
     sub_p = p.add_subparsers(required=True)
@@ -67,6 +81,12 @@ def main(cl_args: list[str]):
         default=DEFAULT_ORIGIN,
         help="git repository url",
     )
+    checkout_p.add_argument(
+        "--patch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply carried patches for the repo-hashtag/patchset",
+    )
     repo_management.add_checkout_options(checkout_p, default_hipify=True)
     checkout_p.set_defaults(jobs=10)
     checkout_p.set_defaults(func=repo_management.do_checkout)
@@ -74,6 +94,13 @@ def main(cl_args: list[str]):
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")
     add_common(hipify_p)
     hipify_p.set_defaults(func=repo_management.do_hipify)
+
+    save_patches_p = sub_p.add_parser(
+        "save-patches",
+        help="Save local commits (base + hipified) as patch files for later application",
+    )
+    add_common(save_patches_p)
+    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)
