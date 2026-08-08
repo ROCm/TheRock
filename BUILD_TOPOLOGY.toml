@@ -148,6 +148,7 @@ artifact_groups = [
     "compiler",
     "core-amdsmi",
     "core-runtime",
+    "core-amdcuid",
     "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
@@ -236,6 +237,12 @@ source_sets = ["rocm-systems"]
 description = "WSL-only ROCDXG bridge library"
 type = "generic"
 artifact_group_deps = ["base"]
+source_sets = ["rocm-systems"]
+
+[artifact_groups.core-amdcuid]
+description = "AMD Component Unified Identifier (amd cuid)"
+type = "generic"
+artifact_group_deps = ["base", "third-party-sysdeps", "compiler"]
 source_sets = ["rocm-systems"]
 
 [artifact_groups.core-amdsmi]
@@ -533,6 +540,14 @@ type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_name = "WSL_ROCDXG"
 feature_group = "WSL"
+
+[artifacts.core-amdcuid]
+artifact_group = "core-amdcuid"
+type = "target-neutral"
+artifact_deps = ["base", "sysdeps"]
+feature_name = "CORE_AMDCUID"
+feature_group = "CORE"
+disable_platforms = ["windows"]
 
 [artifacts.core-amdsmi]
 artifact_group = "core-amdsmi"
