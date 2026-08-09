@@ -90,9 +90,15 @@ jobs:
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
       # Copy PROLENSE_REBOOT_ENABLED from runner environment to workflow env context
-      # GitHub Actions workflow expressions (${{ env.* }}) can only access variables set in
-      # workflow env: blocks. Runner environment variables (from prolense config) are only
-      # available in shell scripts, not workflow expressions. This step bridges the gap.
+      #
+      # PHASED ROLLOUT: This enables testing automatic reboot on SELECT SERVERS before fleet-wide deployment
+      # - Runners WITH this env var in config.yaml → prolense features enabled (3-min timeout, auto-reboot)
+      # - Runners WITHOUT it → backward compatible (3-min timeout, no reboot)
+      # - Easy rollback: just update runner config and restart (no workflow changes)
+      #
+      # TECHNICAL: GitHub Actions workflow expressions (${{ env.* }}) can only access variables
+      # from workflow env: blocks. Runner environment variables (from prolense config.yaml) are
+      # only available in shell scripts. This step bridges the gap by copying from shell to workflow env.
       - name: Set PROLENSE_REBOOT_ENABLED in workflow env
         shell: bash
         run: |
@@ -151,12 +157,23 @@ jobs:
 
       - name: Driver / GPU sanity check
         id: driver-gpu-sanity-check
+        # PHASED ROLLOUT: Timeout is 3 min (default) or 5 min (when reboot enabled, allows buffer for telemetry flush)
         timeout-minutes: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && 5 || 3 }}
         env:
+          # Always set: enables step identification in Grafana dashboards
           STEP_NAME: "Driver GPU sanity check"
           STEP_TIMEOUT_MINUTES: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && '5' || '3' }}
-          # Prolense-specific metadata is only set when PROLENSE_REBOOT_ENABLED is 'true' on the runner
+
+          # PHASED ROLLOUT: Prolense-specific features only enabled on select servers with PROLENSE_REBOOT_ENABLED=true
+          # - Empty string ('') disables the feature (rule checks for truthy/numeric value)
+          # - Enables gradual testing before fleet-wide deployment
+          # - Easy rollback: just update runner config (no workflow changes)
+
+          # Kill step if no output for 3 minutes (prevents hung processes from blocking runners)
           NO_OUTPUT_TIMEOUT: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && '3' || '' }}
+
+          # Auto-reboot server on any failure (*) if uptime > 2 hours (7200s)
+          # Helps recover from driver issues, GPU hangs, or system corruption
           SELF_HEALING_ACTIONS: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && '*:reboot[threshold=7200]' || '' }}
         run: |
           python ./build_tools/print_driver_gpu_info.py
