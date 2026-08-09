@@ -37,6 +37,14 @@ THIS_DIR = Path(__file__).resolve().parent
 DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
 DEFAULT_HASHTAG = "nightly"
 
+# The carried patchsets convert PyTorch and its bundled gloo to native CMake HIP,
+# which the multi-arch Linux build needs to avoid the FindHIP preprocess wrapper.
+# They mark sources LANGUAGE HIP but only enable the HIP language on Linux, and
+# enabling it on Windows additionally requires the platform-module overrides that
+# landed upstream in release/2.13. Until those are backported, applying them on
+# Windows breaks configuration, so default to off there.
+DEFAULT_PATCH = sys.platform != "win32"
+
 
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
@@ -84,8 +92,9 @@ def main(cl_args: list[str]):
     checkout_p.add_argument(
         "--patch",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Apply carried patches for the repo-hashtag/patchset",
+        default=DEFAULT_PATCH,
+        help="Apply carried patches for the repo-hashtag/patchset "
+        "(defaults to off on Windows)",
     )
     repo_management.add_checkout_options(checkout_p, default_hipify=True)
     checkout_p.set_defaults(jobs=10)
