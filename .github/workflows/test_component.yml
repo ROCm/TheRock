@@ -174,7 +174,7 @@ jobs:
 
           # Auto-reboot server on any failure (*) if uptime > 2 hours (7200s)
           # Helps recover from driver issues, GPU hangs, or system corruption
-          SELF_HEALING_ACTIONS: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && '*:reboot[threshold=7200,max_attempts=1]' || '' }}
+          SELF_HEALING_ACTIONS: ${{ env.PROLENSE_REBOOT_ENABLED == 'true' && '*:reboot[threshold=7200,max_attempts=0]' || '' }}
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
