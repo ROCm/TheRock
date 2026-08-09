@@ -244,7 +244,7 @@ jobs:
         timeout-minutes: 15
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]==10.0.0rc0" \
             --index-url=${{ inputs.package_index_url }} \
             --activate-in-future-github-actions-steps
 
