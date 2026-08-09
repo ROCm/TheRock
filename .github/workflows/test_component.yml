@@ -89,6 +89,15 @@ jobs:
       BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
+      # Copy PROLENSE_REBOOT_ENABLED from runner environment to workflow env context
+      # GitHub Actions workflow expressions (${{ env.* }}) can only access variables set in
+      # workflow env: blocks. Runner environment variables (from prolense config) are only
+      # available in shell scripts, not workflow expressions. This step bridges the gap.
+      - name: Set PROLENSE_REBOOT_ENABLED in workflow env
+        shell: bash
+        run: |
+          echo "PROLENSE_REBOOT_ENABLED=${PROLENSE_REBOOT_ENABLED:-false}" >> $GITHUB_ENV
+
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
