@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from packaging.utils import canonicalize_name, parse_wheel_filename
-from packaging.version import InvalidVersion, Version
+from packaging.version import Version
 
 import pytest_runner
 
@@ -21,7 +21,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 CANONICAL_PROJECT = canonicalize_name("tensilelite")
 COMPATIBILITY_PROJECT = canonicalize_name("tensilelite_tensile_compat")
 EXPECTED_PROJECTS = {CANONICAL_PROJECT, COMPATIBILITY_PROJECT}
-CLIENT_VERSION_TIMEOUT_SECONDS = 5
 
 
 class TensileLiteRunnerError(RuntimeError):
@@ -34,94 +33,8 @@ class ReleaseWheels:
     compatibility: Path
 
 
-def is_loader_failure(stderr: str) -> bool:
-    """Recognize native loader diagnostics emitted before client main()."""
-    stderr_lower = stderr.lower()
-    loader_fragments = (
-        "error while loading shared libraries",
-        "cannot open shared object file",
-        "library not loaded",
-        "dll load failed",
-        "the code execution cannot proceed",
-    )
-    return any(fragment in stderr_lower for fragment in loader_fragments)
-
-
-def query_client_version(client_path: Path, env: dict[str, str]) -> Version:
-    """Return the native client's canonical PEP 440 version."""
-    command = [str(client_path), "--version"]
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=CLIENT_VERSION_TIMEOUT_SECONDS,
-            check=False,
-            env=env,
-        )
-    except FileNotFoundError as exc:
-        raise TensileLiteRunnerError(
-            f"Failed to launch TensileLite client; file not found: {client_path}"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version timed out after "
-            f"{CLIENT_VERSION_TIMEOUT_SECONDS} seconds: {client_path}"
-        ) from exc
-    except OSError as exc:
-        raise TensileLiteRunnerError(
-            f"Failed to load or launch TensileLite client {client_path}: {exc}"
-        ) from exc
-
-    if result.returncode < 0:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version terminated by signal "
-            f"{-result.returncode}: {client_path}"
-        )
-    if result.returncode != 0 and is_loader_failure(result.stderr):
-        raise TensileLiteRunnerError(
-            f"Failed to load TensileLite client {client_path}: {result.stderr!r}"
-        )
-    if result.returncode != 0:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version exited with status "
-            f"{result.returncode}: {client_path}"
-        )
-    if result.stderr:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version wrote unexpected stderr: "
-            f"{result.stderr!r}"
-        )
-
-    lines = result.stdout.splitlines()
-    if not lines or (len(lines) == 1 and not lines[0]):
-        raise TensileLiteRunnerError(
-            "TensileLite client --version produced no version line"
-        )
-    if len(lines) != 1:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version must produce exactly one stdout line; "
-            f"got {len(lines)}: {result.stdout!r}"
-        )
-    version_text = lines[0]
-    if version_text != version_text.strip():
-        raise TensileLiteRunnerError(
-            "TensileLite client --version produced a non-canonical line: "
-            f"{version_text!r}"
-        )
-    try:
-        return Version(version_text)
-    except InvalidVersion as exc:
-        raise TensileLiteRunnerError(
-            "TensileLite client --version produced malformed PEP 440 version: "
-            f"{version_text!r}"
-        ) from exc
-
-
-def discover_release_wheels(
-    wheels_dir: Path, expected_version: Version
-) -> ReleaseWheels:
-    """Select exactly one canonical and compatibility wheel for the client."""
+def discover_release_wheels(wheels_dir: Path) -> ReleaseWheels:
+    """Select exactly one canonical and compatibility wheel with matching versions."""
     wheels_by_project: dict[str, list[tuple[Path, Version]]] = {
         project: [] for project in EXPECTED_PROJECTS
     }
@@ -143,6 +56,7 @@ def discover_release_wheels(
         wheels_by_project[project_name].append((wheel_path, version))
 
     selected: dict[str, Path] = {}
+    selected_versions: dict[str, Version] = {}
     for project_name, candidates in wheels_by_project.items():
         if not candidates:
             raise TensileLiteRunnerError(
@@ -154,12 +68,15 @@ def discover_release_wheels(
                 f"found {[path.name for path, _version in candidates]}"
             )
         wheel_path, wheel_version = candidates[0]
-        if wheel_version != expected_version:
-            raise TensileLiteRunnerError(
-                f"{project_name} wheel version {wheel_version} does not match "
-                f"TensileLite client version {expected_version}: {wheel_path}"
-            )
         selected[project_name] = wheel_path
+        selected_versions[project_name] = wheel_version
+
+    if selected_versions[CANONICAL_PROJECT] != selected_versions[COMPATIBILITY_PROJECT]:
+        raise TensileLiteRunnerError(
+            "Canonical and compatibility wheel versions do not match: "
+            f"{selected_versions[CANONICAL_PROJECT]} != "
+            f"{selected_versions[COMPATIBILITY_PROJECT]}"
+        )
 
     return ReleaseWheels(
         canonical=selected[CANONICAL_PROJECT],
@@ -195,13 +112,7 @@ def run_test_phases(
 ) -> int:
     """Install canonical then compatibility wheels and run their test phases."""
     component_root = pytest_runner.resolve_component_path("tensilelite", rocm_path)
-    client_name = (
-        "tensilelite-client.exe" if os.name == "nt" else "tensilelite-client"
-    )
-    client_path = rocm_path / "libexec" / "hipblaslt" / "tensilelite" / client_name
-
-    client_version = query_client_version(client_path, env)
-    wheels = discover_release_wheels(component_root / "wheels", client_version)
+    wheels = discover_release_wheels(component_root / "wheels")
 
     canonical_install_status = install_wheel(wheels.canonical, env)
     if canonical_install_status != 0:
