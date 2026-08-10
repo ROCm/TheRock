@@ -100,6 +100,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
