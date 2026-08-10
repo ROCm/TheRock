@@ -127,7 +127,10 @@ from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
-from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.s3_buckets import (
+    get_release_bucket_config,
+    get_release_index_url,
+)
 from pathlib import Path
 import platform
 import re
@@ -618,10 +621,12 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly or dev release version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://rocm.nightlies.amd.com/tarball-multi-arch/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            f"\t - {get_release_index_url('nightly', 'tarball')}"
+            " (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
-            "\t - https://rocm.devreleases.amd.com/tarball-multi-arch/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            f"\t - {get_release_index_url('dev', 'tarball')}"
+            " (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
         )
         log("Exiting...")
         return

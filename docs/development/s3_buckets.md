@@ -111,6 +111,21 @@ serve a distro-partitioned apt/dnf repository rather than a prefix rewrite of
 the bucket, so no rule is emitted for them. **Keep the table and the rules in
 sync when either changes.**
 
+For the specific case of "which URL do users install this channel from", call
+`get_release_index_url(release_type, bucket_type)` rather than reading
+`cdn_rules` directly:
+
+```python
+from _therock_utils.s3_buckets import get_release_index_url
+
+get_release_index_url("nightly")  # pip --index-url for nightly wheels
+get_release_index_url("release", "tarball")  # where users browse release tarballs
+```
+
+It accepts `release` in addition to the three publishable channels, and raises
+rather than falling back to a raw S3 URL — a channel with no CDN rule has no
+usable public index, and a silently raw URL would be handed to pip.
+
 | Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-dev`        | —                                                                                                                                                                                       |
@@ -228,7 +243,10 @@ the lookup functions choose. Registration alone is not enough, because those
 functions compute a bucket name from a formula (`therock-{release_type}-artifacts`)
 that a downstream repository does not follow. Valid `artifacts_buckets` slots
 are `ci`, `ci-external`, `dev`, `nightly`, and `prerelease`; `release_buckets`
-is keyed by release type and then by `tarball`, `python`, or `packages`.
+is keyed by release type — `dev`, `nightly`, `prerelease`, or `release` — and
+then by `tarball`, `python`, or `packages`. `release` appears here but not in
+`artifacts_buckets` because it can be installed from without being published to,
+which is what `get_release_index_url` reads.
 
 Note the two CI slots. A repository other than `ROCm/TheRock` selects
 `ci-external` for **all** of its CI, not just fork PRs, so a downstream repo
