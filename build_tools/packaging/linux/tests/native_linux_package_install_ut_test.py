@@ -2271,7 +2271,10 @@ class UninstallRpmPackagesTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertTrue(t.uninstall_packages())
         cmd = mock_streaming.call_args[0][0]
-        self.assertEqual(cmd[:4], ["zypper", "--non-interactive", "remove", "-y"])
+        self.assertEqual(
+            cmd[:5],
+            ["zypper", "--non-interactive", "remove", "-y", "--clean-deps"],
+        )
         self.assertEqual(mock_streaming.call_count, 1)
 
 
