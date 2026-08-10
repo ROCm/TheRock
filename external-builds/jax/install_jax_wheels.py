@@ -4,10 +4,13 @@
 
 """Installs a JAX ROCm stack: the plugin and PJRT wheels plus a matching jax.
 
-The plugin and PJRT wheels come from a ROCm package index, since their names
-carry the ROCm major version they were built against (jax_rocm7_plugin,
-jax_rocm10_plugin). A build that produced its own jaxlib installs that from the
-same index; otherwise jax and jaxlib come from PyPI.
+The plugin and PJRT wheels come from wherever the build that made them put
+them, since their names carry the ROCm major version they were built against
+(jax_rocm7_plugin, jax_rocm10_plugin). A release publishes them to a package
+index, so --index-url; PR CI uploads a run-scoped page of wheels instead, so
+--find-links, which leaves PyPI in place for everything else. A build that
+produced its own jaxlib installs that from the same place; otherwise jax and
+jaxlib come from PyPI.
 
 Installs are retried via build_tools/setup_venv.py.
 
@@ -35,10 +38,24 @@ RETRY_TIMEOUT_SECONDS = 180
 RETRY_WAIT_BETWEEN_SECONDS = 15
 
 
+def wheel_source(args: argparse.Namespace) -> list[str]:
+    """Where pip should look for the wheels this build made.
+
+    A find-links page adds to PyPI while an index replaces it, so a caller that
+    gave both meant the page: an index that does not carry the run's wheels
+    cannot install them.
+    """
+    if args.find_links:
+        return ["--find-links", args.find_links]
+    if args.index_url:
+        return ["--index-url", args.index_url]
+    return []
+
+
 def install_commands(args: argparse.Namespace) -> list[list[str]]:
     """The pip commands that install one JAX stack, in order."""
     python = sys.executable
-    index = ["--index-url", args.index_url] if args.index_url else []
+    index = wheel_source(args)
 
     commands = [
         [
@@ -53,7 +70,7 @@ def install_commands(args: argparse.Namespace) -> list[list[str]]:
     ]
 
     if args.jaxlib_version:
-        # Built alongside the plugin, so it only exists on that index.
+        # Built alongside the plugin, so it only exists where the plugin does.
         commands.append(
             [python, "-m", "pip", "install", *index, f"jaxlib=={args.jaxlib_version}"]
         )
@@ -79,6 +96,11 @@ def main(argv: list[str]) -> int:
         "--index-url",
         default=os.getenv("WHEEL_INDEX_URL", ""),
         help="Package index holding the plugin, PJRT and built jaxlib wheels",
+    )
+    p.add_argument(
+        "--find-links",
+        default=os.getenv("WHEEL_FIND_LINKS_URL", ""),
+        help="Page of wheels to install from, on top of PyPI; wins over --index-url",
     )
     p.add_argument(
         "--plugin-package",
@@ -108,7 +130,7 @@ def main(argv: list[str]) -> int:
     p.add_argument(
         "--jaxlib-version",
         default=os.getenv("JAXLIB_VERSION", ""),
-        help="jaxlib version to install from --index-url, if one was built",
+        help="jaxlib version to install alongside the plugin, if one was built",
     )
     p.add_argument(
         "--dry-run",

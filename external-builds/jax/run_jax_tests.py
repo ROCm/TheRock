@@ -10,6 +10,7 @@ for the multi-accelerator subset on its own. This adds only what is ours:
 
   * the ROCm runtime workarounds this repository needs;
   * the known-bad tests from skip_tests/, as a pytest -k expression;
+  * an optional --test-list, described under "Selecting a subset" below;
   * two layers of retry, described under "Retries" below;
   * holding the run to the CPUs the pod was given, described under "Resources".
 
@@ -35,6 +36,16 @@ clear. It only speaks for the suite when the suite's own pytest sessions ran to
 the end, which their reported exit codes are what say.
 
 --no-retries turns off both, running the suite exactly as the script does.
+
+Selecting a subset
+------------------
+
+--test-list names a file of test paths to run instead of the whole suite, which
+is how CI gets a PR-sized run out of the same suite the nightly runs. It is
+applied by ignoring everything under tests/ the list does not name, rather than
+by passing the list to pytest, so that the suite script still decides how the
+tests run. -k would leave the modules left out imported anyway, and importing
+them is most of what a short run has time for.
 
 Resources
 ---------
@@ -63,10 +74,15 @@ Example usage:
 
     # Run only the tests the skip list would have skipped.
     python run_jax_tests.py --jax-dir jax --jax-version 0.10.2 --debug
+
+    # The subset PR CI runs.
+    python run_jax_tests.py --jax-dir jax \\
+        --test-list external-builds/jax/test_selection/small_tests.txt
 """
 
 import argparse
 import dataclasses
+import fnmatch
 import json
 import os
 import platform
@@ -99,6 +115,14 @@ RELATIVE_MULTI_SUITE_SCRIPT = Path("ci") / "run_pytest_rocm_multi.sh"
 # Sourced by the suite script for the JAXCI_* defaults the section below reads,
 # and safe to source here too: it only assigns variables.
 RELATIVE_SUITE_ENV_FILE = Path("ci") / "envs" / "default.env"
+
+# The tree the suite script collects, so a selection names paths inside it and
+# nothing outside it is ever ignored.
+RELATIVE_TESTS_DIR = Path("tests")
+
+# What pytest collects by default, which JAX does not override. Everything else
+# under tests/ is data the suite reads, so leave it alone.
+TEST_FILE_PATTERNS = ("test_*.py", "*_test.py")
 
 # One report per pytest invocation the suite script makes, matched by pattern so
 # that a version splitting the suite differently needs no change here.
@@ -184,14 +208,78 @@ def jax_version_from_ref(jax_ref: str) -> str:
     return jax_ref.removeprefix(JAX_REF_PREFIX) if jax_ref else ""
 
 
+class TestListError(Exception):
+    """The subset a --test-list names cannot be run."""
+
+
+def read_test_list(path: Path) -> list[Path]:
+    """The test paths one selection file names, relative to the JAX checkout."""
+    lines = path.read_text().splitlines()
+    stripped = (line.partition("#")[0].strip() for line in lines)
+    return [Path(line) for line in stripped if line]
+
+
+def _collects_tests(path: Path) -> bool:
+    return path.is_dir() or any(
+        fnmatch.fnmatch(path.name, pattern) for pattern in TEST_FILE_PATTERNS
+    )
+
+
+def ignore_arguments(jax_dir: Path, selected: list[Path]) -> list[str]:
+    """--ignore for every test path under tests/ the selection leaves out.
+
+    Ignoring the complement is what lets the suite script keep its own pytest
+    invocation. Walking the checkout rather than the list also settles what the
+    list cannot know: a version that has since renamed or dropped a test simply
+    has nothing there to ignore.
+
+    Raises:
+        TestListError: if the selection names a path outside tests/, or if the
+            checkout has none of the tests it names. Silently running the whole
+            suite, or none of it, would both pass for a subset.
+    """
+    wanted = set()
+    for path in selected:
+        if path.is_absolute() or RELATIVE_TESTS_DIR not in path.parents:
+            raise TestListError(f"{path} is not under {RELATIVE_TESTS_DIR}/")
+        wanted.add(jax_dir / path)
+
+    missing = sorted(path for path in wanted if not path.exists())
+    if missing:
+        log(
+            f"::warning::{len(missing)} selected test(s) are not in this JAX"
+            f" checkout and will not run: {', '.join(p.name for p in missing)}"
+        )
+    if len(missing) == len(wanted):
+        raise TestListError(
+            f"none of the {len(wanted)} selected tests exist under"
+            f" {jax_dir / RELATIVE_TESTS_DIR}"
+        )
+
+    ignored: list[Path] = []
+    directories = [jax_dir / RELATIVE_TESTS_DIR]
+    while directories:
+        for child in sorted(directories.pop().iterdir()):
+            if child in wanted or not _collects_tests(child):
+                continue
+            if child.is_dir() and any(path.is_relative_to(child) for path in wanted):
+                directories.append(child)
+            else:
+                ignored.append(child)
+
+    log(f"=== Running {len(wanted) - len(missing)} of the suite's tests")
+    return [f"--ignore={path.relative_to(jax_dir).as_posix()}" for path in ignored]
+
+
 def pytest_addopts(
     jax_version: str,
     amdgpu_family: str,
     in_process_reruns: int,
     debug: bool = False,
+    ignore: list[str] | None = None,
 ) -> str:
     """The PYTEST_ADDOPTS value for one configuration."""
-    opts = []
+    opts = list(ignore or [])
     if in_process_reruns:
         # Crashed workers are retried regardless of --only-rerun. Everything else
         # is left to the fresh-process pass.
@@ -426,6 +514,7 @@ def test_environment(
     in_process_reruns: int,
     debug: bool = False,
     cpus: int | None = None,
+    ignore: list[str] | None = None,
 ) -> dict[str, str]:
     """The environment variables the suite and the retry pass need."""
     env = {**suite_env, **THEROCK_ENV}
@@ -433,7 +522,9 @@ def test_environment(
         env["OPENBLAS_NUM_THREADS"] = str(openblas_threads(cpus))
     # Left alone when there is nothing to add, so that --no-retries does not wipe
     # options the caller set.
-    addopts = pytest_addopts(jax_version, amdgpu_family, in_process_reruns, debug)
+    addopts = pytest_addopts(
+        jax_version, amdgpu_family, in_process_reruns, debug, ignore
+    )
     if addopts:
         env["PYTEST_ADDOPTS"] = addopts
     return env
@@ -551,6 +642,14 @@ def cmd_arguments(argv: list[str]) -> argparse.Namespace:
         help="Accelerator subset to run; 'multi' needs more than one GPU",
     )
     p.add_argument(
+        "--test-list",
+        type=Path,
+        default=(
+            Path(os.environ["JAX_TEST_LIST"]) if os.getenv("JAX_TEST_LIST") else None
+        ),
+        help="File of tests/ paths, one per line, to run instead of the whole suite",
+    )
+    p.add_argument(
         "--retries",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -631,7 +730,12 @@ def main(argv: list[str]) -> int:
 
     try:
         suite_env = suite_environment(jax_dir, env) if suite.exists() else {}
-    except SuiteEnvironmentError as e:
+        ignore = (
+            ignore_arguments(jax_dir, read_test_list(args.test_list))
+            if args.test_list
+            else []
+        )
+    except (SuiteEnvironmentError, TestListError, OSError) as e:
         log(f"::error::{e}")
         return 1
     overrides = test_environment(
@@ -641,6 +745,7 @@ def main(argv: list[str]) -> int:
         args.in_process_reruns,
         args.debug,
         cpus,
+        ignore,
     )
     env.update(overrides)
 

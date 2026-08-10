@@ -10,13 +10,22 @@ to different runners: the family's 1-GPU runner takes the suite, which on one
 GPU is the single-accelerator tests, and its multi-GPU runner takes the
 multi-accelerator script.
 
-Multi-GPU runners are scarce, so the second job is only worth its queue slot
-when full testing is asked for. Short testing, which is what a pull request
-gets, runs the suite on the 1-GPU runner alone, and a nightly asks for full
-testing one day a week rather than every night. Which day it is comes from the
-wall clock, as it does for the PyTorch pipeline, so re-running a whole Sunday
-nightly on a later day gives that day's matrix; dispatch a full run to get the
-multi-accelerator tests back.
+--test-size says how much of that a run is worth:
+
+  * small: the PR-sized selection on the 1-GPU runner, and nothing else. This
+    one blocks a pull request, so it is the one that has to stay short.
+  * medium: the whole single-GPU suite nightly, plus the multi-accelerator job
+    one day a week. Multi-GPU runners are scarce enough that a nightly 8-GPU
+    slot is not worth what that subset finds.
+  * large: both, every time, for a release or prerelease.
+
+Which day the week falls on comes from the wall clock, as it does for the
+PyTorch pipeline, so re-running a whole Sunday nightly on a later day gives
+that day's matrix; dispatch a large run to get the multi-accelerator tests
+back.
+
+The end-to-end workloads run as a step of the multi-GPU job rather than a job
+of their own, so they follow whatever this emits.
 """
 
 import argparse
@@ -30,24 +39,19 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
-from github_actions.configure_jax_release_matrix import RELEASE_TYPES
 from github_actions.github_actions_api import gha_set_output
 
-# Values of --test-scope. "short" runs the whole single-accelerator suite on the
-# family's 1-GPU runner, "full" adds the multi-accelerator tests on its multi-GPU
-# runner, and "auto" reads the release type below. Neither narrows the suite: the
-# scope decides which runners a run takes, not which tests each one runs.
-TEST_SCOPE_SHORT = "short"
-TEST_SCOPE_FULL = "full"
-TEST_SCOPE_AUTO = "auto"
-TEST_SCOPES = [TEST_SCOPE_AUTO, TEST_SCOPE_SHORT, TEST_SCOPE_FULL]
+# Values of --test-size, as the module docstring above describes them. What each
+# one selects on the 1-GPU runner is the test workflow's business; what they
+# decide here is whether the multi-GPU job runs.
+TEST_SIZE_SMALL = "small"
+TEST_SIZE_MEDIUM = "medium"
+TEST_SIZE_LARGE = "large"
+TEST_SIZES = [TEST_SIZE_SMALL, TEST_SIZE_MEDIUM, TEST_SIZE_LARGE]
 
-# A prerelease is worth a slot in the multi-GPU pool every time. A nightly takes
-# one on this weekday (UTC, Monday being 0), because the pool is small and that
-# subset moves slowly. Sunday is the quietest day for it.
-ALWAYS_FULL_RELEASE_TYPES = ["prerelease"]
-WEEKLY_FULL_RELEASE_TYPES = ["nightly"]
-WEEKLY_FULL_WEEKDAY = 6
+# The day a medium run also takes a multi-GPU runner, in UTC, Monday being 0.
+# Sunday is the quietest for the shared 8-GPU pool.
+WEEKLY_MULTI_GPU_WEEKDAY = 6
 
 # --test-subset of run_jax_tests.py, which is which ROCm/jax suite script runs:
 # "all" is ci/run_pytest_rocm.sh, which leaves out what the host has no GPUs for,
@@ -79,30 +83,24 @@ def today_utc() -> date:
     return datetime.now(timezone.utc).date()
 
 
-def resolve_scope(test_scope: str, release_type: str, today: date) -> str:
-    """Which subsets to run, from the scope asked for or the release type.
+def wants_multi_gpu(size: str, today: date) -> bool:
+    """Whether this run should also take a multi-GPU runner.
 
-    An explicit scope wins, so a workflow or a person can ask for the
-    multi-accelerator tests on any day.
+    A medium run is the nightly, so this is what makes the multi-accelerator
+    tests weekly rather than nightly. Asking for large runs them whatever day it
+    is, which is also how someone gets them on demand.
     """
-    if test_scope != TEST_SCOPE_AUTO:
-        return test_scope
-    if release_type in ALWAYS_FULL_RELEASE_TYPES:
-        return TEST_SCOPE_FULL
-    if release_type in WEEKLY_FULL_RELEASE_TYPES:
-        return (
-            TEST_SCOPE_FULL
-            if today.weekday() == WEEKLY_FULL_WEEKDAY
-            else TEST_SCOPE_SHORT
-        )
-    return TEST_SCOPE_SHORT
+    if size == TEST_SIZE_LARGE:
+        return True
+    return size == TEST_SIZE_MEDIUM and today.weekday() == WEEKLY_MULTI_GPU_WEEKDAY
 
 
 def build_test_matrix(
     *,
     target: str,
     platform: str,
-    scope: str,
+    size: str,
+    today: date,
 ) -> dict[str, list[dict[str, str]]]:
     entry = platform_entry(target, platform)
     if entry is None:
@@ -122,7 +120,7 @@ def build_test_matrix(
             " single-accelerator tests will not run"
         )
 
-    if scope == TEST_SCOPE_FULL:
+    if wants_multi_gpu(size, today):
         multi_runner = entry.get("test-runs-on-multi-gpu")
         if multi_runner:
             include.append(
@@ -154,40 +152,35 @@ def main(argv: list[str]) -> None:
         help="Test platform (default: linux)",
     )
     parser.add_argument(
-        "--test-scope",
-        choices=TEST_SCOPES,
-        default=TEST_SCOPE_AUTO,
-        help="Which subsets to run; 'auto' reads --release-type",
-    )
-    parser.add_argument(
-        "--release-type",
-        default="dev",
-        # Rejected rather than defaulted, because an unrecognized release type
-        # would quietly drop the multi-accelerator job from a release run.
-        choices=RELEASE_TYPES,
-        help="Release type the build is for (default: dev)",
+        "--test-size",
+        # Rejected rather than defaulted, because an unrecognized size would
+        # quietly drop the multi-accelerator job from a release run.
+        choices=TEST_SIZES,
+        required=True,
+        help="How much of the suite this run is worth",
     )
     args = parser.parse_args(argv)
 
     today = today_utc()
-    scope = resolve_scope(args.test_scope, args.release_type, today)
     print(
         f"Configuring {args.platform} JAX tests for {args.target}:"
-        f" {scope} scope (release type {args.release_type},"
-        f" {today} ({today:%A}) in UTC)"
+        f" {args.test_size} size, {today} ({today:%A}) in UTC"
     )
-    if scope == TEST_SCOPE_SHORT and args.release_type in WEEKLY_FULL_RELEASE_TYPES:
+    if args.test_size == TEST_SIZE_MEDIUM and not wants_multi_gpu(
+        args.test_size, today
+    ):
         # Annotated so that a nightly re-run onto another day is a visible loss
-        # of the week's multi-accelerator coverage rather than a silent one.
+        # of the week of multi-accelerator coverage rather than a silent one.
         print(
             "::notice::The multi-accelerator tests run on"
-            f" {calendar.day_name[WEEKLY_FULL_WEEKDAY]}; dispatch this workflow"
-            " with test_scope full to run them today"
+            f" {calendar.day_name[WEEKLY_MULTI_GPU_WEEKDAY]}; dispatch this"
+            " workflow with test_size large to run them today"
         )
     matrix = build_test_matrix(
         target=args.target,
         platform=args.platform,
-        scope=scope,
+        size=args.test_size,
+        today=today,
     )
     gha_set_output(
         {

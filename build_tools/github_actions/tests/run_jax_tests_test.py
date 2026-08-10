@@ -60,6 +60,92 @@ class PytestAddoptsTest(unittest.TestCase):
         self.assertEqual(opts[0], "--reruns")
         self.assertEqual(opts[-2], "-k")
 
+    def test_the_subset_comes_first(self):
+        # --ignore keeps a module from being imported, which -k cannot do, so
+        # the two are not alternatives and both have to reach pytest.
+        opts = shlex.split(
+            runner.pytest_addopts(
+                "0.10.2", GFX94_FAMILY, 2, False, ["--ignore=tests/a"]
+            )
+        )
+
+        self.assertEqual(opts[0], "--ignore=tests/a")
+        self.assertIn("--reruns", opts)
+        self.assertIn("-k", opts)
+
+
+class ReadTestListTest(unittest.TestCase):
+    def read(self, text: str) -> list[Path]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "list.txt"
+            path.write_text(text)
+            return runner.read_test_list(path)
+
+    def test_one_path_per_line(self):
+        self.assertEqual(
+            self.read("tests/a_test.py\ntests/b_test.py\n"),
+            [Path("tests/a_test.py"), Path("tests/b_test.py")],
+        )
+
+    def test_comments_and_blank_lines_are_not_paths(self):
+        text = "# why these\n\ntests/a_test.py  # and this one\n   \n"
+
+        self.assertEqual(self.read(text), [Path("tests/a_test.py")])
+
+
+class IgnoreArgumentsTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.jax_dir = Path(self.tmp.name)
+        tests = self.jax_dir / "tests"
+        (tests / "pallas").mkdir(parents=True)
+        (tests / "testdata").mkdir()
+        for name in ("a_test.py", "b_test.py", "c_test.py", "array_api_skips.txt"):
+            (tests / name).touch()
+        for name in ("ops_test.py", "other_test.py"):
+            (tests / "pallas" / name).touch()
+
+    def ignored(self, selected: list[str]) -> set[str]:
+        arguments = runner.ignore_arguments(
+            self.jax_dir, [Path(path) for path in selected]
+        )
+        return {argument.removeprefix("--ignore=") for argument in arguments}
+
+    def test_everything_the_selection_leaves_out(self):
+        self.assertEqual(
+            self.ignored(["tests/a_test.py"]),
+            {"tests/b_test.py", "tests/c_test.py", "tests/pallas", "tests/testdata"},
+        )
+
+    def test_a_directory_holding_a_selected_test_is_walked_into(self):
+        ignored = self.ignored(["tests/pallas/ops_test.py"])
+
+        self.assertIn("tests/pallas/other_test.py", ignored)
+        self.assertNotIn("tests/pallas", ignored)
+
+    def test_data_pytest_would_not_collect_is_left_alone(self):
+        # The suite reads these, and ignoring a path pytest never looks at only
+        # invites it to be wrong.
+        self.assertNotIn("tests/array_api_skips.txt", self.ignored(["tests/a_test.py"]))
+
+    def test_a_test_this_version_does_not_have_is_skipped(self):
+        # Test files come and go between JAX versions, so a list naming one that
+        # is gone still runs the rest.
+        self.assertEqual(
+            self.ignored(["tests/a_test.py", "tests/gone_test.py"]),
+            {"tests/b_test.py", "tests/c_test.py", "tests/pallas", "tests/testdata"},
+        )
+
+    def test_a_selection_matching_nothing_is_fatal(self):
+        # Otherwise every test would be ignored and the job would pass empty.
+        with self.assertRaises(runner.TestListError):
+            self.ignored(["tests/gone_test.py"])
+
+    def test_a_path_outside_the_test_tree_is_fatal(self):
+        with self.assertRaises(runner.TestListError):
+            self.ignored(["benchmarks/a_test.py"])
+
 
 # What both suite scripts source, and all that may be evaluated to learn the
 # environment the suite runs under.

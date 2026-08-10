@@ -36,72 +36,70 @@ def runner_for(matrix: dict, subset: str) -> str:
     raise AssertionError(f"no {subset} job in {matrix}")
 
 
-class ResolveScopeTest(unittest.TestCase):
-    def test_a_prerelease_tests_everything_whatever_day_it_is(self):
+class WantsMultiGpuTest(unittest.TestCase):
+    """Which sizes are worth a slot in the shared multi-GPU pool."""
+
+    def test_small_never_takes_one(self):
+        # It blocks pull requests, so it stays on the 1-GPU runner.
         for day in [SUNDAY, TUESDAY]:
             with self.subTest(day=day):
-                self.assertEqual(
-                    matrix_script.resolve_scope("auto", "prerelease", day), "full"
-                )
+                self.assertFalse(matrix_script.wants_multi_gpu("small", day))
 
-    def test_a_nightly_tests_everything_one_day_a_week(self):
-        # The multi-GPU pool is small and that subset moves slowly, so a slot
-        # every night is not worth what it finds.
-        self.assertEqual(matrix_script.resolve_scope("auto", "nightly", SUNDAY), "full")
-        self.assertEqual(
-            matrix_script.resolve_scope("auto", "nightly", TUESDAY), "short"
-        )
+    def test_medium_takes_one_a_day_a_week(self):
+        self.assertTrue(matrix_script.wants_multi_gpu("medium", SUNDAY))
+        self.assertFalse(matrix_script.wants_multi_gpu("medium", TUESDAY))
 
-    def test_release_types_that_run_per_change(self):
-        # An 8-GPU queue slot per job is too much for these.
-        for release_type in ["ci", "dev"]:
-            for day in [SUNDAY, TUESDAY]:
-                with self.subTest(release_type=release_type, day=day):
-                    self.assertEqual(
-                        matrix_script.resolve_scope("auto", release_type, day), "short"
-                    )
-
-    def test_an_explicit_scope_wins(self):
-        # So a workflow, or a person, can ask for either on any day.
-        self.assertEqual(
-            matrix_script.resolve_scope("short", "prerelease", SUNDAY), "short"
-        )
-        self.assertEqual(matrix_script.resolve_scope("full", "ci", TUESDAY), "full")
+    def test_large_always_takes_one(self):
+        for day in [SUNDAY, TUESDAY]:
+            with self.subTest(day=day):
+                self.assertTrue(matrix_script.wants_multi_gpu("large", day))
 
     def test_the_weekly_day_is_the_one_named(self):
-        self.assertEqual(SUNDAY.weekday(), matrix_script.WEEKLY_FULL_WEEKDAY)
+        self.assertEqual(SUNDAY.weekday(), matrix_script.WEEKLY_MULTI_GPU_WEEKDAY)
 
 
 class BuildTestMatrixTest(unittest.TestCase):
-    def matrix(self, target="gfx94X-dcgpu", platform="linux", scope="short") -> dict:
+    def matrix(
+        self, target="gfx94X-dcgpu", platform="linux", size="small", today=TUESDAY
+    ) -> dict:
         return matrix_script.build_test_matrix(
-            target=target, platform=platform, scope=scope
+            target=target, platform=platform, size=size, today=today
         )
 
-    def test_short_scope_runs_only_the_single_gpu_job(self):
-        # On one GPU the suite is the single-accelerator tests.
-        matrix = self.matrix(scope="short")
+    def test_a_pull_request_runs_only_the_single_gpu_job(self):
+        matrix = self.matrix(size="small")
 
         self.assertEqual(subsets(matrix), ["all"])
         self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
 
-    def test_full_scope_adds_the_multi_accelerator_subset(self):
-        matrix = self.matrix(scope="full")
+    def test_a_nightly_off_the_weekly_day(self):
+        matrix = self.matrix(size="medium", today=TUESDAY)
+
+        self.assertEqual(subsets(matrix), ["all"])
+
+    def test_a_nightly_on_the_weekly_day_adds_the_multi_gpu_job(self):
+        matrix = self.matrix(size="medium", today=SUNDAY)
+
+        self.assertEqual(subsets(matrix), ["all", "multi"])
+        self.assertEqual(runner_for(matrix, "multi"), GFX94X_MULTI_GPU)
+
+    def test_a_release_adds_it_whatever_day_it_is(self):
+        matrix = self.matrix(size="large", today=TUESDAY)
 
         self.assertEqual(subsets(matrix), ["all", "multi"])
         self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
         self.assertEqual(runner_for(matrix, "multi"), GFX94X_MULTI_GPU)
 
     def test_the_outer_family_key_resolves_too(self):
-        matrix = self.matrix(target="gfx94x", scope="full")
+        matrix = self.matrix(target="gfx94x", size="large")
 
         self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
         self.assertEqual(runner_for(matrix, "multi"), GFX94X_MULTI_GPU)
 
-    def test_a_family_without_a_multi_gpu_runner_skips_that_subset(self):
+    def test_a_family_without_a_multi_gpu_runner_skips_that_job(self):
         # Those tests need several GPUs, and a 1-GPU runner would skip every one
         # of them while reporting a pass.
-        matrix = self.matrix(target="gfx1151", platform="windows", scope="full")
+        matrix = self.matrix(target="gfx1151", platform="windows", size="large")
 
         self.assertEqual(subsets(matrix), ["all"])
         self.assertEqual(runner_for(matrix, "all"), "windows-gfx1151-gpu-rocm")
@@ -139,9 +137,7 @@ class OutputsTest(unittest.TestCase):
         self.addCleanup(patch.stop)
 
     def test_the_matrix_a_workflow_consumes(self):
-        outputs = self.outputs(
-            ["--target", "gfx94X-dcgpu", "--release-type", "prerelease"]
-        )
+        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "large"])
 
         self.assertEqual(outputs["enabled"], "true")
         self.assertEqual(
@@ -155,28 +151,28 @@ class OutputsTest(unittest.TestCase):
         )
 
     def test_a_pull_request_gets_one_job_on_the_single_gpu_runner(self):
-        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--release-type", "ci"])
+        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "small"])
 
         self.assertEqual(
             json.loads(outputs["matrix"]),
             {"include": [{"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU}]},
         )
 
-    def test_a_nightly_picks_up_the_multi_gpu_job_on_its_day(self):
+    def test_the_nightly_picks_up_the_multi_gpu_job_on_its_day(self):
         weekday = self.outputs(
-            ["--target", "gfx94X-dcgpu", "--release-type", "nightly"], today=TUESDAY
+            ["--target", "gfx94X-dcgpu", "--test-size", "medium"], today=TUESDAY
         )
         weekly = self.outputs(
-            ["--target", "gfx94X-dcgpu", "--release-type", "nightly"], today=SUNDAY
+            ["--target", "gfx94X-dcgpu", "--test-size", "medium"], today=SUNDAY
         )
 
         self.assertEqual(len(json.loads(weekday["matrix"])["include"]), 1)
         self.assertEqual(len(json.loads(weekly["matrix"])["include"]), 2)
 
     def test_a_nightly_off_the_day_says_how_to_get_those_tests(self):
-        # A nightly re-run onto another day loses the week's multi-accelerator
+        # A nightly re-run onto another day loses the week of multi-accelerator
         # coverage, so the run says so and names the way back.
-        argv = ["--target", "gfx94X-dcgpu", "--release-type", "nightly"]
+        argv = ["--target", "gfx94X-dcgpu", "--test-size", "medium"]
         with contextlib.redirect_stdout(io.StringIO()) as weekday:
             self.outputs(argv, today=TUESDAY)
         with contextlib.redirect_stdout(io.StringIO()) as weekly:
@@ -186,10 +182,14 @@ class OutputsTest(unittest.TestCase):
         self.assertIn("Sunday", weekday.getvalue())
         self.assertNotIn("::notice::", weekly.getvalue())
 
-    def test_an_unknown_release_type_is_rejected(self):
+    def test_a_size_is_required_and_checked(self):
         # Defaulting it would quietly drop the multi-accelerator job.
-        with self.assertRaises(SystemExit):
-            self.outputs(["--target", "gfx94X-dcgpu", "--release-type", "nighlty"])
+        for argv in [
+            ["--target", "gfx94X-dcgpu"],
+            ["--target", "gfx94X-dcgpu", "--test-size", "meduim"],
+        ]:
+            with self.subTest(argv=argv), self.assertRaises(SystemExit):
+                self.outputs(argv)
 
 
 if __name__ == "__main__":

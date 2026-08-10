@@ -18,11 +18,13 @@ import install_jax_test_requirements as requirements
 import install_jax_wheels as wheels
 
 INDEX_URL = "https://rocm.nightlies.amd.com/whl-multi-arch/"
+FIND_LINKS_URL = "https://therock-artifacts.s3.amazonaws.com/12345-linux/index.html"
 
 
 def wheel_args(**overrides) -> argparse.Namespace:
     values = dict(
         index_url=INDEX_URL,
+        find_links="",
         plugin_package="jax_rocm10_plugin",
         pjrt_package="jax_rocm10_pjrt",
         plugin_version="0.11.0",
@@ -68,6 +70,22 @@ class InstallJaxWheelsTest(unittest.TestCase):
 
         for command in commands:
             self.assertNotIn("--index-url", command)
+
+    def test_ci_wheels_come_from_a_find_links_page(self):
+        first = wheels.install_commands(
+            wheel_args(index_url="", find_links=FIND_LINKS_URL)
+        )[0]
+
+        self.assertIn("--find-links", first)
+        self.assertEqual(first[first.index("--find-links") + 1], FIND_LINKS_URL)
+
+    def test_a_find_links_page_wins_over_an_index(self):
+        # An index that does not carry the run's wheels cannot install them, so
+        # a caller that gave both meant the page.
+        first = wheels.install_commands(wheel_args(find_links=FIND_LINKS_URL))[0]
+
+        self.assertIn("--find-links", first)
+        self.assertNotIn("--index-url", first)
 
     def test_missing_arguments_are_rejected(self):
         with self.assertRaises(SystemExit):

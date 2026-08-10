@@ -129,6 +129,9 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       release_type: ${{ inputs.release_type }}
+      # A prerelease is worth the multi-GPU runner every time; the nightly takes
+      # it one day a week.
+      test_size: ${{ inputs.release_type == 'prerelease' && 'large' || 'medium' }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
 
