@@ -620,6 +620,7 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 
 def _setup_common_build_env(
     cmake_prefix: Path,
+    bin_dir: Path,
     rocm_dir: Path,
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
@@ -633,6 +634,9 @@ def _setup_common_build_env(
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
+        # Make ROCm tools discoverable on all platforms and ROCm DLLs
+        # discoverable by the Windows loader.
+        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -779,9 +783,6 @@ def do_build(args: argparse.Namespace):
     print(f"  BIN = {bin_dir}")
     print(f"  ROCM_HOME = {rocm_dir}")
 
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
     # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
     # fallback (legacy; see TODO on get_rocm_sdk_targets()).
     pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
@@ -806,8 +807,9 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
+    print(f"  PATH = {env['PATH']}")
 
     if args.use_ccache:
         if not shutil.which("ccache"):
