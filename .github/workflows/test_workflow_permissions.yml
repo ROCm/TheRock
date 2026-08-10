@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 # This workflow validates that the GITHUB_TOKEN has the required permissions
-# to query workflow runs via the GitHub Actions API. This is a runtime test
-# that complements the static workflow_permissions_test.py unit test.
+# to query workflow runs via the GitHub Actions API.
 #
 # The stage reuse feature in setup_multi_arch.yml requires `actions: read`
-# to query baseline workflow runs. This test catches permission issues that
-# might be missed by static YAML analysis.
+# to query baseline workflow runs. This test catches permission issues at
+# runtime.
 #
 # See: https://github.com/ROCm/TheRock/issues/7235
 
@@ -42,106 +41,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install pyyaml
-
-      - name: Test GitHub API access for workflow runs
+      - name: Test GitHub API permissions
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 << 'EOF'
-          """Test that GITHUB_TOKEN can query workflow runs (requires actions:read)."""
-          import json
-          import os
-          import sys
-          from urllib.error import HTTPError
-          from urllib.request import Request, urlopen
-
-          def test_actions_read_permission():
-              """Query workflow runs to verify actions:read permission works."""
-              token = os.environ.get("GITHUB_TOKEN")
-              if not token:
-                  print("ERROR: GITHUB_TOKEN not set")
-                  sys.exit(1)
-
-              repo = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-              # Query a minimal set of workflow runs - we just need to verify the API works
-              url = f"https://api.github.com/repos/{repo}/actions/runs?per_page=1"
-
-              request = Request(url)
-              request.add_header("Authorization", f"Bearer {token}")
-              request.add_header("Accept", "application/vnd.github+json")
-              request.add_header("X-GitHub-Api-Version", "2022-11-28")
-
-              try:
-                  with urlopen(request, timeout=30) as response:
-                      data = json.loads(response.read().decode())
-                      total_count = data.get("total_count", 0)
-                      print(f"SUCCESS: Retrieved workflow runs (total_count={total_count})")
-                      print("The actions:read permission is working correctly.")
-                      return True
-              except HTTPError as e:
-                  if e.code == 403:
-                      print("ERROR: 403 Forbidden - Missing 'actions: read' permission")
-                      print("The GITHUB_TOKEN does not have permission to query workflow runs.")
-                      print("Ensure the workflow has 'actions: read' in its permissions block.")
-                      sys.exit(1)
-                  else:
-                      print(f"ERROR: HTTP {e.code} - {e.reason}")
-                      sys.exit(1)
-              except Exception as e:
-                  print(f"ERROR: {e}")
-                  sys.exit(1)
-
-          if __name__ == "__main__":
-              test_actions_read_permission()
-          EOF
-
-      - name: Test specific workflow runs query (stage reuse pattern)
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 << 'EOF'
-          """Test the exact API pattern used by stage reuse feature."""
-          import json
-          import os
-          import sys
-          from urllib.error import HTTPError
-          from urllib.request import Request, urlopen
-
-          def test_workflow_specific_runs():
-              """Query runs for a specific workflow (mirrors baseline_runs.py)."""
-              token = os.environ.get("GITHUB_TOKEN")
-              repo = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
-              workflow = "multi_arch_ci.yml"
-
-              url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?per_page=1&status=completed"
-
-              request = Request(url)
-              request.add_header("Authorization", f"Bearer {token}")
-              request.add_header("Accept", "application/vnd.github+json")
-              request.add_header("X-GitHub-Api-Version", "2022-11-28")
-
-              try:
-                  with urlopen(request, timeout=30) as response:
-                      data = json.loads(response.read().decode())
-                      runs = data.get("workflow_runs", [])
-                      print(f"SUCCESS: Queried {workflow} runs (found {len(runs)} completed runs)")
-                      print("Stage reuse API pattern is working correctly.")
-                      return True
-              except HTTPError as e:
-                  if e.code == 403:
-                      print(f"ERROR: 403 Forbidden when querying {workflow}")
-                      print("Missing 'actions: read' permission for workflow-specific queries.")
-                      sys.exit(1)
-                  elif e.code == 404:
-                      # Workflow might not exist yet in a fork - that's OK
-                      print(f"WARNING: {workflow} not found (expected in forks)")
-                      return True
-                  else:
-                      print(f"ERROR: HTTP {e.code} - {e.reason}")
-                      sys.exit(1)
-
-          if __name__ == "__main__":
-              test_workflow_specific_runs()
-          EOF
+        run: python build_tools/github_actions/test_workflow_permissions.py
