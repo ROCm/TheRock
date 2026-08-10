@@ -156,7 +156,9 @@ def _compute_artifacts_from_changed_projects(
         if normalized in alias_map:
             rebuild_artifacts.add(alias_map[normalized])
         else:
-            print(f"  WARNING: unknown project '{project}' - not mapped to any artifact")
+            print(
+                f"  WARNING: unknown project '{project}' - not mapped to any artifact"
+            )
 
     # Artifacts not in rebuild set are reusable
     reusable_artifacts = all_stage_artifacts - rebuild_artifacts
