@@ -362,7 +362,9 @@ class StageImpactAnalyzer:
             else:
                 # Path affects all artifacts in this source set
                 is_conservative = True
-                impacted.update(self.topology.get_all_artifacts_for_source_set(submodule))
+                impacted.update(
+                    self.topology.get_all_artifacts_for_source_set(submodule)
+                )
 
         return (impacted, is_conservative)
 

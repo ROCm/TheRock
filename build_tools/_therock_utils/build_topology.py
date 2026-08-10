@@ -1360,6 +1360,7 @@ class BuildTopology:
     def extract_component_from_path(path: str) -> Optional[str]:
         """Extract component name from projects/NAME/... or shared/NAME/... path."""
         import re
+
         match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
         return match.group(1) if match else None
 

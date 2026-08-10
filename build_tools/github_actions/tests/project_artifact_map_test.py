@@ -27,13 +27,17 @@ class ExtractComponentFromPathTest(unittest.TestCase):
 
     def test_shared_path(self):
         self.assertEqual(
-            BuildTopology.extract_component_from_path("shared/rocroller/include/bar.hpp"),
+            BuildTopology.extract_component_from_path(
+                "shared/rocroller/include/bar.hpp"
+            ),
             "rocroller",
         )
 
     def test_dnn_providers_path(self):
         self.assertEqual(
-            BuildTopology.extract_component_from_path("dnn-providers/miopen-provider/src/baz.cpp"),
+            BuildTopology.extract_component_from_path(
+                "dnn-providers/miopen-provider/src/baz.cpp"
+            ),
             "miopen-provider",
         )
 
@@ -86,7 +90,9 @@ class GetArtifactForPathTest(unittest.TestCase):
 
 class ParseChangedPathTest(unittest.TestCase):
     def test_simple_path(self):
-        submodule, subpath = BuildTopology.parse_changed_path("rocm-libraries/projects/rocblas/foo.cpp")
+        submodule, subpath = BuildTopology.parse_changed_path(
+            "rocm-libraries/projects/rocblas/foo.cpp"
+        )
         self.assertEqual(submodule, "rocm-libraries")
         self.assertEqual(subpath, "projects/rocblas/foo.cpp")
 
@@ -119,7 +125,8 @@ class ComponentsInSyncTest(unittest.TestCase):
         cmake_components = self._extract_cmake_components()
         missing = cmake_components - topology_components
         self.assertEqual(
-            missing, set(),
+            missing,
+            set(),
             f"Components in CMakeLists.txt but not BUILD_TOPOLOGY.toml: {sorted(missing)}",
         )
 
@@ -137,7 +144,10 @@ class ComponentsInSyncTest(unittest.TestCase):
         ]
         for cmake_file in REPO_ROOT.rglob("CMakeLists.txt"):
             rel_path = cmake_file.relative_to(REPO_ROOT)
-            if any(part in ("rocm-libraries", "rocm-systems", "build", ".git") for part in rel_path.parts):
+            if any(
+                part in ("rocm-libraries", "rocm-systems", "build", ".git")
+                for part in rel_path.parts
+            ):
                 continue
             try:
                 content = cmake_file.read_text()

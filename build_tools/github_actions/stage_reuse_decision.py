@@ -194,7 +194,9 @@ def _stage_artifacts_available(
         return False
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
-            if not _artifact_available(artifact_name, target_families, available_filenames):
+            if not _artifact_available(
+                artifact_name, target_families, available_filenames
+            ):
                 return False
     return True
 
@@ -467,7 +469,11 @@ def compute_auto_stage_reuse(
     verified_reusable: tuple[str, ...] = ()
     verified_rebuild: tuple[str, ...] = ()
     artifact_level_analysis = plan.artifact_level_analysis
-    if plan.artifact_level_analysis and plan.reusable_artifacts and reported_baseline_run_id:
+    if (
+        plan.artifact_level_analysis
+        and plan.reusable_artifacts
+        and reported_baseline_run_id
+    ):
         # Get all available filenames across platforms
         all_available_filenames: set[str] = set()
         for platform in platforms:
@@ -771,8 +777,12 @@ def render_step_summary(result: AutoStageReuse) -> str:
     if result.artifact_level_analysis:
         out.append("")
         out.append("#### Artifact-level analysis")
-        out.append(f"- impacted artifacts: {_format_stage_list(result.rebuild_artifacts)}")
-        out.append(f"- reusable artifacts: {_format_stage_list(result.reusable_artifacts)}")
+        out.append(
+            f"- impacted artifacts: {_format_stage_list(result.rebuild_artifacts)}"
+        )
+        out.append(
+            f"- reusable artifacts: {_format_stage_list(result.reusable_artifacts)}"
+        )
     if result.mode is StageReuseMode.DRY_RUN and result.available_stages:
         out.append("")
         out.append(
