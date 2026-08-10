@@ -129,6 +129,25 @@ class Artifact:
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
 
 
+def artifact_may_apply_to_platform(
+    artifact: Artifact,
+    platform_name: str,
+) -> bool:
+    """Return whether an artifact may apply to a platform.
+
+    Explicit platform restrictions are honored. Conditional disables are not
+    evaluated because callers do not have the resolved build flags, so the
+    artifact remains applicable conservatively.
+    """
+    if artifact.platform is not None and artifact.platform != platform_name:
+        return False
+
+    if platform_name in artifact.disable_platforms:
+        return False
+
+    return True
+
+
 class BuildTopology:
     """
     Parses and provides operations on BUILD_TOPOLOGY.toml.

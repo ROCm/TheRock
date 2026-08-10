@@ -225,6 +225,151 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertIsNone(inputs.base_ref)
 
+    def test_workflow_dispatch_reads_stage_reuse_diff_base(self):
+        inputs = _run_from_environ(
+            "workflow_dispatch",
+            {
+                "inputs": {},
+            },
+            extra_env={
+                "STAGE_REUSE_DIFF_BASE": "base-commit-sha",
+            },
+        )
+
+        self.assertEqual(
+            inputs.base_ref,
+            "base-commit-sha",
+        )
+
+    def test_workflow_dispatch_without_diff_base_has_no_base_ref(self):
+        inputs = _run_from_environ(
+            "workflow_dispatch",
+            {
+                "inputs": {},
+            },
+        )
+
+        self.assertIsNone(
+            inputs.base_ref,
+        )
+
+
+class TestLoadGitContext(unittest.TestCase):
+    @patch.object(
+        cm.GitContext,
+        "from_repo",
+    )
+    def test_workflow_dispatch_diff_base_builds_git_context(
+        self,
+        mock_from_repo,
+    ):
+        expected = cm.GitContext(
+            changed_files=[
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+            ],
+            diff_base_ref="base-commit-sha",
+            diff_base_commit="resolved-base-sha",
+            diff_head_commit="head-commit-sha",
+        )
+        mock_from_repo.return_value = expected
+
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="base-commit-sha",
+            build_variant="release",
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "SKIP_PATH_FILTERS": "",
+            },
+            clear=False,
+        ):
+            result = cm._load_git_context(
+                inputs,
+            )
+
+        self.assertIs(
+            result,
+            expected,
+        )
+        mock_from_repo.assert_called_once_with(
+            base_ref="base-commit-sha",
+        )
+
+    @patch.object(
+        cm.GitContext,
+        "from_repo",
+    )
+    def test_workflow_dispatch_without_diff_base_uses_empty_context(
+        self,
+        mock_from_repo,
+    ):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref=None,
+            build_variant="release",
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "SKIP_PATH_FILTERS": "",
+            },
+            clear=False,
+        ):
+            result = cm._load_git_context(
+                inputs,
+            )
+
+        self.assertIsNone(
+            result.changed_files,
+        )
+        self.assertIsNone(
+            result.diff_base_commit,
+        )
+        mock_from_repo.assert_not_called()
+
+    @patch.object(
+        cm.GitContext,
+        "from_repo",
+    )
+    def test_external_repo_ignores_dispatch_diff_base(
+        self,
+        mock_from_repo,
+    ):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="base-commit-sha",
+            build_variant="release",
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "SKIP_PATH_FILTERS": "true",
+            },
+            clear=False,
+        ):
+            result = cm._load_git_context(
+                inputs,
+            )
+
+        self.assertIsNone(
+            result.changed_files,
+        )
+        self.assertIsNone(
+            result.diff_base_commit,
+        )
+        mock_from_repo.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
@@ -514,6 +659,156 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_manual_prebuilt_stages_take_precedence_over_auto_reuse(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(
+                "[STAGE-REUSE] stage 'compiler-runtime' "
+                "unaffected AND available in baseline "
+                "on all platforms -> WILL be skipped",
+            ),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=["math-libs"],
+            manual_baseline_run_id="manual-run-100",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "math-libs": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertNotIn(
+            "compiler-runtime",
+            stage_decisions,
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "manual-run-100",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            (),
+        )
+
+        self.assertTrue(
+            any(
+                "manual prebuilt_stages input takes precedence" in reason
+                for reason in adjusted_auto_stage_reuse.reasons
+            )
+        )
+
+        self.assertTrue(
+            any(
+                "WOULD be reusable but was not applied" in line
+                for line in adjusted_auto_stage_reuse.report_lines
+            )
+        )
+
+    def test_auto_reuse_applies_when_manual_stages_are_not_set(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=(
+                "https://github.com/ROCm/TheRock/actions/runs/auto-run-200"
+            ),
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted_auto_stage_reuse,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=[],
+            manual_baseline_run_id="",
+            auto_stage_reuse=auto_stage_reuse,
+        )
+
+        self.assertEqual(
+            stage_decisions,
+            {
+                "compiler-runtime": cm.JobAction.PREBUILT,
+            },
+        )
+
+        self.assertEqual(
+            baseline_run_id,
+            "auto-run-200",
+        )
+
+        self.assertEqual(
+            adjusted_auto_stage_reuse.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
+
+    def test_auto_reuse_is_not_applied_when_disallowed(self):
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=None,
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        (
+            stage_decisions,
+            baseline_run_id,
+            adjusted,
+        ) = cm._apply_stage_reuse_precedence(
+            manual_prebuilt_stages=[],
+            manual_baseline_run_id="manual-run-100",
+            auto_stage_reuse=auto_stage_reuse,
+            allow_automatic_reuse=False,
+        )
+
+        self.assertEqual(stage_decisions, {})
+        self.assertEqual(baseline_run_id, "manual-run-100")
+        self.assertEqual(adjusted.applied_reuse_stages, ())
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -593,6 +888,262 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_expected_baseline_sha_is_diff_base_for_diff_events(self):
+        git_context = cm.GitContext(
+            changed_files=[
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+            ],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        for event_name in (
+            "pull_request",
+            "push",
+            "workflow_dispatch",
+        ):
+            with self.subTest(event_name=event_name):
+                self.assertEqual(
+                    cm._get_expected_baseline_sha(
+                        self._inputs(
+                            event_name=event_name,
+                            base_ref="base-commit-sha",
+                        ),
+                        git_context,
+                    ),
+                    "base-commit-sha",
+                )
+
+    def test_expected_baseline_sha_is_none_without_computed_diff(self):
+        git_context = cm.GitContext(
+            changed_files=None,
+            diff_base_commit=None,
+            diff_head_commit="head-commit-sha",
+        )
+
+        for event_name in (
+            "schedule",
+            "workflow_dispatch",
+        ):
+            with self.subTest(event_name=event_name):
+                self.assertIsNone(
+                    cm._get_expected_baseline_sha(
+                        self._inputs(
+                            event_name=event_name,
+                            base_ref=None,
+                        ),
+                        git_context,
+                    )
+                )
+
+    def test_dispatch_without_explicit_base_does_not_reuse_computed_context(self):
+        git_context = cm.GitContext(
+            changed_files=[
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+            ],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        self.assertIsNone(
+            cm._get_expected_baseline_sha(
+                self._inputs(
+                    event_name="workflow_dispatch",
+                    base_ref=None,
+                ),
+                git_context,
+            )
+        )
+
+    @patch("configure_multi_arch_ci.get_all_families_for_trigger_types")
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_decide_jobs_threads_exact_baseline_sha_and_artifact_families(
+        self,
+        mock_compute_auto_stage_reuse,
+        mock_get_all_families,
+    ):
+        mock_get_all_families.return_value = {
+            "linux-key": {
+                "linux": {
+                    "family": "gfx-linux-artifact",
+                },
+            },
+            "windows-key": {
+                "windows": {
+                    "family": "gfx-windows-artifact",
+                },
+            },
+        }
+
+        auto_stage_reuse = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.DRY_RUN,
+            candidate_stages=(),
+            rebuild_stages=(),
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url=None,
+            available_stages=(),
+            unavailable_stages=(),
+            applied_reuse_stages=(),
+            reasons=(),
+            report_lines=(),
+            platform_available={},
+        )
+        mock_compute_auto_stage_reuse.return_value = auto_stage_reuse
+
+        git_context = cm.GitContext(
+            changed_files=[
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+            ],
+            diff_base_commit="base-commit-sha",
+            diff_head_commit="head-commit-sha",
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+            },
+            clear=False,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name="pull_request",
+                ),
+                git_context=git_context,
+                targets=cm.TargetSelection(
+                    linux_families=["linux-key"],
+                    windows_families=["windows-key"],
+                ),
+            )
+
+        self.assertIs(
+            result.auto_stage_reuse,
+            auto_stage_reuse,
+        )
+
+        mock_compute_auto_stage_reuse.assert_called_once()
+        call_kwargs = mock_compute_auto_stage_reuse.call_args.kwargs
+
+        self.assertEqual(
+            call_kwargs["changed_files"],
+            [
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+            ],
+        )
+        self.assertEqual(
+            call_kwargs["expected_baseline_sha"],
+            "base-commit-sha",
+        )
+        self.assertEqual(
+            call_kwargs["linux_amdgpu_families"],
+            ["gfx-linux-artifact"],
+        )
+        self.assertEqual(
+            call_kwargs["windows_amdgpu_families"],
+            ["gfx-windows-artifact"],
+        )
+
+    @patch("configure_multi_arch_ci.get_all_families_for_trigger_types")
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_decide_jobs_disables_automatic_cross_repo_reuse(
+        self,
+        mock_compute_auto_stage_reuse,
+        mock_get_all_families,
+    ):
+        mock_get_all_families.return_value = {
+            "linux-key": {
+                "linux": {
+                    "family": "gfx-linux-artifact",
+                },
+            },
+        }
+
+        mock_compute_auto_stage_reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=("compiler-runtime",),
+            rebuild_stages=("math-libs",),
+            full_rebuild_required=False,
+            baseline_run_id="auto-run-200",
+            baseline_html_url=None,
+            available_stages=("compiler-runtime",),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-runtime",),
+            reasons=(),
+            report_lines=(),
+            platform_available={
+                "linux": ("compiler-runtime",),
+            },
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_REPOSITORY": "ROCm/rocm-libraries",
+            },
+            clear=False,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name="pull_request",
+                    baseline_repository="ROCm/TheRock",
+                    baseline_run_id="manual-run-100",
+                ),
+                git_context=cm.GitContext(
+                    changed_files=[
+                        "rocm-libraries/projects/rocBLAS/x.cpp",
+                    ],
+                    diff_base_commit="base-commit-sha",
+                    diff_head_commit="head-commit-sha",
+                ),
+                targets=cm.TargetSelection(
+                    linux_families=["linux-key"],
+                ),
+            )
+
+        call_kwargs = mock_compute_auto_stage_reuse.call_args.kwargs
+
+        # Cross-repository automatic lookup must not use the triggering
+        # repository's diff-base SHA.
+        self.assertIsNone(
+            call_kwargs["expected_baseline_sha"],
+        )
+
+        # The automatically selected stage must not be applied.
+        self.assertEqual(
+            result.build_rocm.stage_decisions,
+            {},
+        )
+        self.assertNotIn(
+            "compiler-runtime",
+            result.build_rocm.prebuilt_stages,
+        )
+
+        # Preserve the explicit cross-repository inputs.
+        self.assertEqual(
+            result.build_rocm.baseline_run_id,
+            "manual-run-100",
+        )
+        self.assertEqual(
+            result.build_rocm.baseline_repository,
+            "ROCm/TheRock",
+        )
+
+        self.assertIsNotNone(
+            result.auto_stage_reuse,
+        )
+        assert result.auto_stage_reuse is not None
+        self.assertEqual(
+            result.auto_stage_reuse.applied_reuse_stages,
+            (),
+        )
+        self.assertTrue(
+            any(
+                "cross-repository reuse requires explicit inputs" in reason
+                for reason in result.auto_stage_reuse.reasons
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
