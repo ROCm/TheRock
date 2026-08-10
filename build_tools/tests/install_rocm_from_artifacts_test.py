@@ -392,8 +392,11 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocprofiler_systems_examples=False,
         rocrtst=False,
         rocalution=False,
+        kfdtest=False,
         rocwmma=False,
+        rpp=False,
         libhipcxx=False,
+        hipthreads=False,
         tests=False,
     )
     defaults.update(overrides)

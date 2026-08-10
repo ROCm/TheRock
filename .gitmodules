@@ -28,8 +28,8 @@
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "amd-mesa"]
 	path = third-party/sysdeps/common/mesa-fork
-	url = https://gitlab.freedesktop.org/lakshmi.kumar/mesa.git
-	branch = fix/libva-win32-buildorder
+	url = https://github.com/ROCm/mesa-fork.git
+	branch = main
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git

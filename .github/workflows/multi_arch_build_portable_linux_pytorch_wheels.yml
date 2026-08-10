@@ -46,6 +46,12 @@ on:
         description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
         type: string
         required: true
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -77,7 +83,7 @@ on:
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
   workflow_dispatch:
@@ -104,16 +110,29 @@ on:
         description: PyTorch ref to checkout (for example, "release/2.12").
         type: string
         default: "release/2.12"
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
+        description: >-
+          URL for pip --find-links to install ROCm packages (flat page). Set
+          either this or rocm_package_index_url to override the ROCm package
+          source; leave both blank to use the nightly multi-arch index.
         type: string
         default: ""
       rocm_package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        description: >-
+          URL for pip --index-url to install ROCm packages (PEP 503 index).
+          Set either this or rocm_package_find_links_url to override the ROCm
+          package source; leave both blank to use the nightly multi-arch index
+          (https://rocm.nightlies.amd.com/whl-multi-arch).
         type: string
         default: ""
       release_type:
@@ -123,11 +142,17 @@ on:
           - dev
         default: dev
       repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        description: >-
+          TheRock repository to check out the build scripts/workflow from (NOT
+          the PyTorch source). Leave blank to use this repository. To build a
+          different PyTorch branch, set pytorch_git_ref instead.
         type: string
         default: ""
       ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        description: >-
+          Branch, tag, or SHA of TheRock (the repository above) to check out.
+          Leave blank to use the triggering ref. This does NOT select the
+          PyTorch source ref; use pytorch_git_ref for that.
         type: string
         default: ""
       cache_type:
@@ -141,7 +166,7 @@ on:
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
 
@@ -227,8 +252,12 @@ jobs:
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
+          pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
+          if [ -z "${pytorch_origin}" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
@@ -276,6 +305,16 @@ jobs:
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       - name: Build PyTorch wheels
+        # Default to the nightly multi-arch ROCm index when neither source is
+        # provided so a bare manual dispatch works; setting either input
+        # overrides it. The default is applied here rather than on the input
+        # because GitHub reverts an emptied input back to its declared default,
+        # which would make the two inputs impossible to use exclusively.
+        env:
+          # Use the index if given; else the find-links page; else default to
+          # the nightly multi-arch index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cache_flag=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
@@ -287,14 +326,17 @@ jobs:
           # build_prod_wheels.py forwards each of these to pip and ignores an
           # empty value, so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
+          # --release-type lets the script tag dev builds' torch version with
+          # the torch source commit (e.g. 2.12.0a0+git1a2b3c4d.rocm7.10.0).
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --index-url="${{ inputs.rocm_package_index_url }}" \
-            --find-links="${{ inputs.rocm_package_find_links_url }}" \
+            --index-url="${ROCM_INDEX_URL}" \
+            --find-links="${ROCM_FIND_LINKS}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
+            --release-type="${{ inputs.release_type }}" \
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} \
             ${{ env.optional_build_prod_arguments }}
 
@@ -452,13 +494,12 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to nightly gfx94X-dcgpu Python 3.12 builds for now.
+  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
-        inputs.release_type == 'nightly' &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
@@ -487,7 +528,7 @@ jobs:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
             { "amdgpu_family": "gfx94X-dcgpu",
-              "test_runs_on": "linux-gfx942-1gpu-ossci-rocm",
+              "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
               "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
               "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
               "python_version": "${{ inputs.python_version }}",

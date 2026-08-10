@@ -419,20 +419,28 @@ Install JAX with ROCm support using the unified multi-arch index.
 > as a dependency. You must install ROCm first by following
 > [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages).
 >
-> Always pin `jax`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt` to the same version.
+> Always pin `jax`, `jax_rocm<major>_plugin`, and `jax_rocm<major>_pjrt` to the
+> same version.
+>
+> The plugin and PJRT package names embed the ROCm major version they were built
+> against, so the name to install depends on the ROCm release: `jax_rocm7_*` for
+> ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
-# Set the version (currently supported: 0.9.1, 0.10.0, and 0.10.2)
-JAX_VERSION=0.10.0
+# Set the version (currently supported: 0.10.0, 0.10.1, 0.10.2, and 0.11.0)
+JAX_VERSION=0.11.0
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     "rocm[libraries,device-gfx942]"
 
 # 2. Install JAX ROCm wheels
+# Use the ROCm major version the wheels were built against: 7 for ROCm 7.x, 10
+# for ROCm 10.x.
+ROCM_MAJOR=7
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    "jax_rocm7_plugin==${JAX_VERSION}" \
-    "jax_rocm7_pjrt==${JAX_VERSION}"
+    "jax_rocm${ROCM_MAJOR}_plugin==${JAX_VERSION}" \
+    "jax_rocm${ROCM_MAJOR}_pjrt==${JAX_VERSION}"
 
 # 3. Install matching jax from PyPI
 pip install "jax==${JAX_VERSION}"
@@ -446,6 +454,22 @@ import jax
 print(jax.devices())
 # [RocmDevice(id=0), RocmDevice(id=1), ...]
 ```
+
+> [!NOTE]
+> On ROCm 10, a released `jaxlib` (0.10.0 through 0.11.0) does not know the
+> `jax_rocm10_plugin` name, so the GPU kernel modules resolve to `None` and no FFI
+> handlers are registered. Symptoms are `'NoneType' object has no attribute ...` and
+> `No FFI handler registered for hipsolver_*`. Those versions predate the upstream fix
+> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)); until a `jaxlib`
+> carrying it ships, teach the installed copy about the new major:
+>
+> ```bash
+> python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+>     --plugin-package "jax_rocm${ROCM_MAJOR}_plugin"
+> ```
+>
+> The script edits the installed files in place, is idempotent, and is a no-op on ROCm 7
+> or once a fixed `jaxlib` is installed.
 
 ### Installing multi-arch native packages
 
