@@ -34,7 +34,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 concurrency:
   # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency

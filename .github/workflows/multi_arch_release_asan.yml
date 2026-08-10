@@ -72,7 +72,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 run-name: >-
   Multi-Arch Release ASAN (${{ inputs.release_type || 'dev' }})
