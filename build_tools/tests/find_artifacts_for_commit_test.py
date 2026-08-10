@@ -590,6 +590,7 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             ),
         )
 
+
 class ArtifactRequestValidationTest(unittest.TestCase):
     def test_commit_lookup_rejects_targets_for_multiple_groups(self):
         with self.assertRaisesRegex(
