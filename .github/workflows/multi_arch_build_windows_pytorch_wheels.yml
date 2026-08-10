@@ -360,7 +360,6 @@ jobs:
             --index-url="%ROCM_INDEX_URL%" ^
             --find-links="%ROCM_FIND_LINKS%" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
-            --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^

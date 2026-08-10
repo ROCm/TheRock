@@ -10,6 +10,7 @@ particularly error handling and exit codes.
 
 import hashlib
 import os
+import platform
 import shutil
 import sys
 import tempfile
@@ -17,6 +18,11 @@ import unittest
 from pathlib import Path
 from typing import Optional
 from unittest import mock
+
+
+def is_windows():
+    return platform.system() == "Windows"
+
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -593,12 +599,15 @@ class TestFetchStageAll(ArtifactManagerTestBase):
             )
 
     def test_fetch_exclude_components_skips_test_artifacts(self) -> None:
-        """Test that --exclude-components filters artifact components."""
+        """Test that --exclude-components filters artifact components including xnack variants."""
         import artifact_manager
 
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "test", "generic")
         self._create_staged_artifact("test-artifact", "test", "gfx942")
+        # xnack artifacts use ':' which is invalid in Windows filenames
+        if not is_windows():
+            self._create_staged_artifact("test-artifact", "test", "gfx942:xnack+")
         self._create_staged_artifact("second-artifact", "run", "generic")
         self._create_staged_artifact("second-artifact", "test", "generic")
 
@@ -734,12 +743,15 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
     """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""
 
     def test_fetch_with_amdgpu_targets_finds_individual_target_archives(self):
-        """Test that --amdgpu-targets matches individual-target split archives."""
+        """Test that --amdgpu-targets matches individual-target and xnack-suffixed archives."""
         import artifact_manager
 
-        # Stage a generic artifact and a per-target artifact
+        # Stage generic, per-target, and xnack-suffixed artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "lib", "gfx942")
+        # xnack artifacts use ':' which is invalid in Windows filenames
+        if not is_windows():
+            self._create_staged_artifact("test-artifact", "lib", "gfx942:xnack+")
 
         extract_calls = []
 
@@ -768,16 +780,21 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
             artifact_manager.main(argv)
 
-        # Should have fetched both generic and gfx942
+        # Should have fetched generic, gfx942, and gfx942:xnack+ (non-Windows only)
         fetched_keys = [c.archive_path.name for c in extract_calls]
         self.assertTrue(
             any("generic" in k for k in fetched_keys),
             f"Should fetch generic artifact, got: {fetched_keys}",
         )
         self.assertTrue(
-            any("gfx942" in k for k in fetched_keys),
+            any("gfx942.tar.zst" in k for k in fetched_keys),
             f"Should fetch gfx942 artifact, got: {fetched_keys}",
         )
+        if not is_windows():
+            self.assertTrue(
+                any("gfx942:xnack+" in k for k in fetched_keys),
+                f"Should fetch gfx942:xnack+ artifact, got: {fetched_keys}",
+            )
 
     def test_fetch_with_amdgpu_targets_skips_other_targets(self):
         """Test that --amdgpu-targets doesn't fetch archives for other targets."""

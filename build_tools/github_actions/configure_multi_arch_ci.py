@@ -142,6 +142,7 @@ class CIInputs:
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
@@ -198,6 +199,9 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        build_python_packages = (
+            os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
+        )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
@@ -245,6 +249,7 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
@@ -494,6 +499,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -576,23 +582,25 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
-    # This avoids running expensive ASAN builds on every PR while still
-    # catching ASAN issues when library code (submodules) changes.
-    # The ci:asan label allows manual triggering of ASAN CI on any PR.
+    # Skip ASAN on PRs unless an enabling label is present.
+    # This avoids running expensive ASAN builds on every PR.
+    # Labels that enable ASAN CI:
+    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    has_asan_label = (
+        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.has_submodule_changes is False
-        and "ci:asan" not in ci_inputs.pr_labels
+        and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
-    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
-        print("  Running: 'ci:asan' PR label triggers ASAN CI")
+    if has_asan_label and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN CI triggered by PR label")
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -1150,9 +1158,10 @@ def _expand_build_config_for_platform(
         per_family_info=per_family_info,
         platform=platform,
     )
-    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
-    # Python package build is disabled. Then multi_arch_ci_* can also condition
-    # build_python_packages on that decision.
+    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    # The build_python_packages input allows callers to disable Python packages.
+    is_asan = suffix == "asan"
+    build_python_packages = ci_inputs.build_python_packages and not is_asan
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1161,7 +1170,8 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
+        build_native_linux=True,
+        build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
@@ -1235,10 +1245,20 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push and pull_request events run "host-asan"
-    if build_variant == "asan" and (ci_inputs.is_push or ci_inputs.is_pull_request):
-        build_variant = "host-asan"
+    # ASAN variant selection:
+    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
+    # 2. ci:host-asan label -> host-asan (explicit)
+    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    if build_variant == "asan":
+        if "ci:asan" in ci_inputs.pr_labels:
+            print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan" in ci_inputs.pr_labels:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (ci:host-asan label)")
+        elif ci_inputs.is_push or ci_inputs.is_pull_request:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
