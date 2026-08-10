@@ -142,6 +142,7 @@ class CIInputs:
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
@@ -198,6 +199,9 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        build_python_packages = (
+            os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
+        )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
@@ -245,6 +249,7 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
@@ -494,6 +499,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -1152,9 +1158,10 @@ def _expand_build_config_for_platform(
         per_family_info=per_family_info,
         platform=platform,
     )
-    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
-    # Python package build is disabled. Then multi_arch_ci_* can also condition
-    # build_python_packages on that decision.
+    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    # The build_python_packages input allows callers to disable Python packages.
+    is_asan = suffix == "asan"
+    build_python_packages = ci_inputs.build_python_packages and not is_asan
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1163,7 +1170,8 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
+        build_native_linux=True,
+        build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,

@@ -558,3 +558,6 @@ therock_subproject_merge_compile_commands()
 
 # Write artifact→subprojects manifest for Python scripts to use
 therock_write_subproject_manifest()
+
+include(therock_emit_consumer_graph)
+therock_emit_consumer_graph("${CMAKE_BINARY_DIR}/therock_consumer_graph.json")
