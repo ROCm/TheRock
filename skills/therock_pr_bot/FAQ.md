@@ -1,9 +1,9 @@
 # TheRock PR Bot — Policy FAQ Doc
 
 **TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
-On every Pull Request, it runs a set of policy checks — title/description,
-forbidden files, unit tests, and required CI checks —
-then posts a single results table comment summarising what passed or failed.
+On every Pull Request, it runs a set of policy checks — PR description,
+forbidden files, unit tests, and required CI checks — then posts a single
+results table comment summarising what passed or failed.
 PRs that fail key checks are flagged with a **`Not ready to Review`** label
 until the issues are resolved.
 
@@ -20,28 +20,32 @@ This document explains what each policy check means, why it exists, and how to f
 
 ______________________________________________________________________
 
-## 📝 PR Title
+## 🙋 Wish to Override the Policy Process and get unblocked?
 
-**What does it check?**
+Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
 
-> **Note:** In the results table, the title and description checks are reported together as a single **PR Title/Description** row. Any title *or* description failure shows up there.
+## 🙋 For any policy related feedback?
 
-**Length rules (only)**
+please reach out to the **ROCm Policy Council**.
 
-- Minimum: **10** characters
-- Maximum: **100** characters
+📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
 
-> The title is validated by **length only**. There is no enforced format
-> (e.g. Conventional Commits) and no forbidden-word list — any wording is
-> accepted as long as it is 10–100 characters long.
+Include your PR link, the check(s) you want overridden, and a short
+justification so the council can review your request.
 
-**How to fix**
-Edit the PR title on GitHub (top of the PR page → pencil icon) so it is between 10 and 100 characters, e.g.:
+## ✅ Skip the PR Bot entirely (`@skip-pr-bot`)
 
-```
-Add token refresh support
-Correct codeql workflow trigger
-```
+If you want to opt a PR **out of the bot completely**, add the tag
+**`@skip-pr-bot`** anywhere in the PR description. When present:
+
+- The bot runs **no policy checks** at all.
+- Any existing **`Not ready to Review`** label is **removed**.
+- The bot posts a short notice:
+  *"Author chose to skip pr bot run hence removing label."*
+
+This works both when the tag is present at PR creation **and** when it is added
+later via a description edit. Removing the tag (and pushing/editing again)
+re-enables the normal checks.
 
 ______________________________________________________________________
 
@@ -104,6 +108,12 @@ ______________________________________________________________________
 **What does it check?**
 Certain file types must never be committed to the repository because they can expose secrets or introduce security risks.
 
+> **⚠️ Warning-only (non-blocking):** The Forbidden Files check **never fails
+> the workflow** and **never adds the `Not ready to Review` label**. If a
+> forbidden file is present, the results table shows a **⚠️ Warning** row
+> listing the offending file(s) — but the PR Bot check stays **green**. It is a
+> reminder to remove the file, not a hard gate.
+
 | Pattern                                                  | Reason                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------- |
 | `**/*.pem`                                               | TLS/SSL certificates — must not be stored in source control    |
@@ -134,6 +144,12 @@ ______________________________________________________________________
 **What does it check?**
 PRs that change real source code must include at least one accompanying unit test.
 
+> **⚠️ Warning-only (non-blocking):** The Unit Test check **never fails the
+> workflow** and **never adds the `Not ready to Review` label**. If a code
+> change is missing a test, the results table shows a **⚠️ Warning** row
+> explaining what is missing — but the PR Bot check stays **green**. It is a
+> reminder, not a gate.
+
 **Rules**
 
 - **Doc / config-only PRs are exempt.** If your PR only touches files like
@@ -144,8 +160,8 @@ PRs that change real source code must include at least one accompanying unit tes
 
 **What counts as a test file?**
 
-- Basename matches one of: `test_*`, `testing_*`, `*_test.*`, `*_tests.*`, or `Test*`
-  - ✅ `test_parser.py`, `testing_parser.py`, `parser_test.cpp`, `parser_tests.cpp`, `TestUtils.cpp`
+- Basename matches one of: `test_*`, `testing_*`, `*_test.*`, `*_tests.*`, `*_gtest.*`, or `Test*`
+  - ✅ `test_parser.py`, `testing_parser.py`, `parser_test.cpp`, `parser_tests.cpp`, `parser_gtest.cpp`, `TestUtils.cpp`
   - ❌ `test.py` (does NOT have the `test_` prefix)
 
 | Pattern     | Example             |
@@ -154,6 +170,7 @@ PRs that change real source code must include at least one accompanying unit tes
 | `testing_*` | `testing_parser.py` |
 | `*_test.*`  | `parser_test.cpp`   |
 | `*_tests.*` | `parser_tests.cpp`  |
+| `*_gtest.*` | `parser_gtest.cpp`  |
 | `Test*`     | `TestUtils.cpp`     |
 
 **Path-based recognition**
@@ -168,6 +185,9 @@ Add a unit test for the code you changed, named `test_<something>`:
 # example for Python
 touch tests/test_my_feature.py
 ```
+
+> Even though this is only a warning, adding the missing test clears the ⚠️
+> from the table.
 
 ______________________________________________________________________
 
@@ -226,8 +246,7 @@ A **Bump PR** is an automated pull request that updates dependencies (e.g. from 
 
 When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
 
-- PR title (length) check
-- JIRA/ISSUE ID reference requirement
+- JIRA/ISSUE ID reference requirement in Description
 - Unit test requirement
 - And all other policies
 
@@ -239,6 +258,7 @@ The PR author's login is checked against a configured list of bump bot accounts.
 
 - `assistant-librarian` (and `assistant-librarian[bot]`)
 - `systems-assistant` (and `systems-assistant[bot]`)
+- `dependabot` (and `dependabot[bot]`)
 
 If a different bot opens dependency-bump PRs in your repo, request that the maintainers add it to `bump_bot_authors` in `policy.yml`.
 
@@ -246,20 +266,13 @@ ______________________________________________________________________
 
 ## General Questions
 
-**Why did my PR get the "Not ready to Review" label?**
-
-The label is added when:
-
-1. **Unit Test check fails** — your PR changes source code but has no accompanying test file.
-1. **JIRA/ISSUE ID reference is missing** — your PR description does not include a tracking reference.
-
-All other policy failures (title format, description length, forbidden files, etc.) do not add the label; they are still reported in the table but do not block the PR.
-
 **What is the "Not ready to Review" label?**
 
-When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
-The label is removed automatically once all policy checks pass.
-Other failures (PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
+When the **JIRA/ISSUE ID reference** is missing from the PR description, the bot
+adds a **`Not ready to Review`** label to the PR so it is clearly gated.
+The label is removed automatically once that reference is added.
+The **Unit Test** check and **Forbidden Files** are (⚠️ warning-only).Other failures (
+Draft PR, pre-commit, CodeQL) do **not** add the label.
 
 **How are pre-commit and CodeQL shown?**
 
@@ -279,20 +292,5 @@ git push
 
 Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
-
-______________________________________________________________________
-
-## 🙋 Wish to Override the Policy Process and get unblocked?
-
-Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
-
-## 🙋 For any policy related feedback?
-
-please reach out to the **ROCm Policy Council**.
-
-📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
-
-Include your PR link, the check(s) you want overridden, and a short
-justification so the council can review your request.
 
 ______________________________________________________________________
