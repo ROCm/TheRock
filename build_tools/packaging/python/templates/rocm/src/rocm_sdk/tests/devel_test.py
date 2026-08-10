@@ -65,6 +65,15 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
+        version_file = path / ".info" / "version"
+        self.assertTrue(
+            version_file.is_file(),
+            msg=f"Expected readable ROCm version metadata at {version_file}",
+        )
+        self.assertTrue(
+            version_file.read_text(encoding="utf-8").strip(),
+            msg=f"Expected non-empty ROCm version metadata at {version_file}",
+        )
 
     def testCLIUsesDevelRootPath(self):
         root_path_output = (
