@@ -145,6 +145,7 @@ class WorkflowPermissionsTest(unittest.TestCase):
 
             for job_name, callee_filename, caller_permissions in calls:
                 callee_path = WORKFLOWS_DIR / callee_filename
+                # Skip non-local workflows (e.g., cross-repo references won't exist locally)
                 if not callee_path.exists():
                     continue
 
@@ -192,6 +193,7 @@ class WorkflowPermissionsTest(unittest.TestCase):
 
             for caller_filename in all_in_chain:
                 caller_path = WORKFLOWS_DIR / caller_filename
+                # Skip non-local workflows (e.g., cross-repo references won't exist locally)
                 if not caller_path.exists():
                     continue
 
@@ -205,6 +207,7 @@ class WorkflowPermissionsTest(unittest.TestCase):
                     checked.add(check_key)
 
                     callee_path = WORKFLOWS_DIR / callee_filename
+                    # Skip non-local workflows (e.g., cross-repo references won't exist locally)
                     if not callee_path.exists():
                         continue
 
