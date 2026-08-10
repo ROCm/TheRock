@@ -266,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--single-run",
+        "--require-single-run",
         action="store_true",
         help="Require all requested artifact groups to exist in one workflow run",
     )
@@ -314,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_commits=args.max_commits,
                 amdgpu_targets=args.amdgpu_target,
                 required_artifact_patterns=args.require_artifact,
-                require_single_run=args.single_run,
+                require_single_run=args.require_single_run,
                 require_successful_run=args.require_successful_run,
                 verbose=args.verbose,
             )

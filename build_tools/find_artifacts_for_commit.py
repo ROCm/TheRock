@@ -614,18 +614,19 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help=(
             "Regex that must match at least one concrete artifact filename. "
-            "May be repeated."
+            "May be repeated. "
+            r"Example pattern: ^amd-llvm_.*_generic\.tar\.(zst|xz)$"
         ),
     )
     parser.add_argument(
-        "--single-run",
+        "--require-single-run",
         action="store_true",
         help="Require all requested artifact groups to exist in one workflow run",
     )
     parser.add_argument(
         "--require-successful-run",
         action="store_true",
-        help=("Only accept workflow runs with status=completed and conclusion=success"),
+        help="Only accept workflow runs with status=completed and conclusion=success",
     )
     parser.add_argument(
         "--json",
@@ -661,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
                     platform=args.platform,
                     amdgpu_targets=args.amdgpu_target,
                     required_artifact_patterns=args.require_artifact,
-                    require_single_run=args.single_run,
+                    require_single_run=args.require_single_run,
                     require_successful_run=args.require_successful_run,
                 )
     except (GitHubAPIError, BotoCoreError, ClientError, ValueError, re.error) as e:
