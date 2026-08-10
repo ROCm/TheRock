@@ -133,8 +133,12 @@ def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
     include_markers = category_config.get("pytest_markers", []) or []
     exclude_markers = category_config.get("exclude_markers", []) or []
     if not gfx_target:
-        include_markers = [m for m in include_markers if "{AMDGPU_TARGETS}" not in str(m)]
-        exclude_markers = [m for m in exclude_markers if "{AMDGPU_TARGETS}" not in str(m)]
+        include_markers = [
+            m for m in include_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
+        exclude_markers = [
+            m for m in exclude_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
     include = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in include_markers]
     exclude = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in exclude_markers]
 
