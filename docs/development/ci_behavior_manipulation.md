@@ -101,5 +101,5 @@ For now, these are the common configurations used for testing:
 
 ```
 compiler-runtime
-compiler-runtime,runtime-tests,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs
+compiler-runtime,runtime-tests,math-libs,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs,profiler-examples,wsl-rocdxg
 ```
