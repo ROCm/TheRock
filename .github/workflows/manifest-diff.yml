@@ -127,11 +127,13 @@ jobs:
             --index-file-name index.html
 
       - name: Post manifest-diff report link to bump PR
+        # TEMP TESTING: bump- prefix check dropped to verify the real
+        # comment-posting flow end-to-end on this PR's own CI run (real AWS
+        # creds + real repo permissions). Reverted in the next commit.
         if: >-
           ${{
             steps.gen-report.conclusion == 'success' &&
-            github.event_name == 'pull_request' &&
-            startsWith(github.event.pull_request.head.ref, 'bump-')
+            github.event_name == 'pull_request'
           }}
         continue-on-error: true
         env:
