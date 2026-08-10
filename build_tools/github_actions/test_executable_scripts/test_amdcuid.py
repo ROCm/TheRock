@@ -76,9 +76,9 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-#-----------------------------
+# -----------------------------
 # Hmac key provisioning
-#-----------------------------
+# -----------------------------
 # Generate a temporary HMAC key so the library can compute derived CUIDs
 # without needing the root-provisioned /etc/amdcuid/hmac_key.bin.
 _tmp_key_dir = tempfile.mkdtemp(prefix="amdcuid_ci_")
