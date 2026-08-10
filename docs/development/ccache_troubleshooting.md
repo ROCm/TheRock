@@ -86,6 +86,25 @@ on Windows). The namespace isolates entries to some extent, but be aware
 of cross-repo pollution — entries from one repo may share manifests with
 another if they compile the same source files with compatible flags.
 
+### Release builds compile cache-cold (recache)
+
+Prerelease (release-candidate) builds run ccache in `recache` mode
+(`setup_ccache.py --recache`, wired for `release_type == 'prerelease'` in the
+reusable build workflows). In this mode ccache ignores existing cached results
+and recompiles every object, but still writes the fresh results back to the
+cache.
+
+This is deliberate. Stable releases are a repackage of the prerelease
+artifacts, so the prerelease compile is what actually ships. Compiling it
+cache-cold makes the shipped objects independent of the `compiler_check`
+fingerprint (which covers the compiler binary and its shared libraries, but not
+the device bitcode libraries or `lld`), while still repopulating the shared
+release cache for nightly and test jobs.
+
+Expect the prerelease "Report" step to show close to 100% misses by design.
+Nightly, `dev`, and `ci` builds are unaffected and continue to read from the
+cache.
+
 ## Downloading and inspecting CI logs
 
 ### Finding a workflow run

@@ -117,11 +117,15 @@ jobs:
           git config fetch.parallel 10
 
       - name: Setup ccache
+        # Prerelease builds compile cache-cold (recache): every object is freshly
+        # compiled and shipped artifacts do not depend on the compiler fingerprint,
+        # while the cache is still repopulated. See docs/development/ccache_troubleshooting.md.
         run: |
           ./build_tools/setup_ccache.py \
             --release-type "${{ inputs.release_type }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CACHE_DIR/ccache"
+            --local-path "$CACHE_DIR/ccache" \
+            ${{ inputs.release_type == 'prerelease' && '--recache' || '' }}
 
       - name: Runner health status
         run: |

@@ -140,6 +140,14 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
+    # Recache: when enabled, ccache ignores existing cached results and
+    # recompiles everything (while still updating the cache). Used for release
+    # builds whose shipped objects must be freshly compiled rather than read
+    # from cache, making them independent of the compiler_check fingerprint.
+    # See https://ccache.dev/manual/latest.html#config_recache
+    if args.recache:
+        lines.append("recache = true")
+
     # End with blank line.
     lines.append("")
     return "\n".join(lines)
@@ -242,6 +250,14 @@ def main(argv: list[str]):
         type=Path,
         help="Directory for ccache log files. Defaults to REPO_ROOT/build/logs/ccache. "
         "On Windows CI, pass BUILD_DIR/logs/ccache so logs land in the build tree.",
+    )
+
+    p.add_argument(
+        "--recache",
+        action="store_true",
+        help="Force ccache to ignore existing results and recompile everything "
+        "(while still updating the cache). Used for release builds whose shipped "
+        "objects must be freshly compiled rather than read from cache.",
     )
 
     preset_group = p.add_mutually_exclusive_group()

@@ -148,12 +148,16 @@ jobs:
           python build_tools/health_status.py
 
       - name: Setup ccache
+        # Prerelease builds compile cache-cold (recache): every object is freshly
+        # compiled and shipped artifacts do not depend on the compiler fingerprint,
+        # while the cache is still repopulated. See docs/development/ccache_troubleshooting.md.
         run: |
           python ./build_tools/setup_ccache.py \
             --release-type "${{ inputs.release_type }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
-            --log-dir "${BUILD_DIR}/logs/ccache"
+            --log-dir "${BUILD_DIR}/logs/ccache" \
+            ${{ inputs.release_type == 'prerelease' && '--recache' || '' }}
 
       # Note: no AWS credentials should be needed here since our CI buckets
       # all currently have public read access.
