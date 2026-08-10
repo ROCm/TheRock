@@ -23,23 +23,22 @@ on:
       - ".github/workflows/**"
   workflow_dispatch:
 
-# These permissions mirror what setup_multi_arch.yml callers need
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  test_actions_read_permission:
-    name: Test actions:read permission
+  test_workflow_permissions:
+    name: Validate workflow permissions
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
+      - name: Checkout workflows
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: .github/workflows
           sparse-checkout-cone-mode: false
 
-      - name: Test GitHub API permissions
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate workflows have required permissions
         run: python .github/workflows/tests/test_workflow_permissions.py
