@@ -125,16 +125,18 @@ def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
 
     ``{AMDGPU_TARGETS}`` tokens in marker strings are substituted with the
     *amdgpu_target* value (a concrete gfx target like ``gfx1250``) so
-    categories can be arch-agnostic.
+    categories can be arch-agnostic.  When *amdgpu_target* is empty,
+    any marker containing ``{AMDGPU_TARGETS}`` is dropped entirely
+    (preventing malformed expressions like ``( and emu_fast)``).
     """
-    sub = amdgpu_target or ""
-    raw_include = category_config.get("pytest_markers", []) or []
-    raw_exclude = category_config.get("exclude_markers", []) or []
-    if not sub:
-        raw_include = [m for m in raw_include if "{AMDGPU_TARGETS}" not in str(m)]
-        raw_exclude = [m for m in raw_exclude if "{AMDGPU_TARGETS}" not in str(m)]
-    include = [str(m).replace("{AMDGPU_TARGETS}", sub) for m in raw_include]
-    exclude = [str(m).replace("{AMDGPU_TARGETS}", sub) for m in raw_exclude]
+    gfx_target = amdgpu_target or ""
+    include_markers = category_config.get("pytest_markers", []) or []
+    exclude_markers = category_config.get("exclude_markers", []) or []
+    if not gfx_target:
+        include_markers = [m for m in include_markers if "{AMDGPU_TARGETS}" not in str(m)]
+        exclude_markers = [m for m in exclude_markers if "{AMDGPU_TARGETS}" not in str(m)]
+    include = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in include_markers]
+    exclude = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in exclude_markers]
 
     terms = []
     if include:
