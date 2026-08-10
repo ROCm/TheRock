@@ -84,6 +84,7 @@ fi
 # Run tests
 # ==============================================================================
 export SHOULD_NOT_LEAK=below-the-section
+echo "subset=$JAXCI_ROCM_TEST_SUBSET"
 exit 1
 """
 
@@ -93,6 +94,7 @@ def write_suite_script(jax_dir: Path, allocator="address", conditional="yes") ->
     (jax_dir / "ci" / "envs").mkdir(parents=True, exist_ok=True)
     (jax_dir / "ci" / "envs" / "default.env").write_text(
         "export JAXCI_ENABLE_X64=${JAXCI_ENABLE_X64:-0}\n"
+        f'export {runner.SUITE_SUBSET_VAR}=${{{runner.SUITE_SUBSET_VAR}:-"all"}}\n'
     )
     (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
         SUITE_SCRIPT_TEMPLATE.format(allocator=allocator, conditional=conditional)
@@ -208,6 +210,23 @@ class SuiteEnvironmentTest(unittest.TestCase):
 
         self.assertEqual(env["XLA_PYTHON_CLIENT_ALLOCATOR"], "platform")
         self.assertNotIn("SHOULD_NOT_LEAK", env)
+
+    def test_the_chosen_subset_survives_the_environment_the_script_reports(self):
+        # The default in the suite's env file leaves a caller's choice alone, and
+        # the section does not touch it, so it must not come back as something
+        # for the suite environment to override.
+        write_suite_script(self.jax_dir)
+        env = {**os.environ, runner.SUITE_SUBSET_VAR: "multi"}
+
+        suite_env = runner.suite_environment(self.jax_dir, env)
+
+        self.assertNotIn(runner.SUITE_SUBSET_VAR, suite_env)
+        self.assertEqual(
+            runner.test_environment(suite_env, "0.11.0", "gfx94X-dcgpu", 0).get(
+                runner.SUITE_SUBSET_VAR
+            ),
+            None,
+        )
 
     def test_a_renamed_section_is_fatal(self):
         # Carrying on would run the retry pass, which decides the result, under an
@@ -488,6 +507,31 @@ class RemoveReportsTest(unittest.TestCase):
             runner.remove_reports(Path(tmp))
 
 
+class SuiteReadsSubsetTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.jax_dir = Path(self.tmp.name) / "jax"
+        self.jax_dir.joinpath("ci").mkdir(parents=True)
+        self.addCleanup(self.tmp.cleanup)
+
+    def write(self, script: str) -> None:
+        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(script)
+
+    def test_a_script_that_acts_on_the_variable(self):
+        self.write(
+            "#!/bin/bash\n"
+            f'if [[ "${runner.SUITE_SUBSET_VAR}" == "single" ]]; then exit 0; fi\n'
+        )
+
+        self.assertTrue(runner.suite_reads_subset(self.jax_dir))
+
+    def test_a_script_from_before_the_variable(self):
+        # It would run both subsets whatever was asked for.
+        self.write("#!/bin/bash\npytest -m 'not multiaccelerator' tests\n")
+
+        self.assertFalse(runner.suite_reads_subset(self.jax_dir))
+
+
 class CmdArgumentsTest(unittest.TestCase):
     def test_defaults(self):
         args = runner.cmd_arguments([])
@@ -497,6 +541,16 @@ class CmdArgumentsTest(unittest.TestCase):
         self.assertTrue(args.fresh_process_retry)
         self.assertEqual(args.max_retry_tests, 40)
         self.assertFalse(args.debug)
+        self.assertEqual(args.test_subset, "all")
+
+    def test_a_subset_can_be_chosen(self):
+        args = runner.cmd_arguments(["--test-subset", "multi"])
+
+        self.assertEqual(args.test_subset, "multi")
+
+    def test_an_unknown_subset_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            runner.cmd_arguments(["--test-subset", "both"])
 
     def test_fresh_process_retry_can_be_turned_off(self):
         args = runner.cmd_arguments(["--no-fresh-process-retry"])
@@ -636,6 +690,44 @@ class OrchestrationTest(unittest.TestCase):
 
         self.assertEqual(environments[1]["XLA_PYTHON_CLIENT_ALLOCATOR"], "address")
         self.assertEqual(environments[1]["HSA_NO_SCRATCH_RECLAIM"], "1")
+
+    def test_the_chosen_subset_reaches_the_suite(self):
+        self.returncodes = [0, 0]
+        environments = []
+        with mock.patch.object(
+            runner,
+            "run_command",
+            lambda args, cwd, env: (
+                environments.append(env) or self.fake_run_command(args, cwd, env)
+            ),
+        ):
+            self.run_main(["--test-subset", "multi"])
+
+        self.assertEqual(environments[1][runner.SUITE_SUBSET_VAR], "multi")
+
+    def test_a_script_that_ignores_the_subset_stops_the_run(self):
+        # It would run every test, so the job would look like it covered the
+        # subset it was given.
+        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
+            SUITE_SCRIPT_TEMPLATE.format(
+                allocator="address", conditional="yes"
+            ).replace('echo "subset=$JAXCI_ROCM_TEST_SUBSET"\n', "")
+        )
+        self.returncodes = []
+
+        self.assertEqual(self.run_main(["--test-subset", "multi"]), 1)
+        self.assertEqual(self.commands, [])
+
+    def test_the_default_subset_runs_against_any_script(self):
+        # Nothing asked for a subset, so an older script is still fine.
+        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
+            SUITE_SCRIPT_TEMPLATE.format(
+                allocator="address", conditional="yes"
+            ).replace('echo "subset=$JAXCI_ROCM_TEST_SUBSET"\n', "")
+        )
+        self.returncodes = [0, 0]
+
+        self.assertEqual(self.run_main(), 0)
 
     def test_an_unreadable_environment_stops_before_the_suite(self):
         (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(

@@ -122,6 +122,12 @@ ENV_SECTION_END = "# Run tests"
 # and would contradict the serial retry.
 SUITE_ENV_EXCLUDES = ["JAX_ENABLE_ROCM_XDIST"]
 
+# Picks which of the suite script's two pytest invocations run, so the subset that
+# needs one GPU and the subset that needs several can go to different runners.
+SUITE_SUBSET_VAR = "JAXCI_ROCM_TEST_SUBSET"
+SUITE_SUBSET_ALL = "all"
+SUITE_SUBSETS = [SUITE_SUBSET_ALL, "single", "multi"]
+
 # ROCm/HIP runtime tuning that avoids a pytest slowdown and hang. Ours rather than
 # the suite's, so it belongs here.
 # TODO:(magaonka-amd) remove once the system teams' fixes land.
@@ -308,6 +314,15 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         and name.isupper()
         and name not in SUITE_ENV_EXCLUDES
     }
+
+
+def suite_reads_subset(jax_dir: Path) -> bool:
+    """Whether the checked-out suite script acts on SUITE_SUBSET_VAR.
+
+    A script from before the variable existed ignores it and runs both subsets,
+    which would quietly turn a one-subset job into a full run.
+    """
+    return SUITE_SUBSET_VAR in (jax_dir / RELATIVE_SUITE_SCRIPT).read_text()
 
 
 def available_cpus() -> int:
@@ -528,6 +543,12 @@ def cmd_arguments(argv: list[str]) -> argparse.Namespace:
         help="GPU family under test (e.g. gfx94X-dcgpu), selects skip lists",
     )
     p.add_argument(
+        "--test-subset",
+        choices=SUITE_SUBSETS,
+        default=os.getenv("JAX_TEST_SUBSET", SUITE_SUBSET_ALL),
+        help="Accelerator subset to run; 'multi' needs more than one GPU",
+    )
+    p.add_argument(
         "--retries",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -589,9 +610,21 @@ def main(argv: list[str]) -> int:
         log(f"::error::{suite} not found. Is --jax-dir a ROCm/jax checkout?")
         return 1
 
+    if args.test_subset != SUITE_SUBSET_ALL and suite.exists():
+        if not suite_reads_subset(jax_dir):
+            log(
+                f"::error::{suite} does not read {SUITE_SUBSET_VAR}, so it would"
+                f" run every test instead of the '{args.test_subset}' subset."
+                " Use a jax ref that supports it, or --test-subset all."
+            )
+            return 1
+
     env = dict(os.environ)
     for name in UNSET_VARS:
         env.pop(name, None)
+    # Set before the section is evaluated so the default in the suite's env file
+    # keeps this value, which the suite and the retry pass then share.
+    env[SUITE_SUBSET_VAR] = args.test_subset
 
     cpus = size_to_pod(env, args.cpus)
 
@@ -612,6 +645,7 @@ def main(argv: list[str]) -> int:
 
     log(f"=== Testing JAX {jax_version or '(unknown version)'} in {jax_dir}")
     log(f"  host={platform.node()}")
+    log(f"  subset={args.test_subset}")
     for name in GPU_VISIBILITY_ENV_VARS:
         log(f"  {name}={env.get(name, 'unset')}")
     for name, value in sorted(overrides.items()):
