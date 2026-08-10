@@ -198,6 +198,19 @@ function(therock_subproject_fetch target_name)
   file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
+# Maps a COMPILER_TOOLCHAIN name to the subproject that backs it: "amd-hip" ->
+# hip-clr, "amd-llvm" -> amd-llvm, anything else (or none) -> empty. Used by both
+# the consumer-graph registration and the toolchain configuration.
+function(therock_compiler_toolchain_subproject out_var compiler_toolchain)
+  if(compiler_toolchain STREQUAL "amd-hip")
+    set("${out_var}" "hip-clr" PARENT_SCOPE)
+  elseif(compiler_toolchain STREQUAL "amd-llvm")
+    set("${out_var}" "amd-llvm" PARENT_SCOPE)
+  else()
+    set("${out_var}" "" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # therock_cmake_subproject_declare
 # This declares a cmake based subproject by setting a number of key properties
 # and setting up boiler-plate targets.
@@ -341,7 +354,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;TEST_SUBPROJECTS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -513,8 +526,6 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
-    # Optional override for test dependencies (subproject names to test when this changes).
-    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -551,6 +562,21 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
+
+  # Record direct-consumer edges for the consumer graph emitted by
+  # therock_emit_consumer_graph(). The compiler is a dependency too, but is
+  # declared via COMPILER_TOOLCHAIN rather than BUILD_DEPS/RUNTIME_DEPS.
+  set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
+  set(_consumer_deps ${ARG_BUILD_DEPS} ${ARG_RUNTIME_DEPS})
+  therock_compiler_toolchain_subproject(_toolchain_dep "${ARG_COMPILER_TOOLCHAIN}")
+  if(_toolchain_dep)
+    list(APPEND _consumer_deps "${_toolchain_dep}")
+  endif()
+  foreach(_dep IN LISTS _consumer_deps)
+    if(NOT _dep STREQUAL target_name)  # a project is never its own consumer
+      set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
+    endif()
+  endforeach()
 
   if(ARG_ACTIVATE)
     therock_cmake_subproject_activate("${target_name}")
@@ -1126,10 +1152,12 @@ function(therock_cmake_subproject_activate target_name)
   add_custom_target("${target_name}+dist")
 
   # expunge target
+  # The prebuilt marker sits next to the stage dir, not inside it, so it has to
+  # be deleted here too or the project stays disabled.
   add_custom_target(
     "${target_name}+expunge"
     COMMAND
-      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
+      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}" "${_prebuilt_file}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 
@@ -1742,16 +1770,12 @@ function(_therock_cmake_subproject_setup_toolchain
     # we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
-    #   "amd-hip": Superset of "amd-llvm" which also includes hipcc, hip headers,
-    #     and hip version info. This has hipconfig in it.
+    #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
+    #     HIP version info.
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    if(compiler_toolchain STREQUAL "amd-hip")
-      set(_toolchain_subproject "hip-clr")
-    else()
-      set(_toolchain_subproject "amd-llvm")
-    endif()
+    therock_compiler_toolchain_subproject(_toolchain_subproject "${compiler_toolchain}")
     _therock_assert_is_cmake_subproject("${_toolchain_subproject}")
     get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_amd_llvm_stamp_dir "${_toolchain_subproject}" THEROCK_STAMP_DIR)
@@ -1813,6 +1837,7 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

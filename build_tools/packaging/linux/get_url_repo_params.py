@@ -742,7 +742,10 @@ def main(argv: list[str] | None = None) -> int:
     # get-container-image: get container image for an OS profile
     p_img = subparsers.add_parser(
         "get-container-image",
-        help="Get container image for a given OS profile (e.g. ubuntu2404 -> ubuntu:24.04).",
+        help=(
+            "Get container image for a given OS profile "
+            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest)."
+        ),
     )
     p_img.add_argument(
         "--os-profile",

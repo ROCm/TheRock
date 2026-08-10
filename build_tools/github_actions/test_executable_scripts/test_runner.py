@@ -86,6 +86,7 @@ COMPONENT_DIR_MAPPING = {
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hipblasltprovider": "hipblaslt_plugin",
+    "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
     # Add more mappings as needed
 }

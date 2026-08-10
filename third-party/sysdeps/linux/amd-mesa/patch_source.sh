@@ -6,14 +6,23 @@ set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
 VA_MESON_BUILD="$SOURCE_DIR/src/gallium/targets/va/meson.build"
-LIBVA_MESON_BUILD="$SOURCE_DIR/subprojects/libva-2.22.0/va/meson.build"
-LIBVA_MAIN_MESON_BUILD="$SOURCE_DIR/subprojects/libva-2.22.0/meson.build"
-LIBVA_PKGCONFIG_MESON_BUILD="$SOURCE_DIR/subprojects/libva-2.22.0/pkgconfig/meson.build"
-LIBVA_SOURCE="$SOURCE_DIR/subprojects/libva-2.22.0/va/va.c"
+
+# Detect the libva subproject directory without hardcoding the version number.
+LIBVA_SUBPROJECT_DIR="$(echo "$SOURCE_DIR"/subprojects/libva-[0-9]*/)"
+if [[ ! -d "$LIBVA_SUBPROJECT_DIR" ]]; then
+  echo "ERROR: Could not find libva subproject directory under $SOURCE_DIR/subprojects/" >&2
+  exit 1
+fi
+# Strip trailing slash so paths below are clean.
+LIBVA_SUBPROJECT_DIR="${LIBVA_SUBPROJECT_DIR%/}"
+
+LIBVA_MESON_BUILD="$LIBVA_SUBPROJECT_DIR/va/meson.build"
+LIBVA_MAIN_MESON_BUILD="$LIBVA_SUBPROJECT_DIR/meson.build"
+LIBVA_PKGCONFIG_MESON_BUILD="$LIBVA_SUBPROJECT_DIR/pkgconfig/meson.build"
+LIBVA_SOURCE="$LIBVA_SUBPROJECT_DIR/va/va.c"
 echo "Patching sources..."
 
 # Replace 'gallium_drv_video' in shared_library() calls with 'rocm_sysdeps_gallium_drv_video'
-# This handles both the with_amd_decode_only branch and the standard branch
 sed -i -E "/shared_library\(/,/\)/ s/'gallium_drv_video'/'rocm_sysdeps_gallium_drv_video'/" "$VA_MESON_BUILD"
 
 # Replace 'va' library name with 'rocm_sysdeps_va' in libva meson.build

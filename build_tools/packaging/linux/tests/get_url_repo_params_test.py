@@ -19,7 +19,7 @@ Coverage (trimmed suite, table-driven via ``subTest``):
   - One happy-path CLI smoke per remaining subcommand
 
 Not covered here (P2 / separate PRs): ``upload_package_repo._package_install_url``,
-#7004 container-image string assertions, full CLI error-matrix.
+full CLI error-matrix.
 
 Prerequisites:
 
@@ -331,20 +331,25 @@ class ExtractGfxArchTest(unittest.TestCase):
 
 
 class GetContainerImageTest(unittest.TestCase):
-    """Tests for ``get_container_image()`` (asserts against implementation output)."""
+    """Tests for ``get_container_image()``."""
+
+    # test_native_linux_packages_install.yml feeds this value straight into its
+    # container image, so each profile is pinned to the exact string rather than
+    # compared against another call to the function under test.
+    _EXPECTED_IMAGES = [
+        ("ubuntu2404", "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
+        ("debian12", "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
+        ("sles16", "registry.suse.com/bci/bci-base:16.0"),
+        ("rhel8", "registry.access.redhat.com/ubi8/ubi:8.10"),
+        ("rhel10", "registry.access.redhat.com/ubi10/ubi:10.1"),
+    ]
 
     def test_profile_mapping(self):
-        # Ubuntu/debian share one image; sles/rhel use distinct registry images.
-        ubuntu = get_url_repo_params.get_container_image("ubuntu2404")
-        self.assertEqual(get_url_repo_params.get_container_image("debian12"), ubuntu)
-        self.assertEqual(
-            get_url_repo_params.get_container_image("sles16"),
-            "registry.suse.com/bci/bci-base:16.0",
-        )
-        self.assertEqual(
-            get_url_repo_params.get_container_image("rhel10"),
-            "registry.access.redhat.com/ubi10/ubi:10.1",
-        )
+        for os_profile, expected in self._EXPECTED_IMAGES:
+            with self.subTest(os_profile=os_profile):
+                self.assertEqual(
+                    get_url_repo_params.get_container_image(os_profile), expected
+                )
 
 
 class MainSubcommandsTest(unittest.TestCase):
@@ -408,12 +413,13 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertIn("gfx_arch=gfx94x,gfx1100", output)
 
     def test_get_container_image_cli(self):
-        expected = get_url_repo_params.get_container_image("ubuntu2404")
         code, output = _run_main_with_output(
             ["get-container-image", "--os-profile", "ubuntu2404"]
         )
         self.assertEqual(code, 0)
-        self.assertIn(f"container_image={expected}", output)
+        self.assertIn(
+            "container_image=ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest", output
+        )
 
 
 if __name__ == "__main__":
