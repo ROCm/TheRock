@@ -1,5 +1,5 @@
 From 8abff2c18c975c9aa720d5167b18020bba5a201a Mon Sep 17 00:00:00 2001
-From: TheRock <dev@therock>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Wed, 22 Jul 2026 19:55:10 -0400
 Subject: [PATCH] Use native CMake HIP language to avoid multi-arch preprocess
  assert

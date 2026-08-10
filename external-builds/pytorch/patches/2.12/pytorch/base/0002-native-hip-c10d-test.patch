@@ -1,5 +1,5 @@
 From 7f41f78530577fbcbbf68277a3f8dff770896a74 Mon Sep 17 00:00:00 2001
-From: TheRock <dev@therock>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Sat, 25 Jul 2026 01:34:58 -0400
 Subject: [PATCH] Use native CMake HIP language for c10d_hip_test
 

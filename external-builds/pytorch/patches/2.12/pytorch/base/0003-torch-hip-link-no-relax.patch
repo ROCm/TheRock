@@ -1,5 +1,5 @@
 From bc08f6a5122a3969b23b581494400f22e9ac9d8f Mon Sep 17 00:00:00 2001
-From: TheRock <dev@therock>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Sat, 25 Jul 2026 05:43:58 -0400
 Subject: [PATCH] Link torch_hip with --no-relax for large multi-arch fat build
 

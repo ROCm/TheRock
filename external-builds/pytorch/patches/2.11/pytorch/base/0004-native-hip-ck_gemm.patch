@@ -1,5 +1,5 @@
 From b45191d772969a2d61add3b7b8a8195ec2868bd5 Mon Sep 17 00:00:00 2001
-From: TheRock <dev@therock>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Sat, 25 Jul 2026 05:55:40 -0400
 Subject: [PATCH] Use native CMake HIP for ck_gemm (2.11, mirrors 2.12)
 

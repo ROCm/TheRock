@@ -1,5 +1,5 @@
 From 11c2dad98bf88a68c60f033b0e4483d767311641 Mon Sep 17 00:00:00 2001
-From: TheRock <dev@therock>
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
 Date: Sat, 25 Jul 2026 01:48:12 -0400
 Subject: [PATCH] Make CMAKE_HIP_FLAGS a space-separated string for native HIP
  (2.11)
