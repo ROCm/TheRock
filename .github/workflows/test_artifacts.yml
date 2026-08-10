@@ -222,7 +222,7 @@ jobs:
       #   1. Multi-GPU components use the multi-GPU runner (required for correct execution)
       #   2. For workflow_dispatch, honor the explicit test_runs_on input if provided
       #   3. Benchmark components use the dedicated benchmark runner
-      #   4. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
+      #   4. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
       #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
@@ -235,7 +235,7 @@ jobs:
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
           (matrix.components.linux_cpu_runner == true &&
-            'azure-linux-scale-rocm') ||
+            'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
