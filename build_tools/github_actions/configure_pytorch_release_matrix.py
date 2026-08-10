@@ -61,9 +61,8 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "release/2.11": {"gfx90c"},
         # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
         "release/2.12": {},
-        # gfx125x not yet enabled for PyTorch release/2.13 (ROCm/pytorch fork).
-        # See https://github.com/ROCm/TheRock/issues/5833.
-        "release/2.13": {"gfx125X-dcgpu", "gfx90c"},
+        # gfx125x supported for PyTorch 2.13 via https://github.com/ROCm/pytorch/pull/3532.
+        "release/2.13": {"gfx90c"},
         # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
         # gfx90c excluded: blocked until CK submodule bump in pytorch nightly.
         "nightly": {"gfx90c"},
