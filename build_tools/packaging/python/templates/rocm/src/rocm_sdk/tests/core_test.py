@@ -38,6 +38,7 @@ COMMON_CONSOLE_SCRIPT_TESTS = [
     ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
     ("amdflang", ["--help"], "LLVM compiler", True),
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
+    ("clang-offload-bundler", ["--version"], "clang-offload-bundler", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
     ("hipify-clang", ["--help"], "USAGE:", True),
