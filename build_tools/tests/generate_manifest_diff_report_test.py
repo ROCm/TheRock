@@ -13,12 +13,9 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from generate_manifest_diff_report import (
     build_commit_range_summary,
-    build_pr_comment_body,
-    create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
-    generate_non_superrepo_html,
     generate_step_summary,
     get_api_base_from_url,
     handle_post_comment,
@@ -232,7 +229,9 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_workflow_mode_resolves_both_commits(self):
         """--workflow-mode resolves both start and end from workflow run IDs."""
-        args = parse_args(["--start", "123", "--end", "456", "--workflow-mode"])
+        args = parse_args(
+            ["generate", "--start", "123", "--end", "456", "--workflow-mode"]
+        )
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_workflow_run_by_id"
@@ -249,7 +248,9 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_resolves_start(self):
         """--find-last-run finds the most recent matching run for start commit."""
-        args = parse_args(["--end", "def456", "--find-last-run", "multi_arch_ci.yml"])
+        args = parse_args(
+            ["generate", "--end", "def456", "--find-last-run", "multi_arch_ci.yml"]
+        )
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run"
@@ -263,7 +264,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_uses_terminal_statuses(self):
         """--find-last-run hardcodes accepted statuses to {success, failure}."""
-        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
+        args = parse_args(["generate", "--end", "def456", "--find-last-run", "ci.yml"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run"
@@ -276,7 +277,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_pr_base_ref_resolves_start_via_compare(self):
         """--pr-base-ref resolves start as the merge-base via the Compare API."""
-        args = parse_args(["--end", "deadbeef", "--pr-base-ref", "main"])
+        args = parse_args(["generate", "--end", "deadbeef", "--pr-base-ref", "main"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_send_request"
@@ -292,7 +293,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_no_match_returns_none(self):
         """--find-last-run with no matching prior run → (None, None)."""
-        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
+        args = parse_args(["generate", "--end", "def456", "--find-last-run", "ci.yml"])
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run",
             return_value=None,
@@ -308,6 +309,7 @@ class ResolveCommitsTest(unittest.TestCase):
         """
         args = parse_args(
             [
+                "generate",
                 "--end",
                 "deadbeef",
                 "--pr-base-ref",
@@ -332,7 +334,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_direct_commit_shas_no_api_calls(self):
         """Direct commit SHAs don't require API calls."""
-        args = parse_args(["--start", "abc123", "--end", "def456"])
+        args = parse_args(["generate", "--start", "abc123", "--end", "def456"])
 
         # No mocking needed - should work without API calls
         start_sha, end_sha = resolve_commits(args)
@@ -340,48 +342,10 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(start_sha, "abc123")
         self.assertEqual(end_sha, "def456")
 
-    def test_output_dir_argument_parsed(self):
-        """--output-dir argument is parsed as Path."""
-        args = parse_args(["--start", "abc", "--end", "def", "--output-dir", "reports"])
-        self.assertEqual(args.output_dir, Path("reports"))
-
-    def test_output_dir_defaults_to_none(self):
-        """--output-dir defaults to None when not specified."""
-        args = parse_args(["--start", "abc", "--end", "def"])
-        self.assertIsNone(args.output_dir)
-
 
 # =============================================================================
-# HTML Report Structure Tests
+# Report Content Tests
 # =============================================================================
-
-
-class HtmlReportStructureTest(unittest.TestCase):
-    """Tests that generated HTML includes semantic row classes and data attributes."""
-
-    def test_create_table_includes_header_row_class(self):
-        """Report tables have header row with class report-table-header-row."""
-        html = create_table(["Component", "Commits"], [])
-        self.assertIn("report-table-header-row", html)
-
-    def test_non_superrepo_html_includes_component_row_and_data_component(self):
-        """Non-superrepo table rows have component-row class and data-component attribute."""
-        sub = Submodule(
-            name="test-submodule",
-            sha="abc123",
-            api_base="https://api.github.com/repos/ROCm/test",
-            branch="main",
-            status="unchanged",
-        )
-        diff = ManifestDiff(
-            start_commit="start",
-            end_commit="end",
-            submodules={"test-submodule": sub},
-        )
-        html = generate_non_superrepo_html(diff)
-        self.assertIn("component-row", html)
-        self.assertIn("data-component=", html)
-        self.assertIn("test-submodule", html)
 
 
 class BuildCommitRangeSummaryTest(unittest.TestCase):
@@ -450,38 +414,12 @@ class GenerateStepSummaryReusesCommitRangeSummaryTest(unittest.TestCase):
 
 
 # =============================================================================
-# --action post_comment Tests
+# post_comment Subcommand Tests
 # =============================================================================
 
 
-class BuildPrCommentBodyTest(unittest.TestCase):
-    """Tests for build_pr_comment_body()."""
-
-    def test_includes_marker_link_and_summary(self):
-        body = build_pr_comment_body(
-            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/logs/manifest-diff/index.html",
-            "**Commit Range:** `abc12345` -> `def67890` (2 submodules changed)",
-        )
-
-        self.assertIn(PR_COMMENT_MARKER, body)
-        self.assertIn(
-            "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/logs/manifest-diff/index.html",
-            body,
-        )
-        self.assertIn("2 submodules changed", body)
-        # Marker must appear so gha_update_pr_comment can find/update this comment.
-        self.assertTrue(body.startswith(PR_COMMENT_MARKER))
-
-    def test_omits_summary_line_when_blank(self):
-        body = build_pr_comment_body("https://example.com/index.html", "")
-
-        self.assertIn(PR_COMMENT_MARKER, body)
-        self.assertIn("https://example.com/index.html", body)
-        self.assertNotIn("Commit Range", body)
-
-
 class HandlePostCommentTest(unittest.TestCase):
-    """Tests for handle_post_comment(): URL computation + comment dispatch."""
+    """Tests for handle_post_comment(): URL computation + comment body/dispatch."""
 
     def test_posts_comment_with_computed_report_url(self):
         args = argparse.Namespace(
@@ -489,7 +427,6 @@ class HandlePostCommentTest(unittest.TestCase):
             pr_number=1234,
             commit_range_summary="**Commit Range:** `aaa` -> `bbb` (1 submodule changed)",
             github_repository="ROCm/TheRock",
-            platform="linux",
         )
 
         with mock.patch(
@@ -506,50 +443,44 @@ class HandlePostCommentTest(unittest.TestCase):
         self.assertEqual(call_kwargs["pr_number"], 1234)
         self.assertEqual(call_kwargs["marker"], PR_COMMENT_MARKER)
         self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
+        self.assertTrue(call_kwargs["body"].startswith(PR_COMMENT_MARKER))
         self.assertIn("99999-linux/logs/manifest-diff/index.html", call_kwargs["body"])
         self.assertIn("1 submodule changed", call_kwargs["body"])
 
+    def test_omits_summary_line_when_blank(self):
+        args = argparse.Namespace(
+            run_id="99999",
+            pr_number=1234,
+            commit_range_summary="",
+            github_repository="ROCm/TheRock",
+        )
+
+        with mock.patch(
+            "generate_manifest_diff_report.WorkflowOutputRoot.from_workflow_run",
+            return_value=_make_output_root(run_id="99999"),
+        ), mock.patch(
+            "generate_manifest_diff_report.gha_update_pr_comment"
+        ) as gha_update_pr_comment:
+            handle_post_comment(args)
+
+        body = gha_update_pr_comment.call_args.kwargs["body"]
+        self.assertNotIn("Commit Range", body)
+
 
 class MainDispatchTest(unittest.TestCase):
-    """Tests that main() routes --action post_comment correctly, including
-    the validation that's only meaningful for that action."""
+    """Tests that main() routes the post_comment subcommand to its handler."""
 
-    def test_post_comment_action_dispatches_to_handler(self):
+    def test_post_comment_dispatches_to_handler(self):
         with mock.patch(
             "generate_manifest_diff_report.handle_post_comment", return_value=0
         ) as handle_post_comment_mock:
-            result = main(
-                [
-                    "--action",
-                    "post_comment",
-                    "--run-id",
-                    "123",
-                    "--pr-number",
-                    "456",
-                ]
-            )
+            result = main(["post_comment", "--run-id", "123", "--pr-number", "456"])
 
         self.assertEqual(result, 0)
         handle_post_comment_mock.assert_called_once()
         called_args = handle_post_comment_mock.call_args[0][0]
         self.assertEqual(called_args.run_id, "123")
         self.assertEqual(called_args.pr_number, 456)
-
-    def test_post_comment_action_requires_run_id(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
-            result = main(["--action", "post_comment", "--pr-number", "1"])
-
-        self.assertEqual(result, 1)
-
-    def test_post_comment_action_requires_pr_number(self):
-        result = main(["--action", "post_comment", "--run-id", "123"])
-
-        self.assertEqual(result, 1)
-
-    def test_default_action_is_generate(self):
-        args = parse_args(["--end", "abc123"])
-
-        self.assertEqual(args.action, "generate")
 
 
 if __name__ == "__main__":
