@@ -62,6 +62,13 @@ on:
         description: Runner label to execute tests on
         required: true
         type: string
+      test_subset:
+        description: >-
+          Accelerator subset to run: "all", "single" or "multi". "multi" needs
+          test_runs_on to be a multi-GPU runner.
+        required: false
+        type: string
+        default: "all"
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -122,13 +129,19 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+      test_subset:
+        description: >-
+          Accelerator subset to run: "all", "single" or "multi". "multi" needs
+          test_runs_on to be a multi-GPU runner.
+        type: string
+        default: "all"
 permissions:
   contents: read
   id-token: write
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.test_amdgpu_family }}
+    name: Test JAX | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_subset }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
     outputs:
@@ -290,13 +303,14 @@ jobs:
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
             --jax-ref "${{ inputs.jax_ref }}" \
-            --amdgpu-family "${{ inputs.test_amdgpu_family }}"
+            --amdgpu-family "${{ inputs.test_amdgpu_family }}" \
+            --test-subset "${{ inputs.test_subset }}"
 
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}
+          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}-${{ inputs.test_subset }}
           path: |
             jax/logs/
             jax/test-artifacts/
