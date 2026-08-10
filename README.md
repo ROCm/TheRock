@@ -42,6 +42,9 @@ Multi-arch releases (all GPU architectures):
 
 ## Building from source
 
+> [!WARNING]
+> **Disk Space Requirement:** Building from source requires approximately 200 GB of free disk space. Builds will fail if you run out of space mid-compilation.
+
 We keep the following instructions for recent, commonly used operating system
 versions. Most build failures are due to minor operating system differences in
 dependencies and project setup. Refer to the
