@@ -570,6 +570,25 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             ),
         )
 
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_tar_xz_artifacts_are_supported(self, mock_backend_class):
+        mock_backend_class.return_value.list_artifacts.return_value = [
+            "base_lib_generic.tar.xz",
+            "rocblas_lib_gfx950-dcgpu-asan.tar.xz",
+        ]
+
+        info = self._info(
+            artifact_group="gfx950-dcgpu-asan",
+        )
+
+        self.assertTrue(check_if_artifacts_exist(info))
+        self.assertEqual(
+            info.artifact_filenames,
+            (
+                "base_lib_generic.tar.xz",
+                "rocblas_lib_gfx950-dcgpu-asan.tar.xz",
+            ),
+        )
 
 class ArtifactRequestValidationTest(unittest.TestCase):
     def test_commit_lookup_rejects_targets_for_multiple_groups(self):
