@@ -59,7 +59,7 @@ SKIPPABLE_PATH_PATTERNS = [
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
 FULL_TEST_TRIGGER_PATTERNS = [
-    # ".github/workflows/therock*",  # TESTING: disabled for artifact-reuse testing
+    ".github/workflows/therock*",
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",

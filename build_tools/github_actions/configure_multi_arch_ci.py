@@ -137,25 +137,26 @@ def _compute_artifacts_from_changed_projects(
 
     topology = get_topology()
 
-    # Get all artifacts in math-libs and ml-libs stages (the stages affected by rocm-libraries)
-    affected_stages = {"math-libs", "ml-libs"}
+    # Collect artifacts with component mappings (derived from topology, not hardcoded)
+    granular_source_sets = set(topology.get_source_sets_with_components())
     all_stage_artifacts: set[str] = set()
     for stage in topology.get_build_stages():
-        if stage.name in affected_stages:
-            # Get artifacts via artifact_groups
-            for group_name in stage.artifact_groups:
+        for group_name in stage.artifact_groups:
+            group = topology.artifact_groups.get(group_name)
+            if group and set(group.source_sets) & granular_source_sets:
                 for artifact in topology.get_artifacts_in_group(group_name):
-                    all_stage_artifacts.add(artifact.name)
+                    if artifact.components:
+                        all_stage_artifacts.add(artifact.name)
 
     # Map changed projects to artifacts
     rebuild_artifacts: set[str] = set()
     alias_map = topology.get_alias_to_artifact_map()
-
     for project in changed_projects:
-        # Normalize: "projects/rocprim" -> "rocprim"
         normalized = project.split("/")[-1].lower()
         if normalized in alias_map:
             rebuild_artifacts.add(alias_map[normalized])
+        else:
+            print(f"  WARNING: unknown project '{project}' - not mapped to any artifact")
 
     # Artifacts not in rebuild set are reusable
     reusable_artifacts = all_stage_artifacts - rebuild_artifacts
