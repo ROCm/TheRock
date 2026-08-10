@@ -69,8 +69,6 @@ include = [
   "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
   "lib/hipblaslt/rocisa/**",
-  # TensileLite production client (non-Windows and Windows .exe).
-  "libexec/hipblaslt/tensilelite/**",
 ]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
@@ -106,6 +104,8 @@ include = [
   "libexec/hipblaslt-samples/**",
   # TensileLite Python test artifacts
   "share/hipblaslt/tensilelite/**",
+  # TensileLite client binary (common/benchmark tests)
+  "libexec/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS

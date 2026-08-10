@@ -443,7 +443,7 @@ class TestArtifactStructure:
     def test_tensilelite_runtime_and_test_artifact_layout(
         self, archive_index: list[ArchiveInfo]
     ):
-        """The production BLAS artifact owns the sole TensileLite client."""
+        """The non-Windows BLAS test artifact owns the sole TensileLite client."""
         blas_lib_files = get_artifact_component_files(archive_index, "blas", "lib")
         blas_test_files = get_artifact_component_files(archive_index, "blas", "test")
 
@@ -454,22 +454,20 @@ class TestArtifactStructure:
             else "tensilelite-client"
         )
         expected_client = client_dir + client_name
-        assert expected_client in blas_lib_files, (
-            f"blas_lib is missing required file: {expected_client}"
+        if is_windows_platform():
+            assert not any(path.startswith(client_dir) for path in blas_lib_files)
+            assert not any(path.startswith(client_dir) for path in blas_test_files)
+            return
+
+        assert expected_client in blas_test_files, (
+            f"blas_test is missing required file: {expected_client}"
         )
-        duplicated_clients = sorted(
-            path for path in blas_test_files if path.startswith(client_dir)
-        )
-        assert not duplicated_clients, (
-            "blas_test must consume the production TensileLite client from blas_lib; "
-            f"found duplicates: {duplicated_clients}"
+        assert expected_client not in blas_lib_files, (
+            f"blas_lib must not contain test-only file: {expected_client}"
         )
         assert not (blas_lib_files & blas_test_files), (
             "blas_lib and blas_test must flatten without overlapping files"
         )
-
-        if is_windows_platform():
-            return
 
         test_root = "share/hipblaslt/tensilelite/"
         assert any(
