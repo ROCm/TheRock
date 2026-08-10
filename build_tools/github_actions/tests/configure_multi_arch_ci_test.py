@@ -316,6 +316,16 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
+    def test_asan_pr_with_runtime_only_build_runs(self):
+        """ASAN PR with runtime_only_build=True runs without needing a label."""
+        inputs = self._inputs(
+            build_variant="asan", pr_labels=[], runtime_only_build=True
+        )
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
 
 # ---------------------------------------------------------------------------
 # Step 3: Decide Jobs
@@ -593,6 +603,53 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_runtime_only_build_enables_asan_tests_on_pr(self):
+        """ASAN PR with runtime_only_build=True should run tests."""
+        git_context = cm.GitContext()
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="pull_request",
+                build_variant="asan",
+                runtime_only_build=True,
+            ),
+            git_context=git_context,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(
+            result.test_rocm.action,
+            cm.JobAction.RUN,
+            "runtime_only_build should allow ASAN tests on PR",
+        )
+
+    def test_runtime_only_build_skips_non_runtime_stages(self):
+        """runtime_only_build=True should mark non-runtime stages as SKIP."""
+        git_context = cm.GitContext()
+        result = cm.decide_jobs(
+            self._inputs(runtime_only_build=True),
+            git_context=git_context,
+            targets=cm.TargetSelection(),
+        )
+        # Runtime stages should be RUN (or not in stage_decisions)
+        runtime_stages = {"compiler-runtime", "runtime-tests"}
+        for stage in runtime_stages:
+            # If a runtime stage is in stage_decisions, it should not be SKIP
+            if stage in result.build_rocm.stage_decisions:
+                self.assertNotEqual(
+                    result.build_rocm.stage_decisions[stage],
+                    cm.JobAction.SKIP,
+                    f"Runtime stage {stage} should not be skipped",
+                )
+
+        # Non-runtime stages should be SKIP
+        all_stages = set(cm._get_all_build_stages())
+        non_runtime_stages = all_stages - runtime_stages
+        for stage in non_runtime_stages:
+            self.assertEqual(
+                result.build_rocm.stage_decisions.get(stage),
+                cm.JobAction.SKIP,
+                f"Non-runtime stage {stage} should be skipped",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1546,6 +1603,26 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, [])
         self.assertEqual(outputs.windows_test_labels, [])
+
+    def test_fixed_test_labels_override_dynamic_labels(self):
+        """fixed_test_labels override any dynamically determined test labels."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # Dynamic labels that should be overridden
+            linux_test_labels=["test:rccl", "test:rocprim"],
+            windows_test_labels=["test:rccl"],
+            # Fixed labels that should override
+            fixed_test_labels=["test:hip-tests", "test:rocrtst"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:rocrtst"])
+        self.assertEqual(
+            outputs.windows_test_labels, ["test:hip-tests", "test:rocrtst"]
+        )
 
     @patch("configure_multi_arch_ci.decide_jobs")
     def test_configure_propagates_auto_reuse_baseline_run_id(self, mock_decide_jobs):

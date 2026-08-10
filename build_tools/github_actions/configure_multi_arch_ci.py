@@ -162,6 +162,13 @@ class CIInputs:
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
 
+    # Runtime-only build configuration (from external_repo JSON).
+    # When True, limits build scope to compiler-runtime and runtime-tests stages.
+    runtime_only_build: bool = False
+    # Fixed test labels that override any dynamically determined labels.
+    # When set, only these tests will run regardless of PR labels or other inputs.
+    fixed_test_labels: list[str] = field(default_factory=list)
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -242,6 +249,21 @@ class CIInputs:
             + pr_test_labels
         )
 
+        # Parse runtime-only build configuration from external_repo JSON.
+        # This allows external repos to request limited build scope for presubmit.
+        runtime_only_build = False
+        fixed_test_labels: list[str] = []
+        external_repo_json = os.environ.get("EXTERNAL_REPO_JSON", "")
+        if external_repo_json:
+            try:
+                external_repo = json.loads(external_repo_json)
+                runtime_only_build = external_repo.get("runtime_only_build", False)
+                fixed_labels_str = external_repo.get("fixed_test_labels", "")
+                if fixed_labels_str:
+                    fixed_test_labels = _parse_comma_list(fixed_labels_str)
+            except json.JSONDecodeError:
+                pass  # Ignore malformed JSON, use defaults
+
         return CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -265,6 +287,8 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            runtime_only_build=runtime_only_build,
+            fixed_test_labels=fixed_test_labels,
         )
 
 
@@ -582,8 +606,11 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
+    # Skip ASAN on PRs unless an enabling label is present OR runtime_only_build
+    # is enabled. runtime_only_build allows external repos to run focused host-ASAN
+    # presubmit builds automatically without requiring opt-in labels.
+    # This avoids running expensive full ASAN builds on every PR while still
+    # allowing runtime-only ASAN validation.
     # Labels that enable ASAN CI:
     #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
     has_asan_label = (
@@ -593,13 +620,16 @@ def should_skip_ci(
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and not has_asan_label
+        and not ci_inputs.runtime_only_build
     ):
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
-    if has_asan_label and ci_inputs.build_variant == "asan":
+    if ci_inputs.runtime_only_build and ci_inputs.build_variant == "asan":
+        print("  Running: Runtime-only ASAN CI (no label required)")
+    elif has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
 
     # If we have a list of changed files (push/pull_request events), check if
@@ -880,6 +910,19 @@ def decide_jobs(
     # the MANUAL inputs and are always honored, unchanged, in every mode.
 
     stage_decisions: dict[str, JobAction] = {}
+
+    # Runtime-only build: limit build scope to compiler-runtime and runtime-tests.
+    # All other stages are marked to SKIP (not PREBUILT, since we don't need them).
+    # This is designed for focused host-ASAN presubmit builds.
+    if ci_inputs.runtime_only_build:
+        runtime_only_stages = {"compiler-runtime", "runtime-tests"}
+        all_stages = _get_all_build_stages()
+        for stage in all_stages:
+            if stage not in runtime_only_stages:
+                stage_decisions[stage] = JobAction.SKIP
+        print(f"  Runtime-only build: building {sorted(runtime_only_stages)}")
+        print(f"  Skipping stages: {sorted(set(all_stages) - runtime_only_stages)}")
+
     if ci_inputs.prebuilt_stages:
         for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
@@ -930,8 +973,14 @@ def decide_jobs(
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
     if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+        # Only run ASAN tests on scheduled, workflow_dispatch, or runtime_only_build
+        # runs. runtime_only_build enables focused host-ASAN presubmit testing for
+        # external repos without impacting full ASAN nightly behavior.
+        if not (
+            ci_inputs.is_schedule
+            or ci_inputs.is_workflow_dispatch
+            or ci_inputs.runtime_only_build
+        ):
             test_rocm = TestRocmDecision(
                 action=JobAction.SKIP,
                 test_type=test_type,
@@ -1031,8 +1080,13 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant == "asan":
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Only run full ASAN tests on scheduled, workflow_dispatch, or
+            # runtime_only_build (focused presubmit) runs.
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or ci_inputs.runtime_only_build
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
@@ -1048,9 +1102,13 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Run host-asan tests on nightly (schedule or workflow_dispatch)
+            # or when runtime_only_build is enabled (focused presubmit).
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or ci_inputs.runtime_only_build
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
@@ -1396,12 +1454,22 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    # Apply fixed_test_labels if specified (overrides any dynamically determined labels).
+    # This is used by external repos to enforce a fixed test scope for focused builds.
+    if ci_inputs.fixed_test_labels:
+        linux_test_labels = ci_inputs.fixed_test_labels
+        windows_test_labels = ci_inputs.fixed_test_labels
+        print(f"  Using fixed test labels: {linux_test_labels}")
+    else:
+        linux_test_labels = ci_inputs.linux_test_labels
+        windows_test_labels = ci_inputs.windows_test_labels
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
-        linux_test_labels=ci_inputs.linux_test_labels,
-        windows_test_labels=ci_inputs.windows_test_labels,
+        linux_test_labels=linux_test_labels,
+        windows_test_labels=windows_test_labels,
     )
 
 
