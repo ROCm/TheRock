@@ -91,20 +91,44 @@ def caller_satisfies_permissions(
     return errors
 
 
-def find_local_workflow_calls(workflow: dict) -> list[str]:
-    """Find local reusable workflow calls (uses: ./.github/workflows/...)."""
+def get_job_permissions(job_def: dict, workflow_permissions: dict) -> dict:
+    """Get effective permissions for a job.
+
+    Job-level permissions override workflow-level permissions.
+    If job has no permissions block, inherit from workflow.
+    """
+    job_permissions = job_def.get("permissions")
+    if job_permissions is None:
+        return workflow_permissions
+    if isinstance(job_permissions, str):
+        return {"_all_": job_permissions}
+    if isinstance(job_permissions, dict):
+        return job_permissions
+    return workflow_permissions
+
+
+def find_local_workflow_calls_with_permissions(
+    workflow: dict,
+) -> list[tuple[str, str, dict]]:
+    """Find local reusable workflow calls with their effective permissions.
+
+    Returns list of (job_name, callee_filename, effective_permissions) tuples.
+    """
     calls = []
     jobs = workflow.get("jobs")
     if not isinstance(jobs, dict):
         return calls
 
-    for job_def in jobs.values():
+    workflow_permissions = get_workflow_permissions(workflow)
+
+    for job_name, job_def in jobs.items():
         if not isinstance(job_def, dict):
             continue
         uses = job_def.get("uses")
         if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
             filename = uses.removeprefix("./.github/workflows/")
-            calls.append(filename)
+            effective_permissions = get_job_permissions(job_def, workflow_permissions)
+            calls.append((job_name, filename, effective_permissions))
     return calls
 
 
@@ -117,10 +141,9 @@ class WorkflowPermissionsTest(unittest.TestCase):
 
         for workflow_path in sorted(WORKFLOWS_DIR.glob("*.yml")):
             workflow = load_workflow(workflow_path)
-            caller_permissions = get_workflow_permissions(workflow)
-            called_workflows = find_local_workflow_calls(workflow)
+            calls = find_local_workflow_calls_with_permissions(workflow)
 
-            for callee_filename in called_workflows:
+            for job_name, callee_filename, caller_permissions in calls:
                 callee_path = WORKFLOWS_DIR / callee_filename
                 if not callee_path.exists():
                     continue
@@ -136,7 +159,9 @@ class WorkflowPermissionsTest(unittest.TestCase):
                 )
 
                 for err in permission_errors:
-                    errors.append(f"{workflow_path.name} -> {callee_filename}: {err}")
+                    errors.append(
+                        f"{workflow_path.name}:{job_name} -> {callee_filename}: {err}"
+                    )
 
         if errors:
             self.fail(
@@ -171,11 +196,10 @@ class WorkflowPermissionsTest(unittest.TestCase):
                     continue
 
                 caller_workflow = load_workflow(caller_path)
-                caller_permissions = get_workflow_permissions(caller_workflow)
-                called_workflows = find_local_workflow_calls(caller_workflow)
+                calls = find_local_workflow_calls_with_permissions(caller_workflow)
 
-                for callee_filename in called_workflows:
-                    check_key = (caller_filename, callee_filename)
+                for job_name, callee_filename, caller_permissions in calls:
+                    check_key = (caller_filename, job_name, callee_filename)
                     if check_key in checked:
                         continue
                     checked.add(check_key)
@@ -195,7 +219,9 @@ class WorkflowPermissionsTest(unittest.TestCase):
                     )
 
                     for err in permission_errors:
-                        errors.append(f"{caller_filename} -> {callee_filename}: {err}")
+                        errors.append(
+                            f"{caller_filename}:{job_name} -> {callee_filename}: {err}"
+                        )
 
         if errors:
             self.fail(
