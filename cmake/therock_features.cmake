@@ -121,6 +121,7 @@ function(therock_finalize_features)
     message(STATUS "Implicitly enabled features: ${_implicit_features_spaces}")
   endif()
 
+  # TODO: Remove after disable_processors feature is merged into TheRock.
   # rocprofiler-systems requires architecture-specific assembly for the Dyninst
   # RT library. Disable it on architectures without support.
   if(THEROCK_ENABLE_ROCPROFSYS AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|i.86|ppc64")
@@ -129,6 +130,17 @@ function(therock_finalize_features)
         "disabling THEROCK_ENABLE_ROCPROFSYS automatically.")
     set(THEROCK_ENABLE_ROCPROFSYS OFF CACHE BOOL "" FORCE)
     set(THEROCK_ENABLE_ROCPROFSYS OFF PARENT_SCOPE)
+  endif()
+
+  # TODO: Remove after disable_processors feature is merged into TheRock.
+  # RPP uses x86 SIMD intrinsics (AVX2/SSE) extensively in its CPU kernels.
+  # Disable it on non-x86 architectures.
+  if(THEROCK_ENABLE_RPP AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|i.86")
+    message(WARNING
+        "RPP is not supported on ${CMAKE_SYSTEM_PROCESSOR}, "
+        "disabling THEROCK_ENABLE_RPP automatically.")
+    set(THEROCK_ENABLE_RPP OFF CACHE BOOL "" FORCE)
+    set(THEROCK_ENABLE_RPP OFF PARENT_SCOPE)
   endif()
 
 endfunction()
