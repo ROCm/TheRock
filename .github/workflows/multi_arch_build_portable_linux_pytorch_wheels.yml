@@ -80,6 +80,10 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
@@ -178,7 +182,7 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
       id-token: write
       contents: read
