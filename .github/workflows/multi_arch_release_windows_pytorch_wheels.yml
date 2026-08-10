@@ -114,7 +114,7 @@ jobs:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml
@@ -171,7 +171,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@9bc71d20138b1be33f3cd69e30b60ed53a2dbc25 # notify_quartz/v1.0.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml
