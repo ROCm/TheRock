@@ -183,16 +183,18 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
 
     Returns:
         True if the requested artifact group is represented and every required
-        filename pattern matches at least one artifact; False otherwise.
+        filename pattern matches at least one artifact; False if the artifact
+        lookup succeeds but matching artifacts are not available.
+
+    Raises:
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
     """
     if info._output_root is None:
         return False
 
-    try:
-        backend = S3Backend(output_root=info._output_root)
-        available_filenames = backend.list_artifacts()
-    except (BotoCoreError, ClientError):
-        return False
+    backend = S3Backend(output_root=info._output_root)
+    available_filenames = backend.list_artifacts()
 
     matching_filenames = _filter_artifact_filenames(
         available_filenames,
@@ -473,6 +475,8 @@ def find_artifacts_for_commit(
         GitHubAPIError: If the GitHub API request fails (rate limit, network
             error, etc.). Callers should handle this to distinguish between
             "no artifacts found" (empty list) and "couldn't check" (exception).
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
         ValueError: If explicit AMDGPU targets are provided with more than one
             artifact group.
     """
@@ -518,6 +522,8 @@ def find_artifacts_for_run(
 
     Raises:
         GitHubAPIError: If the workflow run cannot be queried.
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
         ValueError: If explicit AMDGPU targets are provided with more than one
             artifact group.
     """
@@ -658,7 +664,7 @@ def main(argv: list[str] | None = None) -> int:
                     require_single_run=args.single_run,
                     require_successful_run=args.require_successful_run,
                 )
-    except (GitHubAPIError, ValueError, re.error) as e:
+    except (GitHubAPIError, BotoCoreError, ClientError, ValueError, re.error) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 

@@ -7,6 +7,9 @@ import sys
 import unittest
 from unittest import mock
 
+
+from botocore.exceptions import ClientError
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from find_artifacts_for_commit import (
@@ -416,6 +419,26 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             required_artifact_patterns=required_patterns,
             _output_root=mock.sentinel.output_root,
         )
+
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    def test_s3_error_is_not_treated_as_missing_artifacts(
+        self,
+        mock_backend_class,
+    ):
+        mock_backend_class.return_value.list_artifacts.side_effect = ClientError(
+            {
+                "Error": {
+                    "Code": "AccessDenied",
+                    "Message": "Access denied",
+                }
+            },
+            "ListObjectsV2",
+        )
+
+        info = self._info()
+
+        with self.assertRaises(ClientError):
+            check_if_artifacts_exist(info)
 
     @mock.patch("find_artifacts_for_commit.S3Backend")
     def test_lists_concrete_artifacts(self, mock_backend_class):
