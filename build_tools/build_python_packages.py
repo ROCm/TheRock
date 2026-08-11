@@ -342,8 +342,10 @@ def _run_kpack_split(
     # Per-ISA device wheels. Device artifacts overlay into
     # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
     # MIOpen CK kernels) with dynamic deps on core.
-    all_targets = sorted(params.all_target_families)
-    for target in all_targets:
+    # Group by base target (strip xnack suffix) to merge variants like
+    # 'gfx950' and 'gfx950:xnack+' into a single device package.
+    all_base_targets = sorted(set(t.split(":")[0] for t in params.all_target_families))
+    for target in all_base_targets:
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
         dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
@@ -607,7 +609,13 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
 
     Unlike libraries_artifact_filter, this only matches the specific ISA target
     (no generic). Used in kpack-split mode for device wheel population.
+
+    Matches both the base target and any xnack variants (e.g., target='gfx950'
+    matches artifacts for both 'gfx950' and 'gfx950:xnack+'), merging them into
+    a single device package.
     """
+    # Strip xnack suffix from artifact's target_family for comparison
+    artifact_base_target = an.target_family.split(":")[0]
     return (
         an.name
         in [
@@ -622,7 +630,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "rccl",
         ]
         and an.component == "lib"
-        and an.target_family == target
+        and artifact_base_target == target
     )
 
 
