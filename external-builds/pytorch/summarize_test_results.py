@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import html
 import os
 import re
 import sys
@@ -58,12 +59,19 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
 
             if failure is not None:
                 status = "FAILED"
-                message = (failure.get("message") or "")[:200]
+                result = failure
             elif error is not None:
                 status = "ERROR"
-                message = (error.get("message") or "")[:200]
+                result = error
             else:
                 continue
+
+            summary = (result.get("message") or "").strip()
+            details = (result.text or "").strip()
+            if summary and details and summary not in details:
+                message = f"{summary}\n\n{details}"
+            else:
+                message = details or summary
 
             results.append(
                 {
@@ -105,6 +113,14 @@ def derive_test_file(report_path: str) -> str:
     return report_path
 
 
+def format_error_message(message: str) -> str:
+    """Format a complete error message as a collapsible Markdown table cell."""
+    normalized = message.replace("\r\n", "\n").replace("\r", "\n")
+    escaped = html.escape(normalized, quote=False)
+    escaped = escaped.replace("|", "&#124;").replace("\n", "&#10;")
+    return f"<details><summary>view</summary><pre>{escaped}</pre></details>"
+
+
 # ---------------------------------------------------------------------------
 # Single-shard summary (called from each matrix job)
 # ---------------------------------------------------------------------------
@@ -137,7 +153,7 @@ def write_shard_summary(
             if key in seen:
                 continue
             seen.add(key)
-            msg = f["message"].replace("|", "\\|").replace("\n", " ")[:100]
+            msg = format_error_message(f["message"])
             rows.append(
                 f"| {test_file} | {f['class']} | {f['test']} "
                 f"| {f['status']} | {msg} |"
@@ -145,7 +161,7 @@ def write_shard_summary(
 
         lines.append(f"### {len(seen)} failed{heading_suffix}")
         lines.append("")
-        lines.append("| Test File | Test Class | Test Name | Status | Error |")
+        lines.append("| Test File | Test Class | Test Name | Status | Error Message |")
         lines.append("|-----------|-----------|-----------|--------|-------|")
         lines.extend(rows)
         lines.append("")
@@ -243,7 +259,7 @@ def write_combined_summary(
             if key in seen:
                 continue
             seen.add(key)
-            msg = f["message"].replace("|", "\\|").replace("\n", " ")[:100]
+            msg = format_error_message(f["message"])
             rows.append(
                 (
                     config,
@@ -262,7 +278,7 @@ def write_combined_summary(
         lines.append("")
         lines.append(
             "| Config | Shard | Test File | Test Class "
-            "| Test Name | Status | Error |"
+            "| Test Name | Status | Error Message |"
         )
         lines.append(
             "|--------|-------|-----------|-----------|" "-----------|--------|-------|"
