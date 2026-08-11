@@ -816,9 +816,17 @@ def select_baseline_run(
         )
     )
 
+    print(f"[DEBUG] select_baseline_run: checking {len(candidates[:max_runs])} candidates")
+    print(f"[DEBUG] current_commit_sha={current_commit_sha}")
+    print(f"[DEBUG] ordered_commit_shas (first 5)={ordered_commit_shas[:5] if ordered_commit_shas else None}")
     for workflow_run in candidates[:max_runs]:
         run_id = str(workflow_run["id"])
+        head_sha = workflow_run.get("head_sha", "")[:12]
+        status = workflow_run.get("status", "")
+        conclusion = workflow_run.get("conclusion", "")
+        print(f"[DEBUG] Checking run {run_id}: head_sha={head_sha}, status={status}, conclusion={conclusion}")
         if run_id in excluded:
+            print(f"[DEBUG]   -> SKIP: excluded")
             continue
         # Note: we no longer require the workflow run to be completed.
         # An in_progress run can still provide reusable build artifacts if
@@ -836,6 +844,7 @@ def select_baseline_run(
                 now=now,
             )
             if not run_recency.is_valid:
+                print(f"[DEBUG]   -> SKIP: too old (age_hours={run_recency.age_hours}, max={run_recency.max_age_hours})")
                 logger.info(
                     "Skipping run %s: too old or not date-parseable "
                     "(age_hours=%s, max_age_hours=%s)",
@@ -858,6 +867,7 @@ def select_baseline_run(
                 ordered_commit_shas=ordered_commit_shas or (),
             )
             if not commit_compatibility.is_valid:
+                print(f"[DEBUG]   -> SKIP: commit {candidate_head_sha[:12]} is {commit_compatibility.relationship} relative to {commit_compatibility.current_commit_sha[:12]}")
                 logger.info(
                     "Skipping run %s: commit %s is %s relative to current %s",
                     run_id,
@@ -872,6 +882,7 @@ def select_baseline_run(
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
+            print(f"[DEBUG]   -> SKIP: build jobs not healthy (failed={job_health.failed_job_names}, missing={job_health.missing_name_substrings})")
             logger.info(
                 "Skipping run %s: required build jobs not healthy "
                 "(failed=%s, missing=%s)",
@@ -887,12 +898,14 @@ def select_baseline_run(
             required_artifacts=requirements,
         )
         if not availability.is_valid:
+            print(f"[DEBUG]   -> SKIP: missing artifacts {availability.missing_artifacts}")
             logger.info(
                 "Skipping run %s: missing artifacts %s",
                 run_id,
                 availability.missing_artifacts,
             )
             continue
+        print(f"[DEBUG]   -> SELECTED: run {run_id} passed all checks!")
 
         source_ref = create_workflow_run_summary(
             workflow_run,
