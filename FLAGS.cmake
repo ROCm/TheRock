@@ -51,6 +51,19 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+# Gates the generic kernel ingestor platform described in RFC 0017:
+# rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_KERNEL_INGESTOR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
+  CMAKE_VARS
+    HIPDNN_ENABLE_KERNEL_INGESTOR=ON
+  SUB_PROJECTS
+    hipDNN
+    hipkernelprovider
+)
+
 therock_declare_flag(
   NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
   DEFAULT_VALUE OFF
