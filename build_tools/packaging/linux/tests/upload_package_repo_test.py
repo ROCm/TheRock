@@ -4,13 +4,33 @@
 
 """Unit tests for ``upload_package_repo.py`` RPM repodata helpers.
 
-Tests cover S3 RPM key listing, local+S3 arch-dir materialization, and
-fail-fast repodata validation. S3 is stubbed via ``FakeS3``; filesystem
-layout uses real temp directories.
+Regression guards for Issue #6540: full RPM repodata regen from local build
+tree + S3 backfill (dedupe-skipped packages must still appear in repodata).
+
+Coverage:
+
+  - ``_list_s3_rpm_keys`` — only ``.rpm`` keys under ``prefix/x86_64/``; repodata
+    metadata keys in the same prefix are excluded
+  - ``_prepare_rpm_arch_dir_for_repodata`` — local RPMs copied first; missing S3
+    RPMs downloaded once; shared names prefer the local copy
+  - ``_validate_rpm_repodata`` — fail-fast when ``primary.xml.gz`` indexes fewer
+    packages than ``.rpm`` files on disk
+
+Not covered here: ``regenerate_rpm_metadata_from_s3`` end-to-end (requires
+``createrepo_c`` and a full S3 client); DEB merge path in the same module.
+
+Prerequisites:
+
+  - Python 3.10 or newer
+  - Run from TheROCK repository root (or any cwd — modules resolved via ``__file__``)
+  - Stdlib only; ``boto3`` is stubbed so tests run without AWS credentials
 
 Run::
 
     python3.12 build_tools/packaging/linux/tests/upload_package_repo_test.py -v
+
+    python3.12 -m unittest discover -s build_tools/packaging/linux/tests \\
+        -p 'upload_package_repo_test.py' -v
 """
 
 import gzip
