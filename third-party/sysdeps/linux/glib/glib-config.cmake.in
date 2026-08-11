@@ -1,0 +1,22 @@
+# Traverse from lib/cmake/FOO -> the directory holding lib
+get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_DIR}" PATH)
+get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
+if(_IMPORT_PREFIX STREQUAL "/")
+  set(_IMPORT_PREFIX "")
+endif()
+
+# GLib ships several interdependent libraries. Expose each as an imported target
+# under the canonical PkgConfig-style names so consumers can link them directly;
+# most consumers instead discover GLib through pkg-config.
+foreach(_comp glib-2.0 gobject-2.0 gmodule-2.0 gthread-2.0 gio-2.0)
+  if(NOT TARGET PkgConfig::${_comp})
+    add_library(PkgConfig::${_comp} SHARED IMPORTED)
+    set_target_properties(PkgConfig::${_comp} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include/glib-2.0;${_IMPORT_PREFIX}/lib/glib-2.0/include"
+      IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/lib${_comp}.so"
+    )
+  endif()
+endforeach()
+
+set(_IMPORT_PREFIX)
