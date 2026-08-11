@@ -39,7 +39,7 @@ VALID_TEST_CATEGORIES = {
     "ffm-comprehensive",
     "ffm-full",
     # emulation categories (AM/rocjitsu)
-    "emu-quick",
+    "emu-fast",
     "emu-full",
 }
 # Normalize + validate TEST_TYPE once at module load so all downstream
