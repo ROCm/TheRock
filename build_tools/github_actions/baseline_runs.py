@@ -472,35 +472,62 @@ def create_artifact_backend_for_workflow_run(
 
 # Cache the family map to avoid repeated CMake file parsing.
 _FAMILY_MAP_CACHE: dict[str, list[str]] | None = None
+# Case-insensitive lookup cache (lowercase key -> targets)
+_FAMILY_MAP_LOWER_CACHE: dict[str, list[str]] | None = None
 
 
-def _get_family_map() -> dict[str, list[str]]:
-    """Get the cached family-to-targets map."""
-    global _FAMILY_MAP_CACHE
+def _get_family_map() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Get the cached family-to-targets maps (original and lowercase).
+
+    Returns:
+        Tuple of (original_map, lowercase_map) where lowercase_map has
+        all keys lowercased for case-insensitive lookups.
+    """
+    global _FAMILY_MAP_CACHE, _FAMILY_MAP_LOWER_CACHE
     if _FAMILY_MAP_CACHE is None:
         try:
             _FAMILY_MAP_CACHE = amdgpu_family_map()
+            _FAMILY_MAP_LOWER_CACHE = {k.lower(): v for k, v in _FAMILY_MAP_CACHE.items()}
             print(f"[DEBUG] Loaded family map with {len(_FAMILY_MAP_CACHE)} families: {list(_FAMILY_MAP_CACHE.keys())[:10]}")
         except Exception as e:
-            # If we can't parse the CMake file, return empty map
+            # If we can't parse the CMake file, return empty maps
             print(f"[DEBUG] Failed to load family map: {e}")
             _FAMILY_MAP_CACHE = {}
-    return _FAMILY_MAP_CACHE
+            _FAMILY_MAP_LOWER_CACHE = {}
+    return _FAMILY_MAP_CACHE, _FAMILY_MAP_LOWER_CACHE
 
 
 def _expand_family_to_targets(family: str) -> list[str]:
     """Expand a family name to its target list, or return family as-is if unknown.
 
-    For example: 'gfx94x' -> ['gfx942'] (or whatever targets are in that family)
+    For example: 'gfx94X' -> ['gfx942'] (via gfx94X-all lookup)
     Unknown families (like 'generic') are returned as-is: ['generic']
+
+    Lookup strategy (case-insensitive):
+    1. Try the full family name (e.g., 'gfx94X-dcgpu')
+    2. Try with '-all' suffix (e.g., 'gfx94X' -> 'gfx94X-all')
+    3. Try with '-dcgpu' suffix
+    4. Try just the base name
     """
-    family_map = _get_family_map()
-    # Normalize family name for lookup (case-insensitive, strip suffixes like '-dcgpu')
-    normalized = family.lower().split('-')[0]
-    targets = family_map.get(normalized, [])
-    if targets:
-        return targets
+    _, lower_map = _get_family_map()
+    family_lower = family.lower()
+
+    # Try different lookup strategies
+    candidates = [
+        family_lower,                    # Full name: gfx94x-dcgpu
+        f"{family_lower}-all",           # With -all: gfx94x-all
+        f"{family_lower}-dcgpu",         # With -dcgpu: gfx94x-dcgpu
+        family_lower.split('-')[0],      # Base only: gfx94x
+    ]
+
+    for candidate in candidates:
+        targets = lower_map.get(candidate, [])
+        if targets:
+            print(f"[DEBUG] Expanded family '{family}' via '{candidate}' -> {targets}")
+            return targets
+
     # If not found in map, return the original family (handles 'generic', etc.)
+    print(f"[DEBUG] No expansion for family '{family}', returning as-is")
     return [family]
 
 
