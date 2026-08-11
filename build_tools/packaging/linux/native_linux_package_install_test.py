@@ -164,10 +164,12 @@ APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
 # Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
-# /etc/apt/keyrings/rocm.gpg: the amdgpu driver setup from repo.radeon.com ships
-# that path as a packaged file, and this harness writes its keyring with
-# ``sudo tee``, which would overwrite it on any host that has the driver
-# installed. Distinct from the amdrocm-repo package's own keyring
+# /etc/apt/keyrings/rocm.gpg. No package owns that path, but the current
+# documented amdgpu package manager steps set the signing key up there
+# ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
+# and point signed-by= at it. This harness
+# writes its keyring the same way, so sharing the path would overwrite the key a
+# host is already using. Distinct from the amdrocm-repo package's own keyring
 # (AMDROCM_DEB_KEYRING), which lives in a different directory.
 APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")

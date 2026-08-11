@@ -130,10 +130,10 @@ class ConfiguredPathsTest(unittest.TestCase):
             spec.loader.exec_module(self.mod)
 
     def test_apt_keyring_does_not_collide_with_the_driver_keyring(self):
-        # The harness writes this file with 'sudo tee'. /etc/apt/keyrings/rocm.gpg
-        # is shipped as a packaged file by the amdgpu driver setup from
-        # repo.radeon.com, so writing there would clobber it on any host that
-        # has the driver installed.
+        # The harness writes this file with 'sudo tee'. No package owns
+        # /etc/apt/keyrings/rocm.gpg, but the current documented amdgpu package
+        # manager steps set the signing key up there and point signed-by= at it,
+        # so writing to the same path would clobber a key the host is using.
         #
         # Compare whole paths rather than searching for a substring: several
         # candidate names contain "rocm.gpg" as a substring, so a containment
