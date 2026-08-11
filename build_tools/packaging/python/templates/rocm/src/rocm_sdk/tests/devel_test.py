@@ -162,7 +162,6 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-
             if (
                 "opencl" in str(so_path)
                 or "oclruntime" in so_path.name

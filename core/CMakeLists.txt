@@ -487,7 +487,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
     )
     list(APPEND OCL_CLR_CMAKE_ARGS
-    "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
     )
   endif()
 
