@@ -38,6 +38,7 @@ from _therock_utils.artifact_backend import (
     ArtifactBackend,
     S3Backend,
 )
+from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from github_actions_api import gha_send_request
@@ -469,21 +470,66 @@ def create_artifact_backend_for_workflow_run(
     return S3Backend(output_root=output_root)
 
 
+# Cache the family map to avoid repeated CMake file parsing.
+_FAMILY_MAP_CACHE: dict[str, list[str]] | None = None
+
+
+def _get_family_map() -> dict[str, list[str]]:
+    """Get the cached family-to-targets map."""
+    global _FAMILY_MAP_CACHE
+    if _FAMILY_MAP_CACHE is None:
+        try:
+            _FAMILY_MAP_CACHE = amdgpu_family_map()
+        except Exception:
+            # If we can't parse the CMake file, return empty map
+            _FAMILY_MAP_CACHE = {}
+    return _FAMILY_MAP_CACHE
+
+
+def _expand_family_to_targets(family: str) -> list[str]:
+    """Expand a family name to its target list, or return family as-is if unknown.
+
+    For example: 'gfx94x' -> ['gfx942'] (or whatever targets are in that family)
+    Unknown families (like 'generic') are returned as-is: ['generic']
+    """
+    family_map = _get_family_map()
+    # Normalize family name for lookup (case-insensitive, strip suffixes like '-dcgpu')
+    normalized = family.lower().split('-')[0]
+    targets = family_map.get(normalized, [])
+    if targets:
+        return targets
+    # If not found in map, return the original family (handles 'generic', etc.)
+    return [family]
+
+
 def _find_matching_artifact_archives(
     required_artifact: RequiredArtifact,
     available: set[str],
 ) -> list[str]:
-    """Find artifact archives matching a requirement."""
+    """Find artifact archives matching a requirement.
+
+    Expands family names (e.g., 'gfx94x') to actual targets (e.g., 'gfx942')
+    to match how artifacts are actually stored.
+    """
     matches: list[str] = []
+    # Expand the family to actual targets
+    targets = _expand_family_to_targets(required_artifact.target_family)
+
     for component in ARTIFACT_COMPONENTS:
-        for extension in ARTIFACT_EXTENSIONS:
-            filename = (
-                f"{required_artifact.name}_{component}_"
-                f"{required_artifact.target_family}{extension}"
-            )
-            if filename in available:
-                matches.append(filename)
-                break
+        for target in targets:
+            for extension in ARTIFACT_EXTENSIONS:
+                filename = (
+                    f"{required_artifact.name}_{component}_"
+                    f"{target}{extension}"
+                )
+                if filename in available:
+                    matches.append(filename)
+                    break
+            else:
+                # No match for this target, continue to next
+                continue
+            # Found a match for this component, move to next component
+            break
     return matches
 
 
