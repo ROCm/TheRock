@@ -480,8 +480,10 @@ def _get_family_map() -> dict[str, list[str]]:
     if _FAMILY_MAP_CACHE is None:
         try:
             _FAMILY_MAP_CACHE = amdgpu_family_map()
-        except Exception:
+            print(f"[DEBUG] Loaded family map with {len(_FAMILY_MAP_CACHE)} families: {list(_FAMILY_MAP_CACHE.keys())[:10]}")
+        except Exception as e:
             # If we can't parse the CMake file, return empty map
+            print(f"[DEBUG] Failed to load family map: {e}")
             _FAMILY_MAP_CACHE = {}
     return _FAMILY_MAP_CACHE
 
