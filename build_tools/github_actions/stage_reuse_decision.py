@@ -68,7 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
 from _therock_utils.build_topology import BuildTopology, get_topology
 from artifact_manager import ARTIFACT_COMPONENTS
-from baseline_runs import BaselineRun, RequiredArtifact
+from baseline_runs import BaselineRun, RequiredArtifact, _expand_family_to_targets
 from github_actions_api import GitHubAPIError
 from stage_impact import analyze_stage_impact
 
@@ -178,7 +178,11 @@ def _stage_artifacts_available(
     target_families: Sequence[str],
     available_filenames: set[str],
 ) -> bool:
-    """True when every artifact this stage produces has an archive present."""
+    """True when every artifact this stage produces has an archive present.
+
+    Expands family names (e.g., 'gfx94X') to actual targets (e.g., 'gfx942')
+    to match how artifacts are named in the backend.
+    """
 
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
@@ -187,12 +191,17 @@ def _stage_artifacts_available(
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
             for family in target_families:
+                # Expand family to actual targets (e.g., gfx94X -> gfx942)
+                targets = _expand_family_to_targets(family)
                 found = False
-                for component in ARTIFACT_COMPONENTS:
-                    for extension in ARTIFACT_EXTENSIONS:
-                        filename = f"{artifact_name}_{component}_{family}{extension}"
-                        if filename in available_filenames:
-                            found = True
+                for target in targets:
+                    for component in ARTIFACT_COMPONENTS:
+                        for extension in ARTIFACT_EXTENSIONS:
+                            filename = f"{artifact_name}_{component}_{target}{extension}"
+                            if filename in available_filenames:
+                                found = True
+                                break
+                        if found:
                             break
                     if found:
                         break
