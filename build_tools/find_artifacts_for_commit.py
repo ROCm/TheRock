@@ -182,10 +182,12 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
     Returns:
         True if the requested artifact group is represented and every required
         filename pattern matches at least one artifact; False otherwise.
+    Raises:
+        ValueError: If the artifact output root is unavailable.
     """
-    if info._output_root is None:
-        return False
 
+    if info._output_root is None:
+        raise ValueError("Artifact output_root is required for artifact inspection")
     try:
         backend = S3Backend(output_root=info._output_root)
         available_filenames = backend.list_artifacts()

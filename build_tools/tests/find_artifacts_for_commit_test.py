@@ -547,6 +547,16 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             ),
         )
 
+    def test_missing_output_root_fails_fast(self):
+        info = self._info()
+        info._output_root = None
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "output_root is required",
+        ):
+            check_if_artifacts_exist(info)
+
 
 class ArtifactRequestValidationTest(unittest.TestCase):
     def test_commit_lookup_rejects_targets_for_multiple_groups(self):
