@@ -137,6 +137,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path, PurePosixPath
@@ -162,7 +163,13 @@ APT_KEYRING_DIR = _env("ROCM_APT_KEYRING_DIR", "/etc/apt/keyrings")
 APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
-APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", "/etc/apt/keyrings/rocm.gpg")
+# Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
+# /etc/apt/keyrings/rocm.gpg: the amdgpu driver setup from repo.radeon.com ships
+# that path as a packaged file, and this harness writes its keyring with
+# ``sudo tee``, which would overwrite it on any host that has the driver
+# installed. Distinct from the amdrocm-repo package's own keyring
+# (AMDROCM_DEB_KEYRING), which lives in a different directory.
+APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
 VERIFY_KEY_COMPONENTS = [
@@ -175,6 +182,21 @@ VERIFY_KEY_COMPONENTS = [
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
+# amdrocm-repo package: the on-disk paths it installs (the package's public
+# contract). Used by the install-via-package mode to confirm the repo config
+# landed. These are independent of REPO_NAME (which names the manually-written
+# repo file used by the default setup path).
+AMDROCM_REPO_ID = "amdrocm"
+AMDROCM_DEB_SOURCES = "/etc/apt/sources.list.d/amdrocm.sources"
+# Named amdrocm.gpg, not rocm.gpg, so it cannot collide with the keyring the
+# amdgpu driver setup from repo.radeon.com installs. Must match
+# build_repo_package.DEB_KEYRING_PATH.
+AMDROCM_DEB_KEYRING = "/usr/share/keyrings/amdrocm.gpg"
+AMDROCM_RPM_REPO_BASENAME = "amdrocm.repo"
+# Named -amdrocm, not -rocm, for the same collision reason as the deb
+# keyring. Must match build_repo_package.RPM_GPG_KEY_PATH.
+AMDROCM_RPM_KEY = "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"
+
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 
@@ -185,6 +207,12 @@ APT_UPDATE_TIMEOUT_SEC = 120
 ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
+DNF_MAKECACHE_TIMEOUT_SEC = 120
+REPO_PACKAGE_INSTALL_TIMEOUT_SEC = 120
+# Retry the post-install metadata refresh so a transient repo/CDN blip does not
+# fail the (network-dependent) config-only gate.
+REPO_REFRESH_ATTEMPTS = 3
+REPO_REFRESH_BACKOFF_SEC = 3
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
@@ -366,11 +394,14 @@ class NativeLinuxPackageInstallTest:
         gfx_arch: str | list[str] | None = None,
         rocm_version: str | None = None,
         gpg_key_url: str | None = None,
+        repo_package_dir: str | None = None,
+        repo_config_only: bool = False,
     ):
         """Initialize the native Linux package install test runner.
 
         Args:
-        repo_url: Full repository URL (constructed in YAML)
+        repo_url: Full repository URL (constructed in YAML). May be empty/None when
+        repo_package_dir is set (the amdrocm-repo package supplies the repo URL).
         os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
         release_type: Type of release ('nightly' or 'prerelease')
         install_prefix: Installation prefix (default: /opt/rocm/core)
@@ -383,11 +414,20 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
+        repo_package_dir: Directory holding the built ``amdrocm-repo`` package. When
+        set, the repository is configured by installing that package instead of
+        writing repo files directly.
+        repo_config_only: With ``repo_package_dir``, install the package and verify
+        the repo config, then stop (do not install ROCm).
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
-        self.repo_url = repo_url.rstrip("/")
+        # repo_url may be empty/None in install-via-package mode (the package
+        # supplies it); tolerate both without raising.
+        self.repo_url = (repo_url or "").rstrip("/")
         self.release_type = release_type.lower()
+        self.repo_package_dir = repo_package_dir
+        self.repo_config_only = repo_config_only
         self.install_prefix = install_prefix
         self.gfx_arch_list = normalize_target_list(
             gfx_arch, lowercase=True, dedupe=True
@@ -441,8 +481,11 @@ class NativeLinuxPackageInstallTest:
 
         if self.package_type == "deb":
             # For DEB, import GPG key using pipeline approach
-            keyring_dir = Path(APT_KEYRING_DIR)
-            keyring_file = keyring_dir / "rocm.gpg"
+            # Write to the same path the sources entry pins with signed-by=.
+            # These were separate expressions that happened to agree, so any
+            # change to one silently broke apt's ability to find the keyring.
+            keyring_file = Path(APT_KEYRING_FILE)
+            keyring_dir = keyring_file.parent
 
             try:
                 # Create keyring directory
@@ -456,20 +499,31 @@ class NativeLinuxPackageInstallTest:
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
-                # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
+                # Download, dearmor and write the key as three list-form calls
+                # rather than one shell pipeline: the URL and the keyring path
+                # are both configurable, and interpolating them into a shell
+                # string makes them command injection vectors.
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
-                pipeline_cmd = (
-                    f"wget -q -O - {self.gpg_key_url} | "
-                    f"gpg --dearmor | "
-                    f"sudo tee {keyring_file} > /dev/null"
-                )
-
-                subprocess.run(
-                    pipeline_cmd,
-                    shell=True,
+                armored = subprocess.run(
+                    ["wget", "-q", "-O", "-", self.gpg_key_url],
                     check=True,
                     stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                dearmored = subprocess.run(
+                    ["gpg", "--dearmor"],
+                    input=armored,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                subprocess.run(
+                    ["sudo", "tee", str(keyring_file)],
+                    input=dearmored,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     timeout=GPG_KEY_TIMEOUT_SEC,
                 )
@@ -831,6 +885,184 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
+    def _find_repo_package(self) -> Path | None:
+        """Locate the built amdrocm-repo package in repo_package_dir.
+
+        Globs in Python (no shell) and requires exactly one match for this
+        package type. Returns the resolved path, or None on error.
+        """
+        directory = Path(self.repo_package_dir)
+        if not directory.is_dir():
+            print(
+                f"[FAIL] --repo-package-dir is not a directory: {self.repo_package_dir}"
+            )
+            return None
+        pattern = (
+            "amdrocm-repo*.deb" if self.package_type == "deb" else "amdrocm-repo*.rpm"
+        )
+        matches = sorted(directory.glob(pattern))
+        if not matches:
+            print(f"[FAIL] No {pattern} found in {self.repo_package_dir}")
+            return None
+        if len(matches) > 1:
+            print(
+                f"[FAIL] Multiple {pattern} found in {self.repo_package_dir}: {matches}"
+            )
+            return None
+        return matches[0].resolve()
+
+    def install_repo_package(self) -> bool:
+        """Install the amdrocm-repo package, then refresh the repo it configures.
+
+        The package itself is unsigned, so the local install skips package
+        signature checks; the repository the package configures keeps its own
+        gpgcheck setting. The metadata refresh is scoped to the amdrocm repo.
+
+        Returns:
+        True if the package installed and the repo metadata refreshed.
+        """
+        print("\n" + "=" * 80)
+        print("CONFIGURING REPOSITORY VIA amdrocm-repo PACKAGE")
+        print("=" * 80)
+
+        pkg = self._find_repo_package()
+        if pkg is None:
+            return False
+        print(f"\nRepo package: {pkg}")
+
+        if self.package_type == "deb":
+            install_cmd = ["sudo", "apt", "install", "-y", str(pkg)]
+        elif self._is_sles():
+            install_cmd = [
+                "zypper",
+                "--non-interactive",
+                "--no-gpg-checks",
+                "install",
+                "-y",
+                str(pkg),
+            ]
+        else:
+            install_cmd = ["dnf", "install", "-y", "--nogpgcheck", str(pkg)]
+
+        print(f"\nInstalling repo package: {' '.join(install_cmd)}")
+        try:
+            rc = _run_streaming(install_cmd, REPO_PACKAGE_INSTALL_TIMEOUT_SEC)
+        except subprocess.TimeoutExpired:
+            print("[FAIL] Installing amdrocm-repo package timed out")
+            return False
+        except OSError as e:
+            print(f"[FAIL] Error installing amdrocm-repo package: {e}")
+            return False
+        if rc != 0:
+            print(f"[FAIL] Failed to install amdrocm-repo package (exit code: {rc})")
+            return False
+        print("[PASS] amdrocm-repo package installed")
+
+        # Refresh metadata for the repo the package just configured. The dnf and
+        # zypper refreshes are scoped to the amdrocm repo; apt has no clean
+        # per-source refresh, so the deb path runs a repo-wide `apt update`
+        # (a failing unrelated base-image source would also fail this step).
+        if self.package_type == "deb":
+            refresh_cmd = ["sudo", "apt", "update"]
+            refresh_timeout = APT_UPDATE_TIMEOUT_SEC
+        elif self._is_sles():
+            refresh_cmd = [
+                "zypper",
+                "--non-interactive",
+                "--gpg-auto-import-keys",
+                "refresh",
+                AMDROCM_REPO_ID,
+            ]
+            refresh_timeout = ZYPP_REFRESH_TIMEOUT_SEC
+        else:
+            refresh_cmd = [
+                "dnf",
+                "makecache",
+                "--disablerepo=*",
+                f"--enablerepo={AMDROCM_REPO_ID}",
+            ]
+            refresh_timeout = DNF_MAKECACHE_TIMEOUT_SEC
+
+        print(f"\nRefreshing repository metadata: {' '.join(refresh_cmd)}")
+        for attempt in range(1, REPO_REFRESH_ATTEMPTS + 1):
+            try:
+                rc = _run_streaming(refresh_cmd, refresh_timeout)
+            except subprocess.TimeoutExpired:
+                rc = None
+                print("[WARN] Repository metadata refresh timed out")
+            except OSError as e:
+                rc = None
+                print(f"[WARN] Error refreshing repository metadata: {e}")
+            if rc == 0:
+                print("[PASS] Repository metadata refreshed")
+                return True
+            if attempt < REPO_REFRESH_ATTEMPTS:
+                time.sleep(REPO_REFRESH_BACKOFF_SEC * attempt)
+                print(
+                    f"Retrying repository metadata refresh "
+                    f"({attempt + 1}/{REPO_REFRESH_ATTEMPTS})..."
+                )
+        print("[FAIL] Failed to refresh repository metadata")
+        return False
+
+    def assert_repo_configured(self) -> bool:
+        """Verify the amdrocm-repo package dropped the expected repo config.
+
+        Checks the repo file exists (and looks like a ROCm repo) and, for signed
+        release lines, that the signing key was installed too.
+
+        Returns:
+        True if the on-disk repo configuration is present and well-formed.
+        """
+        print("\n" + "=" * 80)
+        print("VERIFYING REPOSITORY CONFIGURATION")
+        print("=" * 80)
+
+        signed = self.release_type in ("prerelease", "release")
+        ok = True
+
+        if self.package_type == "deb":
+            repo_file = Path(AMDROCM_DEB_SOURCES)
+            key_file = Path(AMDROCM_DEB_KEYRING)
+            # deb822 marker (independent of the repo host, which need not contain
+            # "rocm" for a mirror).
+            marker = "URIs:"
+        else:
+            repo_dir = ZYPP_REPOS_DIR if self._is_sles() else YUM_REPOS_DIR
+            repo_file = Path(repo_dir) / AMDROCM_RPM_REPO_BASENAME
+            key_file = Path(AMDROCM_RPM_KEY)
+            marker = "baseurl="
+
+        if repo_file.is_file():
+            content = repo_file.read_text(encoding="utf-8", errors="replace")
+            print(f"[PASS] Repo file present: {repo_file}")
+            print(content)
+            # Match the marker at the start of a line so a file that only
+            # mentions it in a comment is not accepted as configured.
+            if not any(line.startswith(marker) for line in content.splitlines()):
+                print(
+                    f"[FAIL] Repo file missing expected {marker!r} entry: {repo_file}"
+                )
+                ok = False
+        else:
+            print(f"[FAIL] Repo file not found: {repo_file}")
+            ok = False
+
+        if signed:
+            if key_file.is_file():
+                print(f"[PASS] Signing key present: {key_file}")
+            else:
+                print(f"[FAIL] Signing key not found (signed line): {key_file}")
+                ok = False
+        else:
+            print("[INFO] Unsigned line: no signing key expected")
+
+        if ok:
+            print("\n[PASS] Repository configuration verified")
+        else:
+            print("\n[FAIL] Repository configuration verification failed")
+        return ok
+
     def run_repo_setup_and_install(self) -> bool:
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
@@ -862,9 +1094,23 @@ gpgcheck=0
                 print(
                     "GPU Architecture(s): (none — generic packages amdrocm, amdrocm-core-sdk)"
                 )
-        print(f"Repository URL: {self.repo_url}")
+        print(f"Repository URL: {self.repo_url or '(from amdrocm-repo package)'}")
         print(f"Packages (in order): {self.package_names}")
 
+        # Install-via-package mode: the amdrocm-repo package configures the repo.
+        if self.repo_package_dir:
+            if not self.install_repo_package():
+                return False
+            if not self.assert_repo_configured():
+                return False
+            if self.repo_config_only:
+                print("\n[PASS] Repo configured via amdrocm-repo package (config-only)")
+                return True
+            if self.package_type == "deb":
+                return self.install_deb_packages()
+            return self.install_rpm_packages()
+
+        # Default: configure the repo directly, then install.
         if self.package_type == "deb":
             if not self.setup_deb_repository():
                 return False
@@ -886,6 +1132,12 @@ gpgcheck=0
         print("\n" + "=" * 80)
         print("STEP 2: BASIC INSTALL VERIFICATION")
         print("=" * 80)
+
+        if not self.install_prefix:
+            # Reachable when a non-config-only run omits --install-prefix; report
+            # the missing option instead of failing inside Path().
+            print("\n[FAIL] --install-prefix is required to verify an installation")
+            return False
 
         install_path = Path(self.install_prefix)
         if not install_path.exists():
@@ -1431,6 +1683,20 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         help="Directory containing .deb or .rpm files. Required when --test-type is 'simulate'.",
     )
     parser.add_argument(
+        "--repo-package-dir",
+        type=str,
+        metavar="DIR",
+        help="Directory containing the built amdrocm-repo .deb/.rpm. When set, the repository is "
+        "configured by installing that package (instead of writing repo files); --repo-url and "
+        "--gpg-key-url become optional. Not valid with --test-type simulate.",
+    )
+    parser.add_argument(
+        "--repo-config-only",
+        action="store_true",
+        help="With --repo-package-dir: install the amdrocm-repo package, verify the repo config, "
+        "and stop (do not install ROCm). --install-prefix is not required.",
+    )
+    parser.add_argument(
         "--pkg-type",
         type=str,
         choices=["deb", "rpm"],
@@ -1441,6 +1707,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
 
 def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
     if args.test_type == "simulate":
+        if args.repo_package_dir:
+            parser.error("--repo-package-dir is not valid with --test-type 'simulate'")
         if not args.packages_dir:
             parser.error("--packages-dir is required when --test-type is 'simulate'")
         if not args.pkg_type and not args.os_profile:
@@ -1453,13 +1721,17 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
             except ValueError as e:
                 parser.error(str(e))
         return
+    if args.repo_config_only and not args.repo_package_dir:
+        parser.error("--repo-config-only requires --repo-package-dir")
     if not args.os_profile:
         parser.error(
             "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"
         )
-    if not args.repo_url:
+    # In install-via-package mode the amdrocm-repo package supplies the repo URL.
+    if not args.repo_url and not args.repo_package_dir:
         parser.error(
-            "--repo-url is required when --test-type is 'install', 'sanity', or 'full'"
+            "--repo-url is required when --test-type is 'install', 'sanity', or 'full' "
+            "(or provide --repo-package-dir to configure the repo via the amdrocm-repo package)"
         )
     if args.rocm_version:
         try:
@@ -1524,7 +1796,10 @@ def run_tests(args: Namespace) -> int:
     print(f"OS Profile: {args.os_profile}")
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
-    print(f"Repository URL: {args.repo_url}")
+    if args.repo_package_dir:
+        print(f"Repo package dir: {args.repo_package_dir}")
+        print(f"Repo config only: {args.repo_config_only}")
+    print(f"Repository URL: {args.repo_url or '(from amdrocm-repo package)'}")
     # Preview package-name rules before NativeLinuxPackageInstallTest is constructed.
     _norm = normalize_target_list(args.gfx_arch, lowercase=True, dedupe=True)
     if _norm:
@@ -1567,12 +1842,14 @@ def run_tests(args: Namespace) -> int:
 
     test_runner = NativeLinuxPackageInstallTest(
         os_profile=args.os_profile,
-        repo_url=args.repo_url,
+        repo_url=args.repo_url or "",
         release_type=args.release_type,
         install_prefix=args.install_prefix,
         gfx_arch=args.gfx_arch,
         rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
+        repo_package_dir=args.repo_package_dir,
+        repo_config_only=args.repo_config_only,
     )
 
     print("\n" + "=" * 80)
@@ -1587,6 +1864,12 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
+        if args.repo_config_only:
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(repo-config-only: amdrocm-repo package configured the repo)")
+            print("=" * 80 + "\n")
+            return 0
         if args.test_type == "install":
             print("\n" + "=" * 80)
             print("[PASS] INSTALLATION TEST PASSED")
@@ -1617,7 +1900,10 @@ def run_tests(args: Namespace) -> int:
 def _argv_from_ci_env() -> list[str] | None:
     """Build CLI argv from workflow/container env (see ``test_native_linux_packages_install.yml``).
 
-    Required for sanity/full: OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX.
+    Required for sanity/full: OS_PROFILE, RELEASE_TYPE, plus REPO_URL and
+    INSTALL_PREFIX — except in package mode (REPO_PACKAGE_DIR set), where the
+    repo is configured by the installed package so REPO_URL is not needed, and
+    when REPO_CONFIG_ONLY is set INSTALL_PREFIX is not needed either.
     Optional: GFX_ARCH, GPG_KEY_URL; ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version``
     only when versioned package names are needed (omit for unversioned installs).
     """
@@ -1652,8 +1938,22 @@ def _argv_from_ci_env() -> list[str] | None:
     gfx_arch = gfx_raw.replace(";", " ").split() if gfx_raw else []
     release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
     install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+    repo_package_dir = (os.environ.get("REPO_PACKAGE_DIR") or "").strip()
+    repo_config_only = (os.environ.get("REPO_CONFIG_ONLY") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
-    if not (os_profile and repo_url and release_type and install_prefix):
+    # In install-via-package mode the amdrocm-repo package supplies the repo URL;
+    # in config-only mode there is no install/verify, so INSTALL_PREFIX is not
+    # needed either.
+    if not (os_profile and release_type):
+        return None
+    if not repo_url and not repo_package_dir:
+        return None
+    if not install_prefix and not repo_config_only:
         return None
 
     argv = [
@@ -1661,13 +1961,17 @@ def _argv_from_ci_env() -> list[str] | None:
         test_type,
         "--os-profile",
         os_profile,
-        "--repo-url",
-        repo_url,
         "--release-type",
         release_type,
-        "--install-prefix",
-        install_prefix,
     ]
+    if repo_url:
+        argv.extend(["--repo-url", repo_url])
+    if install_prefix:
+        argv.extend(["--install-prefix", install_prefix])
+    if repo_package_dir:
+        argv.extend(["--repo-package-dir", repo_package_dir])
+    if repo_config_only:
+        argv.append("--repo-config-only")
     if gfx_arch:
         argv.extend(["--gfx-arch", *gfx_arch])
     rocm_version = (os.environ.get(ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION) or "").strip()
@@ -1688,11 +1992,14 @@ def test_native_linux_package_install() -> None:
         if os.environ.get("GITHUB_ACTIONS") == "true":
             pytest.fail(
                 "Missing required environment variables for native install test "
-                "(expected OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX; "
-                "optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; or for simulate: PACKAGES_DIR)."
+                "(expected OS_PROFILE, RELEASE_TYPE, plus REPO_URL and INSTALL_PREFIX "
+                "unless REPO_PACKAGE_DIR is set, and INSTALL_PREFIX is not needed with "
+                "REPO_CONFIG_ONLY; optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; "
+                "or for simulate: PACKAGES_DIR)."
             )
         pytest.skip(
-            "Set workflow env vars (OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX); "
+            "Set workflow env vars (OS_PROFILE, RELEASE_TYPE, plus REPO_URL/INSTALL_PREFIX "
+            "unless REPO_PACKAGE_DIR/REPO_CONFIG_ONLY is set); "
             "optional GFX_ARCH and NATIVE_LINUX_INSTALL_ROCM_VERSION."
         )
 
