@@ -6,10 +6,13 @@
 #   Integration-only (real apt/rpm/zypper, network, root): main() execution path after validation.
 
 import contextlib
+import functools
 import importlib.util
+import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1136,181 +1139,293 @@ def _running_as_root() -> bool:
     return hasattr(os, "geteuid") and os.geteuid() == 0
 
 
-# nobody/nogroup: present on essentially every Linux distro. Used to give an
-# entry genuine non-root ownership so the ownership rule is exercised for real.
-_NON_ROOT_UID = 65534
-_NON_ROOT_GID = 65534
+def _fake_stat(st_mode: int, *, st_uid: int, st_gid: int) -> MagicMock:
+    """Return a stat-result stand-in exposing the fields the scan reads."""
+    fake = MagicMock(spec=os.stat_result)
+    fake.st_mode = st_mode
+    fake.st_uid = st_uid
+    fake.st_gid = st_gid
+    return fake
+
+
+@functools.lru_cache(maxsize=1)
+def _userns_available() -> bool:
+    """True if unprivileged Linux user namespaces (``unshare -r``) work here.
+
+    The real-filesystem tests need a root-owned tree, which a normal user can
+    only fabricate by entering a user namespace that maps their uid -> 0. On
+    non-Linux hosts (no ``os.geteuid``) or where ``unshare`` is missing or
+    unprivileged userns are disabled, this returns False and the tests skip.
+    """
+    if not hasattr(os, "geteuid"):
+        return False
+    if shutil.which("unshare") is None:
+        return False
+    try:
+        proc = subprocess.run(
+            ["unshare", "-r", "true"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0
+
+
+# Worker script executed in a subprocess (under ``unshare -r`` when not already
+# root) so that files it creates appear root-owned. It builds a temp tree from a
+# JSON spec, loads the module-under-test by absolute path exactly as this test
+# file does, runs the real verify_installed_file_security() scan, and prints a
+# single ``RESULT=PASS`` / ``RESULT=FAIL`` sentinel line for the parent to
+# assert on. Kept as a string (rather than a temp .py) so it travels with the
+# test file and needs no on-disk companion.
+_REALFS_WORKER = r"""
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+
+def _build_entry(root: Path, entry: dict) -> None:
+    target = root / entry["path"]
+    kind = entry["type"]
+    if kind == "dir":
+        target.mkdir(parents=True, exist_ok=True)
+    elif kind == "file":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(entry.get("content", ""))
+    elif kind == "symlink":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(entry["link_target"], target)
+    else:
+        raise ValueError(f"unknown entry type: {kind}")
+
+
+def main() -> int:
+    spec = json.loads(Path(sys.argv[1]).read_text())
+    module_path = Path(spec["module_path"])
+    _spec = importlib.util.spec_from_file_location(
+        "native_linux_package_install_test", module_path
+    )
+    module = importlib.util.module_from_spec(_spec)
+    sys.modules["native_linux_package_install_test"] = module
+    _spec.loader.exec_module(module)
+
+    workdir = Path(tempfile.mkdtemp())
+    try:
+        real_prefix = workdir / "rocm-real"
+        real_prefix.mkdir()
+        os.chmod(real_prefix, 0o755)
+        # Pass 1: create structure with default modes.
+        for entry in spec["entries"]:
+            _build_entry(real_prefix, entry)
+        # Pass 2: apply explicit modes (symlink bits are ignored by the kernel).
+        for entry in spec["entries"]:
+            if entry["type"] == "symlink" or "mode" not in entry:
+                continue
+            os.chmod(real_prefix / entry["path"], entry["mode"])
+
+        if spec.get("symlinked_prefix"):
+            prefix = workdir / "rocm"
+            prefix.symlink_to(real_prefix, target_is_directory=True)
+        else:
+            prefix = real_prefix
+
+        tester = module.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=str(prefix),
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok = tester.verify_installed_file_security()
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    print("RESULT=PASS" if ok else "RESULT=FAIL")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+"""
 
 
 class VerifyInstalledFileSecurityRealFsTest(unittest.TestCase):
     """Real-filesystem tests for verify_installed_file_security().
 
-    These build actual directory trees on disk and run the real scan with no
-    os.walk / os.lstat mocking, so the assertions reflect the kernel's own view
-    of ownership and mode bits. Creating a genuinely root-owned tree and
-    chowning entries to a non-root uid both require root privileges, so each
-    test is skipped with a warning when the suite is not run as root.
+    The nine non-ownership cases build actual directory trees on disk and run
+    the real scan with no os.walk / os.lstat mocking, so the assertions reflect
+    the kernel's own view of ownership and mode bits. A root-owned tree is
+    required, so when not already root the tree building + scan run inside a
+    subprocess launched via ``unshare -r`` (which maps the current uid -> 0, so
+    created files appear root-owned). If unprivileged user namespaces are
+    unavailable (non-Linux, or ``unshare -r`` fails) these tests skip rather
+    than error.
+
+    The two ownership cases are intentionally MOCKED instead: a single-uid
+    ``unshare -r`` namespace maps only uid 0, so it cannot chown an entry to a
+    non-root uid (uid 65534 is unmapped and chown raises EINVAL), and the
+    newuidmap/uidmap helper is not available in this CI image. Asserting the
+    ownership rule therefore uses stubbed os.walk / os.lstat rather than real
+    files; it needs real root or a full subuid mapping to exercise for real.
     """
 
-    def setUp(self):
-        if not _running_as_root():
-            euid = os.geteuid() if hasattr(os, "geteuid") else "?"
-            raise RuntimeError(
-                "real-filesystem security tests must run as root "
-                f"(euid={euid}). Re-run as root (e.g. "
-                "`sudo -E python3 -m pytest <this file>`) to exercise the "
-                "actual install-tree scan against real files."
-            )
-        self._tmp = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self._tmp, ignore_errors=True)
+    def _run_scan(self, spec: dict) -> bool:
+        """Run the worker on *spec* and return its boolean scan result.
 
-    def _prefix(self, name: str = "rocm") -> Path:
-        """Create and return a root-owned prefix directory (mode 0755)."""
-        p = Path(self._tmp) / name
-        p.mkdir()
-        os.chmod(p, 0o755)
-        return p
-
-    def _check(self, prefix: Path) -> bool:
-        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-            repo_url="https://example.com",
-            os_profile="ubuntu2404",
-            install_prefix=str(prefix),
-        )
-        with _suppress_script_output():
-            return t.verify_installed_file_security()
-
-    def _chown_nonroot_or_skip(self, path: Path, *, follow_symlinks: bool = True):
-        """chown *path* to a non-root uid/gid, skipping if the env forbids it.
-
-        Real root (and CI) can assign any owner. A single-uid user namespace
-        (e.g. `unshare -r` without the uidmap helper) maps only uid 0, so
-        chowning to nobody fails with EINVAL/EPERM; treat that as an
-        environment limitation and skip rather than report a false failure.
+        Runs directly under ``unshare -r`` when not already root; skips the
+        test if unprivileged user namespaces are unavailable.
         """
-        try:
-            os.chown(
-                path, _NON_ROOT_UID, _NON_ROOT_GID, follow_symlinks=follow_symlinks
-            )
-        except OSError as e:
+        spec = {**spec, "module_path": str(_module_path)}
+        if not _running_as_root() and not _userns_available():
             self.skipTest(
-                f"cannot assign non-root ownership in this environment ({e}); "
-                "requires real root or a full subuid mapping"
+                "unprivileged user namespaces unavailable (`unshare -r` does "
+                "not work here); cannot fabricate a root-owned tree without root"
             )
+        with tempfile.TemporaryDirectory() as tmp:
+            spec_path = Path(tmp) / "spec.json"
+            spec_path.write_text(json.dumps(spec))
+            cmd = [sys.executable, "-c", _REALFS_WORKER, str(spec_path)]
+            if not _running_as_root():
+                cmd = ["unshare", "-r", *cmd]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        self.assertEqual(
+            proc.returncode,
+            0,
+            msg=f"worker failed (rc={proc.returncode}):\n{proc.stdout}\n{proc.stderr}",
+        )
+        results = [
+            line for line in proc.stdout.splitlines() if line.startswith("RESULT=")
+        ]
+        self.assertEqual(
+            len(results),
+            1,
+            msg=f"expected one RESULT= line, got {results!r} in:\n{proc.stdout}",
+        )
+        return results[0] == "RESULT=PASS"
+
+    def _assert_scan(self, entries: list, expected: bool, *, symlinked_prefix=False):
+        result = self._run_scan(
+            {"entries": entries, "symlinked_prefix": symlinked_prefix}
+        )
+        self.assertEqual(result, expected)
 
     def test_clean_root_owned_tree_passes(self):
         # A root-owned tree with 0755 dirs and 0644/0755 files passes.
-        prefix = self._prefix()
-        bindir = prefix / "bin"
-        bindir.mkdir()
-        os.chmod(bindir, 0o755)
-        tool = bindir / "rocminfo"
-        tool.write_text("#!/bin/sh\n")
-        os.chmod(tool, 0o755)
-        doc = prefix / "readme.txt"
-        doc.write_text("hi")
-        os.chmod(doc, 0o644)
-        self.assertTrue(self._check(prefix))
+        self._assert_scan(
+            [
+                {"type": "dir", "path": "bin", "mode": 0o755},
+                {
+                    "type": "file",
+                    "path": "bin/rocminfo",
+                    "mode": 0o755,
+                    "content": "#!/bin/sh\n",
+                },
+                {"type": "file", "path": "readme.txt", "mode": 0o644, "content": "hi"},
+            ],
+            True,
+        )
 
     def test_clean_tree_passes_with_symlinked_prefix(self):
         # The prefix itself is commonly a symlink (/opt/rocm/core ->
         # /opt/rocm/core-X.Y); os.walk follows that top-level link to scan the
         # real tree, which is clean here.
-        real = Path(self._tmp) / "rocm-1.2.3"
-        real.mkdir()
-        os.chmod(real, 0o755)
-        bindir = real / "bin"
-        bindir.mkdir()
-        os.chmod(bindir, 0o755)
-        tool = bindir / "tool"
-        tool.write_text("")
-        os.chmod(tool, 0o755)
-        link = Path(self._tmp) / "rocm"
-        link.symlink_to(real, target_is_directory=True)
-        self.assertTrue(self._check(link))
-
-    def test_non_root_owned_file_flagged(self):
-        # A file owned by a non-root uid/gid is flagged.
-        prefix = self._prefix()
-        f = prefix / "tool"
-        f.write_text("")
-        os.chmod(f, 0o644)
-        self._chown_nonroot_or_skip(f)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan(
+            [
+                {"type": "dir", "path": "bin", "mode": 0o755},
+                {"type": "file", "path": "bin/tool", "mode": 0o755},
+            ],
+            True,
+            symlinked_prefix=True,
+        )
 
     def test_group_writable_dir_flagged(self):
         # A root-owned but group-writable directory (mode 0775) is flagged.
-        prefix = self._prefix()
-        d = prefix / "bin"
-        d.mkdir()
-        os.chmod(d, 0o775)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan([{"type": "dir", "path": "bin", "mode": 0o775}], False)
 
     def test_world_writable_dir_flagged(self):
         # A root-owned but world-writable directory (mode 0777) is flagged.
-        prefix = self._prefix()
-        d = prefix / "bin"
-        d.mkdir()
-        os.chmod(d, 0o777)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan([{"type": "dir", "path": "bin", "mode": 0o777}], False)
 
     def test_sticky_world_writable_dir_flagged(self):
         # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
         # is flagged rather than exempted.
-        prefix = self._prefix()
-        d = prefix / "tmp"
-        d.mkdir()
-        os.chmod(d, 0o1777)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan([{"type": "dir", "path": "tmp", "mode": 0o1777}], False)
 
     def test_setuid_file_flagged(self):
         # A root-owned setuid regular file (04755) is a privilege-escalation
         # surface and is flagged.
-        prefix = self._prefix()
-        f = prefix / "setuid-tool"
-        f.write_text("")
-        os.chmod(f, 0o4755)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan(
+            [{"type": "file", "path": "setuid-tool", "mode": 0o4755}], False
+        )
 
     def test_setgid_file_flagged(self):
         # A root-owned setgid *regular file* (02755) is flagged.
-        prefix = self._prefix()
-        f = prefix / "setgid-tool"
-        f.write_text("")
-        os.chmod(f, 0o2755)
-        self.assertFalse(self._check(prefix))
+        self._assert_scan(
+            [{"type": "file", "path": "setgid-tool", "mode": 0o2755}], False
+        )
 
     def test_setgid_directory_allowed(self):
         # A root-owned setgid *directory* (drwxr-sr-x, 02755) is a benign
         # group-inheritance pattern and must NOT be flagged (the common ROCm
         # install-tree case; 2287 such dirs surfaced in CI).
-        prefix = self._prefix()
-        d = prefix / "libexec"
-        d.mkdir()
-        os.chmod(d, 0o2755)
-        self.assertTrue(self._check(prefix))
+        self._assert_scan([{"type": "dir", "path": "libexec", "mode": 0o2755}], True)
 
     def test_symlink_permission_bits_ignored(self):
         # A symlink's own bits are lrwxrwxrwx but are ignored by the kernel; a
         # root-owned symlink in an otherwise clean tree is not flagged.
-        prefix = self._prefix()
-        target = prefix / "real"
-        target.write_text("")
-        os.chmod(target, 0o644)
-        (prefix / "link").symlink_to(target)
-        self.assertTrue(self._check(prefix))
+        self._assert_scan(
+            [
+                {"type": "file", "path": "real", "mode": 0o644},
+                {"type": "symlink", "path": "link", "link_target": "real"},
+            ],
+            True,
+        )
 
-    def test_non_root_owned_symlink_flagged(self):
+    # ---- Ownership cases: MOCKED, not real-filesystem. --------------------
+    # A single-uid `unshare -r` namespace maps only uid 0, so files created in
+    # it are always root-owned and cannot be chowned to a non-root uid (uid
+    # 65534 is unmapped -> chown raises EINVAL); the newuidmap/uidmap helper
+    # that would provide a full subuid mapping is not installed here. So the
+    # ownership rule cannot be exercised against real files without real root.
+    # We instead mock os.walk / os.lstat to present a non-root-owned entry and
+    # assert the scan flags it.
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_non_root_owned_file_flagged(self, mock_walk, mock_lstat):
+        # A regular file owned by a non-root uid/gid is flagged (returns False).
+        mock_walk.return_value = [("/opt/rocm/core", [], ["tool"])]
+        mock_lstat.return_value = _fake_stat(
+            stat.S_IFREG | 0o644, st_uid=1000, st_gid=1000
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_non_root_owned_symlink_flagged(self, mock_walk, mock_lstat):
         # Ownership *is* meaningful for a symlink, so a non-root-owned one is
-        # flagged even though its mode bits are ignored.
-        prefix = self._prefix()
-        target = prefix / "real"
-        target.write_text("")
-        os.chmod(target, 0o644)
-        link = prefix / "link"
-        link.symlink_to(target)
-        self._chown_nonroot_or_skip(link, follow_symlinks=False)
-        self.assertFalse(self._check(prefix))
+        # flagged even though its mode bits are ignored (returns False).
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = _fake_stat(
+            stat.S_IFLNK | 0o777, st_uid=1000, st_gid=1000
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
 
 
 class SetupGpgKeyTest(unittest.TestCase):
