@@ -1,19 +1,17 @@
 # ocl-clr
 [components.lib."core/ocl-clr/stage"]
-exclude = [
-  "bin/hsa-runtime64.dll",
-]
-include = [
-  "etc/**",
-]
 # ocltst libs/dlls belong to ocl_test package
 exclude = [
+  "bin/hsa-runtime64.dll",
   "lib/*oclgl*",
   "lib/*oclperf*",
   "lib/*oclruntime*",
   "bin/*oclgl*",
   "bin/*oclperf*",
   "bin/*oclruntime*",
+]
+include = [
+  "etc/**",
 ]
 [components.run."core/ocl-clr/stage"]
 include = [
