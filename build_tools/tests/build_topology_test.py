@@ -11,16 +11,20 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from configure_stage import get_stage_features
 from _therock_utils.build_topology import (
     BuildStage,
     ArtifactGroup,
     Artifact,
     BuildTopology,
+    get_topology,
 )
+from topology_to_cmake import generate_feature_declarations
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -265,6 +269,113 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(hip.type, "target-specific")
         self.assertEqual(hip.artifact_deps, ["rocm-core"])
         self.assertEqual(hip.platform, "linux")
+
+    def test_parse_platform_disables_guarded_by_flags(self):
+        """Test parsing platform disables guarded by build flags."""
+        self.write_topology(
+            """
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["core-runtime"]
+
+        self.assertEqual(
+            artifact.disable_platforms_if_flags_not_set,
+            {"windows": "HSA_WINDOWS_SHARED_RUNTIME"},
+        )
+        self.assertTrue(topology.is_artifact_disabled_on_platform(artifact, "windows"))
+        self.assertFalse(
+            topology.is_artifact_disabled_on_platform(
+                artifact,
+                "windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            )
+        )
+        self.assertFalse(topology.is_artifact_disabled_on_platform(artifact, "linux"))
+
+    def test_stage_features_skip_platform_disables_guarded_by_flags(self):
+        """Test stage features skip artifacts disabled by unset flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertNotIn(
+            "CORE_RUNTIME",
+            get_stage_features(topology, "runtime", platform_name="windows"),
+        )
+        self.assertIn(
+            "CORE_RUNTIME",
+            get_stage_features(
+                topology,
+                "runtime",
+                platform_name="windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            ),
+        )
+
+    def test_generates_conditional_disabled_platform_feature(self):
+        """Test generated CMake for platform disables guarded by flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("if(NOT THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)", cmake)
+        self.assertIn(
+            "list(APPEND _THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS windows)",
+            cmake,
+        )
+        self.assertIn("else()", cmake)
+        self.assertIn(
+            "DISABLE_PLATFORMS ${_THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS}",
+            cmake,
+        )
+        self.assertIn(
+            "CORE_RUNTIME can be built on ${CMAKE_SYSTEM_NAME} only with "
+            "-DTHEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME=ON",
+            cmake,
+        )
 
     def test_get_artifacts_in_group(self):
         """Test getting artifacts belonging to a group."""
@@ -892,6 +1003,19 @@ class BuildTopologyTest(unittest.TestCase):
         # Foundation stage should need nothing
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
+
+
+class RealTopologyTest(unittest.TestCase):
+    """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
+
+    def test_hipkernelprovider_is_split_per_arch(self):
+        # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
+        # so hipkernelprovider must stay target-specific and kpack-split; reverting
+        # either drops the per-arch bundles from the device artifacts.
+        topology = get_topology()
+        hkp = topology.artifacts["hipkernelprovider"]
+        self.assertEqual(hkp.type, "target-specific")
+        self.assertIn("hipkernelprovider", hkp.split_databases)
 
 
 if __name__ == "__main__":

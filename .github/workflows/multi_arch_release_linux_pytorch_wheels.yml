@@ -119,8 +119,19 @@ jobs:
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
+      - name: "Quartz - started - release PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -150,6 +161,7 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       python_version: ${{ matrix.python_version }}
@@ -165,3 +177,21 @@ jobs:
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [setup_matrix, build_pytorch_wheels]
+    name: "Quartz - completed - release PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

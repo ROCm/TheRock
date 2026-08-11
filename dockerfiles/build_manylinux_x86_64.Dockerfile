@@ -21,9 +21,6 @@ ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.46.2 && \
 pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
-######## Repo ########
-RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
-
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./

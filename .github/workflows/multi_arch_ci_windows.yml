@@ -52,7 +52,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: azure-windows-scale-rocm
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
@@ -61,13 +61,13 @@ jobs:
       id-token: write
     steps:
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -86,6 +86,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
@@ -119,6 +120,7 @@ jobs:
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -135,6 +137,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
@@ -152,8 +155,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -177,6 +181,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -192,7 +197,6 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
@@ -229,6 +233,7 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

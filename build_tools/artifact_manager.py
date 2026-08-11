@@ -69,10 +69,41 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
+
+
+def _get_base_arch(target: str) -> str:
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
+
+    Note: This strips everything after the first colon. Any suffix (not just
+    xnack) will be removed, e.g., 'gfx942:foo' -> 'gfx942'.
+    """
+    if not target:
+        return ""
+    base = target.split(":")[0]
+    return base if base else target
+
+
+def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
+    """Match if the artifact's base arch equals any requested target's base arch.
+
+    Uses base-arch matching: both the artifact target and requested targets are
+    stripped to their base arch before comparison. This means requesting 'gfx942'
+    will match 'gfx942', 'gfx942:xnack+', 'gfx942:xnack-', or any 'gfx942:*' variant.
+
+    Known limitation: All colon-suffixed variants of the same base arch will match.
+    For example, requesting 'gfx942' matches 'gfx942:xnack+', 'gfx942:xnack-',
+    'gfx942:abc', etc. This is intentional to ensure all relevant artifacts are
+    fetched for a given GPU architecture.
+    """
+    if not artifact_target:
+        return False
+    requested_bases = {_get_base_arch(t) for t in requested_targets}
+    return _get_base_arch(artifact_target) in requested_bases
 
 
 def log(msg: str):
@@ -143,22 +174,44 @@ def find_available_artifacts(
 ) -> list[str]:
     """Find which artifacts exist in the available set.
 
-    Iterates artifact_names × target_families × components × extensions,
-    returning filenames that are present in `available`. Prefers .tar.zst
-    over .tar.xz when both exist.
+    Iterates available artifacts and filters by artifact_names, target_families,
+    and components. Uses base-arch matching: requesting a base arch (e.g., "gfx942")
+    will also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
+
+    Prefers .tar.zst over .tar.xz when both exist, because zstd offers faster
+    decompression and better compression ratios for our artifact workloads.
     """
     excluded_components = excluded_components or set()
+    targets_to_match = set(target_families)
+
+    # Use structured ArtifactName parsing for reliable matching (like fetch_artifacts.py)
     matched = []
-    for artifact_name in sorted(artifact_names):
-        for tf in target_families:
-            for comp in ARTIFACT_COMPONENTS:
-                if comp in excluded_components:
-                    continue
-                for ext in ARTIFACT_EXTENSIONS:
-                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
-                    if filename in available:
-                        matched.append(filename)
-                        break  # Found this artifact, don't check other extensions
+    seen = set()
+
+    # Sort .tar.zst before .tar.xz so dedup prefers zstd (faster decompression)
+    def _sort_key(f: str) -> tuple:
+        base = f.rsplit(".tar", 1)[0]
+        priority = 0 if f.endswith(".tar.zst") else 1
+        return (base, priority)
+
+    for filename in sorted(available, key=_sort_key):
+        an = ArtifactName.from_filename(filename)
+        if not an:
+            continue
+        if an.name not in artifact_names:
+            continue
+        if an.component in excluded_components:
+            continue
+        if not _matches_target(an.target_family, targets_to_match):
+            continue
+
+        # Dedupe: prefer .tar.zst over .tar.xz for same artifact
+        key = (an.name, an.component, an.target_family)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.append(filename)
+
     return matched
 
 
@@ -549,11 +602,46 @@ class UploadRequest:
     backend: ArtifactBackend
 
 
+def _format_bytes(size: Optional[int]) -> str:
+    return "unknown" if size is None else f"{size} bytes"
+
+
+def _directory_file_count_and_size_sum(path: Path) -> Optional[tuple[int, int]]:
+    try:
+        count = 0
+        total = 0
+        for child in path.rglob("*"):
+            if child.is_file():
+                count += 1
+                total += child.stat().st_size
+        return count, total
+    except OSError:
+        return None
+
+
+def _hash_file_path(archive_path: Path) -> Path:
+    return Path(f"{archive_path}.sha256sum")
+
+
+def _read_sha256sum_value(hash_path: Path) -> str:
+    """Read the digest from a hash sidecar.
+
+    Existing files in tests and logs use both plain digest and
+    ``sha256sum``-style ``digest filename`` formats. The digest is always the
+    first whitespace-delimited token.
+    """
+    content = hash_path.read_text().strip()
+    if not content:
+        raise ValueError(f"Empty sha256sum file: {hash_path}")
+    return content.split()[0]
+
+
 def compress_artifact(request: CompressRequest) -> Optional[Path]:
     """Compress a single artifact directory using fileset_tool.py artifact-archive."""
     try:
         log(f"  ++ Compressing {request.source_dir.name}")
         request.archive_path.parent.mkdir(parents=True, exist_ok=True)
+        hash_path = _hash_file_path(request.archive_path)
 
         # Use fileset_tool.py artifact-archive for proper archive creation
         import subprocess
@@ -575,7 +663,7 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
         cmd.extend(
             [
                 "--hash-file",
-                str(request.archive_path) + ".sha256sum",
+                str(hash_path),
                 str(request.source_dir),
             ]
         )
@@ -586,6 +674,21 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
                 f"fileset_tool.py artifact-archive failed (returncode={result.returncode}): {result.stderr}"
             )
 
+        sha256 = _read_sha256sum_value(hash_path)
+        file_count_and_size = _directory_file_count_and_size_sum(request.source_dir)
+        if file_count_and_size is None:
+            file_count = "unknown"
+            uncompressed_size = None
+        else:
+            file_count, uncompressed_size = file_count_and_size
+        log(
+            f"  ++ Compressed {request.source_dir.name} "
+            f"(files={file_count}, "
+            f"uncompressed_size={_format_bytes(uncompressed_size)}) "
+            f"-> {request.archive_path.name} "
+            f"(compressed_size={_format_bytes(request.archive_path.stat().st_size)}, "
+            f"sha256={sha256})"
+        )
         return request.archive_path
     except Exception as e:
         log(f"  !! Failed to compress {request.source_dir.name}: {e}")
@@ -599,14 +702,30 @@ def upload_artifact(request: UploadRequest) -> bool:
 
     for attempt in range(MAX_RETRIES):
         try:
-            log(f"  ++ Uploading {request.artifact_key}")
+            # Upload the artifact itself.
+            sha_path = _hash_file_path(request.source_path)
+            sha256 = calculate_hash(request.source_path, "sha256").hexdigest()
+            compressed_size = request.source_path.stat().st_size
+            log(
+                f"  ++ Uploading {request.artifact_key} "
+                f"(compressed_size={_format_bytes(compressed_size)}, "
+                f"sha256={sha256})"
+            )
             request.backend.upload_artifact(request.source_path, request.artifact_key)
 
-            # Also upload sha256sum if it exists
-            sha_path = request.source_path.with_suffix(
-                request.source_path.suffix + ".sha256sum"
-            )
+            # Upload the artifact's sha256sum file.
             if sha_path.exists():
+                sha256sum_sha256 = _read_sha256sum_value(sha_path)
+                if sha256sum_sha256 != sha256:
+                    log(
+                        f"  !! WARNING: sha256 mismatch for {request.artifact_key}: "
+                        f"computed_sha256={sha256}, sha256sum_sha256={sha256sum_sha256}"
+                    )
+                log(
+                    f"  ++ Uploading {request.artifact_key}.sha256sum "
+                    f"(artifact_sha256={sha256sum_sha256}, "
+                    f"size={_format_bytes(sha_path.stat().st_size)})"
+                )
                 request.backend.upload_artifact(
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
@@ -825,7 +944,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    platform: str,
+    source_run_id: str,
+    source_repository: Optional[str],
+    local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -845,7 +967,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -882,8 +1007,9 @@ def do_copy(args: argparse.Namespace):
 
     # Create source and dest backends
     source_backend = _create_source_backend(
-        source_run_id=args.source_run_id,
         platform=args.platform,
+        source_run_id=args.source_run_id,
+        source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
@@ -1210,6 +1336,13 @@ def main(argv: Optional[List[str]] = None):
         type=str,
         required=True,
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+    )
+    copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+        help="GitHub repository for source-run-id in 'owner/repo' format "
+        "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
     )
     copy_parser.add_argument(
         "--stage",

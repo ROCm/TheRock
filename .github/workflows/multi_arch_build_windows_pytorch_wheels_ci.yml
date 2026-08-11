@@ -29,7 +29,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.10"
+        default: "release/2.11"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -60,6 +60,10 @@ on:
         description: "'true' if this is a kpack-split flat build."
         type: string
         default: "false"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "azure-windows-scale-rocm"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -80,7 +84,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.10"
+        default: "release/2.11"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -102,12 +106,15 @@ on:
           - ccache
         default: sccache
 
+permissions:
+  contents: read
+
 run-name: Build Windows PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
 jobs:
   build_pytorch_wheels:
     name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
       id-token: write
       contents: read
@@ -130,7 +137,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -140,7 +147,7 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -220,7 +227,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-ci
@@ -271,7 +278,6 @@ jobs:
             --index-url="${{ inputs.rocm_package_index_url }}" ^
             --find-links="${{ inputs.rocm_package_find_links_url }}" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
-            --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^

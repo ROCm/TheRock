@@ -13,7 +13,8 @@
 # 7. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 8. dctools-core (generic) - RDC (parallel to math-libs)
 # 9. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 10. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 10. cv-libs (generic) - rpp
+# 11. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -66,6 +67,22 @@ permissions:
 
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - build ROCm"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
@@ -297,6 +314,30 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: cv-libs (generic)
+  # ==========================================================================
+  cv-libs:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: cv-libs
+      stage_display_name: "Stage - CV Libs"
+      timeout_minutes: 180  # 3 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: media-libs (generic)
   # ==========================================================================
   media-libs:
@@ -319,3 +360,21 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [compiler-runtime, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
+    name: "Quartz - completed - build ROCm"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -69,7 +69,6 @@ if(_enable_rocRoller)
     BUILD_DEPS
       mxDataGenerator
       rocm-cmake
-      therock-boost
       therock-catch2
       therock-fmt
       therock-googletest
@@ -82,8 +81,6 @@ if(_enable_rocRoller)
       therock-host-blas
       hip-clr
       ${optional_profiler_deps}
-    TEST_SUBPROJECTS
-      hipBLASLt
   )
   therock_cmake_subproject_glob_c_sources(rocRoller
   SUBDIRS
@@ -93,6 +90,40 @@ if(_enable_rocRoller)
   therock_cmake_subproject_activate(rocRoller)
   list(APPEND _blas_subproject_names rocRoller)
 endif()
+
+
+##############################################################################
+# origami
+##############################################################################
+
+therock_cmake_subproject_declare(origami
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/origami"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DHIP_PLATFORM=amd
+    -DORIGAMI_BUILD_SHARED_LIBS=ON
+    -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    # Python bindings (and their nanobind/tsl-robin-map deps) are built out of
+    # TheRock; land the C++ library only. Re-enable alongside a nanobind
+    # provider once bindings have a home (mirrors the hipDNN direction, #6425).
+    -DORIGAMI_ENABLE_PYTHON=OFF
+    -DORIGAMI_ENABLE_FETCH=OFF
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-catch2
+  RUNTIME_DEPS
+    hip-clr
+)
+therock_cmake_subproject_glob_c_sources(origami
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(origami)
+list(APPEND _blas_subproject_names origami)
 
 
 ##############################################################################
@@ -114,7 +145,6 @@ set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
     mxDataGenerator
-    therock-boost
     therock-fmt
     therock-yaml-cpp
     therock-spdlog
@@ -154,13 +184,11 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_build_deps}
   RUNTIME_DEPS
     hip-clr
+    origami
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
-  TEST_SUBPROJECTS
-    hipSPARSELt
-    MIOpen
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
   SUBDIRS
@@ -236,9 +264,6 @@ therock_cmake_subproject_declare(rocBLAS
     hipBLASLt
     ${rocBLAS_optional_runtime_deps}
     ${optional_profiler_deps}
-  TEST_SUBPROJECTS
-    hipBLAS
-    rocSOLVER
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -279,10 +304,6 @@ if(THEROCK_ENABLE_SPARSE)
     RUNTIME_DEPS
       hip-clr
       ${optional_profiler_deps}
-    TEST_SUBPROJECTS
-      hipSPARSE
-      rocSOLVER
-      hipSOLVER
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS
@@ -315,7 +336,6 @@ if(THEROCK_ENABLE_SPARSE)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipSPARSE
     SUBDIRS
@@ -356,16 +376,18 @@ if(THEROCK_ENABLE_SPARSE)
         amd-hip
       BUILD_DEPS
         rocm-cmake
+        hipBLAS-common
         hipSPARSE
         rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
+        hipBLASLt
+        origami
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
-      TEST_SUBPROJECTS
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
       SUBDIRS
@@ -410,9 +432,6 @@ if(THEROCK_ENABLE_SOLVER)
         hip-clr
         rocBLAS
         ${rocSOLVER_optional_deps}
-      TEST_SUBPROJECTS
-        hipSOLVER
-        hipBLAS
   )
   therock_cmake_subproject_glob_c_sources(rocSOLVER
       SUBDIRS
@@ -465,7 +484,6 @@ if(THEROCK_ENABLE_SOLVER)
         rocSOLVER
         rocSPARSE
         ${hipSOLVER_optional_deps}
-      TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER
       SUBDIRS
@@ -514,7 +532,6 @@ therock_cmake_subproject_declare(hipBLAS
     hip-clr
     rocBLAS
     ${hipBLAS_optional_deps}
-  TEST_SUBPROJECTS
 )
 therock_cmake_subproject_glob_c_sources(hipBLAS
 SUBDIRS
