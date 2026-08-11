@@ -25,8 +25,10 @@
       "hipcc",
       "hipify",
       "hipthreads",
+      "kfdtest",
       "libhipcxx",
       "ocl-clr",
+      "profiler-hub",
       "rdc",
       "rocgdb",
       "rocminfo",
@@ -213,6 +215,9 @@
   "hipthreads": {
     "consumers": []
   },
+  "kfdtest": {
+    "consumers": []
+  },
   "libhipcxx": {
     "consumers": [
       "hipthreads"
@@ -251,6 +256,11 @@
     "consumers": [
       "hipblaslt",
       "hipsparselt"
+    ]
+  },
+  "profiler-hub": {
+    "consumers": [
+      "rocprofiler-systems"
     ]
   },
   "rccl": {
@@ -421,6 +431,7 @@
       "hipblaslt",
       "hipsparselt",
       "miopen",
+      "profiler-hub",
       "rccl",
       "rdc",
       "rocblas",
@@ -450,6 +461,7 @@
     "consumers": [
       "aqlprofile",
       "hip-clr",
+      "kfdtest",
       "ocl-clr",
       "rdc",
       "rocminfo",
@@ -590,6 +602,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rccl",
       "rocprofiler-systems",
       "rocroller",
@@ -638,6 +651,7 @@
       "miopen",
       "miopenprovider",
       "mxdatagenerator",
+      "profiler-hub",
       "rccl",
       "rocalution",
       "rocblas",
@@ -698,6 +712,7 @@
     "consumers": [
       "amd-llvm",
       "amdsmi",
+      "kfdtest",
       "rocdecode",
       "rocjitsu",
       "rocjpeg",
@@ -764,6 +779,7 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "profiler-hub",
       "therock-frugally-deep"
     ]
   },
@@ -771,6 +787,7 @@
     "consumers": [
       "amd-llvm",
       "hip-tests",
+      "kfdtest",
       "rocr-runtime",
       "rocrtst",
       "rocshmem",
@@ -788,6 +805,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rocprofiler-systems",
       "rocroller"
     ]
@@ -795,6 +813,7 @@
   "therock-sqlite3": {
     "consumers": [
       "miopen",
+      "profiler-hub",
       "rocprofiler-compute",
       "rocprofiler-sdk",
       "rocprofiler-systems",
@@ -814,6 +833,7 @@
   "therock-yaml-cpp": {
     "consumers": [
       "hipblaslt",
+      "kfdtest",
       "rocprofiler-sdk",
       "rocroller",
       "rocrtst"
@@ -822,6 +842,7 @@
   "therock-zlib": {
     "consumers": [
       "amd-llvm",
+      "kfdtest",
       "rdc",
       "rocgdb",
       "rocr-runtime",
@@ -833,6 +854,7 @@
     "consumers": [
       "amd-comgr",
       "amd-llvm",
+      "kfdtest",
       "rocgdb",
       "rocm-kpack",
       "rocr-runtime",
