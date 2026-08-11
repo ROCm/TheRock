@@ -58,23 +58,24 @@ class BuildTestMatrixTest(unittest.TestCase):
             target=target, platform=platform, scope=scope
         )
 
-    def test_short_scope_runs_only_the_single_accelerator_subset(self):
+    def test_short_scope_runs_only_the_single_gpu_job(self):
+        # On one GPU the suite is the single-accelerator tests.
         matrix = self.matrix(scope="short")
 
-        self.assertEqual(subsets(matrix), ["single"])
-        self.assertEqual(runner_for(matrix, "single"), GFX94X_SINGLE_GPU)
+        self.assertEqual(subsets(matrix), ["all"])
+        self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
 
     def test_full_scope_adds_the_multi_accelerator_subset(self):
         matrix = self.matrix(scope="full")
 
-        self.assertEqual(subsets(matrix), ["single", "multi"])
-        self.assertEqual(runner_for(matrix, "single"), GFX94X_SINGLE_GPU)
+        self.assertEqual(subsets(matrix), ["all", "multi"])
+        self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
         self.assertEqual(runner_for(matrix, "multi"), GFX94X_MULTI_GPU)
 
     def test_the_outer_family_key_resolves_too(self):
         matrix = self.matrix(target="gfx94x", scope="full")
 
-        self.assertEqual(runner_for(matrix, "single"), GFX94X_SINGLE_GPU)
+        self.assertEqual(runner_for(matrix, "all"), GFX94X_SINGLE_GPU)
         self.assertEqual(runner_for(matrix, "multi"), GFX94X_MULTI_GPU)
 
     def test_a_family_without_a_multi_gpu_runner_skips_that_subset(self):
@@ -82,8 +83,8 @@ class BuildTestMatrixTest(unittest.TestCase):
         # of them while reporting a pass.
         matrix = self.matrix(target="gfx1151", platform="windows", scope="full")
 
-        self.assertEqual(subsets(matrix), ["single"])
-        self.assertEqual(runner_for(matrix, "single"), "windows-gfx1151-gpu-rocm")
+        self.assertEqual(subsets(matrix), ["all"])
+        self.assertEqual(runner_for(matrix, "all"), "windows-gfx1151-gpu-rocm")
 
     def test_an_unknown_family_is_an_error(self):
         with self.assertRaises(ValueError):
@@ -117,7 +118,7 @@ class OutputsTest(unittest.TestCase):
             json.loads(outputs["matrix"]),
             {
                 "include": [
-                    {"test_subset": "single", "test_runs_on": GFX94X_SINGLE_GPU},
+                    {"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU},
                     {"test_subset": "multi", "test_runs_on": GFX94X_MULTI_GPU},
                 ]
             },
@@ -128,7 +129,7 @@ class OutputsTest(unittest.TestCase):
 
         self.assertEqual(
             json.loads(outputs["matrix"]),
-            {"include": [{"test_subset": "single", "test_runs_on": GFX94X_SINGLE_GPU}]},
+            {"include": [{"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU}]},
         )
 
     def test_an_unknown_release_type_is_rejected(self):

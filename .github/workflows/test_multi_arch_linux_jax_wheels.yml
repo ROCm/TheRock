@@ -64,8 +64,8 @@ on:
         type: string
       test_subset:
         description: >-
-          Accelerator subset to run: "all", "single" or "multi". "multi" needs
-          test_runs_on to be a multi-GPU runner.
+          Accelerator subset to run: "all", or "multi" for the multi-accelerator
+          tests alone, which needs test_runs_on to be a multi-GPU runner.
         required: false
         type: string
         default: "all"
@@ -131,8 +131,8 @@ on:
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       test_subset:
         description: >-
-          Accelerator subset to run: "all", "single" or "multi". "multi" needs
-          test_runs_on to be a multi-GPU runner.
+          Accelerator subset to run: "all", or "multi" for the multi-accelerator
+          tests alone, which needs test_runs_on to be a multi-GPU runner.
         type: string
         default: "all"
 permissions:

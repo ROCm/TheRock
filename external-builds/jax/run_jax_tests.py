@@ -4,18 +4,19 @@
 
 """Runs the JAX test suite against installed JAX ROCm wheels.
 
-The suite script in the ROCm/jax checkout (ci/run_pytest_rocm.sh) stays the source
-of truth for how the tests run. This adds only what is ours:
+The suite scripts in the ROCm/jax checkout stay the source of truth for how the
+tests run: ci/run_pytest_rocm.sh for a whole run, and ci/run_pytest_rocm_multi.sh
+for the multi-accelerator subset on its own. This adds only what is ours:
 
   * the ROCm runtime workarounds this repository needs;
   * the known-bad tests from skip_tests/, as a pytest -k expression;
   * two layers of retry, described under "Retries" below;
   * holding the run to the CPUs the pod was given, described under "Resources".
 
-Nothing the suite script decides is repeated here. Its environment is read back
-out of ci/utilities/rocm_test_env.sh, which the suite sources, or out of the
-marked section of the suite script in a checkout from before that file existed,
-so a version that changes its allocator or its XLA flags, including behind a
+Nothing the suite decides is repeated here. Its environment is read back out of
+ci/utilities/rocm_test_env.sh, which both scripts source, or out of the marked
+section of the suite script in a checkout from before that file existed, so a
+version that changes its allocator or its XLA flags, including behind a
 conditional, needs no change in this file. Reading it is required rather than
 best-effort: the retry pass decides the result, so running it under a different
 environment than the suite would make that verdict meaningless. A checkout that
@@ -91,6 +92,10 @@ JAX_REF_PREFIX = "rocm-jaxlib-v"
 # from.
 RELATIVE_SUITE_SCRIPT = Path("ci") / "run_pytest_rocm.sh"
 
+# The multi-accelerator tests on their own, which is the only subset that needs
+# more than one GPU. Absent from a jax ref older than the split.
+RELATIVE_MULTI_SUITE_SCRIPT = Path("ci") / "run_pytest_rocm_multi.sh"
+
 # Sourced by the suite script for the JAXCI_* defaults the section below reads,
 # and safe to source here too: it only assigns variables.
 RELATIVE_SUITE_ENV_FILE = Path("ci") / "envs" / "default.env"
@@ -105,28 +110,33 @@ REPORT_GLOB = "logs/pytest_results*.json"
 PYTEST_EXIT_ALL_PASSED = 0
 PYTEST_EXIT_TESTS_FAILED = 1
 
-# What the suite script sources for its environment: exports, echoes and device
-# queries, and nothing that installs or tests. Evaluating it is how the
+# What both suite scripts source for their environment: exports, echoes and
+# device queries, and nothing that installs or tests. Evaluating it is how the
 # per-version environment reaches the retry pass, which has to match the run it
-# is checking. Sourcing the suite script itself would run the tests, and copying
+# is checking. Sourcing a suite script itself would run the tests, and copying
 # its values here would be a second source of truth.
 RELATIVE_SUITE_ENV_SCRIPT = Path("ci") / "utilities" / "rocm_test_env.sh"
 
 # Where that environment lived before it moved into the file above, as a section
-# of the suite script, with the installs above it and the test run below it.
+# of the one suite script there was, with the installs above it and the test run
+# below it.
 ENV_SECTION_START = "# Set up the generic test environment variables"
 ENV_SECTION_END = "# Run tests"
 
-# The section exports its own scratch variables, lowercase by convention, next to
-# the configuration worth keeping. The xdist worker count is for the parallel run
-# and would contradict the serial retry.
+# The environment carries the suite's own scratch variables, lowercase by
+# convention, next to the configuration worth keeping. The xdist worker count is
+# for the parallel run and would contradict the serial retry.
 SUITE_ENV_EXCLUDES = ["JAX_ENABLE_ROCM_XDIST"]
 
-# Picks which of the suite script's two pytest invocations run, so the subset that
-# needs one GPU and the subset that needs several can go to different runners.
-SUITE_SUBSET_VAR = "JAXCI_ROCM_TEST_SUBSET"
-SUITE_SUBSET_ALL = "all"
-SUITE_SUBSETS = [SUITE_SUBSET_ALL, "single", "multi"]
+# Which suite script a run invokes, so that the subset needing one GPU and the
+# subset needing several can go to different runners. "all" is the whole suite,
+# which leaves out what the host has no GPUs for.
+SUBSET_ALL = "all"
+SUBSET_MULTI = "multi"
+SUITE_SCRIPTS = {
+    SUBSET_ALL: RELATIVE_SUITE_SCRIPT,
+    SUBSET_MULTI: RELATIVE_MULTI_SUITE_SCRIPT,
+}
 
 # ROCm/HIP runtime tuning that avoids a pytest slowdown and hang. Ours rather than
 # the suite's, so it belongs here.
@@ -155,7 +165,7 @@ CPU_REQUEST_VAR = "KUBE_CPU_REQUEST"
 MEMORY_REQUEST_VAR = "KUBE_MEMORY_REQUEST"
 
 # The most pytest workers the suite starts in parallel, see the num_processes
-# cap in ci/run_pytest_rocm.sh. Each one loads its own copy of every library.
+# cap in the suite's environment. Each one loads its own copy of every library.
 SUITE_MAX_WORKERS = 16
 
 # Set by the plugin build. Installed wheels carry their own bitcode and linker, so
@@ -314,15 +324,6 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         and name.isupper()
         and name not in SUITE_ENV_EXCLUDES
     }
-
-
-def suite_reads_subset(jax_dir: Path) -> bool:
-    """Whether the checked-out suite script acts on SUITE_SUBSET_VAR.
-
-    A script from before the variable existed ignores it and runs both subsets,
-    which would quietly turn a one-subset job into a full run.
-    """
-    return SUITE_SUBSET_VAR in (jax_dir / RELATIVE_SUITE_SCRIPT).read_text()
 
 
 def available_cpus() -> int:
@@ -544,8 +545,8 @@ def cmd_arguments(argv: list[str]) -> argparse.Namespace:
     )
     p.add_argument(
         "--test-subset",
-        choices=SUITE_SUBSETS,
-        default=os.getenv("JAX_TEST_SUBSET", SUITE_SUBSET_ALL),
+        choices=sorted(SUITE_SCRIPTS),
+        default=os.getenv("JAX_TEST_SUBSET", SUBSET_ALL),
         help="Accelerator subset to run; 'multi' needs more than one GPU",
     )
     p.add_argument(
@@ -605,26 +606,25 @@ def main(argv: list[str]) -> int:
     jax_version = args.jax_version or jax_version_from_ref(args.jax_ref)
 
     jax_dir = args.jax_dir.resolve()
-    suite = jax_dir / RELATIVE_SUITE_SCRIPT
-    if not suite.exists() and not args.dry_run:
-        log(f"::error::{suite} not found. Is --jax-dir a ROCm/jax checkout?")
-        return 1
-
-    if args.test_subset != SUITE_SUBSET_ALL and suite.exists():
-        if not suite_reads_subset(jax_dir):
+    suite_script = SUITE_SCRIPTS[args.test_subset]
+    suite = jax_dir / suite_script
+    if not suite.exists():
+        if args.test_subset != SUBSET_ALL:
+            # Whether it would have run is worth knowing before a runner is
+            # taken for it, so this holds for a dry run too.
             log(
-                f"::error::{suite} does not read {SUITE_SUBSET_VAR}, so it would"
-                f" run every test instead of the '{args.test_subset}' subset."
-                " Use a jax ref that supports it, or --test-subset all."
+                f"::error::{suite} not found, so this jax ref cannot run the"
+                f" '{args.test_subset}' subset on its own. Use a ref that has"
+                " that script, or --test-subset all."
             )
+            return 1
+        if not args.dry_run:
+            log(f"::error::{suite} not found. Is --jax-dir a ROCm/jax checkout?")
             return 1
 
     env = dict(os.environ)
     for name in UNSET_VARS:
         env.pop(name, None)
-    # Set before the section is evaluated so the default in the suite's env file
-    # keeps this value, which the suite and the retry pass then share.
-    env[SUITE_SUBSET_VAR] = args.test_subset
 
     cpus = size_to_pod(env, args.cpus)
 
@@ -655,7 +655,7 @@ def main(argv: list[str]) -> int:
     if not args.dry_run:
         (jax_dir / "dist").mkdir(parents=True, exist_ok=True)
 
-    suite_command = ["bash", os.fspath(RELATIVE_SUITE_SCRIPT)]
+    suite_command = ["bash", os.fspath(suite_script)]
     if args.dry_run:
         log(f"++ Would exec [{jax_dir}]$ {shlex.join(preflight_command())}")
         log(f"++ Would exec [{jax_dir}]$ {shlex.join(suite_command)}")

@@ -6,12 +6,13 @@
 
 The suite splits in two by the "multiaccelerator" pytest marker. Only that
 subset needs more than one GPU, and it is a small part of the run, so the two go
-to different runners: the single-accelerator tests to the family's 1-GPU runner
-and the multi-accelerator tests to its multi-GPU runner.
+to different runners: the family's 1-GPU runner takes the suite, which on one
+GPU is the single-accelerator tests, and its multi-GPU runner takes the
+multi-accelerator script.
 
 Multi-GPU runners are scarce, so the second job is only worth its queue slot
 when full testing is asked for. Short testing, which is what a pull request
-gets, runs the single-accelerator subset alone.
+gets, runs the suite on the 1-GPU runner alone.
 """
 
 import argparse
@@ -35,9 +36,8 @@ SCOPE_AUTO = "auto"
 TEST_SCOPES = [SCOPE_AUTO, SCOPE_SHORT, SCOPE_FULL]
 FULL_SCOPE_RELEASE_TYPES = ["nightly", "prerelease"]
 
-# Mirrors JAXCI_ROCM_TEST_SUBSET in ROCm/jax ci/envs/default.env, which is what
-# run_jax_tests.py passes these to.
-SUBSET_SINGLE = "single"
+# --test-subset of run_jax_tests.py, which is which ROCm/jax suite script runs.
+SUBSET_ALL = "all"
 SUBSET_MULTI = "multi"
 
 
@@ -79,7 +79,7 @@ def build_test_matrix(
 
     single_runner = entry.get("test-runs-on")
     if single_runner:
-        include.append({"test_subset": SUBSET_SINGLE, "test_runs_on": single_runner})
+        include.append({"test_subset": SUBSET_ALL, "test_runs_on": single_runner})
     else:
         print(f"No {platform} test runner for {target}, so no tests will run")
 

@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import shlex
+import shutil
 import sys
 import tempfile
 import unittest
@@ -60,15 +61,9 @@ class PytestAddoptsTest(unittest.TestCase):
         self.assertEqual(opts[-2], "-k")
 
 
-SUITE_SCRIPT_TEMPLATE = """\
-#!/bin/bash
-source ci/envs/default.env
-echo "pretend to install wheels"
-export SHOULD_NOT_LEAK=installs-above-the-section
-
-# ==============================================================================
-# Set up the generic test environment variables
-# ==============================================================================
+# What both suite scripts source, and all that may be evaluated to learn the
+# environment the suite runs under.
+SUITE_ENV_TEMPLATE = """\
 export JAX_SKIP_SLOW_TESTS=true
 export XLA_PYTHON_CLIENT_ALLOCATOR={allocator}
 export JAX_ENABLE_X64="$JAXCI_ENABLE_X64"
@@ -79,48 +74,76 @@ if [[ -n "{conditional}" ]]; then
 else
   export XLA_FLAGS="--xla_gpu_enable_command_buffer="
 fi
+"""
 
+SUITE_SCRIPT = """\
+#!/bin/bash
+source ci/envs/default.env
+echo "pretend to install wheels"
+export SHOULD_NOT_LEAK=installs-outside-the-environment
+source ci/utilities/rocm_test_env.sh
+exit 1
+"""
+
+# A checkout from before the suite split, which keeps the environment in a
+# marked section of its one script.
+LEGACY_SUITE_SCRIPT_TEMPLATE = """\
+#!/bin/bash
+source ci/envs/default.env
+echo "pretend to install wheels"
+export SHOULD_NOT_LEAK=installs-above-the-section
+
+# ==============================================================================
+# Set up the generic test environment variables
+# ==============================================================================
+{environment}
 # ==============================================================================
 # Run tests
 # ==============================================================================
 export SHOULD_NOT_LEAK=below-the-section
-echo "subset=$JAXCI_ROCM_TEST_SUBSET"
 exit 1
 """
 
 
-def write_suite_script(jax_dir: Path, allocator="address", conditional="yes") -> None:
-    """A checkout from before the environment moved out of the suite script."""
+def write_default_env(jax_dir: Path) -> None:
     (jax_dir / "ci" / "envs").mkdir(parents=True, exist_ok=True)
     (jax_dir / "ci" / "envs" / "default.env").write_text(
         "export JAXCI_ENABLE_X64=${JAXCI_ENABLE_X64:-0}\n"
-        f'export {runner.SUITE_SUBSET_VAR}=${{{runner.SUITE_SUBSET_VAR}:-"all"}}\n'
-    )
-    (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-        SUITE_SCRIPT_TEMPLATE.format(allocator=allocator, conditional=conditional)
     )
 
 
-def write_split_suite_script(
+def write_suite_script(jax_dir: Path, allocator="address", conditional="yes") -> None:
+    """A checkout as it is now: two suite scripts over a shared environment."""
+    write_default_env(jax_dir)
+    (jax_dir / "ci" / "utilities").mkdir(parents=True, exist_ok=True)
+    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text(
+        SUITE_ENV_TEMPLATE.format(allocator=allocator, conditional=conditional)
+    )
+    (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(SUITE_SCRIPT)
+    (jax_dir / runner.RELATIVE_MULTI_SUITE_SCRIPT).write_text(SUITE_SCRIPT)
+
+
+def write_legacy_suite_script(
     jax_dir: Path, allocator="address", conditional="yes"
 ) -> None:
-    """A checkout as it is now, with the environment in its own file."""
-    write_suite_script(jax_dir, allocator=allocator, conditional=conditional)
-    section = runner.env_section((jax_dir / runner.RELATIVE_SUITE_SCRIPT).read_text())
-    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).parent.mkdir(
-        parents=True, exist_ok=True
-    )
-    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text(section + "\n")
+    write_default_env(jax_dir)
     (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-        "#!/bin/bash\nsource ci/envs/default.env\n"
-        f"source {runner.RELATIVE_SUITE_ENV_SCRIPT.as_posix()}\nexit 1\n"
+        LEGACY_SUITE_SCRIPT_TEMPLATE.format(
+            environment=SUITE_ENV_TEMPLATE.format(
+                allocator=allocator, conditional=conditional
+            )
+        )
     )
 
 
 class EnvSectionTest(unittest.TestCase):
     def test_extracts_only_the_environment_section(self):
         section = runner.env_section(
-            SUITE_SCRIPT_TEMPLATE.format(allocator="address", conditional="yes")
+            LEGACY_SUITE_SCRIPT_TEMPLATE.format(
+                environment=SUITE_ENV_TEMPLATE.format(
+                    allocator="address", conditional="yes"
+                )
+            )
         )
 
         self.assertIn("XLA_PYTHON_CLIENT_ALLOCATOR=address", section)
@@ -150,6 +173,18 @@ class SuiteEnvironmentTest(unittest.TestCase):
     def suite_env(self, **kwargs) -> dict:
         write_suite_script(self.jax_dir, **kwargs)
         return runner.suite_environment(self.jax_dir, dict(os.environ))
+
+    def legacy_suite_env(self, **kwargs) -> dict:
+        write_legacy_suite_script(self.jax_dir, **kwargs)
+        return runner.suite_environment(self.jax_dir, dict(os.environ))
+
+    def test_a_checkout_from_before_the_split_is_read_from_its_section(self):
+        # Both are in CI at once while the split lands on one release branch at
+        # a time, and the retry pass needs the right environment for either.
+        self.assertEqual(
+            self.legacy_suite_env(allocator="platform")["XLA_PYTHON_CLIENT_ALLOCATOR"],
+            "platform",
+        )
 
     def test_reads_the_allocator_the_script_sets(self):
         self.assertEqual(
@@ -194,41 +229,15 @@ class SuiteEnvironmentTest(unittest.TestCase):
         self.assertNotIn("PATH", env)
         self.assertNotIn("JAXCI_ENABLE_X64", env)
 
-    def test_only_the_section_is_evaluated(self):
-        # Anything outside the markers would mean installs or tests ran.
+    def test_only_the_environment_is_evaluated(self):
+        # Anything else in a suite script would mean installs or tests ran.
         self.assertNotIn("SHOULD_NOT_LEAK", self.suite_env())
+        self.assertNotIn("SHOULD_NOT_LEAK", self.legacy_suite_env())
 
     def test_the_retry_pass_inherits_skipping_slow_tests(self):
         self.assertEqual(self.suite_env()["JAX_SKIP_SLOW_TESTS"], "true")
 
-    def test_the_environment_file_is_read_when_the_checkout_has_one(self):
-        # Newer ROCm/jax keeps the environment in its own file rather than in a
-        # marked section of the suite script.
-        write_split_suite_script(self.jax_dir, allocator="platform")
-
-        env = runner.suite_environment(self.jax_dir, dict(os.environ))
-
-        self.assertEqual(env["XLA_PYTHON_CLIENT_ALLOCATOR"], "platform")
-        self.assertNotIn("SHOULD_NOT_LEAK", env)
-
-    def test_the_chosen_subset_survives_the_environment_the_script_reports(self):
-        # The default in the suite's env file leaves a caller's choice alone, and
-        # the section does not touch it, so it must not come back as something
-        # for the suite environment to override.
-        write_suite_script(self.jax_dir)
-        env = {**os.environ, runner.SUITE_SUBSET_VAR: "multi"}
-
-        suite_env = runner.suite_environment(self.jax_dir, env)
-
-        self.assertNotIn(runner.SUITE_SUBSET_VAR, suite_env)
-        self.assertEqual(
-            runner.test_environment(suite_env, "0.11.0", "gfx94X-dcgpu", 0).get(
-                runner.SUITE_SUBSET_VAR
-            ),
-            None,
-        )
-
-    def test_a_renamed_section_is_fatal(self):
+    def test_an_environment_that_cannot_be_found_is_fatal(self):
         # Carrying on would run the retry pass, which decides the result, under an
         # environment that does not match the run it is checking.
         self.jax_dir.joinpath("ci").mkdir(parents=True)
@@ -246,15 +255,13 @@ class SuiteEnvironmentTest(unittest.TestCase):
             os.fspath(runner.RELATIVE_SUITE_ENV_SCRIPT), str(caught.exception)
         )
 
-    def test_a_section_that_fails_is_fatal(self):
-        # Its device queries feed the values it exports, so a section that
-        # ends badly exported something computed from a command that did not
-        # work, and the retry pass would run under that.
+    def test_an_environment_that_fails_is_fatal(self):
+        # Its device queries feed the values it exports, so one that ends badly
+        # exported something computed from a command that did not work, and the
+        # retry pass would run under that.
         write_suite_script(self.jax_dir)
-        script = (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).read_text()
-        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-            script.replace(runner.ENV_SECTION_END, "false\n# Run tests")
-        )
+        env_script = self.jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT
+        env_script.write_text(env_script.read_text() + "false\n")
 
         with self.assertRaises(runner.SuiteEnvironmentError) as caught:
             runner.suite_environment(self.jax_dir, dict(os.environ))
@@ -264,7 +271,7 @@ class SuiteEnvironmentTest(unittest.TestCase):
     def test_a_failure_names_the_file_it_came_from(self):
         # Either file can be the one at fault, so pointing at the other would
         # send whoever reads this to the wrong checkout.
-        write_split_suite_script(self.jax_dir)
+        write_suite_script(self.jax_dir)
         env_script = self.jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT
         env_script.write_text(env_script.read_text() + "false\n")
 
@@ -507,29 +514,15 @@ class RemoveReportsTest(unittest.TestCase):
             runner.remove_reports(Path(tmp))
 
 
-class SuiteReadsSubsetTest(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.jax_dir = Path(self.tmp.name) / "jax"
-        self.jax_dir.joinpath("ci").mkdir(parents=True)
-        self.addCleanup(self.tmp.cleanup)
-
-    def write(self, script: str) -> None:
-        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(script)
-
-    def test_a_script_that_acts_on_the_variable(self):
-        self.write(
-            "#!/bin/bash\n"
-            f'if [[ "${runner.SUITE_SUBSET_VAR}" == "single" ]]; then exit 0; fi\n'
+class SuiteScriptsTest(unittest.TestCase):
+    def test_each_subset_names_a_script(self):
+        self.assertEqual(
+            runner.SUITE_SCRIPTS,
+            {
+                "all": runner.RELATIVE_SUITE_SCRIPT,
+                "multi": runner.RELATIVE_MULTI_SUITE_SCRIPT,
+            },
         )
-
-        self.assertTrue(runner.suite_reads_subset(self.jax_dir))
-
-    def test_a_script_from_before_the_variable(self):
-        # It would run both subsets whatever was asked for.
-        self.write("#!/bin/bash\npytest -m 'not multiaccelerator' tests\n")
-
-        self.assertFalse(runner.suite_reads_subset(self.jax_dir))
 
 
 class CmdArgumentsTest(unittest.TestCase):
@@ -549,8 +542,11 @@ class CmdArgumentsTest(unittest.TestCase):
         self.assertEqual(args.test_subset, "multi")
 
     def test_an_unknown_subset_is_rejected(self):
-        with self.assertRaises(SystemExit):
-            runner.cmd_arguments(["--test-subset", "both"])
+        # "single" is what running the suite on a 1-GPU runner amounts to, so
+        # there is no script for it and no value either.
+        for subset in ["both", "single"]:
+            with self.subTest(subset=subset), self.assertRaises(SystemExit):
+                runner.cmd_arguments(["--test-subset", subset])
 
     def test_fresh_process_retry_can_be_turned_off(self):
         args = runner.cmd_arguments(["--no-fresh-process-retry"])
@@ -609,7 +605,7 @@ class OrchestrationTest(unittest.TestCase):
 
     def fake_run_command(self, args, cwd, env):
         self.commands.append(args)
-        if args == ["bash", os.fspath(runner.RELATIVE_SUITE_SCRIPT)]:
+        if args[0] == "bash":
             for write in self.suite_reports:
                 write()
         return self.returncodes.pop(0)
@@ -691,48 +687,40 @@ class OrchestrationTest(unittest.TestCase):
         self.assertEqual(environments[1]["XLA_PYTHON_CLIENT_ALLOCATOR"], "address")
         self.assertEqual(environments[1]["HSA_NO_SCRATCH_RECLAIM"], "1")
 
-    def test_the_chosen_subset_reaches_the_suite(self):
+    def test_the_chosen_subset_picks_the_script(self):
         self.returncodes = [0, 0]
-        environments = []
-        with mock.patch.object(
-            runner,
-            "run_command",
-            lambda args, cwd, env: (
-                environments.append(env) or self.fake_run_command(args, cwd, env)
-            ),
-        ):
-            self.run_main(["--test-subset", "multi"])
 
-        self.assertEqual(environments[1][runner.SUITE_SUBSET_VAR], "multi")
-
-    def test_a_script_that_ignores_the_subset_stops_the_run(self):
-        # It would run every test, so the job would look like it covered the
-        # subset it was given.
-        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-            SUITE_SCRIPT_TEMPLATE.format(
-                allocator="address", conditional="yes"
-            ).replace('echo "subset=$JAXCI_ROCM_TEST_SUBSET"\n', "")
+        self.assertEqual(self.run_main(["--test-subset", "multi"]), 0)
+        self.assertEqual(
+            self.commands[1], ["bash", os.fspath(runner.RELATIVE_MULTI_SUITE_SCRIPT)]
         )
+
+    def test_a_ref_without_the_multi_script_stops_the_run(self):
+        # Running the whole suite instead would report a job that covered far
+        # more than the subset its runner was picked for.
+        (self.jax_dir / runner.RELATIVE_MULTI_SUITE_SCRIPT).unlink()
         self.returncodes = []
 
         self.assertEqual(self.run_main(["--test-subset", "multi"]), 1)
         self.assertEqual(self.commands, [])
 
-    def test_the_default_subset_runs_against_any_script(self):
-        # Nothing asked for a subset, so an older script is still fine.
-        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-            SUITE_SCRIPT_TEMPLATE.format(
-                allocator="address", conditional="yes"
-            ).replace('echo "subset=$JAXCI_ROCM_TEST_SUBSET"\n', "")
-        )
+    def test_a_dry_run_says_so_too(self):
+        # A dry run is how the pairing gets checked before a runner is taken.
+        (self.jax_dir / runner.RELATIVE_MULTI_SUITE_SCRIPT).unlink()
+        self.returncodes = []
+
+        self.assertEqual(self.run_main(["--test-subset", "multi", "--dry-run"]), 1)
+
+    def test_a_checkout_from_before_the_split_still_runs(self):
+        # Nothing asked for a subset, so the one script it has is the whole job.
+        shutil.rmtree(self.jax_dir / "ci")
+        write_legacy_suite_script(self.jax_dir)
         self.returncodes = [0, 0]
 
         self.assertEqual(self.run_main(), 0)
 
     def test_an_unreadable_environment_stops_before_the_suite(self):
-        (self.jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
-            "#!/bin/bash\nexit 1\n"
-        )
+        (self.jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text("exit 1\n")
         self.returncodes = []
 
         self.assertEqual(self.run_main(), 1)
