@@ -177,7 +177,8 @@ class TestRocmSdkLibraries:
     versioned .so exists). See ROCM-27833.
 
     Libraries tested:
-      - rocm-sdk-core libraries (amd_smi, amdhip64): always installed with torch.
+      - rocm-sdk-core libraries (amd_smi, amdhip64, hipfile): always installed
+        with torch.
       - rocm-sdk-libraries (hipblas): installed as a torch dependency but not
         guaranteed in all configurations (e.g. narrow installs). Skipped when
         rocm_sdk_libraries is not importable.
@@ -193,6 +194,7 @@ class TestRocmSdkLibraries:
         ("amd_smi", "amdsmi_get_processor_handles"),
         ("amd_smi", "amdsmi_is_P2P_accessible"),
         ("amdhip64", "hipGetDeviceCount"),  # HIP runtime — core dependency of torch
+        ("hipfile", "hipFileGetVersion"),
     ]
 
     # Symbols from rocm-sdk-libraries — installed as a torch dependency but may

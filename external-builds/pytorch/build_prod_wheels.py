@@ -170,6 +170,7 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amd_smi",
     "amdhip64",
+    "hipfile",  # Linux only: linked by torch_python when USE_CUFILE is enabled.
     "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
     # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
