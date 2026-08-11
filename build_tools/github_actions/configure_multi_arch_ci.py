@@ -725,12 +725,25 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         elif windows_names == ["none"]:
             windows_names = []
     elif ci_inputs.is_pull_request:
-        # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
-        # for everything).
-        defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
-        linux_names = list(defaults)
-        windows_names = list(defaults)
+        # External repo builds (rocm-libraries, rocm-systems) pass explicit
+        # family lists via workflow inputs. Honor those instead of defaults
+        # so stage reuse can match baseline artifacts correctly.
+        if ci_inputs.external_repo and (
+            ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families
+        ):
+            linux_names = list(ci_inputs.linux_amdgpu_families)
+            windows_names = list(ci_inputs.windows_amdgpu_families)
+            print(
+                f"  External repo PR: using explicit families "
+                f"(linux={linux_names}, windows={windows_names})"
+            )
+        else:
+            # Smallest default set for fast PR feedback. PR labels can extend
+            # the set below (gfx* for individual families, ci:run-all-archs
+            # for everything).
+            defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
+            linux_names = list(defaults)
+            windows_names = list(defaults)
     elif ci_inputs.is_push:
         # Broader than PR: presubmit + postsubmit. Code has landed, so
         # we validate on more targets (e.g. gfx950) without paying full
