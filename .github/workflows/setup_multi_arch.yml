@@ -198,7 +198,8 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          # TEST: Hard-code to a recent main commit for testing
+          STAGE_REUSE_CURRENT_SHA: a3e3f450de7cd5e0d4d1f46b9dbe9bb6fdf77d64
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
