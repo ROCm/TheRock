@@ -83,6 +83,13 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     _log(f"Config preset: {config_preset}")
     _log(f"Platform: {'Windows' if IS_WINDOWS else 'POSIX'}")
     for k, v in selected_config.items():
+        # Release builds disable the remote cache (local cache only) so a shipped
+        # object never comes from a remote cache hit and cannot depend on the
+        # compiler_check fingerprint being complete across runners. The local
+        # cache is kept for performance and runner stability (notably Windows).
+        if k == "remote_storage" and args.no_remote_cache:
+            _log("Remote cache disabled (--no-remote-cache): using local cache only")
+            continue
         lines.append(f"{k} = {v}")
 
     # Log paths: use --log-dir if provided, otherwise default to
@@ -139,14 +146,6 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   use the appropriate compilation flags that ccache understands. See
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
-
-    # Recache: when enabled, ccache ignores existing cached results and
-    # recompiles everything (while still updating the cache). Used for release
-    # builds whose shipped objects must be freshly compiled rather than read
-    # from cache, making them independent of the compiler_check fingerprint.
-    # See https://ccache.dev/manual/latest.html#config_recache
-    if args.recache:
-        lines.append("recache = true")
 
     # End with blank line.
     lines.append("")
@@ -253,11 +252,11 @@ def main(argv: list[str]):
     )
 
     p.add_argument(
-        "--recache",
+        "--no-remote-cache",
         action="store_true",
-        help="Force ccache to ignore existing results and recompile everything "
-        "(while still updating the cache). Used for release builds whose shipped "
-        "objects must be freshly compiled rather than read from cache.",
+        help="Disable the remote cache and use the local cache only. Release "
+        "builds use this so a shipped object never comes from a remote cache hit, "
+        "while the local cache still provides performance and runner stability.",
     )
 
     preset_group = p.add_mutually_exclusive_group()

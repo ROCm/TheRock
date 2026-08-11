@@ -86,24 +86,24 @@ on Windows). The namespace isolates entries to some extent, but be aware
 of cross-repo pollution — entries from one repo may share manifests with
 another if they compile the same source files with compatible flags.
 
-### Release builds compile cache-cold (recache)
+### Release builds use the local cache only (no remote)
 
-Prerelease (release-candidate) builds run ccache in `recache` mode
-(`setup_ccache.py --recache`, wired for `release_type == 'prerelease'` in the
-reusable build workflows). In this mode ccache ignores existing cached results
-and recompiles every object, but still writes the fresh results back to the
-cache.
+Prerelease (release-candidate) builds disable the remote cache and use only the
+local cache (`setup_ccache.py --no-remote-cache`, wired for
+`release_type == 'prerelease'` in the reusable build workflows).
 
 This is deliberate. Stable releases are a repackage of the prerelease
-artifacts, so the prerelease compile is what actually ships. Compiling it
-cache-cold makes the shipped objects independent of the `compiler_check`
-fingerprint (which covers the compiler binary and its shared libraries, but not
-the device bitcode libraries or `lld`), while still repopulating the shared
-release cache for nightly and test jobs.
+artifacts, so the prerelease compile is what actually ships. Reading only from
+the local cache means a shipped object never comes from a remote cache hit, so
+it cannot depend on the `compiler_check` fingerprint (which covers the compiler
+binary and its shared libraries, but not the device bitcode libraries or `lld`)
+being complete across runners. The local cache is kept because some builds
+(notably Windows) need at least a local cache for performance and runner
+stability.
 
-Expect the prerelease "Report" step to show close to 100% misses by design.
-Nightly, `dev`, and `ci` builds are unaffected and continue to read from the
-cache.
+Expect zero remote hits in the prerelease "Report" step; local hits are
+expected and fine. Nightly, `dev`, and `ci` builds are unaffected and continue
+to use the shared remote cache.
 
 ## Downloading and inspecting CI logs
 
