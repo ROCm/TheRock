@@ -138,9 +138,10 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          COMMIT_RANGE_SUMMARY: ${{ steps.gen-report.outputs.commit_range_summary }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
             post_comment \
             --run-id ${{ github.run_id }} \
             --pr-number ${{ github.event.pull_request.number }} \
-            --commit-range-summary "${{ steps.gen-report.outputs.commit_range_summary }}"
+            --commit-range-summary "$COMMIT_RANGE_SUMMARY"
