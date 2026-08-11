@@ -320,18 +320,54 @@ class GitContext:
         return GitContext()
 
     @staticmethod
-    def from_external_repo(external_repo_name: str) -> "GitContext":
+    def from_external_repo(
+        external_repo_name: str,
+        changed_files: list[str] | None = None,
+    ) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
-        For external repos, we treat the repo name as both a changed file and
-        a submodule path so that:
+        For external repos, we can optionally receive the list of changed files
+        from the external repo. This enables path-based filtering so that
+        docs-only or tool-only changes can skip CI.
+
+        Args:
+            external_repo_name: Short name of the repo (e.g., "rocm-libraries")
+            changed_files: Optional list of changed file paths from the external
+                repo. If provided, paths are prefixed with the repo name for
+                stage impact analysis. If None, the repo name itself is used
+                as the changed file (conservative: assumes all files changed).
+
+        The repo name is always included as a submodule path so that:
         1. Stage reuse analysis can determine which TheRock stages are affected
         2. has_submodule_changes returns True, enabling submodule_bump_tests_only
            families to run their tests
+
+        TODO(#3343): External repos should pass changed_files to enable path-based
+        CI skipping. This requires:
+        1. External repo workflows compute changed files and pass them in the
+           external_repo JSON (e.g., via configure_external_repo_ci.py output)
+        2. Path filtering logic (is_ci_run_required) runs on the prefixed paths
+        See https://github.com/ROCm/TheRock/issues/3343
         """
         print(f"External repo detected: {external_repo_name}")
+
+        if changed_files is not None:
+            # Prefix each path with the repo name for stage impact analysis
+            # e.g., "projects/rocBLAS/x.cpp" -> "rocm-libraries/projects/rocBLAS/x.cpp"
+            prefixed_files = [f"{external_repo_name}/{path}" for path in changed_files]
+            print(f"  {len(prefixed_files)} changed file(s) from external repo")
+            for path in prefixed_files[:10]:
+                print(f"    {path}")
+            if len(prefixed_files) > 10:
+                print(f"    ... and {len(prefixed_files) - 10} more")
+        else:
+            # No changed files provided - use repo name as a catch-all
+            # This is conservative: treats the whole repo as changed
+            prefixed_files = [external_repo_name]
+            print("  No changed files provided, using repo name as changed file")
+
         return GitContext(
-            changed_files=[external_repo_name],
+            changed_files=prefixed_files,
             submodule_paths=[external_repo_name],
         )
 
@@ -342,10 +378,23 @@ class GitContext:
         Returns:
             True if submodule changes detected, False if no submodule changes,
             None if git context is unavailable (changed_files or submodule_paths missing).
+
+        This method handles both exact matches (e.g., "rocm-libraries" in
+        submodule_paths matching "rocm-libraries" in changed_files) and prefix
+        matches (e.g., "rocm-libraries/projects/rocBLAS/x.cpp" starting with
+        "rocm-libraries/").
         """
         if self.changed_files is None or self.submodule_paths is None:
             return None
-        return bool(set(self.submodule_paths) & set(self.changed_files))
+        # Check for exact matches first (TheRock's normal git submodule workflow)
+        if set(self.submodule_paths) & set(self.changed_files):
+            return True
+        # Check for prefix matches (external repo with changed_files)
+        for changed_file in self.changed_files:
+            for submodule_path in self.submodule_paths:
+                if changed_file.startswith(f"{submodule_path}/"):
+                    return True
+        return False
 
     def log(self) -> None:
         """Log git context for CI diagnostics."""
@@ -1447,8 +1496,11 @@ def main():
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
-        # External repo: use repo name for stage reuse analysis.
-        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
+        # External repo: use repo name and optional changed_files for stage reuse.
+        # external_repo is JSON like:
+        #   {"repository":"ROCm/rocm-libraries","ref":"..."}
+        # Or with changed files for path-based filtering:
+        #   {"repository":"ROCm/rocm-libraries","ref":"...","changed_files":["projects/rocBLAS/x.cpp"]}
         try:
             external_repo = json.loads(ci_inputs.external_repo)
         except (json.JSONDecodeError, TypeError) as exc:
@@ -1462,7 +1514,20 @@ def main():
                 f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
             )
         external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+
+        # Extract optional changed_files from external repo JSON
+        # This enables path-based filtering for external repos
+        external_changed_files = external_repo.get("changed_files")
+        if external_changed_files is not None and not isinstance(
+            external_changed_files, list
+        ):
+            raise ValueError(
+                f"EXTERNAL_REPO 'changed_files' must be a list: {ci_inputs.external_repo!r}"
+            )
+
+        git_context = GitContext.from_external_repo(
+            external_repo_name, changed_files=external_changed_files
+        )
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

@@ -267,6 +267,45 @@ class TestGitContext(unittest.TestCase):
         self.assertEqual(git.changed_files, [""])
         self.assertEqual(git.submodule_paths, [""])
 
+    def test_from_external_repo_with_changed_files(self):
+        """from_external_repo prefixes changed files with repo name."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            changed_files=["projects/rocBLAS/x.cpp", "projects/hipBLAS/y.cpp"],
+        )
+        self.assertEqual(
+            git.changed_files,
+            [
+                "rocm-libraries/projects/rocBLAS/x.cpp",
+                "rocm-libraries/projects/hipBLAS/y.cpp",
+            ],
+        )
+        # submodule_paths is still just the repo name for has_submodule_changes
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+        self.assertTrue(git.has_submodule_changes)
+
+    def test_from_external_repo_with_empty_changed_files(self):
+        """from_external_repo with empty changed_files list."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            changed_files=[],
+        )
+        # Empty list means no files changed
+        self.assertEqual(git.changed_files, [])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+        # has_submodule_changes is False because no files overlap with submodule_paths
+        self.assertFalse(git.has_submodule_changes)
+
+    def test_from_external_repo_none_changed_files_uses_repo_name(self):
+        """from_external_repo with None changed_files uses repo name as fallback."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            changed_files=None,
+        )
+        # None means "unknown" - use repo name as conservative fallback
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
