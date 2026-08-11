@@ -187,6 +187,7 @@ def _stage_artifacts_available(
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
     if stage is None:
+        print(f"[DEBUG] _stage_artifacts_available: stage '{stage_name}' not found in topology")
         return False
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
@@ -206,7 +207,9 @@ def _stage_artifacts_available(
                     if found:
                         break
                 if not found:
+                    print(f"[DEBUG] _stage_artifacts_available: stage '{stage_name}' missing {artifact_name} for family {family} (targets={targets})")
                     return False
+    print(f"[DEBUG] _stage_artifacts_available: stage '{stage_name}' has all artifacts")
     return True
 
 
