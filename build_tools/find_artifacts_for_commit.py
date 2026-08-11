@@ -71,12 +71,12 @@ class ArtifactRunInfo:
 
     s3_bucket: str  # e.g. "therock-ci-artifacts"
 
-    # Additional inspection metadata. Defaults allow existing callers to
-    # continue constructing ArtifactRunInfo without supplying these fields.
-    workflow_run_attempt: int = 1
+    # Artifact inspection constraints.
     amdgpu_targets: tuple[str, ...] = ()
-    artifact_filenames: tuple[str, ...] = ()
     required_artifact_patterns: tuple[str, ...] = ()
+
+    # Populated during artifact inspection.
+    artifact_filenames: tuple[str, ...] = ()
     missing_required_artifact_patterns: tuple[str, ...] = ()
 
     # Internal data used to inspect the run's artifact backend. Excluded from
@@ -119,7 +119,6 @@ class ArtifactRunInfo:
             print("  AMDGPU targets:      " + ", ".join(self.amdgpu_targets))
         print(f"  Workflow name:       {self.workflow_file_name}")
         print(f"  Workflow run ID:     {self.workflow_run_id}")
-        print(f"  Workflow attempt:    {self.workflow_run_attempt}")
         print(f"  Workflow run URL:    {self.workflow_run_html_url}")
         print(f"  Workflow run status: {status_str}")
         print(f"  S3 Bucket:           {self.s3_bucket}")
@@ -150,7 +149,6 @@ class ArtifactRunInfo:
             "amdgpu_targets": list(self.amdgpu_targets),
             "workflow_file_name": self.workflow_file_name,
             "workflow_run_id": self.workflow_run_id,
-            "workflow_run_attempt": self.workflow_run_attempt,
             "workflow_run_status": self.workflow_run_status,
             "workflow_run_conclusion": self.workflow_run_conclusion,
             "workflow_run_html_url": self.workflow_run_html_url,
@@ -389,7 +387,6 @@ def _find_artifacts_in_workflow_runs(
                 artifact_group=group,
                 workflow_file_name=workflow_file_name,
                 workflow_run_id=str(workflow_run["id"]),
-                workflow_run_attempt=int(workflow_run.get("run_attempt") or 1),
                 workflow_run_status=workflow_run.get(
                     "status",
                     "unknown",
