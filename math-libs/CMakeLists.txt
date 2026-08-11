@@ -631,10 +631,16 @@ if(_ck_enabled)
   )
 endif()
 
-if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
+if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
   # hipTensor
   ##############################################################################
+
+  # Set composable_kernel as a build dependency only when it's available.
+  set(_hiptensor_build_deps)
+  if(_ck_enabled)
+    list(APPEND _hiptensor_build_deps composable_kernel)
+  endif()
 
   therock_cmake_subproject_declare(hipTensor
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
@@ -654,7 +660,7 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
-      composable_kernel
+      ${_hiptensor_build_deps}
     RUNTIME_DEPS
       hip-clr
   )

@@ -36,6 +36,22 @@ permissions:
   contents: read
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release Windows"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - release Windows"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_windows.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   build_artifacts:
     name: Build Artifacts
     uses: ./.github/workflows/multi_arch_build_windows.yml
@@ -60,6 +76,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -75,6 +92,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Python Packages
     uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -174,3 +192,21 @@ jobs:
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}"
             }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
+    name: "Quartz - completed - release Windows"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release Windows"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_windows.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
