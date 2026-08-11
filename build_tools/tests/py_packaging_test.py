@@ -9,7 +9,10 @@ These tests cover:
   - params.populated_packages: registration and cross-package search helpers
 """
 
+import json
 import os
+import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,6 +23,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from build_python_packages import validate_kpack_split_target_completeness
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -417,15 +421,573 @@ class ParametersConstructionTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Tests for kpack-split device packaging
+# ---------------------------------------------------------------------------
+
+
+class DevicePackagingTest(TmpDirTestCase):
+    """Tests for kpack-split mode: arch-neutral libraries + per-ISA device wheels."""
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        files: dict[str, str],
+    ):
+        """Create a minimal artifact directory with the given files under stage/."""
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        for relpath, content in files.items():
+            f = stage / relpath
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(
+        self,
+        artifact_dir: Path,
+        kpack_split: bool = False,
+        version: str = "0.0.1.test",
+    ) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version=version,
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
+        )
+
+    def _setup_kpack_split_artifacts(self) -> Path:
+        """Create a minimal set of generic + per-ISA artifacts."""
+        artifact_dir = self.temp_dir / "artifacts"
+        # Generic library artifact (host code)
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "generic",
+            {"lib/librocblas.txt": "host library"},
+        )
+        # Per-ISA device artifact
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "gfx942",
+            {
+                ".kpack/blas_lib_gfx942.kpack": "kpack data",
+                "lib/rocblas/library/Foo_gfx942.co": "kernel object",
+            },
+        )
+        return artifact_dir
+
+    def test_kpack_split_libraries_is_arch_neutral(self):
+        """kpack_split=True makes the libraries entry non-target-specific."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        libraries_entry = params.dist_info.ALL_PACKAGES["libraries"]
+        # Should not raise — libraries is no longer target-specific.
+        dist_name = libraries_entry.get_dist_package_name(target_family=None)
+        self.assertEqual(dist_name, "rocm-sdk-libraries")
+        # py_package_name should also work without a target.
+        py_name = libraries_entry.get_py_package_name(target_family=None)
+        self.assertTrue(py_name.startswith("_rocm_sdk_libraries"))
+
+    def test_kpack_split_libraries_package_creates_without_target(self):
+        """Libraries package with target_family=None should not raise in kpack-split."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        # Should not raise.
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        self.assertIsNotNone(lib.path)
+
+    def test_kpack_split_libraries_setup_uses_unsuffixed_pure_package(self):
+        """setup.py must not turn target_family=None into a package name suffix."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(
+            artifact_dir,
+            kpack_split=True,
+            version="0.0.1.dev0",
+        )
+
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        result = subprocess.run(
+            [sys.executable, "setup.py", "--name"],
+            cwd=lib.path,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        self.assertIn(
+            "Found packages: ['rocm_sdk_libraries', '_rocm_sdk_libraries']",
+            result.stdout,
+        )
+        self.assertNotIn("rocm_sdk_libraries_None", result.stdout)
+
+    def test_populate_device_files_copies_all_files(self):
+        """populate_device_files() should copy .kpack and kernel DB files."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        # Verify xnack-suffixed targets produce valid package names by stripping
+        # the suffix (e.g., 'gfx942:xnack+' -> 'rocm-sdk-device-gfx942')
+        device_entry = params.dist_info.ALL_PACKAGES["device"]
+        # Test xnack+ suffix
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942:xnack+"),
+            "rocm-sdk-device-gfx942",
+        )
+        # Test xnack- suffix
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942:xnack-"),
+            "rocm-sdk-device-gfx942",
+        )
+        # Test base target without suffix
+        self.assertEqual(
+            device_entry.get_dist_package_name("gfx942"),
+            "rocm-sdk-device-gfx942",
+        )
+        # Verify get_dist_package_require also strips xnack suffix
+        self.assertTrue(
+            device_entry.get_dist_package_require("gfx942:xnack+").startswith(
+                "rocm-sdk-device-gfx942=="
+            ),
+        )
+        # Verify get_py_package_name also strips xnack suffix
+        self.assertTrue(
+            device_entry.get_py_package_name("gfx942:xnack+").startswith(
+                "_rocm_sdk_device_gfx942"
+            ),
+        )
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+        dev.populate_device_files(
+            params.filter_artifacts(
+                lambda an: an.name == "blas"
+                and an.component == "lib"
+                and an.target_family == "gfx942"
+            )
+        )
+
+        # Both files should be materialized.
+        self.assertTrue(dev.files.has(".kpack/blas_lib_gfx942.kpack"))
+        self.assertTrue(dev.files.has("lib/rocblas/library/Foo_gfx942.co"))
+
+        # Files should exist on disk in the platform dir.
+        platform_dir = dev._platform_dir
+        self.assertTrue((platform_dir / ".kpack" / "blas_lib_gfx942.kpack").exists())
+        self.assertTrue(
+            (platform_dir / "lib" / "rocblas" / "library" / "Foo_gfx942.co").exists()
+        )
+
+    def test_populate_device_files_emits_devel_links_manifest(self):
+        """Device wheel must ship a `_devel_links` manifest mapping each device
+        file to its relative hardlink target into the libraries overlay dir.
+
+        This manifest is what `rocm-sdk init` consumes to mirror per-ISA device
+        files (.kpack/.co/.dat/...) into the generic rocm-sdk-devel tree.
+        """
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+        dev.populate_device_files(
+            params.filter_artifacts(
+                lambda an: an.name == "blas"
+                and an.component == "lib"
+                and an.target_family == "gfx942"
+            )
+        )
+
+        libs_name = dev._platform_dir.name
+        manifest_path = dev._platform_dir / ".devel_links" / "gfx942.json"
+        self.assertTrue(
+            manifest_path.is_file(),
+            "device wheel must emit a .devel_links/<target>.json manifest",
+        )
+
+        data = json.loads(manifest_path.read_text())
+        self.assertEqual(data["version"], "0.0.1.test")
+        links = {entry["relpath"]: entry["target"] for entry in data["links"]}
+
+        # Every device file must have an entry with a relative target that
+        # backtracks out of the devel tree and into the libraries overlay.
+        self.assertEqual(
+            links[".kpack/blas_lib_gfx942.kpack"],
+            f"../../{libs_name}/.kpack/blas_lib_gfx942.kpack",
+        )
+        self.assertEqual(
+            links["lib/rocblas/library/Foo_gfx942.co"],
+            f"../../../../{libs_name}/lib/rocblas/library/Foo_gfx942.co",
+        )
+
+        # The manifest must not list itself as a device file to link.
+        self.assertNotIn(".devel_links/gfx942.json", links)
+
+    def test_device_platform_dir_overlays_libraries(self):
+        """Device package platform dir must match libraries package platform dir name."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        lib = PopulatedDistPackage(params, logical_name="libraries", target_family=None)
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+
+        # The platform dir names must match for the overlay to work.
+        self.assertEqual(lib._platform_dir.name, dev._platform_dir.name)
+
+    def test_device_artifact_filter(self):
+        """device_artifact_filter selects only per-ISA lib artifacts."""
+        # Import the filter from the build script.
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import device_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        # Should match per-ISA lib artifact.
+        an_gfx942 = ArtifactName("blas", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_gfx942))
+
+        # rccl is built TARGET_NEUTRAL but BUILD_TOPOLOGY marks it
+        # target-specific so kpack splits produce per-arch rccl_lib_<arch>
+        # artifacts that must land in the device wheel.
+        an_rccl = ArtifactName("rccl", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_rccl))
+
+        # hipkernelprovider is target-specific + kpack-split (its rocKE engine ships
+        # per-arch AOT bundles), so its per-ISA lib artifact must land in the device
+        # wheel.
+        an_hkp = ArtifactName("hipkernelprovider", "lib", "gfx942")
+        self.assertTrue(device_artifact_filter("gfx942", an_hkp))
+
+        # Should NOT match generic.
+        an_generic = ArtifactName("blas", "lib", "generic")
+        self.assertFalse(device_artifact_filter("gfx942", an_generic))
+
+        # Should NOT match wrong ISA.
+        an_gfx1100 = ArtifactName("blas", "lib", "gfx1100")
+        self.assertFalse(device_artifact_filter("gfx942", an_gfx1100))
+
+        # Should NOT match test component.
+        an_test = ArtifactName("blas", "test", "gfx942")
+        self.assertFalse(device_artifact_filter("gfx942", an_test))
+
+        # Should NOT match non-library artifact name.
+        an_core = ArtifactName("core-hip", "lib", "gfx942")
+        self.assertFalse(device_artifact_filter("gfx942", an_core))
+
+        # Should match xnack variant of the same base target (merges into one package).
+        an_xnack = ArtifactName("blas", "lib", "gfx942:xnack+")
+        self.assertTrue(device_artifact_filter("gfx942", an_xnack))
+
+        # Should NOT match xnack variant of a different base target.
+        an_xnack_other = ArtifactName("blas", "lib", "gfx950:xnack+")
+        self.assertFalse(device_artifact_filter("gfx942", an_xnack_other))
+
+    def test_core_artifact_filter_includes_only_rocjitsu_hotswap(self):
+        """The core wheel ships the HSA hotswap hook without the rocjitsu library."""
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import core_artifact_filter
+
+        from _therock_utils.artifacts import ArtifactName
+
+        self.assertTrue(
+            core_artifact_filter(ArtifactName("rocjitsu-hotswap", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "lib", "generic"))
+        )
+        self.assertFalse(
+            core_artifact_filter(ArtifactName("rocjitsu", "run", "generic"))
+        )
+
+    def test_device_dist_info_has_libraries_py_package_name(self):
+        """Device package _dist_info.py must contain LIBRARIES_PY_PACKAGE_NAME."""
+        artifact_dir = self._setup_kpack_split_artifacts()
+        params = self._make_params(artifact_dir, kpack_split=True)
+
+        dev = PopulatedDistPackage(
+            params, logical_name="device", target_family="gfx942"
+        )
+
+        dist_info_path = (
+            dev.path / "src" / dev.entry.pure_py_package_name / "_dist_info.py"
+        )
+        content = dist_info_path.read_text()
+        self.assertIn("LIBRARIES_PY_PACKAGE_NAME", content)
+        self.assertIn("_rocm_sdk_libraries", content)
+
+
+class KpackSplitCompletenessTest(TmpDirTestCase):
+    """Tests for validating kpack-split artifact coverage before packaging."""
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+    ) -> None:
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "placeholder.txt").write_text("x")
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_artifact_catalog(self, target_families: list[str]) -> ArtifactCatalog:
+        artifact_dir = self.temp_dir / "artifacts"
+        for target_family in target_families:
+            self._add_artifact(
+                artifact_dir=artifact_dir,
+                name="blas",
+                component="lib",
+                target_family=target_family,
+            )
+        return ArtifactCatalog(artifact_dir)
+
+    def _validate_completeness(
+        self,
+        *,
+        kpack_split: bool,
+        artifacts: ArtifactCatalog,
+        linux_targets: list[str] | None,
+        windows_targets: list[str] | None,
+        platform_name: str,
+    ) -> None:
+        validate_kpack_split_target_completeness(
+            kpack_split=kpack_split,
+            artifact_dir=self.temp_dir / "artifacts",
+            artifacts=artifacts,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+            platform_name=platform_name,
+        )
+
+    def test_linux_completeness_passes_when_targets_match(self):
+        artifacts = self._make_artifact_catalog(["gfx1100", "gfx1101"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=["gfx1100", "gfx1101"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+    def test_linux_completeness_fails_when_target_is_missing(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        with self.assertRaisesRegex(RuntimeError, "gfx1101"):
+            self._validate_completeness(
+                kpack_split=True,
+                artifacts=artifacts,
+                linux_targets=["gfx1100", "gfx1101"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_windows_completeness_uses_windows_targets(self):
+        artifacts = self._make_artifact_catalog(["gfx1200"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=["gfx1100"],
+            windows_targets=["gfx1200"],
+            platform_name="win32",
+        )
+
+    def test_completeness_skips_without_platform_target_input(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        self._validate_completeness(
+            kpack_split=True,
+            artifacts=artifacts,
+            linux_targets=None,
+            windows_targets=["gfx1200"],
+            platform_name="linux",
+        )
+
+    def test_completeness_skips_when_kpack_split_is_disabled(self):
+        artifacts = self._make_artifact_catalog(["gfx1100"])
+
+        self._validate_completeness(
+            kpack_split=False,
+            artifacts=artifacts,
+            linux_targets=["gfx1100", "gfx1101"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+
+class RequiredDistPackagesTest(TmpDirTestCase):
+    """Tests for validating required files in the final dist directory."""
+
+    version = "0.0.1.test"
+    wheel_tag = "py3-none-linux_x86_64"
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+    ) -> None:
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (stage / "placeholder.txt").write_text("x")
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_artifact_catalog(
+        self, artifact_specs: list[tuple[str, str, str]]
+    ) -> ArtifactCatalog:
+        artifact_dir = self.temp_dir / "artifacts"
+        for name, component, target_family in artifact_specs:
+            self._add_artifact(
+                artifact_dir=artifact_dir,
+                name=name,
+                component=component,
+                target_family=target_family,
+            )
+        return ArtifactCatalog(artifact_dir)
+
+    def _write_dist_file(self, filename: str) -> None:
+        dist_dir = self.temp_dir / "packages" / "dist"
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        (dist_dir / filename).write_text("package")
+
+    def _write_required_kpack_split_runtime_files(self, target: str) -> None:
+        self._write_dist_file(f"rocm-{self.version}.tar.gz")
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(
+            f"rocm_sdk_device_{target}-{self.version}-{self.wheel_tag}.whl"
+        )
+
+    def _validate_required_dist_packages(
+        self,
+        *,
+        artifacts: ArtifactCatalog,
+        kpack_split: bool,
+        linux_targets: list[str] | None,
+        windows_targets: list[str] | None,
+        platform_name: str,
+    ) -> None:
+        sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+        from build_python_packages import validate_required_dist_packages
+
+        validate_required_dist_packages(
+            dest_dir=self.temp_dir / "packages",
+            version=self.version,
+            artifacts=artifacts,
+            kpack_split=kpack_split,
+            linux_targets=linux_targets,
+            windows_targets=windows_targets,
+            platform_name=platform_name,
+        )
+
+    def test_required_kpack_split_dist_packages_pass(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        self._validate_required_dist_packages(
+            artifacts=artifacts,
+            kpack_split=True,
+            linux_targets=["gfx1100"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+    def test_required_dist_packages_fail_when_rocm_sdist_is_missing(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(
+            f"rocm_sdk_device_gfx1100-{self.version}-{self.wheel_tag}.whl"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, f"rocm-{self.version}.tar.gz"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_fail_when_device_wheel_is_missing(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_dist_file(f"rocm-{self.version}.tar.gz")
+        self._write_dist_file(f"rocm_sdk_core-{self.version}-{self.wheel_tag}.whl")
+        self._write_dist_file(f"rocm_sdk_libraries-{self.version}-{self.wheel_tag}.whl")
+
+        with self.assertRaisesRegex(RuntimeError, "rocm_sdk_device_gfx1100"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_require_devel_when_dev_artifacts_exist(self):
+        artifacts = self._make_artifact_catalog(
+            [
+                ("blas", "lib", "gfx1100"),
+                ("core-hip", "dev", "generic"),
+            ]
+        )
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        with self.assertRaisesRegex(RuntimeError, "rocm_sdk_devel"):
+            self._validate_required_dist_packages(
+                artifacts=artifacts,
+                kpack_split=True,
+                linux_targets=["gfx1100"],
+                windows_targets=None,
+                platform_name="linux",
+            )
+
+    def test_required_dist_packages_skip_devel_without_dev_artifacts(self):
+        artifacts = self._make_artifact_catalog([("blas", "lib", "gfx1100")])
+        self._write_required_kpack_split_runtime_files("gfx1100")
+
+        self._validate_required_dist_packages(
+            artifacts=artifacts,
+            kpack_split=True,
+            linux_targets=["gfx1100"],
+            windows_targets=None,
+            platform_name="linux",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Unit tests for restrict_families (per-family meta package)
 # ---------------------------------------------------------------------------
 
 
 class RestrictFamiliesTest(TmpDirTestCase):
-    """Tests for restrict_families=True in PopulatedDistPackage.
+    """Tests for _dist_info.py generation in PopulatedDistPackage.
 
     These tests verify that per-family meta (rocm) packages bake the correct
-    DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES into _dist_info.py.
+    DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES into _dist_info.py,
+    and (SEC-00224) that user-controlled values reaching that generation
+    (version_suffix, artifact-derived target_family) can't break out of the
+    repr()-quoted source text exec()'d from the on-disk file.
     """
 
     def _add_artifact(
@@ -441,23 +1003,31 @@ class RestrictFamiliesTest(TmpDirTestCase):
         stage.mkdir(parents=True, exist_ok=True)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path) -> Parameters:
+    def _make_params(
+        self,
+        artifact_dir: Path,
+        version: str = "0.0.1.test",
+        version_suffix: str = "",
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
             dest_dir=dest_dir,
-            version="0.0.1.test",
-            version_suffix="",
+            version=version,
+            version_suffix=version_suffix,
             artifacts=ArtifactCatalog(artifact_dir),
         )
 
-    def _exec_dist_info(self, meta: PopulatedDistPackage) -> dict:
+    def _exec_dist_info(
+        self, meta: PopulatedDistPackage, ns: dict | None = None
+    ) -> dict:
         """Read and exec the generated _dist_info.py; return the namespace."""
         dist_info_path = (
             meta.path / "src" / meta.entry.pure_py_package_name / "_dist_info.py"
         )
         content = dist_info_path.read_text()
-        ns: dict = {}
+        if ns is None:
+            ns = {}
         exec(content, ns)
         return ns
 
@@ -570,6 +1140,817 @@ class RestrictFamiliesTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         self.assertNotIn("AVAILABLE_TARGET_FAMILIES.clear()", content)
         self.assertNotIn("gfx94X-dcgpu", content)
+
+    def test_malicious_version_suffix_is_inert(self):
+        """A version_suffix crafted to break out of the repr()-quoted string
+        must not execute; it must round-trip as inert string data.
+        """
+        payload = "'; SENTINEL['pwned'] = True; x = '"
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
+        params = self._make_params(
+            artifact_dir, version="7.0.0", version_suffix=payload
+        )
+        meta = PopulatedDistPackage(params, logical_name="meta")
+
+        sentinel = {"pwned": False}
+        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
+
+        self.assertFalse(
+            sentinel["pwned"],
+            "Malicious version_suffix executed instead of being treated as data",
+        )
+        self.assertEqual(ns["__version__"], "7.0.0")
+        self.assertEqual(ns["PY_PACKAGE_SUFFIX_NONCE"], payload)
+
+    def test_malicious_artifact_target_family_is_inert(self):
+        """A GPU target_family parsed from a real artifact directory name (the
+        actually-exploitable, artifact-derived vector — not a workflow_dispatch
+        input) must round-trip as inert string data even when crafted to break
+        out of the repr()-quoted list literal.
+
+        Directory names here can't contain '_' (ArtifactName's parser splits
+        {name}_{component}_{target_family} on it, same as any real artifact
+        directory), so the payload avoids it, matching what an attacker could
+        actually place in an artifact directory name.
+        """
+        payload = "gfx942');SENTINEL['pwned']=True;x=('"
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", payload)
+        params = self._make_params(artifact_dir)
+        meta = PopulatedDistPackage(params, logical_name="meta")
+
+        sentinel = {"pwned": False}
+        ns = self._exec_dist_info(meta, {"SENTINEL": sentinel})
+
+        self.assertFalse(
+            sentinel["pwned"],
+            "Malicious target_family executed instead of being treated as data",
+        )
+        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], [payload])
+
+    def test_dist_info_object_matches_generated_file(self):
+        """params.dist_info (in-memory, built via direct attribute assignment
+        onto the static template) and the _dist_info.py written to disk (built
+        via repr()-encoded source text) must agree on every user-controlled
+        field, so the two initialization paths can't silently drift apart the
+        way they did when a version bug was previously introduced in only one
+        of the two places.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
+        self._add_artifact(artifact_dir, "base", "lib", "gfx1100")
+        params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
+
+        ns: dict = {}
+        exec(params.dist_info_contents, ns)
+
+        self.assertEqual(ns["__version__"], params.dist_info.__version__)
+        self.assertEqual(
+            ns["PY_PACKAGE_SUFFIX_NONCE"], params.dist_info.PY_PACKAGE_SUFFIX_NONCE
+        )
+        self.assertEqual(
+            ns["DEFAULT_TARGET_FAMILY"], params.dist_info.DEFAULT_TARGET_FAMILY
+        )
+        self.assertEqual(
+            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
+            sorted(params.dist_info.AVAILABLE_TARGET_FAMILIES),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests for cross-platform family awareness in the rocm sdist
+# ---------------------------------------------------------------------------
+
+
+class CrossPlatformFamiliesTest(TmpDirTestCase):
+    """Tests for linux_target_families / windows_target_families kwargs.
+
+    When a multi-arch release pipeline knows the full union of GPU targets
+    across both Linux and Windows builds, the rocm sdist must (a) advertise
+    that union in AVAILABLE_TARGET_FAMILIES, (b) record each platform's
+    contribution separately so setup.py can attach sys_platform markers,
+    (c) pick a DEFAULT_TARGET_FAMILY that resolves on either OS, and
+    (d) produce identical dist_info_contents on both platforms so the
+    metadata that drives the published device extras matches regardless
+    of which platform's job uploaded the sdist last.
+
+    Note on naming: the kwargs and the AVAILABLE_TARGET_FAMILIES constant
+    use the historical "target_family" label, but in kpack-split mode
+    (the only mode that exhibits this bug) the values are GPU **targets**
+    like gfx942 / gfx1100, matching the device wheel suffixes the
+    artifact catalog produces and the `rocm-sdk-device-*` package names
+    published to the index. Tests use realistic target names accordingly.
+
+    The on-disk artifact catalog is irrelevant under these kwargs; tests
+    use an empty artifact tree except where the on-disk view is itself
+    under test (backward compat + identity-across-disjoint-artifacts).
+    """
+
+    def _add_minimal_artifact(self, artifact_dir: Path, target_family: str):
+        subdir = artifact_dir / f"base_lib_{target_family}"
+        (subdir / "stage").mkdir(parents=True, exist_ok=True)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(
+        self,
+        *,
+        on_disk_families: list[str] | None = None,
+        linux_target_families: list[str] | None = None,
+        windows_target_families: list[str] | None = None,
+    ) -> Parameters:
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        for tf in on_disk_families or []:
+            self._add_minimal_artifact(artifact_dir, tf)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+
+    def _exec_dist_info(self, params: Parameters) -> dict:
+        ns: dict = {}
+        exec(params.dist_info_contents, ns)
+        return ns
+
+    # ----- Backward compat: no kwargs => on-disk artifact view ------------
+
+    def test_no_kwargs_uses_on_disk_artifact_view(self):
+        """Without the new kwargs, available_target_families reflects the
+        artifact catalog. Single-platform builds keep their existing
+        behavior unchanged.
+        """
+        params = self._make_params(on_disk_families=["gfx942", "gfx1100"])
+        self.assertEqual(
+            sorted(params.available_target_families),
+            ["gfx1100", "gfx942"],
+        )
+        self.assertEqual(params.linux_target_families, [])
+        self.assertEqual(params.windows_target_families, [])
+
+    def test_dist_info_omits_per_platform_appends_when_kwargs_omitted(self):
+        """No LINUX/WINDOWS_TARGET_FAMILIES.append() lines emitted when
+        neither kwarg is passed, so the generated _dist_info.py for
+        single-platform builds is byte-equivalent to today's.
+        """
+        params = self._make_params(on_disk_families=["gfx942"])
+        ns = self._exec_dist_info(params)
+        # Predeclared constants must load as empty lists.
+        self.assertEqual(ns["LINUX_TARGET_FAMILIES"], [])
+        self.assertEqual(ns["WINDOWS_TARGET_FAMILIES"], [])
+        self.assertNotIn("LINUX_TARGET_FAMILIES.append", params.dist_info_contents)
+        self.assertNotIn("WINDOWS_TARGET_FAMILIES.append", params.dist_info_contents)
+
+    # ----- Union semantics ------------------------------------------------
+
+    def test_available_target_families_is_sorted_union(self):
+        """available_target_families is the sorted union of linux + windows."""
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        self.assertEqual(
+            params.available_target_families,
+            ["gfx1100", "gfx1102", "gfx942", "gfx950"],
+        )
+
+    def test_kwargs_override_on_disk_view(self):
+        """When kwargs are passed, available_target_families ignores the
+        on-disk artifact list. The kwargs are the source of truth.
+        """
+        params = self._make_params(
+            on_disk_families=["gfx942"],
+            linux_target_families=["gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(params.available_target_families, ["gfx1100"])
+
+    def test_per_platform_lists_sorted_and_deduped(self):
+        """Each platform's list is sorted and deduped on Parameters."""
+        params = self._make_params(
+            linux_target_families=["gfx950", "gfx942", "gfx942"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(params.linux_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.windows_target_families, ["gfx1100"])
+
+    def test_only_linux_provided_union_equals_linux(self):
+        """When only linux is provided, union equals linux and windows is empty."""
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950"],
+        )
+        self.assertEqual(params.available_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.linux_target_families, ["gfx942", "gfx950"])
+        self.assertEqual(params.windows_target_families, [])
+
+    # ----- default_target_family must be cross-platform-safe --------------
+    # determine_target_family() in _dist_info.py falls back to
+    # DEFAULT_TARGET_FAMILY when neither ROCM_SDK_TARGET_FAMILY nor
+    # offload-arch resolves. setup.py then plugs that target into every
+    # target-specific extras Requires-Dist. If DEFAULT is Linux-only, a
+    # Windows user without env var or offload-arch fails to resolve
+    # `rocm-sdk-libraries-{DEFAULT}` because no win_amd64 wheel exists
+    # for that target. Hence: prefer the intersection.
+
+    def test_default_target_family_prefers_intersection(self):
+        """DEFAULT must come from the linux ∩ windows intersection when
+        non-empty, so a user without env var / offload-arch gets a target
+        that has wheels for their OS.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx1100", "gfx950"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        # Intersection = {gfx1100}; that must be the DEFAULT.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_avoids_linux_only_alpha_first(self):
+        """Discriminating case: alphabetical-first of the union is a
+        Linux-only target but the intersection points elsewhere. The
+        intersection must win, not the alphabetical-first.
+
+        Configuration is artificial: gfx900 / gfx942 are Linux-only in
+        practice; the test puts gfx942 in the Windows list purely to
+        construct a disagreement between sort-order and intersection.
+        """
+        # Union sorted = [gfx900, gfx942] - alpha-first is gfx900 (Linux-only).
+        # Intersection = [gfx942] - DEFAULT must be gfx942.
+        params = self._make_params(
+            linux_target_families=["gfx900", "gfx942"],
+            windows_target_families=["gfx942"],
+        )
+        self.assertEqual(params.default_target_family, "gfx942")
+
+    def test_default_target_family_intersection_is_sorted(self):
+        """When the intersection has multiple targets, DEFAULT is the
+        sorted-first of the intersection (deterministic).
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx1100", "gfx1200"],
+            windows_target_families=["gfx1200", "gfx1100"],
+        )
+        # Intersection sorted = [gfx1100, gfx1200] => gfx1100.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_falls_back_to_union_when_disjoint(self):
+        """When linux and windows lists are disjoint (no cross-platform
+        target possible), DEFAULT falls back to sorted-first-of-union as
+        a best-effort. Users on the "wrong" OS for that DEFAULT will need
+        ROCM_SDK_TARGET_FAMILY or offload-arch.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942"],
+            windows_target_families=["gfx1100"],
+        )
+        # No intersection => sorted-union[0] = gfx1100.
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    def test_default_target_family_from_only_linux(self):
+        """Only linux provided: DEFAULT is first of sorted linux list."""
+        params = self._make_params(
+            linux_target_families=["gfx950", "gfx942"],
+        )
+        self.assertEqual(params.default_target_family, "gfx942")
+
+    def test_default_target_family_from_only_windows(self):
+        """Only windows provided: DEFAULT is first of sorted windows list."""
+        params = self._make_params(
+            windows_target_families=["gfx1200", "gfx1100"],
+        )
+        self.assertEqual(params.default_target_family, "gfx1100")
+
+    # ----- Generated _dist_info.py shape ----------------------------------
+
+    def test_dist_info_exposes_per_platform_constants(self):
+        """LINUX_TARGET_FAMILIES / WINDOWS_TARGET_FAMILIES baked into
+        _dist_info.py so setup.py can inspect them at install time.
+        """
+        params = self._make_params(
+            linux_target_families=["gfx942", "gfx950"],
+            windows_target_families=["gfx1100"],
+        )
+        ns = self._exec_dist_info(params)
+        self.assertEqual(sorted(ns["LINUX_TARGET_FAMILIES"]), ["gfx942", "gfx950"])
+        self.assertEqual(ns["WINDOWS_TARGET_FAMILIES"], ["gfx1100"])
+        self.assertEqual(
+            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
+            ["gfx1100", "gfx942", "gfx950"],
+        )
+
+    def test_dist_info_identical_across_disjoint_artifact_sets(self):
+        """Core invariant: same cross-platform inputs produce identical
+        dist_info_contents on both Linux and Windows machines, even when
+        their on-disk artifact catalogs are disjoint. Without this, the
+        last-writer-wins upload of rocm-X.Y.Z.tar.gz silently drops one
+        platform's targets from the published device extras.
+        """
+        # Linux machine has the full Linux target set on disk.
+        linux_params = self._make_params(
+            on_disk_families=["gfx942", "gfx950", "gfx1100"],
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        # Windows machine only has Windows-supported targets on disk.
+        windows_params = self._make_params(
+            on_disk_families=["gfx1100"],
+            linux_target_families=["gfx942", "gfx950", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(
+            linux_params.dist_info_contents,
+            windows_params.dist_info_contents,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests for platform marker helper
+# ---------------------------------------------------------------------------
+
+
+class PlatformMarkerTest(TmpDirTestCase):
+    """Tests for get_target_family_platform_marker() in _dist_info.py.
+
+    Called by the rocm setup.py at install time to decide whether a
+    device-gfx* Requires-Dist needs a PEP 508 sys_platform marker.
+    Returns the marker string for platform-exclusive families, "" for
+    cross-platform families or when the per-platform breakdown is
+    unknown (single-platform builds).
+    """
+
+    def _make_dist_info(
+        self,
+        *,
+        linux_target_families: list[str] | None,
+        windows_target_families: list[str] | None,
+    ):
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+        return params.dist_info
+
+    def test_markers_in_mixed_platform_config(self):
+        """In a realistic multi-arch config with Linux-only, cross-platform,
+        and Windows-only targets, each category gets the right marker.
+        Mirrors the production case where Linux and Windows ship
+        overlapping but unequal target sets.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        # Linux-only target gets a linux marker.
+        self.assertEqual(
+            dist_info.get_target_family_platform_marker("gfx942"),
+            'sys_platform == "linux"',
+        )
+        # Windows-only target gets a win32 marker.
+        self.assertEqual(
+            dist_info.get_target_family_platform_marker("gfx1102"),
+            'sys_platform == "win32"',
+        )
+        # Cross-platform target has no marker.
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+
+        # Verify xnack-suffixed targets in platform lists are matched by base target.
+        xnack_dist_info = self._make_dist_info(
+            linux_target_families=["gfx942:xnack+", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        self.assertEqual(
+            xnack_dist_info.get_target_family_platform_marker("gfx942"),
+            'sys_platform == "linux"',
+        )
+
+    def test_no_marker_when_per_platform_lists_unknown(self):
+        """Single-platform builds don't pass the new kwargs; no markers
+        are added, so existing (non-multi-arch) sdists are unchanged.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=None, windows_target_families=None
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx942"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+
+    def test_no_marker_when_only_one_platform_participates(self):
+        """When only one platform's families are declared (the other side
+        is skipped in a multi-arch run, or a Linux-only build flows through
+        the cross-platform kwargs), markers are not attached: there is no
+        cross-platform variant to disambiguate from.
+        """
+        # Linux declared, Windows not.
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=None,
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx942"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+        # Windows declared, Linux not.
+        dist_info = self._make_dist_info(
+            linux_target_families=None,
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1100"), "")
+        self.assertEqual(dist_info.get_target_family_platform_marker("gfx1102"), "")
+
+
+# ---------------------------------------------------------------------------
+# Tests for per-target device extras builder
+# ---------------------------------------------------------------------------
+
+
+class PerTargetExtrasTest(TmpDirTestCase):
+    """Tests for build_per_target_extras() in _dist_info.py.
+
+    The helper produces the device-gfx* and device-all entries for the
+    rocm meta sdist's EXTRAS_REQUIRE. Cross-platform-aware: targets
+    listed only in LINUX_TARGET_FAMILIES or only in WINDOWS_TARGET_FAMILIES
+    get a sys_platform marker so `pip install rocm[device-all]` resolves
+    only to wheels actually published for the user's OS.
+
+    All tests run with kpack_split=True to mirror the multi-arch release
+    pipeline (the only mode that exhibits the cross-platform divergence).
+    In legacy mode the libraries package is also target-specific and the
+    helper would additionally emit libraries-{target} extras; that path
+    is not exercised here.
+    """
+
+    def _make_dist_info(
+        self,
+        *,
+        linux_target_families: list[str] | None,
+        windows_target_families: list[str] | None,
+    ):
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir(exist_ok=True)
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=True,
+            linux_target_families=linux_target_families,
+            windows_target_families=windows_target_families,
+        )
+        return params.dist_info
+
+    def test_empty_when_single_target(self):
+        """No per-target extras for distributions with one target (legacy)."""
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942"],
+            windows_target_families=["gfx942"],
+        )
+        self.assertEqual(dist_info.build_per_target_extras(), {})
+
+    def test_extras_emitted_for_mixed_platform_config(self):
+        """In a realistic multi-arch config, the helper emits one
+        device-{target} entry per available target, plus a device-all
+        aggregating them. Linux-only and Windows-only targets carry
+        sys_platform markers; cross-platform targets do not.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100", "gfx1102"],
+        )
+        extras = dist_info.build_per_target_extras()
+
+        # One entry per target plus the aggregate.
+        self.assertEqual(
+            sorted(extras.keys()),
+            sorted(
+                [
+                    "device-gfx1100",
+                    "device-gfx1102",
+                    "device-gfx942",
+                    "device-all",
+                ]
+            ),
+        )
+
+        # Linux-only target carries the linux marker.
+        self.assertTrue(
+            extras["device-gfx942"][0].endswith('; sys_platform == "linux"'),
+            f"Expected linux marker on Linux-only target, got: "
+            f"{extras['device-gfx942'][0]}",
+        )
+        # Windows-only target carries the win32 marker.
+        self.assertTrue(
+            extras["device-gfx1102"][0].endswith('; sys_platform == "win32"'),
+            f"Expected win32 marker on Windows-only target, got: "
+            f"{extras['device-gfx1102'][0]}",
+        )
+        # Cross-platform target has no marker.
+        self.assertNotIn(";", extras["device-gfx1100"][0])
+        self.assertNotIn("sys_platform", extras["device-gfx1100"][0])
+
+        # device-all aggregates every per-target requirement verbatim.
+        self.assertEqual(
+            sorted(extras["device-all"]),
+            sorted(
+                extras["device-gfx942"]
+                + extras["device-gfx1100"]
+                + extras["device-gfx1102"]
+            ),
+        )
+
+        # Verify xnack-suffixed targets produce valid extra names by stripping
+        # the suffix (e.g., 'device-gfx942' not 'device-gfx942:xnack+')
+        xnack_dist_info = self._make_dist_info(
+            linux_target_families=["gfx942:xnack+", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        xnack_extras = xnack_dist_info.build_per_target_extras()
+        self.assertIn("device-gfx942", xnack_extras)
+        self.assertNotIn("device-gfx942:xnack+", xnack_extras)
+        xnack_req = xnack_extras["device-gfx942"][0]
+        self.assertTrue(
+            xnack_req.startswith("rocm-sdk-device-gfx942=="),
+            f"Expected stripped package name in requirement, got: {xnack_req}",
+        )
+
+    def test_no_markers_when_per_platform_lists_unknown(self):
+        """Without per-platform kwargs (single-platform builds), no markers
+        attach so existing single-platform sdists stay unchanged.
+        """
+        # Populate two targets via the artifact catalog so the helper
+        # actually emits per-target extras.
+        artifact_dir = self.temp_dir / "artifacts"
+        for t in ("gfx942", "gfx1100"):
+            subdir = artifact_dir / f"base_lib_{t}"
+            (subdir / "stage").mkdir(parents=True, exist_ok=True)
+            (subdir / "artifact_manifest.txt").write_text("stage\n")
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=True,
+        )
+        extras = params.dist_info.build_per_target_extras()
+        for extra_name, requires in extras.items():
+            for req in requires:
+                self.assertNotIn(
+                    "sys_platform",
+                    req,
+                    f"Single-platform build leaked a marker into {extra_name}: {req}",
+                )
+
+    def test_requires_dist_pins_version_and_uses_target_in_name(self):
+        """Requires-Dist strings start with 'rocm-sdk-device-{target}==<ver>',
+        matching the canonical PackageEntry.get_dist_package_require() shape.
+        """
+        dist_info = self._make_dist_info(
+            linux_target_families=["gfx942", "gfx1100"],
+            windows_target_families=["gfx1100"],
+        )
+        extras = dist_info.build_per_target_extras()
+        req = extras["device-gfx942"][0]
+        self.assertTrue(
+            req.startswith("rocm-sdk-device-gfx942==0.0.1.test"),
+            f"Unexpected Requires-Dist shape: {req}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for AIPROFSYST-669: rocm-profiler wheel silently dropped
+# libprofiler-hub.so*
+# ---------------------------------------------------------------------------
+
+
+class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
+    """rocprofiler-systems' ProfilerHub.cmake vendors profiler-hub as a
+    runtime .so dependency (NEEDED libprofiler-hub.so.0). It stages into the
+    same lib/ dir as librocprof-sys*, but PROFILER_WHEEL_INCLUDES never
+    listed it, so it was silently dropped when the rocm-profiler wheel was
+    assembled from an otherwise-correct artifact - breaking every rocprof-sys
+    tool at load time.
+    """
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+        files: dict[str, str],
+    ):
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        for relpath, content in files.items():
+            f = stage / relpath
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(content)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(self, artifact_dir: Path) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+
+    def test_profiler_wheel_includes_libprofiler_hub(self):
+        """libprofiler-hub.so* staged inside the rocprofiler-systems artifact
+        must be selected into the profiler wheel, same as librocprof-sys*.
+        """
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "lib",
+            "generic",
+            {
+                "lib/librocprof-sys.so.1": "rocprof-sys runtime",
+                "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
+            },
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(
+            profiler.files.has("lib/libprofiler-hub.so.0"),
+            "libprofiler-hub.so.0 was dropped from the profiler wheel "
+            "(AIPROFSYST-669 regression)",
+        )
+        self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
+
+    def test_profiler_wheel_excludes_unrelated_lib_files(self):
+        """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
+        catch-all - an unrelated file must not sneak into the profiler wheel.
+        """
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "lib",
+            "generic",
+            {
+                "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
+                "lib/libunrelated-dependency.so.1": "should not be selected",
+            },
+        )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
+        self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
+
+
+class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
+    """Unit tests for ensure_profiler_library_symlinks() in isolation - no
+    real ELF binaries or ArtifactCatalog machinery needed, since it only
+    walks profiler.platform_dir / "lib" by filename pattern.
+    """
+
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory()
+        self.platform_dir = Path(self.temp_context.name)
+        self.lib_dir = self.platform_dir / "lib"
+        self.lib_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self.temp_context.cleanup()
+
+    def _fake_profiler(self):
+        import types
+
+        return types.SimpleNamespace(platform_dir=self.platform_dir)
+
+    def test_creates_unversioned_symlink_for_libprofiler_hub(self):
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "libprofiler-hub.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "libprofiler-hub.so.0")
+
+    def test_still_creates_unversioned_symlink_for_librocprof_sys(self):
+        """Regression guard: extending the glob to cover libprofiler-hub must
+        not break the existing librocprof-sys* symlink behavior.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "librocprof-sys.so.1").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "librocprof-sys.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "librocprof-sys.so.1")
+
+    def test_does_not_overwrite_existing_symlink(self):
+        """A prior run (or another mechanism) may have already created the
+        unversioned symlink - don't clobber it, even if it happens to point
+        at a different (but real) target than we'd have picked.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "libprofiler-hub.so.0").write_text("fake soname file")
+        (self.lib_dir / "libprofiler-hub.so.99").write_text("a different target")
+        (self.lib_dir / "libprofiler-hub.so").symlink_to("libprofiler-hub.so.99")
+
+        ensure_profiler_library_symlinks(self._fake_profiler())
+
+        link = self.lib_dir / "libprofiler-hub.so"
+        self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+
+# ---------------------------------------------------------------------------
+# Tests for materialize permission handling
+# ---------------------------------------------------------------------------
+
+
+def _scandir_entry(path: Path) -> os.DirEntry:
+    with os.scandir(path.parent) as it:
+        for entry in it:
+            if entry.name == path.name:
+                return entry
+    raise FileNotFoundError(path)
+
+
+class MaterializeReadOnlySourceTest(TmpDirTestCase):
+    """Regression test for materializing a read-only upstream file.
+
+    shutil.copy2 preserves the source mode bits, so a read-only source (e.g.
+    LLVM's OMPD gdb module, or any file owned by another user in a shared
+    build tree) was copied read-only. The subsequent patchelf pass then could
+    not open the file for writing. _populate_file must restore the owner-write
+    bit on the materialized file regardless of the source permissions.
+    """
+
+    def test_readonly_source_becomes_owner_writable(self):
+        # Build a package instance without running __init__ (which needs a full
+        # dist_info catalog); _populate_file only touches self.files.
+        pkg = PopulatedDistPackage.__new__(PopulatedDistPackage)
+        pkg.files = PopulatedFiles()
+
+        # Use a .txt source so get_file_type() returns "text" and the ELF
+        # rpath path (patchelf) is skipped — we only exercise the copy+chmod.
+        src = self.write_file("readonly.txt", "payload")
+        # Owner read-only (no write bit); this is the exact condition the fix
+        # handles. 0o400 rather than 0o444 keeps the temp file non-world-readable.
+        os.chmod(src, 0o400)
+
+        dest_path = self.temp_dir / "dest" / "readonly.txt"
+        pkg._populate_file(
+            "readonly.txt",
+            dest_path,
+            _scandir_entry(src),
+            resolve_src=False,
+        )
+
+        mode = stat.S_IMODE(os.stat(dest_path).st_mode)
+        self.assertEqual(dest_path.read_text(), "payload")
+        self.assertTrue(
+            mode & stat.S_IWUSR,
+            f"expected owner-write bit to be set, got mode {oct(mode)}",
+        )
 
 
 if __name__ == "__main__":

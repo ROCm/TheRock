@@ -1,11 +1,13 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(OPENMPI_VERSION "5.0.9")
+
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-openmpi-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.9.tar.bz2"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/openmpi-5.0.9.tar.bz2"
+      # Originally mirrored from: "https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-${OPENMPI_VERSION}.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/openmpi-${OPENMPI_VERSION}.tar.bz2"
       URL_HASH "SHA256=dfb72762531170847af3e4a0f21d77d7b23cf36f67ce7ce9033659273677d80b"
       TOUCH "${_download_stamp}"
     )
@@ -22,6 +24,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
           .
         CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
+        "-DOPENMPI_VERSION=${OPENMPI_VERSION}"
         BINARY_DIR
           build
         EXTRA_DEPENDS
@@ -48,7 +51,7 @@ endif()
 include(CMakePackageConfigHelpers)
 
 cmake_minimum_required(VERSION 3.25)
-project(OpenMPI_BUILD VERSION 5.0.9)
+project(OpenMPI_BUILD VERSION ${OPENMPI_VERSION})
 
 set(MPI_STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/install")
 
@@ -86,13 +89,13 @@ configure_package_config_file(
 )
 
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/mpi-version-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/mpi-config-version.cmake"
     VERSION "${PROJECT_VERSION}"
     COMPATIBILITY SameMajorVersion
 )
 
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/mpi-config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/mpi-version-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/mpi-config-version.cmake"
     DESTINATION lib/cmake/openmpi
 )

@@ -1,0 +1,874 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+from datetime import datetime, timezone
+from pathlib import Path
+import os
+import sys
+import unittest
+from unittest import mock
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+
+import baseline_runs
+
+RequiredArtifact = baseline_runs.RequiredArtifact
+
+
+def _workflow_run(
+    run_id: str,
+    *,
+    status: str = "completed",
+    conclusion: str | None = "success",
+    head_sha: str | None = None,
+    run_attempt: int = 1,
+    created_at: str = "2026-06-17T20:00:00Z",
+) -> dict:
+    return {
+        "id": run_id,
+        "status": status,
+        "conclusion": conclusion,
+        "html_url": f"https://github.com/ROCm/TheRock/actions/runs/{run_id}",
+        "head_sha": head_sha or f"sha-{run_id}",
+        "head_branch": "main",
+        "run_attempt": run_attempt,
+        "created_at": created_at,
+    }
+
+
+def _workflow_job(
+    name: str,
+    *,
+    status: str = "completed",
+    conclusion: str | None = "success",
+) -> dict:
+    return {
+        "name": name,
+        "status": status,
+        "conclusion": conclusion,
+    }
+
+
+class FakeBackend:
+    def __init__(self, artifacts: list[str]):
+        self._artifacts = artifacts
+
+    def list_artifacts(self):
+        return list(self._artifacts)
+
+
+class BaselineRunsTest(unittest.TestCase):
+    def test_is_completed_workflow_run(self):
+        self.assertTrue(baseline_runs.is_completed_workflow_run(_workflow_run("1")))
+        self.assertFalse(
+            baseline_runs.is_completed_workflow_run(
+                _workflow_run("1", status="in_progress", conclusion=None)
+            )
+        )
+
+    def test_is_successful_workflow_run(self):
+        self.assertTrue(baseline_runs.is_successful_workflow_run(_workflow_run("1")))
+        self.assertFalse(
+            baseline_runs.is_successful_workflow_run(
+                _workflow_run("1", conclusion="failure")
+            )
+        )
+        self.assertFalse(
+            baseline_runs.is_successful_workflow_run(
+                _workflow_run("1", status="in_progress", conclusion=None)
+            )
+        )
+
+    def test_is_successful_workflow_job(self):
+        self.assertTrue(
+            baseline_runs.is_successful_workflow_job(_workflow_job("Build"))
+        )
+        self.assertFalse(
+            baseline_runs.is_successful_workflow_job(
+                _workflow_job("Build", conclusion="failure")
+            )
+        )
+        self.assertFalse(
+            baseline_runs.is_successful_workflow_job(
+                _workflow_job("Build", status="in_progress", conclusion=None)
+            )
+        )
+
+    def test_query_completed_workflow_runs(self):
+        with mock.patch.object(
+            baseline_runs,
+            "gha_send_request",
+            return_value={
+                "workflow_runs": [
+                    _workflow_run("1"),
+                    _workflow_run("2"),
+                    _workflow_run("3"),
+                ]
+            },
+        ) as mock_send_request:
+            runs = baseline_runs.query_completed_workflow_runs(
+                github_repository="ROCm/TheRock",
+                workflow_name="multi_arch_ci.yml",
+                branch="main",
+                max_runs=2,
+            )
+
+        self.assertEqual([run["id"] for run in runs], ["1", "2"])
+        url = mock_send_request.call_args.args[0]
+        self.assertIn(
+            "/repos/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/runs", url
+        )
+        self.assertIn("status=completed", url)
+        self.assertIn("branch=main", url)
+        self.assertIn("per_page=2", url)
+
+    def test_query_successful_workflow_runs(self):
+        with mock.patch.object(
+            baseline_runs,
+            "gha_send_request",
+            return_value={
+                "workflow_runs": [
+                    _workflow_run("1"),
+                    _workflow_run("2"),
+                    _workflow_run("3"),
+                ]
+            },
+        ) as mock_send_request:
+            runs = baseline_runs.query_successful_workflow_runs(
+                github_repository="ROCm/TheRock",
+                workflow_name="multi_arch_ci.yml",
+                branch="main",
+                max_runs=2,
+            )
+
+        self.assertEqual([run["id"] for run in runs], ["1", "2"])
+        url = mock_send_request.call_args.args[0]
+        self.assertIn(
+            "/repos/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/runs", url
+        )
+        self.assertIn("status=success", url)
+        self.assertIn("branch=main", url)
+        self.assertIn("per_page=2", url)
+
+    def test_query_workflow_run_jobs_uses_run_attempt_when_provided(self):
+        with mock.patch.object(
+            baseline_runs,
+            "gha_send_request",
+            return_value={
+                "jobs": [
+                    _workflow_job("Build Multi-Arch Stages"),
+                    _workflow_job("Test hip-tests", conclusion="failure"),
+                ]
+            },
+        ) as mock_send_request:
+            jobs = baseline_runs.query_workflow_run_jobs(
+                github_repository="ROCm/TheRock",
+                run_id="123",
+                run_attempt=4,
+            )
+
+        self.assertEqual(
+            [job["name"] for job in jobs],
+            ["Build Multi-Arch Stages", "Test hip-tests"],
+        )
+        url = mock_send_request.call_args.args[0]
+        self.assertIn("/actions/runs/123/attempts/4/jobs", url)
+
+    def test_query_workflow_run_jobs_paginates_latest_jobs(self):
+        with mock.patch.object(
+            baseline_runs,
+            "gha_send_request",
+            side_effect=[
+                {"jobs": [_workflow_job(f"Build {i}") for i in range(100)]},
+                {"jobs": [_workflow_job("Build final")]},
+            ],
+        ) as mock_send_request:
+            jobs = baseline_runs.query_workflow_run_jobs(
+                github_repository="ROCm/TheRock",
+                run_id="123",
+            )
+
+        self.assertEqual(len(jobs), 101)
+        first_url = mock_send_request.call_args_list[0].args[0]
+        second_url = mock_send_request.call_args_list[1].args[0]
+        self.assertIn("/actions/runs/123/jobs", first_url)
+        self.assertIn("filter=latest", first_url)
+        self.assertIn("page=1", first_url)
+        self.assertIn("page=2", second_url)
+
+    def test_create_workflow_run_summary(self):
+        run = _workflow_run("123")
+        summary = baseline_runs.create_workflow_run_summary(
+            run,
+            github_repository="ROCm/TheRock",
+            workflow_name="multi_arch_ci.yml",
+        )
+
+        self.assertEqual(summary.repository, "ROCm/TheRock")
+        self.assertEqual(summary.branch, "main")
+        self.assertEqual(summary.commit, "sha-123")
+        self.assertEqual(summary.workflow, "multi_arch_ci.yml")
+        self.assertEqual(summary.run_id, "123")
+        self.assertEqual(summary.status, "completed")
+        self.assertEqual(summary.conclusion, "success")
+        self.assertEqual(summary.timestamp, "2026-06-17T20:00:00Z")
+
+    def test_workflow_run_summary_to_dict(self):
+        run = _workflow_run("123")
+        summary = baseline_runs.create_workflow_run_summary(
+            run,
+            github_repository="ROCm/TheRock",
+            workflow_name="multi_arch_ci.yml",
+        )
+
+        payload = summary.to_dict()
+        self.assertEqual(
+            set(payload.keys()),
+            {
+                "repository",
+                "branch",
+                "commit",
+                "workflow",
+                "run_id",
+                "status",
+                "conclusion",
+                "timestamp",
+                "html_url",
+            },
+        )
+        self.assertEqual(payload["run_id"], "123")
+        self.assertEqual(payload["workflow"], "multi_arch_ci.yml")
+
+    def test_baseline_run_to_dict(self):
+        source_ref = baseline_runs.WorkflowRunSummary(
+            repository="ROCm/TheRock",
+            branch="main",
+            commit="sha-123",
+            workflow="multi_arch_ci.yml",
+            run_id="123",
+            status="completed",
+            conclusion="success",
+            timestamp=None,
+        )
+
+        baseline = baseline_runs.BaselineRun(
+            source_ref=source_ref,
+            platform="linux",
+            job_health=mock.Mock(),
+            artifact_availability=mock.Mock(),
+        )
+
+        payload = baseline.to_dict()
+
+        self.assertIn("source_ref", payload)
+        self.assertEqual(payload["platform"], "linux")
+        self.assertEqual(payload["source_ref"]["run_id"], "123")
+
+    def test_validate_required_artifacts_available(self):
+        backend = FakeBackend(
+            [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+                "blas_dev_gfx94X-dcgpu.tar.xz",
+                "unrelated_lib_generic.tar.zst",
+            ]
+        )
+
+        availability = baseline_runs.validate_required_artifacts_available(
+            backend=backend,
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+            ],
+        )
+
+        self.assertTrue(availability.is_valid)
+        self.assertEqual(availability.missing_artifacts, ())
+        self.assertEqual(
+            availability.matched_filenames,
+            (
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+                "blas_dev_gfx94X-dcgpu.tar.xz",
+            ),
+        )
+
+    def test_validate_required_artifacts_available_reports_missing_names(self):
+        backend = FakeBackend(["blas_lib_gfx94X-dcgpu.tar.zst"])
+
+        availability = baseline_runs.validate_required_artifacts_available(
+            backend=backend,
+            required_artifacts=[
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+                RequiredArtifact("rand", "gfx94X-dcgpu"),
+            ],
+        )
+
+        self.assertFalse(availability.is_valid)
+        self.assertEqual(
+            availability.missing_artifacts,
+            (RequiredArtifact("rand", "gfx94X-dcgpu"),),
+        )
+        self.assertEqual(
+            availability.matched_filenames,
+            ("blas_lib_gfx94X-dcgpu.tar.zst",),
+        )
+
+    def test_validate_required_artifacts_requires_nonempty_requirements(self):
+        backend = FakeBackend(["blas_lib_gfx94X-dcgpu.tar.zst"])
+
+        with self.assertRaisesRegex(ValueError, "required_artifacts"):
+            baseline_runs.validate_required_artifacts_available(
+                backend=backend,
+                required_artifacts=[],
+            )
+
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            baseline_runs.validate_required_artifacts_available(
+                backend=backend,
+                required_artifacts=[RequiredArtifact("blas", "")],
+            )
+
+    def test_validate_required_artifacts_checks_each_target_family(self):
+        backend = FakeBackend(["blas_lib_gfx94X-dcgpu.tar.zst"])
+
+        availability = baseline_runs.validate_required_artifacts_available(
+            backend=backend,
+            required_artifacts=[
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+                RequiredArtifact("blas", "gfx120X-all"),
+            ],
+        )
+
+        self.assertFalse(availability.is_valid)
+        self.assertEqual(
+            availability.missing_artifacts,
+            (RequiredArtifact("blas", "gfx120X-all"),),
+        )
+
+    def test_validate_required_jobs_successful(self):
+        job_health = baseline_runs.validate_required_jobs_successful(
+            workflow_jobs=[
+                _workflow_job("Build Multi-Arch Stages / linux"),
+                _workflow_job("Build Multi-Arch Stages / windows"),
+                _workflow_job("Test hip-tests", conclusion="failure"),
+            ],
+            required_name_substrings=["Build Multi-Arch Stages"],
+        )
+
+        self.assertTrue(job_health.is_valid)
+        self.assertEqual(
+            job_health.matched_job_names,
+            (
+                "Build Multi-Arch Stages / linux",
+                "Build Multi-Arch Stages / windows",
+            ),
+        )
+        self.assertEqual(job_health.failed_job_names, ())
+        self.assertEqual(job_health.missing_name_substrings, ())
+
+    def test_validate_required_jobs_successful_reports_failed_and_missing_jobs(self):
+        job_health = baseline_runs.validate_required_jobs_successful(
+            workflow_jobs=[
+                _workflow_job(
+                    "Build Multi-Arch Stages / linux",
+                    conclusion="failure",
+                ),
+                _workflow_job("Test hip-tests"),
+            ],
+            required_name_substrings=[
+                "Build Multi-Arch Stages",
+                "Build Python Packages",
+            ],
+        )
+
+        self.assertFalse(job_health.is_valid)
+        self.assertEqual(
+            job_health.failed_job_names,
+            ("Build Multi-Arch Stages / linux (completed/failure)",),
+        )
+        self.assertEqual(
+            job_health.missing_name_substrings,
+            ("Build Python Packages",),
+        )
+
+    def test_select_baseline_run_uses_failed_workflow_with_healthy_build_jobs(self):
+        runs = [
+            _workflow_run("current"),
+            _workflow_run("missing-artifacts"),
+            _workflow_run("failed", conclusion="failure"),
+            _workflow_run("usable"),
+        ]
+        artifacts_by_run_id = {
+            "missing-artifacts": ["base_lib_generic.tar.zst"],
+            "failed": [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+            ],
+            "usable": [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+            ],
+        }
+        jobs_by_run_id = {
+            "missing-artifacts": [_workflow_job("Build Multi-Arch Stages")],
+            "failed": [
+                _workflow_job("Build Multi-Arch Stages"),
+                _workflow_job("Test hip-tests", conclusion="failure"),
+            ],
+            "usable": [_workflow_job("Build Multi-Arch Stages")],
+        }
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(artifacts_by_run_id.get(workflow_run["id"], []))
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return jobs_by_run_id.get(workflow_run["id"], [])
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+            ],
+            github_repository="ROCm/TheRock",
+            workflow_name="multi_arch_ci.yml",
+            branch="main",
+            platform="linux",
+            exclude_run_ids=["current"],
+            required_successful_job_name_substrings=["Build Multi-Arch Stages"],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "failed")
+        self.assertEqual(baseline.head_sha, "sha-failed")
+        self.assertEqual(baseline.platform, "linux")
+        self.assertEqual(baseline.source_ref.workflow, "multi_arch_ci.yml")
+        self.assertEqual(baseline.source_ref.repository, "ROCm/TheRock")
+        self.assertEqual(baseline.job_health.failed_job_names, ())
+        self.assertEqual(baseline.artifact_availability.missing_artifacts, ())
+
+    def test_select_baseline_run_skips_run_when_required_build_job_failed(self):
+        runs = [
+            _workflow_run("failed-build", conclusion="failure"),
+            _workflow_run("usable"),
+        ]
+        artifacts_by_run_id = {
+            "failed-build": [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+            ],
+            "usable": [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+            ],
+        }
+        jobs_by_run_id = {
+            "failed-build": [
+                _workflow_job("Build Multi-Arch Stages", conclusion="failure")
+            ],
+            "usable": [_workflow_job("Build Multi-Arch Stages")],
+        }
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(artifacts_by_run_id.get(workflow_run["id"], []))
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return jobs_by_run_id.get(workflow_run["id"], [])
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+            ],
+            platform="linux",
+            required_successful_job_name_substrings=["Build Multi-Arch Stages"],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "usable")
+
+    def test_select_baseline_run_returns_none_when_no_candidate_is_valid(self):
+        runs = [
+            _workflow_run("failed", conclusion="failure"),
+            _workflow_run("missing-artifacts"),
+        ]
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend([])
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return []
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNone(baseline)
+
+
+class CommitCompatibilityTest(unittest.TestCase):
+    HISTORY = ["sha-new", "sha-current", "sha-old", "sha-older"]
+
+    def test_same_commit_is_valid(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="sha-current",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "same")
+        self.assertTrue(result.is_valid)
+
+    def test_ancestor_commit_is_valid(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="sha-old",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "ancestor")
+        self.assertTrue(result.is_valid)
+
+    def test_descendant_commit_is_invalid(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="sha-new",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "descendant_or_divergent")
+        self.assertFalse(result.is_valid)
+
+    def test_unknown_candidate_is_invalid(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="sha-divergent",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "unknown")
+        self.assertFalse(result.is_valid)
+
+    def test_current_outside_window_is_unknown(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="sha-old",
+            current_commit_sha="sha-missing",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "unknown")
+        self.assertFalse(result.is_valid)
+
+    def test_sha_comparison_is_case_insensitive(self):
+        result = baseline_runs.validate_commit_compatibility(
+            candidate_head_sha="SHA-CURRENT",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=self.HISTORY,
+        )
+        self.assertEqual(result.relationship, "same")
+        self.assertTrue(result.is_valid)
+
+    def test_empty_sha_raises(self):
+        with self.assertRaisesRegex(ValueError, "current_commit_sha"):
+            baseline_runs.validate_commit_compatibility(
+                candidate_head_sha="sha-old",
+                current_commit_sha="",
+                ordered_commit_shas=self.HISTORY,
+            )
+
+
+class RunRecencyTest(unittest.TestCase):
+    NOW = datetime(2026, 6, 17, 20, 0, 0, tzinfo=timezone.utc)
+
+    def test_fresh_run_is_valid(self):
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at="2026-06-17T18:00:00Z"),
+            max_age_hours=24,
+            now=self.NOW,
+        )
+        self.assertEqual(result.age_hours, 2.0)
+        self.assertTrue(result.is_valid)
+
+    def test_stale_run_is_invalid(self):
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at="2026-06-15T18:00:00Z"),
+            max_age_hours=24,
+            now=self.NOW,
+        )
+        self.assertEqual(result.age_hours, 50.0)
+        self.assertFalse(result.is_valid)
+
+    def test_no_max_age_accepts_any_parseable_timestamp(self):
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at="2020-01-01T00:00:00Z"),
+            max_age_hours=None,
+            now=self.NOW,
+        )
+        self.assertTrue(result.is_valid)
+
+    def test_missing_timestamp_is_invalid(self):
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at=""),
+            max_age_hours=None,
+            now=self.NOW,
+        )
+        self.assertIsNone(result.age_hours)
+        self.assertFalse(result.is_valid)
+
+    def test_unparseable_timestamp_is_invalid(self):
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at="not-a-date"),
+            max_age_hours=24,
+            now=self.NOW,
+        )
+        self.assertIsNone(result.age_hours)
+        self.assertFalse(result.is_valid)
+
+    def test_negative_max_age_raises(self):
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            baseline_runs.validate_run_recency(
+                workflow_run=_workflow_run("1"),
+                max_age_hours=-1,
+                now=self.NOW,
+            )
+
+    def test_future_created_at_is_invalid(self):
+        # created_at after `now` (clock skew / bad data) -> negative age.
+        result = baseline_runs.validate_run_recency(
+            workflow_run=_workflow_run("1", created_at="2026-06-17T22:00:00Z"),
+            max_age_hours=24,
+            now=self.NOW,
+        )
+        self.assertEqual(result.age_hours, -2.0)
+        self.assertFalse(result.is_valid)
+
+
+class SelectBaselineRunSafetyRulesTest(unittest.TestCase):
+    def _factories(self, artifacts_by_run_id, jobs_by_run_id):
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(artifacts_by_run_id.get(workflow_run["id"], []))
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return jobs_by_run_id.get(workflow_run["id"], [])
+
+        return backend_factory, workflow_jobs_fetcher
+
+    def test_select_baseline_run_skips_incompatible_commit(self):
+        runs = [
+            _workflow_run("newer", head_sha="sha-newer"),
+            _workflow_run("ancestor", head_sha="sha-ancestor"),
+        ]
+        artifacts = {
+            "newer": ["base_lib_generic.tar.zst"],
+            "ancestor": ["base_lib_generic.tar.zst"],
+        }
+        jobs = {
+            "newer": [_workflow_job("Build")],
+            "ancestor": [_workflow_job("Build")],
+        }
+        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=[
+                "sha-newer",
+                "sha-current",
+                "sha-ancestor",
+            ],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "ancestor")
+        assert baseline.commit_compatibility is not None
+        self.assertEqual(baseline.commit_compatibility.relationship, "ancestor")
+
+    def test_select_baseline_run_requires_ordered_commits_for_commit_rule(self):
+        with self.assertRaisesRegex(ValueError, "ordered_commit_shas"):
+            baseline_runs.select_baseline_run(
+                required_artifacts=[RequiredArtifact("base", "generic")],
+                platform="linux",
+                current_commit_sha="sha-current",
+                workflow_runs=[_workflow_run("1")],
+                backend_factory=lambda *a: FakeBackend([]),
+                workflow_jobs_fetcher=lambda *a: [],
+            )
+
+    def test_select_baseline_run_rejects_empty_current_commit_sha(self):
+        # Empty current_commit_sha still enables the check; fail fast at the
+        # API boundary instead of when the first candidate is inspected.
+        with self.assertRaisesRegex(ValueError, "current_commit_sha"):
+            baseline_runs.select_baseline_run(
+                required_artifacts=[RequiredArtifact("base", "generic")],
+                platform="linux",
+                current_commit_sha="",
+                ordered_commit_shas=["sha-current"],
+                workflow_runs=[_workflow_run("1")],
+                backend_factory=lambda *a: FakeBackend([]),
+                workflow_jobs_fetcher=lambda *a: [],
+            )
+
+    def test_select_baseline_run_skips_stale_runs(self):
+        runs = [
+            _workflow_run("stale", created_at="2026-06-10T20:00:00Z"),
+            _workflow_run("fresh", created_at="2026-06-17T10:00:00Z"),
+        ]
+        artifacts = {
+            "stale": ["base_lib_generic.tar.zst"],
+            "fresh": ["base_lib_generic.tar.zst"],
+        }
+        jobs = {
+            "stale": [_workflow_job("Build")],
+            "fresh": [_workflow_job("Build")],
+        }
+        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            max_age_hours=24,
+            now=datetime(2026, 6, 17, 20, 0, 0, tzinfo=timezone.utc),
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "fresh")
+        assert baseline.run_recency is not None
+        self.assertTrue(baseline.run_recency.is_valid)
+
+    def test_select_baseline_run_skips_run_with_empty_head_sha(self):
+        runs = [
+            _workflow_run("no-sha", head_sha=""),
+            _workflow_run("ancestor", head_sha="sha-ancestor"),
+        ]
+        artifacts = {
+            "no-sha": ["base_lib_generic.tar.zst"],
+            "ancestor": ["base_lib_generic.tar.zst"],
+        }
+        jobs = {
+            "no-sha": [_workflow_job("Build")],
+            "ancestor": [_workflow_job("Build")],
+        }
+        backend_factory, workflow_jobs_fetcher = self._factories(artifacts, jobs)
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            current_commit_sha="sha-current",
+            ordered_commit_shas=["sha-current", "sha-ancestor"],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "ancestor")
+
+
+class RunTimingTest(unittest.TestCase):
+    def test_parses_queue_run_and_total(self):
+        timing = baseline_runs.parse_run_timing(
+            {
+                "id": "42",
+                "created_at": "2026-06-17T20:00:00Z",
+                "run_started_at": "2026-06-17T20:05:00Z",
+                "updated_at": "2026-06-17T21:05:00Z",
+            }
+        )
+        self.assertEqual(timing.run_id, "42")
+        self.assertEqual(timing.queue_seconds, 300.0)
+        self.assertEqual(timing.run_seconds, 3600.0)
+        self.assertEqual(timing.total_seconds, 3900.0)
+
+    def test_missing_run_started_at_yields_none_derived(self):
+        timing = baseline_runs.parse_run_timing(
+            {
+                "id": "42",
+                "created_at": "2026-06-17T20:00:00Z",
+                "run_started_at": "",
+                "updated_at": "2026-06-17T21:05:00Z",
+            }
+        )
+        # queue and run depend on run_started_at -> None; total still derivable.
+        self.assertIsNone(timing.queue_seconds)
+        self.assertIsNone(timing.run_seconds)
+        self.assertEqual(timing.total_seconds, 3900.0)
+
+    def test_unparseable_timestamp_yields_none(self):
+        timing = baseline_runs.parse_run_timing(
+            {
+                "id": "42",
+                "created_at": "not-a-date",
+                "run_started_at": "2026-06-17T20:05:00Z",
+                "updated_at": "2026-06-17T21:05:00Z",
+            }
+        )
+        self.assertIsNone(timing.queue_seconds)
+        self.assertIsNone(timing.total_seconds)
+        self.assertEqual(timing.run_seconds, 3600.0)
+
+    def test_out_of_order_timestamps_yield_none(self):
+        # run_started_at before created_at, updated_at before run_started_at:
+        # clock skew / bad data -> None rather than negative durations.
+        timing = baseline_runs.parse_run_timing(
+            {
+                "id": "42",
+                "created_at": "2026-06-17T20:05:00Z",
+                "run_started_at": "2026-06-17T20:00:00Z",
+                "updated_at": "2026-06-17T19:00:00Z",
+            }
+        )
+        self.assertIsNone(timing.queue_seconds)
+        self.assertIsNone(timing.run_seconds)
+        self.assertIsNone(timing.total_seconds)
+
+    def test_to_dict_round_trips_keys(self):
+        timing = baseline_runs.parse_run_timing(
+            {"id": "1", "created_at": "2026-06-17T20:00:00Z"}
+        )
+        self.assertEqual(
+            set(timing.to_dict().keys()),
+            {
+                "run_id",
+                "created_at",
+                "run_started_at",
+                "updated_at",
+                "queue_seconds",
+                "run_seconds",
+                "total_seconds",
+            },
+        )
+
+    def test_out_of_order_timestamps_emit_debug_log(self):
+        with self.assertLogs(baseline_runs.logger, level="DEBUG") as captured:
+            baseline_runs.parse_run_timing(
+                {
+                    "id": "42",
+                    "created_at": "2026-06-17T20:05:00Z",
+                    "run_started_at": "2026-06-17T20:00:00Z",
+                    "updated_at": "2026-06-17T21:00:00Z",
+                }
+            )
+        self.assertTrue(
+            any("negative duration" in message for message in captured.output)
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

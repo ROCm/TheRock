@@ -1,6 +1,6 @@
 # Partially retrieved from https://github.com/pytorch/pytorch/blob/main/requirements.txt
 # and https://github.com/pytorch/pytorch/blob/main/requirements-build.txt
-pytest==8.3.5
+pytest==9.0.3
 pytest-timeout
 pytest-xdist>=3.5.0
 expecttest>=0.3.0

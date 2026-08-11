@@ -120,25 +120,6 @@ def create_ccache_log_archive(build_dir: Path):
     )
 
 
-def upload_artifacts(
-    artifact_group: str,
-    build_dir: Path,
-    output_root: WorkflowOutputRoot,
-    backend: StorageBackend,
-):
-    """Upload build artifacts (.tar.xz archives and checksums) and index."""
-    artifacts_dir = build_dir / "artifacts"
-    if not artifacts_dir.is_dir():
-        log(f"[INFO] Artifacts directory {artifacts_dir} not found. Skipping.")
-        return
-
-    log("Uploading artifacts")
-    count = backend.upload_directory(
-        artifacts_dir, output_root.root(), include=["*.tar.xz*"]
-    )
-    log(f"[INFO] Uploaded {count} artifact files")
-
-
 def upload_logs(
     artifact_group: str,
     build_dir: Path,
@@ -238,12 +219,6 @@ def run(args):
         run_id=args.run_id, platform=PLATFORM
     )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
-
-    # Upload artifacts only if the job not failed
-    if not args.job_status or args.job_status == "success":
-        log("Upload build artifacts")
-        log("----------------------")
-        upload_artifacts(args.artifact_group, args.build_dir, output_root, backend)
 
     log("Upload log")
     log("----------")

@@ -26,52 +26,118 @@ on:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_call, default to empty and trust the calling workflow to be explicit or pass "all".
       linux_amdgpu_families:
-        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
       windows_amdgpu_families:
-        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" or empty = skip.'
+        type: string
+        default: ""
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: true
+      build_jax:
+        description: "Build JAX wheels"
+        type: boolean
+        default: true
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease". All developer-triggered jobs should use "dev"!'
+        description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
-          - nightly
-          - prerelease
         default: dev
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
         default: ""
+      # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
+      # Note: empty string will be converted to the default by github, so we need an explicit "none".
       linux_amdgpu_families:
-        description: "Comma-separated list of Linux GPU families. Empty = all families."
+        description: 'Comma-separated list of Linux GPU families. "all" = all, "none" = skip platform.'
         type: string
-        default: ""
+        default: "gfx94x"
       windows_amdgpu_families:
-        description: "Comma-separated list of Windows GPU families. Empty = all families."
+        description: 'Comma-separated list of Windows GPU families. "all" = all, "none" = skip platform.'
+        type: string
+        default: "gfx110x"
+      run_full_pytorch_tests:
+        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_pytorch:
+        description: "Build PyTorch wheels"
+        type: boolean
+        default: false
+      build_jax:
+        description: "Build JAX wheels"
+        type: boolean
+        default: false
+      python_version:
+        description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 run-name: >-
-  Multi-Arch Release (Linux ${{
-    inputs.linux_amdgpu_families || 'all families'
-  }}, ${{ inputs.release_type }})
+  Multi-Arch Release (${{ inputs.release_type }})
+  | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
+  | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - release"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
       release_type: ${{ inputs.release_type }}
       prerelease_version: ${{ inputs.prerelease_version }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      build_jax: ${{ inputs.build_jax }}
+      python_version: ${{ inputs.python_version }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+    secrets: inherit
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -82,11 +148,55 @@ jobs:
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ needs.setup.outputs.ref }}
+      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      build_jax: ${{ inputs.build_jax }}
+      python_version: ${{ inputs.python_version }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
-  # TODO(#3334): multi_release_arch_windows.yml (and update run-name)
+  windows_release:
+    name: Windows::${{ fromJSON(needs.setup.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup
+    if: ${{ needs.setup.outputs.windows_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_release_windows.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup.outputs.windows_build_config }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ needs.setup.outputs.ref }}
+      build_pytorch: ${{ inputs.build_pytorch }}
+      python_version: ${{ inputs.python_version }}
+    permissions:
+      contents: read
+      actions: write  # Added permission to trigger workflows
+      id-token: write  # Added permission for AWS S3 upload
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [setup, linux_release, windows_release]
+    name: "Quartz - completed - release"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

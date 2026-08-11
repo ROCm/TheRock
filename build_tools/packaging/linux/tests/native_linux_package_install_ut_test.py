@@ -8,11 +8,12 @@
 import contextlib
 import importlib.util
 import os
+import stat
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -28,6 +29,12 @@ if _module_path is None:
     raise FileNotFoundError(
         f"native_linux_package_install_test.py not found in: {_checked}"
     )
+_packaging_utils_path = _module_path.parent / "packaging_utils.py"
+_pu_spec = importlib.util.spec_from_file_location(
+    "packaging_utils", _packaging_utils_path
+)
+packaging_utils = importlib.util.module_from_spec(_pu_spec)
+_pu_spec.loader.exec_module(packaging_utils)
 _spec = importlib.util.spec_from_file_location(
     "native_linux_package_install_test",
     _module_path,
@@ -95,6 +102,45 @@ class EnvHelperTest(unittest.TestCase):
                 native_linux_package_install_test._env("ROCM_TEST_KEY", "default"),
                 "value",
             )
+
+
+class NormalizeTestTypeTest(unittest.TestCase):
+    """Tests for _normalize_test_type()."""
+
+    def test_empty_quick_and_standard_map_to_sanity(self):
+        for test_type in ("", None, "quick", "standard"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    "sanity",
+                )
+
+    def test_comprehensive_and_full_map_to_full(self):
+        for test_type in ("comprehensive", "full"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    "full",
+                )
+
+    def test_native_modes_are_accepted(self):
+        for test_type in ("install", "sanity", "full", "simulate"):
+            with self.subTest(test_type=test_type):
+                self.assertEqual(
+                    native_linux_package_install_test._normalize_test_type(test_type),
+                    test_type,
+                )
+
+    def test_strips_whitespace_and_lowercases(self):
+        self.assertEqual(
+            native_linux_package_install_test._normalize_test_type("  Quick  "),
+            "sanity",
+        )
+
+    def test_invalid_test_type_raises(self):
+        with self.assertRaises(ValueError) as ctx:
+            native_linux_package_install_test._normalize_test_type("standrd")
+        self.assertIn("Unsupported test_type", str(ctx.exception))
 
 
 class DerivePackageTypeTest(unittest.TestCase):
@@ -218,33 +264,81 @@ class IsSlesTest(unittest.TestCase):
 class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest __init__ and derived attributes."""
 
-    def test_default_gfx_arch_and_package_names(self):
-        # Test that when gfx_arch is omitted, default is gfx94x and package_names are correct.
+    def test_omitted_gfx_arch_uses_generic_package_names(self):
+        # Test that when gfx_arch is omitted, generic amdrocm packages are used (no arch suffix).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
         )
-        self.assertEqual(t.gfx_arch, "gfx94x")
+        self.assertEqual(t.gfx_arch_list, [])
+        self.assertIsNone(t.gfx_arch)
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx94x", "amdrocm-core-sdk-gfx94x"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
-    def test_gfx_arch_string_normalized_to_list(self):
-        # Test that a single gfx_arch string is used and package_names include that arch.
+    def test_gfx_arch_without_rocm_version_ignored_for_package_names(self):
+        # gfx_arch is stored but not used in package names without rocm_version.
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="rhel8",
             gfx_arch="gfx110x",
         )
         self.assertEqual(t.gfx_arch, "gfx110x")
+        self.assertIsNone(t.rocm_version_major_minor)
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx110x", "amdrocm-core-sdk-gfx110x"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
-    def test_gfx_arch_list_uses_first_element(self):
-        # Test that when gfx_arch is a list, only the first element is used for package names.
+    def test_gfx_arch_with_rocm_version_uses_versioned_package_names(self):
+        # Version in package name is major.minor only (7.13.1 -> amdrocm7.13-gfx1100).
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx1100",
+            rocm_version="7.13.1",
+        )
+        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.13-gfx1100", "amdrocm-core-sdk7.13-gfx1100"],
+        )
+
+    def test_rocm_version_generic_uses_versioned_package_names(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            rocm_version="7.13.0",
+        )
+        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.13", "amdrocm-core-sdk7.13"],
+        )
+
+    def test_major_minor_rocm_version_from_input(self):
+        m = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input
+        )
+        self.assertIsNone(m(None))
+        self.assertIsNone(m(""))
+        self.assertEqual(m("7.13"), "7.13")
+        self.assertEqual(m("7.13.1"), "7.13")
+        self.assertEqual(m("v7.13.2"), "7.13")
+        # Debian/RPM package version strings: major.minor only used in metapackage names.
+        for version in (
+            "7.14.0~20260520",
+            "7.14.0~20260520-123456",
+            "7.14.0~rc1",
+            "7.14.0~rc1-123456",
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(m(version), "7.14")
+        with self.assertRaises(ValueError):
+            m("not-a-version")
+
+    def test_gfx_arch_list_without_rocm_version_uses_generic_packages(self):
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
@@ -253,17 +347,38 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx1151")
         self.assertEqual(
             t.package_names,
-            ["amdrocm-gfx1151", "amdrocm-core-sdk-gfx1151"],
+            ["amdrocm", "amdrocm-core-sdk"],
         )
 
-    def test_gfx_arch_empty_string_falls_back_to_default(self):
-        # Test that empty gfx_arch string falls back to default gfx94x.
+    def test_gfx_arch_list_with_rocm_version_multi_arch_package_names(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch=["gfx1151", "gfx94x"],
+            rocm_version="7.13",
+        )
+        self.assertEqual(
+            t.package_names,
+            [
+                "amdrocm7.13-gfx1151",
+                "amdrocm-core-sdk7.13-gfx1151",
+                "amdrocm7.13-gfx94x",
+                "amdrocm-core-sdk7.13-gfx94x",
+            ],
+        )
+
+    def test_gfx_arch_empty_string_uses_generic_packages(self):
+        # Test that empty gfx_arch string yields generic package names (same as omitted).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="",
         )
-        self.assertEqual(t.gfx_arch, "gfx94x")
+        self.assertIsNone(t.gfx_arch)
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm", "amdrocm-core-sdk"],
+        )
 
     def test_os_profile_and_release_type_normalized_lower(self):
         # Test that os_profile, release_type, and repo_url (trailing slash) are normalized.
@@ -292,6 +407,180 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             install_prefix="/opt/rocm/core",
         )
         self.assertEqual(t.install_prefix, "/opt/rocm/core")
+
+    def test_gfx_arch_comma_string_with_rocm_version_expands_packages(self):
+        # Comma-separated arch in one string splits in normalization (same as CLI single token).
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx94x, GFX1100 ",
+            rocm_version="7.13",
+        )
+        self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
+        self.assertEqual(
+            t.package_names,
+            [
+                "amdrocm7.13-gfx94x",
+                "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm7.13-gfx1100",
+                "amdrocm-core-sdk7.13-gfx1100",
+            ],
+        )
+
+    def test_gfx_arch_semicolon_string_with_rocm_version_expands_packages(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx94x; GFX1100 ",
+            rocm_version="7.13",
+        )
+        self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
+        self.assertEqual(
+            t.package_names,
+            [
+                "amdrocm7.13-gfx94x",
+                "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm7.13-gfx1100",
+                "amdrocm-core-sdk7.13-gfx1100",
+            ],
+        )
+
+
+class NormalizeTargetListTest(unittest.TestCase):
+    """Tests for normalize_target_list default behavior (preserve casing, no dedupe)."""
+
+    def test_space_comma_and_semicolon_formats(self):
+        n = packaging_utils.normalize_target_list
+        self.assertEqual(
+            n(["gfx94X-dcgpu", "gfx120X-all"]),
+            ["gfx94X-dcgpu", "gfx120X-all"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu,gfx120X-all,gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu;gfx120X-all;gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+        self.assertEqual(
+            n(["gfx94X-dcgpu;gfx120X-all", "gfx1151"]),
+            ["gfx94X-dcgpu", "gfx120X-all", "gfx1151"],
+        )
+
+    def test_preserves_casing_without_dedupe(self):
+        self.assertEqual(
+            packaging_utils.normalize_target_list(["gfx94X-dcgpu"]),
+            ["gfx94X-dcgpu"],
+        )
+
+
+class NormalizedGfxArchsFromInputTest(unittest.TestCase):
+    """Tests for packaging_utils.normalize_target_list (install-test options)."""
+
+    def setUp(self):
+        self.n = lambda value: packaging_utils.normalize_target_list(
+            value, lowercase=True, dedupe=True
+        )
+
+    def test_none_and_blank_yield_empty(self):
+        self.assertEqual(self.n(None), [])
+        self.assertEqual(self.n(""), [])
+
+    def test_list_with_commas_and_whitespace(self):
+        self.assertEqual(self.n(["gfx94x,gfx1100 ", ""]), ["gfx94x", "gfx1100"])
+
+    def test_semicolon_and_comma_mixed(self):
+        self.assertEqual(
+            self.n("gfx94x; GFX1100 ,gfx1200"),
+            ["gfx94x", "gfx1100", "gfx1200"],
+        )
+
+    def test_semicolon_in_list_entries(self):
+        self.assertEqual(self.n(["gfx94x;gfx1100"]), ["gfx94x", "gfx1100"])
+
+    def test_dedupe_case_insensitive_order_preserved(self):
+        self.assertEqual(
+            self.n(["gfx94x", "GFX94X", "gfx1100"]),
+            ["gfx94x", "gfx1100"],
+        )
+
+
+class ArgvFromCiEnvTest(unittest.TestCase):
+    """Tests for _argv_from_ci_env() (workflow env → CLI argv)."""
+
+    _base_sanity_env = {
+        "TEST_TYPE": "sanity",
+        "OS_PROFILE": "ubuntu2404",
+        "REPO_URL": "https://repo.example.com/deb/",
+        "RELEASE_TYPE": "nightly",
+        "INSTALL_PREFIX": "/opt/rocm/core",
+    }
+
+    def test_returns_none_when_required_var_missing(self):
+        with patch.dict(os.environ, {"OS_PROFILE": "ubuntu2404"}, clear=False):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
+
+    def test_multi_gfx_arch_whitespace_and_rocm_version_in_argv(self):
+        env = {
+            **self._base_sanity_env,
+            "GFX_ARCH": "gfx94x gfx1100",
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION": "7.13.1",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--gfx-arch", argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1 : i + 3], ["gfx94x", "gfx1100"])
+        self.assertIn("--rocm-version", argv)
+        j = argv.index("--rocm-version")
+        self.assertEqual(argv[j + 1], "7.13.1")
+
+    def test_gfx_arch_comma_single_token_in_argv(self):
+        env = {**self._base_sanity_env, "GFX_ARCH": "gfx94x,gfx1100"}
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1], "gfx94x,gfx1100")
+
+    def test_gfx_arch_semicolon_splits_to_multiple_argv_tokens(self):
+        env = {**self._base_sanity_env, "GFX_ARCH": "gfx94x; gfx1100"}
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1 : i + 3], ["gfx94x", "gfx1100"])
+
+    def test_gfx_arch_semicolon_single_token_in_argv(self):
+        env = {**self._base_sanity_env, "GFX_ARCH": "gfx94x;gfx1100"}
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        i = argv.index("--gfx-arch")
+        self.assertEqual(argv[i + 1 : i + 3], ["gfx94x", "gfx1100"])
+        env = {
+            **self._base_sanity_env,
+            "GFX_ARCH": "gfx94x gfx1100",
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION": "7.13",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv, raise_instead_of_exit=True
+        )
+        self.assertEqual(args.gfx_arch, ["gfx94x", "gfx1100"])
+        self.assertEqual(args.rocm_version, "7.13")
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url=args.repo_url,
+            os_profile=args.os_profile,
+            release_type=args.release_type,
+            install_prefix=args.install_prefix,
+            gfx_arch=args.gfx_arch,
+            rocm_version=args.rocm_version,
+        )
+        self.assertEqual(len(t.package_names), 4)
 
 
 class RunSimulateInstallTestTest(unittest.TestCase):
@@ -413,7 +702,7 @@ class MainValidationTest(unittest.TestCase):
                 "--test-type",
                 "sanity",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
                 "--gfx-arch",
                 "gfx94x",
             ],
@@ -440,23 +729,254 @@ class MainValidationTest(unittest.TestCase):
                 native_linux_package_install_test.main()
             self.assertEqual(cm.exception.code, 2)
 
-    def test_sanity_requires_gfx_arch(self):
-        # Test that main() exits with error when --test-type sanity but --gfx-arch is missing.
-        with patch(
-            "sys.argv",
+    def test_sanity_parse_without_gfx_arch(self):
+        # Test that sanity/full CLI accepts omitting --gfx-arch (generic amdrocm packages).
+        args = native_linux_package_install_test.parse_cli_arguments(
             [
-                "prog",
                 "--test-type",
                 "sanity",
                 "--os-profile",
                 "ubuntu2404",
                 "--repo-url",
-                "https://x.com",
+                "https://repo_url.com",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertIsNone(args.gfx_arch)
+
+    def test_invalid_rocm_version_rejected(self):
+        with self.assertRaises(ValueError):
+            native_linux_package_install_test.parse_cli_arguments(
+                [
+                    "--test-type",
+                    "sanity",
+                    "--os-profile",
+                    "ubuntu2404",
+                    "--repo-url",
+                    "https://repo_url.com",
+                    "--rocm-version",
+                    "bogus",
+                ],
+                raise_instead_of_exit=True,
+            )
+
+    def test_install_requires_os_profile(self):
+        # install uses the same required args as sanity (no verification step).
+        with patch(
+            "sys.argv",
+            [
+                "prog",
+                "--test-type",
+                "install",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
             ],
         ):
             with self.assertRaises(SystemExit) as cm:
                 native_linux_package_install_test.main()
             self.assertEqual(cm.exception.code, 2)
+
+    def test_parse_cli_maps_quick_to_sanity(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "quick",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "sanity")
+
+    def test_parse_cli_maps_comprehensive_to_full(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "comprehensive",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--gfx-arch",
+                "gfx94x",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
+
+    def test_parse_cli_rejects_invalid_test_type(self):
+        with self.assertRaises(ValueError) as ctx:
+            native_linux_package_install_test.parse_cli_arguments(
+                ["--test-type", "standrd"],
+                raise_instead_of_exit=True,
+            )
+        self.assertIn("Unsupported test_type", str(ctx.exception))
+
+
+class ArgvFromCiEnvTest(unittest.TestCase):
+    """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
+
+    def test_builds_argv_for_install_test_type(self):
+        env = {
+            "TEST_TYPE": "install",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--test-type", argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
+        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
+        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
+
+    def test_ci_env_passes_shared_test_type_to_parser(self):
+        env = {
+            "TEST_TYPE": "comprehensive",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv,
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
+
+    def test_returns_none_when_required_env_missing(self):
+        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
+
+
+class RunTestsTestTypeTest(unittest.TestCase):
+    """Tests for run_tests() early exit paths for install."""
+
+    def _base_args(self, test_type: str):
+        from argparse import Namespace
+
+        return Namespace(
+            test_type=test_type,
+            os_profile="ubuntu2404",
+            repo_url="https://example.com",
+            release_type="dev",
+            install_prefix="/opt/rocm/core",
+            gfx_arch=["gfx94x"],
+            gpg_key_url=None,
+            packages_dir=None,
+            pkg_type=None,
+            rocm_version=None,
+        )
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_basic_verification",
+    )
+    def test_install_skips_basic_verification(self, mock_basic, mock_repo_setup):
+        args = self._base_args("install")
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 0)
+        mock_repo_setup.assert_called_once()
+        mock_basic.assert_not_called()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "run_repo_setup_and_install",
+        return_value=False,
+    )
+    def test_install_fails_when_repo_setup_fails(self, mock_repo_setup):
+        args = self._base_args("install")
+        with _suppress_script_output():
+            rc = native_linux_package_install_test.run_tests(args)
+        self.assertEqual(rc, 1)
+
+    def test_parse_cli_rocm_version_with_multiple_gfx_arch(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--rocm-version",
+                "7.13.1",
+                "--gfx-arch",
+                "gfx94x",
+                "gfx1100",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.rocm_version, "7.13.1")
+        self.assertEqual(args.gfx_arch, ["gfx94x", "gfx1100"])
+
+    def test_parse_cli_rocm_version_with_comma_single_gfx_arch_token(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://repo_url.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--rocm-version",
+                "7.13",
+                "--gfx-arch",
+                "gfx94x,gfx1100",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.gfx_arch, ["gfx94x,gfx1100"])
+
+    def test_parse_cli_rocm_version_with_semicolon_single_gfx_arch_token(self):
+        args = native_linux_package_install_test.parse_cli_arguments(
+            [
+                "--test-type",
+                "sanity",
+                "--os-profile",
+                "ubuntu2404",
+                "--repo-url",
+                "https://example.com",
+                "--release-type",
+                "nightly",
+                "--install-prefix",
+                "/opt/rocm/core",
+                "--rocm-version",
+                "7.13",
+                "--gfx-arch",
+                "gfx94x;gfx1100",
+            ],
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.gfx_arch, ["gfx94x;gfx1100"])
 
 
 class RunBasicVerificationTest(unittest.TestCase):
@@ -471,10 +991,16 @@ class RunBasicVerificationTest(unittest.TestCase):
         )
         self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_enough_components_found(self, mock_run):
+    def test_returns_true_when_enough_components_found(self, mock_run, mock_security):
         # Test that run_basic_verification returns True when install_prefix exists and at least
         # VERIFY_MIN_COMPONENTS key components exist; subprocess (dpkg/rpm, rocminfo) is mocked.
+        # The file-security check is stubbed here (covered separately in its own tests).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -502,8 +1028,15 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_called_process_error_when_querying_packages(self, mock_run):
+    def test_handles_called_process_error_when_querying_packages(
+        self, mock_run, mock_security
+    ):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
 
@@ -520,8 +1053,13 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertTrue(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_rocminfo_timeout(self, mock_run):
+    def test_handles_rocminfo_timeout(self, mock_run, mock_security):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
 
@@ -540,6 +1078,304 @@ class RunBasicVerificationTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertTrue(t.run_basic_verification())
+
+
+class VerifyInstalledFileSecurityTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_installed_file_security()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_find_reports_no_offending_paths(self, mock_run):
+        # Empty find output means every path is root-owned with safe permissions.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_find_reports_offending_paths(self, mock_run):
+        # Non-empty find output lists non-root-owned or insecure paths -> failure.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/bin/setuid-tool\n",
+            stderr="",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_ignores_blank_lines_in_find_output(self, mock_run):
+        # Trailing/blank lines alone should not be treated as offending paths.
+        mock_run.return_value = MagicMock(returncode=0, stdout="\n\n", stderr="")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_nonzero_find_returncode_warns_but_still_evaluates_output(self, mock_run):
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial output; that output is still evaluated.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="/opt/rocm/core/bin/foo\n",
+            stderr="find: '/opt/rocm/core/x': Permission denied\n",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_builds_expected_find_command(self, mock_run):
+        # Verify the single find invocation follows the prefix symlink (-H),
+        # stays on one filesystem (-xdev), checks ownership (uid/gid), writable
+        # (0o022) on non-symlinks (! -type l) and setid (0o6000) on regular
+        # files only (-type f).
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with _suppress_script_output():
+            self._make("/opt/rocm/core").verify_installed_file_security()
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[0], "find")
+        self.assertEqual(cmd[1], "-H")
+        self.assertEqual(cmd[2], "/opt/rocm/core")
+        self.assertIn("-xdev", cmd)
+        self.assertIn("-uid", cmd)
+        self.assertIn("-gid", cmd)
+        self.assertIn("/022", cmd)
+        self.assertIn("/6000", cmd)
+        self.assertIn("!", cmd)
+        # symlinks are excluded from the writable portion (! -type l)
+        self.assertIn("-type", cmd)
+        self.assertIn("l", cmd)
+        # setuid/setgid is scoped to regular files (-type f) so benign setgid
+        # directories (drwxr-sr-x) are not flagged.
+        self.assertIn("f", cmd)
+        setid_idx = cmd.index("/6000")
+        self.assertEqual(cmd[setid_idx - 3 : setid_idx], ["-type", "f", "-perm"])
+        # no sticky-bit special-casing anymore
+        self.assertNotIn("-1000", cmd)
+        # no in-process timeout (style guide: no timeouts on basic binutils)
+        self.assertNotIn("timeout", mock_run.call_args[1])
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_installed_file_security_python",
+        return_value=True,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_falls_back_to_python_when_find_not_available(
+        self, mock_run, mock_fallback
+    ):
+        # If find cannot be executed (OSError), fall back to the Python scan
+        # rather than silently skipping; the fallback result is returned.
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+        mock_fallback.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_installed_file_security_python",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_find_missing_fallback_can_fail(self, mock_run, mock_fallback):
+        # When find is missing and the Python fallback finds offenders, the
+        # overall check fails.
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+        mock_fallback.assert_called_once()
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_passes_for_safe_root_owned_tree(
+        self, mock_walk, mock_lstat
+    ):
+        # Python fallback returns True for root-owned 0755 dir / 0644 file modes.
+        mock_walk.return_value = [
+            ("/opt/rocm/core", ["bin"], ["a.txt"]),
+            ("/opt/rocm/core/bin", [], ["rocminfo"]),
+        ]
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o755),  # bin dir
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),  # a.txt
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o755),  # rocminfo
+        ]
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_entry(self, mock_walk, mock_lstat):
+        # Python fallback returns False when any entry is not owned by root.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["a.txt", "b.txt"])]
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),
+            MagicMock(st_uid=1000, st_gid=1000, st_mode=stat.S_IFREG | 0o644),
+        ]
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_world_writable(self, mock_walk, mock_lstat):
+        # A root-owned but world-writable directory (PATH-hijack case) is flagged.
+        mock_walk.return_value = [("/opt/rocm/core", ["bin"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_flags_sticky_world_writable_dir(
+        self, mock_walk, mock_lstat
+    ):
+        # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
+        # is flagged rather than exempted.
+        mock_walk.return_value = [("/opt/rocm/core", ["tmp"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISVTX | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setuid(self, mock_walk, mock_lstat):
+        # A root-owned setuid binary is flagged as a privilege-escalation surface.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setuid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISUID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setgid_file(self, mock_walk, mock_lstat):
+        # A root-owned setgid *regular file* is still flagged.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setgid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_setgid_directory(self, mock_walk, mock_lstat):
+        # A root-owned setgid *directory* (drwxr-sr-x, mode 2755) is a benign
+        # group-inheritance pattern and must NOT be flagged. This is the common
+        # ROCm install-tree case (2287 such dirs surfaced in CI).
+        mock_walk.return_value = [("/opt/rocm/core", ["libexec"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_root_owned_symlink(self, mock_walk, mock_lstat):
+        # A root-owned symlink (mode 0o777, but bits are meaningless) is allowed.
+        # This is the /opt/rocm/core -> /opt/rocm/core-X.Y case from CI.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFLNK | 0o777
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_symlink(self, mock_walk, mock_lstat):
+        # A non-root-owned symlink is still flagged (ownership is meaningful).
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=1000, st_gid=1000, st_mode=stat.S_IFLNK | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_skips_unstatable_entries(self, mock_walk, mock_lstat):
+        # Entries that cannot be lstat'd (e.g. race/permission) are skipped, not fatal.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["gone.txt"])]
+        mock_lstat.side_effect = OSError("no such file")
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_security_check_fails(
+        self, mock_run, mock_security
+    ):
+        # Even with enough key components present, a failed file-security check
+        # (bad ownership or insecure permissions) fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_security.assert_called_once()
 
 
 class SetupGpgKeyTest(unittest.TestCase):
@@ -563,10 +1399,9 @@ class SetupGpgKeyTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_gpg_key())
 
-    @patch("native_linux_package_install_test.os.chmod")
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run, mock_chmod):
-        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir and pipeline succeed.
+    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run):
+        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir, pipeline, and chmod succeed.
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -574,7 +1409,7 @@ class SetupGpgKeyTest(unittest.TestCase):
             gpg_key_url="https://example.com/rocm.gpg",
         )
         self.assertTrue(t.setup_gpg_key())
-        self.assertEqual(mock_run.call_count, 2)  # mkdir, then pipeline
+        self.assertEqual(mock_run.call_count, 3)  # mkdir, pipeline, chmod
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_false_for_deb_when_subprocess_fails(self, mock_run):
@@ -596,20 +1431,23 @@ class SetupDebRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.setup_deb_repository()."""
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_when_apt_update_succeeds_no_gpg(
-        self, mock_file, mock_streaming
+        self, mock_run, mock_streaming
     ):
-        # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
+        # Test that setup_deb_repository writes repo entry via sudo tee (trusted=yes) and returns True when apt update returns 0.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
             gpg_key_url=None,
+            gfx_arch="gfx94x",
         )
         self.assertTrue(t.setup_deb_repository())
-        mock_file().write.assert_called_once()
-        written = mock_file().write.call_args[0][0]
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0][:2], ["sudo", "tee"])
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("trusted=yes", written)
         self.assertIn("https://repo.example.com", written)
 
@@ -619,20 +1457,22 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "setup_gpg_key",
         return_value=True,
     )
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_with_gpg_when_apt_update_succeeds(
-        self, mock_file, mock_gpg, mock_streaming
+        self, mock_run, mock_gpg, mock_streaming
     ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
             gpg_key_url="https://example.com/rocm.gpg",
+            gfx_arch="gfx94x",
         )
         self.assertTrue(t.setup_deb_repository())
         mock_gpg.assert_called_once()
-        written = mock_file().write.call_args[0][0]
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("signed-by", written)
 
     @patch.object(
@@ -649,40 +1489,49 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertFalse(t.setup_deb_repository())
 
-    @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", side_effect=OSError("Permission denied"))
-    def test_returns_false_when_open_raises(self, mock_file, mock_streaming):
-        # Test that setup_deb_repository returns False when writing sources list raises OSError.
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_open_raises(self, mock_run):
+        # Test that setup_deb_repository returns False when sudo tee fails.
+        import subprocess
+
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "tee", stderr=b"permission denied"
+        )
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
             gpg_key_url=None,
+            gfx_arch="gfx94x",
         )
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_false_when_apt_update_fails(self, mock_file, mock_streaming):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_fails(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when apt update returns non-zero.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 1
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
             gpg_key_url=None,
+            gfx_arch="gfx94x",
         )
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_false_when_apt_update_times_out(self, mock_file, mock_streaming):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_times_out(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.side_effect = subprocess.TimeoutExpired("apt", 120)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
             gpg_key_url=None,
+            gfx_arch="gfx94x",
         )
         self.assertFalse(t.setup_deb_repository())
 
@@ -692,18 +1541,20 @@ class SetupSlesRepositoryTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("builtins.open", new_callable=mock_open)
+    @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_when_refresh_succeeds(
-        self, mock_file, mock_run, mock_streaming
+        self, mock_write_text, mock_run, mock_streaming
     ):
         # Test that _setup_sles_repository writes repo file and returns True when zypper refresh returns 0.
+        # Implementation uses Path.write_text (not open); mock that so /etc is not touched.
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="sles16",
+            gfx_arch="gfx94x",
         )
         self.assertTrue(t._setup_sles_repository())
-        written = mock_file().write.call_args[0][0]
+        written = mock_write_text.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
         self.assertIn("sles16", t.os_profile)
 
@@ -712,17 +1563,17 @@ class SetupDnfRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest._setup_dnf_repository()."""
 
     @patch("native_linux_package_install_test.subprocess.run")
-    @patch("builtins.open", new_callable=mock_open)
-    def test_returns_true_after_writing_repo_file(self, mock_file, mock_run):
+    @patch("native_linux_package_install_test.Path.write_text")
+    def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
         # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
-        mock_run.side_effect = None
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="rhel8",
+            gfx_arch="gfx94x",
         )
         self.assertTrue(t._setup_dnf_repository())
-        written = mock_file().write.call_args[0][0]
+        written = mock_write_text.call_args[0][0]
         self.assertIn("baseurl=https://repo.example.com", written)
 
 
@@ -772,8 +1623,28 @@ class InstallDebPackagesTest(unittest.TestCase):
         )
         self.assertTrue(t.install_deb_packages())
         call_args = mock_streaming.call_args[0][0]
-        self.assertEqual(call_args[0], "apt")
-        self.assertIn("amdrocm-gfx94x", call_args)
+        self.assertEqual(call_args[:4], ["sudo", "apt", "install", "-y"])
+        self.assertIn("amdrocm", call_args)
+
+    @patch("native_linux_package_install_test._run_streaming")
+    def test_apt_install_includes_versioned_multi_arch_package_names(
+        self, mock_streaming
+    ):
+        mock_streaming.return_value = 0
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch=["gfx94x", "gfx1100"],
+            rocm_version="7.13",
+        )
+        with _suppress_script_output():
+            self.assertTrue(t.install_deb_packages())
+        cmd = mock_streaming.call_args[0][0]
+        self.assertEqual(cmd[:4], ["sudo", "apt", "install", "-y"])
+        self.assertIn("amdrocm7.13-gfx94x", cmd)
+        self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
+        self.assertIn("amdrocm7.13-gfx1100", cmd)
+        self.assertIn("amdrocm-core-sdk7.13-gfx1100", cmd)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
@@ -939,7 +1810,7 @@ class TestRdhcTest(unittest.TestCase):
             )
             self.assertTrue(t.test_rdhc())
             call_args = mock_run.call_args[0][0]
-            self.assertIn("rdhc.py", str(call_args[0]))
+            self.assertIn("rdhc.py", str(call_args[1]))
             self.assertIn("--rocm-install-prefix", call_args)
 
     @patch("native_linux_package_install_test.subprocess.run")

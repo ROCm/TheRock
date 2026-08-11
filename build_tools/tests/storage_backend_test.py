@@ -478,7 +478,7 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
 
 
 class TestS3StorageBackendCopyFile(unittest.TestCase):
-    def test_calls_copy_object(self):
+    def test_calls_copy(self):
         backend = S3StorageBackend()
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
@@ -487,10 +487,10 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         dest = StorageLocation("dest-bucket", "release/file.whl")
         backend.copy_file(source, dest)
 
-        mock_client.copy_object.assert_called_once_with(
-            Bucket="dest-bucket",
-            Key="release/file.whl",
-            CopySource={"Bucket": "src-bucket", "Key": "run-1/file.whl"},
+        mock_client.copy.assert_called_once_with(
+            {"Bucket": "src-bucket", "Key": "run-1/file.whl"},
+            "dest-bucket",
+            "release/file.whl",
         )
 
     def test_same_bucket_copy(self):
@@ -502,16 +502,16 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         dest = StorageLocation("bucket", "release/file.whl")
         backend.copy_file(source, dest)
 
-        mock_client.copy_object.assert_called_once_with(
-            Bucket="bucket",
-            Key="release/file.whl",
-            CopySource={"Bucket": "bucket", "Key": "staging/file.whl"},
+        mock_client.copy.assert_called_once_with(
+            {"Bucket": "bucket", "Key": "staging/file.whl"},
+            "bucket",
+            "release/file.whl",
         )
 
     def test_retries_on_failure(self):
         backend = S3StorageBackend()
         mock_client = mock.MagicMock()
-        mock_client.copy_object.side_effect = [
+        mock_client.copy.side_effect = [
             Exception("transient"),
             None,
         ]
@@ -523,7 +523,7 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         with mock.patch("_therock_utils.storage_backend.time.sleep"):
             backend.copy_file(source, dest)
 
-        self.assertEqual(mock_client.copy_object.call_count, 2)
+        self.assertEqual(mock_client.copy.call_count, 2)
 
     def test_dry_run_does_not_call_boto3(self):
         backend = S3StorageBackend(dry_run=True)
@@ -534,7 +534,7 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         dest = StorageLocation("dst", "b.whl")
         backend.copy_file(source, dest)
 
-        mock_client.copy_object.assert_not_called()
+        mock_client.copy.assert_not_called()
 
 
 class TestLocalStorageBackendUploadFiles(unittest.TestCase):
@@ -998,7 +998,7 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
         count = backend.copy_files(files)
 
         self.assertEqual(count, 3)
-        self.assertEqual(mock_client.copy_object.call_count, 3)
+        self.assertEqual(mock_client.copy.call_count, 3)
 
     def test_empty_list_returns_zero(self):
         backend = S3StorageBackend()
@@ -1007,7 +1007,7 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
 
         count = backend.copy_files([])
         self.assertEqual(count, 0)
-        mock_client.copy_object.assert_not_called()
+        mock_client.copy.assert_not_called()
 
     def test_single_file_skips_thread_pool(self):
         backend = S3StorageBackend()
@@ -1028,7 +1028,7 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
 
         self.assertEqual(count, 1)
         mock_pool.assert_not_called()
-        mock_client.copy_object.assert_called_once()
+        mock_client.copy.assert_called_once()
 
     def test_dry_run_does_not_call_boto3(self):
         backend = S3StorageBackend(dry_run=True)
@@ -1048,17 +1048,17 @@ class TestS3StorageBackendCopyFiles(unittest.TestCase):
         count = backend.copy_files(files)
 
         self.assertEqual(count, 2)
-        mock_client.copy_object.assert_not_called()
+        mock_client.copy.assert_not_called()
 
     def test_error_propagation(self):
         backend = S3StorageBackend()
         mock_client = mock.MagicMock()
 
-        def copy_side_effect(**kwargs):
-            if "bad" in kwargs["Key"]:
+        def copy_side_effect(copy_source, bucket, key):
+            if "bad" in key:
                 raise Exception("persistent failure")
 
-        mock_client.copy_object.side_effect = copy_side_effect
+        mock_client.copy.side_effect = copy_side_effect
         backend._s3_client = mock_client
 
         files = [

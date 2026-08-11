@@ -13,15 +13,17 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 # Add build_tools/packaging/python to path so generate_local_index is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "python"))
 
 from generate_local_index import (
-    generate_flat_index,
     generate_multiarch_indexes,
     generate_simple_index,
+    main,
 )
 
 
@@ -175,68 +177,6 @@ class TestGenerateSimpleIndex(unittest.TestCase):
             )
 
 
-class TestGenerateFlatIndex(unittest.TestCase):
-    """Tests for generate_flat_index()."""
-
-    def test_generates_top_level_index(self):
-        """Top-level wheels and sdists appear in index.html at dist/ root."""
-        with tempfile.TemporaryDirectory() as tmp:
-            dist_dir = Path(tmp)
-            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
-            (dist_dir / "rocm_sdk_device_gfx942-1.0.whl").write_bytes(b"device")
-
-            generate_flat_index(dist_dir)
-
-            index = dist_dir / "index.html"
-            self.assertTrue(index.is_file())
-            content = index.read_text()
-            self.assertIn('<a href="./rocm_sdk_core-1.0.whl">', content)
-            self.assertIn('<a href="./rocm_sdk_device_gfx942-1.0.whl">', content)
-
-    def test_excludes_subdir_contents(self):
-        """Files inside subdirectories are not included in the flat index."""
-        with tempfile.TemporaryDirectory() as tmp:
-            dist_dir = Path(tmp)
-            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
-            subdir = dist_dir / "gfx94X-dcgpu"
-            subdir.mkdir()
-            (subdir / "rocm_sdk_libraries_gfx94x_dcgpu-1.0.whl").write_bytes(b"libs")
-
-            generate_flat_index(dist_dir)
-
-            content = (dist_dir / "index.html").read_text()
-            self.assertIn("rocm_sdk_core-1.0.whl", content)
-            self.assertNotIn("rocm_sdk_libraries_gfx94x_dcgpu", content)
-
-    def test_custom_patterns(self):
-        """Only files matching the specified patterns are included."""
-        with tempfile.TemporaryDirectory() as tmp:
-            dist_dir = Path(tmp)
-            (dist_dir / "package.whl").write_bytes(b"whl")
-            (dist_dir / "package.tar.gz").write_bytes(b"sdist")
-            (dist_dir / "README.md").write_bytes(b"readme")
-
-            generate_flat_index(dist_dir, patterns=["*.whl"])
-
-            content = (dist_dir / "index.html").read_text()
-            self.assertIn("package.whl", content)
-            self.assertNotIn("package.tar.gz", content)
-            self.assertNotIn("README.md", content)
-
-    def test_empty_dist(self):
-        """Empty dist/ produces a valid index.html with no package links."""
-        with tempfile.TemporaryDirectory() as tmp:
-            dist_dir = Path(tmp)
-
-            generate_flat_index(dist_dir)
-
-            index = dist_dir / "index.html"
-            self.assertTrue(index.is_file())
-            content = index.read_text()
-            self.assertIn("<!DOCTYPE html>", content)
-            self.assertNotIn("<a href", content)
-
-
 class TestGenerateMultiarchIndexes(unittest.TestCase):
     """Tests for generate_multiarch_indexes()."""
 
@@ -373,6 +313,117 @@ class TestGenerateMultiarchIndexes(unittest.TestCase):
             # Parent files
             self.assertIn("generic.whl", content)
             self.assertIn("generic.tar.gz", content)
+
+
+class TestCli(unittest.TestCase):
+    """Tests for generate_local_index.py CLI modes."""
+
+    def test_default_generates_flat_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / "rocm_sdk_libraries-1.0.whl").write_bytes(b"libraries")
+            (dist_dir / "rocm_sdk_device_gfx942-1.0.whl").write_bytes(b"device")
+
+            main([os.fspath(dist_dir)])
+
+            content = (dist_dir / "index.html").read_text()
+            self.assertIn(
+                '<a href="./rocm_sdk_core-1.0.whl">rocm_sdk_core-1.0.whl</a>',
+                content,
+            )
+            self.assertIn(
+                '<a href="./rocm_sdk_libraries-1.0.whl">rocm_sdk_libraries-1.0.whl</a>',
+                content,
+            )
+            self.assertIn(
+                '<a href="./rocm_sdk_device_gfx942-1.0.whl">rocm_sdk_device_gfx942-1.0.whl</a>',
+                content,
+            )
+
+    def test_default_honors_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            output = dist_dir / "custom.html"
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+
+            main([os.fspath(dist_dir), "--output", os.fspath(output)])
+
+            self.assertTrue(output.is_file())
+            self.assertFalse((dist_dir / "index.html").exists())
+
+    def test_default_honors_patterns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            (dist_dir / "rocm-1.0.tar.gz").write_bytes(b"sdist")
+
+            main([os.fspath(dist_dir), "--patterns", "*.whl"])
+
+            content = (dist_dir / "index.html").read_text()
+            self.assertIn("rocm_sdk_core-1.0.whl", content)
+            self.assertNotIn("rocm-1.0.tar.gz", content)
+
+    def test_default_url_encodes_plus(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            filename = "rocm_sdk_core-7.0.0+abc123-py3-none-any.whl"
+            (dist_dir / filename).write_bytes(b"core")
+
+            main([os.fspath(dist_dir)])
+
+            content = (dist_dir / "index.html").read_text()
+            self.assertIn(
+                'href="./rocm_sdk_core-7.0.0%2Babc123-py3-none-any.whl"',
+                content,
+            )
+            self.assertIn(f">{filename}</a>", content)
+
+    def test_per_family_indexes_generates_subdirectory_indexes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
+            family_dir = dist_dir / "gfx94X-dcgpu"
+            family_dir.mkdir()
+            (family_dir / "rocm_sdk_libraries_gfx94x_dcgpu-1.0.whl").write_bytes(
+                b"libs"
+            )
+
+            main([os.fspath(dist_dir), "--per-family-indexes"])
+
+            self.assertTrue((family_dir / "index.html").is_file())
+            self.assertFalse((dist_dir / "index.html").exists())
+
+    def test_per_family_indexes_rejects_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            (dist_dir / "gfx94X-dcgpu").mkdir()
+
+            with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                main(
+                    [
+                        os.fspath(dist_dir),
+                        "--per-family-indexes",
+                        "--output",
+                        os.fspath(dist_dir / "index.html"),
+                    ]
+                )
+
+    def test_per_family_indexes_rejects_parent_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_dir = Path(tmp)
+            parent_dir = dist_dir / "parent"
+            (dist_dir / "gfx94X-dcgpu").mkdir()
+
+            with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                main(
+                    [
+                        os.fspath(dist_dir),
+                        "--per-family-indexes",
+                        "--parent-dir",
+                        os.fspath(parent_dir),
+                    ]
+                )
 
 
 if __name__ == "__main__":

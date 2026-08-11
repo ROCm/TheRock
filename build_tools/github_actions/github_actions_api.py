@@ -11,6 +11,8 @@ This module provides:
 See also https://pypi.org/project/github-action-utils/.
 """
 
+import base64
+import binascii
 from enum import Enum, auto
 import json
 import logging
@@ -20,8 +22,9 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import urlopen, Request
 
 
@@ -70,6 +73,16 @@ class GitHubAPI:
     For most use cases, use the module-level functions which use a shared
     singleton instance:
         response = gha_send_request("https://api.github.com/repos/owner/repo")
+
+    When a caller needs to authenticate as something other than the default
+    singleton's token (e.g. a GitHub App installation token scoped to a
+    different repository), construct a dedicated instance with an explicit
+    token instead:
+        api = GitHubAPI(github_token=app_installation_token)
+        response = api.send_request("https://api.github.com/repos/other/repo")
+    This is useful when a single process needs to juggle multiple distinct
+    tokens (e.g. two GitHub App tokens minted in the same job), since the
+    module-level singleton caches only one token for its lifetime.
     """
 
     class AuthMethod(Enum):
@@ -84,9 +97,21 @@ class GitHubAPI:
         # Use the GitHub REST API without authenticating, subject to rate limits.
         UNAUTHENTICATED = auto()
 
-    def __init__(self):
-        self._auth_method: GitHubAPI.AuthMethod | None = None
-        self._github_token: str | None = None
+    def __init__(self, github_token: str | None = None):
+        """Creates a GitHub API client.
+
+        Args:
+            github_token: Optional explicit token to authenticate with. When
+                provided, this instance uses that token directly and skips
+                the GITHUB_TOKEN env var / gh CLI auto-detection below. Use
+                this to bind an instance to a specific token (e.g. a GitHub
+                App installation token) without affecting the module-level
+                singleton or other instances.
+        """
+        self._auth_method: GitHubAPI.AuthMethod | None = (
+            GitHubAPI.AuthMethod.GITHUB_TOKEN if github_token else None
+        )
+        self._github_token: str | None = github_token
         self._gh_cli_path: str | None = None
 
     def _detect_auth_method(self) -> AuthMethod:
@@ -152,7 +177,14 @@ class GitHubAPI:
 
         return headers
 
-    def _send_request_via_gh_cli(self, url: str, timeout_seconds: int) -> object:
+    def _send_request_via_gh_cli(
+        self,
+        url: str,
+        timeout_seconds: int,
+        *,
+        method: str = "GET",
+        body: object | None = None,
+    ) -> object:
         """Sends a GitHub API request using the gh CLI.
 
         Raises:
@@ -166,9 +198,16 @@ class GitHubAPI:
         # Strip the base URL to get the API path
         api_path = url.removeprefix("https://api.github.com")
 
+        cmd = [self._gh_cli_path, "api", "--method", method, api_path]
+        input_data: str | None = None
+        if body is not None:
+            cmd.extend(["--input", "-"])
+            input_data = json.dumps(body)
+
         try:
             result = subprocess.run(
-                [self._gh_cli_path, "api", api_path],
+                cmd,
+                input=input_data,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -187,7 +226,9 @@ class GitHubAPI:
             stderr = result.stderr or "(no error message)"
             raise GitHubAPIError(f"gh api request failed: {stderr}")
 
-        if not result.stdout:
+        if not result.stdout or not result.stdout.strip():
+            if method in ("POST", "PATCH", "PUT", "DELETE"):
+                return {}
             raise GitHubAPIError("gh api returned empty response")
 
         try:
@@ -197,18 +238,29 @@ class GitHubAPI:
                 f"gh api returned invalid JSON: {e.msg} at position {e.pos}"
             ) from e
 
-    def _send_request_via_rest_api(self, url: str, timeout_seconds: int) -> object:
+    def _send_request_via_rest_api(
+        self,
+        url: str,
+        timeout_seconds: int,
+        *,
+        method: str = "GET",
+        body: object | None = None,
+    ) -> object:
         """Sends a GitHub API request using the REST API directly.
 
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
         headers = self._get_request_headers()
-        request = Request(url, headers=headers)
+        data: bytes | None = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(body).encode("utf-8")
+        request = Request(url, data=data, headers=headers, method=method)
 
         try:
             with urlopen(request, timeout=timeout_seconds) as response:
-                body = response.read().decode("utf-8")
+                response_body = response.read().decode("utf-8")
         except HTTPError as e:
             # Try to read the error response body for more context
             error_body = ""
@@ -245,19 +297,32 @@ class GitHubAPI:
                 f"Request timed out after {timeout_seconds}s for {url}"
             ) from e
 
+        if not response_body:
+            if method in ("POST", "PATCH", "PUT", "DELETE"):
+                return {}
+
         try:
-            return json.loads(body)
+            return json.loads(response_body)
         except json.JSONDecodeError as e:
             raise GitHubAPIError(
                 f"Invalid JSON response from {url}: {e.msg} at position {e.pos}"
             ) from e
 
-    def send_request(self, url: str, timeout_seconds: int = 300) -> object:
+    def send_request(
+        self,
+        url: str,
+        timeout_seconds: int = 300,
+        *,
+        method: str = "GET",
+        body: object | None = None,
+    ) -> object:
         """Sends a request to the given GitHub REST API URL.
 
         Args:
             url: Full GitHub API URL (e.g., https://api.github.com/repos/...)
             timeout_seconds: Request timeout in seconds (default 300).
+            method: HTTP method (default GET). POST and PATCH are supported.
+            body: Optional JSON-serializable request body for POST/PATCH.
 
         Returns:
             Parsed JSON response.
@@ -270,12 +335,16 @@ class GitHubAPI:
         auth_method = self.get_auth_method()
 
         if auth_method == GitHubAPI.AuthMethod.GH_CLI:
-            return self._send_request_via_gh_cli(url, timeout_seconds)
+            return self._send_request_via_gh_cli(
+                url, timeout_seconds, method=method, body=body
+            )
 
         if auth_method == GitHubAPI.AuthMethod.UNAUTHENTICATED:
             _log("Warning: No GitHub auth available, requests may be rate limited")
 
-        return self._send_request_via_rest_api(url, timeout_seconds)
+        return self._send_request_via_rest_api(
+            url, timeout_seconds, method=method, body=body
+        )
 
 
 # Module-level singleton with cached state.
@@ -340,28 +409,61 @@ def gha_set_output(vars: Mapping[str, str | Path]):
     """Sets values in a step's output parameters.
 
     This appends to the file located at the $GITHUB_OUTPUT environment variable.
+    Multi-line values are written using the heredoc form required by GitHub
+    Actions (see "Multiline strings" in the workflow-commands reference).
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
+      * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#multiline-strings
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
+    _log(
+        f"Setting github output:\n{json.dumps({k: str(v) for k, v in vars.items()}, indent=2)}"
+    )
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
         _log("  Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
         return
 
-    with open(step_output_file, "a") as f:
+    with open(step_output_file, "a", encoding="utf-8") as f:
         for k, v in vars.items():
-            print(f"OUTPUT {k}={str(v)}")
-            f.write(f"{k}={str(v)}\n")
+            value = "" if v is None else str(v)
+            if "\n" in value:
+                # EOF_mag1c delimiter must NOT occure in value
+                f.write(f"{k}<<EOF_mag1c\n{value}\nEOF_mag1c\n")
+            else:
+                print(f"OUTPUT {k}={value}")
+                f.write(f"{k}={value}\n")
 
 
-def gha_append_step_summary(summary: str):
+def gha_job_summary_mirror_path() -> Path | None:
+    """Return the per-job summary mirror file under $RUNNER_TEMP, or None.
+
+    GitHub clears $GITHUB_STEP_SUMMARY between steps, so the rendered job
+    summary cannot be read back at the end of a job. We mirror every append
+    into $RUNNER_TEMP/job_summary.md, which persists for the whole job, so a
+    later step can publish it as a job output (see
+    gha_set_job_summary_output). $RUNNER_TEMP is emptied at the start and end
+    of each job, so the mirror does not leak between jobs.
+
+    Returns None when $RUNNER_TEMP is not set (the caller should skip
+    mirroring rather than fail). Local tests point $RUNNER_TEMP at a temp dir.
+    """
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / "job_summary.md"
+
+
+def gha_append_step_summary(summary: str, mirror_to_job_file: bool = True):
     """Appends a string to the GitHub Actions job summary.
 
-    This appends to the file located at the $GITHUB_STEP_SUMMARY environment variable.
+    This appends to the file located at the $GITHUB_STEP_SUMMARY environment
+    variable. When mirror_to_job_file is set (the default), the same text
+    is also appended to the persistent mirror at $RUNNER_TEMP/job_summary.md
+    (see gha_job_summary_mirror_path) so the accumulated summary can be read
+    back later in the job and published as an output.
 
     See
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#adding-a-job-summary
@@ -374,12 +476,114 @@ def gha_append_step_summary(summary: str):
         _log("  Warning: GITHUB_STEP_SUMMARY env var not set, can't write job summary")
         return
 
+    # Use double newlines to split sections in markdown.
+    block = summary + "\n\n"
+
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
-        f.write(summary + "\n\n")
+        f.write(block)
+
+    if mirror_to_job_file:
+        mirror_path = gha_job_summary_mirror_path()
+        if mirror_path:
+            with open(mirror_path, "a", encoding="utf-8") as f:
+                f.write(block)
+        else:
+            _log(
+                "  Warning: RUNNER_TEMP env var not set, cannot mirror job summary "
+                "for output capture"
+            )
 
 
-def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
+def gha_set_job_summary_output(output_name: str = "summary"):
+    """Publishes the accumulated job summary mirror as a step output.
+
+    Reads $RUNNER_TEMP/job_summary.md (written by gha_append_step_summary) and
+    writes it to $GITHUB_OUTPUT under output_name via gha_set_output.
+
+    Note: A missing or empty mirror file writes no output at all.
+    """
+    mirror_path = gha_job_summary_mirror_path()
+    summary = ""
+    if mirror_path and mirror_path.exists():
+        summary = mirror_path.read_text(encoding="utf-8")
+
+    if not summary:
+        _log(
+            f"  No job summary content to publish; skipping '{output_name}' to add to $GITHUB_OUTPUT"
+        )
+        return
+
+    gha_set_output({output_name: summary})
+
+
+def gha_load_github_event() -> dict[str, Any]:
+    """Loads the JSON event payload pointed to by $GITHUB_EVENT_PATH.
+
+    Raises:
+        KeyError: $GITHUB_EVENT_PATH is not set (not running under GitHub
+            Actions, or the step was given no event payload).
+        FileNotFoundError: $GITHUB_EVENT_PATH is set but the file
+            doesn't exist (CI misconfiguration).
+        ValueError: the file contains invalid JSON, or the top-level
+            payload is not a JSON object.
+        RuntimeError: the file exists but couldn't be read (permissions,
+            disk error, etc.).
+
+    See: https://docs.github.com/en/actions/reference/variables-reference#default-environment-variables
+         https://docs.github.com/en/webhooks/webhook-events-and-payloads
+    """
+    event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+    if not event_path.is_file():
+        raise FileNotFoundError(
+            f"GITHUB_EVENT_PATH is set to '{event_path}' but no such file exists"
+        )
+    try:
+        with open(event_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' contains invalid JSON: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot read GITHUB_EVENT_PATH '{event_path}': {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"GITHUB_EVENT_PATH '{event_path}' must contain a JSON object, "
+            f"got {type(data).__name__}"
+        )
+    return data
+
+
+def is_current_run_pr_from_fork() -> bool:
+    """Whether the current workflow run is a pull request from a fork.
+
+    Reads the GitHub event payload to check the ``.fork`` property on the head
+    repo, matching the GitHub Actions expression
+    ``github.event.pull_request.head.repo.fork``.
+
+    Returns False for non-pull_request events or if the event payload is not
+    available (e.g. local development).
+    """
+    if os.environ.get("GITHUB_EVENT_NAME", "") != "pull_request":
+        return False
+    if not os.environ.get("GITHUB_EVENT_PATH"):
+        return False
+    event = gha_load_github_event()
+    return bool(
+        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    )
+
+
+def gha_send_request(
+    url: str,
+    timeout_seconds: int = 300,
+    *,
+    method: str = "GET",
+    body: object | None = None,
+) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 
     Authentication is handled automatically:
@@ -390,6 +594,8 @@ def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     Args:
         url: Full GitHub API URL (e.g., https://api.github.com/repos/...)
         timeout_seconds: Request timeout in seconds (default 300).
+        method: HTTP method (default GET). POST and PATCH are supported.
+        body: Optional JSON-serializable request body for POST/PATCH.
 
     Returns:
         Parsed JSON response.
@@ -399,7 +605,154 @@ def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
             timeout, invalid JSON, etc.). The original exception is available
             via the __cause__ attribute.
     """
-    return _default_github_api.send_request(url, timeout_seconds=timeout_seconds)
+    return _default_github_api.send_request(
+        url, timeout_seconds=timeout_seconds, method=method, body=body
+    )
+
+
+def gha_update_pr_comment(
+    pr_number: int,
+    marker: str,
+    body: str,
+    github_repository: str = "ROCm/TheRock",
+    *,
+    github_api: "GitHubAPI | None" = None,
+    comment_author: str | None = None,
+) -> dict:
+    """Create or update a sticky PR comment identified by an HTML marker.
+
+    Paginates through existing issue comments on the pull request. If a comment
+    whose body contains ``marker`` is found, that comment is updated in place.
+    Otherwise a new comment is posted.
+
+    Args:
+        pr_number: Pull request number.
+        marker: Unique HTML comment marker embedded in the comment body
+            (e.g. ``<!-- example-marker -->``).
+        body: Full comment body (must include ``marker``).
+        github_repository: Repository in ``owner/repo`` format.
+        github_api: Optional ``GitHubAPI`` instance to use instead of the
+            module-level singleton. Pass a dedicated ``GitHubAPI(github_token=...)``
+            instance for cross-repo comments (e.g. a GitHub App installation
+            token scoped to ``github_repository``) so this call doesn't
+            disturb the singleton's own token/auth state.
+        comment_author: Optional GitHub username to restrict matching to.
+            When set, only an existing comment whose author's login equals
+            this value is treated as the sticky comment to update; comments
+            that merely contain ``marker`` but were authored by someone else
+            (e.g. a human who quote-replied the bot's comment) are ignored,
+            and a new comment is posted instead of editing theirs.
+
+    Returns:
+        The created or updated comment object from the GitHub API.
+
+    Authentication defaults to the module-level singleton (see
+    :func:`gha_send_request`), which uses :envvar:`GITHUB_TOKEN`. In GitHub
+    Actions, set ``GITHUB_TOKEN: ${{ github.token }}`` on the step and grant
+    ``pull-requests: write`` (or ``issues: write``) in job ``permissions``.
+    For cross-repo comments, pass ``github_api=GitHubAPI(github_token=...)``
+    with an App installation token that has access to ``github_repository``.
+
+    See: https://docs.github.com/en/rest/issues/comments
+    """
+    if marker not in body:
+        _log(
+            f"Warning: marker\n  {marker}\n"
+            f"not found in body for PR comment on "
+            f"https://github.com/{github_repository}/pull/{pr_number}\n"
+            f"body text:\n  {body}"
+        )
+
+    api = github_api or _default_github_api
+
+    comments_url = (
+        f"https://api.github.com/repos/{github_repository}"
+        f"/issues/{pr_number}/comments"
+    )
+    MAX_PAGES = 10
+    PER_PAGE = 100
+    page = 1
+    existing_comment_id = None
+
+    while page <= MAX_PAGES:
+        page_url = f"{comments_url}?per_page={PER_PAGE}&page={page}"
+        comments = api.send_request(page_url)
+        if not isinstance(comments, list):
+            break
+
+        for comment in comments:
+            if marker not in comment.get("body", ""):
+                continue
+            if (
+                comment_author is not None
+                and comment.get("user", {}).get("login") != comment_author
+            ):
+                continue
+            existing_comment_id = comment["id"]
+            break
+
+        if existing_comment_id is not None:
+            break
+
+        if len(comments) < PER_PAGE:
+            break
+        page += 1
+
+    if existing_comment_id is not None:
+        patch_url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/issues/comments/{existing_comment_id}"
+        )
+        response = api.send_request(patch_url, method="PATCH", body={"body": body})
+    else:
+        response = api.send_request(comments_url, method="POST", body={"body": body})
+
+    if not isinstance(response, dict):
+        raise GitHubAPIError(
+            f"Expected comment object from GitHub API for PR #{pr_number}, "
+            f"got {type(response).__name__}"
+        )
+    return response
+
+
+def gha_query_prs_for_commit(
+    github_repository: str,
+    sha: str,
+    *,
+    github_api: "GitHubAPI | None" = None,
+) -> list[dict]:
+    """Gets the pull requests associated with a commit.
+
+    Uses the GitHub REST API endpoint: /commits/{sha}/pulls
+
+    A commit can be associated with more than one pull request (e.g. if it
+    was cherry-picked, or landed via multiple merge paths).
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/TheRock").
+        sha: Full (or unambiguous short) git commit SHA.
+        github_api: Optional ``GitHubAPI`` instance to use instead of the
+            module-level singleton. Pass a dedicated ``GitHubAPI(github_token=...)``
+            instance when querying a repository that requires a different
+            token than the singleton's (e.g. a superrepo App installation
+            token).
+
+    Returns:
+        List of pull request objects from the GitHub API. Empty list if the
+        commit is not associated with any pull request (or hasn't been
+        pushed to GitHub, e.g. it only exists locally).
+
+    See: https://docs.github.com/en/rest/commits/commits#list-pull-requests-associated-with-a-commit
+    """
+    api = github_api or _default_github_api
+    url = f"https://api.github.com/repos/{github_repository}/commits/{sha}/pulls"
+    response = api.send_request(url)
+    if not isinstance(response, list):
+        raise GitHubAPIError(
+            f"Expected a list of pull requests for commit {sha!r} in "
+            f"{github_repository!r}, got {type(response).__name__}"
+        )
+    return response
 
 
 def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -> dict:
@@ -420,6 +773,9 @@ def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -
     return gha_send_request(url)
 
 
+# TODO: Consider accepting a git ref (branch/tag) here and resolving it
+# to a SHA via gha_resolve_git_ref, so callers don't need to do that
+# themselves. Same for other functions that take a commit SHA.
 def gha_query_workflow_runs_for_commit(
     github_repository: str,
     workflow_file_name: str,
@@ -437,7 +793,7 @@ def gha_query_workflow_runs_for_commit(
 
     Args:
         github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
-        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        workflow_file_name: Workflow filename (e.g., "multi_arch_ci.yml")
         git_commit_sha: Full git commit SHA
 
     Returns:
@@ -459,29 +815,39 @@ def gha_query_workflow_runs_for_commit(
     return runs
 
 
-def gha_query_last_successful_workflow_run(
+def gha_query_last_workflow_run(
     github_repository: str = "ROCm/TheRock",
-    workflow_name: str = "ci.yml",
+    workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
+    accepted_statuses: set[str] | None = None,
 ) -> dict | None:
-    """Find the last successful run of a specific workflow on the specified branch.
+    """Find the most recent run of a workflow on ``branch`` whose conclusion
+    is in ``accepted_statuses`` (default ``{"success"}``).
 
-    Args:
-        github_repository: Repository in format "owner/repo"
-        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
-        branch: Branch to filter by (defaults to "main")
-
-    Returns:
-        The full workflow run object of the most recent successful run on the specified branch,
-        or None if no successful runs are found.
+    Paginates the most recent runs (newest first), filtering client-side,
+    up to ``MAX_PAGES * PER_PAGE`` runs. Returns ``None`` if no matching
+    run is found within that window.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
-    response = gha_send_request(url)
-
-    # Return the first (most recent) successful run
-    if response and response.get("workflow_runs"):
-        return response["workflow_runs"][0]
+    if accepted_statuses is None:
+        accepted_statuses = {"success"}
+    MAX_PAGES = 5
+    PER_PAGE = 100
+    page = 1
+    while page <= MAX_PAGES:
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_name}/runs"
+            f"?branch={branch}&per_page={PER_PAGE}&sort=created&direction=desc"
+            f"&page={page}"
+        )
+        response = gha_send_request(url)
+        runs = response.get("workflow_runs", []) if response else []
+        for run in runs:
+            if run.get("conclusion") in accepted_statuses:
+                return run
+        if len(runs) < PER_PAGE:
+            break  # Partial or empty page = no more runs to fetch.
+        page += 1
     return None
 
 
@@ -514,6 +880,88 @@ def gha_query_recent_branch_commits(
     response = gha_send_request(url)
 
     return [commit["sha"] for commit in response]
+
+
+def gha_resolve_git_ref(github_repository: str, ref: str) -> str:
+    """Resolve a git ref (branch, tag, or SHA) to a full commit SHA.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        ref: Git ref to resolve (branch name, tag, or commit SHA).
+
+    Returns:
+        The full 40-character commit SHA.
+
+    Raises:
+        GitHubAPIError: If the ref cannot be resolved.
+
+    See: https://docs.github.com/en/rest/commits/commits#get-a-commit
+    """
+    encoded_ref = quote(ref, safe="")
+    url = f"https://api.github.com/repos/{github_repository}/commits/{encoded_ref}"
+    response = gha_send_request(url)
+    return response["sha"]
+
+
+def gha_fetch_file_contents(github_repository: str, path: str, ref: str) -> bytes:
+    """Fetch a file's contents from a GitHub repo at a specific ref.
+
+    Uses the Contents API to retrieve and decode a single file. The file must
+    be small enough for the Contents API to return base64 content; for larger
+    files use the Blobs API instead.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/pytorch").
+        path: File path within the repo (e.g. "version.txt").
+        ref: Git ref (branch, tag, or commit SHA).
+
+    Returns:
+        The decoded file contents.
+
+    Raises:
+        GitHubAPIError: If the file cannot be fetched (not found, API error, etc.).
+
+    See: https://docs.github.com/en/rest/repos/contents#get-repository-content
+    """
+    encoded_path = quote(path, safe="/")
+    encoded_ref = quote(ref, safe="")
+    url = (
+        f"https://api.github.com/repos/{github_repository}/contents/"
+        f"{encoded_path}?ref={encoded_ref}"
+    )
+    response = gha_send_request(url)
+    if not isinstance(response, dict) or response.get("type") != "file":
+        response_type = (
+            response.get("type") if isinstance(response, dict) else type(response)
+        )
+        raise GitHubAPIError(
+            f"Expected GitHub contents response for a file at {path!r}, "
+            f"got {response_type!r}"
+        )
+    if response.get("encoding") != "base64" or not isinstance(
+        response.get("content"), str
+    ):
+        raise GitHubAPIError(
+            f"Expected base64 GitHub contents response for {path!r}; "
+            "use the Git blobs API for larger files"
+        )
+    try:
+        return base64.b64decode(response["content"])
+    except binascii.Error as e:
+        raise GitHubAPIError(f"Failed to decode GitHub contents for {path!r}") from e
+
+
+def gha_fetch_text_file_contents(
+    github_repository: str, path: str, ref: str, *, encoding: str = "utf-8"
+) -> str:
+    """Fetch and decode a text file from a GitHub repo at a specific ref."""
+    contents = gha_fetch_file_contents(github_repository, path, ref)
+    try:
+        return contents.decode(encoding)
+    except UnicodeDecodeError as e:
+        raise GitHubAPIError(
+            f"Failed to decode GitHub contents for {path!r} as {encoding}"
+        ) from e
 
 
 # TODO: Consider moving str2bool to a general-purpose utils module. It's useful
@@ -603,9 +1051,3 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
             logging.info(f"Detected GPU architecture: {gpu_arch}")
             return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
-
-
-def is_asan():
-    """Using artifact_group, determines if this is an asan build"""
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
-    return "asan" in ARTIFACT_GROUP

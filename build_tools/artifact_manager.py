@@ -49,15 +49,16 @@ import os
 import platform as platform_module
 import shutil
 import sys
-import tarfile
 import threading
 import time
 from pathlib import Path
 from typing import List, Optional, Set
 
+from _therock_utils.archive_util import open_archive_for_read
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.cmake_amdgpu_targets import (
-    build_family_to_targets,
-    parse_amdgpu_targets_cmake,
+    amdgpu_family_map,
+    expand_families,
 )
 from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
@@ -68,25 +69,41 @@ from _therock_utils.artifact_backend import (
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
-# Lazy-loaded cache for the family -> targets mapping parsed from CMake.
-_family_to_targets_cache: Optional[dict[str, list[str]]] = None
+
+def _get_base_arch(target: str) -> str:
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
+
+    Note: This strips everything after the first colon. Any suffix (not just
+    xnack) will be removed, e.g., 'gfx942:foo' -> 'gfx942'.
+    """
+    if not target:
+        return ""
+    base = target.split(":")[0]
+    return base if base else target
 
 
-def _get_family_to_targets() -> dict[str, list[str]]:
-    """Return the family -> gfx targets mapping, parsed once from CMake."""
-    global _family_to_targets_cache
-    if _family_to_targets_cache is None:
-        cmake_path = (
-            Path(__file__).parent.parent / "cmake" / "therock_amdgpu_targets.cmake"
-        )
-        infos = parse_amdgpu_targets_cmake(cmake_path)
-        _family_to_targets_cache = build_family_to_targets(infos)
-    return _family_to_targets_cache
+def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
+    """Match if the artifact's base arch equals any requested target's base arch.
+
+    Uses base-arch matching: both the artifact target and requested targets are
+    stripped to their base arch before comparison. This means requesting 'gfx942'
+    will match 'gfx942', 'gfx942:xnack+', 'gfx942:xnack-', or any 'gfx942:*' variant.
+
+    Known limitation: All colon-suffixed variants of the same base arch will match.
+    For example, requesting 'gfx942' matches 'gfx942:xnack+', 'gfx942:xnack-',
+    'gfx942:abc', etc. This is intentional to ensure all relevant artifacts are
+    fetched for a given GPU architecture.
+    """
+    if not artifact_target:
+        return False
+    requested_bases = {_get_base_arch(t) for t in requested_targets}
+    return _get_base_arch(artifact_target) in requested_bases
 
 
 def log(msg: str):
@@ -97,31 +114,6 @@ def log(msg: str):
 def _delay_for_retry(seconds: float):
     """Sleep for retry delay. Mockable for testing."""
     time.sleep(seconds)
-
-
-def _get_pyzstd():
-    """Lazy import pyzstd with helpful error message."""
-    try:
-        import pyzstd
-
-        return pyzstd
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "pyzstd is required for zstd artifact decompression. "
-            "Install it with: pip install pyzstd"
-        )
-
-
-def _open_archive_for_read(path: Path) -> tarfile.TarFile:
-    """Open a tar archive for reading, auto-detecting compression type."""
-    if path.name.endswith(".tar.zst"):
-        pyzstd = _get_pyzstd()
-        zstd_file = pyzstd.ZstdFile(path, mode="rb")
-        return tarfile.TarFile(fileobj=zstd_file, mode="r")
-    elif path.name.endswith(".tar.xz"):
-        return tarfile.TarFile.open(path, mode="r:xz")
-    else:
-        raise ValueError(f"Unknown archive format: {path}")
 
 
 def get_default_topology_path() -> Path:
@@ -163,11 +155,10 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
             input_families = args.amdgpu_families.split(";")
             output_families.extend(input_families)
             if args.expand_family_to_targets:
-                family_map = _get_family_to_targets()
-                for input_family in input_families:
-                    for target in family_map.get(input_family, []):
-                        if target not in output_families:
-                            output_families.append(target)
+                family_map = amdgpu_family_map()
+                for target in expand_families(input_families, family_map, strict=False):
+                    if target not in output_families:
+                        output_families.append(target)
         if args.amdgpu_targets:
             output_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
@@ -176,26 +167,89 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
 
 
 def find_available_artifacts(
-    artifact_names: Set[str],
-    target_families: List[str],
-    available: Set[str],
-) -> List[str]:
+    artifact_names: set[str],
+    target_families: list[str],
+    available: set[str],
+    excluded_components: set[str] | None = None,
+) -> list[str]:
     """Find which artifacts exist in the available set.
 
-    Iterates artifact_names × target_families × components × extensions,
-    returning filenames that are present in `available`. Prefers .tar.zst
-    over .tar.xz when both exist.
+    Iterates available artifacts and filters by artifact_names, target_families,
+    and components. Uses base-arch matching: requesting a base arch (e.g., "gfx942")
+    will also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
+
+    Prefers .tar.zst over .tar.xz when both exist, because zstd offers faster
+    decompression and better compression ratios for our artifact workloads.
     """
+    excluded_components = excluded_components or set()
+    targets_to_match = set(target_families)
+
+    # Use structured ArtifactName parsing for reliable matching (like fetch_artifacts.py)
     matched = []
-    for artifact_name in sorted(artifact_names):
-        for tf in target_families:
-            for comp in ARTIFACT_COMPONENTS:
-                for ext in ARTIFACT_EXTENSIONS:
-                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
-                    if filename in available:
-                        matched.append(filename)
-                        break  # Found this artifact, don't check other extensions
+    seen = set()
+
+    # Sort .tar.zst before .tar.xz so dedup prefers zstd (faster decompression)
+    def _sort_key(f: str) -> tuple:
+        base = f.rsplit(".tar", 1)[0]
+        priority = 0 if f.endswith(".tar.zst") else 1
+        return (base, priority)
+
+    for filename in sorted(available, key=_sort_key):
+        an = ArtifactName.from_filename(filename)
+        if not an:
+            continue
+        if an.name not in artifact_names:
+            continue
+        if an.component in excluded_components:
+            continue
+        if not _matches_target(an.target_family, targets_to_match):
+            continue
+
+        # Dedupe: prefer .tar.zst over .tar.xz for same artifact
+        key = (an.name, an.component, an.target_family)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.append(filename)
+
     return matched
+
+
+def parse_excluded_components(raw_components: str) -> set[str]:
+    """Parse and validate component names passed to --exclude-components."""
+    components = {
+        comp.strip()
+        for comp in raw_components.replace(";", ",").split(",")
+        if comp.strip()
+    }
+    invalid_components = components - set(ARTIFACT_COMPONENTS)
+    if invalid_components:
+        raise ValueError(
+            "Invalid artifact component(s): "
+            f"{', '.join(sorted(invalid_components))}. "
+            f"Valid components are: {', '.join(ARTIFACT_COMPONENTS)}"
+        )
+    return components
+
+
+def parse_excluded_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --exclude-artifacts."""
+    artifacts = {
+        artifact.strip()
+        for artifact in raw_artifacts.replace(";", ",").split(",")
+        if artifact.strip()
+    }
+    invalid_artifacts = artifacts - valid_artifacts
+    if invalid_artifacts:
+        raise ValueError(
+            "Invalid artifact name(s): "
+            f"{', '.join(sorted(invalid_artifacts))}. "
+            f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
+        )
+    return artifacts
 
 
 # =============================================================================
@@ -298,7 +352,7 @@ class BootstrappingPopulator(ArtifactPopulator):
 
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
-                shutil.rmtree(full_path)
+                rmtree_with_retry(full_path)
             # Write the ".prebuilt" marker file
             prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -333,9 +387,9 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
-                shutil.rmtree(output_dir)
+                rmtree_with_retry(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
-            with _open_archive_for_read(archive_path) as tf:
+            with open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
 
         if request.delete_archive:
@@ -374,6 +428,16 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
+    excluded_artifacts = parse_excluded_artifacts(
+        args.exclude_artifacts,
+        set(topology.artifacts.keys()),
+    )
+    if excluded_artifacts:
+        log(f"Excluding artifacts: {', '.join(sorted(excluded_artifacts))}")
+        inbound -= excluded_artifacts
+        if not inbound:
+            log("No artifacts remain after exclusions")
+            return
 
     # Create backend
     backend = create_backend_from_env(
@@ -395,7 +459,16 @@ def do_fetch(args: argparse.Namespace):
     )
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    excluded_components = parse_excluded_components(args.exclude_components)
+    if excluded_components:
+        log(f"Excluding artifact components: {', '.join(sorted(excluded_components))}")
+
+    matched_filenames = find_available_artifacts(
+        inbound,
+        target_families,
+        available,
+        excluded_components=excluded_components,
+    )
 
     download_requests = [
         DownloadRequest(
@@ -483,7 +556,7 @@ def do_fetch(args: argparse.Namespace):
 
     # Cleanup download cache (skip when using a shared cache dir)
     if download_dir.exists() and not args.no_extract and not shared_cache:
-        shutil.rmtree(download_dir)
+        rmtree_with_retry(download_dir)
 
     # Fail if any downloads failed
     total_requested = len(download_requests)
@@ -529,11 +602,46 @@ class UploadRequest:
     backend: ArtifactBackend
 
 
+def _format_bytes(size: Optional[int]) -> str:
+    return "unknown" if size is None else f"{size} bytes"
+
+
+def _directory_file_count_and_size_sum(path: Path) -> Optional[tuple[int, int]]:
+    try:
+        count = 0
+        total = 0
+        for child in path.rglob("*"):
+            if child.is_file():
+                count += 1
+                total += child.stat().st_size
+        return count, total
+    except OSError:
+        return None
+
+
+def _hash_file_path(archive_path: Path) -> Path:
+    return Path(f"{archive_path}.sha256sum")
+
+
+def _read_sha256sum_value(hash_path: Path) -> str:
+    """Read the digest from a hash sidecar.
+
+    Existing files in tests and logs use both plain digest and
+    ``sha256sum``-style ``digest filename`` formats. The digest is always the
+    first whitespace-delimited token.
+    """
+    content = hash_path.read_text().strip()
+    if not content:
+        raise ValueError(f"Empty sha256sum file: {hash_path}")
+    return content.split()[0]
+
+
 def compress_artifact(request: CompressRequest) -> Optional[Path]:
     """Compress a single artifact directory using fileset_tool.py artifact-archive."""
     try:
         log(f"  ++ Compressing {request.source_dir.name}")
         request.archive_path.parent.mkdir(parents=True, exist_ok=True)
+        hash_path = _hash_file_path(request.archive_path)
 
         # Use fileset_tool.py artifact-archive for proper archive creation
         import subprocess
@@ -555,7 +663,7 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
         cmd.extend(
             [
                 "--hash-file",
-                str(request.archive_path) + ".sha256sum",
+                str(hash_path),
                 str(request.source_dir),
             ]
         )
@@ -566,6 +674,21 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
                 f"fileset_tool.py artifact-archive failed (returncode={result.returncode}): {result.stderr}"
             )
 
+        sha256 = _read_sha256sum_value(hash_path)
+        file_count_and_size = _directory_file_count_and_size_sum(request.source_dir)
+        if file_count_and_size is None:
+            file_count = "unknown"
+            uncompressed_size = None
+        else:
+            file_count, uncompressed_size = file_count_and_size
+        log(
+            f"  ++ Compressed {request.source_dir.name} "
+            f"(files={file_count}, "
+            f"uncompressed_size={_format_bytes(uncompressed_size)}) "
+            f"-> {request.archive_path.name} "
+            f"(compressed_size={_format_bytes(request.archive_path.stat().st_size)}, "
+            f"sha256={sha256})"
+        )
         return request.archive_path
     except Exception as e:
         log(f"  !! Failed to compress {request.source_dir.name}: {e}")
@@ -579,14 +702,30 @@ def upload_artifact(request: UploadRequest) -> bool:
 
     for attempt in range(MAX_RETRIES):
         try:
-            log(f"  ++ Uploading {request.artifact_key}")
+            # Upload the artifact itself.
+            sha_path = _hash_file_path(request.source_path)
+            sha256 = calculate_hash(request.source_path, "sha256").hexdigest()
+            compressed_size = request.source_path.stat().st_size
+            log(
+                f"  ++ Uploading {request.artifact_key} "
+                f"(compressed_size={_format_bytes(compressed_size)}, "
+                f"sha256={sha256})"
+            )
             request.backend.upload_artifact(request.source_path, request.artifact_key)
 
-            # Also upload sha256sum if it exists
-            sha_path = request.source_path.with_suffix(
-                request.source_path.suffix + ".sha256sum"
-            )
+            # Upload the artifact's sha256sum file.
             if sha_path.exists():
+                sha256sum_sha256 = _read_sha256sum_value(sha_path)
+                if sha256sum_sha256 != sha256:
+                    log(
+                        f"  !! WARNING: sha256 mismatch for {request.artifact_key}: "
+                        f"computed_sha256={sha256}, sha256sum_sha256={sha256sum_sha256}"
+                    )
+                log(
+                    f"  ++ Uploading {request.artifact_key}.sha256sum "
+                    f"(artifact_sha256={sha256sum_sha256}, "
+                    f"size={_format_bytes(sha_path.stat().st_size)})"
+                )
                 request.backend.upload_artifact(
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
@@ -609,21 +748,31 @@ def do_push(args: argparse.Namespace):
     """Push produced artifacts after building with parallel compress and upload."""
     topology = get_topology(args.topology)
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
-        log(f"ERROR: Stage '{args.stage}' not found")
-        log(f"Available stages: {', '.join(topology.build_stages.keys())}")
-        sys.exit(1)
+    # Determine which artifacts to push
+    if args.stage == "all":
+        produced = set()
+        stages = topology.get_build_stages()
+        for stage in stages:
+            produced.update(topology.get_produced_artifacts(stage.name))
+        log(
+            f"All stages produced {len(produced)} artifacts: {', '.join(sorted(produced))}"
+        )
+    else:
+        # Validate stage
+        if args.stage not in topology.build_stages:
+            log(f"ERROR: Stage '{args.stage}' not found")
+            log(f"Available stages: {', '.join(topology.build_stages.keys())}")
+            sys.exit(1)
 
-    # Get produced artifacts for this stage
-    produced = topology.get_produced_artifacts(args.stage)
-    if not produced:
-        log(f"Stage '{args.stage}' produces no artifacts")
-        return
+        # Get produced artifacts for this stage
+        produced = topology.get_produced_artifacts(args.stage)
+        if not produced:
+            log(f"Stage '{args.stage}' produces no artifacts")
+            return
 
-    log(
-        f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
-    )
+        log(
+            f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
+        )
 
     # Create backend
     backend = create_backend_from_env(
@@ -744,7 +893,7 @@ def do_push(args: argparse.Namespace):
 
     # Cleanup upload cache
     if upload_dir.exists():
-        shutil.rmtree(upload_dir)
+        rmtree_with_retry(upload_dir)
 
     # Fail if any artifacts failed to upload
     if uploaded_count < total_artifacts:
@@ -795,7 +944,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    platform: str,
+    source_run_id: str,
+    source_repository: Optional[str],
+    local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -815,7 +967,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -852,8 +1007,9 @@ def do_copy(args: argparse.Namespace):
 
     # Create source and dest backends
     source_backend = _create_source_backend(
-        source_run_id=args.source_run_id,
         platform=args.platform,
+        source_run_id=args.source_run_id,
+        source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
@@ -1113,6 +1269,19 @@ def main(argv: Optional[List[str]] = None):
         default=None,
         help="Number of concurrent extractions (default: auto)",
     )
+    fetch_parser.add_argument(
+        "--exclude-components",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact components to exclude "
+        f"when fetching. Valid components: {', '.join(ARTIFACT_COMPONENTS)}",
+    )
+    fetch_parser.add_argument(
+        "--exclude-artifacts",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact names to exclude when fetching",
+    )
     fetch_parser.set_defaults(func=do_fetch)
 
     # push command
@@ -1169,10 +1338,17 @@ def main(argv: Optional[List[str]] = None):
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
     )
     copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+        help="GitHub repository for source-run-id in 'owner/repo' format "
+        "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
+    )
+    copy_parser.add_argument(
         "--stage",
         type=str,
         required=True,
-        help="Build stage name(s), comma-separated (e.g., 'foundation,compiler-runtime')",
+        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,runtime-tests,math-libs')",
     )
     _add_target_args(copy_parser)
     copy_parser.add_argument(

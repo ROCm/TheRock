@@ -3,19 +3,16 @@
 
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 import os
-import re
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from setup_venv import (
-    GFX_TARGET_REGEX,
-    install_packages_into_venv,
-)
+from setup_venv import install_packages_into_venv
 
 
 class InstallPackagesTest(unittest.TestCase):
@@ -102,8 +99,8 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_url_complete(self, mock_run, mock_find_python):
-        """Passing index_url without index_subdir uses the URL as-is."""
+    def test_index_url(self, mock_run, mock_find_python):
+        """Passing index_url uses the URL as-is."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -115,31 +112,16 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_name_with_subdir(self, mock_run, mock_find_python):
-        """Passing index_name with index_subdir constructs full URL."""
+    def test_index_name(self, mock_run, mock_find_python):
+        """Passing index_name without index_url uses a known url."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
             index_name="stable",
-            index_subdir="gfx110X-all",
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://repo.amd.com/rocm/whl/gfx110X-all", cmd)
-
-    @patch("setup_venv.find_venv_python_exe", return_value="python")
-    @patch("setup_venv.run_command")
-    def test_index_url_with_subdir(self, mock_run, mock_find_python):
-        """Passing index_url with index_subdir constructs full URL."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
-            packages=["rocm"],
-            index_url="https://example.com/base",
-            index_subdir="gfx94X-dcgpu",
-        )
-
-        cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://example.com/base/gfx94X-dcgpu", cmd)
+        self.assertIn("--index-url=https://repo.amd.com/rocm/whl-multi-arch/", cmd)
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
@@ -152,6 +134,23 @@ class InstallPackagesTest(unittest.TestCase):
         )
 
         cmd = mock_run.call_args[0][0]
+        self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
+        self.assertFalse(any("--index-url" in str(a) for a in cmd))
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_empty_index_url_disables_index(self, mock_run, mock_find_python):
+        """An explicit empty index_url means install only from find-links."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            index_url="",
+            find_links="https://bucket/run-123/index.html",
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--no-index", cmd)
+        self.assertIn("--no-build-isolation", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
         self.assertFalse(any("--index-url" in str(a) for a in cmd))
 
@@ -170,22 +169,47 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--index-url=https://deps/simple/", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
 
+    @patch("setup_venv.time.sleep")
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_package_install_retries_then_succeeds(
+        self, mock_run, mock_find_python, mock_sleep
+    ):
+        """Transient package install failures are retried."""
+        mock_run.side_effect = [
+            subprocess.CalledProcessError(1, ["pip"]),
+            None,
+        ]
 
-class GfxRegexPatternTest(unittest.TestCase):
-    def test_valid_match(self):
-        html_snippet = '<a href="relpath/to/wherever/gfx103X-dgpu">gfx103X-dgpu</a><br><a href="/relpath/gfx120X-all">gfx120X-all</a>'
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(["gfx103X-dgpu", "gfx120X-all"], matches)
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            install_retry_timeout_seconds=60,
+            install_retry_wait_between_seconds=30,
+        )
 
-    def test_match_without_suffix(self):
-        html_snippet = "<a>gfx940</a><br><a>gfx1030</a>"
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(["gfx940", "gfx1030"], matches)
+        self.assertEqual(mock_run.call_count, 2)
+        mock_sleep.assert_called_once_with(30)
 
-    def test_invalid_match(self):
-        html_snippet = "<a>gfx94000</a><br><a>gfx1030X-dgpu</a>"
-        matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(matches, [])
+    @patch("setup_venv.time.sleep")
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_package_install_retries_can_be_disabled(
+        self, mock_run, mock_find_python, mock_sleep
+    ):
+        """Setting the retry window to zero preserves fail-fast behavior."""
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["pip"])
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            install_packages_into_venv(
+                venv_dir=self.venv_dir,
+                packages=["rocm"],
+                install_retry_timeout_seconds=0,
+                install_retry_wait_between_seconds=30,
+            )
+
+        self.assertEqual(mock_run.call_count, 1)
+        mock_sleep.assert_not_called()
 
 
 if __name__ == "__main__":

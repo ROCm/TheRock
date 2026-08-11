@@ -39,6 +39,15 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
+    # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
+    # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
+    # "Unknown debugging section .debug_str_offsets" even in version 0.16
+    # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
+    # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
+        string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
+    endif()
+
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
@@ -72,42 +81,11 @@ endif()
 if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR THEROCK_BUILD_COMGR_TESTS)
   set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
   set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
-
-  # Install llvm-lit script and the lit Python module for running LIT tests.
-  # LLVM_INSTALL_UTILS only installs C++ utilities (FileCheck, not, etc.),
-  # but llvm-lit is a Python script that requires separate handling.
-  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
-
-  # Install the lit Python module. This is needed for llvm-lit to function.
-  # We install it to a lib/python subdirectory and set PYTHONPATH in llvm-lit.
-  set(_lit_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/../llvm/utils/lit")
-  install(DIRECTORY "${_lit_source_dir}/lit"
-    DESTINATION "lib/python"
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-  )
-
-  # Create a wrapper script that sets PYTHONPATH before invoking the real llvm-lit
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
-# Wrapper script for llvm-lit that sets up PYTHONPATH
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export PYTHONPATH="${SCRIPT_DIR}/../lib/python:${PYTHONPATH}"
-exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
-]=])
-  # Install the wrapper and rename the original
-  install(CODE "
-    # Rename the original llvm-lit to llvm-lit.real
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\" )
-    # Install the wrapper script as llvm-lit
-    file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
-    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
-    file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-  ")
 endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
-set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+set(LLVM_TARGETS_TO_BUILD "AMDGPU;Native;SPIRV" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
@@ -170,9 +148,10 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-# When LLVM tests, tools, or Comgr tests are enabled, build all tools (don't selectively disable).
-# Otherwise, only build the minimum required tools for production.
-if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK_BUILD_COMGR_TESTS)
+# When LLVM LIT tests or all tools are requested, build everything (don't selectively disable).
+# Comgr tests only need tools already in the minimal required set (clang, llvm-dis, llvm-objdump,
+# FileCheck via LLVM_INSTALL_UTILS), so they don't need the full tool build.
+if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
   block()
     # This list contains the minimum tooling that must be enabled to build LLVM.
     # It is empically derived (either configure or ninja invocation will fail
@@ -181,12 +160,15 @@ if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS AND NOT THEROCK
       LLVM_AR
       LLVM_AS
       LLVM_CONFIG
+      LLVM_COV
+      LLVM_CXXFILT
       LLVM_DIS
       LLVM_DWARFDUMP
       LLVM_LINK
       LLVM_MC
       LLVM_NM
       LLVM_OFFLOAD_BINARY
+      LLVM_PROFDATA
       LLVM_SHLIB
       LLVM_OBJCOPY
       LLVM_OBJDUMP

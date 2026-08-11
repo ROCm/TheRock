@@ -15,12 +15,12 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
+        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
       python_version:
         required: true
         type: string
@@ -33,6 +33,25 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
+      device_query:
+        description: >-
+          GPU candidate-set selection (--device-query, stage 1). "unique": one
+          device per architecture. "all": every device of each architecture.
+        type: choice
+        options:
+          - "unique"
+          - "all"
+        default: "unique"
+      gpu_policy:
+        description: >-
+          How many candidate GPUs are made visible (--gpu-policy, stage 2).
+          "single": one GPU visible at a time. "all": all candidate GPUs visible
+          at once.
+        type: choice
+        options:
+          - "single"
+          - "all"
+        default: "single"
 
   workflow_call:
     inputs:
@@ -54,6 +73,18 @@ on:
       pytorch_git_ref:
         type: string
         default: "release/2.7"
+      device_query:
+        description: >-
+          --device-query. "unique": one device per architecture; "all": every
+          device of each architecture.
+        type: string
+        default: "unique"
+      gpu_policy:
+        description: >-
+          --gpu-policy. "single": one GPU visible at a time; "all": all candidate
+          GPUs visible at once.
+        type: string
+        default: "single"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -70,9 +101,14 @@ jobs:
   test_wheels:
     name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
+      # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
+        --cap-add=SYS_PTRACE
         --group-add video
         --device /dev/kfd
         --device /dev/dri
@@ -83,21 +119,52 @@ jobs:
     defaults:
       run:
         shell: bash
+    # run_pytorch_tests_full.py already sets CI, PYTORCH_TEST_WITH_ROCM,
+    # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
+    # itself, so we only set the extras the runner does not manage.
     env:
+      QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      # Pin OpenBLAS threads to 1 for deterministic reductions; otherwise
+      # OpenBLAS defaults to the CPU core count, producing non-deterministic
+      # results in tests like test_entropy_monte_carlo.
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
+
+      # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
+      # select GPU-specific device packages. Expand the family to get the
+      # comma-separated device extras string for pip install.
+      - name: Expand GPU family to device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.amdgpu_family }}" \
+            --output-mode=device-extras
 
       # TODO: also upload and reference test report together with this logging?
       - name: Summarize workflow inputs
@@ -106,22 +173,28 @@ jobs:
             --torch-version=${{ inputs.torch_version }} \
             --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
             --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }}
+            --device-extras="${{ steps.expand.outputs.device_extras }}"
 
       - name: Set git options
         run: |
+          git config --global --add safe.directory $PWD
           git config --global core.longpaths true
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
+      # steps to save time.
+      # TODO(#5110): Accept manifest_url and use checkout_from_manifest.py
+      # --no-hipify --no-submodules so tests use the exact source commit and
+      # related repository pins that produced the package under test.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
             --repo-hashtag nightly \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
@@ -129,34 +202,88 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-            --no-hipify
+            --no-hipify \
+            --no-submodules
 
       - name: Set up virtual environment
+        timeout-minutes: 15
         run: |
+          # The torch wheel already depends on the matching rocm runtime
+          # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
+          # so installing torch is enough to pull the ROCm runtime.
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages torch==${{ inputs.torch_version }} \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
             --index-url=${{ inputs.package_index_url }} \
-            --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
       - name: Run rocm-sdk sanity tests
+        timeout-minutes: 5
         run: |
           rocm-sdk test
 
       - name: Run PyTorch smoketests
+        timeout-minutes: 10
         run: |
           python ./external-builds/pytorch/run_pytorch_smoke_tests.py -- \
             --log-cli-level=INFO \
             -v
 
+      # Rather than calling pytest or PyTorch's run_test.py directly, we use a
+      # test runner script that invokes run_test.py after first handling our
+      # custom skip-list integration, serialized execution, GPU selection, and
+      # more. The list of included test suites is limited here compared to in
+      # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
+        timeout-minutes: 120
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query "${{ inputs.device_query }}" \
+            --gpu-policy "${{ inputs.gpu_policy }}" \
+            --include \
+              test_nn \
+              test_torch \
+              test_cuda \
+              test_unary_ufuncs \
+              test_binary_ufuncs \
+              test_autograd \
+            -- \
+            --continue-on-collection-errors
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ inputs.amdgpu_family }}
+          path: external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

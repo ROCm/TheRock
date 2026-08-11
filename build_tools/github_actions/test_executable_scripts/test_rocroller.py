@@ -68,7 +68,7 @@ if platform == "linux":
     env["HIP_PATH"] = str(THEROCK_DIST_DIR)
 
 # TEST_TYPE → gtest filter
-TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
+TEST_TYPE = os.getenv("TEST_TYPE", "standard").lower()
 test_filter_arg = None
 if TEST_TYPE == "quick":
     # keep this subset (TODO: add more tests)
@@ -81,8 +81,6 @@ if TEST_TYPE == "quick":
         "ComponentTest.*",
     ]
     test_filter_arg = "--gtest_filter=" + ":".join(quick_tests)
-elif TEST_TYPE == "quick":
-    test_filter_arg = "--gtest_filter=*quick*"
 
 # Append to the existing filter or start a negative-only filter
 # TODO(#2030): re-enable these tests once compatible with TheRock

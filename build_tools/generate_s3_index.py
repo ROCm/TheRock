@@ -200,6 +200,24 @@ def _discover_dirs_with_files_s3(s3_client, bucket: str, run_prefix: str) -> lis
     return sorted(dirs)
 
 
+def _expand_with_intermediate_dirs(dirs: list[str], run_prefix: str) -> list[str]:
+    """Add every ancestor directory of each entry, up to and including run_prefix.
+
+    Without this, intermediate directories that contain only subdirectories
+    (e.g. ``<run>/logs/`` when only ``<run>/logs/<component>/`` has files)
+    have no index.html generated, so links from a parent index 404.
+    """
+    all_dirs: set[str] = set(dirs)
+    all_dirs.add(run_prefix)
+    for d in dirs:
+        while "/" in d and d != run_prefix:
+            d = d.rsplit("/", 1)[0]
+            all_dirs.add(d)
+            if d == run_prefix:
+                break
+    return sorted(all_dirs)
+
+
 # ---------------------------------------------------------------------------
 # Local listing helpers (for --output-dir mode)
 # ---------------------------------------------------------------------------
@@ -343,6 +361,14 @@ def run(args) -> None:
         log("[WARN] No directories with files found. Nothing to index.")
         return
 
+    if args.include_intermediate_dirs:
+        before = len(dirs)
+        dirs = _expand_with_intermediate_dirs(dirs, prefix)
+        log(
+            f"[INFO] Expanded {before} dirs with files to {len(dirs)} dirs "
+            f"including intermediate ancestors."
+        )
+
     log(f"[INFO] Found directories: {dirs}")
     for dir_prefix in dirs:
         log(f"\n[INFO] Generating index for: {dir_prefix}")
@@ -385,6 +411,15 @@ if __name__ == "__main__":
         "--dry-run",
         action="store_true",
         help="Print what would be uploaded without actually uploading",
+    )
+    parser.add_argument(
+        "--include-intermediate-dirs",
+        action="store_true",
+        help=(
+            "Also generate index.html for directories whose contents are "
+            "only subdirectories (no direct files). Without this, links to "
+            "such directories from a parent index 404."
+        ),
     )
     args = parser.parse_args()
     run(args)

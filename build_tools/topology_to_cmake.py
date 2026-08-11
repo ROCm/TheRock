@@ -45,6 +45,7 @@ from typing import TextIO
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
+from _therock_utils.branch_config import BranchConfig, load_branch_config
 from _therock_utils.build_topology import BuildTopology, Artifact
 
 
@@ -52,6 +53,17 @@ def write_cmake_header(f: TextIO):
     """Write CMake file header."""
     f.write("# Auto-generated from BUILD_TOPOLOGY.toml\n")
     f.write("# DO NOT EDIT MANUALLY\n\n")
+
+
+def write_branch_config_cmake_header(f: TextIO):
+    """Write branch config CMake file header."""
+    f.write("# Auto-generated from BUILD_TOPOLOGY.toml and BRANCH_CONFIG.json\n")
+    f.write("# DO NOT EDIT MANUALLY\n\n")
+
+
+def cmake_quote(value: str) -> str:
+    """Quote a string for use as a CMake argument."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def generate_artifact_targets(topology: BuildTopology, f: TextIO):
@@ -198,6 +210,71 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                     if artifact not in artifacts_in_order:
                         artifacts_in_order.append(artifact)
 
+    def write_feature_declaration(
+        artifact: Artifact,
+        feature_name: str,
+        feature_group: str,
+        requires: list[str],
+        *,
+        disable_platforms: list[str],
+    ):
+        f.write(f"therock_add_feature({feature_name}\n")
+        f.write(f"  GROUP {feature_group}\n")
+        f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
+
+        if requires:
+            f.write(f"  REQUIRES {' '.join(requires)}\n")
+
+        if disable_platforms:
+            f.write(f"  DISABLE_PLATFORMS {' '.join(disable_platforms)}\n")
+
+        f.write(")\n")
+
+    def write_feature_with_conditional_platform_disables(
+        artifact: Artifact,
+        feature_name: str,
+        feature_group: str,
+        requires: list[str],
+    ):
+        disable_platforms_var = f"_THEROCK_{feature_name}_DISABLE_PLATFORMS"
+        f.write('string(TOLOWER "${CMAKE_SYSTEM_NAME}" _therock_system_lower)\n')
+        f.write(f"set({disable_platforms_var}")
+        for platform in artifact.disable_platforms:
+            f.write(f" {platform}")
+        f.write(")\n")
+        for platform, flag in artifact.disable_platforms_if_flags_not_set.items():
+            f.write(f"if(NOT THEROCK_FLAG_{flag})\n")
+            f.write(f"  list(APPEND {disable_platforms_var} {platform})\n")
+            f.write("endif()\n")
+            f.write(
+                f'if(_therock_system_lower STREQUAL "{platform}" '
+                f"AND THEROCK_ENABLE_{feature_name} AND NOT THEROCK_FLAG_{flag})\n"
+            )
+            f.write(
+                f'  message(FATAL_ERROR "{feature_name} can be built on ${{CMAKE_SYSTEM_NAME}} '
+                f'only with -DTHEROCK_FLAG_{flag}=ON")\n'
+            )
+            f.write("endif()\n")
+        f.write(f"if({disable_platforms_var})\n")
+        write_feature_declaration(
+            artifact,
+            feature_name,
+            feature_group,
+            requires,
+            disable_platforms=[f"${{{disable_platforms_var}}}"],
+        )
+        f.write("else()\n")
+        write_feature_declaration(
+            artifact,
+            feature_name,
+            feature_group,
+            requires,
+            disable_platforms=[],
+        )
+        f.write("endif()\n")
+        f.write(f"unset({disable_platforms_var})\n")
+        f.write("unset(_therock_system_lower)\n")
+
     for artifact in artifacts_in_order:
         feature_name = topology.get_artifact_feature_name(artifact)
         feature_group = topology.get_artifact_feature_group(artifact)
@@ -210,18 +287,22 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                 dep_feature = topology.get_artifact_feature_name(dep_artifact)
                 requires.append(dep_feature)
 
-        # Generate the feature declaration
-        f.write(f"therock_add_feature({feature_name}\n")
-        f.write(f"  GROUP {feature_group}\n")
-        f.write(f'  DESCRIPTION "Enables {artifact.name}"\n')
-
-        if requires:
-            f.write(f"  REQUIRES {' '.join(requires)}\n")
-
-        if artifact.disable_platforms:
-            f.write(f"  DISABLE_PLATFORMS {' '.join(artifact.disable_platforms)}\n")
-
-        f.write(")\n\n")
+        if artifact.disable_platforms_if_flags_not_set:
+            write_feature_with_conditional_platform_disables(
+                artifact,
+                feature_name,
+                feature_group,
+                requires,
+            )
+        else:
+            write_feature_declaration(
+                artifact,
+                feature_name,
+                feature_group,
+                requires,
+                disable_platforms=artifact.disable_platforms,
+            )
+        f.write("\n")
 
 
 def generate_validation_metadata(topology: BuildTopology, f: TextIO):
@@ -273,6 +354,23 @@ def generate_validation_metadata(topology: BuildTopology, f: TextIO):
         f.write(")\n\n")
 
 
+def generate_branch_config_flags(config: BranchConfig, f: TextIO):
+    """Generate CMake helpers for branch-local flag defaults."""
+    f.write(
+        "# =============================================================================\n"
+    )
+    f.write("# Branch config flag defaults\n")
+    f.write(
+        "# =============================================================================\n\n"
+    )
+    f.write("macro(therock_apply_branch_config_flags)\n")
+    for flag_name, flag_value in config.flags.items():
+        f.write(
+            f"  therock_override_flag_default({flag_name} {cmake_quote(flag_value)})\n"
+        )
+    f.write("endmacro()\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate CMake includes from BUILD_TOPOLOGY.toml"
@@ -288,6 +386,18 @@ def main():
         type=str,
         default="cmake/therock_topology_generated.cmake",
         help="Output CMake file path",
+    )
+    parser.add_argument(
+        "--branch-config",
+        type=str,
+        default="BRANCH_CONFIG.json",
+        help="Path to optional BRANCH_CONFIG.json file",
+    )
+    parser.add_argument(
+        "--branch-config-output",
+        type=str,
+        default="cmake/therock_branch_config.cmake",
+        help="Output CMake file path for generated branch config helpers",
     )
     parser.add_argument(
         "--validate-only",
@@ -319,6 +429,17 @@ def main():
         print(f"Error loading topology: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Load and validate the optional branch config.
+    branch_config_path = Path(args.branch_config)
+    if not branch_config_path.is_absolute():
+        script_dir = Path(__file__).parent.parent
+        branch_config_path = script_dir / branch_config_path
+    try:
+        branch_config = load_branch_config(branch_config_path, topology)
+    except Exception as e:
+        print(f"Error loading branch config: {e}", file=sys.stderr)
+        sys.exit(1)
+
     # Validate
     errors = topology.validate_topology()
     if errors:
@@ -346,6 +467,11 @@ def main():
 
     # Create parent directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    branch_config_output_path = Path(args.branch_config_output)
+    if not branch_config_output_path.is_absolute():
+        script_dir = Path(__file__).parent.parent
+        branch_config_output_path = script_dir / branch_config_output_path
+    branch_config_output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w") as f:
         write_cmake_header(f)
@@ -357,7 +483,12 @@ def main():
         generate_dependency_variables(topology, f)
         generate_build_order(topology, f)
 
+    with open(branch_config_output_path, "w") as f:
+        write_branch_config_cmake_header(f)
+        generate_branch_config_flags(branch_config, f)
+
     print(f"Generated CMake includes at: {output_path}")
+    print(f"Generated branch config CMake include at: {branch_config_output_path}")
 
     # Print summary
     stages = topology.get_build_stages()

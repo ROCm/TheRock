@@ -4,6 +4,10 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+Linux source builds of Mirage require Rust 1.95 and Cargo. Install them through
+`rustup` by following the
+[Environment Setup Guide](../environment_setup_guide.md#required-build-toolchains).
+
 Table of contents:
 
 - [Overall build architecture](#overall-build-architecture)
@@ -315,9 +319,24 @@ extension can be used to configure the superproject and build individual targets
 Settings for CMake builds can be specified in `.vscode/settings.json` or a
 `.vscode/*.code-workspace` file, like so:
 
+> [!IMPORTANT]
+> If using ccache, first run `setup_ccache.py` to generate the config file:
+>
+> ```bash
+> python build_tools/setup_ccache.py
+> ```
+>
+> Then set the `CCACHE_CONFIGPATH` environment variable in your VSCode
+> settings as shown below. See the
+> [README ccache instructions](../../README.md#ccache-usage-on-linux)
+> for full details.
+
 ```jsonc
 {
   "cmake.generator": "Ninja",
+  "cmake.environment": {
+    "CCACHE_CONFIGPATH": "${workspaceFolder}/.ccache/ccache.conf"
+  },
   "cmake.configureArgs": [
     // General settings.
     "-DTHEROCK_VERBOSE=ON",

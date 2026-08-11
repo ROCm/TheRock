@@ -8,6 +8,11 @@ discussion: https://github.com/ROCm/TheRock/discussions/1817
 
 # Fusilli+IREE as a kernel provider and JIT engine for hipDNN
 
+> **Status note:** The iree-libs subtree and fusilli-provider component
+> described here were implemented and then later removed from TheRock /
+> rocm-libraries. This RFC is retained as historical record of the
+> accepted design.
+
 This RFC proposes adding IREE as a kernel provider to hipDNN to leverage JIT
 compiled and codegenerated kernels in ML training and inference solutions.
 This is made possible with the development of Fusilli - a C++ graph API and

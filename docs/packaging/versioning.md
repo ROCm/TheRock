@@ -59,8 +59,8 @@ users who want early previews of upcoming releases, and QA/test team members.
 | -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | stable releases      | https://repo.amd.com/rocm/        | Manually promoted prereleases                                                                                                                                                                                |
 | prereleases          | https://rocm.prereleases.amd.com/ | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
-| nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [TheRock](https://github.com/ROCm/TheRock)                                                                                                                                            |
-| dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock)                                                                                                                              |
+| nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
+| dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
 With the exception of "dev releases", each distribution channel only contains
@@ -141,7 +141,13 @@ PyTorch packages versions are handled via scripts:
 - [`build_tools/github_actions/determine_version.py`](/build_tools/github_actions/determine_version.py) (this generates e.g. `--version-suffix +rocm7.10.0`)
   - [`build_tools/github_actions/tests/determine_version_test.py`](/build_tools/github_actions/tests/determine_version_test.py)
 - [`external-builds/pytorch/build_prod_wheels.py`](/external-builds/pytorch/build_prod_wheels.py) (this appends the version suffix to each build version)
-- [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py) (this finds the versions in built packages)
+- [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py)
+  (this finds the versions in built packages)
+- [`build_tools/github_actions/generate_pytorch_source_manifest.py`](/build_tools/github_actions/generate_pytorch_source_manifest.py)
+  (this computes expected PyTorch ecosystem package versions and records them
+  with pinned source commits for checkout/build jobs)
+- [`external-builds/pytorch/checkout_from_manifest.py`](/external-builds/pytorch/checkout_from_manifest.py)
+  (this checks out the exact source commits recorded in the manifest)
 
 The scripts produce these versions for each distribution channel:
 
@@ -152,17 +158,27 @@ The scripts produce these versions for each distribution channel:
 | torchvision  | `0.24.0+rocm7.10.0`                       | `0.24.0+rocm7.11.0a20251124`                |
 | triton       | `3.3.1+rocm7.10.0`                        | `3.5.1+rocm7.11.0a20251124`                 |
 
+For manually dispatched `dev` PyTorch builds (`build_prod_wheels.py --release-type dev`), each wheel version is additionally tagged with its own 8-character source commit in the PEP 440 local version segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`. This applies to the `torch`, `torchaudio`, and `torchvision` wheels, so each records exactly which source commit produced it.
+
 #### JAX versions
 
-TODO: fill this in together with:
+JAX packages versions are handled via scripts:
 
-- https://github.com/ROCm/TheRock/issues/1985
-- https://github.com/ROCm/TheRock/issues/2091
+- [`build_tools/github_actions/determine_version.py`](/build_tools/github_actions/determine_version.py) (this generates e.g. `--version-suffix +rocm7.10.0`)
+  - [`build_tools/github_actions/tests/determine_version_test.py`](/build_tools/github_actions/tests/determine_version_test.py)
+- [`build_tools/github_actions/write_jax_versions.py`](/build_tools/github_actions/write_jax_versions.py)
+  (this finds the versions in built packages)
+- [`build_tools/github_actions/generate_jax_manifest.py`](/build_tools/github_actions/generate_jax_manifest.py)
+  (this records versions into a manifest file)
+  - [`build_tools/github_actions/tests/generate_jax_manifest_test.py`](/build_tools/github_actions/tests/generate_jax_manifest_test.py)
+- In the [ROCm/rocm-jax repository](https://github.com/ROCm/rocm-jax): [`build/ci_build`](https://github.com/ROCm/rocm-jax/blob/rocm-jax-infra/build/ci_build) (see the `--rocm-version` and `--no-rocm-version-extra` flags)
 
-<!--
-- jax-rocm7-pjrt
-- jax-rocm7-plugin
-- jaxlib (no rocm code in here) -->
+Versions for each distribution channel:
+
+| Package name     | Example release version (stable x stable) | Example nightly version (stable x nightly) |
+| ---------------- | ----------------------------------------- | ------------------------------------------ |
+| jax-rocm7-pjrt   | `0.10.0+rocm7.14.0`                       | `0.10.2+rocm7.15.0a20260712`               |
+| jax-rocm7-plugin | `0.10.0+rocm7.14.0`                       | `0.10.2+rocm7.15.0a20260712`               |
 
 ### Working with Python package versions
 
@@ -188,6 +204,8 @@ When working with versions please use these tools and avoid custom parsing
   - [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
   - [`build_tools/github_actions/determine_version.py`](/build_tools/github_actions/determine_version.py)
   - [`build_tools/github_actions/write_torch_versions.py`](/build_tools/github_actions/write_torch_versions.py)
+  - [`build_tools/github_actions/generate_pytorch_source_manifest.py`](/build_tools/github_actions/generate_pytorch_source_manifest.py)
+  - [`external-builds/pytorch/checkout_from_manifest.py`](/external-builds/pytorch/checkout_from_manifest.py)
 
 #### Tip - installing prereleases
 
@@ -240,8 +258,8 @@ A few ways to look up the version of an installed package are:
 TheRock supports rpm and debian packages. Each has different versioning scheme as mentioned below.
 Native package versions are handled by scripts:
 
-- [`build_tools/compute_rocm_native_package_version.py`](/build_tools/compute_rocm_native_package_version.py)
-  - [`build_tools/tests/compute_rocm_native_package_version_test.py`](/build_tools/tests/compute_rocm_native_package_version_test.py)
+- [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
+  - [`build_tools/tests/compute_rocm_package_version_test.py`](/build_tools/tests/compute_rocm_package_version_test.py)
 
 The script produces these versions for rpm packages for each release type:
 

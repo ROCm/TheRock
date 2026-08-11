@@ -19,6 +19,7 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
+  "bin/rocroller/**",
   "bin/rocroller-test*",
 ]
 optional = true
@@ -27,21 +28,11 @@ optional = true
 [components.dbg."math-libs/BLAS/origami/stage"]
 [components.dev."math-libs/BLAS/origami/stage"]
 [components.lib."math-libs/BLAS/origami/stage"]
-exclude = [
-  # Python extension modules are cpython-version-specific ABI binaries (e.g.
-  # origami.cpython-312-x86_64-linux-gnu.so). They must not be included in
-  # the python-version-agnostic rocm-sdk lib package, where
-  # testSharedLibrariesLoad would try to ctypes.CDLL() them from a different
-  # Python version and fail. They are distributed via the test component only.
-  "lib/python*/**",
-]
+[components.doc."math-libs/BLAS/origami/stage"]
 [components.test."math-libs/BLAS/origami/stage"]
 include = [
   "bin/origami-tests*",
   "bin/origami/**",
-  # Python extension is fetched here so the test script can set PYTHONPATH
-  # to lib/pythonX.Y/site-packages/ for ctest Python tests.
-  "lib/python*/site-packages/**",
 ]
 
 # hipBLAS
@@ -68,6 +59,8 @@ include = [
   "bin/hipblas_gtest.data",
   "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
+  # Clients tests outputs
+  "bin/hipblas/**",
 ]
 
 # hipBLASLt
@@ -75,6 +68,7 @@ include = [
 include = [
   "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
+  "lib/hipblaslt/rocisa/**",
 ]
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
@@ -98,11 +92,16 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  "bin/hipblaslt/**",
   # hipblaslt-perf and python modules
   "bin/hipblaslt-perf",
   "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
+  # TensileLite Python test artifacts
+  "share/hipblaslt/tensilelite/**",
+  # TensileLite client binary (common/benchmark tests)
+  "libexec/hipblaslt/tensilelite/**",
 ]
 
 # rocBLAS
@@ -146,6 +145,8 @@ optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
   "bin/rocsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/rocsolver/; needs CTestTestfile.cmake)
+  "bin/rocsolver/**",
   "bin/rocsolver-test*",
   "share/rocsolver/test/**",
 ]
@@ -166,6 +167,8 @@ optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
   "bin/hipsolver-bench*",
+  # Clients tests (test_runner runs ctest from bin/hipsolver/; needs CTestTestfile.cmake)
+  "bin/hipsolver/**",
   "bin/hipsolver-test*",
   "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",
@@ -194,6 +197,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/rocsparse/**",
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
@@ -220,11 +224,13 @@ include = [
 ]
 exclude = [
   "share/hipsparse/test/**",
+  "bin/hipsparse/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/hipsparse/**",
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
@@ -247,6 +253,9 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "bin/hipsparselt/CTest*",
+]
 [components.doc."math-libs/BLAS/hipSPARSELt/stage"]
 optional = true
 [components.test."math-libs/BLAS/hipSPARSELt/stage"]
@@ -254,6 +263,7 @@ include = [
   # Clients benchmarks
   "bin/hipsparselt-bench*",
   # Clients tests
+  "bin/hipsparselt/**",
   "bin/hipsparselt-test*",
   "bin/hipsparselt_gtest.data",
   "bin/hipsparselt_gentest.py",

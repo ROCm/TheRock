@@ -27,6 +27,9 @@ set_property(GLOBAL PROPERTY THEROCK_ALL_FLAGS)
 #   DEFAULT_VALUE  - ON or OFF
 #   DESCRIPTION    - Short description for the cache variable
 #   ISSUE          - (Optional) Tracking issue URL
+#   GLOBAL_PROPAGATE_FLAG
+#                  - Propagate THEROCK_FLAG_${NAME} to all sub-projects
+#                    regardless of whether the flag is enabled or disabled.
 #   GLOBAL_CMAKE_VARS   - (Optional) VAR=VALUE pairs set in super-project and
 #                          all sub-projects when the flag is enabled
 #   GLOBAL_CPP_DEFINES  - (Optional) Preprocessor defines for all sub-projects
@@ -39,7 +42,7 @@ set_property(GLOBAL PROPERTY THEROCK_ALL_FLAGS)
 #                          CMAKE_VARS and CPP_DEFINES
 function(therock_declare_flag)
   cmake_parse_arguments(PARSE_ARGV 0 ARG
-    ""
+    "GLOBAL_PROPAGATE_FLAG"
     "NAME;DEFAULT_VALUE;DESCRIPTION;ISSUE"
     "GLOBAL_CMAKE_VARS;GLOBAL_CPP_DEFINES;CMAKE_VARS;CPP_DEFINES;SUB_PROJECTS"
   )
@@ -77,6 +80,7 @@ function(therock_declare_flag)
   # Store flag metadata in global properties for later retrieval.
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DEFAULT_VALUE "${ARG_DEFAULT_VALUE}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DESCRIPTION "${ARG_DESCRIPTION}")
+  set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_PROPAGATE_FLAG "${ARG_GLOBAL_PROPAGATE_FLAG}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_CMAKE_VARS "${ARG_GLOBAL_CMAKE_VARS}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_CPP_DEFINES "${ARG_GLOBAL_CPP_DEFINES}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_CMAKE_VARS "${ARG_CMAKE_VARS}")
@@ -134,8 +138,13 @@ function(therock_finalize_flags)
       list(APPEND _json_entries "\"${_flag_name}\": false")
     endif()
 
+    get_property(_global_propagate_flag GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_GLOBAL_PROPAGATE_FLAG)
+    if(_global_propagate_flag)
+      set_property(GLOBAL APPEND PROPERTY THEROCK_DEFAULT_CMAKE_VARS THEROCK_FLAG_${_flag_name})
+    endif()
+
     if(NOT THEROCK_FLAG_${_flag_name})
-      continue()  # Flag is OFF, skip propagation processing.
+      continue()  # Flag is OFF, skip enabled-only propagation processing.
     endif()
 
     # Process GLOBAL_CMAKE_VARS: set in super-project and add to default vars list.

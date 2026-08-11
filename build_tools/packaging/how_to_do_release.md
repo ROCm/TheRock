@@ -13,35 +13,78 @@ The steps for the release are:
 
 Need:
 
-- `build_tools/packaging/download_prerelease_packages.py`
+- `build_tools/packaging/download_python_packages.py`
 - IAM role: read and list bucket access for therock-prerelease-python and therock-prerelease-tarball
+
+By default, the script operates in single-architecture mode using per-arch
+directories (e.g., `v3/whl/<arch>/`).
 
 Example: Download all prerelease candidates 7.10.0rc2 to ./promotion/download
 
 ```bash
 # 1. (Optional) Check which architectures are available
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --list-archs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --list-archs
 
 # 2. (Recommended) Check which packages are available and their sizes
 #    Make sure you have enough disk space available for what you want to download!
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
 
 # 3. Download all ROCm/PyTorch packages that need promotion (all architectures)
-python build_tools/packaging/download_prerelease_packages.py --version=7.10.0rc2 --output-dir=./promotion/download/ --include-tarballs
+python build_tools/packaging/download_python_packages.py --version=7.10.0rc2 --output-dir=./promotion/download/ --include-tarballs
+```
+
+### Multi-arch packages (flat layout)
+
+Use this mode when packages are stored without per-architecture subdirectories
+(e.g., `v4/whl/` layout).
+
+Requirements for multi-arch mode:
+
+- Must use a compatible bucket prefix (e.g., `v4/whl/`)
+- Output is a flat directory (no `<arch>/` folders)
+- All downloaded wheels are placed under `<output-dir>/wheels/`.
+
+#### List multi-arch packages
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.10.0rc2 \
+  --bucket-prefix=v4/whl/ \
+  --multi-arch \
+  --list-multi-arch-packages
+```
+
+#### Download multi-arch packages
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.10.0rc2 \
+  --bucket-prefix=v4/whl/ \
+  --multi-arch \
+  --output-dir=./promotion/download/
+
+```
+
+Output structure:
+
+```
+<output-dir>/
+  wheels/
+    *.whl
 ```
 
 ## 2. Promote prerelease candidates to release
 
 Need:
 
-- `build_tools/packaging/promote_from_rc_to_final.py`
+- `build_tools/packaging/promote_packages.py`
 
 ```bash
 # TODO this needs a nicer wrapper
 # For each architecture (e.g., gfx1151, gfx950-dcgpu, etc.)
 for arch in ./promotion/download/*; do
    echo "Promoting packages in $arch"
-   python build_tools/packaging/promote_from_rc_to_final.py --input-dir="$arch" --delete-old-on-success
+   python build_tools/packaging/promote_packages.py --input-dir="$arch" --delete-old-on-success
 done
 ```
 
@@ -49,11 +92,88 @@ Or run manually for each arch-subdirectory
 
 ```bash
 # For python packages (repeat for each arch)
-python build_tools/packaging/promote_from_rc_to_final.py --input-dir=./promotion/download/<arch> --delete-old-on-success
+python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/<arch> --delete-old-on-success
 
 # For tarballs
-python build_tools/packaging/promote_from_rc_to_final.py --input-dir=./promotion/download/tarball --delete-old-on-success
+python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/tarball --delete-old-on-success
 ```
+
+### Promoting nightly (`a`) builds
+
+Nightlies carry an `a<YYYYMMDD>` prerelease segment (e.g. `7.13.0a20260501`).
+The promotion source defaults to `rc`; use `--src-version-type=a` to look for
+`a<YYYYMMDD>` instead. The destination defaults to `release` (strip the
+prerelease entirely) but can be overridden with `--dest-version`.
+
+```bash
+# Nightly -> release (e.g. 7.13.0a20260501 -> 7.13.0)
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<arch> \
+   --src-version-type=a \
+   --delete-old-on-success
+
+# Nightly -> RC (e.g. 7.13.0a20260501 -> 7.13.0rc1)
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<arch> \
+   --src-version-type=a \
+   --dest-version=rc1 \
+   --delete-old-on-success
+```
+
+`--dest-version` accepts `release`, `rc<N>` (e.g. `rc1`, `rc2`), or
+`a<YYYYMMDD>` (e.g. `a20260501`). The downstream RC -> release flow above is
+unchanged.
+
+### Multi-arch packages: restricting which gfx targets to ship
+
+Multi-arch aggregator wheels (`rocm`, `torch`, `torchvision`, …) reference
+several gfx targets via `Provides-Extra` / `Requires-Dist` entries, and the
+download directory may contain per-gfx wheels (`rocm_sdk_device_gfx1010-…`,
+`amd_torch_device_gfx1010-…`) for each of those targets.
+
+**Default behavior:** if `--multi-arch-targets` is not passed, no arch filtering
+is applied — multi-arch wheels are promoted unchanged with all their gfx targets
+intact, and every per-gfx wheel in the input directory is promoted.
+
+If a release should only ship a subset of those archs, pass
+`--multi-arch-targets`. This is a positive list: list the target "gfx"
+you want to keep, including for aotriton the sub-family kernels like "gfx11":
+
+```bash
+# Promote the version AND drop per-gfx wheels / aggregator entries for
+# archs not in the keep list.
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<multiarch> \
+   --multi-arch-targets=gfx1201,gfx1010 \
+   --delete-old-on-success
+```
+
+Effects of `--multi-arch-targets`:
+
+- Per-gfx wheels for non-kept archs are skipped (and deleted with
+  `--delete-old-on-success`).
+- Multi-arch aggregator wheels lose `Provides-Extra: device-gfx<N>` /
+  `Requires-Dist: ...-gfx<N>` entries for non-kept archs.
+- Multi-arch `_dist_info.py` loses matching `AVAILABLE_TARGET_FAMILIES`
+  entries; `DEFAULT_TARGET_FAMILY` is repointed at the first kept arch if it
+  referenced a dropped one. The same repoint happens for the bare
+  `extra == "device"` line in METADATA and the `[device]` section in
+  `requires.txt`.
+- Single-arch packages are detected automatically and pass through unchanged.
+
+To run *only* the arch trim (no version rewrite — e.g. you already have
+release-versioned multi-arch wheels and just want to narrow them), use
+`--skip-version-promotion`:
+
+```bash
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<multiarch> \
+   --skip-version-promotion \
+   --multi-arch-targets=gfx1201,gfx1010
+```
+
+`--skip-version-promotion` is mutually exclusive with `--src-version-type` /
+`--dest-version` and requires `--multi-arch-targets`.
 
 ## 3. Upload release packages
 
@@ -63,7 +183,7 @@ Need:
 - IAM role:
   - for testing: write access to therock-testing-bucket
   - for production: write access to therock-release-python and therock-release-tarball
-- Same folder structure as created by `download_prerelease_packages.py`:
+- Same folder structure as created by `download_python_packages.py`:
 
 ```
 <input-dir>/

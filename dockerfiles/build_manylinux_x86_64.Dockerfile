@@ -21,9 +21,6 @@ ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.46.2 && \
 pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
-######## Repo ########
-RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
-
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
@@ -42,9 +39,9 @@ RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
 ######## Ninja ########
 WORKDIR /install-ninja
-ENV CMAKE_VERSION="1.12.1"
+ENV NINJA_VERSION="1.12.1"
 COPY install_ninja.sh ./
-RUN ./install_ninja.sh "${CMAKE_VERSION}" && rm -rf /install-ninja
+RUN ./install_ninja.sh "${NINJA_VERSION}" && rm -rf /install-ninja
 
 ######## AWS CLI ######
 WORKDIR /install-awscli
@@ -56,6 +53,14 @@ WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
+######## Rust (rustup) ########
+ENV RUSTUP_HOME="/usr/local/rustup"
+ENV CARGO_HOME="/usr/local/cargo"
+WORKDIR /install-rust
+ENV RUST_VERSION="1.95.0"
+COPY install_rust.sh ./
+RUN ./install_rust.sh "${RUST_VERSION}" && rm -rf /install-rust
 
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
@@ -88,12 +93,13 @@ RUN yum install -y epel-release && \
 # dvc's rpm package includes .so dependencies built against glib 2.29
 # settling for pip install for now, but it installs modules not needed for dvc pull
 # more dvc features may be used in upcoming sequenced builds
-# Also pinning pathspec because a new version of it breaks the private _DIR_MARK
-# API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+# Pin aiobotocore explicitly so rebuilds resolve a deterministic botocore
+# window. Without this, dvc's loose `aiobotocore` bound lets future pip
+# resolutions drift botocore out of the boto3 pin in requirements.txt.
 #
-# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
-#       in requirements.txt
-RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
+# Note: aiobotocore==3.4.0 requires botocore>=1.42.79,<1.42.85; keep the
+#       boto3 pin in requirements.txt aligned with that window.
+RUN pip install 'dvc[s3]==3.67.1' 'aiobotocore==3.4.0' && \
     which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########

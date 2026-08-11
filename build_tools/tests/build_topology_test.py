@@ -11,16 +11,20 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from configure_stage import get_stage_features
 from _therock_utils.build_topology import (
     BuildStage,
     ArtifactGroup,
     Artifact,
     BuildTopology,
+    get_topology,
 )
+from topology_to_cmake import generate_feature_declarations
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -87,6 +91,122 @@ class BuildTopologyTest(unittest.TestCase):
         compiler = topology.build_stages["compiler"]
         self.assertEqual(compiler.type, "per-arch")
 
+    def test_parse_external_git_sources(self):
+        """Test parsing external git sources in source sets."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "optional-sources/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        source_set = topology.source_sets["optional-hrx"]
+
+        self.assertEqual(source_set.description, "Optional HRX")
+        self.assertEqual(len(source_set.external_git_sources), 1)
+        hrx = source_set.external_git_sources[0]
+        self.assertEqual(hrx.name, "hrx")
+        self.assertEqual(hrx.origin, "https://github.com/ROCm/hrx.git")
+        self.assertEqual(hrx.commit, "e642a13425f46bcf909078459dd4e07df0723a0d")
+        self.assertEqual(hrx.path, "optional-sources/hrx")
+
+    def test_get_source_set_for_submodule(self):
+        """Test looking up the owning source set for a submodule."""
+        self.write_topology(
+            """
+            [source_sets.compilers]
+            description = "Compiler toolchain submodules"
+            submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_source_set_for_submodule("llvm-project").name,
+            "compilers",
+        )
+        self.assertEqual(
+            topology.get_source_set_for_submodule("rocm-libraries").name,
+            "rocm-libraries",
+        )
+        self.assertIsNone(topology.get_source_set_for_submodule("unknown-submodule"))
+
+    def test_get_source_sets_for_submodules(self):
+        """Test batch lookup of source sets from submodule names."""
+        self.write_topology(
+            """
+            [source_sets.compilers]
+            description = "Compiler toolchain submodules"
+            submodules = ["llvm-project", "HIPIFY"]
+
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [source_sets.tests]
+            description = "Tests"
+            submodules = ["tests"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        source_sets = topology.get_source_sets_for_submodules(
+            ["rocm-libraries", "llvm-project", "llvm-project"]
+        )
+
+        self.assertEqual(
+            sorted(source_set.name for source_set in source_sets),
+            ["compilers", "rocm-libraries"],
+        )
+
+    def test_validate_external_git_source_path(self):
+        """Test validation rejects external sources outside optional-sources."""
+        self.write_topology(
+            """
+            [source_sets.optional-hrx]
+            description = "Optional HRX"
+            external_git_sources = [
+              { name = "hrx", origin = "https://github.com/ROCm/hrx.git", commit = "e642a13425f46bcf909078459dd4e07df0723a0d", path = "rocm-systems/hrx" },
+            ]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(any("must be under optional-sources" in e for e in errors))
+
+    def test_validate_conflicting_submodule_ownership(self):
+        """Test validation rejects submodules owned by multiple source sets."""
+        self.write_topology(
+            """
+            [source_sets.set1]
+            description = "Set 1"
+            submodules = ["shared-submodule"]
+
+            [source_sets.set2]
+            description = "Set 2"
+            submodules = ["shared-submodule"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(
+            any("Submodule 'shared-submodule' is used by both" in e for e in errors)
+        )
+
     def test_parse_artifact_groups(self):
         """Test parsing artifact groups."""
         self.write_topology(
@@ -149,6 +269,113 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(hip.type, "target-specific")
         self.assertEqual(hip.artifact_deps, ["rocm-core"])
         self.assertEqual(hip.platform, "linux")
+
+    def test_parse_platform_disables_guarded_by_flags(self):
+        """Test parsing platform disables guarded by build flags."""
+        self.write_topology(
+            """
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["core-runtime"]
+
+        self.assertEqual(
+            artifact.disable_platforms_if_flags_not_set,
+            {"windows": "HSA_WINDOWS_SHARED_RUNTIME"},
+        )
+        self.assertTrue(topology.is_artifact_disabled_on_platform(artifact, "windows"))
+        self.assertFalse(
+            topology.is_artifact_disabled_on_platform(
+                artifact,
+                "windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            )
+        )
+        self.assertFalse(topology.is_artifact_disabled_on_platform(artifact, "linux"))
+
+    def test_stage_features_skip_platform_disables_guarded_by_flags(self):
+        """Test stage features skip artifacts disabled by unset flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertNotIn(
+            "CORE_RUNTIME",
+            get_stage_features(topology, "runtime", platform_name="windows"),
+        )
+        self.assertIn(
+            "CORE_RUNTIME",
+            get_stage_features(
+                topology,
+                "runtime",
+                platform_name="windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            ),
+        )
+
+    def test_generates_conditional_disabled_platform_feature(self):
+        """Test generated CMake for platform disables guarded by flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("if(NOT THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)", cmake)
+        self.assertIn(
+            "list(APPEND _THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS windows)",
+            cmake,
+        )
+        self.assertIn("else()", cmake)
+        self.assertIn(
+            "DISABLE_PLATFORMS ${_THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS}",
+            cmake,
+        )
+        self.assertIn(
+            "CORE_RUNTIME can be built on ${CMAKE_SYSTEM_NAME} only with "
+            "-DTHEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME=ON",
+            cmake,
+        )
 
     def test_get_artifacts_in_group(self):
         """Test getting artifacts belonging to a group."""
@@ -365,6 +592,182 @@ class BuildTopologyTest(unittest.TestCase):
         runtime_idx = build_order.index("runtime")
         self.assertLess(compiler_idx, runtime_idx)
 
+    def test_topology_reverse_indexes(self):
+        """Test reverse indexes across source sets, groups, artifacts, and stages."""
+        self.write_topology(
+            """
+            [source_sets.base]
+            description = "Base"
+            submodules = ["base"]
+
+            [source_sets.runtime]
+            description = "Runtime"
+            submodules = ["runtime"]
+
+            [source_sets.tests]
+            description = "Tests"
+            submodules = ["tests"]
+
+            [source_sets.unused]
+            description = "Unused"
+            submodules = ["unused"]
+
+            [build_stages.foundation]
+            description = "Foundation"
+            artifact_groups = ["base"]
+
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["hip", "rocrtst"]
+
+            [artifact_groups.base]
+            description = "Base"
+            type = "generic"
+            source_sets = ["base"]
+
+            [artifact_groups.hip]
+            description = "HIP"
+            type = "generic"
+            source_sets = ["runtime"]
+
+            [artifact_groups.rocrtst]
+            description = "Runtime tests"
+            type = "generic"
+            source_sets = ["runtime", "tests"]
+
+            [artifact_groups.future]
+            description = "Future group"
+            type = "generic"
+            source_sets = ["base"]
+
+            [artifacts.base-artifact]
+            artifact_group = "base"
+            type = "target-neutral"
+
+            [artifacts.hip-artifact]
+            artifact_group = "hip"
+            type = "target-neutral"
+
+            [artifacts.rocrtst-artifact]
+            artifact_group = "rocrtst"
+            type = "target-neutral"
+
+            [artifacts.future-artifact]
+            artifact_group = "future"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_source_set_to_artifact_groups(),
+            {
+                "base": ["base", "future"],
+                "runtime": ["hip", "rocrtst"],
+                "tests": ["rocrtst"],
+                "unused": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_group_to_artifacts(),
+            {
+                "base": ["base-artifact"],
+                "hip": ["hip-artifact"],
+                "rocrtst": ["rocrtst-artifact"],
+                "future": ["future-artifact"],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_group_to_build_stages(),
+            {
+                "base": ["foundation"],
+                "hip": ["runtime"],
+                "rocrtst": ["runtime"],
+                "future": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_artifact_to_producer_stages(),
+            {
+                "base-artifact": ["foundation"],
+                "hip-artifact": ["runtime"],
+                "rocrtst-artifact": ["runtime"],
+                "future-artifact": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_stage_to_source_sets(),
+            {
+                "foundation": ["base"],
+                "runtime": ["runtime", "tests"],
+            },
+        )
+        self.assertEqual(
+            topology.get_source_set_to_stages(),
+            {
+                "base": ["foundation"],
+                "runtime": ["runtime"],
+                "tests": ["runtime"],
+                "unused": [],
+            },
+        )
+        self.assertEqual(
+            topology.get_submodule_to_source_set(),
+            {
+                "base": "base",
+                "runtime": "runtime",
+                "tests": "tests",
+                "unused": "unused",
+            },
+        )
+
+    def test_stage_source_set_indexes_filter_disabled_platforms(self):
+        """Test stage/source set indexes respect platform disabled source sets."""
+        self.write_topology(
+            """
+            [source_sets.common]
+            description = "Common"
+            submodules = ["common"]
+
+            [source_sets.windows-only]
+            description = "Windows-only"
+            submodules = ["windows-only"]
+            disable_platforms = ["linux"]
+
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+            source_sets = ["common", "windows-only"]
+
+            [artifacts.runtime-artifact]
+            artifact_group = "runtime"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertEqual(
+            topology.get_stage_to_source_sets(),
+            {"runtime": ["common", "windows-only"]},
+        )
+        self.assertEqual(
+            topology.get_stage_to_source_sets(platform="linux"),
+            {"runtime": ["common"]},
+        )
+        self.assertEqual(
+            topology.get_source_set_to_stages(platform="linux"),
+            {
+                "common": ["runtime"],
+                "windows-only": [],
+            },
+        )
+
     def test_get_dependency_graph(self):
         """Test generating dependency graph."""
         self.write_topology(
@@ -481,6 +884,54 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("C", stage2_inbound)
         self.assertIn("D", stage2_inbound)
 
+    def test_group_dependencies_include_transitive_artifact_dependencies(self):
+        """Test group deps include the artifact deps of artifacts they pull in."""
+        self.write_topology(
+            """
+            [build_stages.producer]
+            description = "Producer"
+            artifact_groups = ["base"]
+
+            [build_stages.consumer]
+            description = "Consumer"
+            artifact_groups = ["leaf"]
+
+            [artifact_groups.base]
+            description = "Base"
+            type = "generic"
+
+            [artifact_groups.leaf]
+            description = "Leaf"
+            type = "generic"
+            artifact_group_deps = ["base"]
+
+            [artifacts.toolchain-runtime]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-frontend"]
+
+            [artifacts.toolchain-frontend]
+            artifact_group = "base"
+            type = "target-neutral"
+            artifact_deps = ["toolchain-base"]
+
+            [artifacts.toolchain-base]
+            artifact_group = "base"
+            type = "target-neutral"
+
+            [artifacts.leaf-artifact]
+            artifact_group = "leaf"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        consumer_inbound = topology.get_inbound_artifacts("consumer")
+        self.assertIn("toolchain-runtime", consumer_inbound)
+        self.assertIn("toolchain-frontend", consumer_inbound)
+        self.assertIn("toolchain-base", consumer_inbound)
+
     def test_complex_dependency_chain(self):
         """Test complex dependency chain resolution."""
         self.write_topology(
@@ -552,6 +1003,19 @@ class BuildTopologyTest(unittest.TestCase):
         # Foundation stage should need nothing
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
+
+
+class RealTopologyTest(unittest.TestCase):
+    """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
+
+    def test_hipkernelprovider_is_split_per_arch(self):
+        # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
+        # so hipkernelprovider must stay target-specific and kpack-split; reverting
+        # either drops the per-arch bundles from the device artifacts.
+        topology = get_topology()
+        hkp = topology.artifacts["hipkernelprovider"]
+        self.assertEqual(hkp.type, "target-specific")
+        self.assertIn("hipkernelprovider", hkp.split_databases)
 
 
 if __name__ == "__main__":

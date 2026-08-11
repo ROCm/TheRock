@@ -198,6 +198,19 @@ function(therock_subproject_fetch target_name)
   file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
+# Maps a COMPILER_TOOLCHAIN name to the subproject that backs it: "amd-hip" ->
+# hip-clr, "amd-llvm" -> amd-llvm, anything else (or none) -> empty. Used by both
+# the consumer-graph registration and the toolchain configuration.
+function(therock_compiler_toolchain_subproject out_var compiler_toolchain)
+  if(compiler_toolchain STREQUAL "amd-hip")
+    set("${out_var}" "hip-clr" PARENT_SCOPE)
+  elseif(compiler_toolchain STREQUAL "amd-llvm")
+    set("${out_var}" "amd-llvm" PARENT_SCOPE)
+  else()
+    set("${out_var}" "" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # therock_cmake_subproject_declare
 # This declares a cmake based subproject by setting a number of key properties
 # and setting up boiler-plate targets.
@@ -550,6 +563,21 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
 
+  # Record direct-consumer edges for the consumer graph emitted by
+  # therock_emit_consumer_graph(). The compiler is a dependency too, but is
+  # declared via COMPILER_TOOLCHAIN rather than BUILD_DEPS/RUNTIME_DEPS.
+  set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
+  set(_consumer_deps ${ARG_BUILD_DEPS} ${ARG_RUNTIME_DEPS})
+  therock_compiler_toolchain_subproject(_toolchain_dep "${ARG_COMPILER_TOOLCHAIN}")
+  if(_toolchain_dep)
+    list(APPEND _consumer_deps "${_toolchain_dep}")
+  endif()
+  foreach(_dep IN LISTS _consumer_deps)
+    if(NOT _dep STREQUAL target_name)  # a project is never its own consumer
+      set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
+    endif()
+  endforeach()
+
   if(ARG_ACTIVATE)
     therock_cmake_subproject_activate("${target_name}")
   endif()
@@ -708,23 +736,7 @@ function(therock_cmake_subproject_activate target_name)
   # subproject build or configure command.
   # https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-E-arg-env
   # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
-  set(_build_env_pairs)
-
-  # All project dependencies are managed within the super-project so we don't
-  # want subprojects reaching outside of the sandbox and building against
-  # uncontrolled (and likely incompatible) sources.
-  #
-  # These environment variables have been used by some subprojects to discover
-  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
-  # things like:
-  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
-  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
-  # We unset both the CMake and environment variables with these names.
-  # See also https://github.com/ROCm/TheRock/issues/670.
-  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
-  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
-  list(APPEND _build_env_pairs "--unset=HIP_PATH")
-  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
 
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
@@ -795,6 +807,20 @@ function(therock_cmake_subproject_activate target_name)
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
+  # Disable the CMake package registry within sub-projects. Correct super-project
+  # resolution goes through the dependency provider and trampoline configs on
+  # CMAKE_PREFIX_PATH, never the registry. Leaving the registry enabled lets an
+  # undeclared find_package() latch onto a stray build tree recorded by a sibling
+  # sub-project's export(PACKAGE) (see the system-fallback path in
+  # therock_subproject_dep_provider.cmake). Gated on the same switch as the safe
+  # dependency provider so that disabling it restores full stock find_package()
+  # behavior.
+  string(APPEND _init_contents "if(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY ON)\n")
+  string(APPEND _init_contents "endif()\n")
+
   # Include dirs.
   foreach(_private_include_dir ${_private_include_dirs})
     if(THEROCK_VERBOSE)
@@ -834,6 +860,14 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_PKG_CONFIG_DIRS \"@_private_pkg_config_dirs@\")\n")
 
   string(APPEND _init_contents "${_compiler_toolchain_init_contents}")
+
+  # Enable reproducible builds on Windows. /Brepro makes the linker (both
+  # MSVC link.exe and lld-link) zero out timestamps in PE headers, producing
+  # deterministic output.
+  if(WIN32)
+    string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -1118,10 +1152,12 @@ function(therock_cmake_subproject_activate target_name)
   add_custom_target("${target_name}+dist")
 
   # expunge target
+  # The prebuilt marker sits next to the stage dir, not inside it, so it has to
+  # be deleted here too or the project stays disabled.
   add_custom_target(
     "${target_name}+expunge"
     COMMAND
-      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
+      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}" "${_prebuilt_file}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 
@@ -1137,6 +1173,164 @@ function(therock_cmake_subproject_activate target_name)
   if(THEROCK_VERBOSE)
     message(STATUS "  FPRINT = ${_fprint}")
     message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
+endfunction()
+
+# therock_cmake_subproject_build_test
+# Defines build-tree tests for a CMake subproject. Tests are run from the
+# subproject build directory after its build stamp is up to date. They are not
+# part of ALL and are reached through build-test-${target_name} and the
+# build-tests aggregate target when testing is enabled.
+function(therock_cmake_subproject_build_test target_name)
+  if(NOT THEROCK_BUILD_TESTING)
+    return()
+  endif()
+
+  _therock_assert_is_cmake_subproject("${target_name}")
+
+  get_target_property(_binary_dir "${target_name}" THEROCK_BINARY_DIR)
+  get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
+  get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+  get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
+
+  # Match the subproject prebuilt behavior: when the stage is imported from
+  # artifacts, there is no local build tree to test.
+  set(_prebuilt_file "${_stage_dir}.prebuilt")
+  if(EXISTS "${_prebuilt_file}")
+    return()
+  endif()
+
+  if(TARGET "build-test-${target_name}")
+    message(FATAL_ERROR "Build tests already declared for subproject '${target_name}'")
+  endif()
+  if(NOT ARGN)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one COMMAND")
+  endif()
+
+  set(_command_count 0)
+  set(_current_command)
+  set(_expect_command TRUE)
+  foreach(_arg IN LISTS ARGN)
+    if(_arg STREQUAL "COMMAND")
+      if(_current_command)
+        math(EXPR _command_count "${_command_count} + 1")
+        set("_test_command_${_command_count}" "${_current_command}")
+        set(_current_command)
+      elseif(NOT _expect_command)
+        message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+      endif()
+      set(_expect_command FALSE)
+    else()
+      if(_expect_command)
+        message(FATAL_ERROR
+          "Expected COMMAND in therock_cmake_subproject_build_test(${target_name} ...)")
+      endif()
+      list(APPEND _current_command "${_arg}")
+    endif()
+  endforeach()
+  if(_current_command)
+    math(EXPR _command_count "${_command_count} + 1")
+    set("_test_command_${_command_count}" "${_current_command}")
+  elseif(NOT _command_count)
+    message(FATAL_ERROR "Build tests for '${target_name}' require at least one non-empty COMMAND")
+  elseif(NOT _expect_command)
+    message(FATAL_ERROR "Empty COMMAND in build tests for '${target_name}'")
+  endif()
+
+  # Generate a runner script that executes all test commands independently,
+  # so a failure in one does not prevent the others from running.
+  _therock_cmake_subproject_build_env_pairs(_build_env_pairs)
+  set(_runner_script "${_prefix_dir}/build-test-runner.cmake")
+  set(_runner_content "set(_any_failed FALSE)\n\n")
+
+  foreach(_command_index RANGE 1 ${_command_count})
+    # Use numbered labels/files only when there are multiple commands;
+    # a single command gets the plain name without a suffix.
+    set(_log_file "${target_name}_build_test.log")
+    set(_log_label "${target_name} build-test")
+    if(_command_count GREATER 1)
+      set(_log_file "${target_name}_build_test_${_command_index}.log")
+      set(_log_label "${target_name} build-test ${_command_index}")
+    endif()
+    therock_subproject_log_command(_test_log_prefix
+      LOG_FILE "${_log_file}"
+      LABEL "${_log_label}"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
+    )
+
+    set(_test_command_var "_test_command_${_command_index}")
+    set(_full_cmd
+      ${_test_log_prefix}
+      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+      ${${_test_command_var}}
+    )
+
+    # Serialize the command list into a quoted string for the script.
+    set(_cmd_str "")
+    foreach(_arg IN LISTS _full_cmd)
+      string(APPEND _cmd_str " \"${_arg}\"")
+    endforeach()
+
+    if(_command_index GREATER 1)
+      string(APPEND _runner_content "message(STATUS \"\")\n")
+    endif()
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "message(STATUS \"Running: ${_log_label}\")\n")
+    string(APPEND _runner_content "message(STATUS \"----------------------------------------\")\n")
+    string(APPEND _runner_content "execute_process(\n")
+    string(APPEND _runner_content "  COMMAND${_cmd_str}\n")
+    string(APPEND _runner_content "  WORKING_DIRECTORY \"${_binary_dir}\"\n")
+    string(APPEND _runner_content "  RESULT_VARIABLE _rc${_command_index}\n")
+    string(APPEND _runner_content ")\n")
+    string(APPEND _runner_content "if(_rc${_command_index})\n")
+    string(APPEND _runner_content "  set(_any_failed TRUE)\n")
+    string(APPEND _runner_content "endif()\n\n")
+  endforeach()
+
+  string(APPEND _runner_content "message(STATUS \"\")\n")
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  string(APPEND _runner_content "message(STATUS \"BUILD TEST SUMMARY for ${target_name}\")\n")
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  foreach(_command_index RANGE 1 ${_command_count})
+    set(_log_label "${target_name} build-test")
+    if(_command_count GREATER 1)
+      set(_log_label "${target_name} build-test ${_command_index}")
+    endif()
+    string(APPEND _runner_content "if(_rc${_command_index})\n")
+    string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: FAILED (exit code \${_rc${_command_index}})\")\n")
+    string(APPEND _runner_content "else()\n")
+    string(APPEND _runner_content "  message(STATUS \"  ${_log_label}: PASSED\")\n")
+    string(APPEND _runner_content "endif()\n")
+  endforeach()
+  string(APPEND _runner_content "message(STATUS \"========================================\")\n")
+  string(APPEND _runner_content "if(_any_failed)\n")
+  string(APPEND _runner_content "  message(FATAL_ERROR \"One or more build test commands failed for ${target_name}\")\n")
+  string(APPEND _runner_content "else()\n")
+  string(APPEND _runner_content "  message(STATUS \"All build tests passed for ${target_name}\")\n")
+  string(APPEND _runner_content "endif()\n")
+
+  file(GENERATE OUTPUT "${_runner_script}" CONTENT "${_runner_content}")
+
+  set(_build_stamp_file "${_stamp_dir}/build.stamp")
+  set(_build_test_stamp_file "${_stamp_dir}/build-test.stamp")
+
+  add_custom_command(
+    OUTPUT "${_build_test_stamp_file}"
+    COMMAND "${CMAKE_COMMAND}" -P "${_runner_script}"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_build_test_stamp_file}"
+    WORKING_DIRECTORY "${_binary_dir}"
+    COMMENT "Running build tests for sub-project ${target_name}"
+    USES_TERMINAL
+    DEPENDS
+      "${_build_stamp_file}"
+    VERBATIM
+  )
+  add_custom_target("build-test-${target_name}"
+    DEPENDS "${_build_test_stamp_file}"
+  )
+  if(TARGET therock-build-tests)
+    add_dependencies(therock-build-tests "build-test-${target_name}")
   endif()
 endfunction()
 
@@ -1223,6 +1417,28 @@ function(_therock_assert_is_cmake_subproject target_name)
   if(NOT _is_subproject STREQUAL "cmake")
     message(FATAL_ERROR "Target ${target_name} is not a sub-project")
   endif()
+endfunction()
+
+function(_therock_cmake_subproject_build_env_pairs out_var)
+  set(_build_env_pairs)
+
+  # All project dependencies are managed within the super-project so we don't
+  # want subprojects reaching outside of the sandbox and building against
+  # uncontrolled (and likely incompatible) sources.
+  #
+  # These environment variables have been used by some subprojects to discover
+  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
+  # things like:
+  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
+  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
+  # We unset both the CMake and environment variables with these names.
+  # See also https://github.com/ROCm/TheRock/issues/670.
+  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
+  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
+  list(APPEND _build_env_pairs "--unset=HIP_PATH")
+  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+
+  set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
 # Builds a CMake language fragment to set up a dependency provider such that
@@ -1387,13 +1603,24 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
   set("${list_var}" "${_abs_dirs}" PARENT_SCOPE)
 endfunction()
 
+# Filters a list of AMDGPU targets against the project's EXCLUDE_TARGET_PROJECTS
+# entries from therock_add_amdgpu_target. Silent — callable before the subproject
+# target exists (e.g. to decide whether to declare it at all). For the warning
+# variant used during subproject activation, see _therock_filter_project_gpu_targets.
+function(therock_filter_amdgpu_targets out_var project_name)
+  set(_filtered ${ARGN})
+  get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}")
+  list(REMOVE_ITEM _filtered ${_excludes})
+  set("${out_var}" "${_filtered}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
   get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
   set(_filtered ${_gpu_targets})
   if(_excludes)
-    foreach(exclude in ${_excludes})
+    foreach(exclude IN LISTS _excludes)
       if("${exclude}" IN_LIST _filtered)
         message(WARNING
           "Excluding support for ${exclude} in ${target_name} because it was "
@@ -1478,6 +1705,10 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@CMAKE_C_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@CMAKE_CXX_COMPILER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@CMAKE_LINKER@\")\n")
+  if(WIN32)
+    string(APPEND _toolchain_contents "set(CMAKE_RC_COMPILER \"@CMAKE_RC_COMPILER@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_MT \"@CMAKE_MT@\")\n")
+  endif()
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
@@ -1539,16 +1770,12 @@ function(_therock_cmake_subproject_setup_toolchain
     # we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
-    #   "amd-hip": Superset of "amd-llvm" which also includes hipcc, hip headers,
-    #     and hip version info. This has hipconfig in it.
+    #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
+    #     HIP version info.
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    if(compiler_toolchain STREQUAL "amd-hip")
-      set(_toolchain_subproject "hip-clr")
-    else()
-      set(_toolchain_subproject "amd-llvm")
-    endif()
+    therock_compiler_toolchain_subproject(_toolchain_subproject "${compiler_toolchain}")
     _therock_assert_is_cmake_subproject("${_toolchain_subproject}")
     get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_amd_llvm_stamp_dir "${_toolchain_subproject}" THEROCK_STAMP_DIR)
@@ -1566,6 +1793,15 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
+    # Explicitly set clang's resource directory using the toolchain path rather
+    # than letting clang auto-detect it. On Windows CI, B:\ is a volume mount
+    # to C:\{GUID}\ and clang resolves its binary path through the mount when
+    # computing the resource dir. This embeds the GUID in include paths, which
+    # defeats ccache. Passing -resource-dir with the unresolved path avoids this.
+    string(APPEND _toolchain_contents "file(GLOB _therock_clang_resource_dirs \"@_amd_llvm_dist_dir@/lib/llvm/lib/clang/*\")\n")
+    string(APPEND _toolchain_contents "list(GET _therock_clang_resource_dirs 0 _therock_clang_resource_dir)\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     therock_sanitizer_configure(
@@ -1601,6 +1837,7 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

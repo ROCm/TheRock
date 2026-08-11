@@ -35,13 +35,13 @@ python -m pip install \
 
 ## Running tests
 
-`test_update_dependencies.py` contains unit tests for the wheel filtering
+`update_dependencies_test.py` contains unit tests for the wheel filtering
 logic in `update_dependencies.py`. No AWS credentials or network access
 are required.
 
 ```bash
 cd build_tools/third_party/s3_management
-python -m pytest test_update_dependencies.py -v
+python -m pytest update_dependencies_test.py -v
 ```
 
 ## Playbook for running the scripts
@@ -89,14 +89,21 @@ those changes to the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm --dry-run
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/ \
+      --dry-run
     ```
 
 1. Update dependencies in the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the dev bucket:
@@ -115,7 +122,10 @@ Finally, repeat those steps for the nightly bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-nightly-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the nightly bucket:

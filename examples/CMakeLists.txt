@@ -23,10 +23,11 @@ else()
   )
 endif()
 
-# Examples are configured against the installed ROCm prefix. Since
-# sanitizer builds do not install HIP, this cpp-sdk-user example test
-# is skipped when sanitizers are enabled.
-if("${THEROCK_SANITIZER}" STREQUAL "")
+# Examples are configured against the installed ROCm prefix. The
+# cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
+# HIP is not enabled (e.g. in early multi-arch CI stages) or when
+# sanitizers are enabled (sanitizer builds do not install HIP).
+if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
   add_test(
     NAME therock-examples-cpp-sdk-user
     COMMAND
@@ -41,10 +42,12 @@ if("${THEROCK_SANITIZER}" STREQUAL "")
           "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
           "-DTHEROCK_ENABLE_MIOPEN=${THEROCK_ENABLE_MIOPEN}"
+          "-DTHEROCK_ENABLE_HIPTENSOR=${THEROCK_ENABLE_HIPTENSOR}"
           "-DTHEROCK_ENABLE_PRIM=${THEROCK_ENABLE_PRIM}"
           "-DTHEROCK_ENABLE_RAND=${THEROCK_ENABLE_RAND}"
           "-DTHEROCK_ENABLE_RCCL=${THEROCK_ENABLE_RCCL}"
           "-DTHEROCK_ENABLE_ROCWMMA=${THEROCK_ENABLE_ROCWMMA}"
+          "-DTHEROCK_ENABLE_ROCALUTION=${THEROCK_ENABLE_ROCALUTION}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
           "-DTHEROCK_ENABLE_SOLVER=${THEROCK_ENABLE_SOLVER}"
           "-DTHEROCK_ENABLE_SPARSE=${THEROCK_ENABLE_SPARSE}"

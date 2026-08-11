@@ -105,7 +105,9 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
     exist. Artifacts could be partially uploaded.
 
     TODO(scotttodd): plumb through a list of artifact keys to check for, then
-       use `ArtifactBackend::artifact_exists(artifact_key)`
+       use `ArtifactBackend::artifact_exists(artifact_key)`. With multi-arch CI
+       workflows and server-side indexing of artifacts, this method returns
+       `True` even if only early build stages have completed so far.
 
     Args:
         info: ArtifactRunInfo with the S3 location to check
@@ -127,7 +129,7 @@ def find_artifacts_for_commit(
     commit: str,
     artifact_groups: list[str],
     github_repository_name: str = "ROCm/TheRock",
-    workflow_file_name: str = "ci.yml",
+    workflow_file_name: str = "multi_arch_ci.yml",
     platform: str = platform_module.system().lower(),
 ) -> list[ArtifactRunInfo]:
     """Find artifact info for one or more groups from a commit.
@@ -212,13 +214,13 @@ def main(argv: list[str] | None = None) -> int:
         "--repo",
         type=str,
         default="ROCm/TheRock",
-        help="Repository in 'owner/repo' format (default: ROCm/TheRock)",
+        help="Repository in 'owner/repo' format",
     )
     parser.add_argument(
         "--workflow",
         type=str,
-        default="ci.yml",
-        help="Workflow filename that produces artifacts (default: ci.yml)",
+        default="multi_arch_ci.yml",
+        help="Workflow filename that produces artifacts",
     )
     parser.add_argument(
         "--platform",

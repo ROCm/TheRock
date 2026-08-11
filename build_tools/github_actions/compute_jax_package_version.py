@@ -23,8 +23,8 @@ Example usage:
   The following strings are appended to the file specified in the "GITHUB_ENV"
   environment variable:
 
-    JAX_VERSION=0.8.0
-    JAXLIB_VERSION=0.8.0+rocm7.12.0.dev0.e1a5d395
+    JAX_VERSION=0.8.2
+    JAXLIB_VERSION=0.8.2+rocm7.12.0.dev0.e1a5d395
 """
 
 import argparse
@@ -37,7 +37,7 @@ from github_actions_api import *
 def extract_jax_version_from_requirements(requirements_path: str) -> str:
     """Extracts the JAX version from a requirements.txt file.
 
-    Looks for lines like 'jax==0.8.0' or 'jaxlib==0.8.0' and returns
+    Looks for lines like 'jax==0.8.2' or 'jaxlib==0.8.2' and returns
     the version number.
     """
     pattern = re.compile(r"^\s*(jax|jaxlib)\s*==\s*([^#\s]+)")

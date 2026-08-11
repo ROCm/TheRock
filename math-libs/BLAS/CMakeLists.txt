@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Many things need to be configured with paths to additional LLVM tools.
 # If a project is using an amd-hip or amd-llvm toolchain, then it will already
 # have an implicit dep on the toolchain, so it is safe to reference binaries
@@ -66,7 +69,6 @@ if(_enable_rocRoller)
     BUILD_DEPS
       mxDataGenerator
       rocm-cmake
-      therock-boost
       therock-catch2
       therock-fmt
       therock-googletest
@@ -102,7 +104,10 @@ therock_cmake_subproject_declare(origami
     -DHIP_PLATFORM=amd
     -DORIGAMI_BUILD_SHARED_LIBS=ON
     -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-    -DORIGAMI_ENABLE_PYTHON=ON
+    # Python bindings (and their nanobind/tsl-robin-map deps) are built out of
+    # TheRock; land the C++ library only. Re-enable alongside a nanobind
+    # provider once bindings have a home (mirrors the hipDNN direction, #6425).
+    -DORIGAMI_ENABLE_PYTHON=OFF
     -DORIGAMI_ENABLE_FETCH=OFF
   COMPILER_TOOLCHAIN
     amd-hip
@@ -140,7 +145,6 @@ set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
     mxDataGenerator
-    therock-boost
     therock-fmt
     therock-yaml-cpp
     therock-spdlog
@@ -161,7 +165,10 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     -DTENSILELITE_BUILD_TESTING=OFF
+    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
+    -DROCISA_USE_STABLE_ABI=ON
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
@@ -369,12 +376,15 @@ if(THEROCK_ENABLE_SPARSE)
         amd-hip
       BUILD_DEPS
         rocm-cmake
+        hipBLAS-common
         hipSPARSE
         rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
+        hipBLASLt
+        origami
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
@@ -462,6 +472,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
+        -DEXPORT_FORTRAN_BINDINGS=OFF
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
