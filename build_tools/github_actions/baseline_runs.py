@@ -304,6 +304,58 @@ def query_completed_workflow_runs(
     return workflow_runs[:max_runs]
 
 
+def query_candidate_baseline_runs(
+    *,
+    github_repository: str = "ROCm/TheRock",
+    workflow_name: str = "multi_arch_ci.yml",
+    branch: str = "main",
+    max_runs: int = 20,
+) -> list[dict]:
+    """Query recent workflow runs that may have reusable build artifacts.
+
+    Unlike query_completed_workflow_runs, this includes in_progress runs.
+    A run where builds finished but tests are still running can still provide
+    reusable build artifacts. The caller validates that required build jobs
+    completed successfully before selecting a baseline.
+    """
+    if max_runs < 1:
+        raise ValueError("max_runs must be at least 1")
+
+    # Fetch both completed and in_progress runs. The GitHub API doesn't support
+    # multiple status values, so we query each separately and merge.
+    per_page = min(max_runs, 100)
+    workflow_path = quote(workflow_name, safe="")
+
+    all_runs: list[dict] = []
+    for status in ("completed", "in_progress"):
+        query = urlencode(
+            {
+                "status": status,
+                "branch": branch,
+                "per_page": per_page,
+                "sort": "created",
+                "direction": "desc",
+            }
+        )
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_path}/runs?{query}"
+        )
+        response = gha_send_request(url)
+        all_runs.extend(response.get("workflow_runs", []))
+
+    # Sort by created_at descending and dedupe (in case of overlap)
+    seen_ids: set[int] = set()
+    unique_runs: list[dict] = []
+    for run in sorted(all_runs, key=lambda r: r.get("created_at", ""), reverse=True):
+        run_id = run.get("id")
+        if run_id not in seen_ids:
+            seen_ids.add(run_id)
+            unique_runs.append(run)
+
+    return unique_runs[:max_runs]
+
+
 def query_successful_workflow_runs(
     *,
     github_repository: str = "ROCm/TheRock",
@@ -756,7 +808,7 @@ def select_baseline_run(
     candidates = (
         list(workflow_runs)
         if workflow_runs is not None
-        else query_completed_workflow_runs(
+        else query_candidate_baseline_runs(
             github_repository=github_repository,
             workflow_name=workflow_name,
             branch=branch,
@@ -768,8 +820,11 @@ def select_baseline_run(
         run_id = str(workflow_run["id"])
         if run_id in excluded:
             continue
-        if not is_completed_workflow_run(workflow_run):
-            continue
+        # Note: we no longer require the workflow run to be completed.
+        # An in_progress run can still provide reusable build artifacts if
+        # the build jobs finished (validated by job_health check below).
+        # This allows reusing artifacts from runs where builds passed but
+        # tests are still running.
 
         # Cheap, local checks (recency, commit ancestry) run before the
         # job-health and artifact checks, which require extra API/backend calls.
