@@ -644,8 +644,6 @@ def main(argv: list[str] | None = None) -> int:
                     require_successful_run=args.require_successful_run,
                 )
             else:
-                assert args.commit is not None
-
                 results = find_artifacts_for_commit(
                     commit=args.commit,
                     artifact_groups=args.artifact_group,
