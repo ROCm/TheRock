@@ -199,7 +199,7 @@ jobs:
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
           # TEST: Hard-code to a recent main commit for testing
-          STAGE_REUSE_CURRENT_SHA: a3e3f450de7cd5e0d4d1f46b9dbe9bb6fdf77d64
+          STAGE_REUSE_CURRENT_SHA: a3e3f450db81b55f53a05581ebf52a21583c1126
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
