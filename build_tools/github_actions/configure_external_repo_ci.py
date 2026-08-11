@@ -64,8 +64,10 @@ SKIPPABLE_PATH_PATTERNS = [
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
+# Note: These patterns are checked in the EXTERNAL repo (rocm-libraries/rocm-systems),
+# not in TheRock. Changes to the external repo's workflow file itself should NOT
+# trigger a full rebuild - only changes to shared CI scripts/config should.
 FULL_TEST_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
