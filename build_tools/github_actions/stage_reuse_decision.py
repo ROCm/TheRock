@@ -375,6 +375,9 @@ def compute_auto_stage_reuse(
         )
 
         available_filenames = _matched_filenames(baseline)
+        # Debug: show sample of available filenames
+        sample_filenames = sorted(available_filenames)[:10]
+        print(f"[DEBUG] Platform {platform}: {len(available_filenames)} available filenames, sample: {sample_filenames}")
         available_here: list[str] = []
         if baseline is not None:
             for stage_name in candidates:
