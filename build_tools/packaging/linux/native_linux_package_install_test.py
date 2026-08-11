@@ -486,7 +486,10 @@ class NativeLinuxPackageInstallTest:
             # Write to the same path the sources entry pins with signed-by=.
             # These were separate expressions that happened to agree, so any
             # change to one silently broke apt's ability to find the keyring.
-            keyring_file = Path(APT_KEYRING_FILE)
+            # PurePosixPath, not Path: these are paths on the target Linux
+            # filesystem handed to mkdir(1), tee(1) and chmod(1). Path follows
+            # the local flavour, so on Windows it renders "\etc\apt\keyrings".
+            keyring_file = PurePosixPath(APT_KEYRING_FILE)
             keyring_dir = keyring_file.parent
 
             try:
@@ -578,7 +581,9 @@ class NativeLinuxPackageInstallTest:
 
         if self.gpg_key_url:
             # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
-            apt_keyring = Path(APT_KEYRING_FILE)
+            # PurePosixPath for the same reason: this lands in signed-by= inside
+            # a sources file on the target, not on the machine running the test.
+            apt_keyring = PurePosixPath(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
