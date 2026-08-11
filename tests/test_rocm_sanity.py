@@ -74,20 +74,44 @@ def _opencl_env():
         return env
     # Linux runs in a container with no system ICD registration, so the vendor
     # is required; fail loud rather than letting the search asserts fail opaquely.
-    vendor = THEROCK_BIN_DIR.parent / "lib" / "opencl" / "libamdocl64.so"
+    lib = THEROCK_BIN_DIR.parent / "lib"
+    vendor = lib / "opencl" / "libamdocl64.so"
     if not vendor.exists():
         raise FileNotFoundError(f"amdocl64 vendor runtime not found at {vendor}")
     env["OCL_ICD_FILENAMES"] = str(vendor)
+    # The vendor's deps (libamd_comgr, libhsa-runtime64, sysdeps) are spread
+    # across the install's lib dirs; make them resolvable regardless of how the
+    # artifacts flatten, so the loader can dlopen the vendor.
+    candidates = (lib, lib / "llvm" / "lib", lib / "rocm_sysdeps" / "lib")
+    ld_path = [str(d) for d in candidates if d.is_dir()]
+    if env.get("LD_LIBRARY_PATH"):
+        ld_path.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_path)
+    # Surface the loader's reason (e.g. a failed dlopen) if enumeration fails.
+    env["OCL_ICD_DEBUG"] = "1"
     return env
+
+
+def _log_vendor_ldd(env):
+    """Dump the vendor's shared-lib resolution to explain a failed dlopen."""
+    vendor = env.get("OCL_ICD_FILENAMES")
+    if is_windows() or not vendor:
+        return
+    result = subprocess.run(["ldd", vendor], capture_output=True, text=True, env=env)
+    logger.error(f"ldd {vendor}:")
+    for line in (result.stdout + result.stderr).splitlines():
+        logger.error(line)
 
 
 @pytest.fixture(scope="session")
 def clinfo_output():
     clinfo = f"{THEROCK_BIN_DIR}/clinfo" + (".exe" if is_windows() else "")
+    env = _opencl_env()
     try:
-        return str(run_command([clinfo], env=_opencl_env()).stdout)
+        return str(run_command([clinfo], env=env).stdout)
     except Exception as e:
         logger.info(str(e))
+        _log_vendor_ldd(env)
         return None
 
 
