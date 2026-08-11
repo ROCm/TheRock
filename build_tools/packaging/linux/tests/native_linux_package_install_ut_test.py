@@ -8,6 +8,7 @@
 import contextlib
 import importlib.util
 import os
+import shutil
 import stat
 import sys
 import tempfile
@@ -1092,117 +1093,12 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test.os.lstat")
     @patch("native_linux_package_install_test.os.walk")
-    def test_passes_for_safe_root_owned_tree(self, mock_walk, mock_lstat):
-        # Returns True for root-owned 0755 dir / 0644 file modes.
-        mock_walk.return_value = [
-            ("/opt/rocm/core", ["bin"], ["a.txt"]),
-            ("/opt/rocm/core/bin", [], ["rocminfo"]),
-        ]
-        mock_lstat.side_effect = [
-            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o755),  # bin dir
-            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),  # a.txt
-            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o755),  # rocminfo
-        ]
-        with _suppress_script_output():
-            self.assertTrue(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_fails_on_non_root_entry(self, mock_walk, mock_lstat):
-        # Returns False when any entry is not owned by root.
-        mock_walk.return_value = [("/opt/rocm/core", [], ["a.txt", "b.txt"])]
-        mock_lstat.side_effect = [
-            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),
-            MagicMock(st_uid=1000, st_gid=1000, st_mode=stat.S_IFREG | 0o644),
-        ]
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_fails_on_world_writable(self, mock_walk, mock_lstat):
-        # A root-owned but world-writable directory (PATH-hijack case) is flagged.
-        mock_walk.return_value = [("/opt/rocm/core", ["bin"], [])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o777
-        )
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_flags_sticky_world_writable_dir(self, mock_walk, mock_lstat):
-        # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
-        # is flagged rather than exempted.
-        mock_walk.return_value = [("/opt/rocm/core", ["tmp"], [])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISVTX | 0o777
-        )
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_fails_on_setuid(self, mock_walk, mock_lstat):
-        # A root-owned setuid binary is flagged as a privilege-escalation surface.
-        mock_walk.return_value = [("/opt/rocm/core", [], ["setuid-tool"])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISUID | 0o755
-        )
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_fails_on_setgid_file(self, mock_walk, mock_lstat):
-        # A root-owned setgid *regular file* is still flagged.
-        mock_walk.return_value = [("/opt/rocm/core", [], ["setgid-tool"])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISGID | 0o755
-        )
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_allows_setgid_directory(self, mock_walk, mock_lstat):
-        # A root-owned setgid *directory* (drwxr-sr-x, mode 2755) is a benign
-        # group-inheritance pattern and must NOT be flagged. This is the common
-        # ROCm install-tree case (2287 such dirs surfaced in CI).
-        mock_walk.return_value = [("/opt/rocm/core", ["libexec"], [])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISGID | 0o755
-        )
-        with _suppress_script_output():
-            self.assertTrue(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_allows_root_owned_symlink(self, mock_walk, mock_lstat):
-        # A root-owned symlink (mode 0o777, but bits are meaningless) is allowed.
-        # This is the /opt/rocm/core -> /opt/rocm/core-X.Y case from CI.
-        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=0, st_gid=0, st_mode=stat.S_IFLNK | 0o777
-        )
-        with _suppress_script_output():
-            self.assertTrue(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
-    def test_fails_on_non_root_symlink(self, mock_walk, mock_lstat):
-        # A non-root-owned symlink is still flagged (ownership is meaningful).
-        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
-        mock_lstat.return_value = MagicMock(
-            st_uid=1000, st_gid=1000, st_mode=stat.S_IFLNK | 0o777
-        )
-        with _suppress_script_output():
-            self.assertFalse(self._make().verify_installed_file_security())
-
-    @patch("native_linux_package_install_test.os.lstat")
-    @patch("native_linux_package_install_test.os.walk")
     def test_skips_unstatable_entries(self, mock_walk, mock_lstat):
-        # Entries that cannot be lstat'd (e.g. race/permission) are skipped, not fatal.
+        # An entry that races away between os.walk listing it and os.lstat
+        # (or is otherwise un-lstat'able) is skipped, not treated as fatal.
+        # This is the one case that cannot be produced deterministically with
+        # real files, so os.lstat is stubbed to raise; every other scenario is
+        # covered by the real-filesystem tests below.
         mock_walk.return_value = [("/opt/rocm/core", [], ["gone.txt"])]
         mock_lstat.side_effect = OSError("no such file")
         with _suppress_script_output():
@@ -1233,6 +1129,188 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
             with _suppress_script_output():
                 self.assertFalse(t.run_basic_verification())
         mock_security.assert_called_once()
+
+
+def _running_as_root() -> bool:
+    """True if the current effective user is root (uid 0)."""
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+# nobody/nogroup: present on essentially every Linux distro. Used to give an
+# entry genuine non-root ownership so the ownership rule is exercised for real.
+_NON_ROOT_UID = 65534
+_NON_ROOT_GID = 65534
+
+
+class VerifyInstalledFileSecurityRealFsTest(unittest.TestCase):
+    """Real-filesystem tests for verify_installed_file_security().
+
+    These build actual directory trees on disk and run the real scan with no
+    os.walk / os.lstat mocking, so the assertions reflect the kernel's own view
+    of ownership and mode bits. Creating a genuinely root-owned tree and
+    chowning entries to a non-root uid both require root privileges, so each
+    test is skipped with a warning when the suite is not run as root.
+    """
+
+    def setUp(self):
+        if not _running_as_root():
+            euid = os.geteuid() if hasattr(os, "geteuid") else "?"
+            raise RuntimeError(
+                "real-filesystem security tests must run as root "
+                f"(euid={euid}). Re-run as root (e.g. "
+                "`sudo -E python3 -m pytest <this file>`) to exercise the "
+                "actual install-tree scan against real files."
+            )
+        self._tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._tmp, ignore_errors=True)
+
+    def _prefix(self, name: str = "rocm") -> Path:
+        """Create and return a root-owned prefix directory (mode 0755)."""
+        p = Path(self._tmp) / name
+        p.mkdir()
+        os.chmod(p, 0o755)
+        return p
+
+    def _check(self, prefix: Path) -> bool:
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=str(prefix),
+        )
+        with _suppress_script_output():
+            return t.verify_installed_file_security()
+
+    def _chown_nonroot_or_skip(self, path: Path, *, follow_symlinks: bool = True):
+        """chown *path* to a non-root uid/gid, skipping if the env forbids it.
+
+        Real root (and CI) can assign any owner. A single-uid user namespace
+        (e.g. `unshare -r` without the uidmap helper) maps only uid 0, so
+        chowning to nobody fails with EINVAL/EPERM; treat that as an
+        environment limitation and skip rather than report a false failure.
+        """
+        try:
+            os.chown(
+                path, _NON_ROOT_UID, _NON_ROOT_GID, follow_symlinks=follow_symlinks
+            )
+        except OSError as e:
+            self.skipTest(
+                f"cannot assign non-root ownership in this environment ({e}); "
+                "requires real root or a full subuid mapping"
+            )
+
+    def test_clean_root_owned_tree_passes(self):
+        # A root-owned tree with 0755 dirs and 0644/0755 files passes.
+        prefix = self._prefix()
+        bindir = prefix / "bin"
+        bindir.mkdir()
+        os.chmod(bindir, 0o755)
+        tool = bindir / "rocminfo"
+        tool.write_text("#!/bin/sh\n")
+        os.chmod(tool, 0o755)
+        doc = prefix / "readme.txt"
+        doc.write_text("hi")
+        os.chmod(doc, 0o644)
+        self.assertTrue(self._check(prefix))
+
+    def test_clean_tree_passes_with_symlinked_prefix(self):
+        # The prefix itself is commonly a symlink (/opt/rocm/core ->
+        # /opt/rocm/core-X.Y); os.walk follows that top-level link to scan the
+        # real tree, which is clean here.
+        real = Path(self._tmp) / "rocm-1.2.3"
+        real.mkdir()
+        os.chmod(real, 0o755)
+        bindir = real / "bin"
+        bindir.mkdir()
+        os.chmod(bindir, 0o755)
+        tool = bindir / "tool"
+        tool.write_text("")
+        os.chmod(tool, 0o755)
+        link = Path(self._tmp) / "rocm"
+        link.symlink_to(real, target_is_directory=True)
+        self.assertTrue(self._check(link))
+
+    def test_non_root_owned_file_flagged(self):
+        # A file owned by a non-root uid/gid is flagged.
+        prefix = self._prefix()
+        f = prefix / "tool"
+        f.write_text("")
+        os.chmod(f, 0o644)
+        self._chown_nonroot_or_skip(f)
+        self.assertFalse(self._check(prefix))
+
+    def test_group_writable_dir_flagged(self):
+        # A root-owned but group-writable directory (mode 0775) is flagged.
+        prefix = self._prefix()
+        d = prefix / "bin"
+        d.mkdir()
+        os.chmod(d, 0o775)
+        self.assertFalse(self._check(prefix))
+
+    def test_world_writable_dir_flagged(self):
+        # A root-owned but world-writable directory (mode 0777) is flagged.
+        prefix = self._prefix()
+        d = prefix / "bin"
+        d.mkdir()
+        os.chmod(d, 0o777)
+        self.assertFalse(self._check(prefix))
+
+    def test_sticky_world_writable_dir_flagged(self):
+        # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
+        # is flagged rather than exempted.
+        prefix = self._prefix()
+        d = prefix / "tmp"
+        d.mkdir()
+        os.chmod(d, 0o1777)
+        self.assertFalse(self._check(prefix))
+
+    def test_setuid_file_flagged(self):
+        # A root-owned setuid regular file (04755) is a privilege-escalation
+        # surface and is flagged.
+        prefix = self._prefix()
+        f = prefix / "setuid-tool"
+        f.write_text("")
+        os.chmod(f, 0o4755)
+        self.assertFalse(self._check(prefix))
+
+    def test_setgid_file_flagged(self):
+        # A root-owned setgid *regular file* (02755) is flagged.
+        prefix = self._prefix()
+        f = prefix / "setgid-tool"
+        f.write_text("")
+        os.chmod(f, 0o2755)
+        self.assertFalse(self._check(prefix))
+
+    def test_setgid_directory_allowed(self):
+        # A root-owned setgid *directory* (drwxr-sr-x, 02755) is a benign
+        # group-inheritance pattern and must NOT be flagged (the common ROCm
+        # install-tree case; 2287 such dirs surfaced in CI).
+        prefix = self._prefix()
+        d = prefix / "libexec"
+        d.mkdir()
+        os.chmod(d, 0o2755)
+        self.assertTrue(self._check(prefix))
+
+    def test_symlink_permission_bits_ignored(self):
+        # A symlink's own bits are lrwxrwxrwx but are ignored by the kernel; a
+        # root-owned symlink in an otherwise clean tree is not flagged.
+        prefix = self._prefix()
+        target = prefix / "real"
+        target.write_text("")
+        os.chmod(target, 0o644)
+        (prefix / "link").symlink_to(target)
+        self.assertTrue(self._check(prefix))
+
+    def test_non_root_owned_symlink_flagged(self):
+        # Ownership *is* meaningful for a symlink, so a non-root-owned one is
+        # flagged even though its mode bits are ignored.
+        prefix = self._prefix()
+        target = prefix / "real"
+        target.write_text("")
+        os.chmod(target, 0o644)
+        link = prefix / "link"
+        link.symlink_to(target)
+        self._chown_nonroot_or_skip(link, follow_symlinks=False)
+        self.assertFalse(self._check(prefix))
 
 
 class SetupGpgKeyTest(unittest.TestCase):
