@@ -202,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     selector = parser.add_mutually_exclusive_group()
+    output_options = parser.add_argument_group("output options")
 
     parser.add_argument(
         "--repo",
@@ -236,12 +237,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Maximum commits to search (default: 50, max: 100)",
     )
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Print progress information",
-    )
-    parser.add_argument(
         "--amdgpu-target",
         type=str,
         action="append",
@@ -271,11 +266,6 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=("Only accept workflow runs with status=completed and conclusion=success"),
     )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Print machine-readable JSON",
-    )
     selector.add_argument(
         "--branch",
         type=str,
@@ -291,6 +281,18 @@ def main(argv: list[str] | None = None) -> int:
         "--run-id",
         type=str,
         help="Inspect one explicit GitHub Actions workflow run",
+    )
+    output_options.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print progress information",
+    )
+
+    output_options.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON",
     )
 
     args = parser.parse_args(argv)

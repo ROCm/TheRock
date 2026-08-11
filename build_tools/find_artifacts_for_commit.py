@@ -552,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     selector = parser.add_mutually_exclusive_group(required=True)
+    output_options = parser.add_argument_group("output options")
     selector.add_argument(
         "--commit",
         type=str,
@@ -618,10 +619,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=("Only accept workflow runs with status=completed and conclusion=success"),
     )
-    parser.add_argument(
-        "--json",
+    output_options.add_argument(
+        "-v",
+        "--verbose",
         action="store_true",
-        help="Print machine-readable JSON",
+        help="Print progress information",
     )
 
     args = parser.parse_args(argv)
