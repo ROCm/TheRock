@@ -182,11 +182,45 @@ class CaptureConsoleTest(unittest.TestCase):
                     print("should not be captured")
             self.assertFalse(log2.exists())
 
-    def test_captures_subprocess_and_python_output(self):
-        """capture_console captures Python prints and subprocess stdout/stderr.
+    def test_basic_capture_writes_to_file(self):
+        """capture_console writes output to file (platform-agnostic public API)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "build.log"
 
-        Works on both Linux (via fd redirection) and Windows (via SetStdHandle).
-        """
+            with capture_console(log_path):
+                print("hello", flush=True)
+
+            self.assertIn("hello", log_path.read_text())
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX-only path")
+    def test_posix_capture(self):
+        """capture_console captures subprocess output on POSIX via fd redirection."""
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "build.log"
+
+            with capture_console(log_path):
+                print("Python output", flush=True)
+                subprocess.run(
+                    [sys.executable, "-c", "print('subprocess stdout')"],
+                    check=True,
+                )
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.stderr.write('subprocess stderr\\n')",
+                    ],
+                    check=True,
+                )
+
+            content = log_path.read_text()
+            self.assertIn("Python output", content)
+            self.assertIn("subprocess stdout", content)
+            self.assertIn("subprocess stderr", content)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows-only path")
+    def test_windows_capture(self):
+        """capture_console captures subprocess output on Windows via SetStdHandle."""
         with tempfile.TemporaryDirectory() as tmp:
             log_path = Path(tmp) / "build.log"
 

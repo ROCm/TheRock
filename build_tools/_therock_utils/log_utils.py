@@ -422,19 +422,25 @@ def _capture_console_windows(
         kernel32.SetStdHandle(STD_OUTPUT_HANDLE, orig_stdout_handle)
         kernel32.SetStdHandle(STD_ERROR_HANDLE, orig_stderr_handle)
 
-        # Restore fds
+        # Restore fds - this closes the write ends of the pipes which signals
+        # the tee threads to exit (they'll read EOF)
         os.dup2(orig_stdout_fd, 1)
         os.dup2(orig_stderr_fd, 2)
-        os.close(orig_stdout_fd)
-        os.close(orig_stderr_fd)
 
         # Restore Python streams
         sys.stdout = orig_stdout
         sys.stderr = orig_stderr
 
+        # IMPORTANT: Join tee threads BEFORE closing file descriptors.
+        # The tee threads write to outputs that may reference orig_stdout_fd/orig_stderr_fd.
+        # Closing fds before threads finish would cause write errors.
         for t in tee_threads:
             t.stop()
             t.join(timeout=5.0)
+
+        # Now safe to close file descriptors and file handles
+        os.close(orig_stdout_fd)
+        os.close(orig_stderr_fd)
 
         if console_stdout:
             console_stdout.close()
@@ -521,14 +527,20 @@ def capture_console(
 
     tee_threads = []
     log_fh = None
+    console_stdout = None
+    console_stderr = None
 
     try:
         log_fh = open(log_path, "w", encoding="utf-8")
 
         # Determine output destinations
         if also_to_console:
-            stdout_outputs = [os.fdopen(orig_stdout_fd, "w", closefd=False), log_fh]
-            stderr_outputs = [os.fdopen(orig_stderr_fd, "w", closefd=False), log_fh]
+            # Dup the FDs so we have independent copies for the tee threads.
+            # This matches the Windows implementation and ensures proper cleanup.
+            console_stdout = os.fdopen(os.dup(orig_stdout_fd), "w", closefd=True)
+            console_stderr = os.fdopen(os.dup(orig_stderr_fd), "w", closefd=True)
+            stdout_outputs = [console_stdout, log_fh]
+            stderr_outputs = [console_stderr, log_fh]
         else:
             stdout_outputs = [log_fh]
             stderr_outputs = [log_fh]
@@ -581,20 +593,31 @@ def capture_console(
                 handler.stream = old_stream
 
     finally:
-        # Restore original file descriptors
+        # Restore original file descriptors - this closes the write ends of the pipes
+        # which signals the tee threads to exit (they'll read EOF)
         os.dup2(orig_stdout_fd, 1)
         os.dup2(orig_stderr_fd, 2)
-        os.close(orig_stdout_fd)
-        os.close(orig_stderr_fd)
 
         # Restore Python streams
         sys.stdout = orig_stdout
         sys.stderr = orig_stderr
 
-        # Wait for tee threads to finish (they'll exit when pipes close)
+        # IMPORTANT: Join tee threads BEFORE closing file descriptors.
+        # The tee threads write to outputs that may reference orig_stdout_fd/orig_stderr_fd.
+        # Closing fds before threads finish would cause write errors.
         for t in tee_threads:
             t.stop()
             t.join(timeout=5.0)
+
+        # Now safe to close file descriptors and file handles
+        os.close(orig_stdout_fd)
+        os.close(orig_stderr_fd)
+
+        # Close console file objects (these have closefd=True so they close their duped FDs)
+        if console_stdout:
+            console_stdout.close()
+        if console_stderr:
+            console_stderr.close()
 
         # Close log file
         if log_fh:
