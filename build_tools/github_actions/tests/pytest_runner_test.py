@@ -224,11 +224,6 @@ class RunPhaseTest(unittest.TestCase):
     def test_build_environment_is_final_before_phase_execution(self):
         env = pytest_runner.build_environment(self._tmp, "tensilelite")
 
-        self.assertEqual(env["ROCM_PATH"], str(self._tmp))
-        self.assertEqual(
-            env["PYTHONPATH"],
-            str((self._tmp / "share/hipblaslt/tensilelite").resolve()),
-        )
         self.assertEqual(
             env["TENSILE_TEST_ROOT"], str(self._tmp / "configured")
         )

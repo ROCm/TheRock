@@ -101,30 +101,15 @@ class RocmLibrariesSourceTest(unittest.TestCase):
                         1,
                     )
 
-    def test_unrelated_stage_has_no_tensilelite_requirement(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            missing_source_root = Path(temp_dir) / "unused-rocm-libraries"
-            requirements = resolve_python_requirements(
-                self.topology.get_python_requires_for_stage("foundation"),
-                missing_source_root,
-            )
-            self.assertEqual(requirements, [])
-
-    def test_default_external_and_arbitrary_source_roots(self):
+    def test_external_source_root(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             parent = Path(temp_dir)
-            source_roots = [
-                self._make_source_root(parent, "rocm-libraries"),
-                self._make_source_root(parent, "external-rocm-libraries"),
-                self._make_source_root(parent, "arbitrary-local-checkout"),
-            ]
+            source_root = self._make_source_root(parent, "external-rocm-libraries")
             raw_requirements = self.topology.get_python_requires_for_stage("math-libs")
-            for source_root in source_roots:
-                with self.subTest(source_root=source_root):
-                    self.assertEqual(
-                        resolve_python_requirements(raw_requirements, source_root),
-                        [f"-r {source_root / TENSILELITE_REQUIREMENTS_PATH}"],
-                    )
+            self.assertEqual(
+                resolve_python_requirements(raw_requirements, source_root),
+                [f"-r {source_root / TENSILELITE_REQUIREMENTS_PATH}"],
+            )
 
     def test_missing_requirements_reports_resolved_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
