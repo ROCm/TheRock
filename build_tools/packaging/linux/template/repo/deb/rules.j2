@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Pin root:root ownership and xz compression rather than inheriting them.
+# debhelper already passes --root-owner-group here, because this package sets
+# no Rules-Requires-Root, so today this changes nothing. It is stated
+# explicitly so the archive does not silently start carrying the build
+# account's uid/gid if that field is ever added, and to match
+# template/debian_rules.j2, which every other ROCm package uses.
+override_dh_builddeb:
+	dh_builddeb -- -Zxz --root-owner-group
