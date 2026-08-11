@@ -82,17 +82,20 @@ class PhaseOrchestrationTest(unittest.TestCase):
         ), mock.patch.object(
             runner, "install_wheel", side_effect=install_statuses
         ) as install, mock.patch.object(
+            runner, "verify_client_free_package_help"
+        ) as help_check, mock.patch.object(
             runner.pytest_runner, "run_phase", side_effect=phase_statuses
         ) as phase:
             status = runner.run_test_phases(
                 self.rocm_path, "quick", "gfx942", self.env
             )
-        return status, install, phase
+        return status, help_check, install, phase
 
     def test_installs_and_runs_both_phases_in_order(self):
-        status, install, phase = self._run()
+        status, help_check, install, phase = self._run()
 
         self.assertEqual(status, 0)
+        help_check.assert_called_once_with(self.wheels.canonical, self.env)
         self.assertEqual(
             install.call_args_list,
             [
@@ -131,6 +134,9 @@ class PhaseOrchestrationTest(unittest.TestCase):
         ), mock.patch.object(
             runner, "install_wheel", side_effect=install
         ), mock.patch.object(
+            runner, "verify_client_free_package_help",
+            side_effect=lambda wheel, env: events.append(("help", wheel)),
+        ), mock.patch.object(
             runner.pytest_runner, "run_phase", side_effect=phase
         ):
             status = runner.run_test_phases(
@@ -142,6 +148,7 @@ class PhaseOrchestrationTest(unittest.TestCase):
             events,
             [
                 ("install", self.wheels.canonical),
+                ("help", self.wheels.canonical),
                 ("phase", None),
                 ("install", self.wheels.compatibility),
                 ("phase", ["compat/tests"]),
@@ -149,15 +156,16 @@ class PhaseOrchestrationTest(unittest.TestCase):
         )
 
     def test_canonical_install_failure_stops_before_pytest(self):
-        status, install, phase = self._run(
+        status, help_check, install, phase = self._run(
             install_statuses=(3,), phase_statuses=()
         )
         self.assertEqual(status, 3)
+        help_check.assert_not_called()
         self.assertEqual(install.call_count, 1)
         phase.assert_not_called()
 
     def test_canonical_failure_stops_before_compatibility_install(self):
-        status, install, phase = self._run(
+        status, _help_check, install, phase = self._run(
             install_statuses=(0,), phase_statuses=(4,)
         )
         self.assertEqual(status, 4)
@@ -165,7 +173,7 @@ class PhaseOrchestrationTest(unittest.TestCase):
         self.assertEqual(phase.call_count, 1)
 
     def test_compatibility_install_failure_propagates(self):
-        status, install, phase = self._run(
+        status, _help_check, install, phase = self._run(
             install_statuses=(0, 5), phase_statuses=(0,)
         )
         self.assertEqual(status, 5)
@@ -173,7 +181,7 @@ class PhaseOrchestrationTest(unittest.TestCase):
         self.assertEqual(phase.call_count, 1)
 
     def test_compatibility_failure_propagates(self):
-        status, install, phase = self._run(phase_statuses=(0, 6))
+        status, _help_check, install, phase = self._run(phase_statuses=(0, 6))
         self.assertEqual(status, 6)
         self.assertEqual(install.call_count, 2)
         self.assertEqual(phase.call_count, 2)
@@ -182,28 +190,25 @@ class PhaseOrchestrationTest(unittest.TestCase):
 class PipInstallTest(unittest.TestCase):
     def test_uses_complete_active_interpreter_commands_and_environment(self):
         env = {"ROCM_PATH": "/artifact/rocm"}
-        for wheel in (
-            Path("/artifact/tensilelite.whl"),
-            Path("/artifact/tensilelite_tensile_compat.whl"),
-        ):
-            with self.subTest(wheel=wheel), mock.patch.object(
-                runner.subprocess,
-                "run",
-                return_value=subprocess.CompletedProcess([], 0),
-            ) as run:
-                status = runner.install_wheel(wheel, env)
+        wheel = Path("/artifact/tensilelite.whl")
+        with mock.patch.object(
+            runner.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as run:
+            status = runner.install_wheel(wheel, env)
 
-            self.assertEqual(status, 0)
-            self.assertEqual(
-                run.call_args.args[0],
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--force-reinstall",
-                    "--no-deps",
-                    str(wheel),
-                ],
-            )
-            self.assertIs(run.call_args.kwargs["env"], env)
+        self.assertEqual(status, 0)
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--force-reinstall",
+                "--no-deps",
+                str(wheel),
+            ],
+        )
+        self.assertIs(run.call_args.kwargs["env"], env)

@@ -8,6 +8,7 @@ import logging
 import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,6 +105,67 @@ def install_wheel(wheel_path: Path, env: dict[str, str]) -> int:
         ) from exc
 
 
+def verify_client_free_package_help(wheel_path: Path, env: dict[str, str]) -> None:
+    """Prove the installed canonical wheel imports and prints help without a client."""
+    try:
+        _project, version, _build, _tags = parse_wheel_filename(wheel_path.name)
+    except ValueError as exc:
+        raise TensileLiteRunnerError(
+            f"Malformed canonical wheel filename: {wheel_path}"
+        ) from exc
+    if not version.local or not version.local.startswith("rocm"):
+        raise TensileLiteRunnerError(
+            f"Canonical wheel has no ROCm local version tag: {wheel_path}"
+        )
+
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        temporary_root = Path(temporary_directory)
+        rocm_root = temporary_root / "rocm"
+        (rocm_root / ".info").mkdir(parents=True)
+        (rocm_root / ".info" / "version").write_text(
+            version.local[len("rocm") :] + "\n", encoding="utf-8"
+        )
+        sdk_module = temporary_root / "rocm_sdk"
+        sdk_module.mkdir()
+        (sdk_module / "__main__.py").write_text(
+            "import sys\n"
+            f"ROOT = {str(rocm_root)!r}\n"
+            "if sys.argv[1:] == ['path', '--root']:\n"
+            "    print(ROOT)\n"
+            "else:\n"
+            "    raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+
+        help_env = dict(env)
+        help_env["ROCM_PATH"] = str(rocm_root)
+        help_env["PYTHONPATH"] = os.pathsep.join(
+            filter(None, [str(temporary_root), env.get("PYTHONPATH", "")])
+        )
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "tensilelite", "--help"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=help_env,
+            )
+        except OSError as exc:
+            raise TensileLiteRunnerError(
+                f"Failed to launch client-free TensileLite help: {exc}"
+            ) from exc
+
+    if result.returncode != 0:
+        raise TensileLiteRunnerError(
+            "Client-free TensileLite help failed with status "
+            f"{result.returncode}: {result.stderr!r}"
+        )
+    if "create-library" not in result.stdout:
+        raise TensileLiteRunnerError(
+            "Client-free TensileLite help did not describe the package commands"
+        )
+
+
 def run_test_phases(
     rocm_path: Path,
     test_type: str,
@@ -117,6 +179,7 @@ def run_test_phases(
     canonical_install_status = install_wheel(wheels.canonical, env)
     if canonical_install_status != 0:
         return canonical_install_status
+    verify_client_free_package_help(wheels.canonical, env)
     canonical_status = pytest_runner.run_phase(
         "tensilelite",
         test_type,
