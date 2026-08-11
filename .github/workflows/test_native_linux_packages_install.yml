@@ -196,7 +196,6 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
-      options: --ipc host
     env:
       REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
