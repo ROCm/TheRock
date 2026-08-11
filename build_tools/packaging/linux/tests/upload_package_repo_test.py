@@ -23,7 +23,8 @@ Prerequisites:
 
   - Python 3.10 or newer
   - Run from TheROCK repository root (or any cwd — modules resolved via ``__file__``)
-  - Stdlib only; ``boto3`` is stubbed so tests run without AWS credentials
+  - Stdlib only for these tests; boto3 is stubbed only during module import
+    (restored afterward so pytest collection of other build_tools tests is safe)
 
 Run::
 
@@ -45,18 +46,35 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 LINUX_DIR = THIS_SCRIPT_DIR.parent
 BUILD_TOOLS_DIR = LINUX_DIR.parent.parent
 
-# upload_package_repo imports boto3 at module load; stub it so tests run
-# without AWS credentials or the boto3 package installed.
-_boto3_stub = types.ModuleType("boto3")
-sys.modules["boto3"] = _boto3_stub
-
 # Resolve packaging modules from any working directory (style guide).
 for path in (BUILD_TOOLS_DIR, LINUX_DIR):
     path_str = str(path)
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
-import upload_package_repo as upload_repo  # noqa: E402
+
+def _import_upload_package_repo():
+    """Import upload_package_repo with a temporary boto3 stub.
+
+    upload_package_repo imports boto3 at module load. Stub only for the import
+    so pytest can collect other build_tools tests (e.g. manage_test.py) that
+    need the real boto3 package.
+    """
+    boto3_stub = types.ModuleType("boto3")
+    saved_boto3 = sys.modules.get("boto3")
+    sys.modules["boto3"] = boto3_stub
+    try:
+        import upload_package_repo as upload_repo  # noqa: WPS433
+
+        return upload_repo
+    finally:
+        if saved_boto3 is not None:
+            sys.modules["boto3"] = saved_boto3
+        else:
+            sys.modules.pop("boto3", None)
+
+
+upload_repo = _import_upload_package_repo()
 
 # Test fixture defaults (avoid unexplained literals in assertions and helpers).
 TEST_BUCKET = "therock-test-bucket"
