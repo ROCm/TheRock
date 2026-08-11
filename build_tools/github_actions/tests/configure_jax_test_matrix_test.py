@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+from datetime import date
 from pathlib import Path
 from unittest import mock
 import json
@@ -18,6 +19,9 @@ import configure_jax_test_matrix as matrix_script
 GFX94X_SINGLE_GPU = "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
 GFX94X_MULTI_GPU = "linux-gfx942-8gpu-ossci-rocm"
 
+SUNDAY = date(2026, 8, 9)
+TUESDAY = date(2026, 8, 11)
+
 
 def subsets(matrix: dict) -> list[str]:
     return [job["test_subset"] for job in matrix["include"]]
@@ -31,25 +35,39 @@ def runner_for(matrix: dict, subset: str) -> str:
 
 
 class ResolveScopeTest(unittest.TestCase):
-    def test_release_types_that_test_everything(self):
-        for release_type in ["nightly", "prerelease"]:
-            with self.subTest(release_type=release_type):
+    def test_a_prerelease_tests_everything_whatever_day_it_is(self):
+        for day in [SUNDAY, TUESDAY]:
+            with self.subTest(day=day):
                 self.assertEqual(
-                    matrix_script.resolve_scope("auto", release_type), "full"
+                    matrix_script.resolve_scope("auto", "prerelease", day), "full"
                 )
+
+    def test_a_nightly_tests_everything_one_day_a_week(self):
+        # The multi-GPU pool is small and that subset moves slowly, so a slot
+        # every night is not worth what it finds.
+        self.assertEqual(matrix_script.resolve_scope("auto", "nightly", SUNDAY), "full")
+        self.assertEqual(
+            matrix_script.resolve_scope("auto", "nightly", TUESDAY), "short"
+        )
 
     def test_release_types_that_run_per_change(self):
         # An 8-GPU queue slot per job is too much for these.
         for release_type in ["ci", "dev"]:
-            with self.subTest(release_type=release_type):
-                self.assertEqual(
-                    matrix_script.resolve_scope("auto", release_type), "short"
-                )
+            for day in [SUNDAY, TUESDAY]:
+                with self.subTest(release_type=release_type, day=day):
+                    self.assertEqual(
+                        matrix_script.resolve_scope("auto", release_type, day), "short"
+                    )
 
     def test_an_explicit_scope_wins(self):
-        # So a workflow can put the full suite on its own cadence.
-        self.assertEqual(matrix_script.resolve_scope("short", "prerelease"), "short")
-        self.assertEqual(matrix_script.resolve_scope("full", "ci"), "full")
+        # So a workflow, or a person, can ask for either on any day.
+        self.assertEqual(
+            matrix_script.resolve_scope("short", "prerelease", SUNDAY), "short"
+        )
+        self.assertEqual(matrix_script.resolve_scope("full", "ci", TUESDAY), "full")
+
+    def test_the_weekly_day_is_the_one_named(self):
+        self.assertEqual(SUNDAY.weekday(), matrix_script.WEEKLY_FULL_WEEKDAY)
 
 
 class BuildTestMatrixTest(unittest.TestCase):
@@ -92,10 +110,11 @@ class BuildTestMatrixTest(unittest.TestCase):
 
 
 class OutputsTest(unittest.TestCase):
-    def outputs(self, argv: list[str]) -> dict[str, str]:
+    def outputs(self, argv: list[str], today=TUESDAY) -> dict[str, str]:
         with open(os.environ["GITHUB_OUTPUT"], "w") as f:
             f.truncate()
-        matrix_script.main(argv)
+        with mock.patch.object(matrix_script, "today_utc", lambda: today):
+            matrix_script.main(argv)
         written = Path(os.environ["GITHUB_OUTPUT"]).read_text()
         return dict(line.split("=", 1) for line in written.splitlines() if "=" in line)
 
@@ -131,6 +150,17 @@ class OutputsTest(unittest.TestCase):
             json.loads(outputs["matrix"]),
             {"include": [{"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU}]},
         )
+
+    def test_a_nightly_picks_up_the_multi_gpu_job_on_its_day(self):
+        weekday = self.outputs(
+            ["--target", "gfx94X-dcgpu", "--release-type", "nightly"], today=TUESDAY
+        )
+        weekly = self.outputs(
+            ["--target", "gfx94X-dcgpu", "--release-type", "nightly"], today=SUNDAY
+        )
+
+        self.assertEqual(len(json.loads(weekday["matrix"])["include"]), 1)
+        self.assertEqual(len(json.loads(weekly["matrix"])["include"]), 2)
 
     def test_an_unknown_release_type_is_rejected(self):
         # Defaulting it would quietly drop the multi-accelerator job.

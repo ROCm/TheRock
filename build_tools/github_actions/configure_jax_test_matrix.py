@@ -12,12 +12,14 @@ multi-accelerator script.
 
 Multi-GPU runners are scarce, so the second job is only worth its queue slot
 when full testing is asked for. Short testing, which is what a pull request
-gets, runs the suite on the 1-GPU runner alone.
+gets, runs the suite on the 1-GPU runner alone, and a nightly asks for full
+testing one day a week rather than every night.
 """
 
 import argparse
 import json
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -28,13 +30,19 @@ from github_actions.configure_jax_release_matrix import RELEASE_TYPES
 from github_actions.github_actions_api import gha_set_output
 
 # Values of --test-scope, and the release types that pick them when the scope is
-# left at "auto". A release build tests everything; CI and dev builds are the
-# ones that run per change, where an 8-GPU queue slot per job is too much.
+# left at "auto". CI and dev builds run per change, where an 8-GPU queue slot per
+# job is too much, so they stay short.
 SCOPE_SHORT = "short"
 SCOPE_FULL = "full"
 SCOPE_AUTO = "auto"
 TEST_SCOPES = [SCOPE_AUTO, SCOPE_SHORT, SCOPE_FULL]
-FULL_SCOPE_RELEASE_TYPES = ["nightly", "prerelease"]
+
+# A prerelease is worth a slot in the multi-GPU pool every time. A nightly takes
+# one on this weekday (UTC, Monday being 0), because the pool is small and that
+# subset moves slowly. Sunday is the quietest day for it.
+ALWAYS_FULL_RELEASE_TYPES = ["prerelease"]
+WEEKLY_FULL_RELEASE_TYPES = ["nightly"]
+WEEKLY_FULL_WEEKDAY = 6
 
 # --test-subset of run_jax_tests.py, which is which ROCm/jax suite script runs.
 SUBSET_ALL = "all"
@@ -59,10 +67,24 @@ def platform_entry(target: str, platform: str) -> dict | None:
     return None
 
 
-def resolve_scope(test_scope: str, release_type: str) -> str:
+def today_utc() -> date:
+    """The day the run is happening, which the weekly rule below reads."""
+    return datetime.now(timezone.utc).date()
+
+
+def resolve_scope(test_scope: str, release_type: str, today: date) -> str:
+    """Which subsets to run, from the scope asked for or the release type.
+
+    An explicit scope wins, so a workflow or a person can ask for the
+    multi-accelerator tests on any day.
+    """
     if test_scope != SCOPE_AUTO:
         return test_scope
-    return SCOPE_FULL if release_type in FULL_SCOPE_RELEASE_TYPES else SCOPE_SHORT
+    if release_type in ALWAYS_FULL_RELEASE_TYPES:
+        return SCOPE_FULL
+    if release_type in WEEKLY_FULL_RELEASE_TYPES:
+        return SCOPE_FULL if today.weekday() == WEEKLY_FULL_WEEKDAY else SCOPE_SHORT
+    return SCOPE_SHORT
 
 
 def build_test_matrix(
@@ -128,10 +150,12 @@ def main(argv: list[str]) -> None:
     )
     args = parser.parse_args(argv)
 
-    scope = resolve_scope(args.test_scope, args.release_type)
+    today = today_utc()
+    scope = resolve_scope(args.test_scope, args.release_type, today)
     print(
         f"Configuring {args.platform} JAX tests for {args.target}:"
-        f" {scope} scope (release type {args.release_type})"
+        f" {scope} scope (release type {args.release_type},"
+        f" {today} ({today:%A}) in UTC)"
     )
     matrix = build_test_matrix(
         target=args.target,
