@@ -167,6 +167,15 @@ class ROCmDevelTest(unittest.TestCase):
                 # rocprim unit tests, not actual library files
                 continue
 
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
+                continue
+
             extra_setup = ""
             if (
                 "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
