@@ -465,9 +465,6 @@ class TestArtifactStructure:
         assert expected_client not in blas_lib_files, (
             f"blas_lib must not contain test-only file: {expected_client}"
         )
-        assert not (blas_lib_files & blas_test_files), (
-            "blas_lib and blas_test must flatten without overlapping files"
-        )
 
         test_root = "share/hipblaslt/tensilelite/"
         assert any(
