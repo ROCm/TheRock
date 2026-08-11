@@ -551,6 +551,17 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     # A functools.partial binds the resolved configuration to
     # select_baseline_run; the only free argument is required_artifacts, which
     # matches the BaselineSelector signature.
+    #
+    # For external repos (rocm-libraries, rocm-systems), use lenient artifact
+    # matching. These repos often affect only math-libs, but the unaffected
+    # candidate stages include comm-libs, debug-tools, etc. whose artifacts
+    # may not exist in TheRock baselines. With lenient mode, we select a
+    # baseline if it has SOME artifacts, then let _stage_artifacts_available
+    # determine which stages can actually be reused.
+    require_all_artifacts = not is_external_repo
+    if is_external_repo:
+        print(f"[DEBUG] External repo detected, using lenient artifact matching")
+
     return functools.partial(
         _invoke_select_baseline_run,
         github_repository=github_repository,
@@ -560,18 +571,25 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
         current_commit_sha=effective_commit_sha,
         ordered_commit_shas=ordered_commit_shas,
         max_age_hours=max_age_hours,
+        require_all_artifacts=require_all_artifacts,
     )
 
 
 def _invoke_select_baseline_run(
-    required: Sequence[RequiredArtifact], **kwargs
+    required: Sequence[RequiredArtifact],
+    require_all_artifacts: bool = True,
+    **kwargs
 ) -> BaselineRun | None:
     """Adapter so a partial can present the BaselineSelector(required) shape.
 
     Calls through the ``baseline_runs`` module attribute (rather than a bound
     reference) so tests can monkeypatch ``select_baseline_run``.
     """
-    return baseline_runs.select_baseline_run(required_artifacts=required, **kwargs)
+    return baseline_runs.select_baseline_run(
+        required_artifacts=required,
+        require_all_artifacts=require_all_artifacts,
+        **kwargs
+    )
 
 
 def _empty_result(

@@ -819,6 +819,7 @@ def select_baseline_run(
     workflow_runs: Sequence[dict] | None = None,
     backend_factory: ArtifactBackendFactory = create_artifact_backend_for_workflow_run,
     workflow_jobs_fetcher: WorkflowJobsFetcher = query_jobs_for_workflow_run,
+    require_all_artifacts: bool = True,
 ) -> BaselineRun | None:
     """Select the newest workflow run with healthy build jobs and artifacts.
 
@@ -853,11 +854,16 @@ def select_baseline_run(
             candidate run.
         workflow_jobs_fetcher: Factory used to query jobs for each candidate
             run.
+        require_all_artifacts: When True (default), all required artifacts must
+            be present. When False, accepts a baseline if it has at least some
+            artifacts, allowing per-stage availability checks to determine which
+            stages can actually be reused. Use False for external repos where
+            some stages may not have artifacts in baseline builds.
 
     Returns:
         The first completed candidate run that has healthy required jobs and
-        all required artifact/family pairs, or ``None`` if no valid baseline is
-        found.
+        all required artifact/family pairs (or some, if require_all_artifacts
+        is False), or ``None`` if no valid baseline is found.
     """
     # Validate these early so a missing requirement is a caller error instead of
     # being discovered only after GitHub/API work.
@@ -972,7 +978,11 @@ def select_baseline_run(
             backend=backend,
             required_artifacts=requirements,
         )
-        if not availability.is_valid:
+        # When require_all_artifacts is False, accept a baseline if it has ANY
+        # matched artifacts (for external repos where some stages don't exist).
+        # Per-stage availability check will determine which stages can be reused.
+        has_some_artifacts = len(availability.matched_filenames) > 0
+        if require_all_artifacts and not availability.is_valid:
             print(f"[DEBUG]   -> SKIP: missing artifacts {availability.missing_artifacts}")
             logger.info(
                 "Skipping run %s: missing artifacts %s",
@@ -980,6 +990,12 @@ def select_baseline_run(
                 availability.missing_artifacts,
             )
             continue
+        if not require_all_artifacts and not has_some_artifacts:
+            print(f"[DEBUG]   -> SKIP: no matching artifacts found")
+            logger.info("Skipping run %s: no matching artifacts found", run_id)
+            continue
+        if not require_all_artifacts and availability.missing_artifacts:
+            print(f"[DEBUG]   -> PARTIAL: {len(availability.matched_filenames)} artifacts found, {len(availability.missing_artifacts)} missing (lenient mode)")
         print(f"[DEBUG]   -> SELECTED: run {run_id} passed all checks!")
 
         source_ref = create_workflow_run_summary(
