@@ -47,10 +47,8 @@ function(therock_sanitizer_configure
       # Avoids: (1) -Woption-ignored on gfx942 without :xnack+ (MIOpen failure due to -Werror)
       #         (2) handleSanitizeOption dropping all device -I/-D with -fno-gpu-sanitize (Bug in Driver)
       # TODO: If this is indeed a Driver bug, then this can be replaced with -fno-gpu-sanitize when that is fixed.
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer -Xarch_host -g\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer -Xarch_host -g\")\n")
-      string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-Xarch_host -fsanitize=${_sanitizer_string}>\n")
-      string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-Xarch_host -shared-libsan>)\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer -Xarch_host -g\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer -Xarch_host -g\")\n")
     else()
       # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
       # so make the sanitizer imply shared linkage.
