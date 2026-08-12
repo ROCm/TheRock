@@ -538,11 +538,14 @@ def _find_matching_artifact_archives(
     """Find artifact archives matching a requirement.
 
     Expands family names (e.g., 'gfx94x') to actual targets (e.g., 'gfx942')
-    to match how artifacts are actually stored.
+    to match how artifacts are actually stored. Also accepts 'generic'
+    artifacts as a fallback for any GPU family.
     """
     matches: list[str] = []
-    # Expand the family to actual targets
+    # Expand the family to actual targets, with 'generic' as fallback
     targets = _expand_family_to_targets(required_artifact.target_family)
+    if "generic" not in targets:
+        targets = list(targets) + ["generic"]
 
     for component in ARTIFACT_COMPONENTS:
         for target in targets:

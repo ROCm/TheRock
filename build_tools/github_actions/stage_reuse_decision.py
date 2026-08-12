@@ -181,7 +181,8 @@ def _stage_artifacts_available(
     """True when every artifact this stage produces has an archive present.
 
     Expands family names (e.g., 'gfx94X') to actual targets (e.g., 'gfx942')
-    to match how artifacts are named in the backend.
+    to match how artifacts are named in the backend. Also accepts 'generic'
+    artifacts as a fallback for any GPU family.
     """
 
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
@@ -193,7 +194,11 @@ def _stage_artifacts_available(
         for artifact_name in artifacts_by_group.get(group_name, []):
             for family in target_families:
                 # Expand family to actual targets (e.g., gfx94X -> gfx942)
+                # Also include 'generic' as a fallback since some builds produce
+                # generic artifacts that work for any GPU family
                 targets = _expand_family_to_targets(family)
+                if "generic" not in targets:
+                    targets = list(targets) + ["generic"]
                 found = False
                 for target in targets:
                     for component in ARTIFACT_COMPONENTS:
