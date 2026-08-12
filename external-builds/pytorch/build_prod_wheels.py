@@ -140,9 +140,11 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
+from importlib import metadata
 import json
 import os
 from pathlib import Path
+from packaging.specifiers import SpecifierSet
 from packaging.version import parse
 import platform
 import shutil
@@ -191,6 +193,22 @@ LINUX_LIBRARY_PRELOADS = [
     "rocm_smi64",
 ]
 
+ASAN_SUPPORTED_ROCM = (10, 1)
+ASAN_SUPPORTED_ARCH = "gfx942:xnack+"
+ASAN_DEFAULT_OPTIONS = "detect_leaks=0:abort_on_error=1:print_stacktrace=1"
+ASAN_CMAKE_ARGS = ("-DCMAKE_CXX_SCAN_FOR_MODULES=OFF",)
+ASAN_REQUIRED_LOCAL_PACKAGES = {
+    "rocm",
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "rocm-sdk-device-gfx942",
+    "rocm-sdk-libraries",
+}
+ASAN_BOOTSTRAP_REQUIREMENTS = {
+    "setuptools": SpecifierSet(">=70.2"),
+    "wheel": SpecifierSet(""),
+}
+
 # List of library preloads for Windows to generate into _rocm_init.py
 WINDOWS_LIBRARY_PRELOADS = [
     "amd_comgr",
@@ -221,12 +239,23 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env)
 
 
-def capture(args: list[str | Path], cwd: Path) -> str:
+def capture(
+    args: list[str | Path],
+    cwd: Path,
+    env: dict[str, str] | None = None,
+) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
+    full_env = dict(os.environ)
+    if env:
+        full_env.update(env)
     try:
         return subprocess.check_output(
-            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+            args,
+            cwd=str(cwd),
+            env=full_env,
+            stderr=subprocess.STDOUT,
+            text=True,
         ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
@@ -286,6 +315,134 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
     print(f"Version suffix is: {version_suffix}")
     return version_suffix
+
+
+def validate_asan_rocm_version(rocm_version: str) -> None:
+    """Reject a release or incompatible ROCm SDK before an ASAN build."""
+    parsed_version = parse(rocm_version)
+    if tuple(parsed_version.release[:2]) != ASAN_SUPPORTED_ROCM:
+        raise RuntimeError(
+            "--asan currently requires a ROCm 10.1 SDK; "
+            f"found {rocm_version!r}"
+        )
+    local_parts = (parsed_version.local or "").split(".")
+    if not local_parts or local_parts[0] != "asan" or len(local_parts) < 2:
+        raise RuntimeError(
+            "--asan requires a uniquely labelled ROCm ASAN SDK version "
+            f"(expected 10.1.x+asan.<build-id>, found {rocm_version!r})"
+        )
+
+
+def get_asan_version_suffix(rocm_version: str) -> str:
+    """Derive a collision-resistant torch local version from an ASAN SDK."""
+    validate_asan_rocm_version(rocm_version)
+    parsed_version = parse(rocm_version)
+    major, minor = parsed_version.release[:2]
+    return f"+rocm{major}.{minor}.{parsed_version.local}"
+
+
+def resolve_asan_version_suffix(
+    rocm_version: str, explicit_suffix: str | None
+) -> str:
+    expected_suffix = get_asan_version_suffix(rocm_version)
+    if explicit_suffix and explicit_suffix != expected_suffix:
+        raise RuntimeError(
+            "--asan refuses an explicit torch version suffix that could "
+            "collide with or misidentify the SDK: "
+            f"expected {expected_suffix!r}, found {explicit_suffix!r}"
+        )
+    return expected_suffix
+
+
+def validate_local_asan_index(find_links: str) -> str:
+    """Validate the Phase 1 local index and return its coherent SDK version."""
+    index_path = Path(find_links).expanduser()
+    index_dir = index_path.parent if index_path.name == "index.html" else index_path
+    manifest_path = index_dir / "index-manifest.json"
+    if not index_dir.is_dir() or not manifest_path.is_file():
+        raise ValueError(
+            "--asan --install-rocm requires a local Phase 1 index directory "
+            "(or its index.html) containing index-manifest.json; "
+            f"not found at {index_dir}"
+        )
+
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Invalid local ASAN index manifest {manifest_path}: {exc}")
+    if manifest.get("index_kind") != "local-only":
+        raise ValueError(
+            f"ASAN index manifest must declare index_kind='local-only': {manifest_path}"
+        )
+    if manifest.get("relative_path") != "whl-asan/gfx942-all":
+        raise ValueError(
+            "ASAN index must be the gfx942 family index at "
+            f"whl-asan/gfx942-all: {manifest_path}"
+        )
+
+    packages = manifest.get("packages")
+    if not isinstance(packages, list):
+        raise ValueError(f"ASAN index manifest has no package list: {manifest_path}")
+    for package in packages:
+        if not isinstance(package, dict):
+            raise ValueError(
+                f"ASAN index manifest contains a malformed package: {manifest_path}"
+            )
+        filename = package.get("filename")
+        if (
+            not isinstance(filename, str)
+            or Path(filename).name != filename
+            or not (index_dir / filename).is_file()
+        ):
+            raise ValueError(
+                f"ASAN index package file is missing or invalid: {filename!r}"
+            )
+        declared_size = package.get("size")
+        if (
+            declared_size is not None
+            and (index_dir / filename).stat().st_size != declared_size
+        ):
+            raise ValueError(
+                f"ASAN index package size does not match its manifest: {filename}"
+            )
+    projects = {package.get("normalized_project") for package in packages}
+    missing = sorted(ASAN_REQUIRED_LOCAL_PACKAGES - projects)
+    if missing:
+        raise ValueError(
+            f"ASAN index is missing required packages {missing}: {manifest_path}"
+        )
+    versions = {package.get("version") for package in packages}
+    if len(versions) != 1 or None in versions:
+        raise ValueError(
+            f"ASAN index packages do not have one coherent version: {manifest_path}"
+        )
+    version = versions.pop()
+    if not isinstance(version, str):
+        raise ValueError(f"ASAN index contains an invalid version: {version!r}")
+    validate_asan_rocm_version(version)
+    return version
+
+
+def validate_asan_bootstrap_requirements() -> None:
+    """Ensure the environment can build the local selector without isolation."""
+    missing = []
+    for distribution, requirement in ASAN_BOOTSTRAP_REQUIREMENTS.items():
+        try:
+            installed_version = metadata.version(distribution)
+        except metadata.PackageNotFoundError:
+            missing.append(f"{distribution}{requirement}")
+            continue
+        if requirement and not requirement.contains(
+            installed_version, prereleases=True
+        ):
+            missing.append(f"{distribution}{requirement} (found {installed_version})")
+    if missing:
+        raise RuntimeError(
+            "--asan local installation uses --no-build-isolation and requires "
+            "bootstrap build dependencies in the current environment: "
+            f"{', '.join(missing)}. Install them first with: "
+            "python -m pip install 'setuptools>=70.2' wheel"
+        )
 
 
 def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
@@ -552,14 +709,87 @@ def validate_build_args(
         and args.pytorch_dir is not None
         and not is_windows
         and not args.build_triton
+        and not args.asan
     ):
         parser.error(
             "--enable-pytorch-flash-attention on Linux requires Triton; "
             "specify --triton-dir or disable Flash Attention"
         )
 
+    if not args.asan:
+        return
+    if is_windows:
+        parser.error("--asan is supported only on Linux x86_64")
+    if platform.machine().lower() not in ("x86_64", "amd64"):
+        parser.error("--asan is supported only on Linux x86_64")
+    if args.pytorch_dir is None:
+        parser.error("--asan requires a PyTorch checkout via --pytorch-dir")
+
+    unsupported_builds = [
+        option
+        for enabled, option in (
+            (args.build_triton, "--build-triton"),
+            (args.build_pytorch_audio, "--build-pytorch-audio"),
+            (args.build_pytorch_vision, "--build-pytorch-vision"),
+            (args.build_apex, "--build-apex"),
+        )
+        if enabled
+    ]
+    if unsupported_builds:
+        parser.error(
+            "--asan Phase 2 builds torch only; disable " + ", ".join(unsupported_builds)
+        )
+    asan_extras = {
+        extra.strip() for extra in args.rocm_extras.split(",") if extra.strip()
+    }
+    if asan_extras - {"device"}:
+        parser.error(
+            "--asan only supports the gfx942 single-target 'device' extra; "
+            f"found {sorted(asan_extras)}"
+        )
+
+    requested_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
+    if requested_arch is None:
+        requested_arch = ASAN_SUPPORTED_ARCH
+    if requested_arch.replace(",", ";") != ASAN_SUPPORTED_ARCH:
+        parser.error(
+            f"--asan Phase 2 requires --pytorch-rocm-arch {ASAN_SUPPORTED_ARCH}; "
+            f"found {requested_arch!r}"
+        )
+    args.pytorch_rocm_arch = ASAN_SUPPORTED_ARCH
+
+    if args.index_url:
+        parser.error(
+            "--asan local mode does not accept --index-url; use the Phase 1 "
+            "index with --find-links to prevent mixing release packages"
+        )
+    if args.install_rocm:
+        if not args.find_links:
+            parser.error(
+                "--asan --install-rocm requires --find-links pointing to the "
+                "local Phase 1 whl-asan/gfx942-all index"
+            )
+        try:
+            index_version = validate_local_asan_index(args.find_links)
+            requested_versions = SpecifierSet(args.rocm_sdk_version)
+        except (ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+        if not requested_versions.contains(index_version, prereleases=True):
+            parser.error(
+                f"--rocm-sdk-version {args.rocm_sdk_version!r} excludes local "
+                f"ASAN SDK {index_version}"
+            )
+        # Install an exact coherent set even when the caller used the default
+        # broad selector. This prevents a future local index addition from
+        # silently changing the toolchain used by a retry.
+        args.rocm_sdk_version = f"=={index_version}"
+        args.asan_index_version = index_version
+
 
 def do_install_rocm(args: argparse.Namespace):
+    if getattr(args, "asan", False):
+        validate_asan_bootstrap_requirements()
+
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
     #
@@ -585,6 +815,13 @@ def do_install_rocm(args: argparse.Namespace):
         "install",
         "--force-reinstall",
     ]
+    if getattr(args, "asan", False) or getattr(args, "no_index", False):
+        pip_args.append("--no-index")
+    if getattr(args, "asan", False):
+        # The local Phase 1 index intentionally contains only the ROCm package
+        # set, not generic build dependencies. Reuse the explicitly prepared
+        # environment when pip builds the selector sdist.
+        pip_args.append("--no-build-isolation")
     if args.pre:
         pip_args.extend(["--pre"])
     if args.index_url:
@@ -594,10 +831,19 @@ def do_install_rocm(args: argparse.Namespace):
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", str(args.pip_cache_dir)])
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
-    extras = "libraries,devel"
-    if args.rocm_extras:
-        extras += f",{args.rocm_extras}"
-    pip_args.extend([f"rocm[{extras}]{rocm_sdk_version}"])
+    extras = ["libraries", "devel"]
+    requested_extras = [
+        extra.strip() for extra in args.rocm_extras.split(",") if extra.strip()
+    ]
+    if getattr(args, "asan", False):
+        # A single-target selector exposes `device`, which resolves to the
+        # gfx942 KPACK wheel. `device-gfx942` is only a multi-target extra.
+        requested_extras.append("device")
+    extras.extend(requested_extras)
+    # Preserve order while avoiding `device,device` when an orchestrator makes
+    # the automatic ASAN choice explicit.
+    extras = list(dict.fromkeys(extras))
+    pip_args.extend([f"rocm[{','.join(extras)}]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
@@ -625,6 +871,7 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
+    asan: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
@@ -669,7 +916,7 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    else:
+    elif not asan:
         env.update(
             {
                 # Workaround GCC12 compiler flags.
@@ -711,6 +958,117 @@ def _setup_common_build_env(
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     return env
+
+
+def _setup_asan_build_env(rocm_dir: Path, pytorch_rocm_arch: str) -> dict[str, str]:
+    """Validate the ROCm Clang/ASAN payload and construct ASAN build settings."""
+    if is_windows or platform.machine().lower() not in ("x86_64", "amd64"):
+        raise RuntimeError("--asan is supported only on Linux x86_64")
+    if pytorch_rocm_arch != ASAN_SUPPORTED_ARCH:
+        raise RuntimeError(
+            f"--asan requires PYTORCH_ROCM_ARCH={ASAN_SUPPORTED_ARCH}; "
+            f"found {pytorch_rocm_arch!r}"
+        )
+
+    llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
+    clang = llvm_bin / "clang"
+    clangxx = llvm_bin / "clang++"
+    for compiler in (clang, clangxx):
+        if not compiler.is_file() or not os.access(compiler, os.X_OK):
+            raise RuntimeError(
+                f"--asan requires the executable ROCm compiler {compiler}"
+            )
+
+    hip_device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
+    if not hip_device_lib_path.is_dir() or not any(
+        hip_device_lib_path.glob("*.bc")
+    ):
+        raise RuntimeError(
+            "--asan requires ROCm device bitcode under "
+            f"{hip_device_lib_path}"
+        )
+
+    runtime_name = f"libclang_rt.asan-{platform.machine().lower()}.so"
+    runtime_text = capture(
+        [clangxx, f"-print-file-name={runtime_name}"], cwd=rocm_dir
+    )
+    runtime_path = Path(runtime_text)
+    if (
+        not runtime_text
+        or runtime_text == runtime_name
+        or not runtime_path.is_absolute()
+        or not runtime_path.is_file()
+    ):
+        raise RuntimeError(
+            "ROCm clang++ did not resolve its shared ASAN runtime: "
+            f"expected {runtime_name}, got {runtime_text!r}"
+        )
+    try:
+        runtime_path.resolve().relative_to(rocm_dir.resolve())
+    except ValueError:
+        # Some Linux venvs materialize the same wheel under both `lib` and
+        # `lib64`. The rocm-sdk root can be the lib64 copy while clang reports
+        # its resource dir through the equivalent lib copy. Accept only when
+        # the reported suffix also exists below this exact SDK payload root.
+        try:
+            payload_index = len(runtime_path.parts) - 1 - list(
+                reversed(runtime_path.parts)
+            ).index(rocm_dir.name)
+            payload_relative = Path(*runtime_path.parts[payload_index + 1 :])
+        except ValueError:
+            payload_relative = Path()
+        if (
+            payload_relative.parts[:4] != ("lib", "llvm", "lib", "clang")
+            or not (rocm_dir / payload_relative).is_file()
+        ):
+            raise RuntimeError(
+                "ROCm clang++ resolved ASAN outside the installed ROCm SDK, "
+                f"which could mix sanitizer runtimes: {runtime_path}"
+            )
+
+    inherited_ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
+    ld_library_parts = [str(runtime_path.parent), str(rocm_dir / "lib")]
+    if inherited_ld_library_path:
+        ld_library_parts.append(inherited_ld_library_path)
+    inherited_path = os.environ.get("PATH", "")
+    path_parts = [str(llvm_bin)]
+    if inherited_path:
+        path_parts.append(inherited_path)
+    inherited_cmake_args = os.environ.get("CMAKE_ARGS", "")
+    asan_cmake_args = " ".join(ASAN_CMAKE_ARGS)
+    cmake_args = (
+        f"{inherited_cmake_args} {asan_cmake_args}"
+        if inherited_cmake_args
+        else asan_cmake_args
+    )
+
+    return {
+        "USE_ASAN": "1",
+        "USE_ROCM": "1",
+        "USE_CUDA": "0",
+        "USE_NINJA": "1",
+        "CC": str(clang),
+        "CXX": str(clangxx),
+        "CMAKE_C_COMPILER": str(clang),
+        "CMAKE_CXX_COMPILER": str(clangxx),
+        "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
+        "HIP_DEVICE_LIB_PATH": str(hip_device_lib_path),
+        "ASAN_OPTIONS": os.environ.get("ASAN_OPTIONS", ASAN_DEFAULT_OPTIONS),
+        "CFLAGS": "-fno-omit-frame-pointer ",
+        "CXXFLAGS": "-fno-omit-frame-pointer ",
+        "LDFLAGS": "-shared-libasan ",
+        "LD_LIBRARY_PATH": os.path.pathsep.join(ld_library_parts),
+        "PATH": os.path.pathsep.join(path_parts),
+        # scikit-build-core forwards CMAKE_ARGS to its configure invocation.
+        # CMake 4.4 otherwise enables C++20 dependency scanning automatically
+        # and requires clang-scan-deps, which is intentionally absent from the
+        # Phase 1 ROCm devel wheel.
+        "CMAKE_ARGS": cmake_args,
+        # Private hand-off to do_build. It is removed before the environment is
+        # passed to any build subprocess and used only for the post-build import
+        # probe's LD_PRELOAD.
+        "_THEROCK_ASAN_RUNTIME_PATH": str(runtime_path),
+    }
 
 
 def _do_build_wheels_core(
@@ -763,9 +1121,6 @@ def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
 
-    if not args.version_suffix:
-        args.version_suffix = get_version_suffix_for_installed_rocm_package()
-
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
@@ -773,6 +1128,19 @@ def do_build(args: argparse.Namespace):
     apex_dir: Path | None = args.apex_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
+    if args.asan:
+        validate_asan_rocm_version(rocm_sdk_version)
+        args.version_suffix = resolve_asan_version_suffix(
+            rocm_sdk_version, args.version_suffix
+        )
+        index_version = getattr(args, "asan_index_version", None)
+        if index_version and index_version != rocm_sdk_version:
+            raise RuntimeError(
+                f"Installed ROCm SDK {rocm_sdk_version} does not match local "
+                f"ASAN index {index_version}"
+            )
+    elif not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
     cmake_prefix = get_rocm_path("cmake")
     bin_dir = get_rocm_path("bin")
     rocm_dir = get_rocm_path("root")
@@ -807,9 +1175,22 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
+        asan=args.asan,
     )
     print(f"  PATH = {env['PATH']}")
+    if args.asan:
+        asan_env = _setup_asan_build_env(rocm_dir, pytorch_rocm_arch)
+        args.asan_runtime_path = Path(asan_env.pop("_THEROCK_ASAN_RUNTIME_PATH"))
+        # ROCm/TheRock#7210 provides the generic option and post-build archive
+        # gate. ASAN builds always opt into that portable RPATH contract.
+        args.pytorch_portable_rpath = True
+        env.update(asan_env)
 
     if args.use_ccache:
         if not shutil.which("ccache"):
@@ -1077,6 +1458,92 @@ def copy_libuv_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(uv_dll, target_lib)
 
 
+def resolve_pytorch_flash_attention(
+    args: argparse.Namespace,
+    env: dict[str, str],
+    triton_requirement: str | None,
+) -> bool:
+    """Resolve Flash Attention without conflating Triton and AOTriton."""
+    if args.asan:
+        # Phase 2 does not build a separate Triton wheel. PyTorch's AOTriton
+        # CMake integration selects its prebuilt +asan runtime/images when
+        # USE_ASAN=1. Keep that proven gfx942 path enabled by default while
+        # retaining an explicit opt-out for diagnostics.
+        use_flash_attention = args.enable_pytorch_flash_attention is not False
+        print(
+            "ASAN AOTriton Flash Attention behavior: "
+            f"{'enabled' if use_flash_attention else 'disabled'}"
+        )
+        return use_flash_attention
+    if args.enable_pytorch_flash_attention is not None:
+        use_flash_attention = args.enable_pytorch_flash_attention
+        print(f"Flash Attention explicitly set to: {use_flash_attention}")
+        return use_flash_attention
+    if not is_windows and not triton_requirement:
+        print("Disabling Flash Attention on Linux since triton is not built")
+        return False
+
+    # Enable aotriton by default if supported. AOTriton supports a subset of
+    # GPU architectures. When at least one target arch is supported, let its
+    # build system filter to supported targets. When none are supported its
+    # configure step fails on the empty target list.
+    aotriton_supported_arch_prefixes = (
+        "gfx90a",
+        "gfx942",
+        "gfx950",
+        "gfx11",
+        "gfx12",
+    )
+    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+    has_aotriton_supported_arch = any(
+        arch.startswith(aotriton_supported_arch_prefixes) for arch in rocm_arch_list
+    )
+    print(
+        f"Flash Attention default behavior: {has_aotriton_supported_arch}\n"
+        f"  (has_aotriton_supported_arch: {has_aotriton_supported_arch})"
+    )
+    return has_aotriton_supported_arch
+
+
+def get_pytorch_sanity_env(
+    args: argparse.Namespace, build_env: dict[str, str]
+) -> dict[str, str] | None:
+    """Return environment overrides for the post-install torch import only."""
+    if not args.asan:
+        return None
+    runtime_path = Path(args.asan_runtime_path)
+    if not runtime_path.is_file():
+        raise RuntimeError(
+            f"Validated ASAN runtime disappeared before torch sanity check: {runtime_path}"
+        )
+    inherited_preload = os.environ.get("LD_PRELOAD", "")
+    preload_parts = [str(runtime_path)]
+    if inherited_preload:
+        preload_parts.append(inherited_preload)
+    sanity_env = {"LD_PRELOAD": os.path.pathsep.join(preload_parts)}
+    # Keep ASAN's no-leak policy and the validated SDK library search path
+    # scoped to the same subprocess. In particular, do not LD_PRELOAD the
+    # sanitizer into pip, CMake, Ninja, or compiler processes.
+    for env_name in ("ASAN_OPTIONS", "LD_LIBRARY_PATH"):
+        if env_name in build_env:
+            sanity_env[env_name] = build_env[env_name]
+    return sanity_env
+
+
+def sanity_check_installed_pytorch(
+    args: argparse.Namespace, build_env: dict[str, str]
+) -> None:
+    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    sanity_check_output = capture(
+        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
+        cwd=tempfile.gettempdir(),
+        env=get_pytorch_sanity_env(args, build_env),
+    )
+    if not sanity_check_output:
+        raise RuntimeError("torch package sanity check failed (see output above)")
+    print(f"Sanity check output:\n{sanity_check_output}")
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1090,8 +1557,8 @@ def do_build_pytorch(
     )
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    env["USE_ROCM"] = "ON"
-    env["USE_CUDA"] = "OFF"
+    env["USE_ROCM"] = "1" if args.asan else "ON"
+    env["USE_CUDA"] = "0" if args.asan else "OFF"
     env["USE_MPI"] = "OFF"
     env["USE_NUMA"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
@@ -1111,42 +1578,11 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Enable/disable flash attention.
-    if args.enable_pytorch_flash_attention is not None:
-        use_flash_attention = args.enable_pytorch_flash_attention
-        print(f"Flash Attention explicitly set to: {use_flash_attention}")
-        # Note: this may fail if aotriton is not supported, see below.
-    elif not is_windows and not triton_requirement:
-        print(f"Disabling Flash Attention on Linux since triton is not built")
-        use_flash_attention = False
-    else:
-        # Enable aotriton by default if supported.
-        # aotriton supports a subset of GPU architectures. When *at least* one
-        # target arch is supported let aotriton's build system (gpu_targets.py)
-        # filter to just the supported ones. The runtime (check_gpu in
-        # sdp_utils.cpp) gracefully falls back to math/CK backends on
-        # unsupported GPUs. We only disable flash attention when *no* target
-        # arch is supported — otherwise aotriton's configure step fails on the
-        # empty target list (https://github.com/ROCm/aotriton/issues/169).
-        #
-        # These prefixes match what aotriton's gpu_targets.py recognizes.
-        # See also the image list in pytorch/cmake/External/aotriton.cmake.
-        AOTRITON_SUPPORTED_ARCH_PREFIXES = (
-            "gfx90a",
-            "gfx942",
-            "gfx950",
-            "gfx11",
-            "gfx12",
-        )
-        rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
-        has_aotriton_supported_arch = any(
-            arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES) for arch in rocm_arch_list
-        )
-        use_flash_attention = has_aotriton_supported_arch
-        print(
-            f"Flash Attention default behavior: {use_flash_attention}\n"
-            f"  (has_aotriton_supported_arch: {has_aotriton_supported_arch})"
-        )
+    # Enable/disable Flash Attention. ASAN uses prebuilt AOTriton +asan
+    # artifacts and intentionally has no separate Triton wheel dependency.
+    use_flash_attention = resolve_pytorch_flash_attention(
+        args, env, triton_requirement
+    )
     # Finally update the environment with the resolved setting.
     env.update(
         {
@@ -1296,15 +1732,7 @@ def do_build_pytorch(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
-    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
-    sanity_check_output = capture(
-        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
-        cwd=tempfile.gettempdir(),
-    )
-    if not sanity_check_output:
-        raise RuntimeError("torch package sanity check failed (see output above)")
-    else:
-        print(f"Sanity check output:\n{sanity_check_output}")
+    sanity_check_installed_pytorch(args, env)
 
 
 def do_build_pytorch_audio(
@@ -1426,6 +1854,12 @@ def main(argv: list[str]):
             help="URL or path for pip --find-links (flat package index).",
         )
         p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
+        p.add_argument(
+            "--no-index",
+            action="store_true",
+            default=False,
+            help="Pass --no-index to pip. This is automatic in --asan mode.",
+        )
         # Note that we default to >1.0 because at the time of writing, we had
         # 0.1.0 release placeholder packages out on pypi and we don't want them
         # taking priority.
@@ -1464,6 +1898,14 @@ def main(argv: list[str]):
         "--install-rocm",
         action=argparse.BooleanOptionalAction,
         help="Install rocm-sdk before building",
+    )
+    build_p.add_argument(
+        "--asan",
+        action="store_true",
+        default=False,
+        help="Build a ROCm 10.1 gfx942:xnack+ torch ASAN wheel from the local "
+        "Phase 1 SDK index. Enables ROCm Clang and strict SDK/runtime preflight; "
+        "Triton, sibling wheels, and remote package indexes are excluded.",
     )
     build_p.add_argument(
         "--output-dir",

@@ -180,6 +180,67 @@ mix/match build steps.
     --output-dir $HOME/tmp/pyout
   ```
 
+### Local ROCm 10.1 ASAN torch wheel
+
+Phase 2 has a deliberately isolated `--asan` mode for a torch-only
+`gfx942:xnack+` build. It consumes the local index produced by Phase 1 and
+passes `--no-index` to pip, so release ROCm packages cannot be selected as a
+fallback. The single-target selector's `device` extra is added automatically
+and must resolve `rocm-sdk-device-gfx942`.
+
+The Phase 1 index contains only ROCm artifacts, so prepare the current Python
+environment with the selector sdist's build dependencies before running the
+offline install:
+
+```bash
+python -m pip install 'setuptools>=70.2' wheel
+```
+
+ASAN mode verifies these packages and passes `--no-build-isolation` to pip;
+the offline ROCm install therefore does not try to resolve setuptools from the
+local ROCm-only index.
+
+```bash
+python build_prod_wheels.py build \
+  --asan \
+  --install-rocm \
+  --find-links /path/to/local-index/whl-asan/gfx942-all/index.html \
+  --pytorch-rocm-arch gfx942:xnack+ \
+  --pytorch-dir /path/to/ROCm/pytorch \
+  --no-build-triton \
+  --no-build-pytorch-audio \
+  --no-build-pytorch-vision \
+  --no-build-apex \
+  --output-dir /path/to/local-output
+```
+
+Before compiling, the mode verifies the Phase 1 manifest, its coherent
+`10.1.x+asan.<build-id>` package version, the installed SDK version, ROCm
+Clang executables, device bitcode, and the shared Clang ASAN runtime. It then
+exports `USE_ASAN=1`, ROCm Clang as both the conventional and CMake compilers,
+`gfx942:xnack+`, `HIP_DEVICE_LIB_PATH`, frame-pointer/linker flags, and a
+build-time ASAN runtime path. It also appends
+`-DCMAKE_CXX_SCAN_FOR_MODULES=OFF` to any caller-provided `CMAKE_ARGS`: CMake
+4.4 otherwise requests `clang-scan-deps`, which is not included in the Phase 1
+ROCm devel wheel. The torch version is derived as
+`<torch-base>+rocm10.1.asan.<build-id>`; a conflicting explicit suffix is
+rejected.
+
+After installing the finished wheel, the import sanity subprocess alone
+preloads the shared ASAN runtime discovered from ROCm Clang. The preload is not
+applied to pip, CMake, Ninja, compilers, or release-mode sanity checks.
+
+No separate Triton wheel is built. Flash and memory-efficient attention remain
+enabled by default through PyTorch's prebuilt AOTriton `+asan` path. The
+ROCm/pytorch source must contain the ROCm 10.1/HIP 7.16 compatibility mapping
+for those artifacts (the Phase 0 validated source was commit
+`dcf02e51371deb3050899643462349c1941e8979`). Use
+`--no-enable-pytorch-flash-attention` only as a diagnostic fallback.
+
+This command only writes the requested local output directory. It does not
+publish or upload wheels. Allow enough free space for the roughly 26 GiB SDK
+installation plus the PyTorch checkout, build tree, and finished wheel.
+
 - On Windows:
 
   ```batch
