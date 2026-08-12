@@ -442,6 +442,94 @@ located.
 - Windows paths (and commands) can have max length limitations, so avoid long file names
 - Windows paths do not allow some characters (https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
 
+#### DLL search and runtime loading
+
+Finding a library while building an application and finding its DLLs while
+running it are separate operations. `find_package()` and import libraries such
+as `amdhip64.lib` establish link-time dependencies. At process startup, the
+Windows loader still has to locate DLLs such as `amdhip64_7.dll`.
+
+For an ordinary unpackaged application using the default safe search mode, the
+[DLL search order](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)
+includes these locations in this relative order:
+
+1. The directory containing the executable.
+1. The Windows system directory, normally `System32`.
+1. The process current directory.
+1. Directories in `PATH`.
+
+Several special mechanisms, including loaded modules, Known DLLs, manifests,
+and package dependencies, are considered before those directories. Consult the
+Microsoft documentation before depending on the complete order.
+
+Important consequences for ROCm development include:
+
+- Prepending a ROCm `bin` directory to `PATH` does not override a same-named DLL
+  in `System32`.
+- Changing the process current directory is not equivalent to moving the
+  executable. The executable directory has its own earlier search position.
+- Placing the intended DLLs beside an executable normally gives them precedence
+  over a same-named DLL in `System32`, but an application must package a
+  supported dependency closure rather than copy every DLL in a shared ROCm
+  installation.
+- Ordinary PE imports are resolved before `main()` runs. Calling
+  `LoadLibraryExW()` at the beginning of `main()` is too late to affect an
+  ordinary import on `amdhip64_7.dll`. Compiled HIP programs can also use
+  compiler-generated registration APIs during static initialization.
+
+Tests and dedicated launchers can select a trusted runtime directory for their
+child processes with
+[`SetDllDirectoryW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setdlldirectoryw):
+
+```python
+import ctypes
+import subprocess
+
+rocm_bin = rocm_bin.resolve(strict=True)
+if not rocm_bin.is_dir():
+    raise NotADirectoryError(rocm_bin)
+
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+set_dll_directory = kernel32.SetDllDirectoryW
+set_dll_directory.argtypes = [ctypes.c_wchar_p]
+set_dll_directory.restype = ctypes.c_bool
+
+if not set_dll_directory(str(rocm_bin)):
+    raise ctypes.WinError(ctypes.get_last_error())
+try:
+    subprocess.run(command, check=True, env=child_env)
+finally:
+    if not set_dll_directory(None):
+        raise ctypes.WinError(ctypes.get_last_error())
+```
+
+Microsoft documents that this setting affects child processes created while it
+is active. It is process-global, changes safe-search behavior, and should only
+name a trusted, validated directory. The example assumes a dedicated,
+single-threaded runner that started with the default DLL search state and
+restores that state after launching its children.
+
+The hipthreads test executor adopted this pattern in
+[rocm-libraries PR #10478](https://github.com/ROCm/rocm-libraries/pull/10478).
+It continues to use `PATH` to find tools, but uses `SetDllDirectoryW` to ensure
+that test children select the runtime under test ahead of `System32`. This is a
+test-harness contract: the emitted test program is not made independently
+runnable outside that executor.
+
+Common patterns to avoid include:
+
+- Assuming `PATH` takes precedence over `System32`.
+- Copying every DLL from a merged ROCm `bin` directory beside a test or
+  application executable.
+- Copying DLLs into an extracted ROCm installation while tests run.
+- Inferring a redistributable runtime closure solely from a static PE import
+  scan; applications and libraries can load additional modules or data at
+  runtime.
+
+For application-local DLLs, launchers, central runtime activation, static
+linking, Linux equivalents, and packaging tradeoffs, see
+[Native application packaging](../packaging/native_application_packaging.md).
+
 #### Other platform differences
 
 - Symlink support on Windows is not always available

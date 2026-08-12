@@ -1,5 +1,9 @@
 # ROCm Native Packaging via TheRock
 
+This page describes how TheRock produces Debian and RPM packages. For guidance
+on packaging and loading ROCm libraries from a downstream native application,
+see [Native Application Packaging with ROCm](native_application_packaging.md).
+
 Given ROCk artifact directories, perform surgery to re-layout them for
 distribution as Debian and RPM packages.
 
