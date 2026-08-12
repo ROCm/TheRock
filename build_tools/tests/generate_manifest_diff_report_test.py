@@ -423,12 +423,8 @@ class BuildCommitRangeSummaryTest(unittest.TestCase):
                     status="changed",
                     components={
                         "hip": Component(path="hip", name="hip", status="changed"),
-                        "rccl": Component(
-                            path="rccl", name="rccl", status="changed"
-                        ),
-                        "clr": Component(
-                            path="clr", name="clr", status="unchanged"
-                        ),
+                        "rccl": Component(path="rccl", name="rccl", status="changed"),
+                        "clr": Component(path="clr", name="clr", status="unchanged"),
                     },
                 ),
             },
