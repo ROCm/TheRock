@@ -87,16 +87,82 @@ def find_deb(packages_dir: Path) -> Path:
     return matches[0]
 
 
+def _stderr_text(e: subprocess.CalledProcessError) -> str:
+    """Best-effort decoded/stripped stderr from a CalledProcessError, or "" if none."""
+    stderr = e.stderr
+    if stderr is None:
+        return ""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode(errors="replace")
+    return stderr.strip()
+
+
+def _is_sudo_denial(e: subprocess.CalledProcessError) -> bool:
+    """True if ``sudo`` itself rejected the invocation, not the wrapped command.
+
+    ``sudo -n`` exits non-zero and prints its own diagnostic prefixed with
+    ``sudo:`` (e.g. ``sudo: a password is required``) *before* the wrapped
+    command ever runs. A failure from the wrapped command itself -- e.g.
+    dpkg's own dependency diagnostics -- has no such prefix. Conflating the
+    two previously caused a real dpkg failure to be misreported as "no
+    root/sudo available here" (see module context / TheRock job 93909323734).
+    """
+    return any(
+        line.strip().startswith("sudo:") for line in _stderr_text(e).splitlines()
+    )
+
+
 def install_via_dpkg(deb_path: Path) -> bool:
-    """Real ``dpkg -i`` install. Returns True on success, False if not permitted."""
+    """Real ``dpkg -i`` install, self-healing missing dependencies via ``apt-get -f``.
+
+    ``dpkg -i`` does not resolve dependencies: installing a single .deb whose
+    dependencies are not already present unpacks fine but fails at the
+    *configure* stage with "dependency problems prevent configuration". That is
+    expected, ordinary ``dpkg -i`` behaviour, not a permissions problem -- so it
+    is remediated in place with ``apt-get install -f -y`` (the classic
+    dpkg-then-fix-deps two-step) rather than reported as one.
+
+    Returns:
+        True on success (either the initial ``dpkg -i`` or the ``apt-get -f``
+        remediation). False only when root/sudo access itself is denied (sudo
+        missing, or ``sudo -n`` rejecting the invocation) -- the one condition
+        under which the caller should fall back to a non-root install mode --
+        or when ``apt-get install -f -y`` also fails to fix the dependencies.
+    """
     try:
-        _run(["sudo", "-n", "dpkg", "-i", str(deb_path)])
-        # Resolve any dependency gaps the same way a real install would.
-        _run(["sudo", "-n", "apt-get", "install", "-f", "-y"])
+        _run(["sudo", "-n", "dpkg", "-i", str(deb_path)], stderr=subprocess.PIPE)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"[INFO] dpkg -i install not available/permitted here: {e}")
+    except FileNotFoundError as e:
+        print(f"[INFO] sudo/dpkg not available here: {e}")
         return False
+    except subprocess.CalledProcessError as e:
+        if _is_sudo_denial(e):
+            print(
+                "[INFO] sudo -n denied (no passwordless sudo available here): "
+                f"{_stderr_text(e) or e}"
+            )
+            return False
+        print(
+            f"[INFO] `dpkg -i` failed at exit {e.returncode} (dependency problems "
+            "are expected here -- dpkg -i does not resolve dependencies). dpkg "
+            f"stderr:\n{_stderr_text(e) or '(no stderr captured)'}"
+        )
+        print("[INFO] Attempting `apt-get install -f -y` to resolve dependencies...")
+        try:
+            _run(
+                ["sudo", "-n", "apt-get", "install", "-f", "-y"], stderr=subprocess.PIPE
+            )
+            return True
+        except FileNotFoundError as fix_e:
+            print(f"[INFO] apt-get not available here: {fix_e}")
+            return False
+        except subprocess.CalledProcessError as fix_e:
+            print(
+                f"[INFO] `apt-get install -f -y` failed to fix dependencies at exit "
+                f"{fix_e.returncode}. apt-get stderr:\n"
+                f"{_stderr_text(fix_e) or '(no stderr captured)'}"
+            )
+            return False
 
 
 def install_via_staging(deb_path: Path, staging_dir: Path) -> Path:
