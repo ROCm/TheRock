@@ -34,7 +34,7 @@ by using [`build_tools/_therock_utils/s3_buckets.py`](/build_tools/_therock_util
 ```yaml
 jobs:
   build:
-    runs-on: azure-linux-scale-rocm
+    runs-on: aws-linux-scale-rocm-prod
     permissions:
       id-token: write
     # Linux containers only — mount runner baseline credentials

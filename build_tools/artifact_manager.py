@@ -76,6 +76,36 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
 
+def _get_base_arch(target: str) -> str:
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
+
+    Note: This strips everything after the first colon. Any suffix (not just
+    xnack) will be removed, e.g., 'gfx942:foo' -> 'gfx942'.
+    """
+    if not target:
+        return ""
+    base = target.split(":")[0]
+    return base if base else target
+
+
+def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
+    """Match if the artifact's base arch equals any requested target's base arch.
+
+    Uses base-arch matching: both the artifact target and requested targets are
+    stripped to their base arch before comparison. This means requesting 'gfx942'
+    will match 'gfx942', 'gfx942:xnack+', 'gfx942:xnack-', or any 'gfx942:*' variant.
+
+    Known limitation: All colon-suffixed variants of the same base arch will match.
+    For example, requesting 'gfx942' matches 'gfx942:xnack+', 'gfx942:xnack-',
+    'gfx942:abc', etc. This is intentional to ensure all relevant artifacts are
+    fetched for a given GPU architecture.
+    """
+    if not artifact_target:
+        return False
+    requested_bases = {_get_base_arch(t) for t in requested_targets}
+    return _get_base_arch(artifact_target) in requested_bases
+
+
 def log(msg: str):
     """Print message and flush."""
     print(msg, flush=True)
@@ -144,22 +174,44 @@ def find_available_artifacts(
 ) -> list[str]:
     """Find which artifacts exist in the available set.
 
-    Iterates artifact_names × target_families × components × extensions,
-    returning filenames that are present in `available`. Prefers .tar.zst
-    over .tar.xz when both exist.
+    Iterates available artifacts and filters by artifact_names, target_families,
+    and components. Uses base-arch matching: requesting a base arch (e.g., "gfx942")
+    will also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
+
+    Prefers .tar.zst over .tar.xz when both exist, because zstd offers faster
+    decompression and better compression ratios for our artifact workloads.
     """
     excluded_components = excluded_components or set()
+    targets_to_match = set(target_families)
+
+    # Use structured ArtifactName parsing for reliable matching (like fetch_artifacts.py)
     matched = []
-    for artifact_name in sorted(artifact_names):
-        for tf in target_families:
-            for comp in ARTIFACT_COMPONENTS:
-                if comp in excluded_components:
-                    continue
-                for ext in ARTIFACT_EXTENSIONS:
-                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
-                    if filename in available:
-                        matched.append(filename)
-                        break  # Found this artifact, don't check other extensions
+    seen = set()
+
+    # Sort .tar.zst before .tar.xz so dedup prefers zstd (faster decompression)
+    def _sort_key(f: str) -> tuple:
+        base = f.rsplit(".tar", 1)[0]
+        priority = 0 if f.endswith(".tar.zst") else 1
+        return (base, priority)
+
+    for filename in sorted(available, key=_sort_key):
+        an = ArtifactName.from_filename(filename)
+        if not an:
+            continue
+        if an.name not in artifact_names:
+            continue
+        if an.component in excluded_components:
+            continue
+        if not _matches_target(an.target_family, targets_to_match):
+            continue
+
+        # Dedupe: prefer .tar.zst over .tar.xz for same artifact
+        key = (an.name, an.component, an.target_family)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.append(filename)
+
     return matched
 
 
