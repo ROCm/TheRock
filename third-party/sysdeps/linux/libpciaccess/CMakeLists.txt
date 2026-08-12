@@ -80,8 +80,12 @@ add_custom_target(
     # Run meson from the source directory to avoid this issue.
     "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
-      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # Symbol versioning is applied per library target by patch_source.sh, which
+      # adds link_args : ['-Wl,--version-script=...'] to the library(). It must
+      # not be passed project wide via LDFLAGS: meson duplicates such arguments
+      # in its compiler sanity check (1.12.0) and `ld` then reports
+      # "duplicate version tag `AMDROCM_SYSDEPS_1.0'".
+      # RPATH is set post-install via patch_install.py.
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
