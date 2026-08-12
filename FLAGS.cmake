@@ -32,12 +32,35 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable MX (microscaling) data-type support for GEMM in the hipDNN hipBLASLt provider"
+  CMAKE_VARS
+    HIPBLASLTPROVIDER_ENABLE_MX_GEMM=ON
+  SUB_PROJECTS
+    hipblasltprovider
+)
+
+therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
   DEFAULT_VALUE OFF
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
   CMAKE_VARS
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
   SUB_PROJECTS
+    hipkernelprovider
+)
+
+# Gates the generic kernel ingestor platform described in RFC 0017:
+# rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_KERNEL_INGESTOR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
+  CMAKE_VARS
+    HIPDNN_ENABLE_KERNEL_INGESTOR=ON
+  SUB_PROJECTS
+    hipDNN
     hipkernelprovider
 )
 
@@ -69,6 +92,17 @@ therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
+)
+
+therock_declare_flag(
+  NAME LLVM_ENABLE_ASSERTIONS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. In CI costs roughly 20% more build time overall and up to 35% on device-heavy stages."
+  ISSUE "https://github.com/ROCm/TheRock/pull/6102"
+  CMAKE_VARS
+    LLVM_ENABLE_ASSERTIONS=ON
+  SUB_PROJECTS
+    amd-llvm
 )
 
 ###############################################################################

@@ -80,6 +80,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("windows", job["platform"])
 
+    def test_rocprofiler_sdk_submits_to_cdash(self):
+        config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
+        self.assertIn("--enable-cdash", config["test_script"])
+
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
 
@@ -263,7 +267,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rccl = next(j for j in components if j["job_name"] == "rccl")
         self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
 
-    def test_multi_gpu_job_uses_weighted_labels_when_available(self):
+    def test_multi_gpu_job_uses_count_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
 
         def fake_get_all_families(_):
@@ -272,13 +276,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     "linux": {
                         "test-runs-on": "linux-gfx942-default",
                         "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "weight": 0.5},
-                            {"label": "linux-gfx942-b", "weight": 0.5},
+                            {"label": "linux-gfx942-a", "count": 5},
+                            {"label": "linux-gfx942-b", "count": 5},
                         ],
                         "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
                         "test-runs-on-multi-gpu-labels": [
-                            {"label": "linux-mi300-mgpu-a", "weight": 0.5},
-                            {"label": "linux-mi300-mgpu-b", "weight": 0.5},
+                            {"label": "linux-mi300-mgpu-a", "count": 5},
+                            {"label": "linux-mi300-mgpu-b", "count": 5},
                         ],
                     }
                 }
@@ -433,8 +437,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     "linux": {
                         "test-runs-on": "linux-gfx942-prod",
                         "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "weight": 0.5},
-                            {"label": "linux-gfx942-b", "weight": 0.5},
+                            {"label": "linux-gfx942-a", "count": 5},
+                            {"label": "linux-gfx942-b", "count": 5},
                         ],
                         "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
                     }
@@ -476,8 +480,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         hipblas = next(j for j in components if j["job_name"] == "hipblas")
         self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
 
-    def test_release_build_uses_weighted_runner(self):
-        """Release builds should use weighted runner labels, not sandbox."""
+    def test_release_build_uses_count_runner(self):
+        """Release builds should use count-based runner labels, not sandbox."""
         os.environ["BUILD_VARIANT"] = "release"
         os.environ["PROJECTS_TO_TEST"] = "rocblas"
 
@@ -487,7 +491,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     "linux": {
                         "test-runs-on": "linux-gfx942-default",
                         "test-runs-on-labels": [
-                            {"label": "linux-gfx942-weighted", "weight": 1.0},
+                            {"label": "linux-gfx942-count-runner", "count": 10},
                         ],
                         "test-runs-on-sandbox": "linux-sandbox-runner",
                     }
@@ -502,7 +506,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         original_select_weighted_label = fetch_test_configurations.select_weighted_label
 
         def fake_select_weighted_label(labels_config, context_name):
-            return "linux-gfx942-weighted"
+            return "linux-gfx942-count-runner"
 
         fetch_test_configurations.select_weighted_label = fake_select_weighted_label
 
@@ -511,7 +515,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             components = self._get_components()
 
             rocblas = next(j for j in components if j["job_name"] == "rocblas")
-            self.assertEqual(rocblas["test_runner"], "linux-gfx942-weighted")
+            self.assertEqual(rocblas["test_runner"], "linux-gfx942-count-runner")
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
