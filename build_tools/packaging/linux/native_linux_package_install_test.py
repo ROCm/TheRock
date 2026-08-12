@@ -134,9 +134,11 @@ Example invocations:
 import argparse
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path, PurePosixPath
@@ -174,6 +176,15 @@ VERIFY_KEY_COMPONENTS = [
 ]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
+
+# profiler-hub find_package/link/load verification (verify_profiler_hub_install).
+# Anchor used to detect whether profiler-hub is present in this install at all --
+# same anchor the (now manual-only) profiler_hub_install_smoke_test.py used.
+PROFILER_HUB_CONFIG_ANCHOR = "lib/cmake/profiler-hub/profiler-hub-config.cmake"
+PROFILER_HUB_CONSUMER_FIXTURE_REL = Path("tests") / "fixtures" / "profiler_hub_consumer"
+PROFILER_HUB_CONFIGURE_TIMEOUT_SEC = 120
+PROFILER_HUB_BUILD_TIMEOUT_SEC = 120
+PROFILER_HUB_RUN_TIMEOUT_SEC = 30
 
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
@@ -912,6 +923,10 @@ gpgcheck=0
         # which guards against local PATH-hijack privilege escalation.
         security_ok = self.verify_installed_file_security()
 
+        # Prove profiler-hub's find_package/link/load story end to end, when
+        # this profile can host it (skips cleanly otherwise; see docstring).
+        profiler_hub_ok = self.verify_profiler_hub_install()
+
         # Check installed packages
         print("\nChecking installed packages:")
         try:
@@ -980,6 +995,12 @@ gpgcheck=0
             print(
                 "\n[FAIL] Basic verification FAILED "
                 "(files not owned by root or with insecure permissions)"
+            )
+            return False
+        if not profiler_hub_ok:
+            print(
+                "\n[FAIL] Basic verification FAILED (profiler-hub install "
+                "verification failed)"
             )
             return False
         print("\n[PASS] Basic verification PASSED")
@@ -1207,6 +1228,125 @@ gpgcheck=0
                 print(f"   ... and {len(bad) - 10} more")
             return False
         print(" [PASS] All installed files owned by root with safe permissions")
+        return True
+
+    def verify_profiler_hub_install(self) -> bool:
+        """Prove the installed profiler-hub package is actually consumable.
+
+        Configures, builds, and runs the ``profiler_hub_consumer`` fixture
+        (``tests/fixtures/profiler_hub_consumer/``) against the *installed*
+        CMake package config via ``find_package(profiler-hub CONFIG)`` --
+        exercising find_package resolution, header availability, linking
+        against ``libprofiler-hub.so``, and runtime ``NEEDED``-dependency
+        resolution end to end. Re-homed here (from the now manual-only
+        ``profiler_hub_install_smoke_test.py``) so it runs against a real,
+        apt-dependency-resolved install instead of a hand-rolled single-``.deb``
+        ``dpkg -i`` that cannot resolve its own dependency closure.
+
+        Skips cleanly -- logged, not failed -- whenever this profile cannot
+        host the check: profiler-hub not present in this install (most
+        profiles/RPM lanes), or no ``cmake``/C++ compiler available in the
+        container. A profile that can host it (realistically ubuntu2404/DEB
+        today) and genuinely fails to build/link/run is a real regression and
+        must fail loud, so this can regress the job again -- unlike the
+        preflight-absent cases, which must never turn a green run red.
+
+        Returns:
+        True if skipped (not applicable here) or the consumer built, linked,
+        and ran successfully. False only if the preflight is satisfied and the
+        consumer genuinely fails to configure, build, link, or run correctly.
+        """
+        print("\nVerifying profiler-hub install (find_package/link/load)...")
+        install_path = Path(self.install_prefix)
+        config_path = install_path / PROFILER_HUB_CONFIG_ANCHOR
+        if not config_path.exists():
+            print(
+                f" [SKIP] {PROFILER_HUB_CONFIG_ANCHOR} not found under "
+                f"{install_path}; profiler-hub is not part of this install, "
+                "skipping."
+            )
+            return True
+        if not shutil.which("cmake"):
+            print(" [SKIP] cmake not available on this host; cannot verify.")
+            return True
+        if not any(shutil.which(cxx) for cxx in ("c++", "g++", "clang++")):
+            print(" [SKIP] no C++ compiler available on this host; cannot verify.")
+            return True
+
+        fixture_dir = _SCRIPT_DIR / PROFILER_HUB_CONSUMER_FIXTURE_REL
+        if not fixture_dir.is_dir():
+            print(
+                f" [WARN] profiler-hub consumer fixture not found at {fixture_dir}; "
+                "skipping (this is a repo layout problem, not an install problem)."
+            )
+            return True
+
+        print(f" [PASS] Found {PROFILER_HUB_CONFIG_ANCHOR} under {install_path}")
+        with tempfile.TemporaryDirectory(prefix="profiler_hub_verify_") as tmp:
+            build_dir = Path(tmp) / "build"
+            try:
+                subprocess.run(
+                    [
+                        "cmake",
+                        "-S",
+                        str(fixture_dir),
+                        "-B",
+                        str(build_dir),
+                        f"-DCMAKE_PREFIX_PATH={install_path}",
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=PROFILER_HUB_CONFIGURE_TIMEOUT_SEC,
+                )
+                subprocess.run(
+                    ["cmake", "--build", str(build_dir)],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=PROFILER_HUB_BUILD_TIMEOUT_SEC,
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                output = getattr(e, "output", None) or ""
+                print(
+                    f" [FAIL] profiler-hub consumer configure/build failed: {e}\n"
+                    f"{output}"
+                )
+                return False
+
+            exe = build_dir / "profiler_hub_consumer"
+            env = dict(os.environ)
+            env["LD_LIBRARY_PATH"] = os.pathsep.join(
+                filter(
+                    None, [str(install_path / "lib"), env.get("LD_LIBRARY_PATH", "")]
+                )
+            )
+            try:
+                result = subprocess.run(
+                    [str(exe)],
+                    env=env,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=PROFILER_HUB_RUN_TIMEOUT_SEC,
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                output = getattr(e, "output", None) or ""
+                print(f" [FAIL] profiler-hub consumer failed to run: {e}\n{output}")
+                return False
+
+        if "profiler-hub storage version" not in result.stdout:
+            print(
+                " [FAIL] profiler-hub consumer ran but did not print expected "
+                f"output: {result.stdout!r}"
+            )
+            return False
+        print(
+            f" [PASS] profiler-hub consumer built, linked, and ran: {result.stdout.strip()}"
+        )
         return True
 
     def run_full_verification(self) -> bool:

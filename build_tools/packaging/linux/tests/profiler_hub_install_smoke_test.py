@@ -2,7 +2,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Standalone install-and-load smoke test for the profiler-hub native package.
+"""MANUAL/OPT-IN ONLY -- standalone install-and-load smoke test for profiler-hub.
+
+No workflow step invokes this file. It is not part of CI and does not gate any
+build or install-test job. The find_package/link/load proof it demonstrates has
+been re-homed into ``native_linux_package_install_test.py`` as
+``verify_profiler_hub_install()``, called from ``run_basic_verification()`` --
+the pattern the rest of this repo's post-install verification already follows
+-- so that proof now runs against a real, dependency-resolved package install
+(``sudo apt install``) in the house install-test lane instead of a hand-rolled
+single-``.deb`` ``dpkg -i`` that cannot resolve its own dependencies.
+
+This file is kept only because it is the sole thing in the tree that exercises
+the raw single-package ``dpkg -i`` path (as opposed to apt's repo-based,
+dependency-resolving install). Run it by hand, locally, when you specifically
+want to validate that path; do not wire it back into a workflow without also
+fixing the dependency-resolution problem described below.
 
 Proves the *installed* ``amdrocm-profiler-base`` artifact is actually
 consumable: locates the already-built ``.deb`` (produced by
@@ -16,24 +31,27 @@ end to end -- a missing runtime dependency surfaces as a loader failure, not
 just a link-time pass.
 
 Install modes (``--install-mode``):
-- ``dpkg``: real ``dpkg -i`` install into the system install prefix (matches
-  production installs and CI, where this test runs in-container with root
-  after the "Build Packages" step).
+- ``dpkg``: real ``dpkg -i`` install into the system install prefix. Installing
+  a single ``.deb`` this way does not resolve its dependency closure (``dpkg -i``
+  never does); on a host missing ``amdrocm-runtime``/``amdrocm-sysdeps`` this
+  fails at the configure stage until ``apt-get install -f -y`` is run to
+  complete it, which this mode does automatically.
 - ``staging``: ``dpkg-deb -x <deb> <staging_dir>`` extraction. Does not
   require root/sudo. Fallback for environments without a working
   root/sudo/apt (e.g. a bare compute node); still uses the real packaged file
-  layout, it just does not touch the system install prefix. A real
-  ``dpkg -i`` additionally exercises postinst scripts and apt dependency
-  resolution, which this fallback does not.
+  layout, it just does not touch the system install prefix. Because it only
+  extracts profiler-hub's own .deb, files that live in its (unresolved)
+  dependency packages -- e.g. ``librocm_sysdeps_dw.so.1`` from
+  ``amdrocm-sysdeps`` -- are absent from the staging tree entirely, so a
+  consumer linked against those symbols will not load from staging mode.
 - ``auto`` (default): try ``dpkg``, fall back to ``staging`` if ``dpkg``/sudo
   is unavailable or fails for a permissions reason.
 
-Run standalone::
+Run standalone (manual/local only)::
 
     python3 profiler_hub_install_smoke_test.py --packages-dir /path/to/dist
 
-Or under pytest (CI, env-var driven; see
-``multi_arch_build_native_linux_packages.yml``)::
+Or under pytest::
 
     pytest build_tools/packaging/linux/tests/profiler_hub_install_smoke_test.py -vv --tb=long -s
 """
