@@ -31,7 +31,6 @@ RUN sudo dnf install -y --nodocs \
     libquadmath \
     libatomic \
     valgrind \
-    openssl-devel \
     && sudo dnf clean all
 
 RUN sudo dnf install -y --nodocs git-lfs \

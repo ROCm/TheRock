@@ -31,8 +31,7 @@ RUN sudo apt-get update -y \
     wget \
     psmisc \
     libgfortran5 \
-    valgrind \
-    libssl-dev
+    valgrind
 
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && \
     sudo apt-get install git-lfs
