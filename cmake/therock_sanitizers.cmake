@@ -47,6 +47,13 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
     string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
 
+    # MIOpen uses -Werror and the HOST_ASAN path with non +xnack gfx target will throw a warning that -fsanitize=address
+    # is not supported. This will fail the math-libs step during HOST_ASAN Multi-Arch CI. Passing -fno-gpu-sanitize supresses this warning.
+    if(_sanitizer STREQUAL "HOST_ASAN")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fno-gpu-sanitize\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fno-gpu-sanitize\")\n")
+    endif()
+
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
