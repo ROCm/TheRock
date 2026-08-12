@@ -259,10 +259,14 @@
   },
   "rccl": {
     "consumers": [
-      "rccl-tests"
+      "rccl-tests",
+      "rccl-translate"
     ]
   },
   "rccl-tests": {
+    "consumers": []
+  },
+  "rccl-translate": {
     "consumers": []
   },
   "rdc": {
@@ -297,6 +301,7 @@
   },
   "rocjitsu": {
     "consumers": [
+      "rccl-translate",
       "rocjitsu-hotswap"
     ]
   },
@@ -367,7 +372,8 @@
   "rocm-kpack": {
     "consumers": [
       "hip-clr",
-      "hipkernelprovider"
+      "hipkernelprovider",
+      "rccl-translate"
     ]
   },
   "rocm_smi_lib": {

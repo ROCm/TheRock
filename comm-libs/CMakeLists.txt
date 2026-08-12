@@ -67,6 +67,40 @@ if(THEROCK_ENABLE_RCCL)
   therock_cmake_subproject_activate(rccl)
   list(APPEND _rccl_subproject_names rccl)
 
+  if(THEROCK_ENABLE_ROCJITSU_HOTSWAP AND THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
+    therock_cmake_subproject_dist_dir(_rccl_dist_dir rccl)
+    therock_cmake_subproject_dist_dir(_rocjitsu_dist_dir rocjitsu)
+
+    # Generate the install-owned translation tier from RCCL before KPACK splits
+    # its fat binary. The splitter then assigns this tree only to gfx1250.
+    therock_cmake_subproject_declare(rccl-translate
+      DISABLE_AMDGPU_TARGETS
+      NO_MERGE_COMPILE_COMMANDS
+      BACKGROUND_BUILD
+      FPRINT_SOURCE_HASH
+      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rccl-translate"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-translate"
+      CMAKE_ARGS
+        -DRCCL_ROOT=${_rccl_dist_dir}
+        -DROCJITSU_ROOT=${_rocjitsu_dist_dir}
+        -DROCJITSU_PRETRANSLATE_DRIVER=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/scripts/rocjitsu-pretranslate.py
+        -DKPACK_PYTHON_SOURCE=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
+        # TODO: Set ON once RocJitsu supports every RCCL gfx1250 code object.
+        -DRCCL_TRANSLATE_FAIL_ON_SKIPPED=OFF
+      EXTRA_DEPENDS
+        ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/scripts/rocjitsu-pretranslate.py
+        ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/binutils.py
+        ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/ccob_parser.py
+        ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/tools/bulk_unbundle.py
+      BUILD_DEPS
+        rccl
+        rocjitsu
+        rocm-kpack
+    )
+    therock_cmake_subproject_activate(rccl-translate)
+    list(APPEND _rccl_subproject_names rccl-translate)
+  endif()
+
   if(THEROCK_BUILD_TESTING)
 
     set(_rccl_tests_optional_deps)
