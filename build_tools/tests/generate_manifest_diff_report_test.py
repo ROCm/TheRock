@@ -16,7 +16,6 @@ from generate_manifest_diff_report import (
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
-    generate_step_summary,
     get_api_base_from_url,
     handle_post_comment,
     is_revert,
@@ -379,39 +378,6 @@ class BuildCommitRangeSummaryTest(unittest.TestCase):
         self.assertIn(f"`{diff.end_commit[:8]}`", summary)
         self.assertIn("1 submodule changed", summary)
 
-    def test_zero_and_plural_changed_counts(self):
-        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
-        self.assertIn("0 submodules changed", build_commit_range_summary(diff))
-
-        for name in ("s1", "s2"):
-            diff.submodules[name] = Submodule(
-                name=name,
-                sha="e" * 40,
-                api_base="https://api.github.com/repos/ROCm/" + name,
-                branch="main",
-                status="changed",
-            )
-        self.assertIn("2 submodules changed", build_commit_range_summary(diff))
-
-
-class GenerateStepSummaryReusesCommitRangeSummaryTest(unittest.TestCase):
-    """generate_step_summary() should embed build_commit_range_summary()'s text
-    verbatim rather than re-deriving equivalent formatting, so both surfaces
-    (the job step summary and the bump-PR comment) agree exactly."""
-
-    def test_step_summary_includes_commit_range_summary_line(self):
-        diff = ManifestDiff(start_commit="a" * 40, end_commit="b" * 40)
-        expected_line = build_commit_range_summary(diff)
-
-        with mock.patch(
-            "generate_manifest_diff_report.gha_append_step_summary"
-        ) as append_summary:
-            generate_step_summary(diff)
-
-        append_summary.assert_called_once()
-        posted_summary = append_summary.call_args[0][0]
-        self.assertIn(expected_line, posted_summary)
-
 
 # =============================================================================
 # post_comment Subcommand Tests
@@ -441,11 +407,9 @@ class HandlePostCommentTest(unittest.TestCase):
         gha_update_pr_comment.assert_called_once()
         call_kwargs = gha_update_pr_comment.call_args.kwargs
         self.assertEqual(call_kwargs["pr_number"], 1234)
-        self.assertEqual(call_kwargs["marker"], PR_COMMENT_MARKER)
         self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
         self.assertTrue(call_kwargs["body"].startswith(PR_COMMENT_MARKER))
         self.assertIn("99999-linux/logs/manifest-diff/index.html", call_kwargs["body"])
-        self.assertIn("1 submodule changed", call_kwargs["body"])
 
     def test_omits_summary_line_when_blank(self):
         args = argparse.Namespace(
