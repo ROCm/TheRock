@@ -25,6 +25,7 @@
       "hipcc",
       "hipify",
       "hipthreads",
+      "kfdtest",
       "libhipcxx",
       "ocl-clr",
       "rdc",
@@ -211,6 +212,9 @@
     "consumers": []
   },
   "hipthreads": {
+    "consumers": []
+  },
+  "kfdtest": {
     "consumers": []
   },
   "libhipcxx": {
@@ -450,6 +454,7 @@
     "consumers": [
       "aqlprofile",
       "hip-clr",
+      "kfdtest",
       "ocl-clr",
       "rdc",
       "rocminfo",
@@ -698,6 +703,7 @@
     "consumers": [
       "amd-llvm",
       "amdsmi",
+      "kfdtest",
       "rocdecode",
       "rocjitsu",
       "rocjpeg",
@@ -771,6 +777,7 @@
     "consumers": [
       "amd-llvm",
       "hip-tests",
+      "kfdtest",
       "rocr-runtime",
       "rocrtst",
       "rocshmem",
@@ -814,6 +821,7 @@
   "therock-yaml-cpp": {
     "consumers": [
       "hipblaslt",
+      "kfdtest",
       "rocprofiler-sdk",
       "rocroller",
       "rocrtst"
@@ -822,6 +830,7 @@
   "therock-zlib": {
     "consumers": [
       "amd-llvm",
+      "kfdtest",
       "rdc",
       "rocgdb",
       "rocr-runtime",
@@ -833,6 +842,7 @@
     "consumers": [
       "amd-comgr",
       "amd-llvm",
+      "kfdtest",
       "rocgdb",
       "rocm-kpack",
       "rocr-runtime",
