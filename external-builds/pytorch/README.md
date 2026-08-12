@@ -366,6 +366,22 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
     --dest-dir=build/packages
   ```
 
+### Portable Linux RPATHs
+
+When using a PyTorch checkout that implements
+`THEROCK_PYTORCH_PORTABLE_RPATH`, opt in to relative install RPATHs with:
+
+```bash
+python build_prod_wheels.py build \
+  --pytorch-portable-rpath \
+  --output-dir $HOME/tmp/pyout
+```
+
+The option appends `-DTHEROCK_PYTORCH_PORTABLE_RPATH=ON` without replacing
+caller-provided `CMAKE_ARGS`. Before the Torch wheel is copied or installed,
+every ELF under `torch/lib` is checked and the build fails if an RPATH or
+RUNPATH component is absolute.
+
 ### Bundling PyTorch and ROCm together into a "fat wheel"
 
 By default, Python wheels produced by the PyTorch build do not include ROCm

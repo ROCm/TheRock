@@ -153,6 +153,7 @@ import tarfile
 import tempfile
 import textwrap
 import urllib.request
+import zipfile
 
 script_dir = Path(__file__).resolve().parent
 
@@ -609,6 +610,16 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
         append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
+
+
+def enable_pytorch_portable_rpath(env: dict[str, str]) -> None:
+    """Enable TheRock's relocatable PyTorch install RPATH configuration."""
+    inherited_args = env.get("CMAKE_ARGS", os.environ.get("CMAKE_ARGS", ""))
+    portable_rpath_arg = "-DTHEROCK_PYTORCH_PORTABLE_RPATH=ON"
+    env["CMAKE_ARGS"] = " ".join(
+        part for part in (inherited_args, portable_rpath_arg) if part
+    )
+    print(f"-- Appended CMAKE_ARGS+={portable_rpath_arg}")
 
 
 def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
@@ -1077,6 +1088,81 @@ def copy_libuv_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(uv_dll, target_lib)
 
 
+def _readelf_search_paths(dynamic_section: str) -> list[str]:
+    """Extract RPATH and RUNPATH components from readelf dynamic output."""
+    search_paths = []
+    for line in dynamic_section.splitlines():
+        if "(RPATH)" not in line and "(RUNPATH)" not in line:
+            continue
+        left_bracket = line.find("[")
+        right_bracket = line.rfind("]")
+        if left_bracket < 0 or right_bracket <= left_bracket:
+            raise RuntimeError(f"Could not parse ELF search path: {line}")
+        search_paths.extend(line[left_bracket + 1 : right_bracket].split(":"))
+    return search_paths
+
+
+def validate_pytorch_wheel_runpaths(wheel_path: Path) -> None:
+    """Reject absolute RPATH/RUNPATH entries in the built Torch wheel."""
+    readelf = shutil.which("readelf")
+    if not readelf:
+        raise RuntimeError("Portable PyTorch RPATH validation requires readelf")
+
+    violations = []
+    inspected = 0
+    with zipfile.ZipFile(wheel_path) as wheel, tempfile.TemporaryDirectory() as td:
+        temp_dir = Path(td)
+        for index, member in enumerate(wheel.infolist()):
+            if member.is_dir() or not member.filename.startswith("torch/lib/"):
+                continue
+
+            # Extract one ELF at a time so large wheels do not require enough
+            # temporary storage for a second unpacked copy of the wheel.
+            with wheel.open(member) as source:
+                magic = source.read(4)
+                if magic != b"\x7fELF":
+                    continue
+                temp_elf = temp_dir / f"elf-{index}"
+                with temp_elf.open("wb") as target:
+                    target.write(magic)
+                    shutil.copyfileobj(source, target)
+
+            try:
+                dynamic_section = subprocess.check_output(
+                    [readelf, "-d", temp_elf],
+                    cwd=temp_dir,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                raise RuntimeError(
+                    f"readelf could not inspect {member.filename} in {wheel_path}"
+                ) from exc
+            finally:
+                temp_elf.unlink()
+
+            inspected += 1
+            absolute_paths = [
+                path
+                for path in _readelf_search_paths(dynamic_section)
+                if path.startswith("/")
+            ]
+            if absolute_paths:
+                violations.append((member.filename, absolute_paths))
+
+    if not inspected:
+        raise RuntimeError(f"No torch/lib ELF files found in {wheel_path}")
+    if violations:
+        details = "\n".join(
+            f"  {member}: {', '.join(paths)}" for member, paths in violations
+        )
+        raise RuntimeError(
+            "Torch wheel contains non-portable absolute RPATH/RUNPATH entries:\n"
+            f"{details}"
+        )
+    print(f"Validated portable RPATH/RUNPATH in {inspected} Torch ELFs")
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1096,6 +1182,8 @@ def do_build_pytorch(
     env["USE_NUMA"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
+    if args.pytorch_portable_rpath:
+        enable_pytorch_portable_rpath(env)
 
     # Determine which install requirements to add.
     install_requirements = [
@@ -1289,6 +1377,8 @@ def do_build_pytorch(
     run_command(build_command, cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
+    if args.pytorch_portable_rpath:
+        validate_pytorch_wheel_runpaths(built_wheel)
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
@@ -1576,6 +1666,13 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch flash attention (sets USE_FLASH_ATTENTION and USE_MEM_EFF_ATTENTION). Defaults to enabled if supported",
+    )
+    build_p.add_argument(
+        "--pytorch-portable-rpath",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable TheRock's relocatable PyTorch install RPATH configuration "
+        "and reject absolute RPATH/RUNPATH entries in the built torch wheel",
     )
     build_p.add_argument(
         "--version-suffix",
