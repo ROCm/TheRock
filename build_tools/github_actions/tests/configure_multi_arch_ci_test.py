@@ -1996,6 +1996,10 @@ class TestFocusedPresubmitConfiguration(unittest.TestCase):
         self.assertFalse(linux.build_pytorch)
         self.assertFalse(linux.build_jax)
 
+    def test_python_test_matrix_is_empty_when_packages_are_not_built(self):
+        """The Test Python job only checks the matrix, so it must be empty."""
+        self.assertEqual(self._configure().builds.linux.test_python_packages_matrix, [])
+
     def test_test_scope_is_the_two_runtime_components(self):
         outputs = self._configure()
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:rocrtst"])
