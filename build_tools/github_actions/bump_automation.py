@@ -16,7 +16,7 @@ THEROCK_MAIN_BRANCH = "main"
 BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
-CI_LABELS = ["ci:run-all-archs", "ci:asan"]
+COMMON_CI_LABELS = ["ci:run-all-archs"]
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -38,12 +38,14 @@ SUBMODULE_CONFIG = {
         "files": ROCM_SYSTEMS_FILES,
         "updater": "ref",
         "token_key": "systems",
+        "labels": [*COMMON_CI_LABELS, "ci:asan"],
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
         "files": ROCM_LIBRARIES_FILES,
         "updater": "ci-env",
         "token_key": "libraries",
+        "labels": [*COMMON_CI_LABELS, "ci:asan"],
     },
     "debug-tools/rocgdb/source": {
         "repo": "ROCm/rocgdb",
@@ -52,6 +54,7 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
+        "labels": [*COMMON_CI_LABELS, "test:rocgdb"],
     },
     "third-party/sysdeps/linux/amd-mesa/mesa-fork": {
         "repo": "ROCm/mesa-fork",
@@ -349,7 +352,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": CI_LABELS},
+                data={"labels": config["labels"]},
             )
         except RuntimeError as e:
             print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
