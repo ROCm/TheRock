@@ -49,16 +49,27 @@ import subprocess
 import sys
 import time
 
+from _therock_utils.s3_buckets import get_release_index_url
 from github_actions.github_actions_api import *
 
 is_windows = platform.system() == "Windows"
 
-ROCM_INDEX_URLS_MAP = {
-    "stable": "https://repo.amd.com/rocm/whl-multi-arch/",
-    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
-    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
-    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
-}
+# --index-name values, in the order they are offered on the command line. These
+# are the user-facing channel names; "stable" is this script's long-standing
+# spelling of the "release" bucket slot, so it is aliased rather than renamed.
+ROCM_INDEX_NAMES = ["stable", "prerelease", "nightly", "dev"]
+
+_INDEX_NAME_RELEASE_TYPES = {"stable": "release"}
+
+
+def rocm_index_url(index_name: str) -> str:
+    """Resolve an --index-name to its package index URL.
+
+    Derived from the bucket registry's CDN rules rather than a local table, so
+    there is one place to change when a channel's public URL moves.
+    """
+    release_type = _INDEX_NAME_RELEASE_TYPES.get(index_name, index_name)
+    return get_release_index_url(release_type, "python")
 
 
 def log(*args, **kwargs):
@@ -240,7 +251,7 @@ def install_packages_into_venv(
 
     if index_name:
         # Look up known index name.
-        index_url = ROCM_INDEX_URLS_MAP[index_name]
+        index_url = rocm_index_url(index_name)
 
     if index_url == "":
         pip_install_cmd.append("--no-index")
@@ -378,7 +389,7 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--index-name",
         type=str,
-        choices=["stable", "prerelease", "nightly", "dev"],
+        choices=ROCM_INDEX_NAMES,
         help="Shorthand for a named index",
     )
     install_options.add_argument(

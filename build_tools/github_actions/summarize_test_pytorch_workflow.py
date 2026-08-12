@@ -21,7 +21,12 @@ The script can be tested locally with inputs like this:
 import argparse
 import platform
 import sys
+from pathlib import Path
 
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.s3_buckets import get_release_index_url
 from github_actions_api import *
 
 
@@ -107,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--index-url",
         type=str,
-        default="https://rocm.nightlies.amd.com/whl-multi-arch/",
+        default=get_release_index_url("nightly"),
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
     parser.add_argument(

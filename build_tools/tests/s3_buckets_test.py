@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for s3_buckets.py."""
 
+import contextlib
 import json
 import os
 import sys
@@ -20,13 +21,13 @@ from _therock_utils.s3_buckets import (
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
     get_release_bucket_config,
+    get_release_index_url,
     lookup_bucket_config,
     require_bucket_config,
     reset_bucket_registry,
     resolve_public_url,
     set_bucket_config_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # get_artifacts_bucket_config
@@ -141,6 +142,159 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             get_release_bucket_config(release_type="dev", bucket_type="wheels")
         self.assertIn("wheels", str(cm.exception))
+
+
+# ---------------------------------------------------------------------------
+# get_release_index_url
+# ---------------------------------------------------------------------------
+
+
+class TestGetReleaseIndexUrl(unittest.TestCase):
+    """The public index URLs users install from.
+
+    Every expected value is written out in full rather than rebuilt from the
+    same CdnRules the implementation reads. These URLs appear in install
+    instructions and are passed to pip, so a test that derives them would agree
+    with any rule the code happens to hold, including a wrong one.
+    """
+
+    EXPECTED_WHL = {
+        "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+        "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+        "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+        "release": "https://repo.amd.com/rocm/whl-multi-arch/",
+    }
+
+    EXPECTED_TARBALL = {
+        "dev": "https://rocm.devreleases.amd.com/tarball-multi-arch/",
+        "nightly": "https://rocm.nightlies.amd.com/tarball-multi-arch/",
+        "prerelease": "https://rocm.prereleases.amd.com/tarball-multi-arch/",
+        "release": "https://repo.amd.com/rocm/tarball-multi-arch/",
+    }
+
+    def test_python_indexes(self):
+        for release_type, expected in self.EXPECTED_WHL.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(get_release_index_url(release_type), expected)
+
+    def test_tarball_indexes(self):
+        for release_type, expected in self.EXPECTED_TARBALL.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(
+                    get_release_index_url(release_type, "tarball"), expected
+                )
+
+    def test_release_type_release_is_readable_but_not_publishable(self):
+        """The wider read set must not widen the upload surface.
+
+        "release" has no automated credentials, so it is installable but the
+        publish path has to keep rejecting it.
+        """
+        self.assertEqual(get_release_index_url("release"), self.EXPECTED_WHL["release"])
+        with self.assertRaises(ValueError):
+            get_release_bucket_config("release", "python")
+
+    def test_ci_release_type_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_release_index_url("ci")
+        self.assertIn("ci", str(cm.exception))
+
+    def test_invalid_release_type_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_release_index_url("bogus")
+        self.assertIn("bogus", str(cm.exception))
+
+    def test_packages_bucket_type_raises(self):
+        """packages CDNs are distro-partitioned, so there is no index to derive."""
+        with self.assertRaises(ValueError) as cm:
+            get_release_index_url("nightly", "packages")
+        self.assertIn("packages", str(cm.exception))
+
+    @contextlib.contextmanager
+    def use_registry(self, registry: dict):
+        """Point the process at a registry file for the duration of the block."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "buckets.json"
+            path.write_text(json.dumps(registry))
+            set_bucket_config_file(path)
+            try:
+                yield
+            finally:
+                set_bucket_config_file(None)
+
+    def test_bucket_without_cdn_rule_raises(self):
+        """A missing rule is an error, never a silent raw-S3 URL.
+
+        resolve_public_url falls back to its default; get_release_index_url must
+        not, because the result is handed to pip. Driven through the registry
+        file rather than by patching the selection helper, so the failure being
+        pinned is one a downstream repo can actually configure.
+        """
+        registry = {
+            "version": 1,
+            "buckets": [{"name": "downstream-python"}],
+            "release_buckets": {"nightly": {"python": "downstream-python"}},
+        }
+        with self.use_registry(registry):
+            with self.assertRaises(ValueError) as cm:
+                get_release_index_url("nightly")
+
+        message = str(cm.exception)
+        self.assertIn("no CDN rule", message)
+        self.assertIn("downstream-python", message)
+
+    def test_registry_file_redirect_is_honored(self):
+        """A downstream release_buckets redirect changes the index URL too."""
+        registry = {
+            "version": 1,
+            "buckets": [
+                {
+                    "name": "downstream-python",
+                    "cdn_rules": [
+                        {
+                            "key_prefix": "v4/whl/",
+                            "url_prefix": "https://cdn.example.com/wheels/",
+                        }
+                    ],
+                }
+            ],
+            "release_buckets": {"nightly": {"python": "downstream-python"}},
+        }
+        with self.use_registry(registry):
+            self.assertEqual(
+                get_release_index_url("nightly"),
+                "https://cdn.example.com/wheels/",
+            )
+            # Unredirected slots keep the built-in URL.
+            self.assertEqual(get_release_index_url("dev"), self.EXPECTED_WHL["dev"])
+
+    def test_registry_file_can_redirect_the_release_channel(self):
+        """ "release" is redirectable even though it cannot be published to.
+
+        The registry accepts the install-from set, not the narrower publish-to
+        set. Validating it against the latter would leave get_release_index_url
+        reading a slot no file could ever fill.
+        """
+        registry = {
+            "version": 1,
+            "buckets": [
+                {
+                    "name": "downstream-release-tarball",
+                    "cdn_rules": [
+                        {
+                            "key_prefix": "v4/tarball/",
+                            "url_prefix": "https://cdn.example.com/tarballs/",
+                        }
+                    ],
+                }
+            ],
+            "release_buckets": {"release": {"tarball": "downstream-release-tarball"}},
+        }
+        with self.use_registry(registry):
+            self.assertEqual(
+                get_release_index_url("release", "tarball"),
+                "https://cdn.example.com/tarballs/",
+            )
 
 
 # ---------------------------------------------------------------------------
