@@ -354,11 +354,12 @@ def run_smoke_test(
             staged_root = install_via_staging(deb_path, work_dir / "staging")
             install_root = discover_install_root_staging(staged_root)
             print(
-                f"[INFO] FALLBACK: using dpkg-deb -x staging install at {install_root} "
-                "(no root/sudo available here). Uses the real .deb payload but does not "
-                "touch the system install prefix; a real `dpkg -i` (used in CI) "
-                "additionally exercises postinst scripts and apt dependency resolution, "
-                "which this fallback does not."
+                f"[INFO] FALLBACK: using dpkg-deb -x staging install at {install_root}. "
+                "See the `[INFO]` lines above for why `dpkg -i` was not used here. Uses "
+                "the real .deb payload but does not touch the system install prefix; a "
+                "real `dpkg -i` (this file is not invoked by any CI workflow; see the "
+                "module docstring) additionally exercises postinst scripts and apt "
+                "dependency resolution, which this fallback does not."
             )
 
         _cross_check_install_prefix(install_root, install_prefix)

@@ -1338,16 +1338,16 @@ gpgcheck=0
                 print(f" [FAIL] profiler-hub consumer failed to run: {e}\n{output}")
                 return False
 
-        if "profiler-hub storage version" not in result.stdout:
+            if "profiler-hub storage version" not in result.stdout:
+                print(
+                    " [FAIL] profiler-hub consumer ran but did not print expected "
+                    f"output: {result.stdout!r}"
+                )
+                return False
             print(
-                " [FAIL] profiler-hub consumer ran but did not print expected "
-                f"output: {result.stdout!r}"
+                f" [PASS] profiler-hub consumer built, linked, and ran: {result.stdout.strip()}"
             )
-            return False
-        print(
-            f" [PASS] profiler-hub consumer built, linked, and ran: {result.stdout.strip()}"
-        )
-        return True
+            return True
 
     def run_full_verification(self) -> bool:
         """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
