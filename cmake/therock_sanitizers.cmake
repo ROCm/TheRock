@@ -47,6 +47,20 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
     string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer -g\")\n")
 
+    # HOST_ASAN is host-only, but -fsanitize=address lands in the global
+    # CMAKE_CXX_FLAGS_INIT and so also reaches the HIP device compile. Clang
+    # requires xnack+ for device ASAN and drops the flag with -Woption-ignored,
+    # which is fatal in subprojects built with -Werror (e.g. MIOpen).
+    # Dropping the flag is the intended behavior here, so silence the warning.
+    # https://github.com/ROCm/TheRock/issues/6207
+    #
+    # This is a stopgap. The better fix is to keep the flag off the device
+    # compile entirely via -Xarch_host; see #7164. Revert this when that lands.
+    if(_sanitizer STREQUAL "HOST_ASAN")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Wno-option-ignored\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Wno-option-ignored\")\n")
+    endif()
+
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
