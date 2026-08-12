@@ -384,8 +384,10 @@ def _run_kpack_split(
             "nlohmann-json",
             # rocshmem only provides a static library.
             "rocshmem",
-            # hipthreads only provides a static library.
-            "hipthreads",
+            # hipthreads is disabled for current ROCm release and will be
+            # reintroduced in one of the later releases (TheRock#7292). It only
+            # provides a static library.
+            # "hipthreads",
             # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",
