@@ -8,19 +8,33 @@ Provides a consistent logging API across all Python scripts with:
 
 Usage::
 
-    from _therock_utils.log_utils import configure_logging, get_logger, capture_console
+    from _therock_utils.log_utils import configure_logging, TheRockLogger, capture_console
 
     # One-time setup in main()
     configure_logging(verbose=args.verbose)
 
-    # Get logger for module
-    logger = get_logger(__name__)
+    # Create logger for module
+    logger = TheRockLogger(__name__)
+
+    # Standard Python logging
+    logger.debug("Debug details")
     logger.info("Processing artifacts")
+    logger.warning("Something unexpected")
+    logger.error("Operation failed")
+
+    # GitHub Actions annotations (only emitted when running in CI)
+    logger.warning("Build warning", github=True)
+    logger.error("Build failed", github=True, file="build.py", line=42)
 
     # Capture all output to file
     with capture_console("build.log"):
         logger.info("Building...")
         subprocess.run(["cmake", ".."])  # Also captured
+
+    # Collapsible groups in GitHub Actions logs
+    with github_group("Building ROCm"):
+        logger.info("Step 1...")
+        logger.info("Step 2...")
 """
 
 import io
@@ -163,7 +177,7 @@ def configure_logging(
     _configured = True
 
 
-def get_logger(name: str) -> logging.Logger:
+def _get_logger(name: str) -> logging.Logger:
     """Get a configured logger instance.
 
     Args:
@@ -211,7 +225,7 @@ def vlog(message: str, *args, level: int = 0, **kwargs) -> None:
         *args, **kwargs: Passed to logger.debug().
     """
     if _verbosity >= level:
-        logger = get_logger("therock")
+        logger = _get_logger("therock")
         logger.debug(message, *args, **kwargs)
 
 
@@ -493,7 +507,7 @@ def capture_console(
 
     # Check nesting depth (thread-safe via thread-local storage)
     if _get_capture_depth() >= _MAX_CAPTURE_DEPTH:
-        log = get_logger(__name__)
+        log = _get_logger(__name__)
         log.warning(
             f"capture_console: max nesting depth ({_MAX_CAPTURE_DEPTH}) reached, "
             f"skipping capture to {log_path}"
@@ -655,50 +669,122 @@ def github_group(title: str) -> Iterator[None]:
             print("::endgroup::", flush=True)
 
 
-def github_warning(
-    message: str, *, file: str | None = None, line: int | None = None
+def _log(
+    level: str,
+    message: str,
+    *,
+    name: str = "therock",
+    github: bool = False,
+    file: str | None = None,
+    line: int | None = None,
 ) -> None:
-    """Emit a warning annotation in GitHub Actions.
+    """Internal unified logging for both Python logging and GitHub Actions annotations.
 
     Args:
-        message: Warning message.
-        file: Optional file path to annotate.
-        line: Optional line number.
+        level: Log level ("debug", "info", "warning", "error").
+        message: Log message.
+        name: Logger name (default "therock"). Use __name__ for per-module logging.
+        github: If True, emit GitHub Actions annotation instead of Python log.
+        file: Optional file path for GitHub annotation.
+        line: Optional line number for GitHub annotation.
+
+    Examples::
+
+        # Default - Python logging style
+        log("warning", f"Failed to build {pkg_name}")
+        # -> [WARNING ]: Failed to build amdrocm-fft
+
+        # Per-module logger
+        log("info", "Processing...", name=__name__)
+        # -> [INFO    ] mymodule: Processing...
+
+        # With github=True - GitHub Actions annotation
+        log("warning", f"Failed to build {pkg_name}", github=True)
+        # -> ::warning::Failed to build amdrocm-fft
     """
-    if not is_ci():
-        return
+    if github:
+        if not is_ci():
+            return
 
-    params = []
-    if file:
-        params.append(f"file={file}")
-    if line:
-        params.append(f"line={line}")
+        params = []
+        if file:
+            params.append(f"file={file}")
+        if line:
+            params.append(f"line={line}")
 
-    param_str = " " + ",".join(params) if params else ""
-    print(f"::warning{param_str}::{message}", flush=True)
+        param_str = " " + ",".join(params) if params else ""
+        print(f"::{level}{param_str}::{message}", flush=True)
+    else:
+        logger = _get_logger(name)
+        log_func = getattr(logger, level.lower(), logger.info)
+        log_func(message)
 
 
-def github_error(
-    message: str, *, file: str | None = None, line: int | None = None
-) -> None:
-    """Emit an error annotation in GitHub Actions.
+class TheRockLogger:
+    """TheRock logger with familiar logger.info() style API.
 
-    Args:
-        message: Error message.
-        file: Optional file path to annotate.
-        line: Optional line number.
+    Wraps the unified log() function to provide the standard Python logging
+    interface while supporting GitHub annotations.
+
+    Example::
+
+        logger = TheRockLogger(__name__)
+        logger.info("Processing...")
+        logger.warning("Something odd")
+        logger.error("Failed!", github=True)  # GitHub annotation
     """
-    if not is_ci():
-        return
 
-    params = []
-    if file:
-        params.append(f"file={file}")
-    if line:
-        params.append(f"line={line}")
+    def __init__(self, name: str = "therock"):
+        """Initialize logger with a name.
 
-    param_str = " " + ",".join(params) if params else ""
-    print(f"::error{param_str}::{message}", flush=True)
+        Args:
+            name: Logger name (typically __name__ for per-module logging).
+        """
+        self.name = name
+
+    def debug(
+        self,
+        message: str,
+        *,
+        github: bool = False,
+        file: str | None = None,
+        line: int | None = None,
+    ) -> None:
+        """Log a debug message."""
+        _log("debug", message, name=self.name, github=github, file=file, line=line)
+
+    def info(
+        self,
+        message: str,
+        *,
+        github: bool = False,
+        file: str | None = None,
+        line: int | None = None,
+    ) -> None:
+        """Log an info message."""
+        _log("info", message, name=self.name, github=github, file=file, line=line)
+
+    def warning(
+        self,
+        message: str,
+        *,
+        github: bool = False,
+        file: str | None = None,
+        line: int | None = None,
+    ) -> None:
+        """Log a warning message."""
+        _log("warning", message, name=self.name, github=github, file=file, line=line)
+
+    def error(
+        self,
+        message: str,
+        *,
+        github: bool = False,
+        file: str | None = None,
+        line: int | None = None,
+    ) -> None:
+        """Log an error message."""
+        _log("error", message, name=self.name, github=github, file=file, line=line)
 
 
 # ---------------------------------------------------------------------------

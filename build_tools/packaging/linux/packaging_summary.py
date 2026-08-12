@@ -4,10 +4,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from packaging_utils import *
-from _therock_utils.log_utils import get_logger
+from _therock_utils.log_utils import TheRockLogger
 from typing import List
 
-logger = get_logger(__name__)
+logger = TheRockLogger(__name__)
 
 
 @dataclass

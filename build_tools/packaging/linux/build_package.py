@@ -44,7 +44,7 @@ from runpath_to_rpath import *
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.log_utils import (
     configure_logging,
-    get_logger,
+    TheRockLogger,
     capture_console,
     github_group,
 )
@@ -52,7 +52,7 @@ from _therock_utils.log_utils import (
 from deb_package import *
 from rpm_package import *
 
-logger = get_logger(__name__)
+logger = TheRockLogger(__name__)
 
 
 # Default install prefix

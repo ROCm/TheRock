@@ -20,9 +20,9 @@ BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
 if str(BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(BUILD_TOOLS_DIR))
 
-from _therock_utils.log_utils import get_logger
+from _therock_utils.log_utils import TheRockLogger
 
-logger = get_logger(__name__)
+logger = TheRockLogger(__name__)
 
 # Constants
 # Used for creating host package in kpack mode (contains generic content)

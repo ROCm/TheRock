@@ -8,6 +8,18 @@ Tests cover:
 - Configurable verbosity levels
 - File output configuration
 - Subprocess output capture (cross-platform: Linux and Windows)
+- TheRockLogger class with GitHub annotation support
+
+Run tests::
+
+    # From TheRock root directory
+    python -m pytest build_tools/tests/log_utils_test.py -v
+
+    # Run specific test class
+    python -m pytest build_tools/tests/log_utils_test.py::TheRockLoggerTest -v
+
+    # Run with unittest
+    python -m unittest build_tools.tests.log_utils_test
 """
 
 import io
@@ -23,10 +35,12 @@ from unittest import mock
 from _therock_utils.log_utils import (
     ENV_LOG_ENABLED,
     ENV_LOG_LEVEL,
+    ENV_GITHUB_ACTIONS,
     capture_console,
     configure_logging,
     disable_logger,
     set_verbosity,
+    TheRockLogger,
     vlog,
 )
 
@@ -243,6 +257,63 @@ class CaptureConsoleTest(unittest.TestCase):
             self.assertIn("Python output", content)
             self.assertIn("subprocess stdout", content)
             self.assertIn("subprocess stderr", content)
+
+
+class TheRockLoggerTest(unittest.TestCase):
+    """Tests for TheRockLogger class."""
+
+    def setUp(self):
+        root = logging.getLogger()
+        root.handlers.clear()
+        logging.disable(logging.NOTSET)
+
+        self.stream = io.StringIO()
+        configure_logging(stream=self.stream)
+
+        self._env_backup = os.environ.get(ENV_GITHUB_ACTIONS)
+        os.environ.pop(ENV_GITHUB_ACTIONS, None)
+
+    def tearDown(self):
+        logging.disable(logging.NOTSET)
+        if self._env_backup is not None:
+            os.environ[ENV_GITHUB_ACTIONS] = self._env_backup
+        else:
+            os.environ.pop(ENV_GITHUB_ACTIONS, None)
+
+    def test_logger_methods(self):
+        """TheRockLogger provides info/warning/error methods."""
+        logger = TheRockLogger("test_module")
+
+        logger.info("info message")
+        logger.warning("warning message")
+        logger.error("error message")
+
+        output = self.stream.getvalue()
+        self.assertIn("info message", output)
+        self.assertIn("warning message", output)
+        self.assertIn("error message", output)
+
+    def test_logger_with_github_annotation(self):
+        """TheRockLogger supports github=True for annotations."""
+        os.environ[ENV_GITHUB_ACTIONS] = "true"
+        logger = TheRockLogger("test_module")
+
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            logger.warning("GitHub warning", github=True)
+            logger.error("GitHub error", github=True, file="test.py", line=5)
+
+            output = mock_stdout.getvalue()
+            self.assertIn("::warning::GitHub warning", output)
+            self.assertIn("::error file=test.py,line=5::GitHub error", output)
+
+    def test_logger_github_skipped_when_not_ci(self):
+        """TheRockLogger skips GitHub annotation when not in CI."""
+        os.environ.pop(ENV_GITHUB_ACTIONS, None)
+        logger = TheRockLogger("test_module")
+
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            logger.warning("should not appear", github=True)
+            self.assertEqual(mock_stdout.getvalue(), "")
 
 
 if __name__ == "__main__":

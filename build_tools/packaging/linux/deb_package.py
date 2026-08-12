@@ -17,9 +17,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
-from _therock_utils.log_utils import get_logger
+from _therock_utils.log_utils import TheRockLogger
 
-logger = get_logger(__name__)
+logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
