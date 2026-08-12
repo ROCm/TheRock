@@ -1701,6 +1701,315 @@ class TestConfigurePipeline(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Focused presubmit: narrowed build scope and ASAN as an automatic gate
+# ---------------------------------------------------------------------------
+
+
+class TestBuildStagesAllowlist(unittest.TestCase):
+    """A build_stages allowlist drops every other stage from the build graph."""
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_empty_allowlist_skips_nothing(self):
+        """The default (no allowlist) leaves every stage in the graph."""
+        result = cm.decide_jobs(
+            self._inputs(),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_rocm.skipped_stages, [])
+
+    def test_allowlist_skips_complement(self):
+        """Stages outside the allowlist are skipped; those inside are not."""
+        result = cm.decide_jobs(
+            self._inputs(build_stages=["compiler-runtime", "runtime-tests"]),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        skipped = result.build_rocm.skipped_stages
+        self.assertIn("math-libs", skipped)
+        self.assertNotIn("compiler-runtime", skipped)
+        self.assertNotIn("runtime-tests", skipped)
+
+    def test_allowlist_covers_every_other_known_stage(self):
+        """Nothing outside the allowlist survives, including stages added later."""
+        allowed = ["compiler-runtime", "runtime-tests"]
+        result = cm.decide_jobs(
+            self._inputs(build_stages=allowed),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        expected = set(cm._get_all_build_stages()) - set(allowed)
+        self.assertEqual(set(result.build_rocm.skipped_stages), expected)
+
+    def test_unknown_stage_raises(self):
+        """A typo in build_stages fails loudly instead of building everything."""
+        with self.assertRaises(ValueError) as ctx:
+            cm.decide_jobs(
+                self._inputs(build_stages=["compiler-runtime", "not-a-stage"]),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+        self.assertIn("not-a-stage", str(ctx.exception))
+
+    def test_skip_wins_over_stage_reuse(self):
+        """A skipped stage is never downgraded to a prebuilt artifact copy."""
+        result = cm.decide_jobs(
+            self._inputs(
+                build_stages=["compiler-runtime", "runtime-tests"],
+                prebuilt_stages="math-libs",
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertIn("math-libs", result.build_rocm.skipped_stages)
+        self.assertNotIn("math-libs", result.build_rocm.prebuilt_stages)
+
+    def test_skip_stages_serialized_for_workflow(self):
+        """skip_stages reaches the workflow payload as a comma-separated string."""
+        outputs = cm.configure(
+            self._inputs(
+                event_name="push",
+                commit_ref="main",
+                build_stages=["compiler-runtime", "runtime-tests"],
+            ),
+            cm.GitContext.empty(),
+        )
+        payload = outputs.builds.linux.to_dict()
+        self.assertIn("math-libs", payload["skip_stages"].split(","))
+        self.assertNotIn("compiler-runtime", payload["skip_stages"].split(","))
+
+
+class TestAsanPresubmit(unittest.TestCase):
+    """ASAN runs automatically, with test runners, when asan_presubmit is set."""
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="asan",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_pr_runs_without_any_label(self):
+        """No ci:asan / ci:host-asan label is needed to start the run."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(
+            cm.should_skip_ci(self._inputs(asan_presubmit=True, pr_labels=[]), git)
+        )
+
+    def test_pr_still_gated_by_label_without_the_flag(self):
+        """Existing callers keep the opt-in label gate."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(self._inputs(pr_labels=[]), git))
+
+    def test_tests_run_on_pr(self):
+        """ASAN tests are no longer deferred to nightly triggers."""
+        result = cm.decide_jobs(
+            self._inputs(asan_presubmit=True),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_tests_still_skipped_on_pr_without_the_flag(self):
+        """Existing callers keep the nightly-only test behavior."""
+        result = cm.decide_jobs(
+            self._inputs(),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.action, cm.JobAction.SKIP)
+
+    def test_pr_gets_sandbox_runner(self):
+        """host-asan PRs are allocated an ASAN sandbox runner, not no runner."""
+        sandbox_runners = {
+            config["linux"]["test-runs-on-sandbox"]
+            for config in get_all_families_for_trigger_types(["presubmit"]).values()
+            if "linux" in config and "test-runs-on-sandbox" in config["linux"]
+        }
+        self.assertTrue(
+            sandbox_runners, "expected at least one family with an ASAN sandbox runner"
+        )
+
+        outputs = cm.configure(
+            self._inputs(asan_presubmit=True),
+            cm.GitContext.empty(),
+        )
+        self.assertIsNotNone(outputs.builds.linux)
+        assigned = {
+            info["test-runs-on"] for info in outputs.builds.linux.per_family_info
+        }
+        self.assertTrue(
+            assigned & sandbox_runners,
+            f"expected one of the sandbox runners {sandbox_runners}, got {assigned}",
+        )
+
+    def test_pr_has_no_runner_without_the_flag(self):
+        """Contrast: the same PR without the flag disables every test runner."""
+        outputs = cm.configure(
+            self._inputs(pr_labels=["ci:asan"]), cm.GitContext.empty()
+        )
+        self.assertIsNotNone(outputs.builds.linux)
+        for info in outputs.builds.linux.per_family_info:
+            self.assertEqual(info["test-runs-on"], "")
+
+    def test_nightly_behavior_is_unchanged(self):
+        """Full-ASAN schedule runs keep their existing sandbox allocation."""
+        without = cm.configure(
+            self._inputs(event_name="schedule"), cm.GitContext.empty()
+        )
+        with_flag = cm.configure(
+            self._inputs(event_name="schedule", asan_presubmit=True),
+            cm.GitContext.empty(),
+        )
+        self.assertEqual(
+            without.builds.linux.per_family_info,
+            with_flag.builds.linux.per_family_info,
+        )
+
+
+class TestLockTestLabels(unittest.TestCase):
+    """lock_test_labels keeps PR labels from widening a pinned test scope."""
+
+    def _from_environ(self, *, labels, extra_env):
+        return _run_from_environ(
+            "pull_request",
+            {"pull_request": {"labels": [{"name": name} for name in labels]}},
+            extra_env=extra_env,
+        )
+
+    def test_pr_labels_ignored_when_locked(self):
+        inputs = self._from_environ(
+            labels=["test:rocblas"],
+            extra_env={
+                "LINUX_TEST_LABELS": "test:hip-tests,test:rocrtst",
+                "LOCK_TEST_LABELS": "true",
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:hip-tests", "test:rocrtst"])
+        self.assertEqual(inputs.windows_test_labels, [])
+
+    def test_pr_labels_merged_by_default(self):
+        """Without the flag, PR test labels still extend the caller's list."""
+        inputs = self._from_environ(
+            labels=["test:rocblas"],
+            extra_env={"LINUX_TEST_LABELS": "test:hip-tests"},
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:hip-tests", "test:rocblas"])
+
+    def test_non_test_labels_are_untouched(self):
+        """Locking test labels does not discard other PR labels."""
+        inputs = self._from_environ(
+            labels=["test:rocblas", "ci:host-asan"],
+            extra_env={"LOCK_TEST_LABELS": "true"},
+        )
+        self.assertIn("ci:host-asan", inputs.pr_labels)
+        self.assertEqual(inputs.linux_test_labels, [])
+
+    def test_pr_label_does_not_escalate_test_type(self):
+        """A locked PR test label must not promote test_type to 'full' either."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["test:rocblas"],
+            lock_test_labels=True,
+        )
+        result = cm.decide_jobs(
+            inputs, git_context=cm.GitContext(), targets=cm.TargetSelection()
+        )
+        self.assertEqual(result.test_rocm.test_type, "quick")
+
+    def test_pr_label_escalates_test_type_by_default(self):
+        """Contrast: without the flag, a PR test label still means 'full'."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["test:rocblas"],
+        )
+        result = cm.decide_jobs(
+            inputs, git_context=cm.GitContext(), targets=cm.TargetSelection()
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+
+
+class TestFocusedPresubmitConfiguration(unittest.TestCase):
+    """End-to-end shape of the runtime-only host-ASAN presubmit (#7202)."""
+
+    def _configure(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="asan",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:rocrtst"],
+            lock_test_labels=True,
+            asan_presubmit=True,
+            build_python_packages=False,
+            build_pytorch=False,
+            build_jax=False,
+            build_native_linux=False,
+            validate_artifact_structure=False,
+        )
+        return cm.configure(inputs, cm.GitContext.empty())
+
+    def test_ci_is_enabled(self):
+        self.assertTrue(self._configure().is_ci_enabled)
+
+    def test_uses_host_asan_variant(self):
+        """pull_request maps the asan variant to host-asan."""
+        linux = self._configure().builds.linux
+        self.assertEqual(linux.build_variant_label, "host-asan")
+        self.assertEqual(linux.build_variant_cmake_preset, "linux-release-host-asan")
+
+    def test_build_scope_is_runtime_only(self):
+        linux = self._configure().builds.linux
+        self.assertIn("math-libs", linux.skip_stages)
+        self.assertNotIn("compiler-runtime", linux.skip_stages)
+        self.assertNotIn("runtime-tests", linux.skip_stages)
+
+    def test_post_processing_is_skipped(self):
+        linux = self._configure().builds.linux
+        self.assertFalse(linux.validate_artifact_structure)
+        self.assertFalse(linux.build_native_linux)
+        self.assertFalse(linux.build_python_packages)
+        self.assertFalse(linux.build_pytorch)
+        self.assertFalse(linux.build_jax)
+
+    def test_test_scope_is_the_two_runtime_components(self):
+        outputs = self._configure()
+        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:rocrtst"])
+
+    def test_tests_are_scheduled(self):
+        outputs = self._configure()
+        self.assertEqual(outputs.jobs.test_rocm.action, cm.JobAction.RUN)
+        self.assertTrue(
+            any(info["test-runs-on"] for info in outputs.builds.linux.per_family_info),
+            "expected at least one family to have a test runner",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
 # ---------------------------------------------------------------------------
 

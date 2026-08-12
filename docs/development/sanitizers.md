@@ -23,6 +23,47 @@ In order to simplify use, the following presets are available for setting up spe
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
+## ASAN in CI
+
+`setup_multi_arch.yml` takes `build_variant: asan` and picks the effective variant from the trigger: `push` and `pull_request` build `host-asan`, while `schedule` and `workflow_dispatch` build full `asan`. A PR can pin the choice with the `ci:asan` or `ci:host-asan` label.
+
+By default an ASAN pull request is skipped unless one of those labels is present, and ASAN tests run only on nightly triggers. That keeps a full ASAN build off of every PR, but it also means the default configuration produces no presubmit sanitizer signal.
+
+### Focused host-ASAN presubmit
+
+A caller that narrows the build enough to afford running on every PR can turn ASAN into an automatic gate. The relevant `setup_multi_arch.yml` inputs are:
+
+| Input                         | Effect                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| `build_stages`                | Allowlist of build stages; every other stage is dropped from the graph entirely.        |
+| `asan_presubmit`              | Runs ASAN without an opt-in label and allocates sandbox test runners on `pull_request`. |
+| `lock_test_labels`            | PR `test:*` labels no longer extend the caller's test scope or escalate the test level. |
+| `validate_artifact_structure` | Set to `false` for partial builds, which do not produce a complete artifact tree.       |
+| `build_native_linux`          | Set to `false` to skip deb/rpm builds and their install tests.                          |
+
+A runtime-only host-ASAN presubmit combines them with the existing `build_python_packages`, `build_pytorch`, and `build_jax` switches:
+
+```yaml
+jobs:
+  setup:
+    uses: ROCm/TheRock/.github/workflows/setup_multi_arch.yml@main
+    with:
+      build_variant: "asan"
+      build_stages: "compiler-runtime,runtime-tests"
+      linux_test_labels: "test:hip-tests,test:rocrtst"
+      asan_presubmit: true
+      lock_test_labels: true
+      validate_artifact_structure: false
+      build_native_linux: false
+      build_python_packages: false
+      build_pytorch: false
+      build_jax: false
+```
+
+All of these default to preserving existing behavior, so nightly and manual-dispatch ASAN runs and every other caller are unaffected.
+
+Note that `build_stages` differs from `prebuilt_stages`: a prebuilt stage still contributes artifacts, copied from a baseline run, whereas a stage outside `build_stages` is not built and has no artifacts at all. Only request test components that the selected stages actually produce.
+
 ## Sanitizer Aware Project Development
 
 ### GFX Target Munging (ASAN only)

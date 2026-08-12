@@ -122,6 +122,41 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _parse_bool_env(name: str, default: bool) -> bool:
+    """Read a boolean workflow input from the environment.
+
+    GitHub Actions renders `type: boolean` inputs as the strings "true"/"false",
+    and an unset or empty value means the caller did not pass the input.
+    """
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw == "true"
+
+
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -145,7 +180,23 @@ class CIInputs:
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
+    build_native_linux: bool = True
+    validate_artifact_structure: bool = True
     python_versions: list[str] = field(default_factory=list)
+
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
+
+    # When set, PR 'test:*' labels do not extend the caller-supplied test
+    # labels. Callers that pin an exact test scope use this so a label cannot
+    # widen the matrix beyond what the build produced.
+    lock_test_labels: bool = False
+
+    # When set, ASAN builds and tests are a first-class presubmit gate: no
+    # 'ci:asan'/'ci:host-asan' label is needed to run, and sandbox test runners
+    # are allocated on push/pull_request instead of nightly triggers only.
+    asan_presubmit: bool = False
 
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
@@ -208,6 +259,12 @@ class CIInputs:
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        build_native_linux = _parse_bool_env("BUILD_NATIVE_LINUX", True)
+        validate_artifact_structure = _parse_bool_env(
+            "VALIDATE_ARTIFACT_STRUCTURE", True
+        )
+        lock_test_labels = _parse_bool_env("LOCK_TEST_LABELS", False)
+        asan_presubmit = _parse_bool_env("ASAN_PRESUBMIT", False)
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -237,7 +294,11 @@ class CIInputs:
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
+        # lock_test_labels drops source 2 so the caller's scope is authoritative.
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        if lock_test_labels and pr_test_labels:
+            print(f"  lock_test_labels set: ignoring PR test labels {pr_test_labels}")
+            pr_test_labels = []
         linux_test_labels = (
             _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
         )
@@ -256,7 +317,12 @@ class CIInputs:
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
+            build_native_linux=build_native_linux,
+            validate_artifact_structure=validate_artifact_structure,
             python_versions=[python_version] if python_version else [],
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
+            lock_test_labels=lock_test_labels,
+            asan_presubmit=asan_presubmit,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
@@ -453,6 +519,15 @@ class BuildRocmDecision(JobGroupDecision):
             if action == JobAction.RUN
         ]
 
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
+        ]
+
 
 @dataclass(frozen=True)
 class TestRocmDecision(JobGroupDecision):
@@ -523,6 +598,7 @@ class BuildConfig:
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
+    validate_artifact_structure: bool = True
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -530,6 +606,8 @@ class BuildConfig:
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
@@ -539,6 +617,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -610,6 +689,8 @@ def should_skip_ci(
     # This avoids running expensive ASAN builds on every PR.
     # Labels that enable ASAN CI:
     #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # Callers that set asan_presubmit have already narrowed the build to a
+    # cost that is acceptable on every PR, so the opt-in gate does not apply.
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -617,11 +698,15 @@ def should_skip_ci(
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and not has_asan_label
+        and not ci_inputs.asan_presubmit
     ):
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
+
+    if ci_inputs.asan_presubmit and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN configured as an automatic presubmit gate")
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
@@ -823,6 +908,10 @@ def _has_test_labels(ci_inputs: CIInputs) -> bool:
     ]
     if linux_tests or windows_tests:
         return True
+    if ci_inputs.lock_test_labels:
+        # PR test labels were already dropped from the caller's scope; they
+        # must not escalate test_type either.
+        return False
     return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
 
@@ -917,6 +1006,17 @@ def decide_jobs(
         for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
             stage_decisions[stage] = JobAction.PREBUILT
 
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
+
     # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
     # which stages WOULD be reused and apply nothing; in "reuse-stage" the
     # eligible stages are merged into stage_decisions so the orchestrator skips
@@ -962,7 +1062,7 @@ def decide_jobs(
 
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
+    if ci_inputs.build_variant == "asan" and not ci_inputs.asan_presubmit:
         # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
         if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
             test_rocm = TestRocmDecision(
@@ -1063,42 +1163,29 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan":
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+        if build_variant in ("asan", "host-asan"):
+            # ASAN tests normally run on nightly triggers only, because ASAN
+            # sandbox runner capacity is limited. Callers that set
+            # asan_presubmit have narrowed the build enough to make the
+            # sandbox affordable on every push/pull_request as well.
+            nightly_trigger = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
+            if not (nightly_trigger or ci_inputs.asan_presubmit):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif build_variant == "host-asan":
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: {build_variant} tests skipped for "
+                    f"non-nightly trigger, disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                    f"  {family_name}: using {build_variant} sandbox runner: "
+                    f"{test_runs_on}"
                 )
             else:
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: no {build_variant} sandbox runner "
+                    f"available, disabling tests"
                 )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
@@ -1203,15 +1290,17 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=True,
+        build_native_linux=ci_inputs.build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
+        validate_artifact_structure=ci_inputs.validate_artifact_structure,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
     )

@@ -103,6 +103,7 @@ jobs:
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -116,7 +117,7 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).validate_artifact_structure == true }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     secrets: inherit
     with:

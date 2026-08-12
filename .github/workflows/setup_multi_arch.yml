@@ -40,6 +40,14 @@ on:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
         default: ""
+      build_stages:
+        description: >-
+          Comma-separated allowlist of build stages to run, e.g.
+          "compiler-runtime,runtime-tests". Every other stage is skipped
+          outright, with nothing built and no artifacts copied. Empty (the
+          default) builds every stage.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
@@ -71,6 +79,31 @@ on:
         default: true
       build_jax:
         description: "Build JAX wheels."
+        type: boolean
+        default: false
+      build_native_linux:
+        description: "Build native Linux packages (deb/rpm) and run their install tests."
+        type: boolean
+        default: true
+      validate_artifact_structure:
+        description: >-
+          Run the artifact-structure validation job. Callers that build only a
+          subset of stages should disable this, since it expects a complete
+          artifact tree.
+        type: boolean
+        default: true
+      lock_test_labels:
+        description: >-
+          Treat the caller's test labels as the complete test scope: PR 'test:*'
+          labels are ignored instead of extending the matrix.
+        type: boolean
+        default: false
+      asan_presubmit:
+        description: >-
+          Run ASAN as an automatic presubmit gate. No 'ci:asan'/'ci:host-asan'
+          label is required, and ASAN sandbox test runners are allocated on
+          push/pull_request instead of nightly triggers only. Intended for
+          callers that also narrow the build via build_stages.
         type: boolean
         default: false
       python_version:
@@ -197,12 +230,17 @@ jobs:
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
+          BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          VALIDATE_ARTIFACT_STRUCTURE: ${{ inputs.validate_artifact_structure }}
+          LOCK_TEST_LABELS: ${{ inputs.lock_test_labels }}
+          ASAN_PRESUBMIT: ${{ inputs.asan_presubmit }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
