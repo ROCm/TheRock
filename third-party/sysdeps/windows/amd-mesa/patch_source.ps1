@@ -8,7 +8,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$LibvaMesonBuild = "$SourceDir/subprojects/libva-2.22.0/va/meson.build"
+# Detect the libva subproject directory without hardcoding the version number.
+$LibvaSubprojectDir = Get-ChildItem -Path "$SourceDir/subprojects" -Directory -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match '^libva-[0-9]' } | Select-Object -First 1
+if (-not $LibvaSubprojectDir) {
+  Write-Error "Could not find libva subproject directory under $SourceDir/subprojects/ - was libva extracted by meson setup?"
+  exit 1
+}
+
+$LibvaMesonBuild = "$($LibvaSubprojectDir.FullName)/va/meson.build"
 
 Write-Host "Patching sources..."
 
