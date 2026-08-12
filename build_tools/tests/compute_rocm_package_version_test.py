@@ -17,6 +17,47 @@ import compute_rocm_package_version
 
 
 class DetermineVersionTest(unittest.TestCase):
+    def test_asan_version_uses_isolated_local_version(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="asan",
+            override_base_version="10.1.0",
+            asan_build_id="20260807",
+        )
+        self.assertEqual(version, "10.1.0+asan.20260807")
+
+    def test_asan_build_id_is_normalized(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="asan",
+            override_base_version="10.1.0",
+            asan_build_id="RUN_31-137",
+        )
+        self.assertEqual(version, "10.1.0+asan.run.31.137")
+
+    def test_asan_build_id_rejects_non_local_version_characters(self):
+        with self.assertRaisesRegex(ValueError, "ASAN build ID"):
+            compute_rocm_package_version.compute_version(
+                release_type="asan",
+                override_base_version="10.1.0",
+                asan_build_id="../../release",
+            )
+
+    def test_asan_version_is_wheel_only(self):
+        with self.assertRaisesRegex(ValueError, "only supported for wheels"):
+            compute_rocm_package_version.compute_version(
+                package_type="deb",
+                release_type="asan",
+                override_base_version="10.1.0",
+                asan_build_id="20260807",
+            )
+
+    def test_asan_build_id_requires_asan_release_type(self):
+        with self.assertRaisesRegex(ValueError, "requires release_type='asan'"):
+            compute_rocm_package_version.compute_version(
+                release_type="nightly",
+                override_base_version="10.1.0",
+                asan_build_id="20260807",
+            )
+
     def test_ci_version_uses_dev_version_shape(self):
         version = compute_rocm_package_version.compute_version(
             release_type="ci",
@@ -388,6 +429,32 @@ class MainFunctionMultiplePackageTypesTest(unittest.TestCase):
             self.assertIn("rocm_rpm_package_version", captured_outputs)
         finally:
             compute_rocm_package_version.gha_set_output = original_gha_set_output
+
+    def test_asan_cli_emits_wheel_output_only(self):
+        captured_outputs = {}
+        original_gha_set_output = compute_rocm_package_version.gha_set_output
+
+        def mock_gha_set_output(outputs):
+            captured_outputs.update(outputs)
+
+        compute_rocm_package_version.gha_set_output = mock_gha_set_output
+        try:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "asan",
+                    "--asan-build-id",
+                    "20260807",
+                    "--override-base-version",
+                    "10.1.0",
+                ]
+            )
+        finally:
+            compute_rocm_package_version.gha_set_output = original_gha_set_output
+
+        self.assertEqual(
+            captured_outputs, {"rocm_package_version": "10.1.0+asan.20260807"}
+        )
 
 
 if __name__ == "__main__":

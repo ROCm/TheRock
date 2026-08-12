@@ -23,8 +23,14 @@ Example
 import argparse
 import functools
 import json
+import os
 from pathlib import Path
+from pathlib import PurePosixPath
+import re
 import sys
+
+from elftools.common.exceptions import ELFError
+from elftools.elf.elffile import ELFFile
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
@@ -64,6 +70,209 @@ def load_therock_manifest(artifact_dir: Path) -> dict:
             f"Is base_lib_generic present in {artifact_dir}?"
         )
     return json.loads(manifest_path.read_text())
+
+
+def _asan_build_id_from_manifest(manifest: dict) -> str | None:
+    """Derive a stable build ID from a nightly artifact manifest."""
+    package_version = manifest.get("rocm_package_version", "")
+    match = re.search(r"(?:a|rc)(\d{8,})$", package_version)
+    return match.group(1) if match else None
+
+
+def resolve_package_version(args: argparse.Namespace, manifest: dict) -> str:
+    """Resolve the package version, enforcing ASAN/release isolation."""
+    import compute_rocm_package_version
+
+    is_asan = getattr(args, "asan", False)
+    asan_build_id = getattr(args, "asan_build_id", None)
+    version = getattr(args, "version", "")
+
+    if asan_build_id and not is_asan:
+        raise ValueError("--asan-build-id requires --asan")
+
+    if not is_asan:
+        if version:
+            return version
+        print("::: Version not specified, choosing a default")
+        resolved = compute_rocm_package_version.compute_version(
+            custom_version_suffix=".dev0"
+        )
+        print(f"::: Version defaulting to {resolved}")
+        return resolved
+
+    base_version = manifest.get("rocm_version")
+    if not base_version:
+        raise ValueError(
+            "ASAN packaging requires rocm_version in therock_manifest.json"
+        )
+
+    if version:
+        expected = re.compile(
+            rf"^{re.escape(base_version)}\+asan\.[a-z0-9]+(?:\.[a-z0-9]+)*$"
+        )
+        if not expected.fullmatch(version):
+            raise ValueError(
+                "--asan requires a canonical ASAN wheel version matching "
+                f"{base_version}+asan.<build-id>; got {version!r}"
+            )
+        return version
+
+    if asan_build_id is None:
+        asan_build_id = _asan_build_id_from_manifest(manifest)
+    resolved = compute_rocm_package_version.compute_version(
+        release_type="asan",
+        override_base_version=base_version,
+        asan_build_id=asan_build_id,
+    )
+    print(f"::: ASAN wheel version defaulting to {resolved}")
+    return resolved
+
+
+def find_asan_runtime_rpath(artifacts: ArtifactCatalog) -> str:
+    """Find the Clang ASAN runtime directory in staged artifacts."""
+    runtime_dirs: set[str] = set()
+    for relpath, entry in artifacts.pm.matches():
+        relpath = PurePosixPath(relpath)
+        if entry.is_file() and relpath.match(
+            "lib/llvm/lib/clang/*/lib/linux/libclang_rt.asan-*.so"
+        ):
+            runtime_dirs.add(relpath.parent.as_posix())
+
+    if not runtime_dirs:
+        raise RuntimeError(
+            "--asan was requested but no shared Clang ASAN runtime was found "
+            "in the input artifacts"
+        )
+    if len(runtime_dirs) != 1:
+        raise RuntimeError(
+            "ASAN artifacts contain multiple Clang runtime directories: "
+            + ", ".join(sorted(runtime_dirs))
+        )
+    return runtime_dirs.pop()
+
+
+def _elf_dynamic_info(path: Path) -> tuple[list[str], list[str]] | None:
+    """Return an ELF's NEEDED entries and RPATH/RUNPATH entries."""
+    try:
+        with path.open("rb") as stream:
+            elf = ELFFile(stream)
+            dynamic = elf.get_section_by_name(".dynamic")
+            if dynamic is None:
+                return ([], [])
+            needed: list[str] = []
+            rpaths: list[str] = []
+            for tag in dynamic.iter_tags():
+                if tag.entry.d_tag == "DT_NEEDED":
+                    needed.append(tag.needed)
+                elif tag.entry.d_tag == "DT_RPATH":
+                    rpaths.extend(tag.rpath.split(":"))
+                elif tag.entry.d_tag == "DT_RUNPATH":
+                    rpaths.extend(tag.runpath.split(":"))
+            return needed, rpaths
+    except (ELFError, OSError, ValueError):
+        return None
+
+
+def _rpath_resolves_directory(
+    *,
+    binary_path: Path,
+    rpaths: list[str],
+    expected_dir: Path,
+    binary_platform_root: Path | None = None,
+    expected_platform_root: Path | None = None,
+) -> bool:
+    """Checks an ELF RPATH against its directory in the installed wheel set.
+
+    Package staging directories are isolated from each other, but the contents
+    of every package's ``platform/`` directory are merged into one
+    site-packages directory when the wheels are installed. When platform roots
+    are supplied, project both paths into that common layout before resolving
+    ``$ORIGIN``. Omitting them retains the direct filesystem check used for
+    paths that are already in a merged layout.
+    """
+    if (binary_platform_root is None) != (expected_platform_root is None):
+        raise ValueError(
+            "binary_platform_root and expected_platform_root must be supplied together"
+        )
+
+    if binary_platform_root is not None and expected_platform_root is not None:
+        install_root = Path("/site-packages")
+        try:
+            binary_path = install_root / binary_path.resolve().relative_to(
+                binary_platform_root.resolve()
+            )
+            expected_dir = install_root / expected_dir.resolve().relative_to(
+                expected_platform_root.resolve()
+            )
+        except ValueError:
+            return False
+
+    expected_dir = expected_dir.resolve()
+    for rpath in rpaths:
+        for origin_syntax in ("$ORIGIN", "${ORIGIN}"):
+            if not rpath.startswith(origin_syntax):
+                continue
+            relative = rpath[len(origin_syntax) :].lstrip("/")
+            candidate = Path(os.path.normpath(binary_path.parent / relative))
+            if candidate.resolve() == expected_dir:
+                return True
+    return False
+
+
+def validate_asan_runtime_resolution(
+    *,
+    core: PopulatedDistPackage,
+    packages: list[PopulatedDistPackage],
+    runtime_rpath: str,
+    require_instrumented: bool,
+) -> None:
+    """Validate that packaged ASAN-linked ELFs resolve the core runtime."""
+    runtime_dir = core.platform_dir / runtime_rpath
+    runtimes = sorted(runtime_dir.glob("libclang_rt.asan-*.so"))
+    if not runtimes:
+        raise RuntimeError(
+            f"ASAN runtime was not packaged in rocm-sdk-core at {runtime_dir}"
+        )
+
+    instrumented_count = 0
+    unresolved: list[Path] = []
+    for package in packages:
+        for _, path in package.files.materialized_relpaths.values():
+            if not path.is_file():
+                continue
+            dynamic_info = _elf_dynamic_info(path)
+            if dynamic_info is None:
+                continue
+            needed, rpaths = dynamic_info
+            if not any(name.startswith("libclang_rt.asan-") for name in needed):
+                continue
+            instrumented_count += 1
+            if not _rpath_resolves_directory(
+                binary_path=path,
+                rpaths=rpaths,
+                expected_dir=runtime_dir,
+                binary_platform_root=package.platform_dir.parent,
+                expected_platform_root=core.platform_dir.parent,
+            ):
+                unresolved.append(path)
+
+    if unresolved:
+        paths = "\n  ".join(str(path) for path in unresolved[:20])
+        extra = (
+            "" if len(unresolved) <= 20 else f"\n  ... ({len(unresolved) - 20} more)"
+        )
+        raise RuntimeError(
+            "ASAN-linked packaged ELFs cannot resolve the rocm-sdk-core "
+            f"runtime directory:\n  {paths}{extra}"
+        )
+    if require_instrumented and not instrumented_count:
+        raise RuntimeError(
+            "--asan was requested but no packaged ELF links the shared ASAN runtime"
+        )
+    print(
+        "::: ASAN RPATH validation passed: "
+        f"{instrumented_count} instrumented ELF(s), runtime {runtime_rpath}"
+    )
 
 
 def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
@@ -189,6 +398,7 @@ def validate_required_dist_packages(
 
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
+    args.version = resolve_package_version(args, manifest)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
     if kpack_split:
         print("::: Detected KPACK_SPLIT_ARTIFACTS — producing host + device wheels")
@@ -215,6 +425,11 @@ def run(args: argparse.Namespace):
         windows_targets = expand_families(args.windows_amdgpu_families, family_map)
 
     artifacts = ArtifactCatalog(args.artifact_dir)
+    asan_runtime_rpath = (
+        find_asan_runtime_rpath(artifacts) if getattr(args, "asan", False) else None
+    )
+    if asan_runtime_rpath:
+        print(f"::: ASAN runtime detected at {asan_runtime_rpath}")
     validate_kpack_split_target_completeness(
         kpack_split=kpack_split,
         artifact_dir=args.artifact_dir,
@@ -237,6 +452,8 @@ def run(args: argparse.Namespace):
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
     core.rpath_dep(core, "lib/rocm_sysdeps/lib")
+    if asan_runtime_rpath:
+        core.rpath_dep(core, asan_runtime_rpath)
     core.populate_runtime_files(
         params.filter_artifacts(
             core_artifact_filter,
@@ -266,6 +483,8 @@ def run(args: argparse.Namespace):
         profiler.rpath_dep(core, "lib")
         profiler.rpath_dep(core, "lib/llvm/lib")
         profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
+        if asan_runtime_rpath:
+            profiler.rpath_dep(core, asan_runtime_rpath)
         profiler.populate_runtime_files(profiler_artifacts)
         ensure_profiler_library_symlinks(profiler)
 
@@ -295,9 +514,9 @@ def run(args: argparse.Namespace):
         )
 
     if kpack_split:
-        _run_kpack_split(args, params, core)
+        _run_kpack_split(args, params, core, asan_runtime_rpath)
     else:
-        _run_legacy(args, params, core)
+        _run_legacy(args, params, core, asan_runtime_rpath)
 
     if args.build_packages:
         validate_required_dist_packages(
@@ -315,7 +534,10 @@ def run(args: argparse.Namespace):
 
 
 def _run_kpack_split(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    asan_runtime_rpath: str | None,
 ):
     """Kpack-split mode: arch-neutral host libraries + per-ISA device wheels."""
 
@@ -326,6 +548,8 @@ def _run_kpack_split(
     lib.rpath_dep(core, "lib/host-math/lib")
     # rpp needs libomp, which ships in core under lib/llvm/lib.
     lib.rpath_dep(core, "lib/llvm/lib")
+    if asan_runtime_rpath:
+        lib.rpath_dep(core, asan_runtime_rpath)
     lib.populate_runtime_files(
         params.filter_artifacts(
             filter=functools.partial(libraries_artifact_filter, "generic"),
@@ -335,6 +559,13 @@ def _run_kpack_split(
     # Build core + libraries wheels. The rocm, rocm-sdk-devel, and
     # rocm-sdk-device staging dirs do not exist yet, so the default scan
     # in build_packages will not accidentally include them.
+    if asan_runtime_rpath:
+        validate_asan_runtime_resolution(
+            core=core,
+            packages=list(params.populated_packages),
+            runtime_rpath=asan_runtime_rpath,
+            require_instrumented=True,
+        )
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
@@ -348,11 +579,20 @@ def _run_kpack_split(
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
         dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
+        if asan_runtime_rpath:
+            dev.rpath_dep(core, asan_runtime_rpath)
         dev.populate_device_files(
             params.filter_artifacts(
                 filter=functools.partial(device_artifact_filter, target),
             )
         )
+        if asan_runtime_rpath:
+            validate_asan_runtime_resolution(
+                core=core,
+                packages=[dev],
+                runtime_rpath=asan_runtime_rpath,
+                require_instrumented=False,
+            )
         if args.build_packages:
             build_packages(
                 args.dest_dir,
@@ -402,7 +642,10 @@ def _run_kpack_split(
 
 
 def _run_legacy(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    asan_runtime_rpath: str | None,
 ):
     """Legacy mode: per-family libraries wheels with embedded device code."""
 
@@ -416,6 +659,8 @@ def _run_legacy(
         lib.rpath_dep(core, "lib/host-math/lib")
         # rpp needs libomp, which ships in core under lib/llvm/lib.
         lib.rpath_dep(core, "lib/llvm/lib")
+        if asan_runtime_rpath:
+            lib.rpath_dep(core, asan_runtime_rpath)
         lib.populate_runtime_files(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
@@ -430,6 +675,13 @@ def _run_legacy(
     # Build non-devel, non-meta wheels first — the rocm and rocm-sdk-devel
     # staging dirs do not exist yet, so the default scan in build_packages
     # will not accidentally include them.
+    if asan_runtime_rpath:
+        validate_asan_runtime_resolution(
+            core=core,
+            packages=list(params.populated_packages),
+            runtime_rpath=asan_runtime_rpath,
+            require_instrumented=True,
+        )
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
@@ -647,6 +899,23 @@ def main(argv: list[str]):
         help="Package versions (defaults to an automatic dev version)",
     )
     p.add_argument(
+        "--asan",
+        default=False,
+        action="store_true",
+        help=(
+            "Build locally versioned ASAN wheels, require the shared Clang "
+            "ASAN runtime, and validate cross-wheel runtime RPATHs"
+        ),
+    )
+    p.add_argument(
+        "--asan-build-id",
+        default=None,
+        help=(
+            "Build identifier for --asan (defaults to the source artifact's "
+            "nightly date, then today's date)"
+        ),
+    )
+    p.add_argument(
         "--version-suffix",
         default="",
         help="Version suffix to append to package names on disk",
@@ -686,18 +955,6 @@ def main(argv: list[str]):
         ),
     )
     args = p.parse_args(argv)
-
-    if not args.version:
-        print(f"::: Version not specified, choosing a default")
-        import compute_rocm_package_version
-
-        # Generate a default version like `7.10.0.dev0`.
-        # This is a simple and predictable version, compared to using
-        # `release_type="dev"`, which appends the git commit hash.
-        args.version = compute_rocm_package_version.compute_version(
-            custom_version_suffix=".dev0"
-        )
-        print(f"::: Version defaulting to {args.version}")
 
     run(args)
 
