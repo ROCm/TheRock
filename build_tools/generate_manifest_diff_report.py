@@ -1558,7 +1558,7 @@ def handle_post_comment(args: argparse.Namespace) -> int:
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=PLATFORM
     )
-    report_url = output_root.log_file("manifest-diff", "index.html").https_url
+    report_url = output_root.log_file("manifest-diff", "TheRockReport.html").https_url
     body = _build_pr_comment_body(report_url, args.commit_range_summary)
 
     gha_update_pr_comment(

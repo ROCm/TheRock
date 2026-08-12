@@ -409,7 +409,9 @@ class HandlePostCommentTest(unittest.TestCase):
         self.assertEqual(call_kwargs["pr_number"], 1234)
         self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
         self.assertTrue(call_kwargs["body"].startswith(PR_COMMENT_MARKER))
-        self.assertIn("99999-linux/logs/manifest-diff/index.html", call_kwargs["body"])
+        self.assertIn(
+            "99999-linux/logs/manifest-diff/TheRockReport.html", call_kwargs["body"]
+        )
 
     def test_omits_summary_line_when_blank(self):
         args = argparse.Namespace(
