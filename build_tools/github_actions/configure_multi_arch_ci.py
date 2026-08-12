@@ -945,13 +945,15 @@ def decide_jobs(
     baseline_repository = ci_inputs.baseline_repository
     baseline_run_id = ci_inputs.baseline_run_id
 
-    # Apply automatic stage reuse. For external repos (rocm-libraries, rocm-systems),
-    # we reuse stages from TheRock baselines. For same-repo runs, baseline_repository
-    # is empty or matches the current repo.
-    # reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+    # Automatic stage reuse is now handled per-platform in _expand_build_config_for_platform().
+    # Each platform gets its own prebuilt_stages list based on platform_applied.
+    # Manual prebuilt stages (from ci_inputs) are stored in stage_decisions and
+    # apply to all platforms. Automatic reuse baseline_run_id is used when any
+    # platform has stages to reuse.
+    has_any_platform_reuse = any(
+        stages for stages in auto_stage_reuse.platform_applied.values()
+    )
+    if has_any_platform_reuse and auto_stage_reuse.baseline_run_id:
         baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
@@ -1208,6 +1210,18 @@ def _expand_build_config_for_platform(
     is_asan = suffix == "asan"
     build_python_packages = ci_inputs.build_python_packages and not is_asan
 
+    # Compute per-platform prebuilt stages by combining:
+    # 1. Manual prebuilt stages from workflow input (apply to all platforms)
+    # 2. Automatic per-platform stages from auto_stage_reuse.platform_applied
+    prebuilt_stages = list(jobs.build_rocm.prebuilt_stages)
+    if jobs.auto_stage_reuse:
+        platform_auto_stages = jobs.auto_stage_reuse.platform_applied.get(platform, ())
+        for stage in platform_auto_stages:
+            if stage not in prebuilt_stages:
+                prebuilt_stages.append(stage)
+        if platform_auto_stages:
+            print(f"  {platform}: auto-reusing stages: {', '.join(platform_auto_stages)}")
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
@@ -1223,7 +1237,7 @@ def _expand_build_config_for_platform(
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
-        prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        prebuilt_stages=prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
     )

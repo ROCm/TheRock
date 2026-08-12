@@ -126,6 +126,9 @@ class AutoStageReuse:
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
     platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Per-platform applied stages (in reuse-stage mode). Empty in dry-run mode.
+    # Keys are platform names ("linux", "windows"), values are tuples of stage names.
+    platform_applied: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _target_families(
@@ -419,12 +422,14 @@ def compute_auto_stage_reuse(
         (url for url in platform_baseline_urls.values() if url), None
     )
 
-    # A stage is available only when present on EVERY platform being built.
+    # Compute available stages as union (available on ANY platform) for reporting.
+    # Per-platform availability is tracked separately in platform_available and
+    # platform_applied for downstream consumers that need per-platform decisions.
     available: list[str] = []
     unavailable: list[str] = []
 
     for stage_name in candidates:
-        if all(
+        if any(
             stage_name in per_platform_available.get(platform, ())
             for platform in platforms
         ):
@@ -434,7 +439,31 @@ def compute_auto_stage_reuse(
 
     available_t = tuple(available)
     unavailable_t = tuple(unavailable)
-    applied = available_t if mode is StageReuseMode.REUSE_STAGE else ()
+
+    # Compute per-platform applied stages. Each platform can reuse stages
+    # independently, even if the other platform doesn't have them available.
+    platform_applied: dict[str, tuple[str, ...]] = {}
+    if mode is StageReuseMode.REUSE_STAGE:
+        for platform in platforms:
+            platform_stages = per_platform_available.get(platform, ())
+            # Only include stages that are candidates (unaffected by changes)
+            applied_for_platform = tuple(
+                s for s in candidates if s in platform_stages
+            )
+            platform_applied[platform] = applied_for_platform
+
+    # For backwards compatibility, applied_reuse_stages is the intersection
+    # (stages available on ALL platforms). Consumers that need per-platform
+    # granularity should use platform_applied instead.
+    intersection_applied: list[str] = []
+    if mode is StageReuseMode.REUSE_STAGE:
+        for stage_name in candidates:
+            if all(
+                stage_name in per_platform_available.get(platform, ())
+                for platform in platforms
+            ):
+                intersection_applied.append(stage_name)
+    applied = tuple(intersection_applied)
 
     lines = _format_report(
         mode=mode,
@@ -463,6 +492,7 @@ def compute_auto_stage_reuse(
             reasons=plan.reasons,
             report_lines=lines,
             platform_available=per_platform_available,
+            platform_applied=platform_applied,
         )
     )
 
