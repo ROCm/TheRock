@@ -41,6 +41,13 @@ logging.basicConfig(level=logging.INFO)
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 
+# Maps a group label (the part after "test:") to the individual test matrix
+# keys it expands to. Use this when a single label should select multiple
+# related jobs without relying on name-prefix inference.
+TEST_LABEL_GROUPS: dict[str, list[str]] = {
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+}
+
 
 def _get_script_path(script_name: str) -> str:
     platform_path = SCRIPT_DIR / script_name
@@ -972,7 +979,12 @@ def run():
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
         parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
-        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
+        expanded_test_labels = [
+            member
+            for label in parsed_test_labels
+            for member in TEST_LABEL_GROUPS.get(label, [label])
+        ]
+        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 

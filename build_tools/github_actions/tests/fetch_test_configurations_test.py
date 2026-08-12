@@ -546,6 +546,69 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         hipblas = next(j for j in components if j["job_name"] == "hipblas")
         self.assertEqual(hipblas["test_runner"], "linux-gfx942-default")
 
+    # -----------------------
+    # TEST_LABEL_GROUPS expansion
+    # -----------------------
+
+    def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
+        """test:rocgdb should expand to both rocgdb-cpu and rocgdb-gpu."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+
+    def test_all_rocgdb_label_excludes_unrelated_jobs(self):
+        """test:rocgdb should not include jobs outside the rocgdb group."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("rocblas", names)
+        self.assertNotIn("hipblas", names)
+
+    def test_group_label_and_individual_label_combine(self):
+        """A group label and a plain label together should union their jobs."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb", "test:rocblas"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocblas", names)
+
+    def test_unknown_group_label_is_treated_as_literal(self):
+        """A test: label not in TEST_LABEL_GROUPS should fall through as a literal key."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocblas", names)
+        self.assertNotIn("rocgdb-cpu", names)
+        self.assertNotIn("rocgdb-gpu", names)
+
+    def test_group_label_and_individual_member_label_do_not_duplicate(self):
+        """Passing test:rocgdb alongside an explicit member label should not produce duplicate jobs."""
+        os.environ["TEST_LABELS"] = json.dumps(
+            ["test:rocgdb", "test:rocgdb-cpu", "test:rocgdb-gpu"]
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job_names = [job["job_name"] for job in components]
+        self.assertEqual(job_names.count("rocgdb-cpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-gpu"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
