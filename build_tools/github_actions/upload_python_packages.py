@@ -186,9 +186,12 @@ def write_gha_upload_summary(
               all per-target wheels
             - [...] non-empty: legacy per-family mode — per-family install links
     """
+    # These URLs go into the job summary for a human to click, so they use the
+    # CDN where the bucket has one. The machine-consumed find-links URL emitted
+    # by run() deliberately stays on the raw S3 URL.
     if families:
         # Legacy per-family multi-arch
-        base_url = packages_loc.https_url
+        base_url = packages_loc.public_url
         family_links = "\n".join(
             f"- [{family}]({base_url}/{family}/index.html)" for family in families
         )
@@ -206,7 +209,7 @@ Per-family indexes:
 """
     elif families is not None:
         # kpack-split flat build — single index covers all per-target wheels
-        index_url = f"{packages_loc.https_url}/index.html"
+        index_url = f"{packages_loc.public_url}/index.html"
         install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
 Replace `<YOUR_TARGET>` with your GPU target (e.g. `gfx942`, `gfx1201`):
 ```bash
@@ -216,7 +219,7 @@ pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_
 """
     else:
         # Single-arch: traditional index URL
-        index_url = f"{packages_loc.https_url}/index.html"
+        index_url = f"{packages_loc.public_url}/index.html"
         install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
 pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
@@ -270,6 +273,10 @@ def run(args: argparse.Namespace):
     upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
 
     if not args.output_dir:
+        # package_find_links_url is consumed by CI pip installs, not clicked by a
+        # human, so it stays on the raw S3 URL rather than .public_url: CI reads
+        # the backing bucket directly to avoid CloudFront data-transfer charges.
+        # See docs/development/s3_buckets.md ("Public URLs and CDN").
         if args.multiarch:
             # Detect flat (kpack-split) vs legacy per-family layout from dist/.
             # Dot-directories (e.g. .kpack_staging) are staging artifacts, not

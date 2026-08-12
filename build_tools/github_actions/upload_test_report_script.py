@@ -100,7 +100,7 @@ def run(args: argparse.Namespace):
     # is omitted or empty; otherwise legacy base_uri + log_destination (backward compat).
     log_dest = (args.log_destination or "").strip()
     if log_dest:
-        base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
+        base_uri = output_root.root().s3_uri
         dest_s3_uri = f"{base_uri.rstrip('/')}/{log_dest.lstrip('/')}"
     else:
         dest_s3_uri = output_root.log_dir(args.subfolder).s3_uri
@@ -108,7 +108,9 @@ def run(args: argparse.Namespace):
     create_index_file(args)
     upload_test_report(args.report_path, dest_s3_uri)
 
-    report_url = output_root.log_file(args.subfolder, args.index_file_name).https_url
+    # Job summary link for a human to click: resolve through the bucket's CDN
+    # when it has one.
+    report_url = output_root.log_file(args.subfolder, args.index_file_name).public_url
     gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 
