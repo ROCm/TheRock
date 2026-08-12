@@ -150,6 +150,8 @@ def generate_cmake_args(
     manylinux: bool = False,
     project_names: List[str] = None,
     build_dir: Path = None,
+    build_type: str = "RelWithDebInfo",
+    split_debug_info: bool = True,
 ) -> List[str]:
     """Generate CMake arguments for building a specific stage or projects."""
     args = []
@@ -204,6 +206,18 @@ def generate_cmake_args(
 
     for feature in sorted(features):
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
+
+    # Build type and debug info settings
+    if include_comments:
+        args.append("")
+        args.append("# Build type and debug info settings")
+    if build_type:
+        args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
+        # Keep amd-llvm (compiler) as Release for faster builds
+        if build_type != "Release":
+            args.append("-Damd-llvm_BUILD_TYPE=Release")
+    if split_debug_info:
+        args.append("-DTHEROCK_SPLIT_DEBUG_INFO=ON")
 
     return args
 
@@ -301,6 +315,20 @@ def main(argv: List[str] = None):
         help="Output comma-separated list of stages to skip based on --projects. "
         "Stages not needed to build the specified projects will be listed.",
     )
+    parser.add_argument(
+        "--build-type",
+        type=str,
+        default="RelWithDebInfo",
+        help="CMAKE_BUILD_TYPE value (default: RelWithDebInfo). "
+        "Note: amd-llvm is always built with Release for faster builds.",
+    )
+    parser.add_argument(
+        "--split-debug-info",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable THEROCK_SPLIT_DEBUG_INFO to produce separate .debug files "
+        "(default: enabled). Use --no-split-debug-info to disable.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -382,6 +410,8 @@ def main(argv: List[str] = None):
         manylinux=args.manylinux,
         project_names=args.projects,
         build_dir=args.build_dir,
+        build_type=args.build_type,
+        split_debug_info=args.split_debug_info,
     )
 
     # Filter out comments if not requested

@@ -60,7 +60,7 @@ import sys
 from pathlib import Path
 
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
-DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
+DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test", "dbg"]
 
 
 def log(msg: str) -> None:
