@@ -108,31 +108,31 @@ def _log_opencl_diagnostics(env):
     vendor = env.get("OCL_ICD_FILENAMES", "")
     root = THEROCK_BIN_DIR.parent
     logger.error(f"OCL_ICD_FILENAMES={vendor}")
-    # Which libOpenCL loader does clinfo actually bind (system ocl-icd vs bundled)?
     _diag("ldd clinfo", ["ldd", clinfo])
-    if vendor:
-        _diag("ldd vendor", ["ldd", vendor], env=env)
-    # Is a loader bundled in the install tree (picked up via clinfo RPATH)?
+    # Identify the loader behind libOpenCL.so.1 (ocl-icd vs Khronos).
     _diag(
-        "bundled libOpenCL",
-        ["bash", "-lc", f"find {root} -name 'libOpenCL.so*' 2>/dev/null"],
-    )
-    # System ICD registration in the container (expected empty on _ocl_rt).
-    _diag(
-        "system vendors dir",
+        "loader identity",
         [
             "bash",
             "-lc",
-            "ls -la /etc/OpenCL/vendors 2>&1; cat /etc/OpenCL/vendors/*.icd 2>/dev/null",
+            f"L=$(ldd {clinfo} | awk '/libOpenCL/{{print $3}}'); readlink -f $L; "
+            "dpkg -S $(readlink -f $L) 2>/dev/null; "
+            "strings $L 2>/dev/null | grep -iE 'ocl-icd|khronos|OCL_ICD' | head",
         ],
     )
-    # Max ocl-icd debug (silent => loader is not ocl-icd / var not honored).
-    _diag("clinfo OCL_ICD_DEBUG=15", [clinfo], env=dict(env, OCL_ICD_DEBUG="15"))
-    # Alternate registration: point the loader at the build's vendors dir.
-    alt = {k: v for k, v in env.items() if k != "OCL_ICD_FILENAMES"}
-    alt["OCL_ICD_VENDORS"] = str(root / "etc" / "OpenCL" / "vendors")
-    alt["OCL_ICD_DEBUG"] = "15"
-    _diag("clinfo OCL_ICD_VENDORS", [clinfo], env=alt)
+    # Decisive: canonical /etc/OpenCL/vendors registration with an absolute path,
+    # no OCL_ICD_* env, AMD_LOG_LEVEL=4 so CLR logs whether it initializes.
+    reg = {k: v for k, v in env.items() if not k.startswith("OCL_ICD")}
+    reg["AMD_LOG_LEVEL"] = "4"
+    _diag(
+        "clinfo via /etc/OpenCL/vendors (AMD_LOG_LEVEL=4)",
+        [
+            "bash",
+            "-lc",
+            f"mkdir -p /etc/OpenCL/vendors && echo '{vendor}' > /etc/OpenCL/vendors/amdocl64.icd && {clinfo}",
+        ],
+        env=reg,
+    )
 
 
 @pytest.fixture(scope="session")
