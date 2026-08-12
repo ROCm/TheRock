@@ -10,7 +10,6 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from find_latest_artifacts import (
@@ -39,11 +38,11 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 #    known commit SHAs. This avoids dependence on the evolving tip of any
 #    branch and lets us control which commits are "searched".
 #
-# 2. check_if_artifacts_exist() — Mocked because S3 artifacts are subject to
-#    a retention policy and may be deleted for older runs. By controlling this
-#    mock's return value per-commit, we can test commits/workflows that have
-#    already expired and we can also simulate missing artifacts due to failed
-#    builds.
+# 2. S3Backend and check_if_artifacts_exist() — Mocked because S3 artifacts
+#    are subject to a retention policy and may be deleted for older runs.
+#    Mocking S3Backend avoids real S3 access, while controlling
+#    check_if_artifacts_exist() lets us simulate which artifact groups
+#    are available.
 #
 # The GitHub API calls within find_artifacts_for_commit() (querying workflow
 # runs by commit SHA, retrieving bucket info) are NOT mocked — they hit the
@@ -65,10 +64,14 @@ class FindLatestArtifactsTest(unittest.TestCase):
     """Tests for find_latest_artifacts() with real GitHub API calls."""
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_returns_first_commit_with_artifacts(self, mock_commits, mock_check):
+    def test_returns_first_commit_with_artifacts(
+        self, mock_commits, mock_check, mock_s3_backend
+    ):
         """Returns the first commit that has artifacts."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
@@ -86,17 +89,21 @@ class FindLatestArtifactsTest(unittest.TestCase):
         self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_NEWER)
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_skips_commits_missing_artifacts(self, mock_commits, mock_check):
+    def test_skips_commits_missing_artifacts(
+        self, mock_commits, mock_check, mock_s3_backend
+    ):
         """Skips commits whose artifacts are missing (e.g. flaky build)."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
         ]
 
         # First commit's artifacts are missing, second commit's are present
-        def check_by_commit(info):
+        def check_by_commit(info, _available_filenames):
             return info.git_commit_sha != TEST_THEROCK_COMMIT_NEWER
 
         mock_check.side_effect = check_by_commit
@@ -113,12 +120,16 @@ class FindLatestArtifactsTest(unittest.TestCase):
         self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch(
         "find_artifacts_for_commit.check_if_artifacts_exist", return_value=False
     )
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_returns_none_when_all_artifacts_missing(self, mock_commits, mock_check):
+    def test_returns_none_when_all_artifacts_missing(
+        self, mock_commits, mock_check, mock_s3_backend
+    ):
         """Returns None when no commits have artifacts available."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
@@ -157,10 +168,12 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
     """Tests for multi-group behavior of find_latest_artifacts()."""
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_multiple_groups_all_found(self, mock_commits, mock_check):
+    def test_multiple_groups_all_found(self, mock_commits, mock_check, mock_s3_backend):
         """Returns results when all requested groups have artifacts."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
@@ -181,10 +194,14 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[0].git_commit_sha, results[1].git_commit_sha)
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_skips_commit_with_partial_groups(self, mock_commits, mock_check):
+    def test_skips_commit_with_partial_groups(
+        self, mock_commits, mock_check, mock_s3_backend
+    ):
         """Skips a commit where only some groups have artifacts, returns next."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
@@ -192,7 +209,7 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
 
         # Newer commit: only gfx110X has artifacts
         # Older commit: both groups have artifacts
-        def check_by_commit_and_group(info):
+        def check_by_commit_and_group(info, _available_filenames):
             if info.git_commit_sha == TEST_THEROCK_COMMIT_NEWER:
                 return info.artifact_group == "gfx110X-all"
             return True  # older commit has everything
@@ -213,17 +230,21 @@ class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
         self.assertEqual(results[1].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
 
     @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.S3Backend")
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
     @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
-    def test_returns_none_when_no_commit_has_all_groups(self, mock_commits, mock_check):
+    def test_returns_none_when_no_commit_has_all_groups(
+        self, mock_commits, mock_check, mock_s3_backend
+    ):
         """Returns None when no single commit has all requested groups."""
+        mock_s3_backend.return_value.list_artifacts.return_value = []
         mock_commits.return_value = [
             TEST_THEROCK_COMMIT_NEWER,
             TEST_THEROCK_COMMIT_OLDER,
         ]
 
         # Each commit only has one of the two groups
-        def check_alternating(info):
+        def check_alternating(info, _available_filenames):
             if info.git_commit_sha == TEST_THEROCK_COMMIT_NEWER:
                 return info.artifact_group == "gfx110X-all"
             return info.artifact_group == "gfx120X-all"

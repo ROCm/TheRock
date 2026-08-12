@@ -27,7 +27,7 @@ For script-to-script composition:
 
 import argparse
 from contextlib import nullcontext, redirect_stdout
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import json
 import platform as platform_module
 import re
@@ -78,14 +78,6 @@ class ArtifactRunInfo:
     # Populated during artifact inspection.
     artifact_filenames: tuple[str, ...] = ()
     missing_required_artifact_patterns: tuple[str, ...] = ()
-
-    # Internal data used to inspect the run's artifact backend. Excluded from
-    # repr/comparison and JSON output.
-    _output_root: WorkflowOutputRoot | None = field(
-        default=None,
-        repr=False,
-        compare=False,
-    )
 
     @property
     def git_commit_url(self) -> str:
@@ -164,35 +156,25 @@ class ArtifactRunInfo:
         }
 
 
-def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
-    """Checks whether matching artifacts exist for a workflow run.
-
-    Lists concrete artifact archives from the workflow run's storage prefix,
-    verifies that the requested artifact group is represented, and checks any
-    required artifact filename patterns.
+def check_if_artifacts_exist(
+    info: ArtifactRunInfo,
+    available_filenames: Sequence[str],
+) -> bool:
+    """Check whether available artifact archives satisfy the request.
 
     Without required artifact patterns, this confirms only that the requested
     artifact group is represented. It does not prove that every artifact required
     by a build stage was uploaded.
 
     Args:
-        info: ArtifactRunInfo describing the artifact location and artifact
-            requirements.
+        info: ArtifactRunInfo describing the artifact requirements.
+        available_filenames: Concrete artifact filenames available for the
+            workflow run.
 
     Returns:
         True if the requested artifact group is represented and every required
         filename pattern matches at least one artifact; False otherwise.
-    Raises:
-        ValueError: If the artifact output root is unavailable.
     """
-
-    if info._output_root is None:
-        raise ValueError("Artifact output_root is required for artifact inspection")
-    try:
-        backend = S3Backend(output_root=info._output_root)
-        available_filenames = backend.list_artifacts()
-    except (BotoCoreError, ClientError):
-        return False
 
     matching_filenames = _filter_artifact_filenames(
         available_filenames,
@@ -370,7 +352,11 @@ def _find_artifacts_in_workflow_runs(
             github_repository=github_repository_name,
             workflow_run=workflow_run,
         )
-
+        try:
+            backend = S3Backend(output_root=output_root)
+            available_filenames = tuple(backend.list_artifacts())
+        except (BotoCoreError, ClientError):
+            continue
         # Keep per-run results separate so single-run mode never combines artifact
         # groups from different workflow runs.
         found_in_this_run: dict[str, ArtifactRunInfo] = {}
@@ -401,10 +387,9 @@ def _find_artifacts_in_workflow_runs(
                 s3_bucket=output_root.bucket,
                 amdgpu_targets=tuple(amdgpu_targets),
                 required_artifact_patterns=tuple(required_artifact_patterns),
-                _output_root=output_root,
             )
 
-            if not check_if_artifacts_exist(info):
+            if not check_if_artifacts_exist(info, available_filenames):
                 continue
 
             found_in_this_run[group] = info
@@ -622,10 +607,9 @@ def main(argv: list[str] | None = None) -> int:
         help=("Only accept workflow runs with status=completed and conclusion=success"),
     )
     output_options.add_argument(
-        "-v",
-        "--verbose",
+        "--json",
         action="store_true",
-        help="Print progress information",
+        help="Print machine-readable JSON",
     )
 
     args = parser.parse_args(argv)
