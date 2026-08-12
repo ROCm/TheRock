@@ -234,7 +234,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         run_command(
             [
                 "git", "config",
-                "url.https://x-access-token:" + github_token + "@github.com/.insteadOf",
+                f"url.https://x-access-token:{github_token}@github.com/.insteadOf",
                 "https://github.com/",
             ],
             cwd=repo_dir,
