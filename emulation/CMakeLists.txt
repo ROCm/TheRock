@@ -21,6 +21,8 @@ if(THEROCK_ENABLE_ROCJITSU)
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_LIBDRM}
+    INSTALL_RPATH_DIRS
+      lib
   )
 
   therock_cmake_subproject_glob_c_sources(rocjitsu
