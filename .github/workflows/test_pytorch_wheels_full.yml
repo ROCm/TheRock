@@ -252,6 +252,9 @@ jobs:
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
       # steps to save time.
       - name: Checkout PyTorch Source
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
