@@ -127,13 +127,11 @@ jobs:
             --index-file-name index.html
 
       - name: Post manifest-diff report link to bump PR
-        # TEMP TESTING: bump- prefix check dropped to verify the direct-link
-        # fix + a real submodule-change comment end-to-end on this PR's own
-        # CI run. Reverted in a follow-up commit.
         if: >-
           ${{
             steps.gen-report.conclusion == 'success' &&
-            github.event_name == 'pull_request'
+            github.event_name == 'pull_request' &&
+            startsWith(github.event.pull_request.head.ref, 'bump-')
           }}
         continue-on-error: true
         env:
