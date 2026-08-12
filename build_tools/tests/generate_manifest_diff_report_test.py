@@ -488,6 +488,10 @@ class HandlePostCommentTest(unittest.TestCase):
         self.assertIn(
             "99999-linux/logs/manifest-diff/TheRockReport.html", call_kwargs["body"]
         )
+        self.assertIn(
+            "**Commit Range:** `aaa` -> `bbb` (1 submodule changed)",
+            call_kwargs["body"],
+        )
 
     def test_omits_summary_line_when_blank(self):
         args = argparse.Namespace(
