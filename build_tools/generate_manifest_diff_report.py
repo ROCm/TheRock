@@ -1442,17 +1442,25 @@ def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> 
 
 
 def build_commit_range_summary(diff: ManifestDiff) -> str:
-    """One-line commit-range + changed-submodule-count summary.
+    """Commit-range + changed-submodule-count summary, plus a per-superrepo
+    line listing which components changed.
 
     Shared by generate_step_summary() and handle_post_comment() so both
-    surfaces show identical text.
+    surfaces show identical text. Counts across both regular submodules and
+    superrepos (e.g. rocm-systems, rocm-libraries) so a superrepo-only bump
+    isn't reported as "0 submodules changed".
     """
-    changed_count = len(diff.changed)
+    changed_count = len(diff.get_status_groups()["changed"])
     plural = "" if changed_count == 1 else "s"
-    return (
+    lines = [
         f"**Commit Range:** `{diff.start_commit[:8]}` -> `{diff.end_commit[:8]}` "
         f"({changed_count} submodule{plural} changed)"
-    )
+    ]
+    for superrepo in diff.superrepos.values():
+        if superrepo.status == "changed" and superrepo.changed_components:
+            components = ", ".join(sorted(superrepo.changed_components))
+            lines.append(f"- `{superrepo.name}`: {components}")
+    return "\n".join(lines)
 
 
 def generate_step_summary(diff: ManifestDiff) -> None:

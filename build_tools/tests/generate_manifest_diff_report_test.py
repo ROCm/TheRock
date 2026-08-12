@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from generate_manifest_diff_report import (
     build_commit_range_summary,
+    Component,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
@@ -25,6 +26,7 @@ from generate_manifest_diff_report import (
     PR_COMMENT_MARKER,
     resolve_commits,
     Submodule,
+    Superrepo,
 )
 
 
@@ -377,6 +379,84 @@ class BuildCommitRangeSummaryTest(unittest.TestCase):
         self.assertIn(f"`{diff.start_commit[:8]}`", summary)
         self.assertIn(f"`{diff.end_commit[:8]}`", summary)
         self.assertIn("1 submodule changed", summary)
+
+    def test_counts_changed_superrepo_alongside_regular_submodules(self):
+        """A superrepo-only bump (e.g. rocm-systems) must still be counted,
+        not reported as "0 submodules changed"."""
+        diff = ManifestDiff(
+            start_commit="a" * 40,
+            end_commit="b" * 40,
+            submodules={
+                "unchanged-sub": Submodule(
+                    name="unchanged-sub",
+                    sha="d" * 40,
+                    api_base="https://api.github.com/repos/ROCm/unchanged-sub",
+                    branch="main",
+                    status="unchanged",
+                ),
+            },
+            superrepos={
+                "rocm-systems": Superrepo(
+                    name="rocm-systems",
+                    sha="c" * 40,
+                    api_base="https://api.github.com/repos/ROCm/rocm-systems",
+                    branch="develop",
+                    status="changed",
+                ),
+            },
+        )
+
+        summary = build_commit_range_summary(diff)
+
+        self.assertIn("1 submodule changed", summary)
+
+    def test_lists_changed_components_for_changed_superrepo(self):
+        diff = ManifestDiff(
+            start_commit="a" * 40,
+            end_commit="b" * 40,
+            superrepos={
+                "rocm-systems": Superrepo(
+                    name="rocm-systems",
+                    sha="c" * 40,
+                    api_base="https://api.github.com/repos/ROCm/rocm-systems",
+                    branch="develop",
+                    status="changed",
+                    components={
+                        "hip": Component(path="hip", name="hip", status="changed"),
+                        "rccl": Component(
+                            path="rccl", name="rccl", status="changed"
+                        ),
+                        "clr": Component(
+                            path="clr", name="clr", status="unchanged"
+                        ),
+                    },
+                ),
+            },
+        )
+
+        summary = build_commit_range_summary(diff)
+
+        self.assertIn("`rocm-systems`: hip, rccl", summary)
+        self.assertNotIn("clr", summary)
+
+    def test_omits_component_list_for_unchanged_superrepo(self):
+        diff = ManifestDiff(
+            start_commit="a" * 40,
+            end_commit="b" * 40,
+            superrepos={
+                "rocm-libraries": Superrepo(
+                    name="rocm-libraries",
+                    sha="c" * 40,
+                    api_base="https://api.github.com/repos/ROCm/rocm-libraries",
+                    branch="develop",
+                    status="unchanged",
+                ),
+            },
+        )
+
+        summary = build_commit_range_summary(diff)
+
+        self.assertNotIn("rocm-libraries", summary)
 
 
 # =============================================================================
