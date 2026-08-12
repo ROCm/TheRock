@@ -11,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -58,11 +59,11 @@ def rocm_info_output():
 def _opencl_env():
     """Point the system OpenCL ICD loader at this build's vendor runtime.
 
-    clinfo loads the vendor (amdocl64) through the system ICD loader
-    (libOpenCL / OpenCL.dll); TheRock does not ship the loader. Setting
-    OCL_ICD_FILENAMES makes the test exercise this build's runtime without
-    relying on a system-wide /etc or registry ICD registration (absent in the
-    CI container).
+    clinfo loads the vendor (amdocl64) through the system ICD loader; TheRock
+    ships the vendor but not the loader, and the CI container has no system ICD
+    registration. The container's ocl-icd honors OCL_ICD_VENDORS (a vendors
+    dir) but not OCL_ICD_FILENAMES, so register the vendor via an absolute-path
+    .icd in a dir pointed to by OCL_ICD_VENDORS.
     """
     env = os.environ.copy()
     if is_windows():
@@ -78,7 +79,9 @@ def _opencl_env():
     vendor = lib / "opencl" / "libamdocl64.so"
     if not vendor.exists():
         raise FileNotFoundError(f"amdocl64 vendor runtime not found at {vendor}")
-    env["OCL_ICD_FILENAMES"] = str(vendor)
+    icd_dir = Path(tempfile.mkdtemp(prefix="therock-ocl-icd-"))
+    (icd_dir / "amdocl64.icd").write_text(f"{vendor}\n")
+    env["OCL_ICD_VENDORS"] = str(icd_dir)
     # The vendor's deps (libamd_comgr, libhsa-runtime64, sysdeps) are spread
     # across the install's lib dirs; make them resolvable regardless of how the
     # artifacts flatten, so the loader can dlopen the vendor.
@@ -87,52 +90,24 @@ def _opencl_env():
     if env.get("LD_LIBRARY_PATH"):
         ld_path.append(env["LD_LIBRARY_PATH"])
     env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_path)
-    # Surface the loader's reason (e.g. a failed dlopen) if enumeration fails.
-    env["OCL_ICD_DEBUG"] = "1"
     return env
 
 
-def _diag(label, cmd, env=None):
-    """Run a diagnostic command and log its combined output (never raises)."""
-    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    logger.error(f"--- {label} ---")
-    for line in (r.stdout + r.stderr).splitlines() or ["(no output)"]:
-        logger.error(line)
-
-
 def _log_opencl_diagnostics(env):
-    """On clinfo failure, gather loader + ICD-registration info to root-cause -1001."""
+    """On clinfo failure, dump the loader + vendor lib resolution (Linux only)."""
     if is_windows():
         return
-    clinfo = f"{THEROCK_BIN_DIR}/clinfo"
-    vendor = env.get("OCL_ICD_FILENAMES", "")
-    root = THEROCK_BIN_DIR.parent
-    logger.error(f"OCL_ICD_FILENAMES={vendor}")
-    _diag("ldd clinfo", ["ldd", clinfo])
-    # Identify the loader behind libOpenCL.so.1 (ocl-icd vs Khronos).
-    _diag(
-        "loader identity",
-        [
-            "bash",
-            "-lc",
-            f"L=$(ldd {clinfo} | awk '/libOpenCL/{{print $3}}'); readlink -f $L; "
-            "dpkg -S $(readlink -f $L) 2>/dev/null; "
-            "strings $L 2>/dev/null | grep -iE 'ocl-icd|khronos|OCL_ICD' | head",
-        ],
-    )
-    # Decisive: canonical /etc/OpenCL/vendors registration with an absolute path,
-    # no OCL_ICD_* env, AMD_LOG_LEVEL=4 so CLR logs whether it initializes.
-    reg = {k: v for k, v in env.items() if not k.startswith("OCL_ICD")}
-    reg["AMD_LOG_LEVEL"] = "4"
-    _diag(
-        "clinfo via /etc/OpenCL/vendors (AMD_LOG_LEVEL=4)",
-        [
-            "bash",
-            "-lc",
-            f"mkdir -p /etc/OpenCL/vendors && echo '{vendor}' > /etc/OpenCL/vendors/amdocl64.icd && {clinfo}",
-        ],
-        env=reg,
-    )
+    logger.error(f"OCL_ICD_VENDORS={env.get('OCL_ICD_VENDORS')}")
+    for label, target in (
+        ("clinfo", f"{THEROCK_BIN_DIR}/clinfo"),
+        ("vendor", THEROCK_BIN_DIR.parent / "lib" / "opencl" / "libamdocl64.so"),
+    ):
+        r = subprocess.run(
+            ["ldd", str(target)], capture_output=True, text=True, env=env
+        )
+        logger.error(f"--- ldd {label} ---")
+        for line in (r.stdout + r.stderr).splitlines():
+            logger.error(line)
 
 
 @pytest.fixture(scope="session")
