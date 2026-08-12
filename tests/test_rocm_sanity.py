@@ -92,15 +92,47 @@ def _opencl_env():
     return env
 
 
-def _log_vendor_ldd(env):
-    """Dump the vendor's shared-lib resolution to explain a failed dlopen."""
-    vendor = env.get("OCL_ICD_FILENAMES")
-    if is_windows() or not vendor:
-        return
-    result = subprocess.run(["ldd", vendor], capture_output=True, text=True, env=env)
-    logger.error(f"ldd {vendor}:")
-    for line in (result.stdout + result.stderr).splitlines():
+def _diag(label, cmd, env=None):
+    """Run a diagnostic command and log its combined output (never raises)."""
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    logger.error(f"--- {label} ---")
+    for line in (r.stdout + r.stderr).splitlines() or ["(no output)"]:
         logger.error(line)
+
+
+def _log_opencl_diagnostics(env):
+    """On clinfo failure, gather loader + ICD-registration info to root-cause -1001."""
+    if is_windows():
+        return
+    clinfo = f"{THEROCK_BIN_DIR}/clinfo"
+    vendor = env.get("OCL_ICD_FILENAMES", "")
+    root = THEROCK_BIN_DIR.parent
+    logger.error(f"OCL_ICD_FILENAMES={vendor}")
+    # Which libOpenCL loader does clinfo actually bind (system ocl-icd vs bundled)?
+    _diag("ldd clinfo", ["ldd", clinfo])
+    if vendor:
+        _diag("ldd vendor", ["ldd", vendor], env=env)
+    # Is a loader bundled in the install tree (picked up via clinfo RPATH)?
+    _diag(
+        "bundled libOpenCL",
+        ["bash", "-lc", f"find {root} -name 'libOpenCL.so*' 2>/dev/null"],
+    )
+    # System ICD registration in the container (expected empty on _ocl_rt).
+    _diag(
+        "system vendors dir",
+        [
+            "bash",
+            "-lc",
+            "ls -la /etc/OpenCL/vendors 2>&1; cat /etc/OpenCL/vendors/*.icd 2>/dev/null",
+        ],
+    )
+    # Max ocl-icd debug (silent => loader is not ocl-icd / var not honored).
+    _diag("clinfo OCL_ICD_DEBUG=15", [clinfo], env=dict(env, OCL_ICD_DEBUG="15"))
+    # Alternate registration: point the loader at the build's vendors dir.
+    alt = {k: v for k, v in env.items() if k != "OCL_ICD_FILENAMES"}
+    alt["OCL_ICD_VENDORS"] = str(root / "etc" / "OpenCL" / "vendors")
+    alt["OCL_ICD_DEBUG"] = "15"
+    _diag("clinfo OCL_ICD_VENDORS", [clinfo], env=alt)
 
 
 @pytest.fixture(scope="session")
@@ -111,7 +143,7 @@ def clinfo_output():
         return str(run_command([clinfo], env=env).stdout)
     except Exception as e:
         logger.info(str(e))
-        _log_vendor_ldd(env)
+        _log_opencl_diagnostics(env)
         return None
 
 
