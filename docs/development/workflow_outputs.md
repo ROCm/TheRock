@@ -10,12 +10,12 @@ Every CI workflow run produces a set of outputs (build artifacts, logs,
 manifests, python packages) that are uploaded to S3. Three modules in
 `_therock_utils` handle the path computation and I/O:
 
-| Module             | Role                         | Key types                                                   |
-| ------------------ | ---------------------------- | ----------------------------------------------------------- |
-| `storage_location` | Backend-agnostic location    | `StorageLocation`                                           |
-| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                        |
-| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend` |
-| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`     |
+| Module             | Role                         | Key types                                                              |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`                                                      |
+| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                                   |
+| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend`            |
+| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `HTTPBackend`, `LocalDirectoryBackend` |
 
 `StorageLocation` is the bridge between path computation and I/O.
 `WorkflowOutputRoot` produces `StorageLocation` instances; backends consume them.
@@ -283,6 +283,43 @@ backend.upload_directory(source_dir, dest_location, include=["*.tar.xz*"])
 
 Content-type is inferred from file extension — callers don't need to specify it.
 
+### ArtifactBackend
+
+An abstract base class for reading (and, for the writable transports, writing)
+build artifact archives. Use `create_backend()` and pass an explicit transport.
+
+```python
+from _therock_utils.artifact_backend import create_backend
+
+backend = create_backend(run_id="12345")  # transport="auto"
+backend = create_backend(run_id="12345", transport="http")  # read-only, no credentials
+
+backend.list_artifacts(name_filter="blas")
+backend.download_artifact("blas_lib_gfx94X.tar.xz", dest_path)
+```
+
+| Transport | Backend                 | Credentials | Writable |
+| --------- | ----------------------- | ----------- | -------- |
+| `auto`    | local staging, else S3  | as below    | yes      |
+| `s3`      | `S3Backend`             | boto3 chain | yes      |
+| `http`    | `HTTPBackend`           | none        | no       |
+| `local`   | `LocalDirectoryBackend` | none        | yes      |
+
+Transport is an explicit argument rather than something inferred from the
+environment, because `artifact_manager.py copy` builds a source and a
+destination backend in one process and no process-wide setting can express
+that. `artifact_manager.py` exposes it as `--transport` (and
+`--source-transport` on `copy`); `fetch_artifacts.py` exposes `--transport`.
+Both default from `THEROCK_ARTIFACT_TRANSPORT`, and the flag always wins.
+
+`HTTPBackend` reads the same public URLs a browser would, via
+`StorageLocation.public_url`. That means it follows a bucket's CDN mapping
+automatically when one is configured in
+[`s3_buckets.py`](/build_tools/_therock_utils/s3_buckets.py), and falls back to
+the raw S3 URL otherwise — the backend itself holds no URL configuration. It
+lists artifacts by reading the generated `index.html` for the run, so it can
+only see what has been published there.
+
 ### Adding new output types
 
 To add a new output type:
@@ -307,9 +344,9 @@ To add a new output type:
 
 ### Download scripts
 
-| File                                                                        | Uses                                                                           |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
-| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
-| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend` construction                              |
-| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()`                                                |
+| File                                                                        | Uses                                                                                         |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend`/`HTTPBackend` |
+| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix                   |
+| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for backend construction; `public_url` for `HTTPBackend`                |
+| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend(transport=...)`                                                          |

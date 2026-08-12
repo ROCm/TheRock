@@ -51,10 +51,13 @@ class StorageLocation:
         """Raw S3 HTTPS URL, bypassing any CDN.
 
         Prefer ``.public_url`` for links a human will click. This stays the raw
-        S3 URL for machine-consumed URLs (package indexes, apt/dnf base URLs) and
-        for existence probes, where a CDN cache could give a stale answer and
-        where CI reads deliberately avoid CloudFront data-transfer charges. See
-        docs/development/s3_buckets.md.
+        S3 URL for machine-consumed URLs (package indexes, apt/dnf base URLs),
+        where CI reads deliberately avoid CloudFront data-transfer charges, and
+        for existence probes made by callers that also read from S3 directly,
+        where a CDN cache could otherwise give a stale answer about an object
+        the caller is about to fetch from the origin. A caller that reads over
+        the CDN should probe the CDN too, so that it asks about the same bytes
+        it will get. See docs/development/s3_buckets.md.
         """
         return f"https://{self.bucket}.s3.amazonaws.com/{self.relative_path}"
 
