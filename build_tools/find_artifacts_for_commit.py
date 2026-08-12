@@ -352,11 +352,10 @@ def _find_artifacts_in_workflow_runs(
             github_repository=github_repository_name,
             workflow_run=workflow_run,
         )
-        try:
-            backend = S3Backend(output_root=output_root)
-            available_filenames = tuple(backend.list_artifacts())
-        except (BotoCoreError, ClientError):
-            continue
+
+        backend = S3Backend(output_root=output_root)
+        available_filenames = tuple(backend.list_artifacts())
+
         # Keep per-run results separate so single-run mode never combines artifact
         # groups from different workflow runs.
         found_in_this_run: dict[str, ArtifactRunInfo] = {}
@@ -457,6 +456,8 @@ def find_artifacts_for_commit(
         GitHubAPIError: If the GitHub API request fails (rate limit, network
             error, etc.). Callers should handle this to distinguish between
             "no artifacts found" (empty list) and "couldn't check" (exception).
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
         ValueError: If explicit AMDGPU targets are provided with more than one
             artifact group.
     """
@@ -502,6 +503,8 @@ def find_artifacts_for_run(
 
     Raises:
         GitHubAPIError: If the workflow run cannot be queried.
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
         ValueError: If explicit AMDGPU targets are provided with more than one
             artifact group.
     """
@@ -593,18 +596,19 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help=(
             "Regex that must match at least one concrete artifact filename. "
-            "May be repeated."
+            "May be repeated. "
+            r"Example pattern: ^amd-llvm_.*_generic\.tar\.(zst|xz)$"
         ),
     )
     parser.add_argument(
-        "--single-run",
+        "--require-single-run",
         action="store_true",
         help="Require all requested artifact groups to exist in one workflow run",
     )
     parser.add_argument(
         "--require-successful-run",
         action="store_true",
-        help=("Only accept workflow runs with status=completed and conclusion=success"),
+        help="Only accept workflow runs with status=completed and conclusion=success",
     )
     output_options.add_argument(
         "--json",
@@ -638,10 +642,10 @@ def main(argv: list[str] | None = None) -> int:
                     platform=args.platform,
                     amdgpu_targets=args.amdgpu_target,
                     required_artifact_patterns=args.require_artifact,
-                    require_single_run=args.single_run,
+                    require_single_run=args.require_single_run,
                     require_successful_run=args.require_successful_run,
                 )
-    except (GitHubAPIError, ValueError, re.error) as e:
+    except (GitHubAPIError, BotoCoreError, ClientError, ValueError, re.error) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 

@@ -7,6 +7,9 @@ import sys
 import unittest
 from unittest import mock
 
+
+from botocore.exceptions import ClientError
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from find_artifacts_for_commit import (
@@ -473,6 +476,47 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
         )
         mock_s3_backend.return_value.list_artifacts.assert_called_once_with()
 
+    @mock.patch("find_artifacts_for_commit.S3Backend")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
+    @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
+    def test_s3_error_is_not_treated_as_missing_artifacts(
+        self,
+        mock_query_runs,
+        mock_output_root,
+        mock_s3_backend,
+    ):
+        mock_query_runs.return_value = [
+            {
+                "id": 123,
+                "status": "completed",
+                "conclusion": "success",
+                "html_url": "https://example.invalid/123",
+            }
+        ]
+
+        mock_output_root.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="123",
+            platform="linux",
+        )
+
+        mock_s3_backend.return_value.list_artifacts.side_effect = ClientError(
+            {
+                "Error": {
+                    "Code": "AccessDenied",
+                    "Message": "Access denied",
+                }
+            },
+            "ListObjectsV2",
+        )
+
+        with self.assertRaises(ClientError):
+            find_artifacts_for_commit(
+                commit="abc123",
+                artifact_groups=["gfx94X-dcgpu"],
+            )
+
 
 class ConcreteArtifactInspectionTest(unittest.TestCase):
     def _info(
@@ -614,6 +658,25 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             (
                 "base_lib_generic.tar.zst",
                 "rocblas_lib_gfx942.tar.zst",
+            ),
+        )
+
+    def test_tar_xz_artifacts_are_supported(self):
+        available_filenames = [
+            "base_lib_generic.tar.xz",
+            "rocblas_lib_gfx950-dcgpu-asan.tar.xz",
+        ]
+
+        info = self._info(
+            artifact_group="gfx950-dcgpu-asan",
+        )
+
+        self.assertTrue(check_if_artifacts_exist(info, available_filenames))
+        self.assertEqual(
+            info.artifact_filenames,
+            (
+                "base_lib_generic.tar.xz",
+                "rocblas_lib_gfx950-dcgpu-asan.tar.xz",
             ),
         )
 

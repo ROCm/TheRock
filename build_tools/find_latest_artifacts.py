@@ -35,6 +35,8 @@ import re
 import sys
 from typing import Sequence
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
@@ -101,6 +103,8 @@ def find_latest_artifacts(
 
     Raises:
         GitHubAPIError: If a GitHub API request fails.
+        BotoCoreError: If the S3 artifact lookup fails.
+        ClientError: If the S3 artifact lookup fails.
         ValueError: If both ``ref`` and ``run_id`` are provided, or if explicit
             AMDGPU targets are provided with more than one artifact group.
 
@@ -257,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--single-run",
+        "--require-single-run",
         action="store_true",
         help="Require all requested artifact groups to exist in one workflow run",
     )
@@ -312,11 +316,11 @@ def main(argv: list[str] | None = None) -> int:
                 max_commits=args.max_commits,
                 amdgpu_targets=args.amdgpu_target,
                 required_artifact_patterns=args.require_artifact,
-                require_single_run=args.single_run,
+                require_single_run=args.require_single_run,
                 require_successful_run=args.require_successful_run,
                 verbose=args.verbose,
             )
-    except (GitHubAPIError, ValueError, re.error) as e:
+    except (GitHubAPIError, BotoCoreError, ClientError, ValueError, re.error) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
