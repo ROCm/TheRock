@@ -468,14 +468,12 @@ Important consequences for ROCm development include:
   in `System32`.
 - Changing the process current directory is not equivalent to moving the
   executable. The executable directory has its own earlier search position.
-- Placing the intended DLLs beside an executable normally gives them precedence
-  over a same-named DLL in `System32`, but an application must package a
-  supported dependency closure rather than copy every DLL in a shared ROCm
-  installation.
-- Ordinary PE imports are resolved before `main()` runs. Calling
-  `LoadLibraryExW()` at the beginning of `main()` is too late to affect an
-  ordinary import on `amdhip64_7.dll`. Compiled HIP programs can also use
-  compiler-generated registration APIs during static initialization.
+- Placing the intended DLLs and their dependencies beside an executable gives
+  them precedence over same-named DLLs in `System32`.
+- Windows loads normally linked DLLs before `main()` runs. Calling
+  `LoadLibraryExW()` at the beginning of `main()` is too late to change how
+  Windows finds `amdhip64_7.dll`. The HIP compiler can also generate runtime
+  registration calls that execute during static initialization.
 
 Tests and dedicated launchers can select a trusted runtime directory for their
 child processes with
@@ -503,28 +501,28 @@ finally:
         raise ctypes.WinError(ctypes.get_last_error())
 ```
 
-Microsoft documents that this setting affects child processes created while it
-is active. It is process-global, changes safe-search behavior, and should only
-name a trusted, validated directory. The example assumes a dedicated,
-single-threaded runner that started with the default DLL search state and
-restores that state after launching its children.
+This setting affects child processes created while it is active. It is
+process-global, changes safe-search behavior, and should only name a trusted,
+validated directory. The example assumes a dedicated, single-threaded runner
+that started with the default DLL search state and restores that state after
+launching its children.
 
 The hipthreads test executor adopted this pattern in
 [rocm-libraries PR #10478](https://github.com/ROCm/rocm-libraries/pull/10478).
 It continues to use `PATH` to find tools, but uses `SetDllDirectoryW` to ensure
-that test children select the runtime under test ahead of `System32`. This is a
-test-harness contract: the emitted test program is not made independently
-runnable outside that executor.
+that child test processes load the runtime under test ahead of `System32`. This
+only affects the test harness: the test program still cannot run independently
+outside that executor.
 
-Common patterns to avoid include:
-
-- Assuming `PATH` takes precedence over `System32`.
-- Copying every DLL from a merged ROCm `bin` directory beside a test or
-  application executable.
-- Copying DLLs into an extracted ROCm installation while tests run.
-- Inferring a redistributable runtime closure solely from a static PE import
-  scan; applications and libraries can load additional modules or data at
-  runtime.
+> [!WARNING]
+> Common patterns to avoid include:
+>
+> - Assuming `PATH` takes precedence over `System32`.
+> - Copying every DLL from a merged ROCm `bin` directory beside a test or
+>   application executable.
+> - Copying DLLs into an extracted ROCm installation while tests run.
+> - Choosing which DLLs to package based only on inspecting the executable;
+>   applications and libraries can load additional DLLs or data at runtime.
 
 For application-local DLLs, launchers, central runtime activation, static
 linking, Linux equivalents, and packaging tradeoffs, see

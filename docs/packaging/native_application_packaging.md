@@ -1,14 +1,9 @@
 # Native Application Packaging with ROCm
 
-This guide introduces the deployment choices available to native applications
-that use ROCm. It is intentionally an initial, descriptive guide rather than a
-complete packaging policy. ROCm's Windows packaging and cross-platform
-redistribution interfaces are evolving, and individual components do not yet
-expose one uniform runtime-staging mechanism.
-
-The examples below identify useful patterns and tradeoffs. They do not grant
-redistribution rights or replace the license, compatibility, and deployment
-documentation for a particular ROCm release and component.
+This guide summarizes deployment options for native applications that use ROCm.
+ROCm components do not yet expose a uniform runtime-staging mechanism. Check the
+license, compatibility, and deployment documentation for the ROCm release and
+components being packaged.
 
 ## Build discovery is not runtime discovery
 
@@ -16,7 +11,7 @@ A build can successfully find ROCm headers, CMake packages, import libraries,
 and shared libraries without producing an application that can find its runtime
 dependencies after it is installed elsewhere.
 
-It is useful to treat these as separate contracts:
+Treat these as separate contracts:
 
 1. **Build contract:** Which SDK version, headers, compiler, CMake packages, and
    link libraries does the project consume?
@@ -25,11 +20,6 @@ It is useful to treat these as separate contracts:
 1. **Deployment contract:** Who installs those files, where do they live, how
    does the loader select them, and who services security and compatibility
    updates?
-
-Before choosing a package layout, decide whether the application is intended to
-run from a centrally installed ROCm runtime, carry its own runtime, run through
-an activation launcher, or be distributed as part of a larger framework or
-container.
 
 ## Deployment models
 
@@ -46,10 +36,6 @@ wheels.
 | Static linking                   | Supported implementation archives linked into the application                    | Can reduce shared-library discovery requirements                   | Component-specific support; larger binaries and rebuild-based servicing; may still have dynamic driver/plugin dependencies |
 | Framework or language packages   | Wheels or another package graph install and activate native libraries            | Integrates version solving with the framework's installation flow  | Startup becomes dependent on framework-specific initialization and package layout                                          |
 | Container or application image   | Application and user-space runtime are assembled into one image                  | Reproducible Linux user-space stack                                | Large deployment unit; host kernel, devices, and compatible driver remain external                                         |
-
-No one model is best for every project. Small command-line tools, desktop
-applications, test suites, Python frameworks, and multi-node serving systems
-have different priorities.
 
 ### Choosing a starting point
 
@@ -74,8 +60,8 @@ use a documented central-runtime activation mechanism.
 
 ### Application-local DLLs
 
-The simplest directly runnable Windows layout places the application's
-supported DLL closure in the same directory as its executable:
+The simplest directly runnable Windows layout places the intended DLLs and
+their dependencies in the same directory as the executable:
 
 ```text
 my-application/
@@ -90,29 +76,24 @@ The executable directory is searched before `System32`. This can provide
 deterministic selection even while a legacy same-named runtime is installed
 globally.
 
-The list above is illustrative, not a redistribution manifest. A PE import scan
-does not identify modules loaded with `LoadLibrary`, device/kernel packages,
-configuration, licenses, or optional feature dependencies. Projects should use
-component-owned packaging metadata when available and should not copy all DLLs
-from a merged SDK directory.
+The list above is illustrative. A PE import scan does not identify modules
+loaded with `LoadLibrary`, device/kernel packages, configuration, licenses, or
+optional feature dependencies. Use component packaging metadata when available.
 
 > [!IMPORTANT]
-> This layout explains an available Windows loader pattern; it does not say that
-> every ROCm file may be redistributed. The current
+> The current
 > [HIP SDK deployment guidelines](https://rocm.docs.amd.com/projects/install-on-windows/en/develop/conceptual/deployment-guidelines.html)
-> say that applications do not redistribute the HIP runtime. Follow the support
-> and licensing guidance for the exact ROCm release being packaged. TheRock's
-> future Windows packaging design may establish additional supported models.
+> state that applications do not redistribute the HIP runtime. Follow the
+> deployment and licensing guidance for the ROCm release being packaged.
 
 Several executables can share one application-owned `bin` directory instead of
 carrying a private copy beside every executable.
 
 ### Launcher-managed central runtime
 
-A launcher with no ordinary HIP imports can discover a selected ROCm
-installation, validate its runtime directory, configure DLL loading, and create
-the real HIP process. This is also the natural pattern for a test runner that
-owns all child process creation.
+A launcher with no ordinary HIP imports can discover a ROCm installation,
+validate its runtime directory, configure DLL loading, and create the HIP
+process. A test runner that owns child process creation can use the same pattern.
 
 `SetDllDirectoryW` is one available mechanism for an unpackaged child process.
 More restrictive designs can use `SetDefaultDllDirectories`, `AddDllDirectory`,
@@ -135,15 +116,13 @@ their initial executable. Some possible architectures are:
 - A stable loader or dispatch API loads the runtime and exposes versioned entry
   points to the application.
 
-These are advanced designs. Compiled HIP programs can contain generated
-fat-binary registration calls that execute during static initialization, so
-placing `LoadLibraryExW()` at the top of an otherwise ordinarily linked
-`main()` does not solve startup loading.
+Compiled HIP programs can contain generated fat-binary registration calls that
+execute during static initialization. Placing `LoadLibraryExW()` at the top of
+an otherwise ordinarily linked `main()` does not solve startup loading.
 
-A known path should be derived from an application-owned layout, selected from
-versioned installations using a documented mechanism, or supplied through
-trusted configuration. Embedding the developer's SDK path found by CMake is not
-a redistributable design.
+Derive known paths from an application-owned layout, a documented versioned
+installation, or trusted configuration. Do not embed the developer's SDK path
+found by CMake.
 
 ### Static linking
 
@@ -155,9 +134,8 @@ Windows distributions, `amdhip64.lib` is an import library for
 The current
 [HIP SDK deployment guidelines](https://rocm.docs.amd.com/projects/install-on-windows/en/develop/conceptual/deployment-guidelines.html)
 state that static linking to distributed HIP SDK components is unsupported.
-Some ROCm source projects contain static build modes, but a source build option
-does not by itself define a supported downstream SDK, dependency closure, or
-servicing contract.
+A static build mode in a ROCm source project does not imply that its distributed
+SDK supports static linking.
 
 ## Linux shared-library options
 
@@ -168,9 +146,9 @@ packages. The package manager then owns installation, upgrades, and removal,
 and the system dynamic loader resolves libraries from its configured paths and
 cache.
 
-This model is convenient for system administration but couples the application
-to the distribution's package graph and selected ROCm versions. Applications
-should not copy libraries into `/usr`, `/usr/local`, or `/opt` while they run.
+This model couples the application to the distribution's package graph and
+selected ROCm versions. Installation and updates occur separately from
+application execution.
 
 ### Relocatable application layout
 
@@ -196,8 +174,8 @@ set_target_properties(
 ```
 
 `DT_RUNPATH` applies to an object's direct dependencies rather than every
-descendant in the graph. Bundled libraries may need their own suitable RUNPATH,
-and the complete package still needs validation on a target machine.
+descendant in the graph. Bundled libraries may therefore need their own
+RUNPATH.
 
 See [`ld.so(8)`](https://man7.org/linux/man-pages/man8/ld.so.8.html) for the
 loader order and token expansion rules.
@@ -228,33 +206,26 @@ named on its link line:
 - A compatible host driver and operating-system interface, which generally
   remain outside an application bundle or container.
 
-ROCm components should eventually publish machine-readable runtime and
-redistribution metadata so downstream projects do not have to infer this set
-from directory globs or binary inspection. Until that interface is available,
-projects should document exactly which release and packaging model they test.
+TheRock does not yet provide uniform machine-readable runtime and redistribution
+metadata for this set. Projects should document the release and packaging model
+they test.
 
 ## Responsibility boundaries
 
-A useful way to evaluate any of the deployment models is to identify which
-layer owns each part of the contract:
+Responsibilities by layer include:
 
-- A ROCm component identifies its supported runtime files, compatible versions,
-  dynamically loaded dependencies, and redistribution constraints. Packaging
-  metadata or staging helpers should come from this layer when possible.
-- A downstream application chooses a deployment model, includes or declares the
-  supported runtime closure for the features it uses, configures loading before
-  native code needs it, and owns updates to any private copy it distributes.
+- A ROCm component identifies its runtime files, compatible versions,
+  dynamically loaded dependencies, and redistribution constraints.
+- A downstream application chooses a deployment model, includes or declares its
+  dependencies, configures loading before native code needs it, and updates any
+  private copy it distributes.
 - A package manager, framework initializer, launcher, or container entry point
   implements activation when the application is not independently runnable.
   That requirement is part of the installed product's interface, not merely a
   CI detail.
-- A test harness constructs an isolated deployment, keeps source SDKs and
-  installation prefixes immutable, and verifies the same loading contract that
-  users receive. A harness-specific contract should be labeled as such.
-
-These roles can be implemented in one repository, but keeping them conceptually
-separate avoids turning test setup or a developer machine's environment into an
-undocumented application dependency.
+- A test harness constructs an isolated deployment, keeps the SDK and
+  installation prefix immutable, and verifies the user-facing loading contract.
+  A harness-specific loading contract should be identified as such.
 
 ## Testing a deployment
 
@@ -281,9 +252,8 @@ must not be confused with validation of a redistributable application.
 
 ## Ecosystem design examples
 
-This section is an initial source audit as of August 2026, not an endorsement or
-compatibility promise. The projects and their packaging change over time;
-follow the linked sources when applying a pattern to a new release.
+This source audit describes the projects as of August 2026. Follow the linked
+sources for current behavior.
 
 ### PyTorch built with TheRock packages
 
@@ -293,16 +263,13 @@ which calls `rocm_sdk.initialize_process()` before PyTorch loads its native
 extensions. The helper preloads a project-selected library set and checks the
 ROCm package version.
 
-This is framework-managed activation over a package-managed shared runtime. It
-keeps the PyTorch wheel smaller and lets ROCm components be shared, but correct
-startup depends on the helper, package metadata, and coordinated versions.
+This shares ROCm components between packages but requires the initializer,
+package metadata, and coordinated versions.
 
 TheRock also has an experimental Windows
 [`windows_patch_fat_wheel.py`](../../external-builds/pytorch/windows_patch_fat_wheel.py)
 flow that copies a filtered ROCm tree into `torch/lib/rocm` and patches PyTorch's
-DLL directory setup. This instead makes the wheel the application-local
-deployment unit, trading simplicity at installation time for a much larger,
-application-owned runtime copy.
+DLL directory setup. This produces a larger, self-contained wheel.
 
 See the [PyTorch build tooling](../../external-builds/pytorch/build_prod_wheels.py),
 [PyTorch packaging notes](../../external-builds/pytorch/README.md#bundling-pytorch-and-rocm-together-into-a-fat-wheel),
@@ -319,10 +286,9 @@ the shared ROCm runtime remains a package dependency of the environment. The
 test runner deliberately clears build-time path variables to confirm that the
 installed wheels use those packaged assets.
 
-This plugin architecture gives JAX an explicit accelerator boundary and makes
-major-version selection visible in package names. It also requires coordinated
-plugin, PJRT, JAX, and ROCm packages and is not currently a Windows packaging
-example.
+The package names expose the accelerator boundary and ROCm major version. The
+plugin, PJRT, JAX, and ROCm package versions must be coordinated. This flow does
+not currently cover Windows.
 
 See [Build JAX with ROCm support](../../external-builds/jax/README.md), the
 [JAX test runner](../../external-builds/jax/run_jax_tests.py), and the
@@ -335,10 +301,9 @@ its `ggml-hip` target to their shared targets. It can build compute backends as
 dynamically loaded modules with `GGML_BACKEND_DL`, while its HIP CMake logic
 explicitly rejects `GGML_STATIC`.
 
-This separates the optional accelerator backend from the core application and
-allows one application to support multiple backends. The inspected build logic
-still assumes a compatible ROCm SDK/runtime is discoverable; it does not define
-an application-local ROCm redistribution closure.
+This separates the optional accelerator backend from the core application. The
+build logic assumes that a compatible ROCm SDK/runtime is discoverable and does
+not define an application-local ROCm package.
 
 See llama.cpp's
 [`ggml` build options](https://github.com/ggml-org/llama.cpp/blob/master/ggml/CMakeLists.txt)
@@ -353,18 +318,16 @@ dependencies into a container. The base image and PyTorch own much of the core
 ROCm runtime selection; the SGLang image then pins and builds a tested stack for
 a target GPU architecture and ROCm release.
 
-This treats the container as the user-space deployment unit. It provides a
-controlled Linux environment for a large native dependency graph, but produces
-a large, platform-specific image and still relies on compatible host devices,
-kernel interfaces, and drivers.
+The container is the user-space deployment unit. The image is large and
+platform-specific, and it still requires compatible host devices, kernel
+interfaces, and drivers.
 
 See SGLang's
 [`rocm.Dockerfile`](https://github.com/sgl-project/sglang/blob/main/docker/rocm.Dockerfile).
 
 ## Open design questions
 
-Future revisions of this guide can become more prescriptive as ROCm-wide
-interfaces stabilize. Important open questions include:
+Open questions include:
 
 - Which files form the supported redistributable closure for each component?
 - Should ROCm provide a CMake runtime-staging helper for application-local
@@ -377,7 +340,3 @@ interfaces stabilize. Important open questions include:
   package, and driver versions?
 - Which deployment checks should every ROCm project and downstream package run
   in CI?
-
-Major alternatives should remain documented even when the project eventually
-selects preferred defaults. Different application classes will continue to need
-different packaging boundaries.
