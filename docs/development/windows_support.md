@@ -475,8 +475,10 @@ Important consequences for ROCm development include:
   Windows finds `amdhip64_7.dll`. The HIP compiler can also generate runtime
   registration calls that execute during static initialization.
 
-Tests and dedicated launchers can select a trusted runtime directory for their
-child processes with
+##### Finding DLLs with `SetDllDirectoryW`
+
+One option for tests and dedicated launchers to select a trusted runtime
+directory for their child processes is to use
 [`SetDllDirectoryW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setdlldirectoryw):
 
 ```python
@@ -523,10 +525,6 @@ outside that executor.
 > - Copying DLLs into an extracted ROCm installation while tests run.
 > - Choosing which DLLs to package based only on inspecting the executable;
 >   applications and libraries can load additional DLLs or data at runtime.
-
-For application-local DLLs, launchers, central runtime activation, static
-linking, Linux equivalents, and packaging tradeoffs, see
-[Native application packaging](../packaging/native_application_packaging.md).
 
 #### Other platform differences
 
