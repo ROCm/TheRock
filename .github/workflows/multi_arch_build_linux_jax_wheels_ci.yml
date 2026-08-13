@@ -124,12 +124,14 @@ jobs:
 
     steps:
       - name: Checkout TheRock
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout rocm-jax
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: rocm-jax
@@ -138,6 +140,7 @@ jobs:
 
       - name: Checkout JAX
         id: checkout_jax
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax-source

@@ -131,6 +131,7 @@ jobs:
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
 
       - name: Checkout
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
