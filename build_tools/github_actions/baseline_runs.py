@@ -490,6 +490,10 @@ def validate_required_artifacts_available(
     bucket = getattr(backend, "bucket", "unknown")
     prefix = getattr(backend, "s3_prefix", "unknown")
     print(f"  S3 artifact check: bucket={bucket} prefix={prefix} found={len(available)} artifacts")
+    # Show sample of available artifacts to debug naming mismatches
+    if available:
+        sample = sorted(available)[:5]
+        print(f"  S3 sample artifacts: {sample}")
     matched: list[str] = []
     missing: list[RequiredArtifact] = []
     for required_artifact in requirements:
