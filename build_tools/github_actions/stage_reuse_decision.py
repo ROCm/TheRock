@@ -154,7 +154,12 @@ def _required_artifacts_for_stages(
 ) -> list[RequiredArtifact]:
     """Artifact/family pairs the given stages produce.
 
-    Respects artifact type:
+    The families required for each artifact depend on the STAGE type, not the
+    artifact type. This is because:
+    - generic stages run as a single job and produce only generic-family artifacts
+    - per-arch stages run per-architecture and produce per-arch artifacts
+
+    For per-arch stages, the artifact type further refines the behavior:
     - target-neutral: Only requires the generic family
     - target-specific: Requires each of the target families (excluding generic)
     """
@@ -165,20 +170,27 @@ def _required_artifacts_for_stages(
         stage = topology.build_stages.get(stage_name)
         if stage is None:
             continue
+
+        # Generic stages produce only generic-family artifacts
+        is_generic_stage = stage.type == "generic"
+
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
                 artifact = topology.artifacts.get(artifact_name)
                 if artifact is None:
                     continue
 
-                # Determine which families this artifact produces based on type
-                if artifact.type == "target-specific":
-                    # target-specific: per-arch artifacts, exclude generic
+                # Determine which families this artifact produces
+                if is_generic_stage:
+                    # Generic stages always produce generic-family artifacts
+                    families_for_artifact = [GENERIC_FAMILY]
+                elif artifact.type == "target-specific":
+                    # Per-arch stage with target-specific artifact: per-arch artifacts
                     families_for_artifact = [
                         f for f in target_families if f != GENERIC_FAMILY
                     ]
                 else:
-                    # target-neutral: only generic family
+                    # Per-arch stage with target-neutral artifact: generic only
                     families_for_artifact = [GENERIC_FAMILY]
 
                 for family in families_for_artifact:
@@ -203,7 +215,12 @@ def _stage_artifacts_available(
 ) -> bool:
     """True when every artifact this stage produces has an archive present.
 
-    Respects artifact type:
+    The families checked for each artifact depend on the STAGE type, not the
+    artifact type. This is because:
+    - generic stages run as a single job and produce only generic-family artifacts
+    - per-arch stages run per-architecture and produce per-arch artifacts
+
+    For per-arch stages, the artifact type further refines the behavior:
     - target-neutral: Only checks for generic family archives
     - target-specific: Checks for each target family (excluding generic)
     """
@@ -211,20 +228,27 @@ def _stage_artifacts_available(
     stage = topology.build_stages.get(stage_name)
     if stage is None:
         return False
+
+    # Generic stages produce only generic-family artifacts
+    is_generic_stage = stage.type == "generic"
+
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
             artifact = topology.artifacts.get(artifact_name)
             if artifact is None:
                 continue
 
-            # Determine which families this artifact produces based on type
-            if artifact.type == "target-specific":
-                # target-specific: per-arch artifacts, exclude generic
+            # Determine which families this artifact produces
+            if is_generic_stage:
+                # Generic stages always produce generic-family artifacts
+                families_for_artifact = [GENERIC_FAMILY]
+            elif artifact.type == "target-specific":
+                # Per-arch stage with target-specific artifact: per-arch artifacts
                 families_for_artifact = [
                     f for f in target_families if f != GENERIC_FAMILY
                 ]
             else:
-                # target-neutral: only generic family
+                # Per-arch stage with target-neutral artifact: generic only
                 families_for_artifact = [GENERIC_FAMILY]
 
             for family in families_for_artifact:

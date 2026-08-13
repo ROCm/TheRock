@@ -25,8 +25,9 @@ from github_actions_api import GitHubAPIError
 
 
 class _FakeStage:
-    def __init__(self, groups):
+    def __init__(self, groups, stage_type="generic"):
         self.artifact_groups = groups
+        self.type = stage_type
 
 
 class _FakeArtifact:
@@ -39,21 +40,24 @@ class _FakeArtifact:
 class FakeTopology:
     """Minimal BuildTopology stand-in for stage_impact + artifact derivation.
 
-    compiler-runtime produces artifact 'base'; math-libs produces 'blas'.
+    compiler-runtime is a generic stage producing artifact 'base'.
+    math-libs is a per-arch stage producing artifact 'blas'.
     """
 
     def __init__(self):
         self.build_stages = {
-            "compiler-runtime": _FakeStage(["base-group"]),
-            "math-libs": _FakeStage(["blas-group"]),
+            # compiler-runtime is generic: all artifacts use generic family
+            "compiler-runtime": _FakeStage(["base-group"], "generic"),
+            # math-libs is per-arch: artifacts can be target-specific
+            "math-libs": _FakeStage(["blas-group"], "per-arch"),
         }
         self.artifact_groups = {
             "base-group": type("G", (), {"source_sets": ["core"]})(),
             "blas-group": type("G", (), {"source_sets": ["libs"]})(),
         }
         # Artifacts map: name -> FakeArtifact with type field
-        # base is target-neutral (produces generic only)
-        # blas is target-specific (produces per-arch artifacts)
+        # base is in a generic stage, so always uses generic family
+        # blas is target-specific in a per-arch stage, so uses per-arch families
         self.artifacts = {
             "base": _FakeArtifact("base", "base-group", "target-neutral"),
             "blas": _FakeArtifact("blas", "blas-group", "target-specific"),
