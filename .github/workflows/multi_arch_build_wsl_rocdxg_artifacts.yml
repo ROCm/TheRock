@@ -48,12 +48,17 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
     runs-on:
       group: ROCR-Runtime-libhsakmt-WSL
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
       id-token: write
@@ -61,39 +66,53 @@ jobs:
       run:
         shell: bash
     env:
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_wsl_rocdxg_artifacts.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build WSL ROCDXG artifacts"
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
       # misparses during nested subproject configure.
       THEROCK_WSL_WIN_SDK_MOUNT: /opt/winsdk-shared
+      # Injects Windows env vars into WSL
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
         run: git config --system core.longpaths true
 
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - name: Setting up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -195,8 +214,8 @@ jobs:
       - name: Prepare WSL paths
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_HOST_WORKSPACE/p:THEROCK_WIN_SDK_SHARED/p
         run: |
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           if [ ! -d "${THEROCK_WIN_SDK_SHARED}" ]; then
@@ -237,8 +256,8 @@ jobs:
       - name: Configure
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
         run: |
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
@@ -267,8 +286,8 @@ jobs:
       - name: Build stage
         shell: wsl-bash {0}
         env:
+          # Made available in WSL via job-level WSLENV
           THEROCK_WIN_SDK_SHARED: C:\Program Files (x86)\Windows Kits\10\Include\${{ steps.detect_sdk.outputs.sdk_version }}\shared
-          WSLENV: THEROCK_WIN_SDK_SHARED/p:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
@@ -304,7 +323,8 @@ jobs:
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
         env:
-          WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+          # Append AWS creds set by the "Configure AWS credentials" step
+          WSLENV: ${{ env.WSLENV }}:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           stage_name="${{ inputs.stage_name }}"
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
@@ -319,7 +339,8 @@ jobs:
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
         env:
-          WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
+          # Append AWS creds set by the "Configure AWS credentials" step
+          WSLENV: ${{ env.WSLENV }}:AWS_ACCESS_KEY_ID:AWS_SECRET_ACCESS_KEY:AWS_SESSION_TOKEN:AWS_DEFAULT_REGION:AWS_REGION
         run: |
           wsl_venv_dir="${HOME}/therock-wsl-rocdxg/.venv"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
@@ -329,3 +350,21 @@ jobs:
             --stage="${{ inputs.stage_name }}" \
             --build-dir="${wsl_build_dir}" \
             --amdgpu-family=""
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

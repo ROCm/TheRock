@@ -225,6 +225,48 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertIsNone(inputs.base_ref)
 
+    def test_external_repo_reads_from_env(self):
+        """External repo JSON is read from EXTERNAL_REPO env var."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "EXTERNAL_REPO": '{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+            },
+        )
+        self.assertEqual(
+            inputs.external_repo, '{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+        )
+
+    def test_external_repo_defaults_to_empty(self):
+        """External repo defaults to empty string when not set."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+        )
+        self.assertEqual(inputs.external_repo, "")
+
+
+class TestGitContext(unittest.TestCase):
+    """Test GitContext methods."""
+
+    def test_from_external_repo_creates_context_with_repo_name(self):
+        """from_external_repo creates context with repo name as changed file."""
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+
+    def test_from_external_repo_has_submodule_changes(self):
+        """from_external_repo sets has_submodule_changes to True."""
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+        self.assertTrue(git.has_submodule_changes)
+
+    def test_from_external_repo_empty_name(self):
+        """from_external_repo handles empty name."""
+        git = cm.GitContext.from_external_repo("")
+        self.assertEqual(git.changed_files, [""])
+        self.assertEqual(git.submodule_paths, [""])
+
 
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
@@ -285,31 +327,26 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
         mock_filter.assert_not_called()
 
-    def test_asan_pr_without_submodule_change_skips(self):
-        """ASAN PR without submodule changes skips CI."""
+    def test_asan_pr_without_label_skips(self):
+        """ASAN PR without enabling label skips CI."""
         inputs = self._inputs(build_variant="asan", pr_labels=[])
         git = cm.GitContext(
             changed_files=["CMakeLists.txt", "build_tools/script.py"],
-            submodule_paths=["rocm-libraries", "rocm-systems"],
         )
         self.assertTrue(cm.should_skip_ci(inputs, git))
 
-    def test_asan_pr_with_submodule_change_runs(self):
-        """ASAN PR with submodule changes runs CI."""
-        inputs = self._inputs(build_variant="asan", pr_labels=[])
+    def test_asan_pr_with_ci_asan_label_runs(self):
+        """ASAN PR with ci:asan label runs CI."""
+        inputs = self._inputs(build_variant="asan", pr_labels=["ci:asan"])
         git = cm.GitContext(
-            changed_files=["rocm-libraries", "CMakeLists.txt"],
-            submodule_paths=["rocm-libraries", "rocm-systems"],
+            changed_files=["CMakeLists.txt", "build_tools/script.py"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
-    def test_asan_non_pr_runs_regardless_of_submodule(self):
-        """ASAN on schedule/push runs regardless of submodule changes."""
+    def test_asan_non_pr_runs(self):
+        """ASAN on schedule/push runs regardless of labels."""
         inputs = self._inputs(event_name="schedule", build_variant="asan")
-        git = cm.GitContext(
-            changed_files=None,
-            submodule_paths=["rocm-libraries"],
-        )
+        git = cm.GitContext(changed_files=None)
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     def test_release_pr_without_submodule_change_runs(self):
@@ -320,6 +357,17 @@ class TestShouldSkipCI(unittest.TestCase):
             submodule_paths=["rocm-libraries"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required")
+    def test_external_repo_skips_path_filter(self, mock_filter):
+        """External repo builds skip path filtering and always run CI."""
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+        # Path filter should not be called for external repos
+        mock_filter.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +646,57 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_external_repo_stage_reuse_uses_repo_as_changed_file(self, mock_reuse):
+        """External repo builds pass repo name to stage-impact analysis.
+
+        When an external repo (e.g., rocm-libraries) triggers a build, the repo
+        name should be treated as a changed file for stage-impact analysis.
+        This is a plumbing test that verifies the correct arguments are passed
+        to compute_auto_stage_reuse.
+        """
+        # Setup mock to return a valid AutoStageReuse result
+        mock_reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.DRY_RUN,
+            candidate_stages=(),
+            rebuild_stages=(),
+            full_rebuild_required=False,
+            baseline_run_id="12345",
+            baseline_html_url=None,
+            available_stages=(),
+            unavailable_stages=(),
+            applied_reuse_stages=("compiler-rt",),
+            reasons=(),
+        )
+
+        # Create git context as if from external repo
+        git = cm.GitContext.from_external_repo("rocm-libraries")
+
+        # Verify GitContext is set up correctly
+        self.assertEqual(git.changed_files, ["rocm-libraries"])
+        self.assertEqual(git.submodule_paths, ["rocm-libraries"])
+        self.assertTrue(git.has_submodule_changes)
+
+        # Call decide_jobs with external repo context
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+
+        # Verify compute_auto_stage_reuse was called with correct arguments
+        mock_reuse.assert_called_once()
+        call_kwargs = mock_reuse.call_args.kwargs
+        # The changed_files should be passed through for stage-impact analysis
+        self.assertEqual(call_kwargs["changed_files"], ["rocm-libraries"])
+
+        # Verify the result contains the mocked reuse data
+        self.assertIsNotNone(result.auto_stage_reuse)
+        self.assertEqual(result.auto_stage_reuse.applied_reuse_stages, ("compiler-rt",))
+        self.assertEqual(result.auto_stage_reuse.baseline_run_id, "12345")
 
 
 # ---------------------------------------------------------------------------
@@ -929,6 +1028,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_python_packages=True,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
@@ -960,6 +1060,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_python_packages=True,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
@@ -1113,17 +1214,17 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                },
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
                 },
             ],
@@ -1133,7 +1234,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.10",
+                    "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
                 }
             ],
@@ -1393,7 +1494,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
 
 class TestFormatSummary(unittest.TestCase):
-    """Test summary formatting (pure function)."""
+    """Test summary formatting as a function of CI input and output objects."""
 
     def _inputs(self, **kwargs):
         defaults = dict(
@@ -1406,16 +1507,7 @@ class TestFormatSummary(unittest.TestCase):
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
 
-    def test_skipped_summary(self):
-        outputs = cm.CIOutputs.skipped()
-        result = format_summary(self._inputs(), outputs)
-        # Just check the header. The output is markdown and asserting
-        # on more exact formatting would create a change detector test.
-        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
-
     def test_normal_summary(self):
-        """Only checks header — output is markdown, not a contract.
-        Asserting on exact wording would create a change-detector test."""
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
             test_rocm=cm.TestRocmDecision(action=cm.JobAction.RUN, test_type="full"),
@@ -1426,13 +1518,78 @@ class TestFormatSummary(unittest.TestCase):
         )
         outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         result = format_summary(self._inputs(), outputs)
+
+        self.assertIsInstance(result, str)
         # Just check the header. The output is markdown for humans and asserting
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
 
-    def test_skipped_ci_write_outputs_summary(self):
-        outputs = cm.CIOutputs(is_ci_enabled=False)
-        cm.write_outputs(self._inputs(), outputs)
+    def test_skipped_summary(self):
+        outputs = cm.CIOutputs.skipped()
+        result = format_summary(self._inputs(), outputs)
+
+        self.assertIsInstance(result, str)
+        # Just check the header. The output is markdown for humans and asserting
+        # on more exact formatting would create a change detector test.
+        self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
+        # The summary should also mention that CI was skipped with some
+        # explanation for why.
+        self.assertIn("skipped", result)
+
+
+class TestWriteOutputs(unittest.TestCase):
+    """Test writing CI configuration to GitHub Actions output files."""
+
+    def _write_outputs(self, outputs: cm.CIOutputs) -> tuple[str, str]:
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+        )
+
+        # Redirect GitHub Actions outputs to temporary files so these unit tests
+        # verify write_outputs() without modifying the live test job summary.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            runner_temp = tmp_path / "runner_temp"
+            runner_temp.mkdir()
+            github_output = tmp_path / "github_output"
+            step_summary = tmp_path / "step_summary.md"
+            env = {
+                "GITHUB_OUTPUT": os.fspath(github_output),
+                "GITHUB_STEP_SUMMARY": os.fspath(step_summary),
+                "RUNNER_TEMP": os.fspath(runner_temp),
+            }
+
+            with patch.dict(os.environ, env, clear=False):
+                cm.write_outputs(ci_inputs, outputs)
+
+            return (
+                github_output.read_text(),
+                step_summary.read_text(),
+            )
+
+    def test_running_ci(self):
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=_jobs(test_type="full"),
+        )
+        github_output, step_summary = self._write_outputs(outputs)
+
+        self.assertIn("enable_build_jobs=true", github_output)
+        self.assertIn("test_type=full", github_output)
+        self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_skipped_ci(self):
+        outputs = cm.CIOutputs.skipped()
+        github_output, step_summary = self._write_outputs(outputs)
+
+        # Some outputs should still be emitted even when CI is skipped, so other
+        # workflow steps can use them.
+        self.assertIn("enable_build_jobs=false", github_output)
+        self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
 
 
 # ---------------------------------------------------------------------------
@@ -1608,35 +1765,40 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 class TestFamilyTestFilters(unittest.TestCase):
     """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
 
-    def test_real_family_gfx90a_nightly_check_only(self):
-        """Integration test: gfx90a has nightly_check_only_for_family in the matrix."""
-        # gfx90a (in nightly matrix) has nightly_check_only_for_family=True for linux
+    def test_real_family_gfx90a_postsubmit(self):
+        """Integration test: gfx90a is in postsubmit matrix with submodule changes."""
+        # gfx90a is in postsubmit matrix, so it runs on push events.
+        # It has submodule_bump_tests_only=True, so tests only run when
+        # submodule changes are detected.
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="pull_request",  # Non-schedule run
-            commit_ref="feature-branch",
+            event_name="push",
+            commit_ref="main",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["ci:run-all-archs"],  # Include gfx90a from nightly matrix
         )
-        targets = cm.select_targets(ci_inputs)
-        git_context = cm.GitContext.empty()
+        # gfx90a has submodule_bump_tests_only=True, so we need submodule changes
+        # for tests to be enabled. Simulate a submodule bump.
+        git_context = cm.GitContext(
+            changed_files=["some-submodule"],
+            submodule_paths=["some-submodule"],
+        )
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx90a in the linux build config
+        gfx90a_info = None
         if outputs.builds.linux:
-            gfx90a_info = None
             for family_info in outputs.builds.linux.per_family_info:
                 if family_info["amdgpu_family"] == "gfx90a":
                     gfx90a_info = family_info
                     break
 
         self.assertIsNotNone(gfx90a_info)
-        self.assertEqual(gfx90a_info["test-runs-on"], "")
+        # gfx90a should have test-runs-on set in postsubmit when submodule changes
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-    def test_workflow_dispatch_allows_nightly_check_only_family(self):
-        """workflow_dispatch should allow testing nightly_check_only families."""
-        # gfx90a has nightly_check_only_for_family=True for linux
+    def test_workflow_dispatch_allows_gfx90a(self):
+        """workflow_dispatch should allow testing gfx90a."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
@@ -1688,34 +1850,6 @@ class TestFamilyTestFilters(unittest.TestCase):
         # Tests should be disabled (empty runner)
         self.assertEqual(gfx950_info["test-runs-on"], "")
 
-    def test_submodule_bump_tests_only_enables_tests_with_submodule_changes(self):
-        """gfx950 tests should be enabled on push with submodule changes."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        # Submodule change detected
-        git_context = cm.GitContext(
-            changed_files=["rocm-libraries"],
-            submodule_paths=["rocm-systems", "rocm-libraries"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # Find gfx950 in the linux build config
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be enabled
-        self.assertNotEqual(gfx950_info["test-runs-on"], "")
-
     def test_submodule_bump_tests_only_enables_tests_on_workflow_dispatch(self):
         """gfx950 tests should be enabled on workflow_dispatch regardless of submodule changes."""
         ci_inputs = cm.CIInputs(
@@ -1749,7 +1883,7 @@ class TestFamilyTestFilters(unittest.TestCase):
 
 
 class TestMultiLabelRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of multi-label runner configurations.
+    """Test count-based random selection of multi-label runner configurations.
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1777,19 +1911,19 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         self.assertIn("test-runs-on-labels", gfx94x_linux)
         self.assertIn("test-runs-on-multi-gpu-labels", gfx94x_linux)
 
-        # Verify we have 3 labels for 1-gpu
+        # Verify we have 2 labels for 1-gpu
         labels = gfx94x_linux["test-runs-on-labels"]
-        self.assertEqual(len(labels), 3)
+        self.assertEqual(len(labels), 2)
 
         # Verify label names
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-1gpu-ccs-ossci-rocm", label_names)
         self.assertIn("linux-gfx942-1gpu-ccs-csp-ossci-rocm", label_names)
-        self.assertIn("linux-gfx942-1gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to ~1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_gfx94x_multi_gpu_has_label_config(self):
         """Verify gfx94x has the multi-gpu label configuration."""
@@ -1806,14 +1940,15 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
         label_names = [l["label"] for l in labels]
         self.assertIn("linux-gfx942-8gpu-ossci-rocm", label_names)
 
-        # Verify weights sum to 1.0
-        total_weight = sum(l["weight"] for l in labels)
-        self.assertAlmostEqual(total_weight, 1.0, places=1)
+        # Verify counts are positive integers
+        for label_config in labels:
+            self.assertIn("count", label_config)
+            self.assertGreater(label_config["count"], 0)
 
     def test_expand_build_configs_uses_default_runner(self):
         """expand_build_configs uses the default test-runs-on label.
 
-        Note: Per-component weighted runner selection is handled in
+        Note: Per-component count-based runner selection is handled in
         fetch_test_configurations.py, not in expand_build_configs.
         """
         ci_inputs = cm.CIInputs(
@@ -1871,7 +2006,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 class TestBuildRunnerSelection(unittest.TestCase):
-    """Test weighted random selection of build runners (Azure vs AWS).
+    """Test count-based random selection of build runners (Azure vs AWS).
 
     These tests validate local amdgpu_family_matrix.py definitions.
     CI_CONFIG_PATH is cleared to ensure external config is not loaded.
@@ -1887,24 +2022,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self._orig_env)
 
-    def test_select_build_runner_weighted_selection(self):
-        """Test weighted selection: 100% AWS for default Linux builds."""
+    def test_select_build_runner_weight_selection(self):
+        """Test weight-based selection for build runners."""
         from amdgpu_family_matrix import select_build_runner
 
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.3):
-            self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
-            )
-
-        # Any random value should select AWS for Linux
-        with patch("random.random", return_value=0.75):
+        # With only one runner (weight=1.0), any random value selects it
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
             )
 
         # Windows still uses Azure
-        with patch("random.random", return_value=0.95):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
@@ -1913,7 +2042,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
         """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
         from amdgpu_family_matrix import select_build_runner
 
-        with patch("random.random", return_value=0.99):
+        with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
                 "azure-linux-scale-rocm-heavy-ramdisk",
