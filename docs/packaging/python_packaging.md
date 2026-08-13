@@ -13,7 +13,8 @@ We generate the following types of packages:
 - Selector package: The `rocm` package is built as an sdist so that it is
   evaluated at the point of install, allowing it to perform some selection logic
   to detect dependencies and needs. Most other packages are installed by
-  asking to install extras of this one (i.e. `rocm[libraries]`, etc).
+  asking to install extras of this one (i.e.
+  `rocm[libraries,device-gfx942]`, etc).
   - The `rocm` package provides the `rocm-sdk` tool.
   - The `rocm` package uses the `import rocm_sdk` Python namespace as we do
     not want a barename `rocm`.
@@ -23,15 +24,13 @@ We generate the following types of packages:
   symlinks (instead, only SONAME libraries are included, and any executable
   symlinks are emitted by dynamically compiling an executable that can execle
   a relative binary).
-- Device packages: When kpack artifact splitting is enabled
-  (`KPACK_SPLIT_ARTIFACTS` flag in `therock_manifest.json`), per-ISA device
-  wheels (`rocm-sdk-device-{target}`) are produced alongside an arch-neutral
-  `rocm-sdk-libraries` host wheel. Device wheels contain `.kpack` archives
-  and kernel databases (Tensile `.co`/`.dat`, MIOpen `.kdb`/`.db.txt`, etc.)
-  that overlay into the `rocm-sdk-libraries` platform directory in
-  site-packages. Each device wheel declares `Requires-Dist` on the matching
-  version of `rocm-sdk-libraries`. Users install only the device wheels for
-  their GPU target(s).
+- Device packages: Per-ISA device wheels (`rocm-sdk-device-{target}`) are
+  produced alongside an arch-neutral `rocm-sdk-libraries` host wheel. Device
+  wheels contain `.kpack` archives and kernel databases (Tensile `.co`/`.dat`,
+  MIOpen `.kdb`/`.db.txt`, etc.) that overlay into the `rocm-sdk-libraries`
+  platform directory in site-packages. Each device wheel declares
+  `Requires-Dist` on the matching version of `rocm-sdk-libraries`. Users install
+  only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
   a relative symlink in the tarball. During extraction, file symlinks are
@@ -42,30 +41,26 @@ We generate the following types of packages:
   file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
 
-### Legacy vs kpack-split packaging modes
+### Kpack-split packaging
 
-The packaging pipeline supports two modes, selected automatically based on the
-`KPACK_SPLIT_ARTIFACTS` flag in the build's `therock_manifest.json`:
+All current builds enable `KPACK_SPLIT_ARTIFACTS` by default. The
+`rocm-sdk-libraries` host wheel is architecture neutral and device code is
+distributed in `rocm-sdk-device-{target}` wheels, one per GFX ISA target. The
+devel package is also architecture neutral and excludes test binaries, which
+require device code to run. The packaging tools detect this layout from the
+flag in the build's `therock_manifest.json`. Support for older manifests is
+retained temporarily in the implementation but is not part of the current
+release flow; see [issue 3340](https://github.com/ROCm/TheRock/issues/3340).
 
-- **Legacy mode** (flag absent or false): Runtime packages can be target neutral
-  or target specific. Target specific packages like `rocm-sdk-libraries-{family}`
-  are suffixed with their target family and contain both host code and embedded
-  device code.
-- **Kpack-split mode** (flag true): The `rocm-sdk-libraries` host wheel is
-  arch-neutral (no family suffix, no device code). Device code is distributed
-  via separate `rocm-sdk-device-{target}` wheels, one per GFX ISA target.
-  The devel package is also arch-neutral and excludes test binaries (which
-  require device code to run).
-
-In kpack-split mode the arch-neutral `rocm-sdk-devel` tree does not itself contain
-per-ISA device files. Each installed `rocm-sdk-device-{target}` wheel ships a
-manifest, and `rocm-sdk init` - which also runs on the first use of a devel tool
-such as `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries`
-into the devel tree, recording them in the device wheel's `RECORD` so
-`pip uninstall` removes them. Because the compiler trampolines only trigger this
-on the first expansion, after installing or removing a `rocm-sdk-device-*` wheel
-in an already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test`
-to refresh the device files in the devel tree.
+The arch-neutral `rocm-sdk-devel` tree does not itself contain per-ISA device
+files. Each installed `rocm-sdk-device-{target}` wheel ships a manifest, and
+`rocm-sdk init` - which also runs on the first use of a devel tool such as
+`hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries` into the
+devel tree, recording them in the device wheel's `RECORD` so `pip uninstall`
+removes them. Because the compiler trampolines only trigger this on the first
+expansion, after installing or removing a `rocm-sdk-device-*` wheel in an
+already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test` to
+refresh the device files in the devel tree.
 
 It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The
@@ -85,9 +80,10 @@ including a commit hash). You can also set an explicit fixed version with the
 [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py).
 and the [versioning documentation](versioning.md) for more version formats.
 
-### Build Target Family Selection
+### Package Target Selection
 
-The target GPU family used when building packages is determined in the following order:
+The GPU target selected by the `rocm` meta package is determined in the following
+order:
 
 1. `ROCM_SDK_TARGET_FAMILY` environment variable, if set.
 1. Dynamically discovered target family on the system.
@@ -97,9 +93,10 @@ For CI builds on CPU-only machines, this will typically fall through to (3).
 For developer machines with GPUs, the dynamic detection in (2) should suffice,
 but can be overridden by setting (1).
 
-In case of multiple GPU architectures present, the dynamically discovered target family
-defaults to the first available family, in which case it might be necessary to set the
-`ROCM_SDK_TARGET_FAMILY` environment variable.
+If multiple GPU architectures are present, dynamic detection defaults to the
+first available target. Set the `ROCM_SDK_TARGET_FAMILY` environment variable to
+override that choice. The environment variable retains its historical name but
+accepts an individual GFX ISA target such as `gfx942`.
 
 ### Building from Local Artifacts
 
@@ -131,14 +128,14 @@ You can also build packages from artifacts uploaded by CI workflows:
 
 ```bash
 # 1. Fetch artifacts from a CI run (find run IDs at github.com/ROCm/TheRock/actions)
-RUN_ID=21440027240
-ARTIFACT_GROUP=gfx110X-all
+RUN_ID="<replace-with-run-id>"
 ARTIFACTS_DIR=${HOME}/therock/${RUN_ID}/artifacts
 PACKAGES_DIR=${HOME}/therock/${RUN_ID}/packages
 
+# Fetch the complete platform artifact set. Package construction requires the
+# generic host artifacts and every device target recorded in the build manifest.
 python ./build_tools/fetch_artifacts.py \
     --run-id=${RUN_ID} \
-    --artifact-group=${ARTIFACT_GROUP} \
     --output-dir=${ARTIFACTS_DIR}
 
 # 2. Build Python packages from the fetched artifacts
@@ -147,41 +144,24 @@ python ./build_tools/build_python_packages.py \
     --dest-dir=${PACKAGES_DIR}
 
 # 3. Check the packages that were built
-ls ${PACKAGES_DIR}
-# rocm_sdk_core-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm_sdk_devel-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm_sdk_libraries_gfx110x_all-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm-7.12.0.dev0.tar.gz
-```
-
-For kpack-split builds, use `artifact_manager.py` with `--amdgpu-targets` to
-fetch per-ISA artifacts:
-
-```bash
-python ./build_tools/artifact_manager.py fetch --stage all \
-    --output-dir=${ARTIFACTS_DIR} \
-    --run-id=${RUN_ID} --platform linux \
-    --amdgpu-families "gfx94X-dcgpu;gfx120X-all" \
-    --amdgpu-targets "gfx942,gfx1100,gfx1101,gfx1102,gfx1103,gfx1151,gfx1200,gfx1201"
-
-python ./build_tools/build_python_packages.py \
-    --artifact-dir=${ARTIFACTS_DIR}/artifacts \
-    --dest-dir=${PACKAGES_DIR}
-
-# Kpack-split output:
-# rocm_sdk_core-*.whl, rocm_sdk_libraries-*.whl (arch-neutral),
+ls ${PACKAGES_DIR}/dist
+# rocm_sdk_core-*.whl
+# rocm_sdk_libraries-*.whl
 # rocm_sdk_device_gfx942-*.whl, rocm_sdk_device_gfx1100-*.whl, ...
+# rocm_sdk_devel-*.whl
+# rocm-*.tar.gz
 ```
 
 ### Installing Locally Built Packages
 
 To install locally built packages, you can use the
 [`-f, --find-links`](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)
-option:
+option. Replace `device-gfx942` with the target for your GPU, or use
+`device-all` to install every device wheel:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install rocm[libraries,devel] --pre \
+pip install "rocm[libraries,devel,device-gfx942]" --pre \
     --find-links=${PACKAGES_DIR}/dist
 
 # Run sanity tests to verify the installation
@@ -198,7 +178,7 @@ python ./third-party/indexer/indexer.py ${PACKAGES_DIR}/dist \
 
 # Install using --find-links
 python -m venv .venv && source .venv/bin/activate
-pip install rocm[libraries,devel] --pre \
+pip install "rocm[libraries,devel,device-gfx942]" --pre \
     --find-links=${PACKAGES_DIR}/dist/index.html
 ```
 
@@ -276,8 +256,8 @@ Instead:
 - Runtime dependencies are resolved using RPATH.
 
 > [!NOTE]
-> The `rocm` meta package requires device-family-specific components
-> (e.g. `gfx94X-dcgpu`). If these are not available in the selected
+> The `rocm` meta package requires a device wheel for the selected GFX ISA target
+> (for example, `rocm-sdk-device-gfx942`). If it is not available in the selected
 > package index, installation may be incomplete.
 
 ## Using Packages from Frameworks
@@ -290,9 +270,9 @@ subset (including runtime, HIP, system libraries and critical path math
 libraries), this is a process of installing the development packages like:
 
 ```bash
-# See RELEASES.md for exact arch specific incantations, --index-url
+# See RELEASES.md for exact target-specific incantations, --index-url
 # combinations, etc.
-pip install rocm[libraries,devel]
+pip install "rocm[libraries,devel,device-gfx942]"
 ```
 
 Then build your framework by setting appropriate CMake settings or environment

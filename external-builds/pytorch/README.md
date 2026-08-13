@@ -107,8 +107,8 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.10+) on a system which we build the
-`rocm[libraries,devel]` packages for. See the
+You will need a supported Python version (3.10+) on a system for which we build
+the `rocm[libraries,devel,device-*]` packages. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
 for more background on these `rocm` packages.
@@ -184,6 +184,7 @@ mix/match build steps.
   ```bash
   python build_prod_wheels.py build \
     --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --rocm-extras device-gfx1100 \
     --pytorch-rocm-arch gfx1100 \
     --output-dir $HOME/tmp/pyout
   ```
@@ -193,6 +194,7 @@ mix/match build steps.
   ```batch
   python build_prod_wheels.py build ^
     --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ ^
+    --rocm-extras device-gfx1100 ^
     --pytorch-rocm-arch gfx1100 ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
@@ -320,7 +322,9 @@ per-target device wheels were promoted independently. See the discussion on
 
 ### Other ways to install the rocm packages
 
-The `rocm[libraries,devel]` packages can be installed in multiple ways:
+The `rocm[libraries,devel,device-*]` packages can be installed in multiple ways.
+The examples use `device-gfx942`; replace it with the target for your GPU, or
+use `device-all` when the environment must support every published target.
 
 - (As above) during the `build_prod_wheels.py build` subcommand
 
@@ -329,6 +333,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   build_prod_wheels.py
       --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+      --rocm-extras device-gfx942 \
       install-rocm
   ```
 
@@ -338,30 +343,28 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   # From therock-nightly-python
   python -m pip install \
     --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
-    rocm[libraries,devel]
+    "rocm[libraries,devel,device-gfx942]"
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/ \
-    rocm[libraries,devel]
+    --index-url https://rocm.devreleases.amd.com/whl-multi-arch/ \
+    "rocm[libraries,devel,device-gfx942]"
   ```
 
-- Building the rocm Python packages from artifacts fetched from a CI run:
-
-  <!-- TODO: teach scripts to look up latest stable run and mkdir themselves -->
+- Building the rocm Python packages from artifacts fetched from a CI run. Fetch
+  the complete artifact set: package construction needs the generic host
+  artifacts and every per-ISA device artifact recorded in the build manifest.
 
   ```bash
   # From the repository root
-  mkdir $HOME/.therock/17123441166
-  mkdir $HOME/.therock/17123441166/artifacts
+  RUN_ID="<replace-with-run-id>"
   python ./build_tools/fetch_artifacts.py \
-    --run-id=17123441166 \
-    --target=gfx110X-all \
-    --output-dir=$HOME/.therock/17123441166/artifacts
+    --run-id=${RUN_ID} \
+    --output-dir=${HOME}/.therock/${RUN_ID}/artifacts
 
   python ./build_tools/build_python_packages.py \
-    --artifact-dir=$HOME/.therock/17123441166/artifacts \
-    --dest-dir=$HOME/.therock/17123441166/packages
+    --artifact-dir=${HOME}/.therock/${RUN_ID}/artifacts \
+    --dest-dir=${HOME}/.therock/${RUN_ID}/packages
   ```
 
 - Building the rocm Python packages from artifacts built from source:
@@ -379,10 +382,10 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
 By default, Python wheels produced by the PyTorch build do not include ROCm
 binaries. Instead, they expect those binaries to come from the
-`rocm[libraries,devel]` packages. A "fat wheel" bundles the ROCm binaries into
-the same wheel archive to produce a standalone install including both PyTorch
-and ROCm, with all necessary patches to shared library / DLL loading for out of
-the box operation.
+`rocm[libraries,devel,device-*]` packages. A "fat wheel" bundles the ROCm
+binaries into the same wheel archive to produce a standalone install including
+both PyTorch and ROCm, with all necessary patches to shared library / DLL loading
+for out of the box operation.
 
 To produce such a fat wheel, see
 [`windows_patch_fat_wheel.py`](./windows_patch_fat_wheel.py) and a future
