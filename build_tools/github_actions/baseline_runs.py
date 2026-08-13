@@ -265,15 +265,28 @@ def is_successful_workflow_run(workflow_run: dict) -> bool:
     )
 
 
-def is_successful_workflow_job(workflow_job: dict) -> bool:
+def is_successful_workflow_job(
+    workflow_job: dict, *, allow_in_progress: bool = False
+) -> bool:
     """Return True when a workflow job completed successfully or was skipped.
 
     Skipped jobs are considered successful because they indicate a job that
     didn't need to run (e.g., conditional job, path filter), not a failure.
+
+    When allow_in_progress=True, jobs that are still running (status="in_progress")
+    are also accepted. This is useful when checking in-progress workflow runs
+    where we want to verify that completed build jobs succeeded, while ignoring
+    jobs that are still running (like tests or PyTorch builds).
     """
-    return workflow_job.get("status") == "completed" and workflow_job.get(
-        "conclusion"
-    ) in ("success", "skipped")
+    status = workflow_job.get("status")
+    conclusion = workflow_job.get("conclusion")
+
+    # In-progress jobs are acceptable when explicitly allowed
+    if allow_in_progress and status == "in_progress":
+        return True
+
+    # Completed jobs must have succeeded or been skipped
+    return status == "completed" and conclusion in ("success", "skipped")
 
 
 def query_completed_workflow_runs(
@@ -502,6 +515,7 @@ def validate_required_jobs_successful(
     *,
     workflow_jobs: Sequence[dict],
     required_name_substrings: Iterable[str],
+    allow_in_progress: bool = False,
 ) -> WorkflowJobHealth:
     """Validate that matching workflow jobs completed successfully.
 
@@ -509,6 +523,10 @@ def validate_required_jobs_successful(
     reusable build artifacts. This check lets callers require the relevant
     build jobs to be healthy without requiring the whole workflow conclusion to
     be successful.
+
+    When allow_in_progress=True, jobs that are still running are accepted.
+    This is useful for in-progress workflow runs where we want to verify that
+    completed build jobs succeeded, while ignoring jobs still running.
     """
     requirements = _dedupe_nonempty_strings(
         required_name_substrings,
@@ -536,7 +554,7 @@ def validate_required_jobs_successful(
             if job_name not in seen_matched:
                 seen_matched.add(job_name)
                 matched.append(job_name)
-            if is_successful_workflow_job(job):
+            if is_successful_workflow_job(job, allow_in_progress=allow_in_progress):
                 continue
             job_status = _format_job_status(job)
             if job_status not in seen_failed:
@@ -850,9 +868,14 @@ def select_baseline_run(
                 rejection_reasons.append(reason)
                 continue
 
+        # For in-progress workflow runs, accept jobs that are still running.
+        # We only care that completed build jobs succeeded; running jobs (like
+        # tests or PyTorch builds) are fine to ignore.
+        run_is_in_progress = workflow_run.get("status") == "in_progress"
         job_health = validate_required_jobs_successful(
             workflow_jobs=workflow_jobs_fetcher(workflow_run, github_repository),
             required_name_substrings=required_jobs,
+            allow_in_progress=run_is_in_progress,
         )
         if not job_health.is_valid:
             failed_summary = ", ".join(job_health.failed_job_names[:3])
