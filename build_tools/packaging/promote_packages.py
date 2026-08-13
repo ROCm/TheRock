@@ -23,6 +23,13 @@ Common workflows:
   - a  -> rc                 e.g. 7.13.0a20260501 -> 7.13.0rc1
 Other combinations are mechanically possible but not typical.
 
+When promoting torch-family wheels to a stable release, ROCm package
+dependencies in METADATA are rewritten to a patch-floating stable minor
+specifier (for example `rocm-sdk-core==7.13.*`). The torch wheel identity itself
+remains exact (for example `torch-2.8.0+rocm7.13.0-...whl`) so the artifact
+records the ROCm version it was built against, while allowing ROCm patch
+updates that do not require rebuilding torch.
+
 The keep-list pass (--multi-arch-targets) is independent of version promotion: it
 runs whenever --multi-arch-targets is supplied, alongside any version rewrite. To
 run ONLY the keep-list pass and leave the version untouched, use
@@ -84,7 +91,9 @@ import sys
 import tarfile
 import tempfile
 
-from packaging.version import Version
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
+from packaging.version import InvalidVersion, Version
 from pkginfo import Wheel
 
 # Need dynamic load as change_wheel_version needs to be imported via parent directory
@@ -239,12 +248,114 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     return args
 
 
+def is_torch_package_name(package_name: str) -> bool:
+    """Return True for torch-family packages eligible for ROCm dep floating."""
+    normalized = canonicalize_name(package_name)
+    return normalized in {
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "triton",
+        "apex",
+    } or normalized.startswith(
+        (
+            "amd-torch-device-",
+            "amd-torchvision-device-",
+        )
+    )
+
+
+def is_floating_rocm_dependency_name(package_name: str) -> bool:
+    """Return True for ROCm package deps that may float in torch metadata.
+
+    `rocm-bootstrap` intentionally stays out of this set. It is not part of the
+    stable ROCm SDK dependency line that should float at patch level.
+    """
+    normalized = canonicalize_name(package_name)
+    return (
+        normalized == "rocm"
+        or normalized.startswith("rocm-sdk-")
+        or normalized == "rocm-profiler"
+    )
+
+
+def stable_minor_spec(version_str: str) -> str | None:
+    """Return a stable patch-floating specifier like `7.13.*`, or None."""
+    version = Version(version_str)
+    if version.is_prerelease or version.is_devrelease or version.local is not None:
+        return None
+    if len(version.release) < 2:
+        raise ValueError(f"Stable version {version_str!r} must include major and minor")
+    return f"{version.release[0]}.{version.release[1]}.*"
+
+
+_REQUIRES_DIST_NAME_RE = re.compile(
+    r"^(?P<prefix>Requires-Dist:\s*)(?P<name>[A-Za-z0-9_.-]+)(?P<tail>.*)$"
+)
+
+
+def rewrite_metadata_rocm_line(
+    line: str,
+    old_rocm_version: str,
+    new_rocm_version: str,
+    *,
+    float_rocm_dependency_patch: bool,
+) -> str:
+    """Rewrite one METADATA line for ROCm version promotion.
+
+    Summary lines and non-floating requirements use exact replacement. When
+    `float_rocm_dependency_patch` is set, only existing exact `==<stable version>`
+    pins on ROCm dependency names are converted to `==X.Y.*`.
+    """
+    rewritten = line.replace(old_rocm_version, new_rocm_version)
+    if not float_rocm_dependency_patch or not rewritten.startswith("Requires-Dist"):
+        return rewritten
+
+    requires_match = _REQUIRES_DIST_NAME_RE.match(rewritten)
+    if not requires_match:
+        raise ValueError(f"Malformed Requires-Dist line: {line!r}")
+    requirement_text = requires_match.group("name") + requires_match.group("tail")
+    try:
+        requirement = Requirement(requirement_text)
+    except InvalidRequirement as e:
+        raise ValueError(f"Malformed Requires-Dist requirement: {line!r}") from e
+
+    if not is_floating_rocm_dependency_name(requirement.name):
+        return rewritten
+
+    specifiers = list(requirement.specifier)
+    if len(specifiers) != 1:
+        return rewritten
+    specifier = specifiers[0]
+    if specifier.operator != "==" or "*" in specifier.version:
+        return rewritten
+
+    exact_version = specifier.version
+    try:
+        minor_spec = stable_minor_spec(exact_version)
+    except InvalidVersion:
+        return rewritten
+    if minor_spec is None:
+        return rewritten
+
+    tail = requires_match.group("tail")
+    tail = re.sub(
+        rf"(?P<operator>==\s*){re.escape(exact_version)}(?P<boundary>\b)",
+        rf"\g<operator>{minor_spec}\g<boundary>",
+        tail,
+        count=1,
+    )
+    return requires_match.group("prefix") + requires_match.group("name") + tail
+
+
 def update_metadata_rocm_requires_dist(
     new_dir_path: pathlib.Path,
     package_name_no_version: str,
     old_version: str,
     old_rocm_version: str,
     new_rocm_version: str,
+    *,
+    float_rocm_dependency_patch: bool = False,
 ) -> None:
     """Update Requires-Dist lines in METADATA that reference rocm, leaving others unchanged."""
     metadata_path = (
@@ -261,9 +372,25 @@ def update_metadata_rocm_requires_dist(
                 if line.startswith("Summary:") and (
                     "TheRock" in line or "rocm" in line
                 ):
-                    print(line.replace(old_rocm_version, new_rocm_version), end="")
-                elif line.startswith("Requires-Dist") and "rocm" in line:
-                    print(line.replace(old_rocm_version, new_rocm_version), end="")
+                    print(
+                        rewrite_metadata_rocm_line(
+                            line,
+                            old_rocm_version,
+                            new_rocm_version,
+                            float_rocm_dependency_patch=False,
+                        ),
+                        end="",
+                    )
+                elif line.startswith("Requires-Dist"):
+                    print(
+                        rewrite_metadata_rocm_line(
+                            line,
+                            old_rocm_version,
+                            new_rocm_version,
+                            float_rocm_dependency_patch=float_rocm_dependency_patch,
+                        ),
+                        end="",
+                    )
                 else:
                     print(line, end="")
 
@@ -779,6 +906,7 @@ def wheel_change_extra_files(
     old_version: Version,
     new_version: Version,
     multi_arch_targets: list[str] | None = None,
+    dest_version: str = "release",
 ) -> None:
     # Always run the keep-list pass when archs are requested; do this *before*
     # version rewrites so the version replacement sees a consistent file
@@ -815,6 +943,9 @@ def wheel_change_extra_files(
         if "rocm" not in str(new_version)
         else str(new_version).split("+rocm")[-1]
     )
+    float_rocm_dependency_patch = dest_version == "release" and is_torch_package_name(
+        package_name_no_version
+    )
 
     print("    Changing ROCm-specific files that contain the version")
 
@@ -826,6 +957,7 @@ def wheel_change_extra_files(
         old_version,
         old_rocm_version,
         new_rocm_version,
+        float_rocm_dependency_patch=float_rocm_dependency_patch,
     )
     # Per-arch device wheels (amd_torch_device_gfx, amd_torchvision_device_gfx,
     # rocm_sdk_device_gfx) carry no package-specific files that reference the
@@ -898,7 +1030,9 @@ def promote_wheel(
     # Bound callback matching change_wheel_version's expected signature:
     #   callback(new_dir_path: Path, old_version: Version, new_version: Version) -> None
     callback = functools.partial(
-        wheel_change_extra_files, multi_arch_targets=multi_arch_targets
+        wheel_change_extra_files,
+        multi_arch_targets=multi_arch_targets,
+        dest_version=dest_version,
     )
 
     if skip_version_promotion:
