@@ -162,6 +162,13 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: >-
+          Build runner label. Defaults to the self-hosted ROCm Windows pool so
+          direct workflow_dispatch runs land on a runner with access to the
+          internal package mirror (a GitHub-hosted runner cannot resolve it).
+        type: string
+        default: "azure-windows-scale-rocm"
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
