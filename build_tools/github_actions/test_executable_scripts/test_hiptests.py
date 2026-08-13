@@ -90,9 +90,21 @@ TEST_TO_IGNORE = {
     "gfx125X-dcgpu": {
         "linux": [
             "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+            # ROCM-29275: SDMA COPY_SWAP hangs the GPU on gfx1250 (rocm-systems#9923).
+            "Unit_hipMemcpyBatchAsync_Swap",
+            "Unit_hipMemcpyBatchAsync_P2P_Swap",
         ]
     },
 }
+
+# Tests excluded on every family and platform, merged into the per-family lists
+# above. Use this for failures that are not architecture specific, since nightly
+# runs many more families than presubmit does.
+GENERIC_TEST_TO_IGNORE = [
+    # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+    "Unit_hip_linker_spirv_input",
+    "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
+]
 
 
 def get_asan_lib_path():
@@ -184,8 +196,10 @@ def execute_tests(env):
     if TEST_TYPE == "quick":
         cmd.extend(["-L", "smoke"])
 
+    ignored_tests = list(GENERIC_TEST_TO_IGNORE)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
-        ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+        ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    if ignored_tests:
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

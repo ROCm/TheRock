@@ -143,9 +143,21 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
+      - name: "Quartz - started - test PyTorch wheels (full suite)"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: test_pytorch_wheels_full.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -157,10 +169,17 @@ jobs:
             --default-runner '${{ inputs.test_runs_on }}' \
             --multi-gpu-runner '${{ inputs.test_runs_on_multi_gpu }}'
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_wheels:
     needs: prepare_matrix
     name: Test PyTorch Full | ${{ inputs.amdgpu_family }} / ${{ matrix.test_config }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
     runs-on: ${{ matrix.runs_on }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
@@ -201,13 +220,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -233,6 +252,7 @@ jobs:
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
       # steps to save time.
       - name: Checkout PyTorch Source
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
@@ -308,6 +328,11 @@ jobs:
         run: |
           ./build_tools/health_status.py
 
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
       - name: Run rocm-sdk sanity tests
         timeout-minutes: 5
         run: |
@@ -338,18 +363,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # Windows testing is a recent addition and is being enabled incrementally.
-      # See https://github.com/ROCm/TheRock/issues/2258.
-      #
-      # Many tests are failing on torch 2.10+ so we limit testing to 2.9.
-      # (Obviously that's not ideal, but we need to start somewhere)
-      #
       # HACK: The test process does not terminate on its own gracefully,
       # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
       # After killing the process we read the return code to signal it normally.
       # See https://github.com/ROCm/TheRock/issues/999.
       - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        if: ${{ runner.os == 'Windows'}}
         continue-on-error: true
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
@@ -357,7 +376,7 @@ jobs:
             -v
 
       - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        if: ${{ runner.os == 'Windows'}}
         run: |
           if [ -f run_pytorch_tests_exit_code.txt ]; then
             EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
@@ -367,6 +386,11 @@ jobs:
             echo "No run_pytorch_tests_exit_code.txt found"
             exit 1
           fi
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   # Aggregate every shard's JUnit XML test reports into a single failure table
   # on the run's summary page, so all failures across configs/shards are visible
@@ -378,9 +402,11 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -402,3 +428,26 @@ jobs:
         run: |
           python external-builds/pytorch/summarize_test_results.py \
             --combined-dir artifacts
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [prepare_matrix, test_wheels, test_summary]
+    name: "Quartz - completed - test PyTorch wheels (full suite)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - test PyTorch wheels (full suite)"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: test_pytorch_wheels_full.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
