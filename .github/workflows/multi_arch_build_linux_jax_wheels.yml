@@ -167,13 +167,6 @@ jobs:
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
 
-      - name: Prepare JAX build for ROCm LLVM
-        run: |
-          python3 build_tools/github_actions/configure_jax_rocm_llvm.py \
-            prepare \
-            --jax-source jax-source \
-            --rocm-jax-source rocm-jax
-
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
@@ -196,7 +189,17 @@ jobs:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
           ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          JAX_REF: ${{ inputs.jax_ref }}
         run: |
+          set -euxo pipefail
+
+          cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
+            Dockerfile.jax-manylinux_2_28-therock
+
+          python3 ../build_tools/github_actions/prepare_jax_manylinux_dockerfile.py \
+            --dockerfile Dockerfile.jax-manylinux_2_28-therock \
+            --jax-ref "${JAX_REF}"
+
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
@@ -230,22 +233,13 @@ jobs:
               set -euxo pipefail
 
               ROCM_ROOT="$(rocm-sdk path --root)"
-              ROCM_CLANG="${ROCM_ROOT}/lib/llvm/bin/clang"
-
-              python \
-                /workspace/build_tools/github_actions/configure_jax_rocm_llvm.py \
-                configure-build \
-                --jax-source /workspace/jax-source \
-                --rocm-root "${ROCM_ROOT}"
 
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
-                --clang_path="${ROCM_CLANG}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
-                --bazel_options=--repo_env=CLANG_COMPILER_PATH="${ROCM_CLANG}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
