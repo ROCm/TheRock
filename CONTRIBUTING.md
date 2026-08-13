@@ -219,11 +219,15 @@ following standards:
 | ✅ Branch naming patterns             | <ul><li>Repository ruleset</li></ul>                                                                                                         | <ul><li>[Branch naming policy](#branch-naming-policy)<br>(`users/USERNAME/feature-name`)</li></ul>                                                        |
 | ✅ Pull requests should link an issue | <ul><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul>                                                              | <ul><li>[`pull_request_template.md`](/.github/pull_request_template.md)<li>Policy Bot [`FAQ.md`](/skills/therock_pr_bot/FAQ.md#-pr-description)</li></ul> |
 | ✅ Lint pre-commit checks             | <ul><li>[`pre-commit.yml`](.github/workflows/pre-commit.yml)</li></ul>                                                                       | <ul><li>[pre-commit checks](#pre-commit-checks)</li></ul>                                                                                                 |
-| ✅ Changes should be unit tested      | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>(Planned) `TESTING.md` file</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
+| ✅ Changes should be tested           | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>[`TESTING.md`](/TESTING.md)</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
 
 > [!NOTE]
 > For more information about the PR Policy Bot which enforces some of these
 > policies see [`therock_pr_bot/FAQ.md`](/skills/therock_pr_bot/FAQ.md).
+
+#### Testing practices
+
+Project testing practices are documented in [TESTING.md](/TESTING.md).
 
 #### Coding style guides
 
