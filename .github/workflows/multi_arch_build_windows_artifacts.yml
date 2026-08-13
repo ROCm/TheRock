@@ -142,6 +142,8 @@ jobs:
           # https://github.com/ninja-build/ninja/issues/2616
           choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
+          # win_flex/win_bison are required by the amd-mesa (libva/d3d12) build.
+          choco install --no-progress -y winflexbison3
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
 
       - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
