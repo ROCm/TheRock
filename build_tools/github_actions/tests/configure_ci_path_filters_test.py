@@ -83,6 +83,10 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(is_ci_run_required([path]))
 
+    def test_dont_run_ci_for_path_filter_only_changes(self):
+        paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
+        self.assertFalse(is_ci_run_required(paths))
+
     def test_run_ci_for_tests_exercising_built_packages(self):
         integration_test_paths = [
             # Tests for ROCm subprojects.

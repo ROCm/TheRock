@@ -227,6 +227,10 @@ _SKIPPABLE_PATH_PATTERNS = [
     # This directory contains a collection of AI skills and other developer
     # utilities. It includes some Python scripts, none of which affect CI.
     "skills/*",
+    # This module runs in the lightweight setup job before build jobs are
+    # enabled. Its behavior is covered by unit tests, while running the full
+    # ROCm build would not provide additional validation of the path filters.
+    "build_tools/github_actions/configure_ci_path_filters.py",
     # Unit-test-only directories exercised by .github/workflows/unit_tests.yml.
     # Keep these in sync with the pytest invocations in that workflow and the
     # testpaths in pyproject.toml files. These are intentionally explicit
