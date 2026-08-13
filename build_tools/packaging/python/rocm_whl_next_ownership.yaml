@@ -1,0 +1,217 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Authoritative package ownership for the aggregate /rocm/whl-next Python
+# index. Owner paths are public paths relative to /rocm and must not include
+# hostnames, buckets, release streams, or storage-internal prefixes.
+schema_version: 1
+
+python_indexes:
+  - public_base: /rocm/whl-next
+    packages:
+      filelock:
+        owner_path: core/whl-next
+      fsspec:
+        owner_path: core/whl-next
+      jinja2:
+        owner_path: core/whl-next
+      markupsafe:
+        owner_path: core/whl-next
+      mpmath:
+        owner_path: core/whl-next
+      networkx:
+        owner_path: core/whl-next
+      numpy:
+        owner_path: core/whl-next
+      pillow:
+        owner_path: core/whl-next
+      rocm:
+        owner_path: core/whl-next
+      rocm-bootstrap:
+        owner_path: core/whl-next
+      rocm-profiler:
+        owner_path: core/whl-next
+      rocm-sdk-core:
+        owner_path: core/whl-next
+      rocm-sdk-devel:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1010:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1011:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1012:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1030:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1031:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1032:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1033:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1034:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1035:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1036:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1100:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1101:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1102:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1103:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1150:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1151:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1152:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1153:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1200:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1201:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx1250:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx908:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx90a:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx942:
+        owner_path: core/whl-next
+      rocm-sdk-device-gfx950:
+        owner_path: core/whl-next
+      rocm-sdk-libraries:
+        owner_path: core/whl-next
+      setuptools:
+        owner_path: core/whl-next
+      sympy:
+        owner_path: core/whl-next
+      typing-extensions:
+        owner_path: core/whl-next
+      jax-rocm10-pjrt:
+        owner_path: jax/whl-next
+      jax-rocm10-plugin:
+        owner_path: jax/whl-next
+      amd-torch-device-gfx1010:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1011:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1012:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1030:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1031:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1032:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1033:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1034:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1035:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1036:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx11:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1100:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1101:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1102:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1103:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx110x:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1150:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1151:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1152:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1153:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx115x:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx12-0:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1200:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1201:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx1250:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx908:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx90a:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx942:
+        owner_path: pytorch/whl-next
+      amd-torch-device-gfx950:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1010:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1011:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1012:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1030:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1031:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1032:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1033:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1034:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1035:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1036:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1100:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1101:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1102:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1103:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1150:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1151:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1152:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1153:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1200:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1201:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1250:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx908:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx90a:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx942:
+        owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx950:
+        owner_path: pytorch/whl-next
+      apex:
+        owner_path: pytorch/whl-next
+      torch:
+        owner_path: pytorch/whl-next
+      torchaudio:
+        owner_path: pytorch/whl-next
+      torchvision:
+        owner_path: pytorch/whl-next
+      triton:
+        owner_path: pytorch/whl-next
