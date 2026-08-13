@@ -682,6 +682,31 @@ def _filter_families_by_platform(
     ]
 
 
+def _get_artifact_family_names(
+    family_names: list[str],
+    platform: str,
+    all_families: dict[str, dict],
+) -> list[str]:
+    """Map normalized family names to their artifact family names.
+
+    The input `family_names` are normalized short names (e.g., 'gfx94x').
+    The artifact family names are the canonical names used in S3 artifact
+    paths (e.g., 'gfx94X-dcgpu'). These come from the 'family' field in
+    the platform-specific config in amdgpu_family_matrix.py.
+    """
+    result: list[str] = []
+    for name in family_names:
+        if name not in all_families:
+            continue
+        platform_info = all_families[name].get(platform)
+        if platform_info is None:
+            continue
+        artifact_family = platform_info.get("family", name)
+        if artifact_family not in result:
+            result.append(artifact_family)
+    return result
+
+
 def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
@@ -899,6 +924,7 @@ def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
     targets: TargetSelection,
+    all_families: dict[str, dict] | None = None,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
     ``targets`` (the per-platform family selection from ``select_targets()``)
@@ -921,12 +947,27 @@ def decide_jobs(
     # eligible stages are merged into stage_decisions so the orchestrator skips
     # their builds and copies artifacts instead. The platforms and families to
     # verify come straight from the resolved target selection.
+    #
+    # Map normalized family names (e.g., 'gfx94x') to artifact family names
+    # (e.g., 'gfx94X-dcgpu') so S3 artifact lookups match the actual filenames.
+    # When all_families is None (e.g., in tests), fall back to the original
+    # family names which won't match S3 artifacts but allows tests to pass.
+    if all_families is not None:
+        linux_artifact_families = _get_artifact_family_names(
+            targets.linux_families, "linux", all_families
+        )
+        windows_artifact_families = _get_artifact_family_names(
+            targets.windows_families, "windows", all_families
+        )
+    else:
+        linux_artifact_families = targets.linux_families
+        windows_artifact_families = targets.windows_families
 
     auto_stage_reuse = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
-        linux_amdgpu_families=targets.linux_families,
-        windows_amdgpu_families=targets.windows_families,
+        linux_amdgpu_families=linux_artifact_families,
+        windows_amdgpu_families=windows_artifact_families,
     )
 
     baseline_repository = ci_inputs.baseline_repository
@@ -1258,24 +1299,20 @@ def expand_build_configs(
     git_context: GitContext,
     targets: TargetSelection,
     jobs: JobDecisions,
+    all_families: dict[str, dict] | None = None,
 ) -> BuildConfigs:
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
     platforms where the variant isn't available or no families match.
     """
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
+    # Load all_families if not provided (for backwards compatibility with tests).
+    if all_families is None:
+        all_families = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        all_families = _apply_external_family_overrides(all_families)
 
-    # =========================================================================
-    # TEMPORARY: External family overrides for MI455 bringup in rocm-systems
-    # TODO(geomin12): Remove this block once MI455 is fully enabled in
-    #                 therock-ci-config or this bringup phase is complete.
-    # To revert: delete this block and the corresponding EXTERNAL_FAMILY_OVERRIDES
-    #            env var in setup_multi_arch.yml
-    # =========================================================================
-    all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # ASAN variant selection:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
@@ -1413,10 +1450,23 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     targets = select_targets(ci_inputs)
     targets.log()
 
+    # Load family matrix once and pass to functions that need it.
+    # This includes the mapping from normalized names (gfx94x) to artifact
+    # family names (gfx94X-dcgpu) needed for S3 artifact lookups.
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+    all_families = _apply_external_family_overrides(all_families)
+
     print("\n=== Deciding job configuration ===")
     # Target selection runs first so automatic stage reuse can scope its
     # prebuilt artifact checks to those targets.
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs = decide_jobs(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+        targets=targets,
+        all_families=all_families,
+    )
     jobs.log()
 
     print("\n=== Building per-platform configs ===")
@@ -1425,6 +1475,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         git_context=git_context,
         targets=targets,
         jobs=jobs,
+        all_families=all_families,
     )
     builds.log()
 
