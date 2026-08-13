@@ -73,6 +73,66 @@ Output structure:
     *.whl
 ```
 
+### Structured repo.amd.com packages
+
+Use `--structured` when candidates live in the product-owned repo.amd.com
+bucket layout:
+
+```text
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/whl-next/...
+s3://therock-repo-amd-<stream>-python/v5/rocm/pytorch/whl-next/...
+s3://therock-repo-amd-<stream>-jax/v5/rocm/jax/whl-next/...
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/tarball/...
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/tarball-asan/...
+```
+
+The local promotion layout remains flat:
+
+```text
+<output-dir>/
+  wheels/
+    *.whl
+    rocm-*.tar.gz
+  tarball/
+    therock-dist-*.tar.gz
+  tarball-asan/
+    therock-dist-*.tar.gz
+```
+
+Download structured `whl-next` packages from the `rc` stream:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --output-dir=./promotion/download/
+```
+
+Include normal ROCm Core tarballs:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --include-tarballs \
+  --tarball-variant=release \
+  --output-dir=./promotion/download/
+```
+
+Download ASAN tarballs instead:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --include-tarballs \
+  --tarball-variant=asan \
+  --output-dir=./promotion/download/
+```
+
 ## 2. Promote prerelease candidates to release
 
 Need:
@@ -220,6 +280,35 @@ python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/
 
 # Upload only tarballs (no Python packages)
 python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/download/ --no-upload-python --upload-tarballs --execute --use-release-buckets
+```
+
+### Structured repo.amd.com upload
+
+After promoting the flat local `wheels/`, `tarball/`, or `tarball-asan/`
+directories, upload back to the product-owned repo.amd.com buckets:
+
+```bash
+python build_tools/packaging/upload_release_packages.py \
+  --input-dir ./promotion/download/ \
+  --structured \
+  --repo-stream=rc \
+  --upload-tarballs \
+  --tarball-variant=release \
+  --execute \
+  --use-release-buckets
+```
+
+For ASAN tarballs:
+
+```bash
+python build_tools/packaging/upload_release_packages.py \
+  --input-dir ./promotion/download/ \
+  --structured \
+  --repo-stream=rc \
+  --upload-tarballs \
+  --tarball-variant=asan \
+  --execute \
+  --use-release-buckets
 ```
 
 ## 4. Update index files for the release bucket
