@@ -489,12 +489,7 @@ def validate_required_artifacts_available(
     # Log S3 details when available (S3Backend has these attributes, mocks may not)
     bucket = getattr(backend, "bucket", "unknown")
     prefix = getattr(backend, "s3_prefix", "unknown")
-    logger.info(
-        "S3 artifact check: bucket=%s prefix=%s found=%d artifacts",
-        bucket,
-        prefix,
-        len(available),
-    )
+    print(f"  S3 artifact check: bucket={bucket} prefix={prefix} found={len(available)} artifacts")
     matched: list[str] = []
     missing: list[RequiredArtifact] = []
     for required_artifact in requirements:
