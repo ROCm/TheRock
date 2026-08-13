@@ -85,6 +85,7 @@ class PackageConfig:
     versioned_pkg: bool = True
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
+    build_variant: str = ""
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -413,6 +414,11 @@ def update_package_name(pkg_name, config: PackageConfig):
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
+
+    # For ASAN builds, insert the variant before the version suffix so the
+    # package name reflects the build type (e.g. amdrocm-core-asan7.15).
+    if config.build_variant == "asan":
+        pkg_suffix = f"-{config.build_variant}{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
     updated_pkgname = pkg_name
