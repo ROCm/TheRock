@@ -161,15 +161,15 @@ is_windows = platform.system() == "Windows"
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
-# List of library preloads for Linux to generate into _rocm_init.py
+# List of library preloads for Linux to generate into _rocm_init.py.
+# These are loaded with RTLD_GLOBAL on `import torch` via _rocm_init.py so
+# that their symbols are available via dlsym(RTLD_DEFAULT, ...) without
+# requiring a successful dlopen by unversioned name (which fails in wheel
+# installs where only the versioned .so exists in the runtime package).
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
+    "amd_smi",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
-    "rocprofiler-sdk-roctx",  # Linux only for the moment.
-    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
-    "roctracer64",  # Linux only for the moment.
-    "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -177,13 +177,20 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparse",
     "hipsparselt",
     "hipsolver",
-    "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
     "rocm_smi64",
+    # Linux only.
+    "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
+    "rocprofiler-sdk-roctx",
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
+    "roctracer64",
+    "roctx64",
+    "rccl",
+    "hipfile",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -281,6 +288,57 @@ def get_version_suffix_for_installed_rocm_package() -> str:
     version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
     print(f"Version suffix is: {version_suffix}")
     return version_suffix
+
+
+def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
+    """Return the short git commit for a source dir, or "" if unresolved."""
+    # Pass safe.directory via `-c` (scoped to this single git invocation)
+    # instead of `git config --global` so we don't mutate global system state.
+    # This keeps the lookup working even when the checkout is owned by another
+    # user (e.g. in CI).
+    commit = capture(
+        [
+            "git",
+            "-c",
+            f"safe.directory={source_dir}",
+            "rev-parse",
+            f"--short={length}",
+            "HEAD",
+        ],
+        cwd=source_dir,
+    )
+    if not commit:
+        print(f"WARNING: could not resolve source commit in '{source_dir}'")
+    return commit
+
+
+def compute_build_version(
+    source_dir: Path, version_suffix: str, release_type: str
+) -> str:
+    """Compute a wheel version, tagging dev builds with the source commit.
+
+    Reads `<source_dir>/version.txt` as the base version and appends
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
+    builds the 8-char source commit is merged into that single local segment,
+    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
+    torchvision) records exactly which source commit produced it. PyTorch's
+    setup.py validates the version as PEP 440, which only allows a commit hash
+    in the local segment (after `+`).
+    TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
+    upfront, manifest-based version computation lands so the built version
+    always matches what the manifest records.
+    """
+    base_version = (source_dir / "version.txt").read_text().strip()
+    build_version = base_version + version_suffix
+    if release_type == "dev":
+        commit = get_source_commit_short(source_dir)
+        if commit:
+            # version_suffix is a local identifier like `+rocm7.10.0`; merge the
+            # commit into that single local segment (PEP 440 allows one `+`).
+            local = version_suffix.lstrip("+")
+            local_parts = [p for p in (f"git{commit}", local) if p]
+            build_version = f"{base_version}+{'.'.join(local_parts)}"
+    return build_version
 
 
 def get_triton_windows_llvm_hash(triton_dir: Path) -> str:
@@ -424,6 +482,85 @@ def apply_root_checkout_dir(args: argparse.Namespace) -> None:
         args.apex_dir = directory_if_exists(root_checkout_dir / "apex")
 
 
+def validate_project_dir(
+    parser: argparse.ArgumentParser,
+    *,
+    build_enabled: bool,
+    source_dir: Path | None,
+    build_option: str,
+    dir_option: str,
+) -> None:
+    """Validate the source directory for an enabled project build."""
+    if not build_enabled:
+        return
+
+    if source_dir is None:
+        parser.error(
+            f"{build_option} requires {dir_option} or a matching checkout "
+            "under --root-checkout-dir"
+        )
+    if not source_dir.exists():
+        parser.error(f"{dir_option} does not exist: {source_dir}")
+    if not source_dir.is_dir():
+        parser.error(f"{dir_option} is not a directory: {source_dir}")
+
+
+def validate_build_args(
+    parser: argparse.ArgumentParser, args: argparse.Namespace
+) -> None:
+    """Resolve automatic project selections and validate build arguments."""
+    # If a project dir exists, enable that project --build-* option by default.
+    if args.build_triton is None:
+        args.build_triton = args.triton_dir is not None
+    if args.build_pytorch_audio is None:
+        args.build_pytorch_audio = args.pytorch_audio_dir is not None
+    if args.build_pytorch_vision is None:
+        args.build_pytorch_vision = args.pytorch_vision_dir is not None
+    if args.build_apex is None:
+        args.build_apex = args.apex_dir is not None
+
+    # If a build-* option is set, the *-dir option must point to a real directory.
+    validate_project_dir(
+        parser,
+        build_enabled=args.build_triton,
+        source_dir=args.triton_dir,
+        build_option="--build-triton",
+        dir_option="--triton-dir",
+    )
+    validate_project_dir(
+        parser,
+        build_enabled=args.build_pytorch_audio,
+        source_dir=args.pytorch_audio_dir,
+        build_option="--build-pytorch-audio",
+        dir_option="--pytorch-audio-dir",
+    )
+    validate_project_dir(
+        parser,
+        build_enabled=args.build_pytorch_vision,
+        source_dir=args.pytorch_vision_dir,
+        build_option="--build-pytorch-vision",
+        dir_option="--pytorch-vision-dir",
+    )
+    validate_project_dir(
+        parser,
+        build_enabled=args.build_apex,
+        source_dir=args.apex_dir,
+        build_option="--build-apex",
+        dir_option="--apex-dir",
+    )
+
+    if (
+        args.enable_pytorch_flash_attention
+        and args.pytorch_dir is not None
+        and not is_windows
+        and not args.build_triton
+    ):
+        parser.error(
+            "--enable-pytorch-flash-attention on Linux requires Triton; "
+            "specify --triton-dir or disable Flash Attention"
+        )
+
+
 def do_install_rocm(args: argparse.Namespace):
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
@@ -485,6 +622,7 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 
 def _setup_common_build_env(
     cmake_prefix: Path,
+    bin_dir: Path,
     rocm_dir: Path,
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
@@ -498,6 +636,9 @@ def _setup_common_build_env(
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
+        # Make ROCm tools discoverable on all platforms and ROCm DLLs
+        # discoverable by the Windows loader.
+        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -586,8 +727,7 @@ def _do_build_wheels_core(
     """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
     # Build triton.
     triton_requirement = None
-    if args.build_triton or (args.build_triton is None and triton_dir):
-        assert triton_dir, "Must specify --triton-dir if --build-triton"
+    if args.build_triton:
         triton_requirement = do_build_triton(args, triton_dir, dict(env))
     else:
         print("--- Not building triton (no --triton-dir)")
@@ -601,30 +741,19 @@ def _do_build_wheels_core(
         print("--- Not building pytorch (no --pytorch-dir)")
 
     # Build pytorch audio.
-    if args.build_pytorch_audio or (
-        args.build_pytorch_audio is None and pytorch_audio_dir
-    ):
-        assert (
-            pytorch_audio_dir
-        ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
+    if args.build_pytorch_audio:
         do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
     else:
         print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
     # Build pytorch vision.
-    if args.build_pytorch_vision or (
-        args.build_pytorch_vision is None and pytorch_vision_dir
-    ):
-        assert (
-            pytorch_vision_dir
-        ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
+    if args.build_pytorch_vision:
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
     # Build apex.
-    if args.build_apex or (args.build_apex is None and apex_dir):
-        assert apex_dir, "Must specify --apex-dir if --build-apex"
+    if args.build_apex:
         do_build_apex(args, apex_dir, dict(env))
     else:
         print("--- Not build apex (no --apex-dir)")
@@ -656,9 +785,6 @@ def do_build(args: argparse.Namespace):
     print(f"  BIN = {bin_dir}")
     print(f"  ROCM_HOME = {rocm_dir}")
 
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
     # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
     # fallback (legacy; see TODO on get_rocm_sdk_targets()).
     pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
@@ -683,8 +809,9 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
+    print(f"  PATH = {env['PATH']}")
 
     if args.use_ccache:
         if not shutil.which("ccache"):
@@ -959,70 +1086,11 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    # Compute version.
-    pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_build_version += args.version_suffix
-    pytorch_build_version_parsed = parse(pytorch_build_version)
-    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
-
-    is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
-
-    # aotriton supports a subset of GPU architectures. When at least one
-    # target arch is supported, we enable flash attention and let aotriton's
-    # build system (gpu_targets.py) filter to just the supported ones. The
-    # runtime (check_gpu in sdp_utils.cpp) gracefully falls back to math/CK
-    # backends on unsupported GPUs. We only disable flash attention when
-    # *no* target arch is supported — otherwise aotriton's configure step
-    # fails on the empty target list (https://github.com/ROCm/aotriton/issues/169).
-    #
-    # These prefixes match what aotriton's gpu_targets.py recognizes.
-    # See also the image list in pytorch/cmake/External/aotriton.cmake.
-    AOTRITON_SUPPORTED_ARCH_PREFIXES = ("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")
-    # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
-    #   which is pinned by pytorch >= 2.11. Older versions don't include it.
-    aotriton_unsupported_archs_for_version = []
-    if not is_pytorch_2_11_or_later:
-        aotriton_unsupported_archs_for_version = ["gfx1152", "gfx1153"]
-    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
-    has_aotriton_supported_arch = any(
-        arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES)
-        and arch not in aotriton_unsupported_archs_for_version
-        for arch in rocm_arch_list
+    # Compute version (dev builds are tagged with the torch source commit).
+    pytorch_build_version = compute_build_version(
+        pytorch_dir, args.version_suffix, args.release_type
     )
-
-    if not is_windows:
-        if args.enable_pytorch_flash_attention_linux is None:
-            # Default: enable when triton is available AND at least one
-            # target arch is supported by aotriton. When all targets are
-            # unsupported, aotriton can't produce a valid library.
-            use_flash_attention = (
-                "ON" if triton_requirement and has_aotriton_supported_arch else "OFF"
-            )
-            print(
-                f"Flash Attention default behavior (triton={bool(triton_requirement)},"
-                f" aotriton_arch={has_aotriton_supported_arch}): {use_flash_attention}"
-            )
-        else:
-            # Explicit override: user has set the flag to true/false
-            if args.enable_pytorch_flash_attention_linux:
-                assert (
-                    triton_requirement
-                ), "Must build with triton if wanting to use flash attention"
-                use_flash_attention = "ON"
-            else:
-                use_flash_attention = "OFF"
-
-            print(f"Flash Attention override set by flag: {use_flash_attention}")
-
-        env.update(
-            {
-                "USE_FLASH_ATTENTION": use_flash_attention,
-                "USE_MEM_EFF_ATTENTION": use_flash_attention,
-            }
-        )
-        print(
-            f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
-        )
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
@@ -1045,22 +1113,57 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Windows-specific settings.
+    # Enable/disable flash attention.
+    if args.enable_pytorch_flash_attention is not None:
+        use_flash_attention = args.enable_pytorch_flash_attention
+        print(f"Flash Attention explicitly set to: {use_flash_attention}")
+        # Note: this may fail if aotriton is not supported, see below.
+    elif not is_windows and not triton_requirement:
+        print(f"Disabling Flash Attention on Linux since triton is not built")
+        use_flash_attention = False
+    else:
+        # Enable aotriton by default if supported.
+        # aotriton supports a subset of GPU architectures. When *at least* one
+        # target arch is supported let aotriton's build system (gpu_targets.py)
+        # filter to just the supported ones. The runtime (check_gpu in
+        # sdp_utils.cpp) gracefully falls back to math/CK backends on
+        # unsupported GPUs. We only disable flash attention when *no* target
+        # arch is supported — otherwise aotriton's configure step fails on the
+        # empty target list (https://github.com/ROCm/aotriton/issues/169).
+        #
+        # These prefixes match what aotriton's gpu_targets.py recognizes.
+        # See also the image list in pytorch/cmake/External/aotriton.cmake.
+        AOTRITON_SUPPORTED_ARCH_PREFIXES = (
+            "gfx90a",
+            "gfx942",
+            "gfx950",
+            "gfx11",
+            "gfx12",
+        )
+        rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+        has_aotriton_supported_arch = any(
+            arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES) for arch in rocm_arch_list
+        )
+        use_flash_attention = has_aotriton_supported_arch
+        print(
+            f"Flash Attention default behavior: {use_flash_attention}\n"
+            f"  (has_aotriton_supported_arch: {has_aotriton_supported_arch})"
+        )
+    # Finally update the environment with the resolved setting.
+    env.update(
+        {
+            "USE_FLASH_ATTENTION": ("ON" if use_flash_attention else "OFF"),
+            "USE_MEM_EFF_ATTENTION": ("ON" if use_flash_attention else "OFF"),
+        }
+    )
+
     if is_windows:
+        # Apply Windows-specific settings.
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
         copy_libuv_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = (
-            "1"
-            if args.enable_pytorch_flash_attention_windows
-            and has_aotriton_supported_arch
-            else "0"
-        )
-
         env.update(
             {
-                "USE_FLASH_ATTENTION": use_flash_attention,
-                "USE_MEM_EFF_ATTENTION": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
@@ -1072,9 +1175,9 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
+    else:
+        # Apply Linux-specific settings.
 
-    if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.
         # While a decent thing to be doing, this is presently required because:
         # TODO: include/rocm_smi/kfd_ioctl.h is included without its advertised
@@ -1133,6 +1236,32 @@ def do_build_pytorch(
     run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
 
     build_command = [sys.executable, "-m", "build", "--wheel", "--no-isolation"]
+    pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
+    if "scikit_build_core.build" in pytorch_pyproject_text:
+        # scikit-build-core applies Git ignore rules when constructing the wheel,
+        # dropping generated, gitignored runtime files. This workaround can be
+        # removed once these fixes are merged and commonly available:
+        # https://github.com/pytorch/pytorch/pull/191625
+        # https://github.com/pytorch/pytorch/pull/191629
+        build_command.append(
+            "-Cwheel.force-include.torch/_rocm_init.py=torch/_rocm_init.py"
+        )
+        if is_windows:
+            build_command.append(
+                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
+                "torch/lib/libomp140.x86_64.dll"
+            )
+            if use_flash_attention:
+                # TODO: similar upstream fix for these and then drop here
+                build_command.append(
+                    "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
+                    "torch/lib/aotriton_v2.dll"
+                )
+                build_command.append(
+                    "-Cwheel.force-include.torch/lib/liblzma.dll="
+                    "torch/lib/liblzma.dll"
+                )
+
     if is_windows:
         # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
@@ -1183,9 +1312,10 @@ def do_build_pytorch(
 def do_build_pytorch_audio(
     args: argparse.Namespace, pytorch_audio_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the audio source commit).
+    build_version = compute_build_version(
+        pytorch_audio_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -1222,9 +1352,10 @@ def do_build_pytorch_audio(
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
-    # Compute version.
-    build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
-    build_version += args.version_suffix
+    # Compute version (dev builds are tagged with the vision source commit).
+    build_version = compute_build_version(
+        pytorch_vision_dir, args.version_suffix, args.release_type
+    )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
@@ -1443,20 +1574,24 @@ def main(argv: list[str]):
         help="Enable building of apex (requires --apex-dir)",
     )
     build_p.add_argument(
-        "--enable-pytorch-flash-attention-windows",
+        "--enable-pytorch-flash-attention",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
-    )
-    build_p.add_argument(
-        "--enable-pytorch-flash-attention-linux",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Enable building of torch flash attention on Linux (enabled by default, sets USE_FLASH_ATTENTION=1)",
+        help="Enable building of torch flash attention (sets USE_FLASH_ATTENTION and USE_MEM_EFF_ATTENTION). Defaults to enabled if supported",
     )
     build_p.add_argument(
         "--version-suffix",
         help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
+    )
+    build_p.add_argument(
+        "--release-type",
+        choices=["ci", "dev", "nightly", "prerelease"],
+        default="nightly",
+        help="Release type of the build. For `dev` builds the torch wheel "
+        "version is tagged with the 8-char torch source commit in the local "
+        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
+        "The default is non-appending so other callers (CI, nightly, "
+        "prerelease) keep their plain `<base>+<suffix>` versions.",
     )
     build_p.add_argument(
         "--clean",
@@ -1468,6 +1603,8 @@ def main(argv: list[str]):
     args = p.parse_args(argv)
     if args.command == "build":
         apply_root_checkout_dir(args)
+        validate_build_args(build_p, args)
+
     args.func(args)
 
 

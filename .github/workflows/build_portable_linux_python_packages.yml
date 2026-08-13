@@ -107,13 +107,27 @@ jobs:
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
       kpack_split: ${{ steps.upload.outputs.kpack_split }}
+      summary: ${{ steps.summary.outputs.summary }}
     env:
+      QUARTZ_REPORTING_WORKFLOW: build_portable_linux_python_packages.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build ROCm Python packages"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -173,3 +187,21 @@ jobs:
             --artifact-group="${{ inputs.artifact_group }}" \
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

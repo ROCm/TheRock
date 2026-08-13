@@ -35,7 +35,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -109,7 +109,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.2"
+        default: "rocm-jaxlib-v0.11.0"
       jax_version:
         description: "Base JAX version (e.g. 0.8.2). Leave empty to auto-detect from rocm-jax requirements."
         required: false
@@ -274,6 +274,13 @@ jobs:
           else
             pip install jax==${JAX_VERSION} jaxlib==${JAX_VERSION}
           fi
+
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
       - name: Run JAX tests
         env:
