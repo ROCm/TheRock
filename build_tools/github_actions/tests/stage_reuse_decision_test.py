@@ -322,12 +322,17 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         )
         self.assertEqual(captured["current_commit_sha"], "sha-current")
 
-    def test_empty_history_disables_commit_rule(self):
+    def test_empty_history_disables_commit_rule_for_same_repo(self):
         def fake_history(**kwargs):
             return []
 
+        # Simulate same-repo run by setting GITHUB_REPOSITORY to match
+        # THEROCK_REPOSITORY (defaults to ROCm/TheRock).
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -335,17 +340,87 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
 
-    def test_history_fetch_error_disables_commit_rule(self):
+    def test_empty_history_fails_closed_for_external_repo(self):
+        def fake_history(**kwargs):
+            return []
+
+        # Simulate external repo by setting THEROCK_REPOSITORY different from
+        # GITHUB_REPOSITORY.
+        captured, result = self._run_with_env(
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "THEROCK_REPOSITORY": "ROCm/TheRock",
+                "GITHUB_REPOSITORY": "external/repo",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        # For external repos, fail closed: select_baseline_run is never called.
+        self.assertEqual(captured, {})
+        self.assertIsNone(result)
+
+    def test_history_fetch_error_disables_commit_rule_for_same_repo(self):
         def fake_history(**kwargs):
             raise GitHubAPIError("api down")
 
+        # Simulate same-repo run.
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+            },
             fake_history,
             fake_select="baseline",
         )
         self.assertIsNone(captured["current_commit_sha"])
         self.assertIsNone(captured["ordered_commit_shas"])
+
+    def test_history_fetch_error_fails_closed_for_external_repo(self):
+        def fake_history(**kwargs):
+            raise GitHubAPIError("api down")
+
+        # Simulate external repo.
+        captured, result = self._run_with_env(
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "THEROCK_REPOSITORY": "ROCm/TheRock",
+                "GITHUB_REPOSITORY": "external/repo",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        # For external repos, fail closed: select_baseline_run is never called.
+        self.assertEqual(captured, {})
+        self.assertIsNone(result)
+
+    def test_include_in_progress_enabled_via_env(self):
+        def fake_history(**kwargs):
+            return ["sha-current"]
+
+        captured, _ = self._run_with_env(
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_INCLUDE_IN_PROGRESS": "true",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        self.assertTrue(captured["include_in_progress"])
+
+    def test_include_in_progress_disabled_by_default(self):
+        def fake_history(**kwargs):
+            return ["sha-current"]
+
+        captured, _ = self._run_with_env(
+            {
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+            },
+            fake_history,
+            fake_select="baseline",
+        )
+        self.assertFalse(captured["include_in_progress"])
 
     def test_no_sha_means_no_history_fetch(self):
         calls = {"n": 0}

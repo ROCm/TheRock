@@ -64,15 +64,16 @@ SKIPPABLE_PATH_PATTERNS = [
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
-    ".github/scripts/therock*",
-    ".github/scripts/get_changed_projects.py",
-    ".github/scripts/ci_utils.py",
-    ".github/scripts/config_loader.py",
-    ".github/scripts/repo_config_model.py",
-    ".github/scripts/pr_detect_changed_subtrees.py",
-    ".github/repos-config.json",
+# TODO(geomin12): Re-enable after testing in-progress artifact reuse
+FULL_TEST_TRIGGER_PATTERNS: list[str] = [
+    # ".github/workflows/therock*",
+    # ".github/scripts/therock*",
+    # ".github/scripts/get_changed_projects.py",
+    # ".github/scripts/ci_utils.py",
+    # ".github/scripts/config_loader.py",
+    # ".github/scripts/repo_config_model.py",
+    # ".github/scripts/pr_detect_changed_subtrees.py",
+    # ".github/repos-config.json",
 ]
 
 

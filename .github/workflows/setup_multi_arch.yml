@@ -197,10 +197,18 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
-          # The checkout commit is used for commit-compatibility checking.
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          # TEST: Disable commit-compatibility checking for feature branch testing.
+          # The feature branch SHA won't be in main's history, so we skip this check.
+          # TODO(geomin12): Remove after testing in-progress artifact reuse.
+          # STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
+          # TEST: Always query baseline runs from main branch (not the feature branch).
+          # TODO(geomin12): Remove after testing in-progress artifact reuse.
+          STAGE_REUSE_BASELINE_BRANCH: "main"
+          # TEST: Include in-progress runs as baseline candidates (builds done, tests queued).
+          # TODO(geomin12): Remove after testing in-progress artifact reuse.
+          STAGE_REUSE_INCLUDE_IN_PROGRESS: "true"
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}

@@ -266,11 +266,14 @@ def is_successful_workflow_run(workflow_run: dict) -> bool:
 
 
 def is_successful_workflow_job(workflow_job: dict) -> bool:
-    """Return True when a workflow job completed successfully."""
-    return (
-        workflow_job.get("status") == "completed"
-        and workflow_job.get("conclusion") == "success"
-    )
+    """Return True when a workflow job completed successfully or was skipped.
+
+    Skipped jobs are considered successful because they indicate a job that
+    didn't need to run (e.g., conditional job, path filter), not a failure.
+    """
+    return workflow_job.get("status") == "completed" and workflow_job.get(
+        "conclusion"
+    ) in ("success", "skipped")
 
 
 def query_completed_workflow_runs(
@@ -279,29 +282,50 @@ def query_completed_workflow_runs(
     workflow_name: str = "multi_arch_ci.yml",
     branch: str = "main",
     max_runs: int = 20,
+    include_in_progress: bool = False,
 ) -> list[dict]:
-    """Query recent completed workflow runs for a workflow and branch."""
+    """Query recent completed workflow runs for a workflow and branch.
+
+    When ``include_in_progress`` is True, in-progress runs are also included,
+    allowing reuse of build artifacts from runs where tests are still queued.
+    """
     if max_runs < 1:
         raise ValueError("max_runs must be at least 1")
 
     per_page = min(max_runs, 100)
     workflow_path = quote(workflow_name, safe="")
-    query = urlencode(
-        {
-            "status": "completed",
-            "branch": branch,
-            "per_page": per_page,
-            "sort": "created",
-            "direction": "desc",
-        }
-    )
-    url = (
-        f"https://api.github.com/repos/{github_repository}"
-        f"/actions/workflows/{workflow_path}/runs?{query}"
-    )
-    response = gha_send_request(url)
-    workflow_runs = response.get("workflow_runs", [])
-    return workflow_runs[:max_runs]
+    statuses = ["completed"]
+    if include_in_progress:
+        statuses.append("in_progress")
+
+    all_runs: list[dict] = []
+    seen_ids: set[int] = set()
+
+    for status in statuses:
+        query = urlencode(
+            {
+                "status": status,
+                "branch": branch,
+                "per_page": per_page,
+                "sort": "created",
+                "direction": "desc",
+            }
+        )
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/workflows/{workflow_path}/runs?{query}"
+        )
+        response = gha_send_request(url)
+        for run in response.get("workflow_runs", []):
+            run_id = run.get("id")
+            if run_id is not None and run_id not in seen_ids:
+                seen_ids.add(run_id)
+                all_runs.append(run)
+
+    # Sort by created_at descending (newest first) to maintain consistent
+    # ordering when merging results from multiple status queries.
+    all_runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return all_runs[:max_runs]
 
 
 def query_successful_workflow_runs(
@@ -692,6 +716,7 @@ def select_baseline_run(
     workflow_runs: Sequence[dict] | None = None,
     backend_factory: ArtifactBackendFactory = create_artifact_backend_for_workflow_run,
     workflow_jobs_fetcher: WorkflowJobsFetcher = query_jobs_for_workflow_run,
+    include_in_progress: bool = False,
 ) -> BaselineRun | None:
     """Select the newest workflow run with healthy build jobs and artifacts.
 
@@ -726,11 +751,14 @@ def select_baseline_run(
             candidate run.
         workflow_jobs_fetcher: Factory used to query jobs for each candidate
             run.
+        include_in_progress: When True, also consider in-progress workflow runs
+            as candidates. This allows reusing build artifacts from runs where
+            tests are still queued or running, as long as the required build
+            jobs have completed successfully and artifacts are available.
 
     Returns:
-        The first completed candidate run that has healthy required jobs and
-        all required artifact/family pairs, or ``None`` if no valid baseline is
-        found.
+        The first candidate run that has healthy required jobs and all required
+        artifact/family pairs, or ``None`` if no valid baseline is found.
     """
     # Validate these early so a missing requirement is a caller error instead of
     # being discovered only after GitHub/API work.
@@ -753,22 +781,26 @@ def select_baseline_run(
             )
     check_recency = max_age_hours is not None
 
-    candidates = (
-        list(workflow_runs)
-        if workflow_runs is not None
-        else query_completed_workflow_runs(
+    if workflow_runs is not None:
+        candidates = list(workflow_runs)
+    else:
+        candidates = query_completed_workflow_runs(
             github_repository=github_repository,
             workflow_name=workflow_name,
             branch=branch,
             max_runs=max_runs,
+            include_in_progress=include_in_progress,
         )
-    )
 
     for workflow_run in candidates[:max_runs]:
         run_id = str(workflow_run["id"])
         if run_id in excluded:
             continue
-        if not is_completed_workflow_run(workflow_run):
+        # When include_in_progress is enabled, we allow in-progress runs as
+        # candidates and rely on the job-health and artifact-availability
+        # checks to validate that the build is actually complete enough to
+        # reuse. When disabled, we require the workflow to be fully completed.
+        if not include_in_progress and not is_completed_workflow_run(workflow_run):
             continue
 
         # Cheap, local checks (recency, commit ancestry) run before the

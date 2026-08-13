@@ -83,6 +83,12 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertTrue(
             baseline_runs.is_successful_workflow_job(_workflow_job("Build"))
         )
+        # Skipped jobs are considered successful (didn't need to run).
+        self.assertTrue(
+            baseline_runs.is_successful_workflow_job(
+                _workflow_job("Build", conclusion="skipped")
+            )
+        )
         self.assertFalse(
             baseline_runs.is_successful_workflow_job(
                 _workflow_job("Build", conclusion="failure")
@@ -149,6 +155,75 @@ class BaselineRunsTest(unittest.TestCase):
         self.assertIn("status=success", url)
         self.assertIn("branch=main", url)
         self.assertIn("per_page=2", url)
+
+    def test_query_completed_workflow_runs_includes_in_progress(self):
+        def mock_request(url):
+            if "status=completed" in url:
+                return {
+                    "workflow_runs": [
+                        _workflow_run("1", created_at="2026-06-17T20:00:00Z"),
+                        _workflow_run("2", created_at="2026-06-17T18:00:00Z"),
+                    ]
+                }
+            elif "status=in_progress" in url:
+                return {
+                    "workflow_runs": [
+                        _workflow_run(
+                            "3",
+                            status="in_progress",
+                            conclusion=None,
+                            created_at="2026-06-17T19:00:00Z",
+                        ),
+                    ]
+                }
+            return {"workflow_runs": []}
+
+        with mock.patch.object(
+            baseline_runs, "gha_send_request", side_effect=mock_request
+        ) as mock_send_request:
+            runs = baseline_runs.query_completed_workflow_runs(
+                github_repository="ROCm/TheRock",
+                workflow_name="multi_arch_ci.yml",
+                branch="main",
+                max_runs=10,
+                include_in_progress=True,
+            )
+
+        # Should have queried both completed and in_progress.
+        self.assertEqual(mock_send_request.call_count, 2)
+        # Results sorted by created_at descending: run 1 (20:00), run 3 (19:00), run 2 (18:00).
+        self.assertEqual([run["id"] for run in runs], ["1", "3", "2"])
+
+    def test_query_completed_workflow_runs_deduplicates(self):
+        # Same run appears in both completed and in_progress queries.
+        def mock_request(url):
+            if "status=completed" in url:
+                return {
+                    "workflow_runs": [
+                        _workflow_run("1", created_at="2026-06-17T20:00:00Z"),
+                    ]
+                }
+            elif "status=in_progress" in url:
+                return {
+                    "workflow_runs": [
+                        _workflow_run("1", created_at="2026-06-17T20:00:00Z"),
+                    ]
+                }
+            return {"workflow_runs": []}
+
+        with mock.patch.object(
+            baseline_runs, "gha_send_request", side_effect=mock_request
+        ):
+            runs = baseline_runs.query_completed_workflow_runs(
+                github_repository="ROCm/TheRock",
+                workflow_name="multi_arch_ci.yml",
+                branch="main",
+                max_runs=10,
+                include_in_progress=True,
+            )
+
+        # Should deduplicate.
+        self.assertEqual([run["id"] for run in runs], ["1"])
 
     def test_query_workflow_run_jobs_uses_run_attempt_when_provided(self):
         with mock.patch.object(
@@ -516,6 +591,93 @@ class BaselineRunsTest(unittest.TestCase):
         )
 
         self.assertIsNone(baseline)
+
+    def test_select_baseline_run_accepts_in_progress_when_enabled(self):
+        """Verify in-progress runs are accepted when include_in_progress=True."""
+        runs = [
+            _workflow_run(
+                "in-progress",
+                status="in_progress",
+                conclusion=None,
+                created_at="2026-06-17T20:00:00Z",
+            ),
+        ]
+        artifacts_by_run_id = {
+            "in-progress": [
+                "base_lib_generic.tar.zst",
+                "blas_lib_gfx94X-dcgpu.tar.zst",
+            ],
+        }
+        jobs_by_run_id = {
+            "in-progress": [
+                _workflow_job("Build Multi-Arch Stages"),
+                _workflow_job("Test hip-tests", status="queued", conclusion=None),
+            ],
+        }
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(artifacts_by_run_id.get(workflow_run["id"], []))
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return jobs_by_run_id.get(workflow_run["id"], [])
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[
+                RequiredArtifact("base", "generic"),
+                RequiredArtifact("blas", "gfx94X-dcgpu"),
+            ],
+            platform="linux",
+            required_successful_job_name_substrings=["Build Multi-Arch Stages"],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+            include_in_progress=True,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        self.assertEqual(baseline.run_id, "in-progress")
+        self.assertEqual(baseline.source_ref.status, "in_progress")
+
+    def test_select_baseline_run_rejects_in_progress_when_disabled(self):
+        """Verify in-progress runs are rejected when include_in_progress=False."""
+        runs = [
+            _workflow_run(
+                "in-progress",
+                status="in_progress",
+                conclusion=None,
+            ),
+            _workflow_run("completed"),
+        ]
+        artifacts_by_run_id = {
+            "in-progress": ["base_lib_generic.tar.zst"],
+            "completed": ["base_lib_generic.tar.zst"],
+        }
+        jobs_by_run_id = {
+            "in-progress": [_workflow_job("Build Multi-Arch Stages")],
+            "completed": [_workflow_job("Build Multi-Arch Stages")],
+        }
+
+        def backend_factory(workflow_run, github_repository, platform):
+            return FakeBackend(artifacts_by_run_id.get(workflow_run["id"], []))
+
+        def workflow_jobs_fetcher(workflow_run, github_repository):
+            return jobs_by_run_id.get(workflow_run["id"], [])
+
+        baseline = baseline_runs.select_baseline_run(
+            required_artifacts=[RequiredArtifact("base", "generic")],
+            platform="linux",
+            required_successful_job_name_substrings=["Build Multi-Arch Stages"],
+            workflow_runs=runs,
+            backend_factory=backend_factory,
+            workflow_jobs_fetcher=workflow_jobs_fetcher,
+            include_in_progress=False,
+        )
+
+        self.assertIsNotNone(baseline)
+        assert baseline is not None
+        # Should skip in-progress and select completed.
+        self.assertEqual(baseline.run_id, "completed")
 
 
 class CommitCompatibilityTest(unittest.TestCase):

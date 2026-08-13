@@ -48,6 +48,11 @@ are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
                                    rule when unset.
 * ``STAGE_REUSE_COMMIT_HISTORY`` - number of branch commits to fetch for
                                    ancestry (default ``50``).
+* ``STAGE_REUSE_INCLUDE_IN_PROGRESS`` - when ``true``, also consider in-progress
+                                   workflow runs as baseline candidates. This
+                                   allows reusing artifacts from runs where
+                                   tests are still queued, as long as builds
+                                   have completed successfully.
 """
 
 import enum
@@ -485,6 +490,9 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     max_age_hours_raw = os.environ.get("STAGE_REUSE_MAX_AGE_HOURS")
     max_age_hours = float(max_age_hours_raw) if max_age_hours_raw else None
     history_count_raw = os.environ.get("STAGE_REUSE_COMMIT_HISTORY", "50")
+    include_in_progress = (
+        os.environ.get("STAGE_REUSE_INCLUDE_IN_PROGRESS", "").lower() == "true"
+    )
     try:
         history_count = max(1, int(history_count_raw))
     except ValueError:
@@ -551,6 +559,7 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
         current_commit_sha=effective_commit_sha,
         ordered_commit_shas=ordered_commit_shas,
         max_age_hours=max_age_hours,
+        include_in_progress=include_in_progress,
     )
 
 
