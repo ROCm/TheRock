@@ -16,8 +16,20 @@
 #   #   "CC=${_meson_cc}"
 #   #   "CXX=${_meson_cxx}"
 function(therock_get_meson_compiler_env out_cc out_cxx)
+  # Meson splits the CC/CXX env string on whitespace, so a compiler path
+  # containing a space (e.g. Windows "C:/Program Files/.../cl.exe") must be
+  # quoted or it is broken into multiple args. When a launcher (ccache) is
+  # prepended, the launcher then tries to exec the truncated path
+  # ("C:/Program") and fails. Only quote when a space is present so paths
+  # without spaces (typical on Linux, e.g. /usr/bin/gcc) are unchanged.
   set(_cc "${CMAKE_C_COMPILER}")
   set(_cxx "${CMAKE_CXX_COMPILER}")
+  if(_cc MATCHES " ")
+    set(_cc "\"${_cc}\"")
+  endif()
+  if(_cxx MATCHES " ")
+    set(_cxx "\"${_cxx}\"")
+  endif()
   if(CMAKE_C_COMPILER_LAUNCHER)
     string(REPLACE ";" " " _c_launcher "${CMAKE_C_COMPILER_LAUNCHER}")
     set(_cc "${_c_launcher} ${_cc}")
