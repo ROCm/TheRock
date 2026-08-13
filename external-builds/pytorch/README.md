@@ -378,7 +378,27 @@ use `device-all` when the environment must support every published target.
     --dest-dir=build/packages
   ```
 
-### Bundling PyTorch and ROCm together into a "fat wheel"
+### Splitting multi-architecture PyTorch wheels
+
+`build_prod_wheels.py` produces unsplit multi-target PyTorch wheels containing
+PyTorch device code for every target in `--pytorch-rocm-arch`. Before
+publishing, the TheRock CI/CD workflows use
+`rocm_kpack.tools.split_python_wheels` to replace the unsplit `torch` and
+`torchvision` wheels with architecture-neutral host wheels and per-ISA
+`amd-torch-device-*` and `amd-torchvision-device-*` wheels.
+
+This post-processing is not yet integrated into `build_prod_wheels.py`, and the
+kpack packages it requires are not yet published. See the current implementation
+in the following workflows:
+
+- [Portable Linux PyTorch wheels](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml)
+- [Windows PyTorch wheels](/.github/workflows/multi_arch_build_windows_pytorch_wheels.yml)
+
+Follow [issue 5656](https://github.com/ROCm/TheRock/issues/5656) for publishing
+the required packages, integrating wheel splitting into the build scripts, and
+documenting a supported standalone developer workflow.
+
+### Bundling ROCm libraries into a PyTorch "fat wheel"
 
 By default, Python wheels produced by the PyTorch build do not include ROCm
 binaries. Instead, they expect those binaries to come from the
