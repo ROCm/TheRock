@@ -53,7 +53,7 @@ SUBMODULE_CONFIG = {
         "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
     },
-    "third-party/sysdeps/linux/amd-mesa/mesa-fork": {
+    "third-party/sysdeps/common/mesa-fork": {
         "repo": "ROCm/mesa-fork",
         "files": [],
         "updater": "submodule-only",
@@ -367,7 +367,7 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
     if submodule in ("all", "mesa-fork"):
         create_therock_bump(
-            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["mesa-fork"]
+            "third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"]
         )
 
 
