@@ -55,7 +55,10 @@ class GetSourceCommitShortTest(unittest.TestCase):
             subprocess.check_call(["git", "config", "user.name", "Test User"], cwd=repo)
             (repo / "version.txt").write_text("2.12.0a0\n")
             subprocess.check_call(["git", "add", "version.txt"], cwd=repo)
-            subprocess.check_call(["git", "commit", "-m", "init"], cwd=repo)
+            subprocess.check_call(
+                ["git", "-c", "commit.gpgSign=false", "commit", "-m", "init"],
+                cwd=repo,
+            )
             commit = get_source_commit_short(repo, length=8)
             self.assertEqual(len(commit), 8)
 
