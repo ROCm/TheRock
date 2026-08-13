@@ -2,7 +2,64 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""ROCm aggregate Python Simple API index tooling."""
+"""ROCm aggregate Python Simple API index tooling.
+
+Validates and generates the routed aggregate Simple API index for:
+
+    /rocm/whl-next/
+
+The generator is storage-independent. It consumes a checked-in ownership
+manifest plus a local directory tree mirroring the public product-local index
+layout:
+
+    <content-root>/rocm/<owner_path>/index.html
+    <content-root>/rocm/<owner_path>/<normalized-package>/index.html
+
+For example, a package owned by ``pytorch/whl-next`` is validated from:
+
+    <content-root>/rocm/pytorch/whl-next/index.html
+    <content-root>/rocm/pytorch/whl-next/torch/index.html
+
+The required routed baseline writes:
+
+    <output>/rocm/whl-next/index.html
+    <output>/rocm-whl-next-routes.json
+    <output>/validation.json
+
+The aggregate root links to canonical package subdirectories under the
+aggregate namespace, such as ``torch/``. The generated route table maps those
+aggregate package requests to exact product-local package pages. The generator
+does not copy or rewrite product-local package pages; they remain authoritative
+for artifact links and metadata in the routed design.
+
+CLI subcommands:
+
+    # Validate only the ownership manifest.
+    python aggregate_index.py validate-manifest \
+        --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml
+
+    # Validate a local public-tree snapshot without writing outputs.
+    python aggregate_index.py validate-content \
+        --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
+        --content-root /tmp/rocm-whl-next-content
+
+    # Generate routed aggregate outputs from a validated local snapshot.
+    python aggregate_index.py generate \
+        --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
+        --content-root /tmp/rocm-whl-next-content \
+        --output-dir /tmp/rocm-whl-next-output
+
+The deployment invocation should use ``generate --strict-completeness`` and
+must not use ``--allow-unpublished``. Both set-comparison directions are
+deployment-visible failures: a manifest-owned package that is not published
+would route to a missing product-local package page, while a published package
+absent from the manifest is unreachable through the aggregate index.
+
+``--allow-unpublished`` is only for explicit pre-publication inventory
+workflows. In that mode, manifest-owned packages absent from product roots are
+recorded as unpublished in ``validation.json`` and excluded from the aggregate
+root and exact route table.
+"""
 
 import argparse
 import dataclasses
@@ -13,6 +70,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import quote, urlsplit
 
 from packaging.utils import canonicalize_name, is_normalized_name
@@ -21,12 +79,15 @@ from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
 
-SUPPORTED_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 1
+ROUTES_SCHEMA_VERSION = 1
+VALIDATION_SCHEMA_VERSION = 1
 SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
 ROUTES_FILENAME = "rocm-whl-next-routes.json"
 VALIDATION_FILENAME = "validation.json"
 
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_PATTERN_PREFIX_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 class ManifestError(ValueError):
@@ -82,10 +143,24 @@ class PackageOwnership:
     name: str
     owner_path: str
 
-    @property
-    def owner_public_base(self) -> str:
-        """Return the owner root as an absolute public path."""
-        return f"/rocm/{self.owner_path}"
+
+@dataclasses.dataclass(frozen=True)
+class PatternOwnership:
+    """Ownership declaration for a normalized package prefix pattern."""
+
+    pattern: str
+    prefix: str
+    owner_path: str
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedOwnership:
+    """Resolved ownership for one package."""
+
+    name: str
+    owner_path: str
+    source: str
+    pattern: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,10 +169,48 @@ class PythonIndexOwnership:
 
     public_base: str
     packages: dict[str, PackageOwnership]
+    patterns: dict[str, PatternOwnership]
 
     def ordered_packages(self) -> list[PackageOwnership]:
         """Return packages in route JSON order: owner_path, then package name."""
         return sorted(self.packages.values(), key=lambda p: (p.owner_path, p.name))
+
+    def ordered_patterns(self) -> list[PatternOwnership]:
+        """Return ownership patterns in route JSON order."""
+        return sorted(self.patterns.values(), key=lambda p: (p.owner_path, p.pattern))
+
+    def owner_paths(self) -> set[str]:
+        """Return product-local roots referenced by exact or pattern ownership."""
+        return {
+            *[package.owner_path for package in self.packages.values()],
+            *[pattern.owner_path for pattern in self.patterns.values()],
+        }
+
+    def resolve_package(self, package_name: str) -> ResolvedOwnership | None:
+        """Resolve package ownership from exact declarations or patterns."""
+        exact = self.packages.get(package_name)
+        if exact is not None:
+            return ResolvedOwnership(
+                name=package_name,
+                owner_path=exact.owner_path,
+                source="exact",
+            )
+
+        matching_patterns = [
+            pattern
+            for pattern in self.patterns.values()
+            if package_name.startswith(pattern.prefix)
+        ]
+        if not matching_patterns:
+            return None
+
+        pattern = max(matching_patterns, key=lambda p: len(p.prefix))
+        return ResolvedOwnership(
+            name=package_name,
+            owner_path=pattern.owner_path,
+            source="pattern",
+            pattern=pattern.pattern,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -125,6 +238,8 @@ class ValidatedPackage:
     owner_path: str
     product_root_index: Path
     package_index: Path
+    source: str
+    pattern: str | None = None
 
     @property
     def product_root_public_path(self) -> str:
@@ -134,7 +249,7 @@ class ValidatedPackage:
     @property
     def package_public_path(self) -> str:
         """Return the package index path under the public /rocm tree."""
-        return f"/rocm/{self.owner_path}/{quote(self.name, safe='')}/index.html"
+        return _package_index_public_path(self.owner_path, self.name)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -178,6 +293,110 @@ class GeneratedOutputPaths:
     aggregate_root: Path
     route_table: Path
     validation_report: Path
+    unpublished_package_count: int
+
+
+@dataclasses.dataclass(frozen=True)
+class Route:
+    """One exact aggregate package route."""
+
+    package: str
+    owner_path: str
+    target: str
+
+    def to_json(self) -> dict[str, str]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class RouteTable:
+    """Exact aggregate package route table."""
+
+    schema_version: int
+    public_base: str
+    routes: list[Route]
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "public_base": self.public_base,
+            "routes": [route.to_json() for route in self.routes],
+        }
+
+
+@dataclasses.dataclass(frozen=True)
+class ValidationOwnerSummary:
+    """Validation summary for one owner path."""
+
+    package_count: int
+
+    def to_json(self) -> dict[str, int]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class ValidationPackage:
+    """Validation report entry for one published package."""
+
+    name: str
+    owner_path: str
+    product_root_index: str
+    package_index: str
+    source: str
+    pattern: str | None = None
+
+    def to_json(self) -> dict[str, str]:
+        data = {
+            "name": self.name,
+            "owner_path": self.owner_path,
+            "product_root_index": self.product_root_index,
+            "package_index": self.package_index,
+            "source": self.source,
+        }
+        if self.pattern is not None:
+            data["pattern"] = self.pattern
+        return data
+
+
+@dataclasses.dataclass(frozen=True)
+class ValidationUnpublishedPackage:
+    """Validation report entry for one unpublished manifest package."""
+
+    name: str
+    owner_path: str
+    product_root_index: str
+
+    def to_json(self) -> dict[str, str]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class ValidationReport:
+    """CI-readable validation report."""
+
+    schema_version: int
+    public_base: str
+    package_count: int
+    unpublished_package_count: int
+    owners: dict[str, ValidationOwnerSummary]
+    packages: list[ValidationPackage]
+    unpublished_packages: list[ValidationUnpublishedPackage]
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "public_base": self.public_base,
+            "package_count": self.package_count,
+            "unpublished_package_count": self.unpublished_package_count,
+            "owners": {
+                owner_path: summary.to_json()
+                for owner_path, summary in sorted(self.owners.items())
+            },
+            "packages": [package.to_json() for package in self.packages],
+            "unpublished_packages": [
+                package.to_json() for package in self.unpublished_packages
+            ],
+        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -255,9 +474,10 @@ def validate_product_indexes(
 ) -> ValidatedIndexContent:
     """Validate product-local root and package indexes for a manifest.
 
-    The validator is relaxed by default for inventory workflows: manifest-owned
-    packages that are absent from product roots are recorded as unpublished.
-    Pass ``require_all_manifest_packages=True`` for deployable completeness.
+    The validator is strict by default: every manifest-owned package must be
+    present in its product root. Pass ``require_all_manifest_packages=False``
+    only for explicit pre-publication inventory workflows, where absent
+    manifest packages are recorded as unpublished.
 
     Args:
         manifest: Parsed ownership manifest.
@@ -271,63 +491,63 @@ def validate_product_indexes(
         page is missing, empty, malformed, or invalid.
     """
     index = manifest.python_indexes[0]
-    packages_by_owner_path: dict[str, list[PackageOwnership]] = {}
-    for package in index.ordered_packages():
-        packages_by_owner_path.setdefault(package.owner_path, []).append(package)
 
     validated_packages: dict[str, ValidatedPackage] = {}
     unpublished_packages: dict[str, UnpublishedPackage] = {}
-    for owner_path in sorted(packages_by_owner_path):
+    for owner_path in sorted(index.owner_paths()):
         product_root_index = content_root / "rocm" / owner_path / "index.html"
         root_links = parse_product_root_index(product_root_index)
         root_links_by_package: dict[str, list[ProductRootLink]] = {}
         for link in root_links:
             root_links_by_package.setdefault(link.package_name, []).append(link)
 
-        if strict_completeness:
-            manifest_package_names = {
-                package.name for package in packages_by_owner_path[owner_path]
-            }
-            extra_package_names = sorted(
-                set(root_links_by_package) - manifest_package_names
-            )
-            if extra_package_names:
-                extra_packages = ", ".join(repr(name) for name in extra_package_names)
-                raise IndexValidationError(
-                    f"{product_root_index}: product root contains package(s) "
-                    f"absent from the ownership manifest: {extra_packages}"
-                )
-
-        for package in packages_by_owner_path[owner_path]:
-            matching_links = root_links_by_package.get(package.name, [])
-            if not matching_links:
-                if require_all_manifest_packages:
+        for package_name, matching_links in sorted(root_links_by_package.items()):
+            ownership = index.resolve_package(package_name)
+            if ownership is None:
+                if strict_completeness:
                     raise IndexValidationError(
-                        f"{product_root_index}: missing canonical package link "
-                        f"for {package.name!r}"
+                        f"{product_root_index}: product root contains package "
+                        f"{package_name!r} absent from the ownership manifest"
                     )
-                unpublished_packages[package.name] = UnpublishedPackage(
-                    name=package.name,
-                    owner_path=owner_path,
-                    product_root_index=product_root_index,
-                )
                 continue
+            if ownership.owner_path != owner_path:
+                raise IndexValidationError(
+                    f"{product_root_index}: package {package_name!r} resolves to "
+                    f"owner path {ownership.owner_path!r}, not {owner_path!r}"
+                )
             if len(matching_links) != 1:
                 raise IndexValidationError(
                     f"{product_root_index}: expected exactly one package link "
-                    f"for {package.name!r}, found {len(matching_links)}"
+                    f"for {package_name!r}, found {len(matching_links)}"
                 )
 
             package_index = (
-                content_root / "rocm" / owner_path / package.name / "index.html"
+                content_root / "rocm" / owner_path / package_name / "index.html"
             )
             _require_non_empty_file(package_index, "package index")
-            validated_packages[package.name] = ValidatedPackage(
-                name=package.name,
+            validated_packages[package_name] = ValidatedPackage(
+                name=package_name,
                 owner_path=owner_path,
                 product_root_index=product_root_index,
                 package_index=package_index,
+                source=ownership.source,
+                pattern=ownership.pattern,
             )
+
+    for package in index.ordered_packages():
+        if package.name in validated_packages:
+            continue
+        product_root_index = content_root / "rocm" / package.owner_path / "index.html"
+        if require_all_manifest_packages:
+            raise IndexValidationError(
+                f"{product_root_index}: missing canonical package link "
+                f"for {package.name!r}"
+            )
+        unpublished_packages[package.name] = UnpublishedPackage(
+            name=package.name,
+            owner_path=package.owner_path,
+            product_root_index=product_root_index,
+        )
 
     route_ordered_packages = sorted(
         validated_packages.values(), key=lambda p: (p.owner_path, p.name)
@@ -386,12 +606,13 @@ def write_generated_outputs(
     route_table_path = output_dir / ROUTES_FILENAME
     validation_report_path = output_dir / VALIDATION_FILENAME
     _write_text_atomic(aggregate_root_path, aggregate_root_html)
-    _write_text_atomic(route_table_path, _json_dumps(route_table))
-    _write_text_atomic(validation_report_path, _json_dumps(validation_report))
+    _write_text_atomic(route_table_path, _json_dumps(route_table.to_json()))
+    _write_text_atomic(validation_report_path, _json_dumps(validation_report.to_json()))
     return GeneratedOutputPaths(
         aggregate_root=aggregate_root_path,
         route_table=route_table_path,
         validation_report=validation_report_path,
+        unpublished_package_count=validation_report.unpublished_package_count,
     )
 
 
@@ -416,54 +637,56 @@ def render_aggregate_root(validated: ValidatedIndexContent) -> str:
     return "\n".join(lines)
 
 
-def build_route_table(validated: ValidatedIndexContent) -> dict[str, object]:
+def build_route_table(validated: ValidatedIndexContent) -> RouteTable:
     """Build the exact aggregate package route table."""
-    return {
-        "schema_version": SUPPORTED_SCHEMA_VERSION,
-        "public_base": validated.public_base,
-        "routes": [
-            {
-                "package": package.name,
-                "owner_path": package.owner_path,
-                "target": f"/rocm/{package.owner_path}/{quote(package.name, safe='')}/",
-            }
+    return RouteTable(
+        schema_version=ROUTES_SCHEMA_VERSION,
+        public_base=validated.public_base,
+        routes=[
+            Route(
+                package=package.name,
+                owner_path=package.owner_path,
+                target=_package_public_base(package.owner_path, package.name),
+            )
             for package in validated.ordered_packages()
         ],
-    }
+    )
 
 
-def build_validation_report(validated: ValidatedIndexContent) -> dict[str, object]:
+def build_validation_report(validated: ValidatedIndexContent) -> ValidationReport:
     """Build deterministic CI-readable validation output."""
     owners: dict[str, int] = {}
     for package in validated.ordered_packages():
         owners[package.owner_path] = owners.get(package.owner_path, 0) + 1
-    return {
-        "schema_version": SUPPORTED_SCHEMA_VERSION,
-        "public_base": validated.public_base,
-        "package_count": len(validated.packages),
-        "unpublished_package_count": len(validated.unpublished_packages),
-        "owners": {
-            owner_path: {"package_count": owners[owner_path]}
+    return ValidationReport(
+        schema_version=VALIDATION_SCHEMA_VERSION,
+        public_base=validated.public_base,
+        package_count=len(validated.packages),
+        unpublished_package_count=len(validated.unpublished_packages),
+        owners={
+            owner_path: ValidationOwnerSummary(package_count=owners[owner_path])
             for owner_path in sorted(owners)
         },
-        "packages": [
-            {
-                "name": package.name,
-                "owner_path": package.owner_path,
-                "product_root_index": package.product_root_public_path,
-                "package_index": package.package_public_path,
-            }
+        packages=[
+            ValidationPackage(
+                name=package.name,
+                owner_path=package.owner_path,
+                product_root_index=package.product_root_public_path,
+                package_index=package.package_public_path,
+                source=package.source,
+                pattern=package.pattern,
+            )
             for package in validated.ordered_packages()
         ],
-        "unpublished_packages": [
-            {
-                "name": package.name,
-                "owner_path": package.owner_path,
-                "product_root_index": package.product_root_public_path,
-            }
+        unpublished_packages=[
+            ValidationUnpublishedPackage(
+                name=package.name,
+                owner_path=package.owner_path,
+                product_root_index=package.product_root_public_path,
+            )
             for package in validated.ordered_unpublished_packages()
         ],
-    }
+    )
 
 
 def parse_product_root_index(path: Path) -> list[ProductRootLink]:
@@ -508,9 +731,9 @@ def parse_ownership_manifest(
     schema_version = _require_int(
         manifest["schema_version"], f"{context}.schema_version"
     )
-    if schema_version != SUPPORTED_SCHEMA_VERSION:
+    if schema_version != MANIFEST_SCHEMA_VERSION:
         raise ManifestError(
-            f"{context}.schema_version must be {SUPPORTED_SCHEMA_VERSION}, "
+            f"{context}.schema_version must be {MANIFEST_SCHEMA_VERSION}, "
             f"got {schema_version}"
         )
 
@@ -532,7 +755,9 @@ def parse_ownership_manifest(
 
 def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
     index = _require_mapping(data, context)
-    _require_keys(index, {"public_base", "packages"}, context)
+    _require_keys(
+        index, {"public_base", "packages"}, context, optional_keys={"patterns"}
+    )
 
     public_base = _require_str(index["public_base"], f"{context}.public_base")
     _validate_public_base(public_base, f"{context}.public_base")
@@ -543,8 +768,11 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
         )
 
     package_items = _require_mapping(index["packages"], f"{context}.packages")
-    if not package_items:
-        raise ManifestError(f"{context}.packages must not be empty")
+    pattern_items = _require_mapping(index.get("patterns", {}), f"{context}.patterns")
+    if not package_items and not pattern_items:
+        raise ManifestError(
+            f"{context}.packages and {context}.patterns must not both be empty"
+        )
 
     packages: dict[str, PackageOwnership] = {}
     for raw_name, raw_config in package_items.items():
@@ -583,13 +811,70 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
             owner_path=owner_path,
         )
 
+    patterns = _parse_patterns(pattern_items, f"{context}.patterns")
+    _validate_pattern_conflicts(patterns, f"{context}.patterns")
+
     route_ordered_packages = sorted(
         packages.values(), key=lambda p: (p.owner_path, p.name)
+    )
+    route_ordered_patterns = sorted(
+        patterns.values(), key=lambda p: (p.owner_path, p.pattern)
     )
     return PythonIndexOwnership(
         public_base=public_base,
         packages={package.name: package for package in route_ordered_packages},
+        patterns={pattern.pattern: pattern for pattern in route_ordered_patterns},
     )
+
+
+def _parse_patterns(
+    pattern_items: Mapping[object, object],
+    context: str,
+) -> dict[str, PatternOwnership]:
+    patterns: dict[str, PatternOwnership] = {}
+    for raw_pattern, raw_config in pattern_items.items():
+        if not isinstance(raw_pattern, str):
+            raise ManifestError(f"{context} contains a non-string pattern")
+        _validate_pattern(raw_pattern, f"{context}.{raw_pattern}")
+        pattern_config = _require_mapping(raw_config, f"{context}.{raw_pattern}")
+        _require_keys(pattern_config, {"owner_path"}, f"{context}.{raw_pattern}")
+        owner_path = _require_str(
+            pattern_config["owner_path"],
+            f"{context}.{raw_pattern}.owner_path",
+        )
+        _validate_owner_path(owner_path, f"{context}.{raw_pattern}.owner_path")
+        patterns[raw_pattern] = PatternOwnership(
+            pattern=raw_pattern,
+            prefix=raw_pattern.removesuffix("*"),
+            owner_path=owner_path,
+        )
+    return patterns
+
+
+def _validate_pattern(pattern: str, context: str) -> None:
+    if pattern.count("*") != 1 or not pattern.endswith("*"):
+        raise ManifestError(f"{context}: pattern must end with exactly one '*'")
+    prefix = pattern.removesuffix("*")
+    if not _PATTERN_PREFIX_RE.fullmatch(prefix):
+        raise ManifestError(
+            f"{context}: pattern prefix must be lowercase [a-z0-9-] and start "
+            "with an alphanumeric character"
+        )
+
+
+def _validate_pattern_conflicts(
+    patterns: dict[str, PatternOwnership],
+    context: str,
+) -> None:
+    patterns_by_prefix: dict[str, PatternOwnership] = {}
+    for pattern in patterns.values():
+        existing = patterns_by_prefix.get(pattern.prefix)
+        if existing is not None and existing.owner_path != pattern.owner_path:
+            raise ManifestError(
+                f"{context}: patterns {existing.pattern!r} and {pattern.pattern!r} "
+                "have the same prefix but different owner paths"
+            )
+        patterns_by_prefix[pattern.prefix] = pattern
 
 
 def _require_mapping(data: object, context: str) -> Mapping[object, object]:
@@ -622,9 +907,12 @@ def _require_keys(
     data: Mapping[object, object],
     expected_keys: set[str],
     context: str,
+    *,
+    optional_keys: set[str] | None = None,
 ) -> None:
+    optional_keys = optional_keys or set()
     actual_keys = set(data)
-    unknown_keys = actual_keys - expected_keys
+    unknown_keys = actual_keys - expected_keys - optional_keys
     missing_keys = expected_keys - actual_keys
     if unknown_keys:
         unknown = ", ".join(repr(key) for key in sorted(unknown_keys, key=repr))
@@ -738,8 +1026,8 @@ def _require_non_empty_file(path: Path, description: str) -> None:
 def _assert_output_package_sets_match(
     validated: ValidatedIndexContent,
     aggregate_root_html: str,
-    route_table: dict[str, object],
-    validation_report: dict[str, object],
+    route_table: RouteTable,
+    validation_report: ValidationReport,
 ) -> None:
     expected_packages = set(validated.packages)
     aggregate_packages = {
@@ -748,8 +1036,8 @@ def _assert_output_package_sets_match(
             aggregate_root_html, "aggregate root"
         )
     }
-    route_packages = _route_package_set(route_table)
-    validation_packages = _validation_package_set(validation_report)
+    route_packages = {route.package for route in route_table.routes}
+    validation_packages = {package.name for package in validation_report.packages}
     if aggregate_packages != expected_packages:
         raise RuntimeError("Aggregate root package set does not match validated input")
     if route_packages != expected_packages:
@@ -760,40 +1048,18 @@ def _assert_output_package_sets_match(
         )
 
 
-def _route_package_set(route_table: dict[str, object]) -> set[str]:
-    routes = route_table.get("routes")
-    if not isinstance(routes, list):
-        raise RuntimeError("Route table routes must be a list")
-    packages: set[str] = set()
-    for route in routes:
-        if not isinstance(route, dict):
-            raise RuntimeError("Route table routes must contain objects")
-        package_name = route.get("package")
-        if not isinstance(package_name, str):
-            raise RuntimeError("Route table route package must be a string")
-        packages.add(package_name)
-    return packages
-
-
-def _validation_package_set(validation_report: dict[str, object]) -> set[str]:
-    packages = validation_report.get("packages")
-    if not isinstance(packages, list):
-        raise RuntimeError("Validation report packages must be a list")
-    package_names: set[str] = set()
-    for package in packages:
-        if not isinstance(package, dict):
-            raise RuntimeError("Validation report packages must contain objects")
-        package_name = package.get("name")
-        if not isinstance(package_name, str):
-            raise RuntimeError("Validation report package name must be a string")
-        package_names.add(package_name)
-    return package_names
-
-
 def _write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    tmp_path.write_text(text, encoding="utf-8")
+    with NamedTemporaryFile(
+        "w",
+        dir=path.parent,
+        encoding="utf-8",
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as f:
+        f.write(text)
+        tmp_path = Path(f.name)
     tmp_path.replace(path)
 
 
@@ -801,8 +1067,21 @@ def _json_dumps(data: object) -> str:
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
+def _public_path(owner_path: str, *segments: str) -> str:
+    quoted_segments = [quote(segment, safe="") for segment in segments]
+    return "/" + "/".join(["rocm", owner_path, *quoted_segments])
+
+
 def _product_root_public_path(owner_path: str) -> str:
-    return f"/rocm/{owner_path}/index.html"
+    return _public_path(owner_path, "index.html")
+
+
+def _package_public_base(owner_path: str, package_name: str) -> str:
+    return _public_path(owner_path, package_name) + "/"
+
+
+def _package_index_public_path(owner_path: str, package_name: str) -> str:
+    return _public_path(owner_path, package_name, "index.html")
 
 
 def _validate_manifest_command(args: argparse.Namespace) -> int:
@@ -829,10 +1108,7 @@ def _generate_command(args: argparse.Namespace) -> int:
         strict_completeness=args.strict_completeness,
         require_all_manifest_packages=not args.allow_unpublished,
     )
-    validation_report = json.loads(
-        outputs.validation_report.read_text(encoding="utf-8")
-    )
-    _warn_unpublished_packages(validation_report["unpublished_package_count"])
+    _warn_unpublished_packages(outputs.unpublished_package_count)
     print(f"aggregate_root: {outputs.aggregate_root}")
     print(f"route_table: {outputs.route_table}")
     print(f"validation_report: {outputs.validation_report}")
@@ -860,9 +1136,7 @@ def _validate_content_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _warn_unpublished_packages(unpublished_count: object) -> None:
-    if not isinstance(unpublished_count, int):
-        raise RuntimeError("unpublished package count must be an integer")
+def _warn_unpublished_packages(unpublished_count: int) -> None:
     if unpublished_count:
         print(
             f"warning: {unpublished_count} manifest package(s) are unpublished "

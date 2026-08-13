@@ -14,7 +14,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from aggregate_index import (
     IndexValidationError,
+    MANIFEST_SCHEMA_VERSION,
     ManifestError,
+    ROUTES_SCHEMA_VERSION,
+    VALIDATION_SCHEMA_VERSION,
     generate_outputs,
     load_ownership_manifest,
     main,
@@ -25,7 +28,7 @@ from aggregate_index import (
 
 def _valid_manifest() -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": MANIFEST_SCHEMA_VERSION,
         "python_indexes": [
             {
                 "public_base": "/rocm/whl-next",
@@ -122,13 +125,13 @@ def test_checked_in_manifest_loads() -> None:
     manifest = load_ownership_manifest(manifest_path)
     index = manifest.python_indexes[0]
 
-    assert manifest.schema_version == 1
+    assert manifest.schema_version == MANIFEST_SCHEMA_VERSION
     assert index.public_base == "/rocm/whl-next"
     assert "jax-rocm7-plugin" not in index.packages
     assert "jax-rocm7-pjrt" not in index.packages
-    assert index.packages["jax-rocm10-plugin"].owner_public_base == "/rocm/jax/whl-next"
-    assert index.packages["rocm-sdk-core"].owner_public_base == "/rocm/core/whl-next"
-    assert index.packages["torch"].owner_public_base == "/rocm/pytorch/whl-next"
+    assert index.packages["jax-rocm10-plugin"].owner_path == "jax/whl-next"
+    assert index.packages["rocm-sdk-core"].owner_path == "core/whl-next"
+    assert index.packages["torch"].owner_path == "pytorch/whl-next"
 
 
 def test_checked_in_manifest_uses_known_owner_paths() -> None:
@@ -138,7 +141,8 @@ def test_checked_in_manifest_uses_known_owner_paths() -> None:
     known_owner_paths = {"core/whl-next", "jax/whl-next", "pytorch/whl-next"}
 
     assert {
-        package.owner_path for package in index.packages.values()
+        *[package.owner_path for package in index.packages.values()],
+        *[pattern.owner_path for pattern in index.patterns.values()],
     } == known_owner_paths
 
 
@@ -214,6 +218,190 @@ def test_validate_product_indexes_strict_completeness_rejects_extra_package(
         )
 
 
+def test_pattern_package_generates_exact_route_and_validation_source(
+    tmp_path: Path,
+) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {},
+                    "patterns": {
+                        "rocm-sdk-device-gfx*": {"owner_path": "core/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_product_root(content_root, "core/whl-next", ["rocm-sdk-device-gfx1201"])
+    _write_package_page(content_root, "core/whl-next", "rocm-sdk-device-gfx1201")
+
+    outputs = generate_outputs(manifest, content_root, output_dir)
+
+    route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
+    )
+    assert route_table["routes"] == [
+        {
+            "owner_path": "core/whl-next",
+            "package": "rocm-sdk-device-gfx1201",
+            "target": "/rocm/core/whl-next/rocm-sdk-device-gfx1201/",
+        }
+    ]
+    assert validation_report["packages"] == [
+        {
+            "name": "rocm-sdk-device-gfx1201",
+            "owner_path": "core/whl-next",
+            "product_root_index": "/rocm/core/whl-next/index.html",
+            "package_index": "/rocm/core/whl-next/rocm-sdk-device-gfx1201/index.html",
+            "source": "pattern",
+            "pattern": "rocm-sdk-device-gfx*",
+        }
+    ]
+
+
+def test_exact_package_ownership_takes_precedence_over_pattern(
+    tmp_path: Path,
+) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {
+                        "foo-gfx1201": {"owner_path": "core/whl-next"},
+                    },
+                    "patterns": {
+                        "foo-gfx*": {"owner_path": "pytorch/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    _write_product_root(tmp_path, "core/whl-next", ["foo-gfx1201"])
+    _write_package_page(tmp_path, "core/whl-next", "foo-gfx1201")
+    _write_product_root(tmp_path, "pytorch/whl-next", [])
+
+    validated = validate_product_indexes(manifest, tmp_path)
+
+    assert validated.packages["foo-gfx1201"].owner_path == "core/whl-next"
+    assert validated.packages["foo-gfx1201"].source == "exact"
+    assert validated.packages["foo-gfx1201"].pattern is None
+
+
+def test_longest_pattern_prefix_wins(tmp_path: Path) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {},
+                    "patterns": {
+                        "foo*": {"owner_path": "core/whl-next"},
+                        "foo-bar*": {"owner_path": "pytorch/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    _write_product_root(tmp_path, "core/whl-next", [])
+    _write_product_root(tmp_path, "pytorch/whl-next", ["foo-bar-gfx1201"])
+    _write_package_page(tmp_path, "pytorch/whl-next", "foo-bar-gfx1201")
+
+    validated = validate_product_indexes(manifest, tmp_path)
+
+    assert validated.packages["foo-bar-gfx1201"].owner_path == "pytorch/whl-next"
+    assert validated.packages["foo-bar-gfx1201"].pattern == "foo-bar*"
+
+
+def test_pattern_owner_mismatch_is_rejected(tmp_path: Path) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {
+                        "core-sentinel": {"owner_path": "core/whl-next"},
+                    },
+                    "patterns": {
+                        "foo-gfx*": {"owner_path": "pytorch/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    _write_product_root(tmp_path, "pytorch/whl-next", [])
+    _write_product_root(tmp_path, "core/whl-next", ["core-sentinel", "foo-gfx1201"])
+    _write_package_page(tmp_path, "core/whl-next", "core-sentinel")
+    _write_package_page(tmp_path, "core/whl-next", "foo-gfx1201")
+
+    with pytest.raises(IndexValidationError, match="resolves to owner path"):
+        validate_product_indexes(manifest, tmp_path)
+
+
+def test_strict_completeness_rejects_unknown_package_even_with_patterns(
+    tmp_path: Path,
+) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {},
+                    "patterns": {
+                        "foo-gfx*": {"owner_path": "core/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    _write_product_root(tmp_path, "core/whl-next", ["bar-gfx1201"])
+    _write_package_page(tmp_path, "core/whl-next", "bar-gfx1201")
+
+    with pytest.raises(
+        IndexValidationError, match="absent from the ownership manifest"
+    ):
+        validate_product_indexes(
+            manifest,
+            tmp_path,
+            strict_completeness=True,
+        )
+
+
+def test_require_all_manifest_packages_ignores_zero_match_patterns(
+    tmp_path: Path,
+) -> None:
+    manifest = parse_ownership_manifest(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "python_indexes": [
+                {
+                    "public_base": "/rocm/whl-next",
+                    "packages": {},
+                    "patterns": {
+                        "foo-gfx*": {"owner_path": "core/whl-next"},
+                    },
+                }
+            ],
+        }
+    )
+    _write_product_root(tmp_path, "core/whl-next", [])
+
+    validated = validate_product_indexes(manifest, tmp_path)
+
+    assert validated.packages == {}
+    assert validated.unpublished_packages == {}
+
+
 def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     content_root = tmp_path / "content"
     output_dir = tmp_path / "out"
@@ -243,7 +431,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
 
     route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
     assert route_table == {
-        "schema_version": 1,
+        "schema_version": ROUTES_SCHEMA_VERSION,
         "public_base": "/rocm/whl-next",
         "routes": [
             {
@@ -272,7 +460,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     validation_report = json.loads(
         outputs.validation_report.read_text(encoding="utf-8")
     )
-    assert validation_report["schema_version"] == 1
+    assert validation_report["schema_version"] == VALIDATION_SCHEMA_VERSION
     assert validation_report["public_base"] == "/rocm/whl-next"
     assert validation_report["package_count"] == 4
     assert validation_report["unpublished_package_count"] == 0
@@ -286,6 +474,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
         "apex",
         "torch",
     ]
+    assert {package["source"] for package in validation_report["packages"]} == {"exact"}
     assert validation_report["unpublished_packages"] == []
 
 
@@ -900,13 +1089,63 @@ def test_validate_product_indexes_rejects_empty_package_page(
                     }
                 ],
             },
-            "packages must not be empty",
+            "packages and manifest.python_indexes\\[0\\].patterns must not both be empty",
         ),
     ],
 )
 def test_rejects_malformed_top_level_data(data: object, match: str) -> None:
     with pytest.raises(ManifestError, match=match):
         parse_ownership_manifest(data)
+
+
+@pytest.mark.parametrize(
+    "pattern, match",
+    [
+        ("foo", "exactly one"),
+        ("foo*bar", "exactly one"),
+        ("foo**", "exactly one"),
+        ("foo_*", "pattern prefix"),
+        ("Foo*", "pattern prefix"),
+        ("*foo", "exactly one"),
+    ],
+)
+def test_rejects_invalid_patterns(pattern: str, match: str) -> None:
+    data = {
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "python_indexes": [
+            {
+                "public_base": "/rocm/whl-next",
+                "packages": {},
+                "patterns": {
+                    pattern: {"owner_path": "core/whl-next"},
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ManifestError, match=match):
+        parse_ownership_manifest(data)
+
+
+def test_rejects_duplicate_pattern_keys(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text(
+        """
+schema_version: 1
+python_indexes:
+  - public_base: /rocm/whl-next
+    packages: {}
+    patterns:
+      foo*:
+        owner_path: core/whl-next
+      foo*:
+        owner_path: pytorch/whl-next
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ManifestError, match="duplicate key 'foo\\*'"):
+        load_ownership_manifest(manifest_path)
 
 
 @pytest.mark.parametrize(
