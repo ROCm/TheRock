@@ -366,9 +366,7 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
     if submodule in ("all", "rocgdb"):
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
     if submodule in ("all", "mesa-fork"):
-        create_therock_bump(
-            "third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"]
-        )
+        create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
