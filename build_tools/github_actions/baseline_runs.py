@@ -792,15 +792,20 @@ def select_baseline_run(
             include_in_progress=include_in_progress,
         )
 
+    # Track rejection reasons for debugging when no baseline is found.
+    rejection_reasons: list[str] = []
+
     for workflow_run in candidates[:max_runs]:
         run_id = str(workflow_run["id"])
         if run_id in excluded:
+            rejection_reasons.append(f"{run_id}: excluded by caller")
             continue
         # When include_in_progress is enabled, we allow in-progress runs as
         # candidates and rely on the job-health and artifact-availability
         # checks to validate that the build is actually complete enough to
         # reuse. When disabled, we require the workflow to be fully completed.
         if not include_in_progress and not is_completed_workflow_run(workflow_run):
+            rejection_reasons.append(f"{run_id}: not completed (in_progress disabled)")
             continue
 
         # Cheap, local checks (recency, commit ancestry) run before the
@@ -813,13 +818,12 @@ def select_baseline_run(
                 now=now,
             )
             if not run_recency.is_valid:
-                logger.info(
-                    "Skipping run %s: too old or not date-parseable "
-                    "(age_hours=%s, max_age_hours=%s)",
-                    run_id,
-                    run_recency.age_hours,
-                    run_recency.max_age_hours,
+                reason = (
+                    f"{run_id}: too old (age={run_recency.age_hours:.1f}h, "
+                    f"max={run_recency.max_age_hours}h)"
                 )
+                logger.info("Skipping run: %s", reason)
+                rejection_reasons.append(reason)
                 continue
 
         commit_compatibility: CommitCompatibility | None = None
@@ -827,7 +831,9 @@ def select_baseline_run(
             candidate_head_sha = (workflow_run.get("head_sha", "") or "").strip()
             if not candidate_head_sha:
                 # A run without a head_sha cannot be confirmed compatible.
-                logger.info("Skipping run %s: no head_sha to compare", run_id)
+                reason = f"{run_id}: no head_sha to compare"
+                logger.info("Skipping run: %s", reason)
+                rejection_reasons.append(reason)
                 continue
             commit_compatibility = validate_commit_compatibility(
                 candidate_head_sha=candidate_head_sha,
@@ -835,13 +841,13 @@ def select_baseline_run(
                 ordered_commit_shas=ordered_commit_shas or (),
             )
             if not commit_compatibility.is_valid:
-                logger.info(
-                    "Skipping run %s: commit %s is %s relative to current %s",
-                    run_id,
-                    candidate_head_sha,
-                    commit_compatibility.relationship,
-                    commit_compatibility.current_commit_sha,
+                reason = (
+                    f"{run_id}: commit {candidate_head_sha[:8]} is "
+                    f"{commit_compatibility.relationship} relative to "
+                    f"{current_commit_sha[:8] if current_commit_sha else 'None'}"
                 )
+                logger.info("Skipping run: %s", reason)
+                rejection_reasons.append(reason)
                 continue
 
         job_health = validate_required_jobs_successful(
@@ -849,13 +855,13 @@ def select_baseline_run(
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
-            logger.info(
-                "Skipping run %s: required build jobs not healthy "
-                "(failed=%s, missing=%s)",
-                run_id,
-                job_health.failed_job_names,
-                job_health.missing_name_substrings,
-            )
+            failed_summary = ", ".join(job_health.failed_job_names[:3])
+            if len(job_health.failed_job_names) > 3:
+                failed_summary += f" (+{len(job_health.failed_job_names) - 3} more)"
+            missing_summary = ", ".join(job_health.missing_name_substrings)
+            reason = f"{run_id}: job health failed (failed=[{failed_summary}], missing=[{missing_summary}])"
+            logger.info("Skipping run: %s", reason)
+            rejection_reasons.append(reason)
             continue
 
         backend = backend_factory(workflow_run, github_repository, platform)
@@ -864,11 +870,15 @@ def select_baseline_run(
             required_artifacts=requirements,
         )
         if not availability.is_valid:
-            logger.info(
-                "Skipping run %s: missing artifacts %s",
-                run_id,
-                availability.missing_artifacts,
+            missing_summary = ", ".join(
+                f"{a.name}/{a.target_family}"
+                for a in availability.missing_artifacts[:3]
             )
+            if len(availability.missing_artifacts) > 3:
+                missing_summary += f" (+{len(availability.missing_artifacts) - 3} more)"
+            reason = f"{run_id}: missing artifacts [{missing_summary}]"
+            logger.info("Skipping run: %s", reason)
+            rejection_reasons.append(reason)
             continue
 
         source_ref = create_workflow_run_summary(
@@ -885,5 +895,16 @@ def select_baseline_run(
             commit_compatibility=commit_compatibility,
             run_recency=run_recency,
         )
+
+    # Log summary when no baseline was found to help debug selection failures.
+    if rejection_reasons:
+        logger.warning(
+            "No baseline run found. Evaluated %d candidate(s), all rejected:",
+            len(rejection_reasons),
+        )
+        for reason in rejection_reasons:
+            logger.warning("  - %s", reason)
+    else:
+        logger.warning("No baseline run found: no candidates available")
 
     return None
