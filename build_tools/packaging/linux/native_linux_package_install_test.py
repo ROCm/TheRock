@@ -28,7 +28,7 @@ Test modes (--test-type):
   actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
-APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
+APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 
@@ -158,11 +158,16 @@ def _env(key: str, default: str) -> str:
 # ROCM_REPO_NAME: logical repo name used for APT list, Zypper/Yum repo file and section id
 # ROCM_APT_*, ROCM_ZYPP_*, ROCM_YUM_*, ROCM_RDHC_REL_PATH
 REPO_NAME = _env("ROCM_REPO_NAME", "rocm-test")
-APT_KEYRING_DIR = _env("ROCM_APT_KEYRING_DIR", "/etc/apt/keyrings")
 APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
-APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", "/etc/apt/keyrings/rocm.gpg")
+# Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
+# /etc/apt/keyrings/rocm.gpg. No package owns that path, but the current
+# documented amdgpu package manager steps set the signing key up there
+# ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
+# and point signed-by= at it. This harness writes its keyring the same way, so
+# sharing the path would overwrite the key a host is already using.
+APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
 VERIFY_KEY_COMPONENTS = [
@@ -440,9 +445,14 @@ class NativeLinuxPackageInstallTest:
         print(f"\nGPG Key URL: {self.gpg_key_url}")
 
         if self.package_type == "deb":
-            # For DEB, import GPG key using pipeline approach
-            keyring_dir = Path(APT_KEYRING_DIR)
-            keyring_file = keyring_dir / "rocm.gpg"
+            # Write to the same path the sources entry pins with signed-by=.
+            # These were separate expressions that happened to agree, so any
+            # change to one silently broke apt's ability to find the keyring.
+            # PurePosixPath, not Path: these are paths on the target Linux
+            # filesystem handed to mkdir(1), tee(1) and chmod(1). Path follows
+            # the local flavour, so on Windows it renders "\etc\apt\keyrings".
+            keyring_file = PurePosixPath(APT_KEYRING_FILE)
+            keyring_dir = keyring_file.parent
 
             try:
                 # Create keyring directory
@@ -456,20 +466,31 @@ class NativeLinuxPackageInstallTest:
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
-                # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
+                # Download, dearmor and write the key as three list-form calls
+                # rather than one shell pipeline: the URL and the keyring path
+                # are both configurable, and interpolating them into a shell
+                # string makes them command injection vectors.
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
-                pipeline_cmd = (
-                    f"wget -q -O - {self.gpg_key_url} | "
-                    f"gpg --dearmor | "
-                    f"sudo tee {keyring_file} > /dev/null"
-                )
-
-                subprocess.run(
-                    pipeline_cmd,
-                    shell=True,
+                armored = subprocess.run(
+                    ["wget", "-q", "-O", "-", self.gpg_key_url],
                     check=True,
                     stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                dearmored = subprocess.run(
+                    ["gpg", "--dearmor"],
+                    input=armored,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                subprocess.run(
+                    ["sudo", "tee", str(keyring_file)],
+                    input=dearmored,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     timeout=GPG_KEY_TIMEOUT_SEC,
                 )
@@ -488,6 +509,13 @@ class NativeLinuxPackageInstallTest:
                 print(f"[FAIL] Failed to setup GPG key: {e}")
                 if e.stderr:
                     print(f"Error output: {e.stderr.decode()}")
+                return False
+            except subprocess.TimeoutExpired as e:
+                # TimeoutExpired is a SubprocessError, not an OSError or a
+                # CalledProcessError, so neither handler around it catches one.
+                # Without this the whole run dies on a slow mirror instead of
+                # reporting a failed key import like every other failure here.
+                print(f"[FAIL] Timed out setting up GPG key: {e}")
                 return False
             except OSError as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
@@ -522,7 +550,9 @@ class NativeLinuxPackageInstallTest:
 
         if self.gpg_key_url:
             # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
-            apt_keyring = Path(APT_KEYRING_FILE)
+            # PurePosixPath for the same reason: this lands in signed-by= inside
+            # a sources file on the target, not on the machine running the test.
+            apt_keyring = PurePosixPath(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)

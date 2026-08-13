@@ -104,6 +104,111 @@ class EnvHelperTest(unittest.TestCase):
             )
 
 
+class ConfiguredPathsTest(unittest.TestCase):
+    """Tests for the module-level on-disk paths.
+
+    The paths are module constants resolved from the environment at import
+    time, and ROCM_REPO_NAME / ROCM_APT_KEYRING_FILE are documented overrides.
+    These tests are about the shipped defaults, so they re-import the module
+    with those variables cleared rather than reading whatever the ambient shell
+    happens to export.
+    """
+
+    def setUp(self):
+        # Load a private copy under its own name rather than reloading the
+        # shared instance: the @patch.object decorators elsewhere in this file
+        # bind to the class object that exists at class-definition time, and
+        # reloading swaps it out from under them.
+        with patch.dict(os.environ, {}, clear=False):
+            for name in ("ROCM_REPO_NAME", "ROCM_APT_KEYRING_FILE"):
+                os.environ.pop(name, None)
+            spec = importlib.util.spec_from_file_location(
+                "native_linux_package_install_test__default_paths", _module_path
+            )
+            self.mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.mod)
+
+    def test_apt_keyring_does_not_collide_with_the_driver_keyring(self):
+        # The harness writes this file with 'sudo tee'. No package owns
+        # /etc/apt/keyrings/rocm.gpg, but the current documented amdgpu package
+        # manager steps set the signing key up there and point signed-by= at it,
+        # so writing to the same path would clobber a key the host is using.
+        #
+        # Compare whole paths rather than searching for a substring: several
+        # candidate names contain "rocm.gpg" as a substring, so a containment
+        # check would pass even for a name that still collides.
+        self.assertNotEqual(self.mod.APT_KEYRING_FILE, "/etc/apt/keyrings/rocm.gpg")
+
+    def test_no_keyring_dir_constant_remains(self):
+        # APT_KEYRING_DIR used to hold the directory that setup_gpg_key() wrote
+        # into, and the module docstring advertised ROCM_APT_KEYRING_DIR as an
+        # override. The directory is now derived from APT_KEYRING_FILE, so
+        # bringing the constant back would give the harness two ways to say
+        # where the keyring lives and let them drift apart again. Setting the
+        # env var would also look like it worked while doing nothing.
+        self.assertFalse(hasattr(self.mod, "APT_KEYRING_DIR"))
+
+    def test_apt_keyring_is_derived_from_repo_name(self):
+        # Matches the sibling APT_SOURCES_LIST, which is also REPO_NAME-derived,
+        # so the harness's files stay grouped under one recognizable name.
+        self.assertEqual(
+            self.mod.APT_KEYRING_FILE,
+            f"/etc/apt/keyrings/{self.mod.REPO_NAME}.gpg",
+        )
+
+    def test_gpg_import_writes_the_path_the_sources_entry_pins(self):
+        # setup_gpg_key() writes the keyring and the sources entry pins it with
+        # signed-by=. These were two separate expressions that happened to
+        # agree, so renaming the constant silently pointed apt at a keyring
+        # that was never created. Assert they are the same path.
+        written = self._written_keyring_path()
+        self.assertEqual(written, self.mod.APT_KEYRING_FILE)
+
+    def _written_keyring_path(self):
+        """Run setup_gpg_key() with subprocess stubbed; return the tee target."""
+        runner = self.mod.NativeLinuxPackageInstallTest(
+            os_profile="ubuntu2404",
+            repo_url="https://example.com/repo",
+            release_type="prerelease",
+            gpg_key_url="https://example.com/rocm.gpg",
+        )
+        with patch.object(self.mod.subprocess, "run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=b"key")
+            with _suppress_script_output():
+                self.assertTrue(runner.setup_gpg_key())
+        tee_calls = [
+            c.args[0]
+            for c in mock_run.call_args_list
+            if c.args and c.args[0][:2] == ["sudo", "tee"]
+        ]
+        self.assertEqual(len(tee_calls), 1, f"expected one tee call, got {tee_calls}")
+        return tee_calls[0][2]
+
+    def test_gpg_import_uses_no_shell(self):
+        # The URL and the keyring path are both configurable; interpolating
+        # them into a shell string makes them injection vectors.
+        runner = self.mod.NativeLinuxPackageInstallTest(
+            os_profile="ubuntu2404",
+            repo_url="https://example.com/repo",
+            release_type="prerelease",
+            gpg_key_url="https://example.com/rocm.gpg",
+        )
+        with patch.object(self.mod.subprocess, "run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=b"key")
+            with _suppress_script_output():
+                self.assertTrue(runner.setup_gpg_key())
+        # Assert the import actually ran. The checks below live inside a loop
+        # over the recorded calls, so without this they pass trivially if a
+        # future change makes the deb branch return before running anything.
+        self.assertTrue(mock_run.call_args_list, "setup_gpg_key ran no commands")
+        for call in mock_run.call_args_list:
+            self.assertNotIn("shell", call.kwargs)
+            # Guard args before indexing: a call written as run(args=[...])
+            # has empty .args and would raise IndexError instead of failing.
+            self.assertTrue(call.args, f"expected a positional argv, got {call}")
+            self.assertIsInstance(call.args[0], list)
+
+
 class NormalizeTestTypeTest(unittest.TestCase):
     """Tests for _normalize_test_type()."""
 
@@ -1401,15 +1506,32 @@ class SetupGpgKeyTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_for_deb_when_mock_succeeds(self, mock_run):
-        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir, pipeline, and chmod succeed.
-        mock_run.return_value = MagicMock(returncode=0)
+        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when
+        # every step of the key import succeeds.
+        mock_run.return_value = MagicMock(returncode=0, stdout=b"key")
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gpg_key_url="https://example.com/rocm.gpg",
         )
         self.assertTrue(t.setup_gpg_key())
-        self.assertEqual(mock_run.call_count, 3)  # mkdir, pipeline, chmod
+        # Assert the sequence rather than a bare count: the download and
+        # dearmor steps are separate list-form calls (they were one shell
+        # pipeline), and a count alone gives no signal about what changed.
+        #
+        # Compare two tokens, not one. Three of the five commands run under
+        # sudo, so matching on argv[0] alone cannot tell tee from chmod and
+        # would pass even if the keyring were written by the wrong tool.
+        self.assertEqual(
+            [c.args[0][:2] for c in mock_run.call_args_list],
+            [
+                ["sudo", "mkdir"],
+                ["wget", "-q"],
+                ["gpg", "--dearmor"],
+                ["sudo", "tee"],
+                ["sudo", "chmod"],
+            ],
+        )
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_false_for_deb_when_subprocess_fails(self, mock_run):
@@ -1424,6 +1546,64 @@ class SetupGpgKeyTest(unittest.TestCase):
             os_profile="ubuntu2404",
             gpg_key_url="https://example.com/rocm.gpg",
         )
+        self.assertFalse(t.setup_gpg_key())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_the_downloaded_body_is_not_a_key(self, mock_run):
+        # The download succeeds but returns something that isn't a key, which
+        # is what a server serving an HTML error page with HTTP 200 gives you.
+        # 'gpg --dearmor' exits 2 on anything that isn't OpenPGP data.
+        #
+        # This is the case the old implementation got wrong. It ran the import
+        # as one shell pipeline, and a pipeline exits with the status of its
+        # LAST command, so check=True only ever validated 'tee'. gpg failed,
+        # tee still wrote an empty keyring and exited 0, and the harness
+        # printed success and returned True. apt then failed much later with an
+        # opaque signature error, nowhere near the actual fault.
+        import subprocess
+
+        def fail_on_dearmor(argv, **kwargs):
+            if argv[:2] == ["gpg", "--dearmor"]:
+                # Model what subprocess actually does, rather than raising
+                # unconditionally. Raising regardless of `check` would make
+                # this test pass even if the production code stopped checking
+                # the dearmor step, which is precisely the bug it guards.
+                if not kwargs.get("check"):
+                    return MagicMock(returncode=2, stdout=b"")
+                raise subprocess.CalledProcessError(
+                    2, argv, stderr=b"gpg: no valid OpenPGP data found."
+                )
+            return MagicMock(returncode=0, stdout=b"<html>404</html>")
+
+        mock_run.side_effect = fail_on_dearmor
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gpg_key_url="https://example.com/rocm.gpg",
+        )
+
+        self.assertFalse(t.setup_gpg_key())
+        # The keyring must not be written at all. Reporting the failure is only
+        # half of it; an empty file left behind would still break apt.
+        self.assertNotIn(
+            ["sudo", "tee"], [c.args[0][:2] for c in mock_run.call_args_list]
+        )
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_a_step_times_out(self, mock_run):
+        # TimeoutExpired is a SubprocessError. It is neither an OSError nor a
+        # CalledProcessError, so it matches neither of the other handlers and
+        # used to propagate out of setup_gpg_key and abort the run, instead of
+        # being reported as a failed key import.
+        import subprocess
+
+        mock_run.side_effect = subprocess.TimeoutExpired("wget", 60)
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gpg_key_url="https://example.com/rocm.gpg",
+        )
+
         self.assertFalse(t.setup_gpg_key())
 
 
