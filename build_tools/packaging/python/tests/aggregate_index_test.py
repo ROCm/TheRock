@@ -3,6 +3,7 @@
 
 """Tests for ROCm aggregate Python index ownership tooling."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -15,6 +16,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from aggregate_index import (
     IndexValidationError,
     ManifestError,
+    generate_outputs,
     load_ownership_manifest,
     parse_ownership_manifest,
     validate_product_indexes,
@@ -30,6 +32,7 @@ def _valid_manifest() -> dict[str, object]:
                 "packages": {
                     "torch": {"owner_path": "pytorch/whl-next"},
                     "rocm-sdk-core": {"owner_path": "core/whl-next"},
+                    "rocm-sdk-devel": {"owner_path": "core/whl-next"},
                     "apex": {"owner_path": "pytorch/whl-next"},
                 },
             }
@@ -86,6 +89,18 @@ def _write_valid_content_root(root: Path) -> None:
     _write_package_page(root, "pytorch/whl-next", "torch")
 
 
+def _generated_output_bytes(output_dir: Path) -> dict[str, bytes]:
+    relative_paths = [
+        "rocm/whl-next/index.html",
+        "rocm-whl-next-routes.json",
+        "validation.json",
+    ]
+    return {
+        relative_path: (output_dir / relative_path).read_bytes()
+        for relative_path in relative_paths
+    }
+
+
 def test_checked_in_manifest_loads() -> None:
     manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
     manifest = load_ownership_manifest(manifest_path)
@@ -106,9 +121,15 @@ def test_parse_sorts_packages_by_owner_path_then_name() -> None:
     manifest = parse_ownership_manifest(data)
     index = manifest.python_indexes[0]
 
-    assert list(index.packages) == ["rocm-sdk-core", "apex", "torch"]
+    assert list(index.packages) == [
+        "rocm-sdk-core",
+        "rocm-sdk-devel",
+        "apex",
+        "torch",
+    ]
     assert [package.name for package in index.ordered_packages()] == [
         "rocm-sdk-core",
+        "rocm-sdk-devel",
         "apex",
         "torch",
     ]
@@ -122,6 +143,7 @@ def test_validate_product_indexes_success(tmp_path: Path) -> None:
 
     assert validated.public_base == "/rocm/whl-next"
     assert list(validated.packages) == ["rocm-sdk-core", "apex", "torch"]
+    assert list(validated.unpublished_packages) == ["rocm-sdk-devel"]
     rocm_sdk_core = validated.packages["rocm-sdk-core"]
     assert rocm_sdk_core.owner_path == "core/whl-next"
     assert rocm_sdk_core.product_root_index == (
@@ -153,6 +175,132 @@ def test_validate_product_indexes_strict_completeness_rejects_extra_package(
         validate_product_indexes(manifest, tmp_path, strict_completeness=True)
 
 
+def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    outputs = generate_outputs(manifest, content_root, output_dir)
+
+    assert outputs.aggregate_root == output_dir / "rocm/whl-next/index.html"
+    assert outputs.route_table == output_dir / "rocm-whl-next-routes.json"
+    assert outputs.validation_report == output_dir / "validation.json"
+
+    aggregate_root = outputs.aggregate_root.read_text(encoding="utf-8")
+    assert (
+        aggregate_root
+        == """<!DOCTYPE html>
+<html>
+  <body>
+    <a href="apex/">apex</a><br/>
+    <a href="rocm-sdk-core/">rocm-sdk-core</a><br/>
+    <a href="torch/">torch</a><br/>
+  </body>
+</html>
+"""
+    )
+
+    route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
+    assert route_table == {
+        "schema_version": 1,
+        "public_base": "/rocm/whl-next",
+        "routes": [
+            {
+                "owner_path": "core/whl-next",
+                "package": "rocm-sdk-core",
+                "target": "/rocm/core/whl-next/rocm-sdk-core/",
+            },
+            {
+                "owner_path": "pytorch/whl-next",
+                "package": "apex",
+                "target": "/rocm/pytorch/whl-next/apex/",
+            },
+            {
+                "owner_path": "pytorch/whl-next",
+                "package": "torch",
+                "target": "/rocm/pytorch/whl-next/torch/",
+            },
+        ],
+    }
+
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
+    )
+    assert validation_report["schema_version"] == 1
+    assert validation_report["public_base"] == "/rocm/whl-next"
+    assert validation_report["package_count"] == 3
+    assert validation_report["unpublished_package_count"] == 1
+    assert validation_report["owners"] == {
+        "core/whl-next": {"package_count": 1},
+        "pytorch/whl-next": {"package_count": 2},
+    }
+    assert [package["name"] for package in validation_report["packages"]] == [
+        "rocm-sdk-core",
+        "apex",
+        "torch",
+    ]
+    assert validation_report["unpublished_packages"] == [
+        {
+            "name": "rocm-sdk-devel",
+            "owner_path": "core/whl-next",
+            "product_root_index": (
+                content_root / "rocm/core/whl-next/index.html"
+            ).as_posix(),
+        }
+    ]
+
+
+def test_generate_outputs_strict_completeness_rejects_extra_package(
+    tmp_path: Path,
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    with pytest.raises(
+        IndexValidationError, match="absent from the ownership manifest"
+    ):
+        generate_outputs(
+            manifest,
+            content_root,
+            output_dir,
+            strict_completeness=True,
+        )
+    assert not (output_dir / "rocm/whl-next/index.html").exists()
+    assert not (output_dir / "rocm-whl-next-routes.json").exists()
+    assert not (output_dir / "validation.json").exists()
+
+
+def test_generate_outputs_is_byte_for_byte_deterministic(tmp_path: Path) -> None:
+    content_root = tmp_path / "content"
+    first_output_dir = tmp_path / "first"
+    second_output_dir = tmp_path / "second"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    generate_outputs(manifest, content_root, first_output_dir)
+    generate_outputs(manifest, content_root, second_output_dir)
+
+    assert _generated_output_bytes(first_output_dir) == _generated_output_bytes(
+        second_output_dir
+    )
+
+
+def test_generate_outputs_overwrite_is_deterministic(tmp_path: Path) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    generate_outputs(manifest, content_root, output_dir)
+    first_output = _generated_output_bytes(output_dir)
+    generate_outputs(manifest, content_root, output_dir)
+
+    assert _generated_output_bytes(output_dir) == first_output
+
+
 def test_validate_product_indexes_rejects_missing_product_root(
     tmp_path: Path,
 ) -> None:
@@ -166,7 +314,26 @@ def test_validate_product_indexes_rejects_missing_product_root(
         validate_product_indexes(manifest, tmp_path)
 
 
-def test_validate_product_indexes_rejects_missing_package_link(
+def test_validate_product_indexes_records_unpublished_package_by_default(
+    tmp_path: Path,
+) -> None:
+    _write_product_root(tmp_path, "core/whl-next", ["extra-core"])
+    _write_product_root(tmp_path, "pytorch/whl-next", ["apex", "torch"])
+    _write_package_page(tmp_path, "core/whl-next", "rocm-sdk-core")
+    _write_package_page(tmp_path, "pytorch/whl-next", "apex")
+    _write_package_page(tmp_path, "pytorch/whl-next", "torch")
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    validated = validate_product_indexes(manifest, tmp_path)
+
+    assert list(validated.packages) == ["apex", "torch"]
+    assert list(validated.unpublished_packages) == [
+        "rocm-sdk-core",
+        "rocm-sdk-devel",
+    ]
+
+
+def test_validate_product_indexes_requires_manifest_packages_when_requested(
     tmp_path: Path,
 ) -> None:
     _write_product_root(tmp_path, "core/whl-next", ["extra-core"])
@@ -177,7 +344,11 @@ def test_validate_product_indexes_rejects_missing_package_link(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="missing canonical package link"):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(
+            manifest,
+            tmp_path,
+            require_all_manifest_packages=True,
+        )
 
 
 def test_validate_product_indexes_rejects_duplicate_package_link(

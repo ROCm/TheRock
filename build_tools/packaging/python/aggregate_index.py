@@ -7,6 +7,7 @@
 import argparse
 import dataclasses
 import html.parser
+import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -20,6 +21,8 @@ from yaml.nodes import MappingNode
 
 SUPPORTED_SCHEMA_VERSION = 1
 SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
+ROUTES_FILENAME = "rocm-whl-next-routes.json"
+VALIDATION_FILENAME = "validation.json"
 
 _NORMALIZE_RE = re.compile(r"[-_.]+")
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -116,15 +119,41 @@ class ValidatedPackage:
 
 
 @dataclasses.dataclass(frozen=True)
+class UnpublishedPackage:
+    """Manifest-owned package that is not present in its product-local root."""
+
+    name: str
+    owner_path: str
+    product_root_index: Path
+
+
+@dataclasses.dataclass(frozen=True)
 class ValidatedIndexContent:
     """Validated product-local content for one aggregate index."""
 
     public_base: str
     packages: dict[str, ValidatedPackage]
+    unpublished_packages: dict[str, UnpublishedPackage]
 
     def ordered_packages(self) -> list[ValidatedPackage]:
         """Return packages in route JSON order: owner_path, then package name."""
         return sorted(self.packages.values(), key=lambda p: (p.owner_path, p.name))
+
+    def ordered_unpublished_packages(self) -> list[UnpublishedPackage]:
+        """Return unpublished packages in route JSON order."""
+        return sorted(
+            self.unpublished_packages.values(),
+            key=lambda p: (p.owner_path, p.name),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class GeneratedOutputPaths:
+    """Paths written by aggregate output generation."""
+
+    aggregate_root: Path
+    route_table: Path
+    validation_report: Path
 
 
 @dataclasses.dataclass(frozen=True)
@@ -189,6 +218,7 @@ def validate_product_indexes(
     content_root: Path,
     *,
     strict_completeness: bool = False,
+    require_all_manifest_packages: bool = False,
 ) -> ValidatedIndexContent:
     """Validate product-local root and package indexes for a manifest.
 
@@ -201,7 +231,7 @@ def validate_product_indexes(
 
     Raises:
         IndexValidationError: If a referenced product-local root or package
-        page is missing, empty, malformed, or lacks a declared package entry.
+        page is missing, empty, malformed, or invalid.
     """
     index = manifest.python_indexes[0]
     packages_by_owner_path: dict[str, list[PackageOwnership]] = {}
@@ -209,6 +239,7 @@ def validate_product_indexes(
         packages_by_owner_path.setdefault(package.owner_path, []).append(package)
 
     validated_packages: dict[str, ValidatedPackage] = {}
+    unpublished_packages: dict[str, UnpublishedPackage] = {}
     for owner_path in sorted(packages_by_owner_path):
         product_root_index = content_root / "rocm" / owner_path / "index.html"
         root_links = parse_product_root_index(product_root_index)
@@ -233,10 +264,17 @@ def validate_product_indexes(
         for package in packages_by_owner_path[owner_path]:
             matching_links = root_links_by_package.get(package.name, [])
             if not matching_links:
-                raise IndexValidationError(
-                    f"{product_root_index}: missing canonical package link "
-                    f"for {package.name!r}"
+                if require_all_manifest_packages:
+                    raise IndexValidationError(
+                        f"{product_root_index}: missing canonical package link "
+                        f"for {package.name!r}"
+                    )
+                unpublished_packages[package.name] = UnpublishedPackage(
+                    name=package.name,
+                    owner_path=owner_path,
+                    product_root_index=product_root_index,
                 )
+                continue
             if len(matching_links) != 1:
                 raise IndexValidationError(
                     f"{product_root_index}: expected exactly one package link "
@@ -260,22 +298,147 @@ def validate_product_indexes(
     return ValidatedIndexContent(
         public_base=index.public_base,
         packages={package.name: package for package in route_ordered_packages},
+        unpublished_packages={
+            package.name: package
+            for package in sorted(
+                unpublished_packages.values(), key=lambda p: (p.owner_path, p.name)
+            )
+        },
     )
+
+
+def generate_outputs(
+    manifest: OwnershipManifest,
+    content_root: Path,
+    output_dir: Path,
+    *,
+    strict_completeness: bool = False,
+    require_all_manifest_packages: bool = False,
+) -> GeneratedOutputPaths:
+    """Validate product-local content and write aggregate routed outputs."""
+    validated = validate_product_indexes(
+        manifest,
+        content_root,
+        strict_completeness=strict_completeness,
+        require_all_manifest_packages=require_all_manifest_packages,
+    )
+    return write_generated_outputs(validated, output_dir)
+
+
+def write_generated_outputs(
+    validated: ValidatedIndexContent,
+    output_dir: Path,
+) -> GeneratedOutputPaths:
+    """Write aggregate root, exact route table, and validation report."""
+    aggregate_root_html = render_aggregate_root(validated)
+    route_table = build_route_table(validated)
+    validation_report = build_validation_report(validated)
+    _assert_output_package_sets_match(
+        validated,
+        aggregate_root_html,
+        route_table,
+        validation_report,
+    )
+
+    aggregate_root_path = output_dir / "rocm" / "whl-next" / "index.html"
+    route_table_path = output_dir / ROUTES_FILENAME
+    validation_report_path = output_dir / VALIDATION_FILENAME
+    _write_text_atomic(aggregate_root_path, aggregate_root_html)
+    _write_text_atomic(route_table_path, _json_dumps(route_table))
+    _write_text_atomic(validation_report_path, _json_dumps(validation_report))
+    return GeneratedOutputPaths(
+        aggregate_root=aggregate_root_path,
+        route_table=route_table_path,
+        validation_report=validation_report_path,
+    )
+
+
+def render_aggregate_root(validated: ValidatedIndexContent) -> str:
+    """Render the aggregate PEP 503 root index."""
+    lines = [
+        "<!DOCTYPE html>",
+        "<html>",
+        "  <body>",
+    ]
+    for package_name in sorted(validated.packages):
+        lines.append(f'    <a href="{package_name}/">{package_name}</a><br/>')
+    lines.extend(
+        [
+            "  </body>",
+            "</html>",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_route_table(validated: ValidatedIndexContent) -> dict[str, object]:
+    """Build the exact aggregate package route table."""
+    return {
+        "schema_version": SUPPORTED_SCHEMA_VERSION,
+        "public_base": validated.public_base,
+        "routes": [
+            {
+                "package": package.name,
+                "owner_path": package.owner_path,
+                "target": f"/rocm/{package.owner_path}/{package.name}/",
+            }
+            for package in validated.ordered_packages()
+        ],
+    }
+
+
+def build_validation_report(validated: ValidatedIndexContent) -> dict[str, object]:
+    """Build deterministic CI-readable validation output."""
+    owners: dict[str, int] = {}
+    for package in validated.ordered_packages():
+        owners[package.owner_path] = owners.get(package.owner_path, 0) + 1
+    return {
+        "schema_version": SUPPORTED_SCHEMA_VERSION,
+        "public_base": validated.public_base,
+        "package_count": len(validated.packages),
+        "unpublished_package_count": len(validated.unpublished_packages),
+        "owners": {
+            owner_path: {"package_count": owners[owner_path]}
+            for owner_path in sorted(owners)
+        },
+        "packages": [
+            {
+                "name": package.name,
+                "owner_path": package.owner_path,
+                "product_root_index": package.product_root_index.as_posix(),
+                "package_index": package.package_index.as_posix(),
+            }
+            for package in validated.ordered_packages()
+        ],
+        "unpublished_packages": [
+            {
+                "name": package.name,
+                "owner_path": package.owner_path,
+                "product_root_index": package.product_root_index.as_posix(),
+            }
+            for package in validated.ordered_unpublished_packages()
+        ],
+    }
 
 
 def parse_product_root_index(path: Path) -> list[ProductRootLink]:
     """Parse and validate package links from one product-local root index."""
     text = _read_non_empty_text(path, "product root index")
+    return _parse_product_root_index_text(text, str(path))
+
+
+def _parse_product_root_index_text(text: str, context: str) -> list[ProductRootLink]:
     parser = _AnchorParser()
     parser.feed(text)
     parser.close()
 
     links: list[ProductRootLink] = []
     for anchor in parser.anchors:
-        package_name = _package_name_from_root_href(anchor.href, str(path))
+        package_name = _package_name_from_root_href(anchor.href, context)
         if anchor.text != package_name:
             raise IndexValidationError(
-                f"{path}: link text {anchor.text!r} does not match "
+                f"{context}: link text {anchor.text!r} does not match "
                 f"package href {anchor.href!r}"
             )
         links.append(
@@ -499,6 +662,72 @@ def _require_non_empty_file(path: Path, description: str) -> None:
         raise IndexValidationError(f"Empty {description}: {path}")
 
 
+def _assert_output_package_sets_match(
+    validated: ValidatedIndexContent,
+    aggregate_root_html: str,
+    route_table: dict[str, object],
+    validation_report: dict[str, object],
+) -> None:
+    expected_packages = set(validated.packages)
+    aggregate_packages = {
+        link.package_name
+        for link in _parse_product_root_index_text(
+            aggregate_root_html, "aggregate root"
+        )
+    }
+    route_packages = _route_package_set(route_table)
+    validation_packages = _validation_package_set(validation_report)
+    if aggregate_packages != expected_packages:
+        raise RuntimeError("Aggregate root package set does not match validated input")
+    if route_packages != expected_packages:
+        raise RuntimeError("Route table package set does not match validated input")
+    if validation_packages != expected_packages:
+        raise RuntimeError(
+            "Validation report package set does not match validated input"
+        )
+
+
+def _route_package_set(route_table: dict[str, object]) -> set[str]:
+    routes = route_table.get("routes")
+    if not isinstance(routes, list):
+        raise RuntimeError("Route table routes must be a list")
+    packages: set[str] = set()
+    for route in routes:
+        if not isinstance(route, dict):
+            raise RuntimeError("Route table routes must contain objects")
+        package_name = route.get("package")
+        if not isinstance(package_name, str):
+            raise RuntimeError("Route table route package must be a string")
+        packages.add(package_name)
+    return packages
+
+
+def _validation_package_set(validation_report: dict[str, object]) -> set[str]:
+    packages = validation_report.get("packages")
+    if not isinstance(packages, list):
+        raise RuntimeError("Validation report packages must be a list")
+    package_names: set[str] = set()
+    for package in packages:
+        if not isinstance(package, dict):
+            raise RuntimeError("Validation report packages must contain objects")
+        package_name = package.get("name")
+        if not isinstance(package_name, str):
+            raise RuntimeError("Validation report package name must be a string")
+        package_names.add(package_name)
+    return package_names
+
+
+def _write_text_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def _json_dumps(data: object) -> str:
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
 def _validate_manifest_command(args: argparse.Namespace) -> int:
     manifest = load_ownership_manifest(args.manifest)
     index = manifest.python_indexes[0]
@@ -514,12 +743,28 @@ def _validate_manifest_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _generate_command(args: argparse.Namespace) -> int:
+    manifest = load_ownership_manifest(args.manifest)
+    outputs = generate_outputs(
+        manifest,
+        args.content_root,
+        args.output_dir,
+        strict_completeness=args.strict or args.strict_completeness,
+        require_all_manifest_packages=args.strict or args.require_all_manifest_packages,
+    )
+    print(f"aggregate_root: {outputs.aggregate_root}")
+    print(f"route_table: {outputs.route_table}")
+    print(f"validation_report: {outputs.validation_report}")
+    return 0
+
+
 def _validate_content_command(args: argparse.Namespace) -> int:
     manifest = load_ownership_manifest(args.manifest)
     validated = validate_product_indexes(
         manifest,
         args.content_root,
-        strict_completeness=args.strict_completeness,
+        strict_completeness=args.strict or args.strict_completeness,
+        require_all_manifest_packages=args.strict or args.require_all_manifest_packages,
     )
     owner_counts: dict[str, int] = {}
     for package in validated.ordered_packages():
@@ -527,6 +772,7 @@ def _validate_content_command(args: argparse.Namespace) -> int:
 
     print(f"public_base: {validated.public_base}")
     print(f"packages: {len(validated.packages)}")
+    print(f"unpublished_packages: {len(validated.unpublished_packages)}")
     for owner_path in sorted(owner_counts):
         print(f"{owner_path}: {owner_counts[owner_path]}")
     return 0
@@ -547,6 +793,47 @@ def main(argv: list[str]) -> int:
     )
     validate_parser.set_defaults(func=_validate_manifest_command)
 
+    generate_parser = subparsers.add_parser(
+        "generate",
+        help="validate product-local content and generate aggregate routed outputs",
+    )
+    generate_parser.add_argument(
+        "--manifest",
+        type=Path,
+        required=True,
+        help="Path to the ownership manifest YAML file",
+    )
+    generate_parser.add_argument(
+        "--content-root",
+        type=Path,
+        required=True,
+        help="Local directory mirroring public /rocm/... product indexes",
+    )
+    generate_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Directory where aggregate outputs will be written",
+    )
+    generate_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail on undeclared product-root packages and unpublished "
+        "manifest packages",
+    )
+    generate_parser.add_argument(
+        "--strict-completeness",
+        action="store_true",
+        help="fail if referenced product roots contain packages absent from "
+        "the ownership manifest",
+    )
+    generate_parser.add_argument(
+        "--require-all-manifest-packages",
+        action="store_true",
+        help="fail if a manifest-owned package is absent from its product root",
+    )
+    generate_parser.set_defaults(func=_generate_command)
+
     content_parser = subparsers.add_parser(
         "validate-content",
         help="validate product-local index content for an ownership manifest",
@@ -564,10 +851,21 @@ def main(argv: list[str]) -> int:
         help="Local directory mirroring public /rocm/... product indexes",
     )
     content_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail on undeclared product-root packages and unpublished "
+        "manifest packages",
+    )
+    content_parser.add_argument(
         "--strict-completeness",
         action="store_true",
         help="fail if referenced product roots contain packages absent from "
         "the ownership manifest",
+    )
+    content_parser.add_argument(
+        "--require-all-manifest-packages",
+        action="store_true",
+        help="fail if a manifest-owned package is absent from its product root",
     )
     content_parser.set_defaults(func=_validate_content_command)
 
