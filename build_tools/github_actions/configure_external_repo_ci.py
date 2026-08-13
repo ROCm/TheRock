@@ -5,7 +5,14 @@
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
 This script determines which projects changed and whether to run/skip tests.
-It consolidates logic previously duplicated across external repo workflows.
+
+Stage Reuse:
+    TheRock's stage_reuse_decision.py handles stage impact analysis and
+    baseline run selection using commit compatibility. The external repo
+    workflow should:
+    1. Resolve therock_ref using resolve_therock_ref.py (merge-base pinning)
+    2. Pass that ref to setup_multi_arch.yml
+    3. TheRock's stage_reuse_decision.py finds commit-compatible baseline runs
 
 Usage:
     python configure_external_repo_ci.py \
@@ -30,7 +37,6 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, fields
-from pathlib import Path
 from typing import (
     Callable,
     Iterable,

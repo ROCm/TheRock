@@ -45,7 +45,9 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
     [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
+    [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
@@ -424,7 +426,9 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems_examples,
             args.rocrtst,
             args.rocalution,
+            args.kfdtest,
             args.rocwmma,
+            args.rpp,
             args.libhipcxx,
             args.hipthreads,
         ]
@@ -553,9 +557,28 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.rpp:
+            extra_artifacts.append("rpp")
+            # test_rpp.py compiles the test suite against the installed tree,
+            # so the _lib expansion below is not sufficient:
+            #   rpp_dev      - lib/cmake/rpp for find_package(rpp), plus headers.
+            #   base_dev     - include/half/half.hpp, which api/rppdefs.h
+            #                  includes to define Rpp16f.
+            #   amd-llvm_dev - lib/llvm/lib/cmake/AMDDeviceLibs. rpp-config.cmake
+            #                  calls find_dependency(HIP), and hip-config-amd.cmake
+            #                  in turn resolves AMDDeviceLibs through the
+            #                  lib/cmake/AMDDeviceLibs shim in base_lib.
+            argv.append("rpp_dev")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
@@ -969,9 +992,23 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rpp",
+        default=False,
+        help="Include 'rpp' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
