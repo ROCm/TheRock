@@ -226,20 +226,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             ["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir
         )
 
-    # Inject GITHUB_TOKEN auth into the local repo config so large fetches from
-    # github.com are authenticated. This is necessary because this repo is freshly
-    # initialized and does not inherit any global git config set by the caller.
-    github_token = os.environ.get("GITHUB_TOKEN")
-    if github_token:
-        run_command(
-            [
-                "git", "config",
-                f"url.https://x-access-token:{github_token}@github.com/.insteadOf",
-                "https://github.com/",
-            ],
-            cwd=repo_dir,
-        )
-
     # Fetch and checkout.
     fetch_args = []
     if args.depth is not None:

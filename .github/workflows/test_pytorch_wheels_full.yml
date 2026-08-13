@@ -203,7 +203,6 @@ jobs:
     # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
     # uses os.environ.setdefault() so values set here take precedence.
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       SHARD_NUMBER: ${{ matrix.shard }}

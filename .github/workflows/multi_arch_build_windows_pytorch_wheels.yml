@@ -176,7 +176,6 @@ jobs:
       id-token: write
       contents: read
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CHECKOUT_ROOT: B:/src
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist

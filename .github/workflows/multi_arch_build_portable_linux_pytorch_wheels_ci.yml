@@ -122,7 +122,6 @@ jobs:
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       RELEASE_TYPE: ci
       optional_build_prod_arguments: ""
