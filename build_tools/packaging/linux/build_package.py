@@ -575,10 +575,15 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
-    # Append version to default install prefix
+    # Append version (and build variant for ASAN) to default install prefix.
+    # Release:  /opt/rocm/core-7.15
+    # ASAN:     /opt/rocm/core-asan-7.15
     prefix = args.install_prefix
     if prefix == DEFAULT_INSTALL_PREFIX:
-        prefix = f"{prefix}-{modified_rocm_version}"
+        if args.build_variant == "asan":
+            prefix = f"{prefix}-{args.build_variant}-{modified_rocm_version}"
+        else:
+            prefix = f"{prefix}-{modified_rocm_version}"
 
     # Validate package type
     pkg_type = (args.pkg_type or "").lower()
@@ -729,6 +734,16 @@ def main(argv: list[str]):
         "--install-prefix",
         default=f"{DEFAULT_INSTALL_PREFIX}",
         help="Base directory where package will be installed",
+    )
+
+    p.add_argument(
+        "--build-variant",
+        default="",
+        help=(
+            "Build variant (e.g. 'asan'). When set to 'asan', the install prefix "
+            "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
+            "(e.g. /opt/rocm/core-asan-7.15)."
+        ),
     )
 
     p.add_argument(
