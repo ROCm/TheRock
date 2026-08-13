@@ -94,6 +94,17 @@ therock_declare_flag(
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
 )
 
+therock_declare_flag(
+  NAME LLVM_ENABLE_ASSERTIONS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. In CI costs roughly 20% more build time overall and up to 35% on device-heavy stages."
+  ISSUE "https://github.com/ROCm/TheRock/pull/6102"
+  CMAKE_VARS
+    LLVM_ENABLE_ASSERTIONS=ON
+  SUB_PROJECTS
+    amd-llvm
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
