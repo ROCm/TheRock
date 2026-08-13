@@ -353,13 +353,14 @@ with ctest:
 ctest --test-dir build
 ```
 
-Testing functionality on an actual GPU is in progress and will be documented
-separately.
+See [TESTING.md](/TESTING.md#testing-changes-to-rocm-subprojects-with-therock)
+for more details about testing.
 
 ## Development manuals
 
 - [FAQ](docs/faq.md): Frequently asked questions for TheRock users.
-- [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [TESTING.md](TESTING.md): Testing policies for TheRock itself and ROCm subprojects.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
 - [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.

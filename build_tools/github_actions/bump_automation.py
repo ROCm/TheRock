@@ -53,6 +53,13 @@ SUBMODULE_CONFIG = {
         "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
     },
+    "third-party/sysdeps/linux/amd-mesa/mesa-fork": {
+        "repo": "ROCm/mesa-fork",
+        "files": [],
+        "updater": "submodule-only",
+        # We will reuse the rocm-systems token for now.
+        "token_key": "systems",
+    },
 }
 
 
@@ -358,6 +365,10 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("rocm-libraries", tokens["libraries"])
     if submodule in ("all", "rocgdb"):
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
+    if submodule in ("all", "mesa-fork"):
+        create_therock_bump(
+            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["mesa-fork"]
+        )
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
@@ -444,13 +455,14 @@ def main() -> None:
     parser.add_argument(
         "--submodule",
         default="all",
-        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb"],
+        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
+    parser.add_argument("--mesa_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -460,6 +472,7 @@ def main() -> None:
         "systems": args.systems_token,
         "libraries": args.libraries_token,
         "rocgdb": args.rocgdb_token,
+        "mesa-fork": args.mesa_token,
     }
 
     if args.event_type == "schedule":
