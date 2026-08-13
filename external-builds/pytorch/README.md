@@ -172,11 +172,19 @@ Now note the gfx target you want to build for and then...
 [advanced build instructions](#advanced-build-instructions) for ways to
 mix/match build steps.
 
+> [!WARNING]
+> Pass `--pytorch-rocm-arch` with the gfx target for your development system,
+> such as `--pytorch-rocm-arch gfx1100`. If this option is omitted, the build
+> uses every target reported by the multi-arch `rocm-sdk` packages (currently
+> more than 20 targets). Compiling PyTorch for all of them can take over two
+> hours, compared with roughly 30–60 minutes for a single target.
+
 - On Linux:
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --pytorch-rocm-arch gfx1100 \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -184,7 +192,8 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ ^
+    --pytorch-rocm-arch gfx1100 ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision ^
@@ -319,7 +328,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+      --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
       install-rocm
   ```
 
@@ -328,7 +337,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+    --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
     rocm[libraries,devel]
 
   # OR from therock-dev-python
@@ -497,7 +506,7 @@ a manifest for the release branch and check out from that manifest:
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
   --rocm-version 7.13.0a20260501 \
   --output external-builds/pytorch/pytorch_manifest.json \
-  --pytorch-git-refs release/2.12
+  --pytorch-git-refs release/2.13
 
 python external-builds/pytorch/checkout_from_manifest.py \
   --manifest external-builds/pytorch/pytorch_manifest.json \
@@ -516,7 +525,7 @@ which can then be read by the checkout script.
 > ```bash
 > python pytorch_torch_repo.py checkout \
 >   --gitrepo-origin https://github.com/ROCm/pytorch.git \
->   --repo-hashtag release/2.12
+>   --repo-hashtag release/2.13
 > python pytorch_audio_repo.py checkout --require-related-commit
 > python pytorch_vision_repo.py checkout --require-related-commit
 > python pytorch_triton_repo.py checkout
@@ -530,13 +539,13 @@ which can then be read by the checkout script.
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --output external-builds/pytorch/pytorch_manifest.json \
-    --pytorch-git-refs "release/2.11"
+    --pytorch-git-refs "release/2.13"
 
 # Multiple versions (computed filenames in a directory):
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --manifest-dir external-builds/pytorch/manifests/ \
-    --pytorch-git-refs "release/2.11 release/2.12 nightly"
+    --pytorch-git-refs "release/2.11 release/2.12 release/2.13 nightly"
 
 # The target platform defaults to the current host. Pass it explicitly when
 # generating a manifest for another platform:
@@ -544,13 +553,13 @@ python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --platform windows \
     --output manifest.json \
-    --pytorch-git-refs "release/2.11"
+    --pytorch-git-refs "release/2.13"
 
 # Only pytorch (skip audio/vision/triton/apex):
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --output external-builds/pytorch/manifest.json \
-    --pytorch-git-refs "release/2.11" \
+    --pytorch-git-refs "release/2.13" \
     --projects pytorch
 ```
 
