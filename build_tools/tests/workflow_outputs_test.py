@@ -196,8 +196,9 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
     def test_repo_package_sits_outside_the_package_index(self):
         # The bootstrap file is fetched by URL, so it must not land inside the
         # repository index: deb indexes dists/ + pool/, rpm indexes x86_64/.
-        # One amdrocm-repo is built per OS profile and several share a
-        # filename, so indexing them together would collide.
+        # One amdrocm-repo is built per OS profile and they all carry the same
+        # package name, so indexing them together would collide. The filenames
+        # differ, since the dist tag expands per profile.
         for pkg_type, index_dirs in [
             ("deb", ("dists", "pool")),
             ("rpm", ("x86_64",)),

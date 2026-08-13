@@ -242,8 +242,10 @@ class WorkflowOutputRoot:
         so it sits *beside* the repository index rather than inside it: it is
         never reached by ``dists/`` (deb) or ``x86_64/repodata`` (rpm) and so
         is not part of any package index. Keeping it out matters because one
-        ``amdrocm-repo`` is built per OS profile and several share a filename,
-        which would collide if they were indexed together.
+        ``amdrocm-repo`` is built per OS profile and they all carry the same
+        package name, which would collide if they were indexed together. The
+        built filenames differ, since the dist tag expands per profile, so the
+        collision is on the package name rather than on the file.
 
         The object name is fixed so the download URL is stable regardless of
         the built package's versioned filename.

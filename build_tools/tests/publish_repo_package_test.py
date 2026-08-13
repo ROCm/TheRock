@@ -174,7 +174,8 @@ def test_publish_key_per_profile(tmp_path, monkeypatch, pkg_type, os_profile):
 
 def test_publish_is_outside_the_repository_index(tmp_path, monkeypatch):
     # The bootstrap file is fetched by URL and must not be swept into the
-    # content index, or the identically-named per-profile rpms would collide.
+    # content index, or the per-profile rpms would collide on the package name
+    # they share.
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
     args = prp.parse_args(_argv(tmp_path, output_dir=staging))
