@@ -71,6 +71,19 @@ endif()
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
 therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
+# Meson detects the linker by scanning PATH for link.exe. On Windows CI, Git's
+# GNU link.exe (C:\Program Files\Git\usr\bin) shadows MSVC's linker and meson
+# rejects it ("Found GNU link.exe instead of MSVC link.exe"). Prepend the MSVC
+# compiler's own bin directory (which holds the matching link.exe) to PATH so
+# meson finds the MSVC linker first.
+if(MSVC)
+  get_filename_component(_msvc_bindir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  file(TO_NATIVE_PATH "${_msvc_bindir}" _msvc_bindir_native)
+  set(_meson_path_env "PATH=${_msvc_bindir_native};$ENV{PATH}")
+else()
+  set(_meson_path_env "PATH=$ENV{PATH}")
+endif()
+
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
 
 add_custom_target(
@@ -88,6 +101,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
+      "${_meson_path_env}"
       ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
@@ -124,6 +138,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
+      "${_meson_path_env}"
       ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
