@@ -5,7 +5,7 @@
 """Manual / on-demand test suite for the promote_packages promotion script.
 
 This exercises promote_packages.py end-to-end against a **local directory of
-already-downloaded** pre-release artifacts. It does not download RC packages
+already-downloaded** pre-release artifacts. It does not download packages
 itself — point --input-dir at a download_python_packages.py output root: wheels
 + the rocm sdist are read from `<root>/wheels/` and distribution tarballs from
 `<root>/tarball-multi-arch/` (either subdir may be absent). Wheels and tarballs
@@ -13,7 +13,7 @@ are never read from the same directory. Aggregator install checks call
 `pip install` without `--no-index`, so PyPI may still be reached for transitive
 deps; JAX wheels install with `--no-deps` only.
 
-A real download mixes both OSes and several package versions in `wheels/`; the
+A real download mixes both OSes (Linux, Windows) and several package versions in `wheels/`; the
 input is filtered to one --platform (default linux) and, for the install checks,
 to one coherent stack per family (see below), since e.g. multiple torch versions
 can't be installed together.
@@ -28,7 +28,7 @@ path.
 
 It is intentionally a standalone, on-demand script (run by a human before a
 release), NOT a pytest/CI target: it installs the wheels into throwaway
-virtualenvs. Keep it runnable by hand.
+virtualenvs.
 
 WHAT IS VALIDATED
   1. Full promotion of the arch-agnostic aggregator packages
@@ -59,7 +59,7 @@ specific release. How the expected output is worked out:
      (or the rocm sdist) via pkginfo, e.g. "7.9.0rc20260501".
   2. Drop the prerelease tail to get the final version, e.g. "7.9.0".
   3. For every discovered filename, swap the source version for the final
-     version -- the same rename promotion does -- and assert the promoted
+     version and assert the promoted
      directory contains exactly that set. For example:
        rocm_sdk_core-7.9.0rc20260501-...whl -> rocm_sdk_core-7.9.0-...whl
        torch-2.7.1+rocm7.9.0rc20260501-...whl -> torch-2.7.1+rocm7.9.0-...whl
@@ -146,7 +146,7 @@ def _wheel_platform(name: str) -> str | None:
     """The platform a wheel targets, from its filename tag, or None if it is
     platform-agnostic (the rocm sdist, any `-none-any` wheel). A download's
     `wheels/` dir carries both OSes, so this is used to pick one."""
-    if "win_amd64" in name:
+    if "-win_" in name:
         return "windows"
     if "linux" in name:  # linux_x86_64, manylinux_2_XX_x86_64, ...
         return "linux"
@@ -426,7 +426,7 @@ def checkAllWheelsSameVersion(
         version = Version(wheel.version)
 
         local_tag = "rocm" + str(expected_version)
-        if str(version) == str(expected_version) and version.local is None:
+        if version == expected_version and version.local is None:
             continue  # arch-agnostic / device SDK wheels
         # torch-family wheels carry the rocm tag as a local version segment,
         # sometimes prefixed with a git hash (e.g. `git43422b04.rocm7.14.0`).
@@ -667,7 +667,7 @@ def checkPromoteTarball(
                     f"\n[ERROR] expected {fin_name} after promotion; got {sorted(produced)}"
                 )
                 ok = False
-            elif rc_name in produced:
+            if rc_name in produced:
                 print(f"\n[ERROR] rc tarball {rc_name} survived promotion")
                 ok = False
     _banner("TEST DONE: promote tarball. Result: " + ("SUCCESS" if ok else "FAILURE"))
