@@ -243,6 +243,12 @@ function(therock_provide_artifact slice_name)
     set(_split_component_dirs)
 
     foreach(_component ${ARG_COMPONENTS})
+      # Skip dbg component - contains only .build-id/*.debug files (host debug
+      # symbols extracted via objcopy), not GPU fat binaries that need splitting.
+      # These files stay in artifacts-unsplit/ and get copied directly below.
+      if("${_component}" STREQUAL "dbg")
+        continue()
+      endif()
       set(_unsplit_component_dir "${_artifacts_base_dir}/${slice_name}_${_component}${_bundle_suffix}")
       set(_unsplit_manifest "${_unsplit_component_dir}/artifact_manifest.txt")
       set(_artifact_prefix "${slice_name}_${_component}")
@@ -278,6 +284,25 @@ function(therock_provide_artifact slice_name)
         VERBATIM
       )
     endforeach()
+
+    # Copy dbg component directly to artifacts/ as generic (no splitting needed).
+    # dbg contains .build-id/*.debug files which are host-only debug symbols.
+    if("dbg" IN_LIST ARG_COMPONENTS)
+      set(_dbg_unsplit_dir "${_artifacts_base_dir}/${slice_name}_dbg${_bundle_suffix}")
+      set(_dbg_generic_dir "${THEROCK_BINARY_DIR}/artifacts/${slice_name}_dbg_generic")
+      set(_dbg_manifest "${_dbg_generic_dir}/artifact_manifest.txt")
+      list(APPEND _split_manifest_files "${_dbg_manifest}")
+      list(APPEND _split_component_dirs "${_dbg_generic_dir}")
+      add_custom_command(
+        OUTPUT "${_dbg_manifest}"
+        COMMENT "Copying ${slice_name}_dbg to generic artifact (no GPU code to split)"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_dbg_generic_dir}"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_dbg_unsplit_dir}" "${_dbg_generic_dir}"
+        DEPENDS
+          "${_dbg_unsplit_dir}/artifact_manifest.txt"
+        VERBATIM
+      )
+    endif()
 
     # Flatten split artifacts to dist/DISTRIBUTION after all splits complete.
     # This uses artifact-flatten-split which discovers split output dirs by
