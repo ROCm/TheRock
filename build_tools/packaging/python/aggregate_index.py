@@ -6,14 +6,16 @@
 
 import argparse
 import dataclasses
+import html
 import html.parser
 import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
+from packaging.utils import canonicalize_name, is_normalized_name
 import yaml
 from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
@@ -24,7 +26,6 @@ SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
 ROUTES_FILENAME = "rocm-whl-next-routes.json"
 VALIDATION_FILENAME = "validation.json"
 
-_NORMALIZE_RE = re.compile(r"[-_.]+")
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
@@ -49,14 +50,22 @@ def _construct_mapping_without_duplicate_keys(
     mapping: dict[object, object] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
-        if key in mapping:
+        try:
+            if key in mapping:
+                raise ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found duplicate key {key!r}",
+                    key_node.start_mark,
+                )
+            mapping[key] = loader.construct_object(value_node, deep=deep)
+        except TypeError as e:
             raise ConstructorError(
                 "while constructing a mapping",
                 node.start_mark,
-                f"found duplicate key {key!r}",
+                f"found unhashable key {key!r}",
                 key_node.start_mark,
-            )
-        mapping[key] = loader.construct_object(value_node, deep=deep)
+            ) from e
     return mapping
 
 
@@ -117,6 +126,16 @@ class ValidatedPackage:
     product_root_index: Path
     package_index: Path
 
+    @property
+    def product_root_public_path(self) -> str:
+        """Return the product root index path under the public /rocm tree."""
+        return _product_root_public_path(self.owner_path)
+
+    @property
+    def package_public_path(self) -> str:
+        """Return the package index path under the public /rocm tree."""
+        return f"/rocm/{self.owner_path}/{quote(self.name, safe='')}/index.html"
+
 
 @dataclasses.dataclass(frozen=True)
 class UnpublishedPackage:
@@ -125,6 +144,11 @@ class UnpublishedPackage:
     name: str
     owner_path: str
     product_root_index: Path
+
+    @property
+    def product_root_public_path(self) -> str:
+        """Return the product root index path under the public /rocm tree."""
+        return _product_root_public_path(self.owner_path)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -172,6 +196,8 @@ class _AnchorParser(html.parser.HTMLParser):
         self._active_text: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._active_href is not None:
+            raise IndexValidationError("Package links must not contain nested tags")
         if tag.lower() != "a":
             return
         attr_map = dict(attrs)
@@ -197,10 +223,15 @@ class _AnchorParser(html.parser.HTMLParser):
         self._active_href = None
         self._active_text = []
 
+    def close(self) -> None:
+        super().close()
+        if self._active_href is not None:
+            raise IndexValidationError("Unterminated package link")
+
 
 def pep503_normalize(name: str) -> str:
     """Normalize a package name per PEP 503."""
-    return _NORMALIZE_RE.sub("-", name.lower())
+    return str(canonicalize_name(name))
 
 
 def load_ownership_manifest(path: Path) -> OwnershipManifest:
@@ -208,8 +239,10 @@ def load_ownership_manifest(path: Path) -> OwnershipManifest:
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.load(f, Loader=_UniqueKeyLoader)
-    except ConstructorError as e:
+    except yaml.YAMLError as e:
         raise ManifestError(f"{path}: {e}") from e
+    except (OSError, UnicodeDecodeError) as e:
+        raise ManifestError(f"{path}: cannot read ownership manifest: {e}") from e
     return parse_ownership_manifest(data, context=str(path))
 
 
@@ -218,9 +251,13 @@ def validate_product_indexes(
     content_root: Path,
     *,
     strict_completeness: bool = False,
-    require_all_manifest_packages: bool = False,
+    require_all_manifest_packages: bool = True,
 ) -> ValidatedIndexContent:
     """Validate product-local root and package indexes for a manifest.
+
+    The validator is relaxed by default for inventory workflows: manifest-owned
+    packages that are absent from product roots are recorded as unpublished.
+    Pass ``require_all_manifest_packages=True`` for deployable completeness.
 
     Args:
         manifest: Parsed ownership manifest.
@@ -313,9 +350,14 @@ def generate_outputs(
     output_dir: Path,
     *,
     strict_completeness: bool = False,
-    require_all_manifest_packages: bool = False,
+    require_all_manifest_packages: bool = True,
 ) -> GeneratedOutputPaths:
-    """Validate product-local content and write aggregate routed outputs."""
+    """Validate product-local content and write aggregate routed outputs.
+
+    Generation is deploy-safe by default and requires every manifest-owned
+    package to be present. Pass ``require_all_manifest_packages=False`` only
+    for explicit pre-publication inventory output.
+    """
     validated = validate_product_indexes(
         manifest,
         content_root,
@@ -361,7 +403,9 @@ def render_aggregate_root(validated: ValidatedIndexContent) -> str:
         "  <body>",
     ]
     for package_name in sorted(validated.packages):
-        lines.append(f'    <a href="{package_name}/">{package_name}</a><br/>')
+        href = quote(package_name, safe="")
+        text = html.escape(package_name)
+        lines.append(f'    <a href="{href}/">{text}</a><br/>')
     lines.extend(
         [
             "  </body>",
@@ -381,7 +425,7 @@ def build_route_table(validated: ValidatedIndexContent) -> dict[str, object]:
             {
                 "package": package.name,
                 "owner_path": package.owner_path,
-                "target": f"/rocm/{package.owner_path}/{package.name}/",
+                "target": f"/rocm/{package.owner_path}/{quote(package.name, safe='')}/",
             }
             for package in validated.ordered_packages()
         ],
@@ -406,8 +450,8 @@ def build_validation_report(validated: ValidatedIndexContent) -> dict[str, objec
             {
                 "name": package.name,
                 "owner_path": package.owner_path,
-                "product_root_index": package.product_root_index.as_posix(),
-                "package_index": package.package_index.as_posix(),
+                "product_root_index": package.product_root_public_path,
+                "package_index": package.package_public_path,
             }
             for package in validated.ordered_packages()
         ],
@@ -415,7 +459,7 @@ def build_validation_report(validated: ValidatedIndexContent) -> dict[str, objec
             {
                 "name": package.name,
                 "owner_path": package.owner_path,
-                "product_root_index": package.product_root_index.as_posix(),
+                "product_root_index": package.product_root_public_path,
             }
             for package in validated.ordered_unpublished_packages()
         ],
@@ -430,8 +474,11 @@ def parse_product_root_index(path: Path) -> list[ProductRootLink]:
 
 def _parse_product_root_index_text(text: str, context: str) -> list[ProductRootLink]:
     parser = _AnchorParser()
-    parser.feed(text)
-    parser.close()
+    try:
+        parser.feed(text)
+        parser.close()
+    except IndexValidationError as e:
+        raise IndexValidationError(f"{context}: {e}") from e
 
     links: list[ProductRootLink] = []
     for anchor in parser.anchors:
@@ -511,6 +558,11 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
                 f"{context}.packages.{raw_name}: package name must be PEP 503 "
                 f"normalized as {package_name!r}"
             )
+        _validate_normalized_package_name(
+            package_name,
+            f"{context}.packages.{package_name}",
+            ManifestError,
+        )
         package_config = _require_mapping(
             raw_config, f"{context}.packages.{package_name}"
         )
@@ -609,6 +661,19 @@ def _validate_public_path_segments(path: str, context: str) -> None:
             )
 
 
+def _validate_normalized_package_name(
+    package_name: str,
+    context: str,
+    error_type: type[ManifestError] | type[IndexValidationError],
+) -> None:
+    if not is_normalized_name(package_name) or not _PUBLIC_PATH_SEGMENT_RE.fullmatch(
+        package_name
+    ):
+        raise error_type(
+            f"{context}: package name must be a valid normalized Python project name"
+        )
+
+
 def _package_name_from_root_href(href: str, context: str) -> str:
     if href == "":
         raise IndexValidationError(f"{context}: package link href must not be empty")
@@ -647,12 +712,20 @@ def _package_name_from_root_href(href: str, context: str) -> str:
             f"{context}: package link href {href!r} must use normalized "
             f"package name {normalized!r}"
         )
+    _validate_normalized_package_name(
+        package_name,
+        f"{context}: package link href {href!r}",
+        IndexValidationError,
+    )
     return package_name
 
 
 def _read_non_empty_text(path: Path, description: str) -> str:
     _require_non_empty_file(path, description)
-    return path.read_text(encoding="utf-8")
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise IndexValidationError(f"Cannot read {description}: {path}: {e}") from e
 
 
 def _require_non_empty_file(path: Path, description: str) -> None:
@@ -728,6 +801,10 @@ def _json_dumps(data: object) -> str:
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
+def _product_root_public_path(owner_path: str) -> str:
+    return f"/rocm/{owner_path}/index.html"
+
+
 def _validate_manifest_command(args: argparse.Namespace) -> int:
     manifest = load_ownership_manifest(args.manifest)
     index = manifest.python_indexes[0]
@@ -749,9 +826,13 @@ def _generate_command(args: argparse.Namespace) -> int:
         manifest,
         args.content_root,
         args.output_dir,
-        strict_completeness=args.strict or args.strict_completeness,
-        require_all_manifest_packages=args.strict or args.require_all_manifest_packages,
+        strict_completeness=args.strict_completeness,
+        require_all_manifest_packages=not args.allow_unpublished,
     )
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
+    )
+    _warn_unpublished_packages(validation_report["unpublished_package_count"])
     print(f"aggregate_root: {outputs.aggregate_root}")
     print(f"route_table: {outputs.route_table}")
     print(f"validation_report: {outputs.validation_report}")
@@ -763,8 +844,8 @@ def _validate_content_command(args: argparse.Namespace) -> int:
     validated = validate_product_indexes(
         manifest,
         args.content_root,
-        strict_completeness=args.strict or args.strict_completeness,
-        require_all_manifest_packages=args.strict or args.require_all_manifest_packages,
+        strict_completeness=args.strict_completeness,
+        require_all_manifest_packages=not args.allow_unpublished,
     )
     owner_counts: dict[str, int] = {}
     for package in validated.ordered_packages():
@@ -773,17 +854,46 @@ def _validate_content_command(args: argparse.Namespace) -> int:
     print(f"public_base: {validated.public_base}")
     print(f"packages: {len(validated.packages)}")
     print(f"unpublished_packages: {len(validated.unpublished_packages)}")
+    _warn_unpublished_packages(len(validated.unpublished_packages))
     for owner_path in sorted(owner_counts):
         print(f"{owner_path}: {owner_counts[owner_path]}")
     return 0
 
 
+def _warn_unpublished_packages(unpublished_count: object) -> None:
+    if not isinstance(unpublished_count, int):
+        raise RuntimeError("unpublished package count must be an integer")
+    if unpublished_count:
+        print(
+            f"warning: {unpublished_count} manifest package(s) are unpublished "
+            "and excluded from active aggregate outputs",
+            file=sys.stderr,
+        )
+
+
+def _add_content_validation_flags(parser: argparse.ArgumentParser) -> None:
+    """Add flags controlling manifest/product-root set comparison."""
+    parser.add_argument(
+        "--allow-unpublished",
+        action="store_true",
+        help="allow manifest-owned packages absent from product roots and exclude "
+        "them from validated output",
+    )
+    parser.add_argument(
+        "--strict-completeness",
+        action="store_true",
+        help="fail if a product root publishes a package absent from the "
+        "ownership manifest",
+    )
+
+
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     subparsers = parser.add_subparsers(required=True)
     validate_parser = subparsers.add_parser(
         "validate-manifest",
         help="validate an aggregate index ownership manifest",
+        allow_abbrev=False,
     )
     validate_parser.add_argument(
         "--manifest",
@@ -796,6 +906,7 @@ def main(argv: list[str]) -> int:
     generate_parser = subparsers.add_parser(
         "generate",
         help="validate product-local content and generate aggregate routed outputs",
+        allow_abbrev=False,
     )
     generate_parser.add_argument(
         "--manifest",
@@ -815,28 +926,13 @@ def main(argv: list[str]) -> int:
         required=True,
         help="Directory where aggregate outputs will be written",
     )
-    generate_parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="fail on undeclared product-root packages and unpublished "
-        "manifest packages",
-    )
-    generate_parser.add_argument(
-        "--strict-completeness",
-        action="store_true",
-        help="fail if referenced product roots contain packages absent from "
-        "the ownership manifest",
-    )
-    generate_parser.add_argument(
-        "--require-all-manifest-packages",
-        action="store_true",
-        help="fail if a manifest-owned package is absent from its product root",
-    )
+    _add_content_validation_flags(generate_parser)
     generate_parser.set_defaults(func=_generate_command)
 
     content_parser = subparsers.add_parser(
         "validate-content",
         help="validate product-local index content for an ownership manifest",
+        allow_abbrev=False,
     )
     content_parser.add_argument(
         "--manifest",
@@ -850,27 +946,15 @@ def main(argv: list[str]) -> int:
         required=True,
         help="Local directory mirroring public /rocm/... product indexes",
     )
-    content_parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="fail on undeclared product-root packages and unpublished "
-        "manifest packages",
-    )
-    content_parser.add_argument(
-        "--strict-completeness",
-        action="store_true",
-        help="fail if referenced product roots contain packages absent from "
-        "the ownership manifest",
-    )
-    content_parser.add_argument(
-        "--require-all-manifest-packages",
-        action="store_true",
-        help="fail if a manifest-owned package is absent from its product root",
-    )
+    _add_content_validation_flags(content_parser)
     content_parser.set_defaults(func=_validate_content_command)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ManifestError, IndexValidationError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

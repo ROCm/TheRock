@@ -17,11 +17,15 @@ python_indexes:
         owner_path: core/whl-next
       markupsafe:
         owner_path: core/whl-next
+      ml-dtypes:
+        owner_path: core/whl-next
       mpmath:
         owner_path: core/whl-next
       networkx:
         owner_path: core/whl-next
       numpy:
+        owner_path: core/whl-next
+      opt-einsum:
         owner_path: core/whl-next
       pillow:
         owner_path: core/whl-next
@@ -90,6 +94,8 @@ python_indexes:
       setuptools:
         owner_path: core/whl-next
       sympy:
+        owner_path: core/whl-next
+      tomli:
         owner_path: core/whl-next
       typing-extensions:
         owner_path: core/whl-next

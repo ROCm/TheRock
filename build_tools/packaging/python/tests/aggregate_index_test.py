@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -18,6 +17,7 @@ from aggregate_index import (
     ManifestError,
     generate_outputs,
     load_ownership_manifest,
+    main,
     parse_ownership_manifest,
     validate_product_indexes,
 )
@@ -89,6 +89,16 @@ def _write_valid_content_root(root: Path) -> None:
     _write_package_page(root, "pytorch/whl-next", "torch")
 
 
+def _write_complete_content_root(root: Path) -> None:
+    _write_valid_content_root(root)
+    _write_product_root(
+        root,
+        "core/whl-next",
+        ["extra-core", "rocm-sdk-core", "rocm-sdk-devel"],
+    )
+    _write_package_page(root, "core/whl-next", "rocm-sdk-devel")
+
+
 def _generated_output_bytes(output_dir: Path) -> dict[str, bytes]:
     relative_paths = [
         "rocm/whl-next/index.html",
@@ -101,6 +111,12 @@ def _generated_output_bytes(output_dir: Path) -> dict[str, bytes]:
     }
 
 
+def _assert_no_generated_outputs(output_dir: Path) -> None:
+    assert not (output_dir / "rocm/whl-next/index.html").exists()
+    assert not (output_dir / "rocm-whl-next-routes.json").exists()
+    assert not (output_dir / "validation.json").exists()
+
+
 def test_checked_in_manifest_loads() -> None:
     manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
     manifest = load_ownership_manifest(manifest_path)
@@ -108,12 +124,22 @@ def test_checked_in_manifest_loads() -> None:
 
     assert manifest.schema_version == 1
     assert index.public_base == "/rocm/whl-next"
-    assert len(index.packages) == 103
     assert "jax-rocm7-plugin" not in index.packages
     assert "jax-rocm7-pjrt" not in index.packages
     assert index.packages["jax-rocm10-plugin"].owner_public_base == "/rocm/jax/whl-next"
     assert index.packages["rocm-sdk-core"].owner_public_base == "/rocm/core/whl-next"
     assert index.packages["torch"].owner_public_base == "/rocm/pytorch/whl-next"
+
+
+def test_checked_in_manifest_uses_known_owner_paths() -> None:
+    manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
+    manifest = load_ownership_manifest(manifest_path)
+    index = manifest.python_indexes[0]
+    known_owner_paths = {"core/whl-next", "jax/whl-next", "pytorch/whl-next"}
+
+    assert {
+        package.owner_path for package in index.packages.values()
+    } == known_owner_paths
 
 
 def test_parse_sorts_packages_by_owner_path_then_name() -> None:
@@ -139,7 +165,11 @@ def test_validate_product_indexes_success(tmp_path: Path) -> None:
     _write_valid_content_root(tmp_path)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    validated = validate_product_indexes(manifest, tmp_path)
+    validated = validate_product_indexes(
+        manifest,
+        tmp_path,
+        require_all_manifest_packages=False,
+    )
 
     assert validated.public_base == "/rocm/whl-next"
     assert list(validated.packages) == ["rocm-sdk-core", "apex", "torch"]
@@ -160,7 +190,11 @@ def test_validate_product_indexes_allows_extra_package_by_default(
     _write_valid_content_root(tmp_path)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    validate_product_indexes(manifest, tmp_path)
+    validate_product_indexes(
+        manifest,
+        tmp_path,
+        require_all_manifest_packages=False,
+    )
 
 
 def test_validate_product_indexes_strict_completeness_rejects_extra_package(
@@ -172,13 +206,18 @@ def test_validate_product_indexes_strict_completeness_rejects_extra_package(
     with pytest.raises(
         IndexValidationError, match="absent from the ownership manifest"
     ):
-        validate_product_indexes(manifest, tmp_path, strict_completeness=True)
+        validate_product_indexes(
+            manifest,
+            tmp_path,
+            strict_completeness=True,
+            require_all_manifest_packages=False,
+        )
 
 
 def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     content_root = tmp_path / "content"
     output_dir = tmp_path / "out"
-    _write_valid_content_root(content_root)
+    _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
     outputs = generate_outputs(manifest, content_root, output_dir)
@@ -195,6 +234,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
   <body>
     <a href="apex/">apex</a><br/>
     <a href="rocm-sdk-core/">rocm-sdk-core</a><br/>
+    <a href="rocm-sdk-devel/">rocm-sdk-devel</a><br/>
     <a href="torch/">torch</a><br/>
   </body>
 </html>
@@ -210,6 +250,11 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
                 "owner_path": "core/whl-next",
                 "package": "rocm-sdk-core",
                 "target": "/rocm/core/whl-next/rocm-sdk-core/",
+            },
+            {
+                "owner_path": "core/whl-next",
+                "package": "rocm-sdk-devel",
+                "target": "/rocm/core/whl-next/rocm-sdk-devel/",
             },
             {
                 "owner_path": "pytorch/whl-next",
@@ -229,12 +274,52 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     )
     assert validation_report["schema_version"] == 1
     assert validation_report["public_base"] == "/rocm/whl-next"
-    assert validation_report["package_count"] == 3
-    assert validation_report["unpublished_package_count"] == 1
+    assert validation_report["package_count"] == 4
+    assert validation_report["unpublished_package_count"] == 0
     assert validation_report["owners"] == {
-        "core/whl-next": {"package_count": 1},
+        "core/whl-next": {"package_count": 2},
         "pytorch/whl-next": {"package_count": 2},
     }
+    assert [package["name"] for package in validation_report["packages"]] == [
+        "rocm-sdk-core",
+        "rocm-sdk-devel",
+        "apex",
+        "torch",
+    ]
+    assert validation_report["unpublished_packages"] == []
+
+
+def test_generate_outputs_requires_manifest_packages_by_default(
+    tmp_path: Path,
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    with pytest.raises(IndexValidationError, match="missing canonical package link"):
+        generate_outputs(manifest, content_root, output_dir)
+    _assert_no_generated_outputs(output_dir)
+
+
+def test_generate_outputs_can_allow_unpublished_packages(tmp_path: Path) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_valid_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    outputs = generate_outputs(
+        manifest,
+        content_root,
+        output_dir,
+        require_all_manifest_packages=False,
+    )
+
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
+    )
+    assert validation_report["package_count"] == 3
+    assert validation_report["unpublished_package_count"] == 1
     assert [package["name"] for package in validation_report["packages"]] == [
         "rocm-sdk-core",
         "apex",
@@ -244,9 +329,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
         {
             "name": "rocm-sdk-devel",
             "owner_path": "core/whl-next",
-            "product_root_index": (
-                content_root / "rocm/core/whl-next/index.html"
-            ).as_posix(),
+            "product_root_index": "/rocm/core/whl-next/index.html",
         }
     ]
 
@@ -268,16 +351,14 @@ def test_generate_outputs_strict_completeness_rejects_extra_package(
             output_dir,
             strict_completeness=True,
         )
-    assert not (output_dir / "rocm/whl-next/index.html").exists()
-    assert not (output_dir / "rocm-whl-next-routes.json").exists()
-    assert not (output_dir / "validation.json").exists()
+    _assert_no_generated_outputs(output_dir)
 
 
 def test_generate_outputs_is_byte_for_byte_deterministic(tmp_path: Path) -> None:
     content_root = tmp_path / "content"
     first_output_dir = tmp_path / "first"
     second_output_dir = tmp_path / "second"
-    _write_valid_content_root(content_root)
+    _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
     generate_outputs(manifest, content_root, first_output_dir)
@@ -288,10 +369,29 @@ def test_generate_outputs_is_byte_for_byte_deterministic(tmp_path: Path) -> None
     )
 
 
+def test_generate_outputs_is_deterministic_across_content_roots(
+    tmp_path: Path,
+) -> None:
+    first_content_root = tmp_path / "first-content"
+    second_content_root = tmp_path / "second-content"
+    first_output_dir = tmp_path / "first-output"
+    second_output_dir = tmp_path / "second-output"
+    _write_complete_content_root(first_content_root)
+    _write_complete_content_root(second_content_root)
+    manifest = parse_ownership_manifest(_valid_manifest())
+
+    generate_outputs(manifest, first_content_root, first_output_dir)
+    generate_outputs(manifest, second_content_root, second_output_dir)
+
+    assert _generated_output_bytes(first_output_dir) == _generated_output_bytes(
+        second_output_dir
+    )
+
+
 def test_generate_outputs_overwrite_is_deterministic(tmp_path: Path) -> None:
     content_root = tmp_path / "content"
     output_dir = tmp_path / "out"
-    _write_valid_content_root(content_root)
+    _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
     generate_outputs(manifest, content_root, output_dir)
@@ -299,6 +399,346 @@ def test_generate_outputs_overwrite_is_deterministic(tmp_path: Path) -> None:
     generate_outputs(manifest, content_root, output_dir)
 
     assert _generated_output_bytes(output_dir) == first_output
+
+
+def test_main_generate_default_writes_complete_outputs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_complete_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "generate",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--output-dir",
+            os.fspath(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert (output_dir / "rocm/whl-next/index.html").is_file()
+    assert (output_dir / "rocm-whl-next-routes.json").is_file()
+    assert (output_dir / "validation.json").is_file()
+
+
+def test_main_generate_requires_manifest_packages_by_default(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "generate",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--output-dir",
+            os.fspath(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "missing canonical package link" in captured.err
+    assert "Traceback" not in captured.err
+    _assert_no_generated_outputs(output_dir)
+
+
+def test_main_generate_allow_unpublished_succeeds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "generate",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--output-dir",
+            os.fspath(output_dir),
+            "--allow-unpublished",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "warning: 1 manifest package" in captured.err
+    assert (output_dir / "rocm/whl-next/index.html").is_file()
+    assert (output_dir / "rocm-whl-next-routes.json").is_file()
+    assert (output_dir / "validation.json").is_file()
+
+
+def test_main_generate_strict_completeness_allow_unpublished_fails_on_extra_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "generate",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--output-dir",
+            os.fspath(output_dir),
+            "--allow-unpublished",
+            "--strict-completeness",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "absent from the ownership manifest" in captured.err
+    assert "Traceback" not in captured.err
+    _assert_no_generated_outputs(output_dir)
+
+
+def test_main_validate_content_default_requires_manifest_packages(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "validate-content",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "missing canonical package link" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_validate_content_allow_unpublished_succeeds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "validate-content",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--allow-unpublished",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "warning: 1 manifest package" in captured.err
+    assert "unpublished_packages: 1" in captured.out
+
+
+def test_main_validate_content_strict_completeness_with_allow_unpublished_fails_on_extra_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    manifest_path = tmp_path / "ownership.yaml"
+    _write_valid_content_root(content_root)
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
+
+    exit_code = main(
+        [
+            "validate-content",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+            "--allow-unpublished",
+            "--strict-completeness",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "absent from the ownership manifest" in captured.err
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [
+            "generate",
+            "--manifest",
+            "ownership.yaml",
+            "--content-root",
+            "content",
+            "--output-dir",
+            "out",
+            "--require-all-manifest-packages",
+        ],
+        [
+            "validate-content",
+            "--manifest",
+            "ownership.yaml",
+            "--content-root",
+            "content",
+            "--strict",
+        ],
+    ],
+)
+def test_main_rejects_unsupported_content_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    argv = [
+        (
+            os.fspath(tmp_path / value)
+            if value in {"ownership.yaml", "content", "out"}
+            else value
+        )
+        for value in argv
+    ]
+    with pytest.raises(SystemExit) as exc_info:
+        main(argv)
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert "unrecognized arguments" in captured.err
+
+
+def test_main_reports_manifest_errors_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text(
+        "schema_version: 2\npython_indexes: []\n", encoding="utf-8"
+    )
+
+    exit_code = main(["validate-manifest", "--manifest", os.fspath(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "schema_version must be 1" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_reports_malformed_yaml_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text("schema_version: [", encoding="utf-8")
+
+    exit_code = main(["validate-manifest", "--manifest", os.fspath(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "while parsing" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_reports_unhashable_yaml_key_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text("? [schema_version]\n: 1\n", encoding="utf-8")
+
+    exit_code = main(["validate-manifest", "--manifest", os.fspath(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "unhashable key" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_reports_missing_manifest_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest_path = tmp_path / "missing.yaml"
+
+    exit_code = main(["validate-manifest", "--manifest", os.fspath(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: ")
+    assert "cannot read ownership manifest" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_main_reports_index_validation_errors_without_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    content_root = tmp_path / "content"
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text(
+        """
+schema_version: 1
+python_indexes:
+  - public_base: /rocm/whl-next
+    packages:
+      torch:
+        owner_path: pytorch/whl-next
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "validate-content",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--content-root",
+            os.fspath(content_root),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.startswith("error: Missing product root index:")
+    assert "Traceback" not in captured.err
 
 
 def test_validate_product_indexes_rejects_missing_product_root(
@@ -324,7 +764,11 @@ def test_validate_product_indexes_records_unpublished_package_by_default(
     _write_package_page(tmp_path, "pytorch/whl-next", "torch")
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    validated = validate_product_indexes(manifest, tmp_path)
+    validated = validate_product_indexes(
+        manifest,
+        tmp_path,
+        require_all_manifest_packages=False,
+    )
 
     assert list(validated.packages) == ["apex", "torch"]
     assert list(validated.unpublished_packages) == [
@@ -374,6 +818,9 @@ def test_validate_product_indexes_rejects_duplicate_package_link(
         ("rocm-sdk-core/#sha256=abc", "rocm-sdk-core", "query or fragment"),
         ("rocm-sdk-core", "rocm-sdk-core", "must end with '/'"),
         ("Rocm_Sdk_Core/", "Rocm_Sdk_Core", "must use normalized package name"),
+        ("foo<script>/", "foo<script>", "index.html: Package links"),
+        ("foo bar/", "foo bar", "valid normalized Python project name"),
+        ("ünïcode/", "ünïcode", "valid normalized Python project name"),
         ("rocm-sdk-core/", "wrong", "link text"),
     ],
 )
@@ -403,7 +850,11 @@ def test_validate_product_indexes_rejects_missing_package_page(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="Missing package index"):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(
+            manifest,
+            tmp_path,
+            require_all_manifest_packages=False,
+        )
 
 
 def test_validate_product_indexes_rejects_empty_package_page(
@@ -416,7 +867,11 @@ def test_validate_product_indexes_rejects_empty_package_page(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="Empty package index"):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(
+            manifest,
+            tmp_path,
+            require_all_manifest_packages=False,
+        )
 
 
 @pytest.mark.parametrize(
@@ -478,6 +933,12 @@ def test_rejects_invalid_public_base(public_base: str, match: str) -> None:
     [
         ("Torch", "package name must be PEP 503 normalized"),
         ("torch_gpu", "package name must be PEP 503 normalized"),
+        ("", "valid normalized Python project name"),
+        ("a/b", "valid normalized Python project name"),
+        ("foo bar", "valid normalized Python project name"),
+        ("foo<script>", "valid normalized Python project name"),
+        ('"onclick"', "valid normalized Python project name"),
+        ("ünïcode", "valid normalized Python project name"),
     ],
 )
 def test_rejects_unnormalized_package_names(package_name: str, match: str) -> None:
@@ -547,5 +1008,13 @@ def test_rejects_malformed_yaml(tmp_path: Path) -> None:
     manifest_path = tmp_path / "ownership.yaml"
     manifest_path.write_text("schema_version: [", encoding="utf-8")
 
-    with pytest.raises(yaml.YAMLError):
+    with pytest.raises(ManifestError, match="while parsing"):
+        load_ownership_manifest(manifest_path)
+
+
+def test_rejects_unhashable_yaml_key(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text("? [schema_version]\n: 1\n", encoding="utf-8")
+
+    with pytest.raises(ManifestError, match="unhashable key"):
         load_ownership_manifest(manifest_path)
