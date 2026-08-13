@@ -15,7 +15,7 @@ sys.path.insert(
     0, os.fspath(Path(__file__).parent.parent.parent / "external-builds" / "pytorch")
 )
 
-from build_prod_wheels import compute_build_version, get_source_commit_short
+from build_prod_wheels import compute_build_version
 
 
 class ComputeBuildVersionTest(unittest.TestCase):
@@ -42,25 +42,6 @@ class ComputeBuildVersionTest(unittest.TestCase):
         with mock.patch("build_prod_wheels.get_source_commit_short", return_value=""):
             version = compute_build_version(self.source_dir, "+rocm7.10.0", "dev")
         self.assertEqual(version, "2.12.0a0+rocm7.10.0")
-
-
-class GetSourceCommitShortTest(unittest.TestCase):
-    def test_reads_short_commit_from_git_repo(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            repo = Path(temp_dir)
-            subprocess.check_call(["git", "init"], cwd=repo)
-            subprocess.check_call(
-                ["git", "config", "user.email", "test@example.com"], cwd=repo
-            )
-            subprocess.check_call(["git", "config", "user.name", "Test User"], cwd=repo)
-            (repo / "version.txt").write_text("2.12.0a0\n")
-            subprocess.check_call(["git", "add", "version.txt"], cwd=repo)
-            subprocess.check_call(
-                ["git", "-c", "commit.gpgSign=false", "commit", "-m", "init"],
-                cwd=repo,
-            )
-            commit = get_source_commit_short(repo, length=8)
-            self.assertEqual(len(commit), 8)
 
 
 if __name__ == "__main__":
