@@ -348,6 +348,31 @@ def rewrite_metadata_rocm_line(
     return requires_match.group("prefix") + requires_match.group("name") + tail
 
 
+_CHECK_VERSION_RE = re.compile(
+    r"(?P<prefix>\bcheck_version\s*=\s*['\"])(?P<version>[^'\"]+)(?P<suffix>['\"])"
+)
+
+
+def rewrite_rocm_init_check_version(
+    line: str, old_rocm_version: str, new_rocm_version: str
+) -> str:
+    """Rewrite torch _rocm_init.py stable checks to ROCm major/minor wildcard."""
+    rewritten = line.replace(old_rocm_version, new_rocm_version)
+    check_version_match = _CHECK_VERSION_RE.search(rewritten)
+    if check_version_match is None:
+        return rewritten
+    if check_version_match.group("version") != new_rocm_version:
+        return rewritten
+    minor_spec = stable_minor_spec(new_rocm_version)
+    if minor_spec is None:
+        return rewritten
+    return (
+        rewritten[: check_version_match.start("version")]
+        + minor_spec
+        + rewritten[check_version_match.end("version") :]
+    )
+
+
 def update_metadata_rocm_requires_dist(
     new_dir_path: pathlib.Path,
     package_name_no_version: str,
@@ -1009,6 +1034,19 @@ def wheel_change_extra_files(
     with fileinput.input(files=files_to_change, encoding="utf-8", inplace=True) as f:
         for line in f:
             print(line.replace(old_rocm_version, new_rocm_version), end="")
+
+    if float_rocm_dependency_patch and "torch" == package_name_no_version:
+        rocm_init_path = new_dir_path / package_name_no_version / "_rocm_init.py"
+        with fileinput.input(
+            files=[rocm_init_path], encoding="utf-8", inplace=True
+        ) as f:
+            for line in f:
+                print(
+                    rewrite_rocm_init_check_version(
+                        line, old_rocm_version, new_rocm_version
+                    ),
+                    end="",
+                )
 
     print("    ...done")
 

@@ -20,6 +20,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from packaging.version import Version
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_packages as ptf
 
@@ -252,14 +254,37 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
                 1,
             )
         )
-        result = self._apply_version_rewrite(
-            body,
-            "torch",
-            "2.8.0+rocm7.13.0",
-            "7.13.0a20260505",
-            "7.13.0",
-            float_rocm_dependency_patch=True,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "torch-2.8.0+rocm7.13.0"
+            torch_dir = root / "torch"
+            dist_info = root / "torch-2.8.0+rocm7.13.0a20260505.dist-info"
+            torch_dir.mkdir(parents=True)
+            dist_info.mkdir()
+            (torch_dir / "_rocm_init.py").write_text(
+                "check_version='7.13.0a20260505')\n", encoding="utf-8"
+            )
+            (torch_dir / "version.py").write_text(
+                "__version__ = '2.8.0+rocm7.13.0a20260505'\n",
+                encoding="utf-8",
+            )
+            (dist_info / "METADATA").write_text(body, encoding="utf-8")
+
+            ptf.wheel_change_extra_files(
+                root,
+                Version("2.8.0+rocm7.13.0a20260505"),
+                Version("2.8.0+rocm7.13.0"),
+                dest_version="release",
+            )
+
+            result = (dist_info / "METADATA").read_text(encoding="utf-8")
+            self.assertIn(
+                "check_version='7.13.*'",
+                (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "__version__ = '2.8.0+rocm7.13.0'",
+                (torch_dir / "version.py").read_text(encoding="utf-8"),
+            )
         self.assertIn("Requires-Dist: rocm-bootstrap", result)
         self.assertIn("Requires-Dist: rocm-sdk-core==7.13.*", result)
         self.assertIn(
@@ -327,6 +352,14 @@ Requires-Dist: rocm-sdk-core==7.13.0a20260505
         )
         self.assertIn("Requires-Dist: rocm-sdk-core==7.13.0rc1", result)
         self.assertNotIn("==7.13.*", result)
+        self.assertEqual(
+            ptf.rewrite_rocm_init_check_version(
+                "check_version='7.13.0a20260505')\n",
+                "7.13.0a20260505",
+                "7.13.0rc1",
+            ),
+            "check_version='7.13.0rc1')\n",
+        )
 
     def test_rocm_package_dependency_stays_exact_when_floating_disabled(self):
         result = self._apply_version_rewrite(
