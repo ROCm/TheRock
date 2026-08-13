@@ -66,7 +66,11 @@ jobs:
       # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
       # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
       # and any job-specific options
-      options: ${{ fromJSON(inputs.component).container_options }}
+      options: >-
+        ${{ inputs.platform == 'linux' &&
+            fromJSON(inputs.component).container_options
+            || null
+        }}
     strategy:
       fail-fast: false
       matrix:
