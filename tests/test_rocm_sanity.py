@@ -122,6 +122,17 @@ def clinfo_output():
         f"VENDORS={env.get('OCL_ICD_VENDORS')} "
         f"win_vendor={win_vendor} exists={win_vendor.exists()}"
     )
+    # TEMP validity discriminator (Windows): point OCL_ICD_FILENAMES at a bogus
+    # path. If a platform still enumerates, the loader used the registry (system
+    # driver) and ignored our env => the leg tests the system driver, not our
+    # build. Platform enumeration does not need a GPU, so this survives the
+    # GPU-detection flake.
+    if is_windows():
+        bogus = dict(env, OCL_ICD_FILENAMES=str(THEROCK_BIN_DIR / "does-not-exist.dll"))
+        r = subprocess.run([clinfo], capture_output=True, text=True, env=bogus)
+        for line in (r.stdout + r.stderr).splitlines():
+            if re.search(r"Number of platforms|Platform Name|clGetPlatformIDs", line):
+                logger.error(f"[clinfo-diag bogus-FILENAMES] {line.strip()}")
     try:
         out = str(run_command([clinfo], env=env).stdout)
         for line in out.splitlines():
