@@ -571,6 +571,14 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # profiler-hub install/consumption tests
+    "profiler-hub": {
+        "job_name": "profiler-hub",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 1},
+    },
     # hipDNN integration tests (unit tests for the integration test harness)
     "hipdnn-integration-tests": {
         "job_name": "hipdnn-integration-tests",
