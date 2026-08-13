@@ -20,19 +20,19 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
-# Importing is_asan from amdgpu_family_matrix.py
+# Importing ASAN helpers from amdgpu_family_matrix.py
 sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
-from amdgpu_family_matrix import is_asan
+from amdgpu_family_matrix import get_asan_lib_path, is_asan, is_asan_instrumented
 
 
 def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, env=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, env=env, shell=is_windows(), text=True
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -149,7 +149,17 @@ class TestROCmSanity:
         # Running and checking the executable
         platform_executable_prefix = "./" if not is_windows() else ""
         hip_check_executable = f"{platform_executable_prefix}hip_check"
-        process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR))
+        # hip_check is deliberately compiled without -fsanitize=address, so it
+        # needs the runtime preloaded to link against instrumented ROCm
+        # libraries. Instrumenting it instead would pull in device-side
+        # instrumentation that the host-asan variant exists to avoid.
+        env = None
+        if is_asan_instrumented():
+            env = {
+                **os.environ,
+                "LD_PRELOAD": get_asan_lib_path(THEROCK_BIN_DIR),
+            }
+        process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR), env=env)
         check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hip_check_executable_file)), 0
