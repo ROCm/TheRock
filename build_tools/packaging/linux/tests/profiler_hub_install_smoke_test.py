@@ -5,13 +5,7 @@
 """MANUAL/OPT-IN ONLY -- standalone install-and-load smoke test for profiler-hub.
 
 No workflow step invokes this file. It is not part of CI and does not gate any
-build or install-test job. The find_package/link/load proof it demonstrates has
-been re-homed into ``native_linux_package_install_test.py`` as
-``verify_profiler_hub_install()``, called from ``run_basic_verification()`` --
-the pattern the rest of this repo's post-install verification already follows
--- so that proof now runs against a real, dependency-resolved package install
-(``sudo apt install``) in the house install-test lane instead of a hand-rolled
-single-``.deb`` ``dpkg -i`` that cannot resolve its own dependencies.
+build or install-test job.
 
 This file is kept only because it is the sole thing in the tree that exercises
 the raw single-package ``dpkg -i`` path (as opposed to apt's repo-based,
@@ -23,12 +17,17 @@ Proves the *installed* ``amdrocm-profiler-base`` artifact is actually
 consumable: locates the already-built ``.deb`` (produced by
 ``build_package.py`` in a prior step), installs it, then configures, compiles,
 and runs a trivial consumer against the installed CMake package config (not
-the profiler-hub build tree) via
-``build_tools/packaging/linux/tests/fixtures/profiler_hub_consumer``. This
-exercises CMake ``find_package`` resolution, header availability, linking
-against ``libprofiler-hub.so``, and runtime ``NEEDED``-dependency resolution
-end to end -- a missing runtime dependency surfaces as a loader failure, not
-just a link-time pass.
+the profiler-hub build tree). This exercises CMake ``find_package``
+resolution, header availability, linking against ``libprofiler-hub.so``, and
+runtime ``NEEDED``-dependency resolution end to end -- a missing runtime
+dependency surfaces as a loader failure, not just a link-time pass.
+
+The consumer project it builds is
+``build_tools/github_actions/test_executable_scripts/profiler_hub_install_tests``
+-- deliberately the very same fixture the artifact-based consumption test
+drives, so the two differ only in how the package got installed, not in what
+is proven about it. It registers its executable with ``add_test``, so it is
+driven here through ``ctest`` rather than by invoking a binary path directly.
 
 Install modes (``--install-mode``):
 - ``dpkg``: real ``dpkg -i`` install into the system install prefix. Installing
@@ -64,7 +63,13 @@ import tempfile
 from pathlib import Path
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-FIXTURE_DIR = THIS_SCRIPT_DIR / "fixtures" / "profiler_hub_consumer"
+BUILD_TOOLS_DIR = THIS_SCRIPT_DIR.parents[2]
+FIXTURE_DIR = (
+    BUILD_TOOLS_DIR
+    / "github_actions"
+    / "test_executable_scripts"
+    / "profiler_hub_install_tests"
+)
 
 PKG_NAME = "amdrocm-profiler-base"
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
@@ -83,6 +88,10 @@ KEY_COMPONENTS = [
 # package payload), rather than predicting it from build_package.py's
 # version-suffix convention (e.g. "/opt/rocm/core" -> "/opt/rocm/core-7.15").
 ANCHOR_COMPONENT = KEY_COMPONENTS[0]
+
+# Emitted by the fixture's test_template.cpp.in once find_package, linking and
+# loading have all succeeded.
+CONSUMER_EXPECTED_OUTPUT = "profiler-hub: package found and linked successfully"
 
 RUN_TIMEOUT_SEC = 30
 
@@ -308,13 +317,14 @@ def build_and_run_consumer(install_root: Path, work_dir: Path) -> None:
     )
     _run(["cmake", "--build", str(build_dir), "--clean-first"])
 
-    exe = build_dir / "profiler_hub_consumer"
     env = dict(os.environ)
     env["LD_LIBRARY_PATH"] = os.pathsep.join(
         filter(None, [str(install_root / "lib"), env.get("LD_LIBRARY_PATH", "")])
     )
+    # -V so the consumer's own stdout is echoed and can be asserted on; without
+    # it ctest prints test output only on failure.
     result = _run(
-        [str(exe)],
+        ["ctest", "--test-dir", str(build_dir), "-V"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -322,7 +332,7 @@ def build_and_run_consumer(install_root: Path, work_dir: Path) -> None:
         timeout=RUN_TIMEOUT_SEC,
     )
     print(result.stdout)
-    if "profiler-hub storage version" not in result.stdout:
+    if CONSUMER_EXPECTED_OUTPUT not in result.stdout:
         raise AssertionError(
             f"Consumer ran but did not print expected output: {result.stdout!r}"
         )
