@@ -36,8 +36,18 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
+      - name: Generate clone token
+        id: clone-token
+        uses: actions/create-github-app-token@df432ceeac20ab8f7f8cc7a0e70e0c83f3eb6ff3 # v2.0.6
+        with:
+          app-id: ${{ secrets.ROCM_CLONE_APP_ID }}
+          private-key: ${{ secrets.ROCM_CLONE_APP_PRIVATE_KEY }}
+          owner: ROCm
+
       - name: Fetch sources
         # All subproject sources must be present for the graph to be complete.
+        env:
+          GITHUB_CLONE_TOKEN: ${{ steps.clone-token.outputs.token }}
         run: python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1
 
       - name: Configure (emits the consumer graph)

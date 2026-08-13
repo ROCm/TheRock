@@ -45,6 +45,30 @@ def is_windows() -> bool:
     return platform.system() == "Windows"
 
 
+def _configure_github_clone_token() -> None:
+    """Configure git to authenticate GitHub clones using GITHUB_CLONE_TOKEN.
+
+    When set, injects the token into all https://github.com/ URLs via
+    git's url.insteadOf mechanism. This allows fetch_sources.py to clone
+    private and rate-limited ROCm org repos without hitting anonymous
+    GitHub API throttling limits.
+    """
+    token = os.environ.get("GITHUB_CLONE_TOKEN")
+    if not token:
+        return
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "--global",
+            f"url.https://x-access-token:{token}@github.com/.insteadOf",
+            "https://github.com/",
+        ],
+        check=True,
+    )
+    log("Configured git to use GITHUB_CLONE_TOKEN for github.com clones.")
+
+
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
@@ -718,6 +742,7 @@ def get_submodule_revision(submodule_path: str) -> str:
 
 
 def main(argv):
+    _configure_github_clone_token()
     parser = argparse.ArgumentParser(
         prog="fetch_sources",
         description="Fetch sources for TheRock build. Use --stage for stage-aware "

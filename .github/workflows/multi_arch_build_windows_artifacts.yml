@@ -181,8 +181,18 @@ jobs:
             --output-dir="${BUILD_DIR}" \
             --bootstrap
 
+      - name: Generate clone token
+        id: clone-token
+        uses: actions/create-github-app-token@df432ceeac20ab8f7f8cc7a0e70e0c83f3eb6ff3 # v2.0.6
+        with:
+          app-id: ${{ secrets.ROCM_CLONE_APP_ID }}
+          private-key: ${{ secrets.ROCM_CLONE_APP_PRIVATE_KEY }}
+          owner: ROCm
+
       - name: Fetch sources
         timeout-minutes: 30
+        env:
+          GITHUB_CLONE_TOKEN: ${{ steps.clone-token.outputs.token }}
         run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration

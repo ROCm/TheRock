@@ -22,6 +22,7 @@ from fetch_sources import (
     get_enabled_sources,
     parse_source_set_args,
     resolve_reference_dir,
+    _configure_github_clone_token,
     _resolve_mirror_path,
     _fetch_one_external_git_source,
     _update_one_submodule,
@@ -390,6 +391,38 @@ class FetchExternalGitSourceTest(unittest.TestCase):
         self.assertEqual(
             commands[2], ["git", "checkout", "--detach", self.source.commit]
         )
+
+
+class ConfigureGithubCloneTokenTest(unittest.TestCase):
+    """Tests for _configure_github_clone_token."""
+
+    @mock.patch("subprocess.run")
+    @mock.patch.dict(os.environ, {"GITHUB_CLONE_TOKEN": "ghs_testtoken123"}, clear=False)
+    def test_configures_git_when_token_set(self, mock_run):
+        _configure_github_clone_token()
+        mock_run.assert_called_once_with(
+            [
+                "git",
+                "config",
+                "--global",
+                "url.https://x-access-token:ghs_testtoken123@github.com/.insteadOf",
+                "https://github.com/",
+            ],
+            check=True,
+        )
+
+    @mock.patch("subprocess.run")
+    @mock.patch.dict(os.environ, {}, clear=False)
+    def test_no_op_when_token_not_set(self, mock_run):
+        os.environ.pop("GITHUB_CLONE_TOKEN", None)
+        _configure_github_clone_token()
+        mock_run.assert_not_called()
+
+    @mock.patch("subprocess.run")
+    @mock.patch.dict(os.environ, {"GITHUB_CLONE_TOKEN": ""}, clear=False)
+    def test_no_op_when_token_empty(self, mock_run):
+        _configure_github_clone_token()
+        mock_run.assert_not_called()
 
 
 if __name__ == "__main__":
