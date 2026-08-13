@@ -2013,6 +2013,50 @@ class TestFocusedPresubmitConfiguration(unittest.TestCase):
         )
 
 
+class TestSanityBlocksComponents(unittest.TestCase):
+    """A failing sanity check can be made non-blocking for component tests."""
+
+    def _from_environ(self, extra_env=None):
+        return _run_from_environ(
+            "pull_request",
+            {"pull_request": {"labels": []}},
+            extra_env=extra_env,
+        )
+
+    def test_defaults_to_blocking(self):
+        """Existing callers keep the current gate."""
+        self.assertTrue(self._from_environ().sanity_blocks_components)
+
+    def test_can_be_disabled(self):
+        inputs = self._from_environ({"SANITY_BLOCKS_COMPONENTS": "false"})
+        self.assertFalse(inputs.sanity_blocks_components)
+
+    def test_reaches_the_build_config(self):
+        """The workflow reads this off build_config, so it must serialize."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            sanity_blocks_components=False,
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertFalse(outputs.builds.linux.sanity_blocks_components)
+        self.assertIs(outputs.builds.linux.to_dict()["sanity_blocks_components"], False)
+
+    def test_default_serializes_as_true(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertIs(outputs.builds.linux.to_dict()["sanity_blocks_components"], True)
+
+
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
 # ---------------------------------------------------------------------------

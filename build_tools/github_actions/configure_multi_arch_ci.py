@@ -182,6 +182,9 @@ class CIInputs:
     build_jax: bool = False
     build_native_linux: bool = True
     validate_artifact_structure: bool = True
+    # When false, component tests run even if the sanity check fails, so a
+    # failing sanity check still reports but no longer hides component results.
+    sanity_blocks_components: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # Allowlist of build stages to run. Empty means every stage, which is the
@@ -263,6 +266,7 @@ class CIInputs:
         validate_artifact_structure = _parse_bool_env(
             "VALIDATE_ARTIFACT_STRUCTURE", True
         )
+        sanity_blocks_components = _parse_bool_env("SANITY_BLOCKS_COMPONENTS", True)
         lock_test_labels = _parse_bool_env("LOCK_TEST_LABELS", False)
         asan_presubmit = _parse_bool_env("ASAN_PRESUBMIT", False)
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
@@ -319,6 +323,7 @@ class CIInputs:
             build_jax=build_jax,
             build_native_linux=build_native_linux,
             validate_artifact_structure=validate_artifact_structure,
+            sanity_blocks_components=sanity_blocks_components,
             python_versions=[python_version] if python_version else [],
             build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             lock_test_labels=lock_test_labels,
@@ -599,6 +604,7 @@ class BuildConfig:
     build_pytorch: bool
     build_jax: bool
     validate_artifact_structure: bool = True
+    sanity_blocks_components: bool = True
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -1304,6 +1310,7 @@ def _expand_build_config_for_platform(
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         validate_artifact_structure=ci_inputs.validate_artifact_structure,
+        sanity_blocks_components=ci_inputs.sanity_blocks_components,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,

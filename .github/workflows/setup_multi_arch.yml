@@ -92,6 +92,14 @@ on:
           artifact tree.
         type: boolean
         default: true
+      sanity_blocks_components:
+        description: >-
+          Whether a failing sanity check prevents the component tests from
+          running. Set to false to keep collecting component results while a
+          known sanity failure is being resolved; the sanity check still runs
+          and still reports its own status.
+        type: boolean
+        default: true
       lock_test_labels:
         description: >-
           Treat the caller's test labels as the complete test scope: PR 'test:*'
@@ -232,6 +240,7 @@ jobs:
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           VALIDATE_ARTIFACT_STRUCTURE: ${{ inputs.validate_artifact_structure }}
+          SANITY_BLOCKS_COMPONENTS: ${{ inputs.sanity_blocks_components }}
           LOCK_TEST_LABELS: ${{ inputs.lock_test_labels }}
           ASAN_PRESUBMIT: ${{ inputs.asan_presubmit }}
           PYTHON_VERSION: ${{ inputs.python_version }}
