@@ -114,8 +114,22 @@ def _log_opencl_diagnostics(env):
 def clinfo_output():
     clinfo = f"{THEROCK_BIN_DIR}/clinfo" + (".exe" if is_windows() else "")
     env = _opencl_env()
+    # TEMP validity diagnostic: which vendor DLL/registration was used, and which
+    # driver clinfo actually enumerated (build vs system driver).
+    win_vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+    logger.error(
+        f"[clinfo-diag] FILENAMES={env.get('OCL_ICD_FILENAMES')} "
+        f"VENDORS={env.get('OCL_ICD_VENDORS')} "
+        f"win_vendor={win_vendor} exists={win_vendor.exists()}"
+    )
     try:
-        return str(run_command([clinfo], env=env).stdout)
+        out = str(run_command([clinfo], env=env).stdout)
+        for line in out.splitlines():
+            if re.search(
+                r"Platform Version|Driver Version|Platform Name|\bName:", line
+            ):
+                logger.error(f"[clinfo-diag] {line.strip()}")
+        return out
     except Exception as e:
         logger.info(str(e))
         _log_opencl_diagnostics(env)
