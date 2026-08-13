@@ -381,7 +381,7 @@ def main(argv: List[str] = None):
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
         manylinux=args.manylinux,
-        project_names=artifact_list if artifact_list else None,
+        project_names=artifact_list or None,
         build_dir=args.build_dir,
     )
 

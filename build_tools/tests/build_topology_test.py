@@ -884,6 +884,70 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("C", stage2_inbound)
         self.assertIn("D", stage2_inbound)
 
+    def test_get_reverse_artifact_deps(self):
+        """Test computing downstream dependents of artifacts."""
+        self.write_topology(
+            """
+            [artifact_groups.group1]
+            description = "Group 1"
+            type = "generic"
+
+            # Dependency graph:
+            #   prim <-- sparse <-- solver
+            #     ^        ^
+            #     |        |
+            #     +-- rocalution
+            #
+            # If prim changes, sparse/solver/rocalution must rebuild.
+            # If sparse changes, solver/rocalution must rebuild.
+            [artifacts.prim]
+            artifact_group = "group1"
+            type = "target-specific"
+
+            [artifacts.sparse]
+            artifact_group = "group1"
+            type = "target-specific"
+            artifact_deps = ["prim"]
+
+            [artifacts.solver]
+            artifact_group = "group1"
+            type = "target-specific"
+            artifact_deps = ["sparse"]
+
+            [artifacts.rocalution]
+            artifact_group = "group1"
+            type = "target-specific"
+            artifact_deps = ["prim", "sparse"]
+
+            [artifacts.unrelated]
+            artifact_group = "group1"
+            type = "target-specific"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        # prim changes -> sparse, solver, rocalution must rebuild
+        prim_dependents = topology.get_reverse_artifact_deps({"prim"})
+        self.assertEqual(prim_dependents, {"sparse", "solver", "rocalution"})
+
+        # sparse changes -> solver, rocalution must rebuild
+        sparse_dependents = topology.get_reverse_artifact_deps({"sparse"})
+        self.assertEqual(sparse_dependents, {"solver", "rocalution"})
+
+        # solver changes -> nothing depends on it
+        solver_dependents = topology.get_reverse_artifact_deps({"solver"})
+        self.assertEqual(solver_dependents, set())
+
+        # Multiple inputs: prim and sparse -> still sparse, solver, rocalution
+        # (sparse is excluded since it's in the input)
+        combined_dependents = topology.get_reverse_artifact_deps({"prim", "sparse"})
+        self.assertEqual(combined_dependents, {"solver", "rocalution"})
+
+        # unrelated has no dependents
+        unrelated_dependents = topology.get_reverse_artifact_deps({"unrelated"})
+        self.assertEqual(unrelated_dependents, set())
+
     def test_group_dependencies_include_transitive_artifact_dependencies(self):
         """Test group deps include the artifact deps of artifacts they pull in."""
         self.write_topology(

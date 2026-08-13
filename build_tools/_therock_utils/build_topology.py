@@ -240,7 +240,7 @@ class BuildTopology:
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
-                components=artifact_data.get("components", []),
+                components=artifact_data.get("components") or [artifact_name],
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -364,6 +364,46 @@ class BuildTopology:
                 # the same node in diamond dependency patterns
                 collected.add(dep_name)
                 self._collect_transitive_artifact_deps(dep_name, collected)
+
+    def get_reverse_artifact_deps(self, artifact_names: Set[str]) -> Set[str]:
+        """
+        Get all artifacts that transitively depend on the given artifacts.
+
+        This computes the "downstream" or "reverse" dependency graph - artifacts
+        that would need to be rebuilt if the input artifacts change.
+
+        Args:
+            artifact_names: Set of artifact names to find dependents for
+
+        Returns:
+            Set of artifact names that depend (directly or transitively) on
+            any of the input artifacts. Does not include the input artifacts.
+        """
+        # Build reverse dependency map: artifact -> set of artifacts that depend on it
+        reverse_deps: Dict[str, Set[str]] = {name: set() for name in self.artifacts}
+        for artifact in self.artifacts.values():
+            for dep_name in artifact.artifact_deps:
+                if dep_name in reverse_deps:
+                    reverse_deps[dep_name].add(artifact.name)
+
+        # BFS to find all transitive dependents
+        dependents: Set[str] = set()
+        to_visit = list(artifact_names)
+        visited: Set[str] = set()
+
+        while to_visit:
+            current = to_visit.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+
+            for dependent in reverse_deps.get(current, set()):
+                if dependent not in artifact_names:  # Don't include inputs
+                    dependents.add(dependent)
+                if dependent not in visited:
+                    to_visit.append(dependent)
+
+        return dependents
 
     def get_produced_artifacts(self, build_stage: str) -> Set[str]:
         """

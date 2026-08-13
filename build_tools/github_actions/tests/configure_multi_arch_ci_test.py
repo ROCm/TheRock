@@ -2087,5 +2087,87 @@ class TestBuildRunnerSelection(unittest.TestCase):
             )
 
 
+# ---------------------------------------------------------------------------
+# External repo artifact computation
+# ---------------------------------------------------------------------------
+
+
+class TestComputeArtifactsFromChangedProjects(unittest.TestCase):
+    """Test _compute_artifacts_from_changed_projects function.
+
+    These tests verify that when external repos specify changed_projects,
+    the function correctly:
+    1. Maps project names to artifacts
+    2. Expands rebuild_artifacts to include downstream dependents
+    3. Computes reusable_artifacts as the complement
+    """
+
+    def test_downstream_dependents_included_in_rebuild(self):
+        """Verify downstream dependents are included in rebuild_artifacts.
+
+        From BUILD_TOPOLOGY.toml:
+        - prim depends on: core-runtime, core-hip, rand
+        - sparse depends on: blas, prim
+        - solver depends on: blas, prim, sparse, host-suite-sparse
+        - rocalution depends on: core-runtime, core-hip, blas, prim, rand, sparse
+
+        If rocprim changes, then sparse, solver, and rocalution must rebuild
+        because they depend (directly or transitively) on prim.
+        """
+        rebuild, reusable = cm._compute_artifacts_from_changed_projects(
+            ["projects/rocprim"]
+        )
+
+        # prim should be in rebuild
+        self.assertIn("prim", rebuild)
+
+        # downstream dependents should also be in rebuild
+        self.assertIn("sparse", rebuild)
+        self.assertIn("solver", rebuild)
+        self.assertIn("rocalution", rebuild)
+
+        # prim and its dependents should NOT be reusable
+        self.assertNotIn("prim", reusable)
+        self.assertNotIn("sparse", reusable)
+        self.assertNotIn("solver", reusable)
+        self.assertNotIn("rocalution", reusable)
+
+    def test_multiple_changed_projects(self):
+        """Test that multiple changed projects accumulate correctly."""
+        rebuild, reusable = cm._compute_artifacts_from_changed_projects(
+            ["projects/rocprim", "projects/rocfft"]
+        )
+
+        # Both direct changes should be in rebuild
+        self.assertIn("prim", rebuild)
+        self.assertIn("fft", rebuild)
+
+        # prim's dependents should also be in rebuild
+        self.assertIn("sparse", rebuild)
+
+        # Neither should be reusable
+        self.assertNotIn("prim", reusable)
+        self.assertNotIn("fft", reusable)
+
+    def test_leaf_artifact_no_downstream(self):
+        """Test that leaf artifacts (nothing depends on them) work correctly."""
+        rebuild, reusable = cm._compute_artifacts_from_changed_projects(
+            ["projects/rocsolver"]
+        )
+
+        # solver should be in rebuild
+        self.assertIn("solver", rebuild)
+
+        # solver should NOT be reusable
+        self.assertNotIn("solver", reusable)
+
+        # Other artifacts that don't depend on solver should be reusable
+        # (assuming they exist and have component mappings)
+        # Note: prim doesn't depend on solver, so if it has components, it's reusable
+        if "prim" in reusable or "prim" in rebuild:
+            # prim doesn't depend on solver, so should be reusable
+            self.assertIn("prim", reusable)
+
+
 if __name__ == "__main__":
     unittest.main()
