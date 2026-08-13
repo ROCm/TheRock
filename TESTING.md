@@ -1,9 +1,11 @@
 # Testing in TheRock
 
 **TheRock is the integration point for build, test, packaging, and release
-infrastructure for ROCm Core.** The code here is used by developers building
-ROCm from source, CI systems validating pull request contributions
-in repositories like [rocm-systems](https://github.com/ROCm/rocm-systems) and
+infrastructure for the
+[ROCm Core SDK](https://rocm.docs.amd.com/en/latest/components/core.html).**
+The code here is used by developers building ROCm from source, CI systems
+validating pull request contributions in repositories like
+[rocm-systems](https://github.com/ROCm/rocm-systems) and
 [rocm-libraries](https://github.com/ROCm/rocm-libraries), and release workflows
 publishing nightly and stable releases in
 [rockrel](https://github.com/ROCm/rockrel) which are trusted by users and
@@ -32,11 +34,11 @@ provides the fastest feedback, while continuous integration (CI) workflows
 provide consistent environments for validating changes across representative
 project-wide configurations and component boundaries.
 
-**ROCm Core is built and released as a single product.** Individual subprojects
-may validate their own behavior in isolation, then TheRock assembles and tests
-those projects together as often as practical throughout development to provide
-confidence in cross-component behavior and product-wide properties that
-component-level testing cannot evaluate.
+**The ROCm Core SDK is built and released as a single product.** Individual
+subprojects may validate their own behavior in isolation, then TheRock assembles
+and tests those projects together as often as practical throughout development
+to provide confidence in cross-component behavior and product-wide properties
+that component-level testing cannot evaluate.
 
 _This page describes how these testing layers work together to validate changes
 to TheRock and the ROCm subprojects it integrates. It also explains how code and
@@ -180,9 +182,7 @@ to build system files, we generally look for
   [`.github/workflows/multi_arch_ci.yml`](/.github/workflows/multi_arch_ci.yml)
   should not have new failures.
 - The build jobs should not significantly regress in duration.
-  - _We currently only monitor for this after merge, we'd like to watch these metrics more proactively in the future_
 - The build artifacts should not unexpectedly grow in size.
-  - _We currently only monitor for this after merge, we'd like to watch these metrics more proactively in the future_
 
 > [!IMPORTANT]
 > Certain types of changes benefit from additional validation, such as:
@@ -217,6 +217,12 @@ to build system files, we generally look for
 >
 > Our target is 30 minutes "time to signal" wall time including builds and tests.
 
+> [!WARNING]
+> We do not yet actively track _build duration_ or _binary size_ metrics, nor do
+> we report diffs in these metrics on PRs.
+>
+> See https://github.com/ROCm/TheRock/issues/5325.
+
 ______________________________________________________________________
 
 ### TheRock feature area: GitHub Actions workflows
@@ -241,6 +247,9 @@ these practices to make testing manageable:
 - Keep workflows as simple as possible, e.g. by putting logic in
   Python scripts rather than inline Bash and then writing unit tests for those
   scripts (see [this section in `github_actions_style_guide.md`](/docs/development/style_guides/github_actions_style_guide.md#prefer-python-scripts-over-inline-bash)).
+- Document how to reproduce test environments and run tests locally:
+  - [`test_environment_reproduction.md`](/docs/development/test_environment_reproduction.md)
+  - [Running/testing PyTorch](/external-builds/pytorch/README.md#runningtesting-pytorch) and [`build_tools/github_actions/summarize_test_pytorch_workflow.py`](/build_tools/github_actions/summarize_test_pytorch_workflow.py)
 - Support running using prebuilt artifacts/packages and minimal matrices for
   efficient testing. For example,
   [`test_rocm_wheels.yml`](/.github/workflows/test_rocm_wheels.yml)
@@ -254,9 +263,9 @@ these practices to make testing manageable:
 - When workflows and scripts are used across repositories, pin to specific
   commits so workflow runs are reproducible and updates can be tested prior
   to rollout.
-  - In https://github.com/ROCm/rocm-libraries and
-    https://github.com/ROCm/rocm-systems, "TheRock CI" uses commit pins that
-    receive regular update pull requests via
+  - In [rocm-libraries](https://github.com/ROCm/rocm-libraries) and
+    [rocm-systems](https://github.com/ROCm/rocm-systems), "TheRock CI" uses
+    commit pins that receive regular update pull requests via
     [`build_tools/github_actions/bump_automation.py`](/build_tools/github_actions/bump_automation.py).
     These pull requests can be reviewed and fixed when there are breaking
     changes to the build system, workflows, or scripts.
@@ -368,6 +377,8 @@ Python packages, and native operating system packages for distribution.
   [artifacts](/docs/development/artifacts.md) using scripts in
   [`build_tools/packaging/`](/build_tools/packaging/) with documentation in
   [`docs/packaging/`](/docs/packaging/).
+- With the exception of package _signing_, developers and downstream projects
+  should be able to build packages exactly as TheRock's CI/CD system does.
 - Packages should use dev/nightly/stable versions following
   [`docs/packaging/versioning.md`](/docs/packaging/versioning.md) for
   version/channel sorting and auditability.
@@ -387,6 +398,9 @@ Packages are tested using a combination of these practices:
   - Integration and regression tests for interactions between multiple packages,
     ensuring that ROCm packages are self-sufficient, don't conflict with system
     packages, and can be used together with other ecosystem packages
+
+Native Linux packaging unit tests live under
+[`build_tools/packaging/linux/tests/`](/build_tools/packaging/linux/tests/).
 
 > [!TIP]
 > Package installation tests should be modeled closely after user-facing install
