@@ -1,0 +1,85 @@
+# Hand-maintained test-selection policy, read by
+# test_tools/determine_rocm_test_dependencies.py. It overrides the generated
+# consumer graph (test_tools/therock_consumer_graph.json) where the graph alone is
+# not enough. Schema and resolution order are documented in
+# docs/rfcs/RFC0013-Consumer-Based-Test-Selection.md.
+#
+# Each table:
+#   [component.<name>]  <name> must be a graph key (validated).
+#   level = <1-5>       Walk depth. Default 4 (self + direct consumers). 5 = self
+#                       only; 3 = self + all transitive consumers.
+#   test_include        Extra targets to test; values need not be graph keys.
+#   test_exclude        Targets to drop after the walk and includes.
+
+# --- Foundational runtimes ----------------------------------------------------
+# Used by most of the tree, so they test their full transitive downstream.
+
+[component.rocr-runtime]
+level = 3
+test_include = ["amd-dbgapi", "ocl-icd", "rocgdb"]
+
+[component.hip-clr]
+# Backs the "amd-hip" toolchain most of the tree builds with.
+level = 3
+# Only the couplings the walk does not already reach: hipinfo is a hip-clr tool
+# target (not a graph key); rocrtst has no graph path from hip-clr.
+test_include = ["hipinfo", "rocrtst"]
+
+[component.amd-llvm]
+# The compiler builds ~everything; its consumers come from the graph via
+# COMPILER_TOOLCHAIN edges, so no hand-list is needed.
+level = 3
+
+# --- Test-only / non-derivable inclusions -------------------------------------
+# Couplings the graph cannot express (test-only targets, or edges not declared as
+# build/runtime deps).
+
+[component.amdsmi]
+test_include = ["hip-tests"]
+
+[component.rocprofiler-sdk]
+test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]
+
+[component.rocprofiler-register]
+test_include = ["hipfile"]
+
+[component.aqlprofile]
+test_include = ["rocprofiler-systems-examples"]
+
+[component.roctracer]
+test_include = ["hip-clr", "rocprofiler-sdk"]
+
+# rocgdb-cpu / rocgdb-gpu are ctest targets of rocgdb, not subprojects, so they
+# are named here rather than derived from the graph.
+
+[component.amd-dbgapi]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+
+[component.rocgdb]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+
+# --- Math / ML library couplings ----------------------------------------------
+
+[component.hipblas]
+test_include = ["hipsolver"]
+
+[component.hiprand]
+test_include = ["miopen", "rocprim"]
+
+[component.libhipcxx]
+test_include = ["rocthrust"]
+
+[component.miopen]
+test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
+
+[component.hipkernelprovider]
+test_include = ["hipdnn_integration_tests", "hipdnn_samples"]
+
+[component.rocroller]
+test_include = ["hipdnn", "miopen"]
+
+[component.rocrand]
+test_include = ["hipfft", "rocfft", "rocprim"]
+
+[component.rocsparse]
+test_include = ["rocblas", "rocprim", "rocsolver"]

@@ -170,11 +170,6 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amd_smi",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
-    "rocprofiler-sdk-roctx",  # Linux only for the moment.
-    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
-    "roctracer64",  # Linux only for the moment.
-    "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -182,13 +177,20 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparse",
     "hipsparselt",
     "hipsolver",
-    "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
     "rocm_smi64",
+    # Linux only.
+    "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
+    "rocprofiler-sdk-roctx",
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
+    "roctracer64",
+    "roctx64",
+    "rccl",
+    "hipfile",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -620,6 +622,7 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 
 def _setup_common_build_env(
     cmake_prefix: Path,
+    bin_dir: Path,
     rocm_dir: Path,
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
@@ -633,6 +636,9 @@ def _setup_common_build_env(
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
+        # Make ROCm tools discoverable on all platforms and ROCm DLLs
+        # discoverable by the Windows loader.
+        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -779,9 +785,6 @@ def do_build(args: argparse.Namespace):
     print(f"  BIN = {bin_dir}")
     print(f"  ROCM_HOME = {rocm_dir}")
 
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
     # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
     # fallback (legacy; see TODO on get_rocm_sdk_targets()).
     pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
@@ -806,8 +809,9 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
+    print(f"  PATH = {env['PATH']}")
 
     if args.use_ccache:
         if not shutil.which("ccache"):

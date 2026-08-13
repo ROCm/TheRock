@@ -131,6 +131,8 @@ jobs:
     name: Test JAX | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 120
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
 
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
@@ -142,6 +144,8 @@ jobs:
         --group-add video
         --user root
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e KUBE_CPU_REQUEST
+        -e KUBE_MEMORY_REQUEST
         --dns 8.8.8.8
         --dns 8.8.4.4
 
@@ -150,12 +154,25 @@ jobs:
         shell: bash
 
     env:
+      QUARTZ_REPORTING_WORKFLOW: test_linux_jax_wheels_partial.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test JAX wheels (partial)"
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -227,42 +244,20 @@ jobs:
             --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
             --output-mode=device-extras
 
+      # rocm[libraries] alone, since that is what RELEASES.md tells users to
+      # install: anything the wheels need belongs there, not in [devel].
       - name: Install ROCm packages
+        env:
+          ROCM_PACKAGES: rocm[libraries${{ steps.expand.outputs.device_extras && format(',{0}', steps.expand.outputs.device_extras) || '' }}]==${{ inputs.rocm_version }}
         run: |
-          python -m pip install --upgrade pip
+          python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
+            --packages "${ROCM_PACKAGES}" \
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
 
-          pkg="rocm[libraries]"
-          if [ -n "${{ steps.expand.outputs.device_extras }}" ]; then
-            pkg="${pkg%]},${{ steps.expand.outputs.device_extras }}]"
-          fi
-
-          python -m pip install --pre \
-            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}" \
-            "${pkg}==${{ inputs.rocm_version }}"
-
-          echo "ROCM_ROOT=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
-
+      # Package names, versions and the index arrive as env vars set above.
       - name: Install JAX wheels from package index
         run: |
-          echo "Installing from:"
-          echo "  ${WHEEL_INDEX_URL}"
-
-          pip install \
-            --index-url "${WHEEL_INDEX_URL}" \
-            "${JAX_PLUGIN_PACKAGE}==${JAX_PLUGIN_VERSION}" \
-            "${JAX_PJRT_PACKAGE}==${JAX_PJRT_VERSION}"
-
-          if [ -n "${JAXLIB_VERSION}" ]; then
-            pip install \
-              --index-url "${WHEEL_INDEX_URL}" \
-              "jaxlib==${JAXLIB_VERSION}"
-
-            pip install "jax==${JAX_VERSION}"
-          else
-            pip install \
-              "jax==${JAX_VERSION}" \
-              "jaxlib==${JAX_VERSION}"
-          fi
+          python external-builds/jax/install_jax_wheels.py
 
       # jaxlib comes from upstream PyPI and only knows the ROCm majors that
       # existed when it was released, so it has to be taught about newer ones.
@@ -271,41 +266,56 @@ jobs:
           python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
             --plugin-package "${JAX_PLUGIN_PACKAGE}"
 
-      - name: Run JAX tests
-        timeout-minutes: 60
-        env:
-          # Avoid large upfront GPU memory reservation.
-          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
-
-          # Set XLA allocator. JAX 0.10.2 uses the default allocator; all
-          # other releases keep the platform allocator.
-          XLA_PYTHON_CLIENT_ALLOCATOR: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && 'default' || 'platform' }}
-
-          # JAX 0.10.2 only: ROCm/HIP runtime tuning to avoid a pytest
-          # slowdown/hang; other releases keep the runtime defaults.
-          # TODO:(magaonka-amd) remove these as soon as fixes from corresponding system teams lands.
-          ROCPROFILER_QUEUE_INTERPOSITION: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
-          DEBUG_HIP_DYNAMIC_QUEUES: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '0' }}
-          HSA_NO_SCRATCH_RECLAIM: ${{ inputs.jax_ref == 'rocm-jaxlib-v0.10.2' && '1' }}
-
-          # Reduce compilation/autotune memory pressure.
-          XLA_FLAGS: >-
-            --xla_gpu_force_compilation_parallelism=1
-            --xla_gpu_enable_nccl_comm_splitting=false
-            --xla_gpu_enable_command_buffer=
-
+      # The device serial numbers it prints identify a recurring bad device
+      # across runs, since the runner and the device index change every time.
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
         run: |
-          set -euxo pipefail
+          python build_tools/print_driver_gpu_info.py
 
-          unset ROCM_ROOT
-          unset HIP_DEVICE_LIB_PATH
-          unset JAX_ROCM_PLUGIN_INTERNAL_BITCODE_PATH
-          unset JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH
+      - name: Install JAX test requirements
+        run: |
+          python external-builds/jax/install_jax_test_requirements.py \
+            --jax-dir jax \
+            --python-version "${PYTHON_VERSION}"
 
-          python -c "import jax; print(jax.local_devices())"
+      # The runner owns the test environment, the skip lists, the pod's CPU
+      # allocation and both layers of retry, so that the same command
+      # reproduces this job locally. See the comments in the script.
+      - name: Run JAX tests
+        # The suite runs 35-70 min across versions, so 60 left no headroom: one
+        # job reached 100% of the tests and was still killed by the timeout.
+        timeout-minutes: 120
+        run: |
+          python external-builds/jax/run_jax_tests.py \
+            --jax-dir jax \
+            --jax-ref "${{ inputs.jax_ref }}" \
+            --amdgpu-family "${{ inputs.test_amdgpu_family }}"
 
-          echo "=== Starting full test suite ==="
-          pytest jax/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/tests/scipy_stats_test.py -q --log-cli-level=INFO
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}
+          path: |
+            jax/logs/
+            jax/test-artifacts/
+          if-no-files-found: ignore
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -80,6 +80,10 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "azure-windows-scale-rocm"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -167,7 +171,7 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
       id-token: write
       contents: read
@@ -188,11 +192,23 @@ jobs:
       torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
         shell: bash
     steps:
+      - name: "Quartz - started - build PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -471,6 +487,11 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   configure_pytorch_tests:
     name: Configure PyTorch Tests
     runs-on: ubuntu-24.04
@@ -479,6 +500,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -504,6 +526,11 @@ jobs:
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform windows
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
     if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
@@ -514,6 +541,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_pytorch_tests.outputs.matrix) }}
     uses: ./.github/workflows/test_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -526,3 +554,21 @@ jobs:
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels]
+    name: "Quartz - completed - build PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
