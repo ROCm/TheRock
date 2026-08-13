@@ -138,7 +138,7 @@ jobs:
       - name: "Quartz - started - build JAX wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_linux_jax_wheels.yml
@@ -330,7 +330,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build JAX Wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_linux_jax_wheels.yml
