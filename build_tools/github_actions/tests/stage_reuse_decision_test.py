@@ -29,6 +29,13 @@ class _FakeStage:
         self.artifact_groups = groups
 
 
+class _FakeArtifact:
+    def __init__(self, name, artifact_group, artifact_type="target-neutral"):
+        self.name = name
+        self.artifact_group = artifact_group
+        self.type = artifact_type
+
+
 class FakeTopology:
     """Minimal BuildTopology stand-in for stage_impact + artifact derivation.
 
@@ -43,6 +50,13 @@ class FakeTopology:
         self.artifact_groups = {
             "base-group": type("G", (), {"source_sets": ["core"]})(),
             "blas-group": type("G", (), {"source_sets": ["libs"]})(),
+        }
+        # Artifacts map: name -> FakeArtifact with type field
+        # base is target-neutral (produces generic only)
+        # blas is target-specific (produces per-arch artifacts)
+        self.artifacts = {
+            "base": _FakeArtifact("base", "base-group", "target-neutral"),
+            "blas": _FakeArtifact("blas", "blas-group", "target-specific"),
         }
 
     def get_source_set_to_artifact_groups(self):
@@ -171,9 +185,12 @@ class AvailabilityGateTest(unittest.TestCase):
         joined = "\n".join(result.report_lines)
         self.assertIn("no baseline run contains artifacts", joined)
 
-    def test_partial_family_availability_rebuilds(self):
-        # Needs base for a real family + generic; baseline only has the generic
-        # archive, so the real family's artifact is missing -> rebuild.
+    def test_target_neutral_only_needs_generic(self):
+        # compiler-runtime produces 'base' which is target-neutral.
+        # Even when requesting gfx94X-dcgpu family, base only needs
+        # base_lib_generic.tar.zst (not per-arch artifacts).
+        # math-libs is affected by the change (rocm-libraries), so only
+        # compiler-runtime is a candidate.
         result = compute_auto_stage_reuse(
             changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
             mode=StageReuseMode.DRY_RUN,
@@ -181,8 +198,10 @@ class AvailabilityGateTest(unittest.TestCase):
             topology=FakeTopology(),
             baseline_selector=_selector(_baseline("123", ["base_lib_generic.tar.zst"])),
         )
-        self.assertIn("compiler-runtime", result.unavailable_stages)
-        self.assertEqual(result.available_stages, ())
+        # compiler-runtime is available because base is target-neutral
+        # and only needs generic artifact (which is present)
+        self.assertIn("compiler-runtime", result.available_stages)
+        self.assertEqual(result.unavailable_stages, ())
 
     def test_reuse_stage_applies_only_available_stages(self):
         result = compute_auto_stage_reuse(

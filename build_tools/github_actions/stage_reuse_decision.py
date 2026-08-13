@@ -152,8 +152,12 @@ def _required_artifacts_for_stages(
     stage_names: Sequence[str],
     target_families: Sequence[str],
 ) -> list[RequiredArtifact]:
-    """Artifact/family pairs the given stages produce."""
+    """Artifact/family pairs the given stages produce.
 
+    Respects artifact type:
+    - target-neutral: Only requires the generic family
+    - target-specific: Requires each of the target families (excluding generic)
+    """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     required: list[RequiredArtifact] = []
     seen: set[RequiredArtifact] = set()
@@ -163,7 +167,21 @@ def _required_artifacts_for_stages(
             continue
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
-                for family in target_families:
+                artifact = topology.artifacts.get(artifact_name)
+                if artifact is None:
+                    continue
+
+                # Determine which families this artifact produces based on type
+                if artifact.type == "target-specific":
+                    # target-specific: per-arch artifacts, exclude generic
+                    families_for_artifact = [
+                        f for f in target_families if f != GENERIC_FAMILY
+                    ]
+                else:
+                    # target-neutral: only generic family
+                    families_for_artifact = [GENERIC_FAMILY]
+
+                for family in families_for_artifact:
                     req = RequiredArtifact(name=artifact_name, target_family=family)
                     if req not in seen:
                         seen.add(req)
@@ -183,15 +201,33 @@ def _stage_artifacts_available(
     target_families: Sequence[str],
     available_filenames: set[str],
 ) -> bool:
-    """True when every artifact this stage produces has an archive present."""
+    """True when every artifact this stage produces has an archive present.
 
+    Respects artifact type:
+    - target-neutral: Only checks for generic family archives
+    - target-specific: Checks for each target family (excluding generic)
+    """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
     if stage is None:
         return False
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
-            for family in target_families:
+            artifact = topology.artifacts.get(artifact_name)
+            if artifact is None:
+                continue
+
+            # Determine which families this artifact produces based on type
+            if artifact.type == "target-specific":
+                # target-specific: per-arch artifacts, exclude generic
+                families_for_artifact = [
+                    f for f in target_families if f != GENERIC_FAMILY
+                ]
+            else:
+                # target-neutral: only generic family
+                families_for_artifact = [GENERIC_FAMILY]
+
+            for family in families_for_artifact:
                 found = False
                 for component in ARTIFACT_COMPONENTS:
                     for extension in ARTIFACT_EXTENSIONS:
