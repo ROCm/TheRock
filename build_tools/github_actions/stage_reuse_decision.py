@@ -125,6 +125,8 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "rocrtst",
         # Storage libs
         "hipfile",
+        # WSL-specific
+        "wsl-rocdxg",
     ]
 )
 
