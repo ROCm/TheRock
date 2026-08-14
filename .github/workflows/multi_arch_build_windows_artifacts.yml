@@ -113,6 +113,7 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout Repository
+        timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -120,6 +121,7 @@ jobs:
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
+        timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
