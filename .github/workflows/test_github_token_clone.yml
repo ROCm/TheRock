@@ -9,6 +9,11 @@ name: Test GITHUB_TOKEN Clone Auth
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/test_github_token_clone.yml"
 
 permissions:
   contents: read
