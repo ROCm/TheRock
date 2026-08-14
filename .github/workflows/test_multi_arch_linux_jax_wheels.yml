@@ -65,7 +65,7 @@ on:
       test_subset:
         description: >-
           Accelerator subset to run: "all", or "multi" for the multi-accelerator
-          tests alone, which needs test_runs_on to be a multi-GPU runner.
+          tests alone, which fails unless test_runs_on is a multi-GPU runner.
         required: false
         type: string
         default: "all"
@@ -132,8 +132,9 @@ on:
       test_subset:
         description: >-
           Accelerator subset to run: "all", or "multi" for the multi-accelerator
-          tests alone, which needs test_runs_on to be a multi-GPU runner.
-        type: string
+          tests alone, which fails unless test_runs_on is a multi-GPU runner.
+        type: choice
+        options: ["all", "multi"]
         default: "all"
 permissions:
   contents: read

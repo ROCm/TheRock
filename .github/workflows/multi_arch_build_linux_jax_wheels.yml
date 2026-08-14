@@ -84,7 +84,10 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       test_scope:
-        description: "Which test subsets to run, and on which runners."
+        description: >-
+          "short" runs the suite on the 1-GPU runner, which is the
+          single-accelerator tests, "full" adds the multi-accelerator tests on
+          the multi-GPU runner, and "auto" picks from release_type.
         type: choice
         options: ["auto", "short", "full"]
         default: "auto"

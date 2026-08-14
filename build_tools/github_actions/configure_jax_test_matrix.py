@@ -29,13 +29,14 @@ from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_typ
 from github_actions.configure_jax_release_matrix import RELEASE_TYPES
 from github_actions.github_actions_api import gha_set_output
 
-# Values of --test-scope, and the release types that pick them when the scope is
-# left at "auto". CI and dev builds run per change, where an 8-GPU queue slot per
-# job is too much, so they stay short.
-SCOPE_SHORT = "short"
-SCOPE_FULL = "full"
-SCOPE_AUTO = "auto"
-TEST_SCOPES = [SCOPE_AUTO, SCOPE_SHORT, SCOPE_FULL]
+# Values of --test-scope. "short" runs the whole single-accelerator suite on the
+# family's 1-GPU runner, "full" adds the multi-accelerator tests on its multi-GPU
+# runner, and "auto" reads the release type below. Neither narrows the suite: the
+# scope decides which runners a run takes, not which tests each one runs.
+TEST_SCOPE_SHORT = "short"
+TEST_SCOPE_FULL = "full"
+TEST_SCOPE_AUTO = "auto"
+TEST_SCOPES = [TEST_SCOPE_AUTO, TEST_SCOPE_SHORT, TEST_SCOPE_FULL]
 
 # A prerelease is worth a slot in the multi-GPU pool every time. A nightly takes
 # one on this weekday (UTC, Monday being 0), because the pool is small and that
@@ -44,9 +45,11 @@ ALWAYS_FULL_RELEASE_TYPES = ["prerelease"]
 WEEKLY_FULL_RELEASE_TYPES = ["nightly"]
 WEEKLY_FULL_WEEKDAY = 6
 
-# --test-subset of run_jax_tests.py, which is which ROCm/jax suite script runs.
-SUBSET_ALL = "all"
-SUBSET_MULTI = "multi"
+# --test-subset of run_jax_tests.py, which is which ROCm/jax suite script runs:
+# "all" is ci/run_pytest_rocm.sh, which leaves out what the host has no GPUs for,
+# and "multi" is ci/run_pytest_rocm_multi.sh, the multi-accelerator tests alone.
+TEST_SUBSET_ALL = "all"
+TEST_SUBSET_MULTI = "multi"
 
 
 def platform_entry(target: str, platform: str) -> dict | None:
@@ -68,7 +71,11 @@ def platform_entry(target: str, platform: str) -> dict | None:
 
 
 def today_utc() -> date:
-    """The day the run is happening, which the weekly rule below reads."""
+    """The day the run is happening, which the weekly rule below reads.
+
+    A rerun is a new run, so re-running a Sunday nightly on Monday drops the
+    multi-accelerator job. Pass test_scope=full to reproduce the original.
+    """
     return datetime.now(timezone.utc).date()
 
 
@@ -78,13 +85,17 @@ def resolve_scope(test_scope: str, release_type: str, today: date) -> str:
     An explicit scope wins, so a workflow or a person can ask for the
     multi-accelerator tests on any day.
     """
-    if test_scope != SCOPE_AUTO:
+    if test_scope != TEST_SCOPE_AUTO:
         return test_scope
     if release_type in ALWAYS_FULL_RELEASE_TYPES:
-        return SCOPE_FULL
+        return TEST_SCOPE_FULL
     if release_type in WEEKLY_FULL_RELEASE_TYPES:
-        return SCOPE_FULL if today.weekday() == WEEKLY_FULL_WEEKDAY else SCOPE_SHORT
-    return SCOPE_SHORT
+        return (
+            TEST_SCOPE_FULL
+            if today.weekday() == WEEKLY_FULL_WEEKDAY
+            else TEST_SCOPE_SHORT
+        )
+    return TEST_SCOPE_SHORT
 
 
 def build_test_matrix(
@@ -101,19 +112,27 @@ def build_test_matrix(
 
     single_runner = entry.get("test-runs-on")
     if single_runner:
-        include.append({"test_subset": SUBSET_ALL, "test_runs_on": single_runner})
+        include.append({"test_subset": TEST_SUBSET_ALL, "test_runs_on": single_runner})
     else:
-        print(f"No {platform} test runner for {target}, so no tests will run")
+        # A family with no hardware configured carries an empty label, so this is
+        # a skip rather than an error. Annotated because everything below it then
+        # runs a smaller share of the suite than the scope asked for.
+        print(
+            f"::warning::No {platform} test runner for {target}, so the"
+            " single-accelerator tests will not run"
+        )
 
-    if scope == SCOPE_FULL:
+    if scope == TEST_SCOPE_FULL:
         multi_runner = entry.get("test-runs-on-multi-gpu")
         if multi_runner:
-            include.append({"test_subset": SUBSET_MULTI, "test_runs_on": multi_runner})
+            include.append(
+                {"test_subset": TEST_SUBSET_MULTI, "test_runs_on": multi_runner}
+            )
         else:
             # Sending them to a 1-GPU runner would skip every one of them.
             print(
-                f"No {platform} multi-GPU test runner for {target}, so the"
-                " multi-accelerator tests will not run"
+                f"::warning::No {platform} multi-GPU test runner for {target}, so"
+                " the multi-accelerator tests will not run"
             )
 
     for job in include:
@@ -137,7 +156,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--test-scope",
         choices=TEST_SCOPES,
-        default=SCOPE_AUTO,
+        default=TEST_SCOPE_AUTO,
         help="Which subsets to run; 'auto' reads --release-type",
     )
     parser.add_argument(

@@ -4,6 +4,8 @@
 from datetime import date
 from pathlib import Path
 from unittest import mock
+import contextlib
+import io
 import json
 import os
 import sys
@@ -103,6 +105,15 @@ class BuildTestMatrixTest(unittest.TestCase):
 
         self.assertEqual(subsets(matrix), ["all"])
         self.assertEqual(runner_for(matrix, "all"), "windows-gfx1151-gpu-rocm")
+
+    def test_a_family_without_any_test_runner_runs_nothing(self):
+        # A family that has a build but no test hardware carries an empty label,
+        # so this is a configuration a run has to survive, loudly.
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            matrix = self.matrix(target="gfx90a", platform="windows", scope="full")
+
+        self.assertEqual(matrix["include"], [])
+        self.assertIn("::warning::", out.getvalue())
 
     def test_an_unknown_family_is_an_error(self):
         with self.assertRaises(ValueError):

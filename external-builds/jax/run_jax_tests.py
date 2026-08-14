@@ -130,12 +130,13 @@ SUITE_ENV_EXCLUDES = ["JAX_ENABLE_ROCM_XDIST"]
 
 # Which suite script a run invokes, so that the subset needing one GPU and the
 # subset needing several can go to different runners. "all" is the whole suite,
-# which leaves out what the host has no GPUs for.
-SUBSET_ALL = "all"
-SUBSET_MULTI = "multi"
+# which leaves out what the host has no GPUs for, and "multi" is the
+# multi-accelerator tests alone, which a 1-GPU host would skip entirely.
+TEST_SUBSET_ALL = "all"
+TEST_SUBSET_MULTI = "multi"
 SUITE_SCRIPTS = {
-    SUBSET_ALL: RELATIVE_SUITE_SCRIPT,
-    SUBSET_MULTI: RELATIVE_MULTI_SUITE_SCRIPT,
+    TEST_SUBSET_ALL: RELATIVE_SUITE_SCRIPT,
+    TEST_SUBSET_MULTI: RELATIVE_MULTI_SUITE_SCRIPT,
 }
 
 # ROCm/HIP runtime tuning that avoids a pytest slowdown and hang. Ours rather than
@@ -546,7 +547,7 @@ def cmd_arguments(argv: list[str]) -> argparse.Namespace:
     p.add_argument(
         "--test-subset",
         choices=sorted(SUITE_SCRIPTS),
-        default=os.getenv("JAX_TEST_SUBSET", SUBSET_ALL),
+        default=os.getenv("JAX_TEST_SUBSET", TEST_SUBSET_ALL),
         help="Accelerator subset to run; 'multi' needs more than one GPU",
     )
     p.add_argument(
@@ -609,7 +610,7 @@ def main(argv: list[str]) -> int:
     suite_script = SUITE_SCRIPTS[args.test_subset]
     suite = jax_dir / suite_script
     if not suite.exists():
-        if args.test_subset != SUBSET_ALL:
+        if args.test_subset != TEST_SUBSET_ALL:
             # Whether it would have run is worth knowing before a runner is
             # taken for it, so this holds for a dry run too.
             log(
