@@ -198,7 +198,10 @@ def _profiler_hub_consumer_toolchain_probe() -> tuple[bool, str]:
         text=True,
     )
     if probe.returncode != 0 or "__cplusplus 201703L" not in probe.stdout:
-        return False, f"{cxx} does not report C++17 support (__cplusplus 201703L absent)"
+        return (
+            False,
+            f"{cxx} does not report C++17 support (__cplusplus 201703L absent)",
+        )
     return True, cxx
 
 
