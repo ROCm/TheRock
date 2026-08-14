@@ -64,6 +64,10 @@ on:
         type: boolean
         default: true
         description: "Build JAX wheels"
+      skip_gpu_tests:
+        type: boolean
+        default: false
+        description: "Skip GPU test jobs (Windows test artifacts + test python). Used for CPU-pool load testing."
   pull_request:
     types:
       - labeled
@@ -141,6 +145,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
       aws_windows_cpu_build_label: ${{ inputs.aws_windows_cpu_build_label || '' }}
+      skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
       id-token: write
