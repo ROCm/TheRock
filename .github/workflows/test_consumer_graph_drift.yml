@@ -36,6 +36,12 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
+      - name: Adjust git config
+        run: |
+          git config --global \
+            url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf \
+            "https://github.com/"
+
       - name: Fetch sources
         # All subproject sources must be present for the graph to be complete.
         run: python3 ./build_tools/fetch_sources.py --jobs 12 --depth 1

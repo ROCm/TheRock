@@ -130,6 +130,9 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
+          git config --global \
+            url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf \
+            "https://github.com/"
 
       - name: Setup ccache
         run: |
