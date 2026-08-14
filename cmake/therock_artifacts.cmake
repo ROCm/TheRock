@@ -237,7 +237,8 @@ function(therock_provide_artifact slice_name)
 
   # When splitting is enabled, run split_artifacts.py on each component
   if(_should_split)
-    set(_split_tool "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/tools/split_artifacts.py")
+    # Use wrapper script that handles stripped binaries with empty .hip_fatbin sections
+    set(_split_tool "${THEROCK_SOURCE_DIR}/build_tools/split_artifacts_wrapper.py")
     set(_bundler_path "${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-bundler")
     set(_split_manifest_files)
     set(_split_component_dirs)
