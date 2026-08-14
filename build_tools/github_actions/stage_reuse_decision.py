@@ -113,6 +113,18 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         # Communication libs - Linux only, may not be uploaded
         "rccl",
         "rocshmem",
+        # Core artifacts - some not uploaded as standalone
+        "core-hipinfo",
+        "core-amdsmi",
+        "core-runtime",
+        "core-hiptests",
+        "core-ocl",
+        "core-ocl-icd",
+        "core-kpack",
+        "kfdtest",
+        "rocrtst",
+        # Storage libs
+        "hipfile",
     ]
 )
 
