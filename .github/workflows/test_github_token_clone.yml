@@ -40,7 +40,7 @@ jobs:
       - name: Configure git to use GITHUB_TOKEN for github.com clones
         run: |
           git config --global \
-            url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf \
+            url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf \
             "https://github.com/"
 
       - name: Fetch sources
