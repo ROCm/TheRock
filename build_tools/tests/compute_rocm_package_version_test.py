@@ -1,8 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -12,12 +14,98 @@ from packaging.version import Version
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import compute_rocm_package_version
 
-TEST_BKC_RELEASE_METADATA = {"base-date": "20260811"}
+TEST_BKC_VERSION_DATA = {"release-metadata": {"base-date": "20260811"}}
 
 
 # Note: the regex matches in here aren't exact, but they should be "good enough"
 # to cover the general structure of each version string while allowing for
 # future changes like using X.Y versions instead of X.Y.Z versions.
+
+
+class VersionFileTest(unittest.TestCase):
+    def test_loads_repository_version_file(self):
+        version_data = compute_rocm_package_version.load_version_file()
+
+        self.assertIsInstance(version_data["rocm-version"], str)
+        self.assertIsInstance(version_data["release-metadata"], dict)
+
+    def test_loads_version_file_with_empty_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0",
+  "release-metadata": {
+    "base-date": ""
+  }
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {
+                    "rocm-version": "7.9.0",
+                    "release-metadata": {"base-date": ""},
+                },
+            )
+
+    def test_loads_version_file_with_populated_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0",
+  "release-metadata": {
+    "base-date": "20260811"
+  }
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {
+                    "rocm-version": "7.9.0",
+                    "release-metadata": {"base-date": "20260811"},
+                },
+            )
+
+    def test_rejects_invalid_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            # Missing closing }
+            version_file.write_text(
+                '{ "rocm-version": "7.9.0"',
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(json.JSONDecodeError):
+                compute_rocm_package_version.load_version_file(version_file)
+
+    def test_rejects_invalid_base_date_metadata(self):
+        for base_date in ("2026081", "20261301"):
+            with self.subTest(
+                base_date=base_date
+            ), tempfile.TemporaryDirectory() as temp_dir:
+                version_file = Path(temp_dir) / "version.json"
+                version_file.write_text(
+                    f"""{{
+  "rocm-version": "7.9.0",
+  "release-metadata": {{
+    "base-date": "{base_date}"
+  }}
+}}
+""",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(
+                    ValueError, "valid date in YYYYMMDD format"
+                ):
+                    compute_rocm_package_version.load_version_file(version_file)
 
 
 class PythonPackageVersionTest(unittest.TestCase):
@@ -57,7 +145,7 @@ class PythonPackageVersionTest(unittest.TestCase):
             release_type="dev-bkc",
             override_base_version="7.9.0",
             override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
 
@@ -79,7 +167,7 @@ class PythonPackageVersionTest(unittest.TestCase):
         version = compute_rocm_package_version.compute_version(
             release_type="nightly-bkc",
             override_base_version="7.9.0",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertRegex(
             version,
@@ -94,18 +182,7 @@ class PythonPackageVersionTest(unittest.TestCase):
                 compute_rocm_package_version.compute_version(
                     release_type=release_type,
                     override_base_version="7.9.0",
-                    release_metadata={},
-                )
-
-    def test_bkc_version_validates_base_date_metadata(self):
-        for base_date in ("2026081", "20261301"):
-            with self.subTest(base_date=base_date), self.assertRaisesRegex(
-                ValueError, "valid date in YYYYMMDD format"
-            ):
-                compute_rocm_package_version.compute_version(
-                    release_type="nightly-bkc",
-                    override_base_version="7.9.0",
-                    release_metadata={"base-date": base_date},
+                    version_data={},
                 )
 
     def test_prerelease_version(self):
@@ -203,12 +280,12 @@ class PythonPackageVersionTest(unittest.TestCase):
             "dev-bkc": compute_rocm_package_version.compute_version(
                 release_type="dev-bkc",
                 override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
-                release_metadata=TEST_BKC_RELEASE_METADATA,
+                version_data=TEST_BKC_VERSION_DATA,
                 **common_args,
             ),
             "nightly-bkc": compute_rocm_package_version.compute_version(
                 release_type="nightly-bkc",
-                release_metadata=TEST_BKC_RELEASE_METADATA,
+                version_data=TEST_BKC_VERSION_DATA,
                 **common_args,
             ),
             "nightly": compute_rocm_package_version.compute_version(
@@ -260,7 +337,7 @@ class DebPackageVersionTest(unittest.TestCase):
             package_type="deb",
             release_type="dev-bkc",
             override_base_version="8.1.0",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertRegex(version, r"^8\.1\.0~dev[0-9]{8}$")
 
@@ -284,7 +361,7 @@ class DebPackageVersionTest(unittest.TestCase):
             package_type="deb",
             release_type="nightly-bkc",
             override_base_version="8.1.0",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertRegex(
             version,
@@ -373,7 +450,7 @@ class RpmPackageVersionTest(unittest.TestCase):
             release_type="dev-bkc",
             override_base_version="8.1.0",
             override_git_sha="abcdef1234567890",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
 
@@ -397,7 +474,7 @@ class RpmPackageVersionTest(unittest.TestCase):
             package_type="rpm",
             release_type="nightly-bkc",
             override_base_version="8.1.0",
-            release_metadata=TEST_BKC_RELEASE_METADATA,
+            version_data=TEST_BKC_VERSION_DATA,
         )
         self.assertRegex(
             version,

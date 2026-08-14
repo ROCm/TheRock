@@ -49,6 +49,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import Any
 
 from github_actions.github_actions_api import *
 
@@ -61,25 +62,38 @@ def _log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def load_rocm_version() -> str:
-    """Loads the rocm-version from the repository's version.json file."""
-    version_file = THEROCK_DIR / "version.json"
-    _log(f"Loading version from file '{version_file.resolve()}'")
+def load_version_file(
+    version_file: Path = THEROCK_DIR / "version.json",
+) -> dict[str, Any]:
+    """Loads the repository's version.json file."""
+    _log(f"Loading version data from file '{version_file.resolve()}'")
     with open(version_file, "rt") as f:
-        loaded_file = json.load(f)
-        return loaded_file["rocm-version"]
+        version_data = json.load(f)
+    if not isinstance(version_data, dict):
+        raise ValueError("version.json must contain an object")
 
+    release_metadata = version_data.get("release-metadata", {})
+    if not isinstance(release_metadata, Mapping):
+        raise ValueError("release-metadata in version.json must be an object")
 
-def load_release_metadata() -> dict[str, object]:
-    """Loads generic release metadata from the repository's version.json file."""
-    version_file = THEROCK_DIR / "version.json"
-    _log(f"Loading release metadata from file '{version_file.resolve()}'")
-    with open(version_file, "rt") as f:
-        loaded_file = json.load(f)
-        release_metadata = loaded_file.get("release-metadata", {})
-        if not isinstance(release_metadata, dict):
-            raise ValueError("release-metadata in version.json must be an object")
-        return release_metadata
+    base_date = release_metadata.get("base-date", "")
+    if not isinstance(base_date, str):
+        raise ValueError(
+            "release-metadata.base-date must be a valid date in YYYYMMDD format"
+        )
+    if base_date:
+        if len(base_date) != 8 or not base_date.isdigit():
+            raise ValueError(
+                "release-metadata.base-date must be a valid date in YYYYMMDD format"
+            )
+        try:
+            datetime.strptime(base_date, "%Y%m%d")
+        except ValueError as e:
+            raise ValueError(
+                "release-metadata.base-date must be a valid date in YYYYMMDD format"
+            ) from e
+
+    return version_data
 
 
 def get_git_sha(short: bool = False, override_git_sha: str | None = None):
@@ -130,7 +144,7 @@ def compute_version(
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
     override_git_sha: str | None = None,
-    release_metadata: Mapping[str, object] | None = None,
+    version_data: Mapping[str, Any] | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -143,38 +157,30 @@ def compute_version(
         override_base_version: Override the base version from version.json
         override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
             See get_git_sha() for details on when this is needed.
-        release_metadata: Generic metadata from version.json. Loaded automatically
-            for BKC release types when not provided.
+        version_data: Contents of version.json. Loaded automatically when required.
 
     Returns:
         Computed version string appropriate for the package type
     """
+    if version_data is None:
+        version_data = load_version_file()
+
     if override_base_version:
         base_version = override_base_version
     else:
-        base_version = load_rocm_version()
+        base_version = version_data.get("rocm-version")
+        if not isinstance(base_version, str) or not base_version:
+            raise ValueError("rocm-version must be set in version.json")
     _log(f"Base version  : '{base_version}'")
     _log(f"Package type  : '{package_type}'")
+    current_date = get_current_date()
 
-    bkc_base_date = None
     if release_type in ("dev-bkc", "nightly-bkc"):
-        if release_metadata is None:
-            release_metadata = load_release_metadata()
-        bkc_base_date = release_metadata.get("base-date")
-        if not isinstance(bkc_base_date, str) or not bkc_base_date:
+        release_metadata = version_data.get("release-metadata", {})
+        if not release_metadata.get("base-date"):
             raise ValueError(
                 "release-metadata.base-date must be set in version.json "
                 f"for release type '{release_type}'"
-            )
-        try:
-            parsed_bkc_base_date = datetime.strptime(bkc_base_date, "%Y%m%d")
-        except ValueError as e:
-            raise ValueError(
-                "release-metadata.base-date must be a valid date in YYYYMMDD format"
-            ) from e
-        if parsed_bkc_base_date.strftime("%Y%m%d") != bkc_base_date:
-            raise ValueError(
-                "release-metadata.base-date must be a valid date in YYYYMMDD format"
             )
 
     # Handle wheel packages (Python packaging standards)
@@ -193,11 +199,9 @@ def compute_version(
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            current_date = get_current_date()
             version_suffix = f"a{current_date}"
         elif release_type == "nightly-bkc":
-            current_date = get_current_date()
-            version_suffix = f"a{bkc_base_date}+bkc.{current_date}"
+            version_suffix = f"a{release_metadata['base-date']}+bkc.{current_date}"
         elif release_type == "prerelease":
             # Construct a prerelease (rc / "release candidate") version
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
@@ -226,7 +230,6 @@ def compute_version(
             # Construct a dev release version with date and optionally git SHA
             # deb format: <rocm-version>~dev<YYYYMMDD>
             # rpm format: <rocm-version>~<YYYYMMDD>g<short-git-sha>
-            current_date = get_current_date()
             if package_type == "deb":
                 version_suffix_str = f"~dev{current_date}"
             else:  # rpm
@@ -235,11 +238,9 @@ def compute_version(
         elif release_type == "nightly":
             # Construct a nightly version with date
             # Format: <rocm-version>~<YYYYMMDD>
-            current_date = get_current_date()
             version_suffix_str = f"~{current_date}"
         elif release_type == "nightly-bkc":
-            current_date = get_current_date()
-            version_suffix_str = f"~{bkc_base_date}+bkc.{current_date}"
+            version_suffix_str = f"~{release_metadata['base-date']}+bkc.{current_date}"
         elif release_type == "prerelease":
             # Construct a prerelease version
             # deb format: <rocm-version>~pre<N>
@@ -304,10 +305,6 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
-    release_metadata = None
-    if args.release_type in ("dev-bkc", "nightly-bkc"):
-        release_metadata = load_release_metadata()
-
     # Validation
     if args.release_type != "prerelease" and args.prerelease_version:
         parser.error("release type must be 'prerelease' if --prerelease-version is set")
@@ -315,6 +312,8 @@ def main(argv):
         parser.error(
             "--prerelease-version is required when release type is 'prerelease'"
         )
+
+    version_data = load_version_file()
 
     # Compute versions for all three package types: wheel, deb, and rpm
     outputs = {}
@@ -326,7 +325,7 @@ def main(argv):
             prerelease_version=args.prerelease_version,
             override_base_version=args.override_base_version,
             override_git_sha=args.override_git_sha,
-            release_metadata=release_metadata,
+            version_data=version_data,
         )
 
         # Set appropriate output variable based on package type
