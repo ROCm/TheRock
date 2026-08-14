@@ -107,6 +107,9 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "nlohmann-json",
         "spdlog",
         "openmpi",
+        # Third-party libs - have hardcoded build paths in CMake configs, must rebuild
+        # in external repos to get correct paths (see fftw3.h not found issue)
+        "fftw3",
         # Communication libs - not uploaded as standalone
         "rccl",
         "rocshmem",
