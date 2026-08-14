@@ -10,6 +10,7 @@ Table of contents:
 - [Overview](#overview)
   - [Constraints and design guidelines](#constraints-and-design-guidelines)
   - [Distribution channels (dev, nightly, release)](#distribution-channels-dev-nightly-release)
+- [Release branch metadata](#release-branch-metadata)
 - [Python package versions](#python-package-versions)
 - [Native Linux package versions](#native-linux-package-versions)
 - [Native Windows package versions](#native-windows-package-versions)
@@ -24,14 +25,22 @@ where
 - `Z` is the "patch version"
 
 The [`version.json`](/version.json) file at the root of TheRock defines the
-base version used for packages. Its generic `release-metadata` object contains
-fields that release types can interpret as needed. These fields are empty on
-the base branch and populated by commits on release branches. For BKC releases,
-`release-metadata.base-date` identifies the regular nightly release that the
-branch was created from. Subprojects may have their own independent library
-versions (for example
-`HIPBLASLT_PROJECT_VERSION` in
-[`rocm-libraries/projects/hipblaslt/CMakeLists.txt`](https://github.com/ROCm/rocm-libraries/blob/develop/projects/hipblaslt/CMakeLists.txt)).
+base version used for packages:
+
+```json
+{
+  "rocm-version": "10.1.0"
+}
+```
+
+> [!NOTE]
+> Subprojects may have their own independent
+> library versions (for example `HIPBLASLT_PROJECT_VERSION` in
+> [`rocm-libraries/projects/hipblaslt/CMakeLists.txt`](https://github.com/ROCm/rocm-libraries/blob/develop/projects/hipblaslt/CMakeLists.txt)):
+>
+> ```cmake
+> set(HIPBLASLT_PROJECT_VERSION "1.4.1" CACHE STRING "Semantic version string.")
+> ```
 
 <!-- TODO: touch on ABI versions in libraries (.so/.dll) -->
 
@@ -65,12 +74,43 @@ users who want early previews of upcoming releases, and QA/test team members.
 | stable releases      | https://repo.amd.com/rocm/        | Manually promoted prereleases                                                                                                                                                                                |
 | prereleases          | https://rocm.prereleases.amd.com/ | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
 | nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
+| BKC releases         | TBD                               | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
 | dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
+
+Each distribution channel is currently hosted on a separate release index that
+can be passed to package managers like `pip` (see
+[RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
+for details). For example:
+
+```bash
+pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
+pip install --index-url=https://rocm.devreleases.amd.com/whl-multi-arch/ rocm
+```
 
 With the exception of "dev releases", each distribution channel only contains
 release artifacts of the matching release type. The "dev releases" channel
 _can_ contain any type of release.
+
+## Release branch metadata
+
+The `version.json` file also contains a generic `release-metadata` object
+hosting fields that release types can interpret as needed. These fields should
+be empty on the base branch and may be populated by commits on release branches:
+
+```jsonc
+{
+  "rocm-version": "10.1.0",
+  "release-metadata": {
+    // Empty on the base branch.
+    "base-date": ""
+    // A BKC release branch could set base-date to 20260811 for a package
+    // version like 10.1.0a20260811+bkc.20260813 where
+    //   * 20260811 is fixed to when the release branch forked from mainline
+    //   * 20260813 is the current date
+  }
+}
+```
 
 ## Python package versions
 
@@ -90,6 +130,8 @@ The script produces these versions for each release type:
 | dev          | `X.Y.Z.dev0+NNNN`                          | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 | dev-bkc      | `X.Y.Z.dev0+NNNN`<br>(same as regular dev) | `10.1.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`                                                                                                              |
 
+### BKC versions
+
 For `nightly-bkc`, `BASEDATE` comes from `release-metadata.base-date` in
 `version.json` and identifies the regular nightly used to create the BKC
 branch. The date in the `bkc.YYYYMMDD` local version identifier is the BKC
@@ -99,22 +141,6 @@ than the next regular nightly:
 ```text
 10.1.0a20260811 < 10.1.0a20260811+bkc.20260814 < 10.1.0a20260812
 ```
-
-Both BKC release types require the base date metadata to be populated on their
-release branch. The `dev-bkc` release type uses the regular dev package version
-format; its distinct release type is used to route BKC builds through release
-automation. Each BKC build date currently identifies one logical build; there
-is no additional build counter.
-
-Each distribution channel is currently hosted on a separate release index that
-can be passed to `pip` or `uv` via `--index-url`. For example:
-
-```bash
-pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
-```
-
-See [RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
-for details.
 
 ### External Python package versions
 
@@ -314,9 +340,6 @@ The script produces these versions for debian packages for each release type:
 | nightly-bkc  | `X.Y.Z~BASEDATE+bkc.YYYYMMDD`                | `10.1.0~20260811+bkc.20260814`                                         |
 | dev          | `X.Y.Z~devYYYYMMDD`                          | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)                  |
 | dev-bkc      | `X.Y.Z~devYYYYMMDD`<br>(same as regular dev) | `10.1.0~dev20260814`                                                   |
-
-The native `nightly-bkc` versions use the same base nightly date and BKC build
-date as the Python package version.
 
 ## Native Windows package versions
 
