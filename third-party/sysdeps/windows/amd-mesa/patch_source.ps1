@@ -25,7 +25,12 @@ if (-not (Test-Path $LibvaMesonBuild)) {
   exit 1
 }
 
-$content = Get-Content $LibvaMesonBuild -Raw
+# Normalize CRLF -> LF so string matching is independent of the line endings
+# of both this script (git may check it out CRLF via autocrlf) and the libva
+# tarball (extracted LF). All patterns below are normalized the same way.
+function Convert-Lf([string]$s) { return $s.Replace("`r`n", "`n") }
+
+$content = Convert-Lf (Get-Content $LibvaMesonBuild -Raw)
 
 # Replace the libva_win32_dep declare_dependency block to:
 # 1. Add fs.copyfile() loop that copies win32/va_win32.h into the flat
@@ -71,6 +76,8 @@ $new = @'
     dependencies : deps)
 '@
 
+$old = Convert-Lf $old
+$new = Convert-Lf $new
 if ($content -notmatch [regex]::Escape($old.Trim())) {
   Write-Error "Could not find expected libva_win32_dep block in $LibvaMesonBuild - patch may already be applied or file changed upstream."
   exit 1
@@ -91,6 +98,8 @@ $vaNew = @'
 libva = shared_library(
   'rocm_sysdeps_va',
 '@
+$vaOld = Convert-Lf $vaOld
+$vaNew = Convert-Lf $vaNew
 if ($content -notmatch [regex]::Escape($vaOld)) {
   Write-Error "Could not find libva shared_library('va') declaration in $LibvaMesonBuild - patch may already be applied or file changed upstream."
   exit 1
@@ -105,6 +114,8 @@ $vaWin32New = @'
   libva_win32 = shared_library(
     'rocm_sysdeps_va_win32',
 '@
+$vaWin32Old = Convert-Lf $vaWin32Old
+$vaWin32New = Convert-Lf $vaWin32New
 if ($content -notmatch [regex]::Escape($vaWin32Old)) {
   Write-Error "Could not find libva_win32 shared_library('va_win32') declaration in $LibvaMesonBuild - patch may already be applied or file changed upstream."
   exit 1
