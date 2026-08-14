@@ -35,10 +35,12 @@ Run::
   python3.12 build_tools/packaging/linux/tests/get_url_repo_params_test.py -v
 """
 
+import json
 import os
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -420,6 +422,167 @@ class MainSubcommandsTest(unittest.TestCase):
         self.assertIn(
             "container_image=ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest", output
         )
+
+
+class GetPublicRepoBaseUrlTest(unittest.TestCase):
+    """Tests for get_public_repo_base_url() and its subcommand."""
+
+    def test_prerelease(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("prerelease"),
+            "https://rocm.prereleases.amd.com/packages-multi-arch",
+        )
+
+    def test_release(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("release"),
+            "https://repo.amd.com/rocm/packages-multi-arch",
+        )
+
+    def test_nightly(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("nightly"),
+            "https://rocm.nightlies.amd.com/packages-multi-arch",
+        )
+
+    def test_ci_and_dev_are_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("ci"), "")
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("dev"), "")
+
+    def test_unknown_line_is_empty(self):
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("bogus"), "")
+
+    def test_case_insensitive(self):
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_base_url("PreRelease"),
+            "https://rocm.prereleases.amd.com/packages-multi-arch",
+        )
+
+    def test_subcommand_emits_url(self):
+        code, output = _run_main_with_output(
+            ["get-public-repo-base-url", "--release-type", "prerelease"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "repo_base_url=https://rocm.prereleases.amd.com/packages-multi-arch",
+            output,
+        )
+
+    def test_subcommand_emits_empty_for_ci(self):
+        code, output = _run_main_with_output(
+            ["get-public-repo-base-url", "--release-type", "ci"]
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("repo_base_url=", output)
+        self.assertNotIn("packages-multi-arch", output)
+
+
+class NightlySubFolderTest(unittest.TestCase):
+    """Tests for nightly_sub_folder() and its subcommand."""
+
+    def test_formats_with_injected_date(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("12345", today=date(2026, 7, 16)),
+            "20260716-12345",
+        )
+
+    def test_zero_padded_month_and_day(self):
+        self.assertEqual(
+            get_url_repo_params.nightly_sub_folder("7", today=date(2026, 1, 3)),
+            "20260103-7",
+        )
+
+    def test_rejects_non_numeric_run_id(self):
+        # The value is written to $GITHUB_OUTPUT, and gha_set_output uses a
+        # heredoc whose delimiter it does not verify, so an embedded newline
+        # could terminate it early and inject further step outputs.
+        for bad in ["1\nEOF_mag1c\ninjected=yes", "a/b", "12345\n", "", "abc"]:
+            with self.subTest(run_id=bad):
+                with self.assertRaises(ValueError):
+                    get_url_repo_params.nightly_sub_folder(bad)
+
+    def test_subcommand_writes_exactly_one_output_for_hostile_input(self):
+        code, output = _run_main_with_output(
+            [
+                "get-nightly-sub-folder",
+                "--release-type",
+                "nightly",
+                "--run-id",
+                "1\nEOF_mag1c\ninjected=yes",
+            ]
+        )
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("injected=yes", output)
+
+    def test_subcommand_emits_sub_folder(self):
+        code, output = _run_main_with_output(
+            ["get-nightly-sub-folder", "--run-id", "12345"]
+        )
+        self.assertEqual(code, 0)
+        # The date is the current UTC date; assert the structure, not the value.
+        self.assertRegex(output, r"repo_sub_folder=\d{8}-12345")
+
+    def test_subcommand_emits_sub_folder_for_nightly(self):
+        code, output = _run_main_with_output(
+            ["get-nightly-sub-folder", "--release-type", "nightly", "--run-id", "12345"]
+        )
+        self.assertEqual(code, 0)
+        self.assertRegex(output, r"repo_sub_folder=\d{8}-12345")
+
+    def test_subcommand_emits_empty_for_other_lines(self):
+        # Only the nightly line publishes into a dated sub-folder; the other
+        # lines publish at the repository root.
+        for release_type in ("release", "prerelease", "ci"):
+            with self.subTest(release_type=release_type):
+                code, output = _run_main_with_output(
+                    [
+                        "get-nightly-sub-folder",
+                        "--release-type",
+                        release_type,
+                        "--run-id",
+                        "12345",
+                    ]
+                )
+                self.assertEqual(code, 0)
+                self.assertIn("repo_sub_folder=", output)
+                self.assertNotRegex(output, r"repo_sub_folder=\S")
+
+
+class GetContainerImageMapTest(unittest.TestCase):
+    """Tests for get_container_image_map() and its subcommand."""
+
+    def test_maps_rpm_profiles(self):
+        self.assertEqual(
+            get_url_repo_params.get_container_image_map(["rhel8", "sles16"]),
+            {
+                "rhel8": "registry.access.redhat.com/ubi8/ubi:8.10",
+                "sles16": "registry.suse.com/bci/bci-base:16.0",
+            },
+        )
+
+    def test_subcommand_emits_json_map(self):
+        code, output = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", '["ubuntu2404"]']
+        )
+        self.assertEqual(code, 0)
+        # Recover the JSON value written after ``images=``.
+        line = next(l for l in output.splitlines() if l.startswith("images="))
+        images = json.loads(line[len("images=") :])
+        self.assertEqual(
+            images, {"ubuntu2404": "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"}
+        )
+
+    def test_subcommand_rejects_invalid_json(self):
+        code, _ = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", "not-json"]
+        )
+        self.assertEqual(code, 1)
+
+    def test_subcommand_rejects_non_list_json(self):
+        code, _ = _run_main_with_output(
+            ["get-container-image-map", "--os-profiles", '{"a": 1}']
+        )
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":
