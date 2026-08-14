@@ -60,6 +60,7 @@ jobs:
       build_python_packages: false
       build_pytorch: false
       build_jax: false
+    secrets: inherit
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}

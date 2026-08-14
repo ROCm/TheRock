@@ -68,7 +68,6 @@
       "g++",
       "g++-multilib"
     ],
-
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm LLVM compiler",
     "Description_Long": "ROCm LLVM compiler with rocm-llvm and hipcc",
@@ -261,31 +260,7 @@
             ]
           }
         ]
-      }
-    ],
-    "Gfxarch": "False"
-  },
-  {
-    "Package": "amdrocm-wsl",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-runtime"
-    ],
-    "RPMRequires": [
-      "amdrocm-runtime"
-    ],
-    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD ROCm WSL support library",
-    "Description_Long": "AMD ROCm DXG support library for Windows Subsystem for Linux (WSL)",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Artifactory": [
+      },
       {
         "Artifact": "wsl-rocdxg",
         "Artifact_Subdir": [
@@ -294,41 +269,6 @@
             "Components": [
               "lib",
               "doc"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "False"
-  },
-  {
-    "Package": "amdrocm-wsl-devel",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-wsl"
-    ],
-    "RPMRequires": [
-      "amdrocm-wsl"
-    ],
-    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD ROCm WSL support library development files",
-    "Description_Long": "Development files for AMD ROCm DXG support library for Windows Subsystem for Linux (WSL)",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Artifactory": [
-      {
-        "Artifact": "wsl-rocdxg",
-        "Artifact_Subdir": [
-          {
-            "Name": "wsl-rocdxg",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -400,6 +340,17 @@
         "Artifact_Subdir": [
           {
             "Name": "amd-comgr",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "wsl-rocdxg",
+        "Artifact_Subdir": [
+          {
+            "Name": "wsl-rocdxg",
             "Components": [
               "dev"
             ]
@@ -622,7 +573,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -887,7 +837,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-blas-devel",
     "Version": "",
@@ -942,7 +891,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-sparse",
     "Version": "",
@@ -993,7 +941,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-sparse-devel",
     "Version": "",
@@ -1036,7 +983,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-solver",
     "Version": "",
@@ -1088,7 +1034,6 @@
     "Gfxarch": "True",
     "Disable_DWZ": "True"
   },
-
   {
     "Package": "amdrocm-solver-devel",
     "Version": "",
@@ -1131,7 +1076,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-rocalution",
     "Version": "",
@@ -1396,7 +1340,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-rand-test",
     "Version": "",
@@ -1622,7 +1565,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -1705,10 +1647,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-profiler-test",
     "Version": "",
@@ -1782,7 +1722,6 @@
         ]
       }
     ],
-
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1843,7 +1782,6 @@
         ]
       }
     ],
-
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1877,7 +1815,6 @@
       }
     ],
     "Gfxarch": "False"
-
   },
   {
     "Package": "amdrocm-base",
@@ -1917,7 +1854,6 @@
               "doc"
             ]
           },
-
           {
             "Name": "rocm-core",
             "Components": [
@@ -1972,10 +1908,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-opencl-test",
     "Version": "",
@@ -2169,7 +2103,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-mpfr",
         "Artifact_Subdir": [
@@ -2184,7 +2117,6 @@
           }
         ]
       },
-
       {
         "Artifact": "sysdeps-gmp",
         "Artifact_Subdir": [
@@ -2254,23 +2186,18 @@
           }
         ]
       }
-
     ],
-
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_DEB_STRIP": "True"
   },
-
   {
     "Package": "amdrocm-hipblas-common-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [
-    ],
-    "RPMRequires": [
-    ],
+    "DEBDepends": [],
+    "RPMRequires": [],
     "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
     "Description_Short": "Common files for hipBLAS libraries",
     "Description_Long": "hipBLAS-common is a header-only library that provides common files for hipBLAS and hipBLASLt",
@@ -2293,7 +2220,6 @@
         ]
       }
     ],
-
     "Gfxarch": "True"
   },
   {
@@ -2301,10 +2227,8 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [
-    ],
-    "RPMRequires": [
-    ],
+    "DEBDepends": [],
+    "RPMRequires": [],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "Common files for math library",
     "Description_Long": "Contains host suite sparse libraries",
@@ -2344,10 +2268,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-ck",
     "Version": "",
@@ -2410,7 +2332,6 @@
     "Gfxarch": "True",
     "DisablePackaging": "True"
   },
-
   {
     "Package": "amdrocm-rccl-test",
     "Version": "",
@@ -2455,10 +2376,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rccl",
     "Version": "",
@@ -2499,10 +2418,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rccl-devel",
     "Version": "",
@@ -2539,7 +2456,6 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
   {
@@ -2576,7 +2492,6 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
   {
@@ -2615,10 +2530,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-rocshmem-devel",
     "Version": "",
@@ -2652,10 +2565,8 @@
         ]
       }
     ],
-
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-dnn",
     "Version": "",
@@ -2721,11 +2632,9 @@
         ]
       }
     ],
-
     "Gfxarch": "True",
     "Disable_DWZ": "True"
   },
-
   {
     "Package": "amdrocm-dnn-test",
     "Version": "",
@@ -2735,12 +2644,14 @@
       "amdrocm-dnn-devel",
       "amdrocm-runtime",
       "amdrocm-blas",
+      "amdrocm-rand",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
       "amdrocm-dnn-devel",
       "amdrocm-runtime",
       "amdrocm-blas",
+      "amdrocm-rand",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
@@ -2815,7 +2726,6 @@
     ],
     "Gfxarch": "True"
   },
-
   {
     "Package": "amdrocm-dnn-devel",
     "Version": "",
@@ -3024,7 +2934,6 @@
           }
         ]
       },
-
       {
         "Artifact": "amd-dbgapi",
         "Artifact_Subdir": [
@@ -3038,7 +2947,6 @@
           }
         ]
       }
-
     ],
     "Gfxarch": "False"
   },
@@ -3462,7 +3370,6 @@
     "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile-devel",
     "Version": "",
@@ -3498,7 +3405,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile-test",
     "Version": "",
@@ -3537,7 +3443,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-threads",
     "Version": "",
@@ -3575,7 +3480,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-threads-test",
     "Version": "",
@@ -3611,7 +3515,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
@@ -4026,5 +3929,4 @@
     "Metapackage": "True",
     "Gfxarch": "True"
   }
-
 ]
