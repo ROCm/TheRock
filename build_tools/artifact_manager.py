@@ -1004,7 +1004,7 @@ def do_copy(args: argparse.Namespace):
         return
 
     # Exclude artifacts if specified
-    excluded_artifacts = _parse_exclude_artifacts(
+    excluded_artifacts = parse_excluded_artifacts(
         args.exclude_artifacts,
         set(topology.artifacts.keys()),
     )
