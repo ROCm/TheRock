@@ -214,8 +214,10 @@ def generate_cmake_args(
     if build_type:
         args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
         # Keep amd-llvm (compiler) as Release for faster builds
+        # Keep MIOpen as Release to avoid fatbin extraction issues with debug info
         if build_type != "Release":
             args.append("-Damd-llvm_BUILD_TYPE=Release")
+            args.append("-DMIOpen_BUILD_TYPE=Release")
     if split_debug_info:
         args.append("-DTHEROCK_SPLIT_DEBUG_INFO=ON")
 
