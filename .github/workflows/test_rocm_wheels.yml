@@ -117,7 +117,7 @@ jobs:
     name: Test ROCm wheels | ${{ inputs.amdgpu_family }} | py${{ inputs.python_version }} | ${{ inputs.container_image_name }}
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
-    timeout-minutes: 120
+
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_url != '' && inputs.container_image_url || null }}
       options: --ipc host
