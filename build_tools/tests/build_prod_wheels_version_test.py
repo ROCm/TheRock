@@ -79,6 +79,27 @@ class ComputeBuildVersionTest(unittest.TestCase):
             "2.13.0+rocm10.1.0a20260811.bkc.20260813",
         )
 
+    def test_nightly_bkc_sorts_between_base_and_next_nightly(self):
+        # A BKC build upgrades its base nightly, while the next regular nightly
+        # upgrades the BKC build when both are available to pip.
+        (self.source_dir / "version.txt").write_text("2.13.0\n")
+        base_nightly = Version(
+            compute_build_version(self.source_dir, "+rocm10.1.0a20260811", "nightly")
+        )
+        nightly_bkc = Version(
+            compute_build_version(
+                self.source_dir,
+                "+rocm10.1.0a20260811-bkc.20260813",
+                "nightly-bkc",
+            )
+        )
+        next_nightly = Version(
+            compute_build_version(self.source_dir, "+rocm10.1.0a20260812", "nightly")
+        )
+
+        self.assertGreater(nightly_bkc, base_nightly)
+        self.assertGreater(next_nightly, nightly_bkc)
+
     def test_dev_release_tags_git_commit_in_local_segment(self):
         with mock.patch(
             "build_prod_wheels.get_source_commit_short", return_value="1a2b3c4d"
