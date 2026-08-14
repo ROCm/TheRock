@@ -76,6 +76,7 @@ from github_actions_api import (
     gha_set_output,
 )
 from stage_reuse_decision import (
+    ARTIFACTS_NOT_COPYABLE,
     AutoStageReuse,
     StageReuseMode,
     compute_auto_stage_reuse,
@@ -436,6 +437,8 @@ class BuildRocmDecision(JobGroupDecision):
     # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
     # TheRock's baseline runs instead of their own.
     baseline_repository: str = ""
+    # Artifacts to exclude from copying (have non-relocatable paths).
+    exclude_copy_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -532,6 +535,8 @@ class BuildConfig:
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
+    # Artifacts to exclude from copying (have non-relocatable paths)
+    exclude_copy_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -539,6 +544,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["exclude_copy_artifacts"] = ",".join(self.exclude_copy_artifacts)
         return d
 
 
@@ -987,6 +993,7 @@ def decide_jobs(
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
+        exclude_copy_artifacts=list(ARTIFACTS_NOT_COPYABLE),
     )
 
     # Test ROCm.
@@ -1254,6 +1261,7 @@ def _expand_build_config_for_platform(
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
+        exclude_copy_artifacts=jobs.build_rocm.exclude_copy_artifacts,
     )
 
 

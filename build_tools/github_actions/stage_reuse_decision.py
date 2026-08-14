@@ -107,9 +107,6 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "nlohmann-json",
         "spdlog",
         "openmpi",
-        # Third-party libs - have hardcoded build paths in CMake configs, must rebuild
-        # in external repos to get correct paths (see fftw3.h not found issue)
-        "fftw3",
         # Communication libs - not uploaded as standalone
         "rccl",
         "rocshmem",
@@ -120,6 +117,18 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "rocrtst",
         # WSL-specific - Windows only, not in Linux S3
         "wsl-rocdxg",
+    ]
+)
+
+# Artifacts that should NOT be copied from baseline runs, even if they exist in S3.
+# These have hardcoded build paths in CMake configs that break when used in a
+# different repository checkout. They must be rebuilt locally.
+# TODO: Make these artifacts relocatable so they can be reused.
+ARTIFACTS_NOT_COPYABLE = frozenset(
+    [
+        # fftw3 CMake configs have absolute paths like /__w/TheRock/TheRock/build/...
+        # which don't exist in external repos (e.g., rocm-libraries)
+        "fftw3",
     ]
 )
 

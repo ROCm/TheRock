@@ -1003,6 +1003,15 @@ def do_copy(args: argparse.Namespace):
         log("Specified stages produce no artifacts")
         return
 
+    # Exclude artifacts if specified
+    excluded_artifacts = _parse_exclude_artifacts(
+        args.exclude_artifacts,
+        set(topology.artifacts.keys()),
+    )
+    if excluded_artifacts:
+        log(f"Excluding artifacts: {', '.join(sorted(excluded_artifacts))}")
+        produced -= excluded_artifacts
+
     target_families = parse_target_families(args)
 
     # Create source and dest backends
@@ -1361,6 +1370,12 @@ def main(argv: Optional[List[str]] = None):
         "--dry-run",
         action="store_true",
         help="List what would be copied without actually copying",
+    )
+    copy_parser.add_argument(
+        "--exclude-artifacts",
+        type=str,
+        default="",
+        help="Comma- or semicolon-separated artifact names to exclude from copying",
     )
     copy_parser.set_defaults(func=do_copy)
 

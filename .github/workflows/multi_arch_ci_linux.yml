@@ -87,7 +87,8 @@ jobs:
             --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
-            --expand-family-to-targets
+            --expand-family-to-targets \
+            --exclude-artifacts="${{ fromJSON(inputs.build_config).exclude_copy_artifacts }}"
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
