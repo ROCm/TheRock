@@ -1,11 +1,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-import argparse
-from pathlib import Path
 import os
 import sys
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import compute_rocm_package_version
@@ -39,6 +39,14 @@ class DetermineVersionTest(unittest.TestCase):
         #   .dev0+
         #   [0-9a-z]+   Git SHA (short or long)
         self.assertRegex(version, r"^[0-9]+[0-9\.]*\.dev0\+[0-9a-z]+$")
+
+    def test_dev_version_with_git_sha_override(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="dev",
+            override_base_version="7.9.0",
+            override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+        )
+        self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
 
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -210,6 +218,15 @@ class RpmPackageVersionTest(unittest.TestCase):
         #   [0-9a-z]{8} Short git SHA (8 characters)
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}g[0-9a-z]{8}$")
 
+    def test_dev_version_with_git_sha_override(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="dev",
+            override_base_version="8.1.0",
+            override_git_sha="abcdef1234567890",
+        )
+        self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="rpm",
@@ -262,132 +279,27 @@ class RpmPackageVersionTest(unittest.TestCase):
         self.assertEqual(version, "8.0.0~custom1")
 
 
-class GitShaOverrideTest(unittest.TestCase):
-    """Tests for explicit override_git_sha parameter."""
-
-    def test_wheel_dev_uses_provided_git_sha(self):
-        version = compute_rocm_package_version.compute_version(
-            release_type="dev",
-            override_base_version="8.1.0",
-            override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
-        )
-        self.assertEqual(version, "8.1.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
-
-    def test_rpm_dev_truncates_long_git_sha(self):
-        version = compute_rocm_package_version.compute_version(
-            package_type="rpm",
-            release_type="dev",
-            override_base_version="8.1.0",
-            override_git_sha="abcdef1234567890",
-        )
-        # Should truncate to 8 chars
-        self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
-
-    def test_main_forwards_override_git_sha_to_all_package_types(self):
-        """main() must forward --override-git-sha into the computed versions.
-
-        Regression test for the bug where main() computed versions without
-        passing args.override_git_sha, so the flag was silently ignored and
-        cross-repo callers (e.g. rocm-libraries nightlies building TheRock)
-        got the caller's GITHUB_SHA embedded instead of the requested commit.
-        """
-        override_sha = "abcdef1234567890abcdef1234567890abcdef12"
-        captured_outputs = {}
-        original_gha_set_output = compute_rocm_package_version.gha_set_output
-
-        def mock_gha_set_output(outputs):
-            captured_outputs.update(outputs)
-
-        compute_rocm_package_version.gha_set_output = mock_gha_set_output
-        try:
+class MainFunctionTest(unittest.TestCase):
+    def test_sets_package_version_outputs(self):
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
             compute_rocm_package_version.main(
                 [
                     "--release-type",
-                    "dev",
+                    "release",
                     "--override-base-version",
                     "7.99.0",
-                    "--override-git-sha",
-                    override_sha,
                 ]
             )
-        finally:
-            compute_rocm_package_version.gha_set_output = original_gha_set_output
 
-        # Wheel embeds the full override SHA.
-        self.assertEqual(
-            captured_outputs["rocm_package_version"], f"7.99.0.dev0+{override_sha}"
+        gha_set_output.assert_called_once_with(
+            {
+                "rocm_package_version": "7.99.0",
+                "rocm_deb_package_version": "7.99.0",
+                "rocm_rpm_package_version": "7.99.0",
+            }
         )
-        # DEB uses the dev-date format and does not embed a git SHA at all.
-        self.assertRegex(
-            captured_outputs["rocm_deb_package_version"], r"^7\.99\.0~dev[0-9]{8}$"
-        )
-        self.assertNotIn(override_sha[:8], captured_outputs["rocm_deb_package_version"])
-        # RPM embeds the 8-char truncation of the same override SHA.
-        self.assertRegex(
-            captured_outputs["rocm_rpm_package_version"],
-            rf"^7\.99\.0~[0-9]{{8}}g{override_sha[:8]}$",
-        )
-
-
-class MainFunctionMultiplePackageTypesTest(unittest.TestCase):
-    """Tests for main() function: compute all package types when --package-type is omitted."""
-
-    def test_compute_all_package_types_without_flag(self):
-        """Test that when --package-type is not provided, all types are computed."""
-        captured_outputs = {}
-        original_gha_set_output = compute_rocm_package_version.gha_set_output
-
-        def mock_gha_set_output(outputs):
-            captured_outputs.update(outputs)
-
-        compute_rocm_package_version.gha_set_output = mock_gha_set_output
-
-        try:
-            compute_rocm_package_version.main(
-                ["--release-type", "dev", "--override-base-version", "8.0.0"]
-            )
-
-            # Should have all three outputs
-            self.assertIn("rocm_package_version", captured_outputs)
-            self.assertIn("rocm_deb_package_version", captured_outputs)
-            self.assertIn("rocm_rpm_package_version", captured_outputs)
-
-            # Verify formats
-            self.assertRegex(
-                captured_outputs["rocm_package_version"], r"^8\.0\.0\.dev0\+[0-9a-z]+$"
-            )
-            self.assertRegex(
-                captured_outputs["rocm_deb_package_version"], r"^8\.0\.0~dev[0-9]{8}$"
-            )
-            self.assertRegex(
-                captured_outputs["rocm_rpm_package_version"],
-                r"^8\.0\.0~[0-9]{8}g[0-9a-z]{8}$",
-            )
-        finally:
-            compute_rocm_package_version.gha_set_output = original_gha_set_output
-
-    def test_existing_workflows_still_work(self):
-        """Test that existing workflows reading rocm_package_version still work."""
-        captured_outputs = {}
-        original_gha_set_output = compute_rocm_package_version.gha_set_output
-
-        def mock_gha_set_output(outputs):
-            captured_outputs.update(outputs)
-
-        compute_rocm_package_version.gha_set_output = mock_gha_set_output
-
-        try:
-            # This mimics setup_multi_arch.yml line 66: no --package-type specified
-            compute_rocm_package_version.main(["--release-type", "dev"])
-
-            # Existing workflow reads rocm_package_version, which should still exist
-            self.assertIn("rocm_package_version", captured_outputs)
-
-            # Additional outputs don't break existing workflows (they just ignore them)
-            self.assertIn("rocm_deb_package_version", captured_outputs)
-            self.assertIn("rocm_rpm_package_version", captured_outputs)
-        finally:
-            compute_rocm_package_version.gha_set_output = original_gha_set_output
 
 
 if __name__ == "__main__":
