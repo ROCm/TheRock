@@ -197,6 +197,7 @@ def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
     target_families: Sequence[str],
+    platform: str | None = None,
 ) -> list[RequiredArtifact]:
     """Artifact/family pairs the given stages produce.
 
@@ -211,6 +212,9 @@ def _required_artifacts_for_stages(
 
     Artifacts in ARTIFACTS_NOT_UPLOADED_TO_S3 are skipped since they are not
     packaged as standalone archives.
+
+    When platform is provided, artifacts with disable_platforms containing that
+    platform are skipped.
     """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     required: list[RequiredArtifact] = []
@@ -232,6 +236,11 @@ def _required_artifacts_for_stages(
                 artifact = topology.artifacts.get(artifact_name)
                 if artifact is None:
                     continue
+
+                # Skip artifacts disabled for this platform
+                if platform and hasattr(artifact, "disable_platforms"):
+                    if platform in artifact.disable_platforms:
+                        continue
 
                 # Determine which families this artifact produces
                 if is_generic_stage:
@@ -265,6 +274,7 @@ def _stage_artifacts_available(
     stage_name: str,
     target_families: Sequence[str],
     available_filenames: set[str],
+    platform: str | None = None,
 ) -> bool:
     """True when every artifact this stage produces has an archive present.
 
@@ -279,6 +289,9 @@ def _stage_artifacts_available(
 
     Artifacts in ARTIFACTS_NOT_UPLOADED_TO_S3 are skipped since they are not
     packaged as standalone archives.
+
+    When platform is provided, artifacts with disable_platforms containing that
+    platform are skipped.
     """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
@@ -297,6 +310,11 @@ def _stage_artifacts_available(
             artifact = topology.artifacts.get(artifact_name)
             if artifact is None:
                 continue
+
+            # Skip artifacts disabled for this platform
+            if platform and hasattr(artifact, "disable_platforms"):
+                if platform in artifact.disable_platforms:
+                    continue
 
             # Determine which families this artifact produces
             if is_generic_stage:
@@ -452,7 +470,6 @@ def compute_auto_stage_reuse(
             )
         )
 
-    required = _required_artifacts_for_stages(topology, candidates, families)
     # Verify artifact availability independently for each platform. A single
     # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
     # a per-platform selector is built so each platform is checked against a
@@ -463,6 +480,11 @@ def compute_auto_stage_reuse(
     baseline_error: str | None = None
 
     for platform in platforms:
+        # Generate platform-specific requirements (skips disabled artifacts)
+        required = _required_artifacts_for_stages(
+            topology, candidates, families, platform=platform
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -492,7 +514,7 @@ def compute_auto_stage_reuse(
         if baseline is not None:
             for stage_name in candidates:
                 if _stage_artifacts_available(
-                    topology, stage_name, families, available_filenames
+                    topology, stage_name, families, available_filenames, platform
                 ):
                     available_here.append(stage_name)
         per_platform_available[platform] = tuple(available_here)
