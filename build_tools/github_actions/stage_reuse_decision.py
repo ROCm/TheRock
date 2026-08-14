@@ -234,6 +234,13 @@ def _required_artifacts_for_stages(
                     if platform in artifact.disable_platforms:
                         continue
 
+                # Skip artifacts conditionally disabled for this platform
+                # (e.g., disable_platforms_if_flags_not_set = { windows = "FLAG" })
+                # In CI we don't set these special flags, so treat as disabled.
+                if platform and hasattr(artifact, "disable_platforms_if_flags_not_set"):
+                    if platform in artifact.disable_platforms_if_flags_not_set:
+                        continue
+
                 # Determine which families this artifact produces
                 if is_generic_stage:
                     # Generic stages always produce generic-family artifacts
@@ -306,6 +313,13 @@ def _stage_artifacts_available(
             # Skip artifacts disabled for this platform
             if platform and hasattr(artifact, "disable_platforms"):
                 if platform in artifact.disable_platforms:
+                    continue
+
+            # Skip artifacts conditionally disabled for this platform
+            # (e.g., disable_platforms_if_flags_not_set = { windows = "FLAG" })
+            # In CI we don't set these special flags, so treat as disabled.
+            if platform and hasattr(artifact, "disable_platforms_if_flags_not_set"):
+                if platform in artifact.disable_platforms_if_flags_not_set:
                     continue
 
             # Determine which families this artifact produces
