@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       release_type:
-        description: "Release Type (ci, dev, nightly, prerelease)."
+        description: "Release type for the packages being tested."
         required: true
         type: string
       gpg_key_url:
@@ -58,12 +58,13 @@ on:
         required: true
         type: string
       release_type:
-        description: 'Release type: "ci" or "dev"'
+        description: "Release type for the packages being tested."
         required: true
         type: choice
         options:
           - ci
           - dev
+          - dev-bkc
       gpg_key_url:
         description: "GPG key URL for signed repos"
         type: string

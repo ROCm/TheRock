@@ -11,7 +11,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       prerelease_version:
@@ -46,10 +46,11 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
+          - dev-bkc
         default: dev
       # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
       # Note: empty string will be converted to the default by github, so we need an explicit "none".
