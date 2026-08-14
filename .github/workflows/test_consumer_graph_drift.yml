@@ -24,7 +24,6 @@ jobs:
   consumer_graph_drift:
     name: "Consumer graph drift check"
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
     steps:
       - name: Checking out repository
         timeout-minutes: 10
