@@ -1,0 +1,19 @@
+// Copyright (c) Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#include <@header@>
+#include <iostream>
+
+int main() {
+  // Call a real, side-effect-free entry point rather than only including the
+  // header, so the test proves link-time symbol resolution against
+  // lib@pkg_name@.so and runtime loader resolution of its own dependencies --
+  // not merely that the header is installed and parses.
+  profiler_hub::storage_t storage{":memory:", "profiler_hub_install_test"};
+  profiler_hub::version_t version = storage.get_storage_version();
+
+  std::cout << "@pkg_name@: package found and linked successfully, storage version "
+            << version.major << "." << version.minor << "." << version.patch
+            << std::endl;
+  return 0;
+}
