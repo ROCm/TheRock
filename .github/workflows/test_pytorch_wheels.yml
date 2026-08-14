@@ -137,7 +137,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -189,6 +189,7 @@ jobs:
       # related repository pins that produced the package under test.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
@@ -198,6 +199,7 @@ jobs:
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
@@ -278,7 +280,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

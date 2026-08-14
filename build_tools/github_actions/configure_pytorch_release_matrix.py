@@ -64,8 +64,7 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         # gfx125x supported for PyTorch 2.13 via https://github.com/ROCm/pytorch/pull/3532.
         "release/2.13": {"gfx90c"},
         # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
-        # gfx90c excluded: blocked until CK submodule bump in pytorch nightly.
-        "nightly": {"gfx90c"},
+        "nightly": {},
     },
     "windows": {
         "release/2.11": {"gfx90c"},

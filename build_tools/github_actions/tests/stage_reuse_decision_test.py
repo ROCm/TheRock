@@ -105,22 +105,18 @@ def _selector(baseline):
 
 class ModeParsingTest(unittest.TestCase):
     def test_default_is_dry_run(self):
-        import os
-
-        os.environ.pop("STAGE_REUSE_MODE", None)
-        self.assertEqual(StageReuseMode.from_environ(), StageReuseMode.DRY_RUN)
+        with patch.dict(os.environ):
+            os.environ.pop("STAGE_REUSE_MODE", None)
+            self.assertEqual(StageReuseMode.from_environ(), StageReuseMode.DRY_RUN)
 
     def test_explicit_modes(self):
-        import os
-
         for value, expected in [
             ("dry-run", StageReuseMode.DRY_RUN),
             ("reuse-stage", StageReuseMode.REUSE_STAGE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
-            os.environ["STAGE_REUSE_MODE"] = value
-            self.assertEqual(StageReuseMode.from_environ(), expected)
-        os.environ.pop("STAGE_REUSE_MODE", None)
+            with patch.dict(os.environ, {"STAGE_REUSE_MODE": value}):
+                self.assertEqual(StageReuseMode.from_environ(), expected)
 
 
 class AvailabilityGateTest(unittest.TestCase):
@@ -272,39 +268,38 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
     an empty ordered_commit_shas window while current_commit_sha is set."""
 
     def _run_with_env(self, env, fake_history, fake_select):
-        import os
-
-        old_env = {k: os.environ.get(k) for k in env}
-        os.environ.update({k: v for k, v in env.items() if v is not None})
+        test_env = {
+            "GITHUB_REPOSITORY": "ROCm/TheRock",
+            "THEROCK_REPOSITORY": "ROCm/TheRock",
+        }
         for k, v in env.items():
             if v is None:
-                os.environ.pop(k, None)
+                test_env.pop(k, None)
+            else:
+                test_env[k] = v
 
-        import baseline_runs
-        import github_actions_api
-
-        orig_select = baseline_runs.select_baseline_run
-        orig_hist = getattr(github_actions_api, "gha_query_recent_branch_commits", None)
         captured = {}
 
         def _capturing_select(**kwargs):
             captured.update(kwargs)
             return fake_select
 
-        baseline_runs.select_baseline_run = _capturing_select
-        github_actions_api.gha_query_recent_branch_commits = fake_history
-        try:
+        with (
+            patch.dict(os.environ, test_env, clear=True),
+            patch.object(
+                srd.baseline_runs,
+                "select_baseline_run",
+                new=_capturing_select,
+            ),
+            patch.object(
+                srd.github_actions_api,
+                "gha_query_recent_branch_commits",
+                new=fake_history,
+            ),
+        ):
             selector = srd._default_baseline_selector(platform="linux")
             result = selector([("base", "generic")])
-        finally:
-            baseline_runs.select_baseline_run = orig_select
-            if orig_hist is not None:
-                github_actions_api.gha_query_recent_branch_commits = orig_hist
-            for k, v in old_env.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
+
         return captured, result
 
     def test_history_is_fetched_and_threaded(self):

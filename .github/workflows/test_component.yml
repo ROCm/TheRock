@@ -44,22 +44,6 @@ permissions:
   contents: read
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    name: "Quartz - started - test ROCm component"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - started - test ROCm component"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
-        with:
-          run_phase: started
-          reporting_workflow: test_component.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   test_component:
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
@@ -93,6 +77,8 @@ jobs:
       run:
         shell: bash
     env:
+      QUARTZ_REPORTING_WORKFLOW: test_component.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
@@ -107,6 +93,17 @@ jobs:
       BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -249,20 +246,15 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [test_component]
-    name: "Quartz - completed - test ROCm component"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - completed - test ROCm component"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
-          reporting_workflow: test_component.yml
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
           workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -201,7 +201,7 @@ jobs:
       - name: "Quartz - started - build PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
@@ -263,6 +263,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -280,6 +281,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
@@ -564,7 +566,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml

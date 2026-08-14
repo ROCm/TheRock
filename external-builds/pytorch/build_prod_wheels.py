@@ -170,11 +170,6 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amd_smi",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
-    "rocprofiler-sdk-roctx",  # Linux only for the moment.
-    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
-    "roctracer64",  # Linux only for the moment.
-    "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -182,13 +177,20 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparse",
     "hipsparselt",
     "hipsolver",
-    "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
     "rocm_smi64",
+    # Linux only.
+    "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
+    "rocprofiler-sdk-roctx",
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
+    "roctracer64",
+    "roctx64",
+    "rccl",
+    "hipfile",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py

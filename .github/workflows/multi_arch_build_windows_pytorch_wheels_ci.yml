@@ -200,6 +200,7 @@ jobs:
 
       - name: Checkout PyTorch source (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -209,6 +210,7 @@ jobs:
 
       - name: Checkout PyTorch source (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
