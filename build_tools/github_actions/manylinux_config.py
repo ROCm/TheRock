@@ -18,7 +18,7 @@ DIST_PYTHON_EXECUTABLES = (
     "/opt/python/cp311-cp311/bin/python;"
     "/opt/python/cp312-cp312/bin/python;"
     "/opt/python/cp313-cp313/bin/python;"
-    "/opt/python-shared/cp314-cp314/bin/python3"
+    "/opt/python/cp314-cp314/bin/python"
 )
 
 # Python executables with shared libpython, for embedded Python builds (rocgdb)
