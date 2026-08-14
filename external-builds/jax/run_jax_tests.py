@@ -104,11 +104,15 @@ REPORT_GLOB = "logs/pytest_results*.json"
 PYTEST_EXIT_ALL_PASSED = 0
 PYTEST_EXIT_TESTS_FAILED = 1
 
-# The section of the suite script that only computes the environment: exports,
-# echoes and device queries, with the installs above it and the test run below it.
-# Evaluating it is how the per-version environment reaches the retry pass, which
-# has to match the run it is checking. Sourcing the script itself would run the
-# tests, and copying its values here would be a second source of truth.
+# What the suite script sources for its environment: exports, echoes and device
+# queries, and nothing that installs or tests. Evaluating it is how the
+# per-version environment reaches the retry pass, which has to match the run it
+# is checking. Sourcing the suite script itself would run the tests, and copying
+# its values here would be a second source of truth.
+RELATIVE_SUITE_ENV_SCRIPT = Path("ci") / "utilities" / "rocm_test_env.sh"
+
+# Where that environment lived before it moved into the file above, as a section
+# of the suite script, with the installs above it and the test run below it.
 ENV_SECTION_START = "# Set up the generic test environment variables"
 ENV_SECTION_END = "# Run tests"
 
@@ -209,25 +213,45 @@ def _read_env_dump(path: Path) -> dict[str, str]:
     return {name: value for name, separator, value in pairs if separator}
 
 
-def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
-    """What the suite script's environment section exports.
+def suite_env_program(jax_dir: Path) -> str:
+    """The shell that computes the suite's environment, and only that.
 
-    Evaluated in a shell that dumps its environment on either side of the section,
-    so the result is what the section itself changed rather than a guess at which
-    names look interesting.
+    A checkout from before the environment moved out of the suite script keeps it
+    in a marked section there, which is what gets evaluated instead.
 
     Raises:
-        SuiteEnvironmentError: if the section cannot be found or evaluated. This
-            fails the run by design, because the retry pass decides the result and
-            a wrong environment there would decide it wrongly.
+        SuiteEnvironmentError: if the checkout holds neither.
     """
-    section = env_section((jax_dir / RELATIVE_SUITE_SCRIPT).read_text())
+    if (jax_dir / RELATIVE_SUITE_ENV_SCRIPT).exists():
+        return f"source {shlex.quote(os.fspath(RELATIVE_SUITE_ENV_SCRIPT))}"
+
+    older = jax_dir / RELATIVE_SUITE_SCRIPT
+    section = env_section(older.read_text()) if older.exists() else ""
     if not section:
         raise SuiteEnvironmentError(
-            f"{RELATIVE_SUITE_SCRIPT} has no section between '{ENV_SECTION_START}' and"
-            f" '{ENV_SECTION_END}'. The script most likely renamed them, so update"
-            " ENV_SECTION_START and ENV_SECTION_END to match it."
+            f"{jax_dir / RELATIVE_SUITE_ENV_SCRIPT} does not exist and"
+            f" {RELATIVE_SUITE_SCRIPT} has no section between"
+            f" '{ENV_SECTION_START}' and '{ENV_SECTION_END}', so there is nothing"
+            " to read the suite's environment from. Update"
+            " RELATIVE_SUITE_ENV_SCRIPT, or ENV_SECTION_START and"
+            " ENV_SECTION_END, to match what the checkout has."
         )
+    return section
+
+
+def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
+    """What the suite exports before it runs anything.
+
+    Evaluated in a shell that dumps its environment on either side, so the result
+    is what the suite itself changed rather than a guess at which names look
+    interesting.
+
+    Raises:
+        SuiteEnvironmentError: if it cannot be found or evaluated. This fails the
+            run by design, because the retry pass decides the result and a wrong
+            environment there would decide it wrongly.
+    """
+    section = suite_env_program(jax_dir)
     if not (jax_dir / RELATIVE_SUITE_ENV_FILE).exists():
         raise SuiteEnvironmentError(
             f"{RELATIVE_SUITE_ENV_FILE} is missing, and the section reads its defaults."
