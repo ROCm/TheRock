@@ -186,9 +186,18 @@ add_custom_target(
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
   COMMAND
-    "${MESON_BUILD}" compile --verbose
+    # Meson records the linker as the bare command `link` and re-resolves it via
+    # PATH during the ninja build. Without the MSVC bindir prepended here, Git's
+    # GNU link.exe shadows MSVC's linker and fails ("link: extra operand ...").
+    # The same PATH prepend is applied to the setup steps above.
+    "${CMAKE_COMMAND}" -E env
+      "${_meson_path_env}"
+      --
+      "${MESON_BUILD}" compile --verbose
   COMMAND
-    "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+    "${CMAKE_COMMAND}" -E env
+      "${_meson_path_env}"
+      "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
       "${MESON_BUILD}" install
   COMMAND
     # DirectX-Headers / d3dx12 are build-time only dependencies of mesa,
