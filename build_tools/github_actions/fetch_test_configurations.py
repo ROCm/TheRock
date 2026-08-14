@@ -467,11 +467,10 @@ test_matrix = {
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
     },
     "hipfft": {
@@ -703,6 +702,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
