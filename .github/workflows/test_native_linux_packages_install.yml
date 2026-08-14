@@ -107,8 +107,19 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
+      - name: "Quartz - started - test rpm/deb install"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: test_native_linux_packages_install.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -135,7 +146,6 @@ jobs:
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
-        --privileged
     env:
       REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
@@ -191,7 +201,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -215,3 +225,21 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [prepare_install_context, test_native_linux_packages_install]
+    name: "Quartz - completed - test rpm/deb install"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - test rpm/deb install"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: test_native_linux_packages_install.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -4,7 +4,7 @@
 # Reusable single-build workflow for the Linux JAX wheel flow.
 #
 # This workflow is called once per release matrix cell from
-# test_linux_jax_wheels_partial.yml
+# multi_arch_release_linux_jax_wheels.yml
 #
 # Built shape:
 #   - One build/ci_build invocation for one python_version and jax_ref
@@ -29,10 +29,6 @@ on:
         description: "Repository containing the JAX release branch."
         type: string
         required: true
-      build_mode:
-        description: "Build mode: native or manylinux."
-        type: string
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -50,10 +46,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       release_type:
         description: "Release type."
         type: string
@@ -92,13 +84,6 @@ on:
         description: "GitHub repository in owner/repo format (e.g. ROCm/jax or ROCm/rocm-jax)."
         type: string
         default: "ROCm/jax"
-      build_mode:
-        description: "Build mode."
-        type: choice
-        options:
-          - native
-          - manylinux
-        required: true
       gfx_arch:
         description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
@@ -116,10 +101,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      tar_url:
-        description: "URL to the TheRock tarball used for the build."
-        type: string
-        required: true
       release_type:
         description: "Release type."
         type: string
@@ -148,26 +129,42 @@ jobs:
       jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
       jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+      summary: ${{ steps.summary.outputs.summary }}
     env:
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
+      - name: "Quartz - started - build JAX wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_linux_jax_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout TheRock
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Checkout rocm-jax
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX
-        if: ${{ inputs.build_mode == 'manylinux' }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        id: checkout_jax
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax-source
           repository: ${{ inputs.jax_repository }}
@@ -180,7 +177,7 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -188,32 +185,9 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
-      - name: Set package dist dir
-        run: |
-          if [ "${{ inputs.build_mode }}" = "manylinux" ]; then
-            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/jax-source/dist" >> "$GITHUB_ENV"
-          else
-            echo "PACKAGE_DIST_DIR=${GITHUB_WORKSPACE}/rocm-jax/jax_rocm_plugin/wheelhouse" >> "$GITHUB_ENV"
-          fi
-
-      - name: Build JAX Wheels (native, v0.9.1)
-        if: ${{ inputs.build_mode == 'native' }}
-        working-directory: rocm-jax
-        env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
-          PYTHON_VERSION: ${{ inputs.python_version }}
-          TAR_URL: ${{ inputs.tar_url }}
-        run: |
-          python3 build/ci_build \
-            --compiler=clang \
-            --python-versions="${PYTHON_VERSION}" \
-            --rocm-version="${ROCM_VERSION}" \
-            --therock-path="${TAR_URL}" \
-            dist_wheels
       # TODO: THEROCK_INDEX_URL need to be renamed in the future to
       # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
       - name: Build manylinux image
-        if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
           THEROCK_VERSION: ""
@@ -238,7 +212,6 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}"
 
       - name: Build JAX Wheels in manylinux container
-        if: ${{ inputs.build_mode == 'manylinux' }}
         working-directory: jax-source
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
@@ -262,7 +235,7 @@ jobs:
                 --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
-                --bazel_options=--//jaxlib/tools:jaxlib_git_hash=$(git rev-parse HEAD) \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path=$(pwd)/dist
@@ -286,21 +259,27 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   generate_target_to_run:
     name: Generate target_to_run
     if: ${{ inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
       - name: Checkout CI config
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ROCm/therock-ci-config
           ref: main
@@ -315,14 +294,20 @@ jobs:
           CI_CONFIG_PATH: ci-config
         run: python ./build_tools/github_actions/configure_target_run.py
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_jax_wheels:
     if: ${{ inputs.test_amdgpu_family != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
-    name: Test JAX wheels | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
+    name: Test | ${{ inputs.test_amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     permissions:
       contents: read
       id-token: write
-    uses: ./.github/workflows/test_linux_jax_wheels_partial.yml
+    uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
+    secrets: inherit
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
@@ -338,3 +323,21 @@ jobs:
       jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
+    name: "Quartz - completed - build JAX Wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build JAX Wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_linux_jax_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

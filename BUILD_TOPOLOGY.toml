@@ -150,6 +150,7 @@ artifact_groups = [
     "core-runtime",
     "third-party-libs",
     "hip-runtime",
+    "kfdtest",
     "opencl-runtime",
     "profiler-core",
     "rocjitsu"
@@ -172,6 +173,10 @@ type = "per-arch"
 description = "Communication libraries (generic, single job parallel to math-libs)"
 artifact_groups = ["comm-libs"]
 type = "generic"
+
+[build_stages.cv-libs]
+description = "Computer Vision Libraries"
+artifact_groups = ["cv-libs"]
 
 [build_stages.storage-libs]
 description = "Storage libraries (generic, single job parallel to math-libs)"
@@ -271,6 +276,12 @@ type = "generic"
 artifact_group_deps = ["hip-runtime", "opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
+[artifact_groups.kfdtest]
+description = "KFD kernel driver tests"
+type = "generic"
+artifact_group_deps = ["core-runtime"]
+source_sets = ["rocm-systems"]
+
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
@@ -321,6 +332,13 @@ description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.cv-libs]
+description = "Computer Vision Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -569,6 +587,14 @@ feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.kfdtest]
+artifact_group = "kfdtest"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm", "sysdeps"]
+feature_name = "CORE_KFDTESTS"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hipinfo]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -640,6 +666,13 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 
+[artifacts.hipthreads]
+# target-neutral: libhipthreads.a is a static archive of device bitcode that is
+# identical across per-arch shards. Built for all targets once.
+artifact_group = "math-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
@@ -661,7 +694,7 @@ artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "rand"]
 
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
@@ -685,6 +718,16 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 split_databases = ["hipkernelprovider"]
+
+# --- Computer Vision Integration ---
+
+[artifacts.rpp]
+artifact_group = "cv-libs"
+type = "target-neutral"
+# half headers come from base; amd-llvm arrives transitively via core-hip.
+artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
+feature_group = "CV_LIBS"
+# No disable_platforms: Windows is opt-in via -DTHEROCK_ENABLE_RPP=ON.
 
 # --- Media Integration ---
 
@@ -816,6 +859,13 @@ disable_platforms = ["windows"]
 artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
+feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+[artifacts.rocjitsu-hotswap]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = ["rocjitsu"]
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 

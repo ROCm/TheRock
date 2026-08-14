@@ -77,12 +77,13 @@ See the following table for how each version is supported:
 
 | PyTorch version | Linux                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Windows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.13            | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.13` branch](https://github.com/ROCm/pytorch/tree/release/2.13)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.13/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.13/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.13/related_commits)</li><li>[ROCm/apex `release/1.13.0` branch](https://github.com/ROCm/apex/tree/release/1.13.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.13/related_commits)</li></ul> | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.13` branch](https://github.com/ROCm/pytorch/tree/release/2.13)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.13/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.13/related_commits)</li></ul>                           |
 | 2.13 alpha      | ✅ Using upstream pytorch<br><ul><li>[pytorch/pytorch `nightly` branch](https://github.com/pytorch/pytorch/tree/nightly)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/pytorch/pytorch/blob/nightly/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio `nightly` branch](https://github.com/pytorch/audio/tree/nightly)</li><li>[pytorch/vision `nightly` branch](https://github.com/pytorch/vision/tree/nightly)</li><li>[ROCm/apex `master` branch](https://github.com/ROCm/apex/tree/master)</li></ul>                                                                                                                                                                                                                                                              | ✅ Using upstream pytorch<br><ul><li>[pytorch/pytorch `nightly` branch](https://github.com/pytorch/pytorch/tree/nightly)<ul><li>[triton-lang/triton-windows](https://github.com/triton-lang/triton-windows) - [`ci_commit_pins/triton-windows.txt`](ci_commit_pins/triton-windows.txt)</li></ul></li><li>[pytorch/audio `nightly` branch](https://github.com/pytorch/audio/tree/nightly)</li><li>[pytorch/vision `nightly` branch](https://github.com/pytorch/vision/tree/nightly)</li></ul> |
 | 2.12            | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.12` branch](https://github.com/ROCm/pytorch/tree/release/2.12)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.12/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.12/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.12/related_commits)</li><li>[ROCm/apex `release/1.12.0` branch](https://github.com/ROCm/apex/tree/release/1.12.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.12/related_commits)</li></ul> | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.12` branch](https://github.com/ROCm/pytorch/tree/release/2.12)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.12/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.12/related_commits)</li></ul>                           |
 | 2.12 alpha      | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.11            | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.11` branch](https://github.com/ROCm/pytorch/tree/release/2.11)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.11/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.11/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.11/related_commits)</li><li>[ROCm/apex `release/1.11.0` branch](https://github.com/ROCm/apex/tree/release/1.11.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.11/related_commits)</li></ul> | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.11` branch](https://github.com/ROCm/pytorch/tree/release/2.11)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.11/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.11/related_commits)</li></ul>                           |
 | 2.11 alpha      | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 2.10            | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.10` branch](https://github.com/ROCm/pytorch/tree/release/2.10)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.10/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.10/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.10/related_commits)</li><li>[ROCm/apex `release/1.10.0` branch](https://github.com/ROCm/apex/tree/release/1.10.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.10/related_commits)</li></ul> | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.10` branch](https://github.com/ROCm/pytorch/tree/release/2.10)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.10/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.10/related_commits)</li></ul>                           |
+| 2.10            | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.10 alpha      | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.9             | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2.9 alpha       | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -106,8 +107,8 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.10+) on a system which we build the
-`rocm[libraries,devel]` packages for. See the
+You will need a supported Python version (3.10+) on a system for which we build
+the `rocm[libraries,devel,device-*]` packages. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
 for more background on these `rocm` packages.
@@ -123,7 +124,7 @@ for more background on these `rocm` packages.
 > https://github.com/pytorch/vision/issues/9165 for details.
 
 > [!WARNING]
-> On Windows, when building with "--enable-pytorch-flash-attention-windows",
+> On Windows, when building with "--enable-pytorch-flash-attention",
 > Make sure to use [ninja 1.13.1](https://github.com/ninja-build/ninja/releases/tag/v1.13.1) or above.
 >
 > NOTE: If you use ccache and face "invalid argument" errors during the aotriton build,
@@ -171,11 +172,20 @@ Now note the gfx target you want to build for and then...
 [advanced build instructions](#advanced-build-instructions) for ways to
 mix/match build steps.
 
+> [!WARNING]
+> Pass `--pytorch-rocm-arch` with the gfx target for your development system,
+> such as `--pytorch-rocm-arch gfx1100`. If this option is omitted, the build
+> uses every target reported by the multi-arch `rocm-sdk` packages (currently
+> more than 20 targets). Compiling PyTorch for all of them can take over two
+> hours, compared with roughly 30–60 minutes for a single target.
+
 - On Linux:
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --rocm-extras device-gfx1100 \
+    --pytorch-rocm-arch gfx1100 \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -183,7 +193,9 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ ^
+    --rocm-extras device-gfx1100 ^
+    --pytorch-rocm-arch gfx1100 ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision ^
@@ -195,7 +207,7 @@ mix/match build steps.
 ### Prerequisites
 
 On Linux we run automated tests under our
-[`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
+[`no_rocm_image_ubuntu24_04.Dockerfile`](/dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
 container (also
 [documented in `dockerfiles/README.md`](/dockerfiles/README.md#no_rocm_image_dockerfile)).
 Docker is optional for developers and users. If you want to use our test image,
@@ -310,7 +322,9 @@ per-target device wheels were promoted independently. See the discussion on
 
 ### Other ways to install the rocm packages
 
-The `rocm[libraries,devel]` packages can be installed in multiple ways:
+The `rocm[libraries,devel,device-*]` packages can be installed in multiple ways.
+The examples use `device-gfx942`; replace it with the target for your GPU, or
+use `device-all` when the environment must support every published target.
 
 - (As above) during the `build_prod_wheels.py build` subcommand
 
@@ -318,7 +332,8 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+      --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+      --rocm-extras device-gfx942 \
       install-rocm
   ```
 
@@ -327,31 +342,29 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
-    rocm[libraries,devel]
+    --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "rocm[libraries,devel,device-gfx942]"
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/ \
-    rocm[libraries,devel]
+    --index-url https://rocm.devreleases.amd.com/whl-multi-arch/ \
+    "rocm[libraries,devel,device-gfx942]"
   ```
 
-- Building the rocm Python packages from artifacts fetched from a CI run:
-
-  <!-- TODO: teach scripts to look up latest stable run and mkdir themselves -->
+- Building the rocm Python packages from artifacts fetched from a CI run. Fetch
+  the complete artifact set: package construction needs the generic host
+  artifacts and every per-ISA device artifact recorded in the build manifest.
 
   ```bash
   # From the repository root
-  mkdir $HOME/.therock/17123441166
-  mkdir $HOME/.therock/17123441166/artifacts
+  RUN_ID="<replace-with-run-id>"
   python ./build_tools/fetch_artifacts.py \
-    --run-id=17123441166 \
-    --target=gfx110X-all \
-    --output-dir=$HOME/.therock/17123441166/artifacts
+    --run-id=${RUN_ID} \
+    --output-dir=${HOME}/.therock/${RUN_ID}/artifacts
 
   python ./build_tools/build_python_packages.py \
-    --artifact-dir=$HOME/.therock/17123441166/artifacts \
-    --dest-dir=$HOME/.therock/17123441166/packages
+    --artifact-dir=${HOME}/.therock/${RUN_ID}/artifacts \
+    --dest-dir=${HOME}/.therock/${RUN_ID}/packages
   ```
 
 - Building the rocm Python packages from artifacts built from source:
@@ -365,14 +378,34 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
     --dest-dir=build/packages
   ```
 
-### Bundling PyTorch and ROCm together into a "fat wheel"
+### Splitting multi-architecture PyTorch wheels
+
+`build_prod_wheels.py` produces unsplit multi-target PyTorch wheels containing
+PyTorch device code for every target in `--pytorch-rocm-arch`. Before
+publishing, the TheRock CI/CD workflows use
+`rocm_kpack.tools.split_python_wheels` to replace the unsplit `torch` and
+`torchvision` wheels with architecture-neutral host wheels and per-ISA
+`amd-torch-device-*` and `amd-torchvision-device-*` wheels.
+
+This post-processing is not yet integrated into `build_prod_wheels.py`, and the
+kpack packages it requires are not yet published. See the current implementation
+in the following workflows:
+
+- [Portable Linux PyTorch wheels](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml)
+- [Windows PyTorch wheels](/.github/workflows/multi_arch_build_windows_pytorch_wheels.yml)
+
+Follow [issue 5656](https://github.com/ROCm/TheRock/issues/5656) for publishing
+the required packages, integrating wheel splitting into the build scripts, and
+documenting a supported standalone developer workflow.
+
+### Bundling ROCm libraries into a PyTorch "fat wheel"
 
 By default, Python wheels produced by the PyTorch build do not include ROCm
 binaries. Instead, they expect those binaries to come from the
-`rocm[libraries,devel]` packages. A "fat wheel" bundles the ROCm binaries into
-the same wheel archive to produce a standalone install including both PyTorch
-and ROCm, with all necessary patches to shared library / DLL loading for out of
-the box operation.
+`rocm[libraries,devel,device-*]` packages. A "fat wheel" bundles the ROCm
+binaries into the same wheel archive to produce a standalone install including
+both PyTorch and ROCm, with all necessary patches to shared library / DLL loading
+for out of the box operation.
 
 To produce such a fat wheel, see
 [`windows_patch_fat_wheel.py`](./windows_patch_fat_wheel.py) and a future
@@ -496,7 +529,7 @@ a manifest for the release branch and check out from that manifest:
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
   --rocm-version 7.13.0a20260501 \
   --output external-builds/pytorch/pytorch_manifest.json \
-  --pytorch-git-refs release/2.12
+  --pytorch-git-refs release/2.13
 
 python external-builds/pytorch/checkout_from_manifest.py \
   --manifest external-builds/pytorch/pytorch_manifest.json \
@@ -515,7 +548,7 @@ which can then be read by the checkout script.
 > ```bash
 > python pytorch_torch_repo.py checkout \
 >   --gitrepo-origin https://github.com/ROCm/pytorch.git \
->   --repo-hashtag release/2.12
+>   --repo-hashtag release/2.13
 > python pytorch_audio_repo.py checkout --require-related-commit
 > python pytorch_vision_repo.py checkout --require-related-commit
 > python pytorch_triton_repo.py checkout
@@ -529,13 +562,13 @@ which can then be read by the checkout script.
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --output external-builds/pytorch/pytorch_manifest.json \
-    --pytorch-git-refs "release/2.10"
+    --pytorch-git-refs "release/2.13"
 
 # Multiple versions (computed filenames in a directory):
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --manifest-dir external-builds/pytorch/manifests/ \
-    --pytorch-git-refs "release/2.10 release/2.11 nightly"
+    --pytorch-git-refs "release/2.11 release/2.12 release/2.13 nightly"
 
 # The target platform defaults to the current host. Pass it explicitly when
 # generating a manifest for another platform:
@@ -543,13 +576,13 @@ python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --platform windows \
     --output manifest.json \
-    --pytorch-git-refs "release/2.10"
+    --pytorch-git-refs "release/2.13"
 
 # Only pytorch (skip audio/vision/triton/apex):
 python build_tools/github_actions/generate_pytorch_source_manifest.py \
     --rocm-version 7.13.0a20260501 \
     --output external-builds/pytorch/manifest.json \
-    --pytorch-git-refs "release/2.10" \
+    --pytorch-git-refs "release/2.13" \
     --projects pytorch
 ```
 

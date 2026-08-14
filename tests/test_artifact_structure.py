@@ -71,6 +71,8 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("fftw3", "run"),
     ("hipkernelprovider", "lib"),
     ("hipkernelprovider", "test"),
+    ("hipthreads", "dev"),
+    ("hipthreads", "test"),
     ("mirage", "dev"),  # new artifact, no packages yet.
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
@@ -79,6 +81,11 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),
 }
+
+
+def is_windows_platform() -> bool:
+    """Check if the artifacts being validated are Windows artifacts and return bool"""
+    return os.getenv("PLATFORM", "linux").lower() == "windows"
 
 
 @pytest.fixture(scope="session")
@@ -422,6 +429,12 @@ class TestArtifactStructure:
             len(artifact_names),
         )
 
+    @pytest.mark.skipif(
+        is_windows_platform(),
+        reason="package.json coverage check only applies to Linux artifacts; "
+        "package.json (build_tools/packaging/linux/package.json) has no "
+        "entries for Windows-only artifacts. ",
+    )
     def test_artifacts_covered_by_packages(self, archive_index: list[ArchiveInfo]):
         """Every fetched artifact/component should be covered by a package.
 
