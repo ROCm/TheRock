@@ -19,6 +19,12 @@ Test modes (--test-type):
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
+  2b. profiler-hub packaged-consumption test: configure, build, and run a real
+      find_package(profiler-hub) consumer against the installed prefix, without
+      LD_LIBRARY_PATH -- proves a relocated, dependency-resolved install can
+      actually be consumed. Skips cleanly (prints why, does not fail) if the
+      container has no C++ compiler, cmake, or ninja. (Run for both sanity and
+      full, after step 2.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
 - comprehensive: CI alias for full.
 - install: Repo-based install only (step 1). No rocminfo or component checks.
@@ -134,9 +140,11 @@ Example invocations:
 import argparse
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import traceback
 from argparse import ArgumentParser, Namespace
 from pathlib import Path, PurePosixPath
@@ -147,11 +155,51 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 from packaging_utils import normalize_target_list
 
+# Consumer fixture shared with the artifact-based consumption test
+# (test_executable_scripts/test_profiler_hub_install.py); this is the same
+# find_package(profiler-hub) project, just configured against a packaged
+# install prefix here instead of a build-tree artifact directory.
+BUILD_TOOLS_DIR = _SCRIPT_DIR.parents[1]
+PROFILER_HUB_CONSUMER_DIR = (
+    BUILD_TOOLS_DIR
+    / "github_actions"
+    / "test_executable_scripts"
+    / "profiler_hub_install_tests"
+)
+
 
 def _env(key: str, default: str) -> str:
     """Return os.environ[key] if set and non-empty, else default."""
     v = os.environ.get(key, "").strip()
     return v if v else default
+
+
+def _profiler_hub_consumer_toolchain_probe() -> tuple[bool, str]:
+    """Best-effort probe: is there a toolchain to build the packaged-install consumer?
+
+    Mirrors test_profiler_hub_install.py's system_cxx17_capability() check. This venue
+    has no ROCm-bundled clang to fall back on -- only the distro's own compiler is
+    available at the package layer -- so cmake/ninja are required here too.
+
+    Returns (ok, cxx_compiler_or_reason). On success the second element is the
+    resolved C++ compiler path; on failure it is a human-readable reason.
+    """
+    cxx = shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
+    if cxx is None:
+        return False, "no system C++ compiler (c++/g++/clang++) found on PATH"
+    if shutil.which("cmake") is None:
+        return False, "cmake not found on PATH"
+    if shutil.which("ninja") is None:
+        return False, "ninja not found on PATH"
+    probe = subprocess.run(
+        [cxx, "-std=c++17", "-x", "c++", "-E", "-dM", "-"],
+        input="",
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0 or "__cplusplus 201703L" not in probe.stdout:
+        return False, f"{cxx} does not report C++17 support (__cplusplus 201703L absent)"
+    return True, cxx
 
 
 # --- Config: paths overridable via environment variables ---
@@ -986,6 +1034,83 @@ gpgcheck=0
         print("\n[PASS] Basic verification PASSED")
         return True
 
+    def run_profiler_hub_consumer_test(self) -> bool:
+        """Step 2b: build and run a real find_package(profiler-hub) consumer against
+        this packaged, dependency-resolved install -- deliberately without setting
+        LD_LIBRARY_PATH.
+
+        This proves packaged-install consumption at the layer that already owns
+        package-level risk, after a *real* apt/dnf/zypper install rather than a
+        standalone ``dpkg -i``. Not setting LD_LIBRARY_PATH is the point: a
+        relocated install's RUNPATH must resolve on its own, and if it doesn't,
+        that is a real finding to surface, not something to paper over.
+
+        Returns:
+        True if no C++/cmake/ninja toolchain is available (clean skip -- a missing
+        toolchain must not fail the job) or the consumer configured, built, linked,
+        and ran successfully. False if a toolchain was present but any of those
+        steps failed.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 2b: PROFILER-HUB PACKAGED-CONSUMPTION TEST")
+        print("=" * 80)
+
+        ok, cxx_or_reason = _profiler_hub_consumer_toolchain_probe()
+        if not ok:
+            print(f"[SKIP] profiler-hub consumption test: {cxx_or_reason}")
+            return True
+        cxx = cxx_or_reason
+
+        install_path = Path(self.install_prefix).resolve()
+        with tempfile.TemporaryDirectory(prefix="profiler_hub_consumer_") as tmp:
+            build_dir = Path(tmp) / "build"
+            configure_cmd = [
+                "cmake",
+                "-S",
+                str(PROFILER_HUB_CONSUMER_DIR),
+                "-B",
+                str(build_dir),
+                "-GNinja",
+                f"-DCMAKE_PREFIX_PATH={install_path}",
+                f"-DCMAKE_CXX_COMPILER={cxx}",
+            ]
+            build_cmd = ["cmake", "--build", str(build_dir)]
+            # No LD_LIBRARY_PATH set here -- see docstring.
+            env = os.environ.copy()
+            env.pop("LD_LIBRARY_PATH", None)
+            test_cmd = [
+                "ctest",
+                "--test-dir",
+                str(build_dir),
+                "-V",
+                "--no-tests=error",
+                "--timeout",
+                "120",
+            ]
+            try:
+                print(f"\n$ {' '.join(configure_cmd)}")
+                subprocess.run(configure_cmd, check=True)
+                print(f"\n$ {' '.join(build_cmd)}")
+                subprocess.run(build_cmd, check=True)
+                print(f"\n$ {' '.join(test_cmd)}")
+                subprocess.run(test_cmd, check=True, env=env)
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"\n[FAIL] profiler-hub packaged-consumption test failed at exit "
+                    f"{e.returncode} (no LD_LIBRARY_PATH was set -- this may be a "
+                    "relocated RUNPATH not resolving, or another real packaging defect)."
+                )
+                return False
+            except subprocess.TimeoutExpired:
+                print("\n[FAIL] profiler-hub packaged-consumption test timed out")
+                return False
+
+        print(
+            "\n[PASS] profiler-hub packaged-consumption test PASSED "
+            "(no LD_LIBRARY_PATH set)"
+        )
+        return True
+
     @staticmethod
     def _format_flagged_reason(st: os.stat_result) -> str:
         """Format an owner/group/mode + 'why flagged' annotation from a stat result.
@@ -1596,6 +1721,9 @@ def run_tests(args: Namespace) -> int:
             return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
+            return 1
+        if not test_runner.run_profiler_hub_consumer_test():
+            print("\n[FAIL] Step 2b (profiler-hub packaged-consumption test) failed.")
             return 1
         if args.test_type == "full":
             if not test_runner.run_full_verification():
