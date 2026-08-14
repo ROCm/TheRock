@@ -123,9 +123,7 @@ def _find_violations(workflow: dict, workflow_name: str) -> list[str]:
                 step_name = (
                     step.get("name") or step.get("uses") or step.get("run", "")[:60]
                 )
-                violations.append(
-                    f"{workflow_name} / {job_name} / '{step_name}'"
-                )
+                violations.append(f"{workflow_name} / {job_name} / '{step_name}'")
 
     return violations
 
