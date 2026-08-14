@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from packaging.version import Version
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import compute_rocm_package_version
 
@@ -16,7 +18,7 @@ import compute_rocm_package_version
 # future changes like using X.Y versions instead of X.Y.Z versions.
 
 
-class DetermineVersionTest(unittest.TestCase):
+class PythonPackageVersionTest(unittest.TestCase):
     def test_ci_version_uses_dev_version_shape(self):
         version = compute_rocm_package_version.compute_version(
             release_type="ci",
@@ -106,6 +108,61 @@ class DetermineVersionTest(unittest.TestCase):
             override_base_version="7.9.0",
         )
         self.assertRegex(version, r"^7\.9\.0a[0-9]{8}$")
+
+    def test_versions_are_valid_and_canonical(self):
+        # Version() rejects non-PEP 440 versions such as "7.10.0~rc0".
+        # See https://packaging.python.org/en/latest/specifications/version-specifiers/.
+        versions = self._compute_versions_by_release_type()
+
+        for release_type, version in versions.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(str(Version(version)), version)
+
+    def test_versions_sort_by_release_type(self):
+        # pip install --upgrade selects the greatest available version, so enforce:
+        # release > prerelease > nightly > dev.
+        versions = self._compute_versions_by_release_type()
+        print(f"versions: {versions}")
+
+        self.assertGreater(
+            Version(versions["nightly"]),
+            Version(versions["dev"]),
+        )
+        self.assertGreater(
+            Version(versions["prerelease"]),
+            Version(versions["nightly"]),
+        )
+        self.assertGreater(
+            Version(versions["release"]),
+            Version(versions["prerelease"]),
+        )
+
+    @staticmethod
+    def _compute_versions_by_release_type() -> dict[str, str]:
+        common_args = {
+            "package_type": "wheel",
+            "override_base_version": "7.10.0",
+        }
+        return {
+            "dev": compute_rocm_package_version.compute_version(
+                release_type="dev",
+                override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+                **common_args,
+            ),
+            "nightly": compute_rocm_package_version.compute_version(
+                release_type="nightly",
+                **common_args,
+            ),
+            "prerelease": compute_rocm_package_version.compute_version(
+                release_type="prerelease",
+                prerelease_version="0",
+                **common_args,
+            ),
+            "release": compute_rocm_package_version.compute_version(
+                release_type="release",
+                **common_args,
+            ),
+        }
 
 
 class DebPackageVersionTest(unittest.TestCase):
