@@ -153,11 +153,12 @@ For example, for torch version `2.9.0` built with ROCm version `7.10.0` we
 generate a composite torch version `2.9.0+rocm7.10.0`. See this table for more
 possible version combinations:
 
-| ROCm release type | ROCm version example | Composite torch version example                                                    |
-| ----------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| stable            | `7.10.0`             | `2.9.0+rocm7.10.0`                                                                 |
-| nightly           | `7.10.0a20251124`    | `2.9.0+rocm7.10.0a20251124`                                                        |
-| dev               | `7.10.0.dev0+efed3c` | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
+| ROCm release type | ROCm version example           | Composite torch version example                                                    |
+| ----------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| stable            | `7.10.0`                       | `2.9.0+rocm7.10.0`                                                                 |
+| nightly           | `7.10.0a20251124`              | `2.9.0+rocm7.10.0a20251124`                                                        |
+| nightly-bkc       | `10.1.0a20260811+bkc.20260813` | `2.13.0+rocm10.1.0a20260811.bkc.20260813`                                          |
+| dev               | `7.10.0.dev0+efed3c`           | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
 
 These local version identifiers are specially constructed such that the expected
 version sorting of `stable > nightly > dev` is preserved. Note that per the

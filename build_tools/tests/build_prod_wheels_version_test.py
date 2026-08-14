@@ -67,6 +67,18 @@ class ComputeBuildVersionTest(unittest.TestCase):
 
         self.assertGreater(rocm_7_14, rocm_10_0)
 
+    def test_nightly_bkc_release_uses_bkc_rocm_version(self):
+        (self.source_dir / "version.txt").write_text("2.13.0\n")
+        version = compute_build_version(
+            self.source_dir,
+            "+rocm10.1.0a20260811-bkc.20260813",
+            "nightly-bkc",
+        )
+        self.assertEqual(
+            str(Version(version)),
+            "2.13.0+rocm10.1.0a20260811.bkc.20260813",
+        )
+
     def test_dev_release_tags_git_commit_in_local_segment(self):
         with mock.patch(
             "build_prod_wheels.get_source_commit_short", return_value="1a2b3c4d"
