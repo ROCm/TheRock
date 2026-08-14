@@ -54,6 +54,7 @@ on:
           - aws-windows-scale-rocm-customer-dev-m8a24xl
           - aws-windows-scale-rocm-customer-dev-m8azn24xl
           - aws-windows-scale-rocm-prod
+          - aws-windows-scale-rocm-prod-mix
           - azure-windows-scale-rocm
       build_pytorch:
         type: boolean
