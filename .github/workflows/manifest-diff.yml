@@ -84,7 +84,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64:users-yhui-update-manylinux-sha
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
