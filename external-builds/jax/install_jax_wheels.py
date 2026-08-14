@@ -43,8 +43,7 @@ def wheel_source(args: argparse.Namespace) -> list[str]:
 
     A find-links page adds to PyPI while an index replaces it, so a caller that
     gave both meant the page: an index that does not carry the run's wheels
-    cannot install them. Neither leaves pip on PyPI, which is how a released
-    version is installed and how a caller pins one through pip's own config.
+    cannot install them. One of the two is required, which main() checks.
     """
     if args.find_links:
         return ["--find-links", args.find_links]
@@ -151,6 +150,14 @@ def main(argv: list[str]) -> int:
     missing = sorted(name for name, value in required.items() if not value)
     if missing:
         p.error(f"missing required argument(s): {', '.join(missing)}")
+
+    if not args.find_links and not args.index_url:
+        # jax_rocm<major>_plugin is a published name, so leaving pip on PyPI
+        # would install a release in place of the wheels this run built.
+        p.error(
+            "missing required argument: --find-links or --index-url"
+            " (https://pypi.org/simple to install published wheels)"
+        )
 
     for command in install_commands(args):
         if args.dry_run:
