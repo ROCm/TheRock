@@ -144,7 +144,10 @@ jobs:
   test_jax_wheels:
     name: Test JAX | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_subset }}
     runs-on: ${{ inputs.test_runs_on }}
-    timeout-minutes: 120
+    # Room for the longest subset plus its setup, where installing the ROCm
+    # packages alone has taken over an hour; the test step below holds each
+    # subset to its own budget.
+    timeout-minutes: 240
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
 
@@ -298,8 +301,9 @@ jobs:
       # reproduces this job locally. See the comments in the script.
       - name: Run JAX tests
         # The suite runs 35-70 min across versions, so 60 left no headroom: one
-        # job reached 100% of the tests and was still killed by the timeout.
-        timeout-minutes: 120
+        # job reached 100% of the tests and was still killed by the timeout. The
+        # multi-accelerator subset is a fraction of that.
+        timeout-minutes: ${{ inputs.test_subset == 'multi' && 90 || 120 }}
         run: |
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
