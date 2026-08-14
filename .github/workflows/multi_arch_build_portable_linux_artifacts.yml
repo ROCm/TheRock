@@ -132,9 +132,6 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-          git config --global \
-            url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf \
-            "https://github.com/"
 
       - name: Setup ccache
         run: |
@@ -160,7 +157,11 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config

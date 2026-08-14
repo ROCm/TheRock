@@ -159,9 +159,6 @@ jobs:
           git config --global core.symlinks true
           git config --global core.longpaths true
           git config fetch.parallel 10
-          git config --global \
-            url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf \
-            "https://github.com/"
 
       - name: Runner health status
         run: |
@@ -188,7 +185,11 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config
