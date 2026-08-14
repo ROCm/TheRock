@@ -290,6 +290,11 @@ jobs:
         run: |
           python build_tools/print_driver_gpu_info.py
 
+      - name: KFD version check
+        timeout-minutes: 1
+        run: |
+          python build_tools/print_kfd_version.py
+
       - name: Install JAX test requirements
         run: |
           python external-builds/jax/install_jax_test_requirements.py \
