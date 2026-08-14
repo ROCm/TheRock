@@ -85,7 +85,8 @@ GENERIC_FAMILY = "generic"
 # Artifacts that are defined in BUILD_TOPOLOGY.toml but not uploaded to S3 as
 # standalone archives. These are typically third-party dependencies that are
 # built but bundled into other artifacts, or system dependencies.
-# TODO(geomin12): Investigate why these aren't uploaded and fix properly.
+# This list was validated against S3 bucket contents - only include artifacts
+# that are truly NOT present in S3.
 ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
     [
         # Third-party sysdeps - built but not packaged separately
@@ -100,32 +101,17 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "sysdeps-hwloc",
         "sysdeps-util-linux",
         "sysdeps-amd-mesa",
-        # Third-party libs - built but not packaged separately
-        "elfio",
-        "fftw3",
-        "flatbuffers",
+        # Third-party libs - some not packaged separately
         "fmt",
         "nlohmann-json",
         "spdlog",
         "openmpi",
-        "host-blas",
-        "host-suite-sparse",
-        # Communication libs - Linux only, may not be uploaded
+        # Communication libs - not uploaded as standalone
         "rccl",
         "rocshmem",
-        # Core artifacts - some not uploaded as standalone
-        "core-hipinfo",
-        "core-amdsmi",
-        "core-runtime",
-        "core-hiptests",
-        "core-ocl",
-        "core-ocl-icd",
-        "core-kpack",
-        "kfdtest",
+        # Core artifacts - not uploaded as standalone
         "rocrtst",
-        # Storage libs
-        "hipfile",
-        # WSL-specific
+        # WSL-specific - Windows only, not in Linux S3
         "wsl-rocdxg",
     ]
 )
