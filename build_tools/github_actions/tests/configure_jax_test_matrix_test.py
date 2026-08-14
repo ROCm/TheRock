@@ -108,7 +108,7 @@ class BuildTestMatrixTest(unittest.TestCase):
         # A family that has a build but no test hardware carries an empty label,
         # so this is a configuration a run has to survive, loudly.
         with contextlib.redirect_stdout(io.StringIO()) as out:
-            matrix = self.matrix(target="gfx90a", platform="windows", scope="full")
+            matrix = self.matrix(target="gfx90a", platform="windows", size="large")
 
         self.assertEqual(matrix["include"], [])
         self.assertIn("::warning::", out.getvalue())

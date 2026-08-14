@@ -43,7 +43,8 @@ def wheel_source(args: argparse.Namespace) -> list[str]:
 
     A find-links page adds to PyPI while an index replaces it, so a caller that
     gave both meant the page: an index that does not carry the run's wheels
-    cannot install them.
+    cannot install them. Neither leaves pip on PyPI, which is how a released
+    version is installed and how a caller pins one through pip's own config.
     """
     if args.find_links:
         return ["--find-links", args.find_links]

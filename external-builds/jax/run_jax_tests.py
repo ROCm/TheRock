@@ -238,9 +238,13 @@ def ignore_arguments(jax_dir: Path, selected: list[Path]) -> list[str]:
             checkout has none of the tests it names. Silently running the whole
             suite, or none of it, would both pass for a subset.
     """
+    tests_dir = (jax_dir / RELATIVE_TESTS_DIR).resolve()
     wanted = set()
     for path in selected:
-        if path.is_absolute() or RELATIVE_TESTS_DIR not in path.parents:
+        # Resolved, because "tests/../benchmarks/x_test.py" is under tests/ by
+        # spelling only, and a symlink leading out of it is not under it at all.
+        outside = not (jax_dir / path).resolve().is_relative_to(tests_dir)
+        if path.is_absolute() or outside:
             raise TestListError(f"{path} is not under {RELATIVE_TESTS_DIR}/")
         wanted.add(jax_dir / path)
 

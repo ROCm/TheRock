@@ -109,7 +109,10 @@ on:
           - dev
         default: dev
       test_size:
-        description: "How much of the suite to run."
+        description: >-
+          How much of test_subset to run: "small" takes the PR-sized selection,
+          which exists for the "all" subset only, and "medium" and "large" take
+          all of it. On the "multi" subset it picks the end-to-end scope.
         type: choice
         options:
           - small

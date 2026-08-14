@@ -146,6 +146,19 @@ class IgnoreArgumentsTest(unittest.TestCase):
         with self.assertRaises(runner.TestListError):
             self.ignored(["benchmarks/a_test.py"])
 
+    def test_a_path_that_only_starts_under_the_test_tree_is_fatal(self):
+        # It reads as a test path, and pytest would collect whatever it lands on.
+        with self.assertRaises(runner.TestListError):
+            self.ignored(["tests/../benchmarks/a_test.py"])
+
+    def test_a_symlink_leading_out_of_the_test_tree_is_fatal(self):
+        (self.jax_dir / "benchmarks").mkdir()
+        (self.jax_dir / "benchmarks" / "a_test.py").touch()
+        (self.jax_dir / "tests" / "linked").symlink_to(self.jax_dir / "benchmarks")
+
+        with self.assertRaises(runner.TestListError):
+            self.ignored(["tests/linked/a_test.py"])
+
 
 # What both suite scripts source, and all that may be evaluated to learn the
 # environment the suite runs under.
