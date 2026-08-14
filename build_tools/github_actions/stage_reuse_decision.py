@@ -82,6 +82,40 @@ logger = logging.getLogger(__name__)
 LOG_PREFIX = "[STAGE-REUSE]"
 GENERIC_FAMILY = "generic"
 
+# Artifacts that are defined in BUILD_TOPOLOGY.toml but not uploaded to S3 as
+# standalone archives. These are typically third-party dependencies that are
+# built but bundled into other artifacts, or system dependencies.
+# TODO(geomin12): Investigate why these aren't uploaded and fix properly.
+ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
+    [
+        # Third-party sysdeps - built but not packaged separately
+        "sysdeps",
+        "sysdeps-expat",
+        "sysdeps-gmp",
+        "sysdeps-mpfr",
+        "sysdeps-ncurses",
+        "sysdeps-libmnl",
+        "sysdeps-libnl",
+        "sysdeps-libpciaccess",
+        "sysdeps-hwloc",
+        "sysdeps-util-linux",
+        "sysdeps-amd-mesa",
+        # Third-party libs - built but not packaged separately
+        "elfio",
+        "fftw3",
+        "flatbuffers",
+        "fmt",
+        "nlohmann-json",
+        "spdlog",
+        "openmpi",
+        "host-blas",
+        "host-suite-sparse",
+        # Communication libs - Linux only, may not be uploaded
+        "rccl",
+        "rocshmem",
+    ]
+)
+
 
 class StageReuseMode(enum.Enum):
     DRY_RUN = "dry-run"
@@ -162,6 +196,9 @@ def _required_artifacts_for_stages(
     For per-arch stages, the artifact type further refines the behavior:
     - target-neutral: Only requires the generic family
     - target-specific: Requires each of the target families (excluding generic)
+
+    Artifacts in ARTIFACTS_NOT_UPLOADED_TO_S3 are skipped since they are not
+    packaged as standalone archives.
     """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     required: list[RequiredArtifact] = []
@@ -176,6 +213,10 @@ def _required_artifacts_for_stages(
 
         for group_name in stage.artifact_groups:
             for artifact_name in artifacts_by_group.get(group_name, []):
+                # Skip artifacts known to not be uploaded to S3
+                if artifact_name in ARTIFACTS_NOT_UPLOADED_TO_S3:
+                    continue
+
                 artifact = topology.artifacts.get(artifact_name)
                 if artifact is None:
                     continue
@@ -223,6 +264,9 @@ def _stage_artifacts_available(
     For per-arch stages, the artifact type further refines the behavior:
     - target-neutral: Only checks for generic family archives
     - target-specific: Checks for each target family (excluding generic)
+
+    Artifacts in ARTIFACTS_NOT_UPLOADED_TO_S3 are skipped since they are not
+    packaged as standalone archives.
     """
     artifacts_by_group = topology.get_artifact_group_to_artifacts()
     stage = topology.build_stages.get(stage_name)
@@ -234,6 +278,10 @@ def _stage_artifacts_available(
 
     for group_name in stage.artifact_groups:
         for artifact_name in artifacts_by_group.get(group_name, []):
+            # Skip artifacts known to not be uploaded to S3
+            if artifact_name in ARTIFACTS_NOT_UPLOADED_TO_S3:
+                continue
+
             artifact = topology.artifacts.get(artifact_name)
             if artifact is None:
                 continue
