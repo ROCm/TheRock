@@ -74,6 +74,14 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
+    def test_hipdnn_integration_tests_includes_rocrand(self):
+        # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
+        # generation, so the test runners must fetch the rand artifact even
+        # though --rand was not requested.
+        argv = self._run_main(["--hipdnn-integration-tests"])
+        self.assertIn("hipdnn-integration-tests_run", argv)
+        self.assertIn("rand_lib", argv)
+
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     """Return a tarball name matching the platform under test."""
@@ -392,7 +400,9 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocprofiler_systems_examples=False,
         rocrtst=False,
         rocalution=False,
+        kfdtest=False,
         rocwmma=False,
+        rpp=False,
         libhipcxx=False,
         hipthreads=False,
         tests=False,

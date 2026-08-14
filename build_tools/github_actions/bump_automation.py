@@ -16,7 +16,7 @@ THEROCK_MAIN_BRANCH = "main"
 BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
-CI_LABEL = "ci:run-all-archs"
+CI_LABELS = ["ci:run-all-archs", "ci:asan"]
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -52,6 +52,13 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
+    },
+    "third-party/sysdeps/linux/amd-mesa/mesa-fork": {
+        "repo": "ROCm/mesa-fork",
+        "files": [],
+        "updater": "submodule-only",
+        # We will reuse the rocm-systems token for now.
+        "token_key": "systems",
     },
 }
 
@@ -337,15 +344,15 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
 
         try:
-            # Add ci:run-all-archs label to the PR
+            # Add CI labels to the PR (run-all-archs + asan for full coverage)
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": [CI_LABEL]},
+                data={"labels": CI_LABELS},
             )
         except RuntimeError as e:
-            print(f"[WARN] Failed to apply ci:run-all-archs to PR #{pr['number']}: {e}")
+            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 
@@ -358,6 +365,10 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("rocm-libraries", tokens["libraries"])
     if submodule in ("all", "rocgdb"):
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
+    if submodule in ("all", "mesa-fork"):
+        create_therock_bump(
+            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["mesa-fork"]
+        )
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
@@ -444,13 +455,14 @@ def main() -> None:
     parser.add_argument(
         "--submodule",
         default="all",
-        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb"],
+        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
+    parser.add_argument("--mesa_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -460,6 +472,7 @@ def main() -> None:
         "systems": args.systems_token,
         "libraries": args.libraries_token,
         "rocgdb": args.rocgdb_token,
+        "mesa-fork": args.mesa_token,
     }
 
     if args.event_type == "schedule":

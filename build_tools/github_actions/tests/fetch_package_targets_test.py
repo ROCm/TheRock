@@ -131,29 +131,29 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertTrue(any("gfx110X-all" == t["amdgpu_family"] for t in targets))
         self.assertTrue(any("gfx120X-all" == t["amdgpu_family"] for t in targets))
 
-    def test_gfx94x_multi_label_selects_first_when_random_low(self):
-        """When random() is low, first label should be selected."""
+    def test_gfx94x_multi_label_selects_first(self):
+        """Test that first label can be selected via random.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.05 (< 0.1 first weight)
-        with patch("random.random", return_value=0.05):
+        first_label = {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5}
+        with patch("random.choices", return_value=[first_label]):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-ossci-rocm")
 
-    def test_gfx94x_multi_label_selects_second_when_random_medium(self):
-        """When random() is in second range, second label should be selected."""
+    def test_gfx94x_multi_label_selects_second(self):
+        """Test that second label can be selected via random.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.5 (>= 0.1, < 0.9)
-        with patch("random.random", return_value=0.5):
+        second_label = {"label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm", "count": 28}
+        with patch("random.choices", return_value=[second_label]):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
@@ -161,15 +161,15 @@ class FetchPackageTargetsTest(unittest.TestCase):
             targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
         )
 
-    def test_gfx94x_multi_label_selects_third_when_random_high(self):
-        """When random() is high, third label should be selected."""
+    def test_gfx94x_multi_label_selects_third(self):
+        """Test that third label can be selected via random.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
-        # Mock random.random() to return 0.95 (>= 0.9)
-        with patch("random.random", return_value=0.95):
+        third_label = {"label": "linux-gfx942-1gpu-ossci-rocm", "count": 5}
+        with patch("random.choices", return_value=[third_label]):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
