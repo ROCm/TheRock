@@ -12,6 +12,8 @@ from packaging.version import Version
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import compute_rocm_package_version
 
+TEST_BKC_RELEASE_METADATA = {"base-date": "20260811"}
+
 
 # Note: the regex matches in here aren't exact, but they should be "good enough"
 # to cover the general structure of each version string while allowing for
@@ -50,6 +52,15 @@ class PythonPackageVersionTest(unittest.TestCase):
         )
         self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
 
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="dev-bkc",
+            override_base_version="7.9.0",
+            override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             release_type="nightly",
@@ -63,6 +74,39 @@ class PythonPackageVersionTest(unittest.TestCase):
         #   a
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*a[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="nightly-bkc",
+            override_base_version="7.9.0",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertRegex(
+            version,
+            r"^7\.9\.0a20260811\+bkc\.[0-9]{8}$",
+        )
+
+    def test_bkc_version_requires_base_date_metadata(self):
+        for release_type in ("dev-bkc", "nightly-bkc"):
+            with self.subTest(release_type=release_type), self.assertRaisesRegex(
+                ValueError, "release-metadata.base-date"
+            ):
+                compute_rocm_package_version.compute_version(
+                    release_type=release_type,
+                    override_base_version="7.9.0",
+                    release_metadata={},
+                )
+
+    def test_bkc_version_validates_base_date_metadata(self):
+        for base_date in ("2026081", "20261301"):
+            with self.subTest(base_date=base_date), self.assertRaisesRegex(
+                ValueError, "valid date in YYYYMMDD format"
+            ):
+                compute_rocm_package_version.compute_version(
+                    release_type="nightly-bkc",
+                    override_base_version="7.9.0",
+                    release_metadata={"base-date": base_date},
+                )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -120,12 +164,20 @@ class PythonPackageVersionTest(unittest.TestCase):
 
     def test_versions_sort_by_release_type(self):
         # pip install --upgrade selects the greatest available version, so enforce:
-        # release > prerelease > nightly > dev.
+        # release > prerelease > nightly > nightly-bkc > dev-bkc == dev.
         versions = self._compute_versions_by_release_type()
 
+        self.assertEqual(
+            Version(versions["dev-bkc"]),
+            Version(versions["dev"]),
+        )
+        self.assertGreater(
+            Version(versions["nightly-bkc"]),
+            Version(versions["dev-bkc"]),
+        )
         self.assertGreater(
             Version(versions["nightly"]),
-            Version(versions["dev"]),
+            Version(versions["nightly-bkc"]),
         )
         self.assertGreater(
             Version(versions["prerelease"]),
@@ -146,6 +198,17 @@ class PythonPackageVersionTest(unittest.TestCase):
             "dev": compute_rocm_package_version.compute_version(
                 release_type="dev",
                 override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+                **common_args,
+            ),
+            "dev-bkc": compute_rocm_package_version.compute_version(
+                release_type="dev-bkc",
+                override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+                release_metadata=TEST_BKC_RELEASE_METADATA,
+                **common_args,
+            ),
+            "nightly-bkc": compute_rocm_package_version.compute_version(
+                release_type="nightly-bkc",
+                release_metadata=TEST_BKC_RELEASE_METADATA,
                 **common_args,
             ),
             "nightly": compute_rocm_package_version.compute_version(
@@ -192,6 +255,15 @@ class DebPackageVersionTest(unittest.TestCase):
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~dev[0-9]{8}$")
 
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="dev-bkc",
+            override_base_version="8.1.0",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertRegex(version, r"^8\.1\.0~dev[0-9]{8}$")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="deb",
@@ -206,6 +278,18 @@ class DebPackageVersionTest(unittest.TestCase):
         #   ~
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="nightly-bkc",
+            override_base_version="8.1.0",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertRegex(
+            version,
+            r"^8\.1\.0~20260811\+bkc\.[0-9]{8}$",
+        )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -283,6 +367,16 @@ class RpmPackageVersionTest(unittest.TestCase):
         )
         self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
 
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="dev-bkc",
+            override_base_version="8.1.0",
+            override_git_sha="abcdef1234567890",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="rpm",
@@ -297,6 +391,18 @@ class RpmPackageVersionTest(unittest.TestCase):
         #   ~
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="nightly-bkc",
+            override_base_version="8.1.0",
+            release_metadata=TEST_BKC_RELEASE_METADATA,
+        )
+        self.assertRegex(
+            version,
+            r"^8\.1\.0~20260811\+bkc\.[0-9]{8}$",
+        )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(

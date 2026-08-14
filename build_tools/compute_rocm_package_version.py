@@ -29,6 +29,11 @@ Sample usage:
   # rocm_deb_package_version=7.10.0~20251021
   # rocm_rpm_package_version=7.10.0~20251021
 
+  python compute_rocm_package_version.py --release-type=nightly-bkc
+  # rocm_package_version=10.1.0a20260811+bkc.20260814
+  # rocm_deb_package_version=10.1.0~20260811+bkc.20260814
+  # rocm_rpm_package_version=10.1.0~20260811+bkc.20260814
+
   python compute_rocm_package_version.py --custom-version-suffix=.dev0
   # 7.10.0.dev0
 
@@ -37,6 +42,7 @@ Sample usage:
 """
 
 import argparse
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 import json
@@ -62,6 +68,18 @@ def load_rocm_version() -> str:
     with open(version_file, "rt") as f:
         loaded_file = json.load(f)
         return loaded_file["rocm-version"]
+
+
+def load_release_metadata() -> dict[str, object]:
+    """Loads generic release metadata from the repository's version.json file."""
+    version_file = THEROCK_DIR / "version.json"
+    _log(f"Loading release metadata from file '{version_file.resolve()}'")
+    with open(version_file, "rt") as f:
+        loaded_file = json.load(f)
+        release_metadata = loaded_file.get("release-metadata", {})
+        if not isinstance(release_metadata, dict):
+            raise ValueError("release-metadata in version.json must be an object")
+        return release_metadata
 
 
 def get_git_sha(short: bool = False, override_git_sha: str | None = None):
@@ -112,17 +130,21 @@ def compute_version(
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
     override_git_sha: str | None = None,
+    release_metadata: Mapping[str, object] | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
     Args:
         package_type: Type of package ("wheel", "deb", or "rpm")
-        release_type: Release type ("ci", "dev", "nightly", "prerelease", or "release")
+        release_type: Release type ("ci", "dev", "dev-bkc", "nightly",
+            "nightly-bkc", "prerelease", or "release")
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
         override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
             See get_git_sha() for details on when this is needed.
+        release_metadata: Generic metadata from version.json. Loaded automatically
+            for BKC release types when not provided.
 
     Returns:
         Computed version string appropriate for the package type
@@ -134,6 +156,27 @@ def compute_version(
     _log(f"Base version  : '{base_version}'")
     _log(f"Package type  : '{package_type}'")
 
+    bkc_base_date = None
+    if release_type in ("dev-bkc", "nightly-bkc"):
+        if release_metadata is None:
+            release_metadata = load_release_metadata()
+        bkc_base_date = release_metadata.get("base-date")
+        if not isinstance(bkc_base_date, str) or not bkc_base_date:
+            raise ValueError(
+                "release-metadata.base-date must be set in version.json "
+                f"for release type '{release_type}'"
+            )
+        try:
+            parsed_bkc_base_date = datetime.strptime(bkc_base_date, "%Y%m%d")
+        except ValueError as e:
+            raise ValueError(
+                "release-metadata.base-date must be a valid date in YYYYMMDD format"
+            ) from e
+        if parsed_bkc_base_date.strftime("%Y%m%d") != bkc_base_date:
+            raise ValueError(
+                "release-metadata.base-date must be a valid date in YYYYMMDD format"
+            )
+
     # Handle wheel packages (Python packaging standards)
     if package_type == "wheel":
         if custom_version_suffix:
@@ -142,7 +185,7 @@ def compute_version(
             version_suffix = custom_version_suffix
         elif release_type == "release":
             version_suffix = ""
-        elif release_type in ("ci", "dev"):
+        elif release_type in ("ci", "dev", "dev-bkc"):
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
             git_sha = get_git_sha(override_git_sha=override_git_sha)
@@ -152,6 +195,9 @@ def compute_version(
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
             current_date = get_current_date()
             version_suffix = f"a{current_date}"
+        elif release_type == "nightly-bkc":
+            current_date = get_current_date()
+            version_suffix = f"a{bkc_base_date}+bkc.{current_date}"
         elif release_type == "prerelease":
             # Construct a prerelease (rc / "release candidate") version
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
@@ -176,7 +222,7 @@ def compute_version(
             # Final release version - no suffix
             # Format: <rocm-version>
             version_suffix_str = ""
-        elif release_type in ("ci", "dev"):
+        elif release_type in ("ci", "dev", "dev-bkc"):
             # Construct a dev release version with date and optionally git SHA
             # deb format: <rocm-version>~dev<YYYYMMDD>
             # rpm format: <rocm-version>~<YYYYMMDD>g<short-git-sha>
@@ -191,6 +237,9 @@ def compute_version(
             # Format: <rocm-version>~<YYYYMMDD>
             current_date = get_current_date()
             version_suffix_str = f"~{current_date}"
+        elif release_type == "nightly-bkc":
+            current_date = get_current_date()
+            version_suffix_str = f"~{bkc_base_date}+bkc.{current_date}"
         elif release_type == "prerelease":
             # Construct a prerelease version
             # deb format: <rocm-version>~pre<N>
@@ -218,7 +267,15 @@ def main(argv):
     release_type_group.add_argument(
         "--release-type",
         type=str,
-        choices=["ci", "dev", "nightly", "prerelease", "release"],
+        choices=[
+            "ci",
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+        ],
         help="The type of package version to produce. 'ci' uses dev-style versions.",
     )
     release_type_group.add_argument(
@@ -247,6 +304,10 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
+    release_metadata = None
+    if args.release_type in ("dev-bkc", "nightly-bkc"):
+        release_metadata = load_release_metadata()
+
     # Validation
     if args.release_type != "prerelease" and args.prerelease_version:
         parser.error("release type must be 'prerelease' if --prerelease-version is set")
@@ -265,6 +326,7 @@ def main(argv):
             prerelease_version=args.prerelease_version,
             override_base_version=args.override_base_version,
             override_git_sha=args.override_git_sha,
+            release_metadata=release_metadata,
         )
 
         # Set appropriate output variable based on package type
