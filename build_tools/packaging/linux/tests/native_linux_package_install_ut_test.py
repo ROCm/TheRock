@@ -2153,22 +2153,29 @@ class VerifyNoRunpathTest(unittest.TestCase):
         mock_rpath.assert_called_once()
 
 
-_ELF_TOOLCHAIN_AVAILABLE = bool(shutil.which("cc") and shutil.which("readelf"))
+# These fixtures build real ELF shared objects with GNU-ld options like
+# -Wl,-rpath and --disable-new-dtags. That only works with a Linux-targeting
+# toolchain: on Windows the runner ships MinGW (cc/readelf are on PATH) but its
+# ld targets PE/COFF and rejects those ELF-only options, so gate on Linux too.
+_ELF_TOOLCHAIN_AVAILABLE = bool(
+    sys.platform.startswith("linux") and shutil.which("cc") and shutil.which("readelf")
+)
 
 
 @unittest.skipUnless(
     _ELF_TOOLCHAIN_AVAILABLE,
-    "requires a C compiler (cc) and readelf to build/inspect real ELF fixtures",
+    "real-ELF fixtures are Linux-only and require cc + readelf",
 )
 class VerifyNoRunpathRealElfTest(unittest.TestCase):
     """End-to-end tests for verify_no_runpath() against real ELF files.
 
     Unlike VerifyNoRunpathTest, which mocks readelf, these compile small shared
     objects with known DT_RPATH/DT_RUNPATH tags and run the real ``readelf`` so
-    the actual subprocess code path is exercised. They are skipped where ``cc``
-    or ``readelf`` are unavailable (for example the windows-2022 CI leg). Error
-    paths that cannot be produced from a real file (readelf missing, non-zero
-    exit) remain covered by the mocked VerifyNoRunpathTest.
+    the actual subprocess code path is exercised. They only run on Linux with a
+    C compiler and readelf, and are skipped elsewhere (for example the
+    windows-2022 CI leg, whose MinGW ld cannot produce ELF with these options).
+    Error paths that cannot be produced from a real file (readelf missing,
+    non-zero exit) remain covered by the mocked VerifyNoRunpathTest.
     """
 
     def _compile_so(self, directory, name, *link_flags):
