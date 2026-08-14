@@ -45,3 +45,24 @@ jobs:
 
       - name: Fetch sources
         run: python build_tools/fetch_sources.py --jobs 12 --depth 1
+
+  test_clone_no_auth:
+    name: "Test fetch_sources without GITHUB_TOKEN"
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: git config fetch.parallel 10
+
+      - name: Fetch sources
+        run: python build_tools/fetch_sources.py --jobs 12 --depth 1
