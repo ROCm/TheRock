@@ -116,6 +116,9 @@ jobs:
         include: ${{ fromJSON(needs.setup_matrix.outputs.jax_matrix) }}
 
     permissions:
+      # A called workflow cannot ask for more than this grants, and its configure
+      # job reads the run's creation date through the API.
+      actions: read
       id-token: write
       contents: read
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml

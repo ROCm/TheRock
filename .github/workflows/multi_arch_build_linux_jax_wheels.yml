@@ -131,6 +131,9 @@ on:
 run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
 
 permissions:
+  # actions: read is for the configure job, which asks the API when this run was
+  # created so that a rerun keeps the matrix of the attempt it repeats.
+  actions: read
   contents: read
   id-token: write
 
@@ -309,12 +312,18 @@ jobs:
         id: configure
         env:
           CI_CONFIG_PATH: ci-config
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # created_at stays at the first attempt while run_started_at moves, so
+          # a rerun the next day still gets the day it was scheduled for. Falling
+          # back to today keeps the run going if the token cannot read it.
+          created_at=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at || date -u +%FT%TZ)
           python ./build_tools/github_actions/configure_jax_test_matrix.py \
             --target "${{ inputs.test_amdgpu_family }}" \
             --platform linux \
             --test-scope "${{ inputs.test_scope }}" \
-            --release-type "${{ inputs.release_type }}"
+            --release-type "${{ inputs.release_type }}" \
+            --run-date "${created_at%%T*}"
 
       - name: Capture job summary
         id: summary

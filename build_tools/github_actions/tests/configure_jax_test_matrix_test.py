@@ -173,6 +173,23 @@ class OutputsTest(unittest.TestCase):
         self.assertEqual(len(json.loads(weekday["matrix"])["include"]), 1)
         self.assertEqual(len(json.loads(weekly["matrix"])["include"]), 2)
 
+    def test_a_rerun_repeats_the_matrix_of_the_run_it_repeats(self):
+        # The workflow passes the run's creation date, so re-running a Sunday
+        # nightly on a Tuesday still takes the multi-GPU runner.
+        outputs = self.outputs(
+            [
+                "--target",
+                "gfx94X-dcgpu",
+                "--release-type",
+                "nightly",
+                "--run-date",
+                SUNDAY.isoformat(),
+            ],
+            today=TUESDAY,
+        )
+
+        self.assertEqual(len(json.loads(outputs["matrix"])["include"]), 2)
+
     def test_an_unknown_release_type_is_rejected(self):
         # Defaulting it would quietly drop the multi-accelerator job.
         with self.assertRaises(SystemExit):

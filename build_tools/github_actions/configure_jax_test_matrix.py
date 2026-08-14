@@ -13,7 +13,9 @@ multi-accelerator script.
 Multi-GPU runners are scarce, so the second job is only worth its queue slot
 when full testing is asked for. Short testing, which is what a pull request
 gets, runs the suite on the 1-GPU runner alone, and a nightly asks for full
-testing one day a week rather than every night.
+testing one day a week rather than every night. Which day that is comes from
+--run-date, the day the run was created, so a rerun repeats the matrix of the
+attempt it repeats rather than the one its own day would give.
 """
 
 import argparse
@@ -71,11 +73,7 @@ def platform_entry(target: str, platform: str) -> dict | None:
 
 
 def today_utc() -> date:
-    """The day the run is happening, which the weekly rule below reads.
-
-    A rerun is a new run, so re-running a Sunday nightly on Monday drops the
-    multi-accelerator job. Pass test_scope=full to reproduce the original.
-    """
+    """Today in UTC, for a caller that did not say when its run began."""
     return datetime.now(timezone.utc).date()
 
 
@@ -167,9 +165,17 @@ def main(argv: list[str]) -> None:
         choices=RELEASE_TYPES,
         help="Release type the build is for (default: dev)",
     )
+    parser.add_argument(
+        "--run-date",
+        type=date.fromisoformat,
+        # The day the run was created rather than the day this runs, so that a
+        # rerun repeats the matrix of the attempt it is repeating.
+        default=None,
+        help="Date the run was created, UTC YYYY-MM-DD (default: today)",
+    )
     args = parser.parse_args(argv)
 
-    today = today_utc()
+    today = args.run_date or today_utc()
     scope = resolve_scope(args.test_scope, args.release_type, today)
     print(
         f"Configuring {args.platform} JAX tests for {args.target}:"
