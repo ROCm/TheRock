@@ -334,6 +334,11 @@ if(THEROCK_ENABLE_PROFILER_HUB)
   therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
   therock_cmake_subproject_activate(profiler-hub)
 
+  # Actually run the gtest binary built above instead of only compiling it.
+  therock_cmake_subproject_build_test(profiler-hub
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+  )
+
   therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/profiler-hub/dist/lib
     LIB_NAMES
       libprofiler-hub.so
