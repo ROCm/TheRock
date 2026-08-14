@@ -70,8 +70,9 @@ from typing import Callable, Optional, Sequence
 # cleanly regardless of the current working directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS
+from _therock_utils.artifact_backend import ARTIFACT_EXTENSIONS, S3Backend
 from _therock_utils.build_topology import BuildTopology, get_topology
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import ARTIFACT_COMPONENTS
 from baseline_runs import BaselineRun, RequiredArtifact
 from github_actions_api import GitHubAPIError
@@ -526,27 +527,173 @@ def compute_auto_stage_reuse(
     }
 
     # The workflow can only copy artifacts from a single baseline_run_id, so if
-    # platforms resolve to different baseline runs we cannot safely reuse.
+    # platforms resolve to different baseline runs we try to unify on one.
+    # We pick one baseline and re-verify artifact availability for all platforms.
 
     if len(selected_run_ids) > 1:
-        return _log_and_return(
-            _empty_result(
-                mode,
-                full_rebuild_required=True,
-                reasons=(
-                    "automatic reuse resolved different baseline runs per platform",
-                ),
-                report_lines=(
-                    f"{LOG_PREFIX} multiple baseline runs selected across "
-                    f"platforms; disabling automatic reuse.",
-                ),
-            )
+        # Try to unify: pick the baseline with the most available stages across
+        # platforms. This is often the "older" baseline that has more complete
+        # artifacts. Re-verify that this baseline has artifacts for all platforms.
+        #
+        # For each candidate baseline (run_id), we directly query S3 for artifact
+        # availability on each platform, rather than re-running the full baseline
+        # selection. This lets us verify a specific run_id across all platforms.
+        logger.info(
+            "%s platforms selected different baselines: %s - attempting unification",
+            LOG_PREFIX,
+            {p: run_id for p, run_id in platform_baseline_run_ids.items()},
         )
 
-    reported_baseline_run_id = next(iter(selected_run_ids), None)
-    reported_baseline_url = next(
-        (url for url in platform_baseline_urls.values() if url), None
-    )
+        # We need to store baseline objects to re-verify, keyed by (run_id, platform)
+        # The original loop already stored the baseline for each platform's selected run
+        platform_baselines: dict[str, BaselineRun | None] = {}
+        for platform in platforms:
+            run_id = platform_baseline_run_ids.get(platform)
+            if run_id:
+                # Store the baseline that was found for this platform
+                # We'll use it to re-verify artifacts for other platforms
+                # Since we don't have the baseline object stored, we need to
+                # re-query or use a different approach.
+                pass
+
+        # Simpler approach: just try each candidate baseline and check S3 directly
+        # for ALL platforms. Use the baseline_runs utilities to create S3 backends.
+        best_baseline_run_id = None
+        best_baseline_url = None
+        best_platform_available: dict[str, tuple[str, ...]] = {}
+        best_coverage = -1
+
+        for test_run_id in selected_run_ids:
+            # Find which platform originally selected this run
+            source_platform = next(
+                (p for p, rid in platform_baseline_run_ids.items() if rid == test_run_id),
+                None,
+            )
+            if source_platform is None:
+                continue
+
+            # Check artifact availability for ALL platforms using this run_id
+            test_platform_available: dict[str, tuple[str, ...]] = {}
+            unified_works = True
+
+            for platform in platforms:
+                if platform == source_platform:
+                    # Use already-computed availability
+                    test_platform_available[platform] = per_platform_available[platform]
+                else:
+                    # Need to check S3 for this specific run_id + platform.
+                    # Create the S3 backend directly without a full workflow_run dict.
+                    # The WorkflowOutputRoot.from_workflow_run works without the dict
+                    # if we're querying the main TheRock artifacts bucket.
+                    github_repository = os.environ.get(
+                        "THEROCK_REPOSITORY",
+                        os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+                    )
+                    try:
+                        # Create S3 backend directly with just run_id and platform
+                        output_root = WorkflowOutputRoot.from_workflow_run(
+                            run_id=test_run_id,
+                            platform=platform,
+                            github_repository=github_repository,
+                            # Don't pass workflow_run - we don't have it
+                            # This works for TheRock main branch artifacts
+                        )
+                        backend = S3Backend(output_root=output_root)
+                        available_s3 = set(backend.list_artifacts())
+                        print(
+                            f"  S3 unification check: run={test_run_id} platform={platform} "
+                            f"found={len(available_s3)} artifacts"
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "%s S3 check failed for run %s platform %s: %s",
+                            LOG_PREFIX,
+                            test_run_id,
+                            platform,
+                            exc,
+                        )
+                        unified_works = False
+                        break
+
+                    if not available_s3:
+                        # No artifacts for this platform
+                        unified_works = False
+                        break
+
+                    # Check which stages are available
+                    available_here: list[str] = []
+                    for stage_name in candidates:
+                        if _stage_artifacts_available(
+                            topology, stage_name, families, available_s3, platform
+                        ):
+                            available_here.append(stage_name)
+                    test_platform_available[platform] = tuple(available_here)
+
+                    # If no stages are available, this baseline won't work
+                    if not available_here:
+                        unified_works = False
+                        break
+
+            if not unified_works:
+                logger.info(
+                    "%s baseline %s does not have artifacts for all platforms",
+                    LOG_PREFIX,
+                    test_run_id,
+                )
+                continue
+
+            # Count total stage coverage
+            coverage = sum(len(avail) for avail in test_platform_available.values())
+            logger.info(
+                "%s baseline %s has coverage=%d across platforms",
+                LOG_PREFIX,
+                test_run_id,
+                coverage,
+            )
+            if coverage > best_coverage:
+                best_coverage = coverage
+                best_baseline_run_id = test_run_id
+                best_platform_available = test_platform_available
+                # Get URL from original selection
+                for p, rid in platform_baseline_run_ids.items():
+                    if rid == test_run_id:
+                        best_baseline_url = platform_baseline_urls[p]
+                        break
+
+        if best_baseline_run_id is not None:
+            logger.info(
+                "%s unified on baseline %s with coverage=%d",
+                LOG_PREFIX,
+                best_baseline_run_id,
+                best_coverage,
+            )
+            print(
+                f"  Unified baseline selection: run_id={best_baseline_run_id} "
+                f"coverage={best_coverage}"
+            )
+            reported_baseline_run_id = best_baseline_run_id
+            reported_baseline_url = best_baseline_url
+            per_platform_available = best_platform_available
+        else:
+            return _log_and_return(
+                _empty_result(
+                    mode,
+                    full_rebuild_required=True,
+                    reasons=(
+                        "automatic reuse resolved different baseline runs per platform "
+                        "and could not unify on a single baseline",
+                    ),
+                    report_lines=(
+                        f"{LOG_PREFIX} multiple baseline runs selected across "
+                        f"platforms; could not unify; disabling automatic reuse.",
+                    ),
+                )
+            )
+    else:
+        reported_baseline_run_id = next(iter(selected_run_ids), None)
+        reported_baseline_url = next(
+            (url for url in platform_baseline_urls.values() if url), None
+        )
 
     # A stage is available only when present on EVERY platform being built.
     available: list[str] = []

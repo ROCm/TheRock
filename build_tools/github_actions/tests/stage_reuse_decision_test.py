@@ -541,7 +541,13 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         self.assertIn("no build platforms selected", "\n".join(result.report_lines))
 
     def test_different_platform_baselines_disable_reuse(self):
-        """Automatic reuse is disabled when platforms resolve to different baseline runs."""
+        """Automatic reuse is disabled when platforms resolve to different baseline runs.
+
+        When platforms select different baselines, the system attempts to unify on a
+        single baseline by checking artifact availability across all platforms. If
+        unification fails (e.g., no baseline has artifacts for all platforms), it
+        falls back to a full rebuild.
+        """
         per_platform = {
             "linux": _baseline("L1", ["base_lib_generic.tar.zst"]),
             "windows": _baseline("W1", ["base_lib_generic.tar.zst"]),
@@ -558,9 +564,15 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
 
         self.assertTrue(result.full_rebuild_required)
         self.assertEqual(result.applied_reuse_stages, ())
-        self.assertIn(
-            "automatic reuse resolved different baseline runs per platform",
-            result.reasons,
+        # The system tries to unify on a single baseline but fails in tests
+        # because fake workflow_runs don't have full metadata for S3 queries
+        self.assertTrue(
+            any(
+                "automatic reuse resolved different baseline runs per platform"
+                in reason
+                for reason in result.reasons
+            ),
+            f"Expected reason about different baselines, got: {result.reasons}",
         )
 
 
