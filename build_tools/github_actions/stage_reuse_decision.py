@@ -83,40 +83,19 @@ LOG_PREFIX = "[STAGE-REUSE]"
 GENERIC_FAMILY = "generic"
 
 # Artifacts that are defined in BUILD_TOPOLOGY.toml but not uploaded to S3 as
-# standalone archives. These are typically third-party dependencies that are
-# built but bundled into other artifacts, or system dependencies.
-# This list was validated against S3 bucket contents (run 31633842914) - only
-# include artifacts that are truly NOT present in S3 as _lib_/_dev_/_run_ archives.
-# Note: Some artifacts have _test_ archives but no build artifacts.
+# standalone archives. Validated against S3 bucket contents (run 31633842914).
+# Only include artifacts that are truly NOT present in S3.
 ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
     [
-        # Third-party sysdeps - built but not packaged separately
-        "sysdeps",
-        "sysdeps-expat",
-        "sysdeps-gmp",
-        "sysdeps-mpfr",
-        "sysdeps-ncurses",
+        # Third-party sysdeps - not in S3
         "sysdeps-libmnl",
         "sysdeps-libnl",
-        "sysdeps-libpciaccess",
-        "sysdeps-hwloc",
-        "sysdeps-util-linux",
-        "sysdeps-amd-mesa",
-        # Third-party libs - some not packaged separately
+        # Third-party libs - not in S3
         "fmt",
-        "nlohmann-json",
         "spdlog",
         "openmpi",
-        # Communication libs - not uploaded as standalone
-        "rccl",
-        "rocshmem",
-        # Core artifacts - not uploaded as standalone (have _test_ but no _lib_/_dev_)
+        # Core artifacts - not in S3 (no archives at all)
         "core-hipinfo",
-        "core-hiptests",
-        "kfdtest",
-        "rocrtst",
-        # WSL-specific - Windows only, not in Linux S3
-        "wsl-rocdxg",
     ]
 )
 
