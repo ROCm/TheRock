@@ -68,9 +68,6 @@ else()
   endif()
 endif()
 
-include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
-therock_get_meson_compiler_env(_meson_cc _meson_cxx)
-
 # Meson detects the linker by scanning PATH for link.exe. On Windows CI, Git's
 # GNU link.exe (C:\Program Files\Git\usr\bin) shadows MSVC's linker and meson
 # rejects it ("Found GNU link.exe instead of MSVC link.exe"). Prepend the MSVC
@@ -83,6 +80,31 @@ if(MSVC)
 else()
   set(_meson_path_env "PATH=$ENV{PATH}")
 endif()
+
+# Pass the compiler (and any launcher such as ccache) to meson via a native
+# file rather than CC/CXX env strings. Meson whitespace-splits the CC/CXX env
+# value, which breaks the MSVC compiler path ("C:/Program Files/.../cl.exe");
+# quoting it instead breaks `cmake -E env` batch parsing. A native file lists
+# the command as an array, so the space-containing path is never re-split.
+function(_therock_meson_binary_array out_var compiler)
+  set(_elems "")
+  foreach(_launcher ${ARGN})
+    list(APPEND _elems "'${_launcher}'")
+  endforeach()
+  list(APPEND _elems "'${compiler}'")
+  list(JOIN _elems ", " _joined)
+  set(${out_var} "[${_joined}]" PARENT_SCOPE)
+endfunction()
+
+_therock_meson_binary_array(_meson_c_bin "${CMAKE_C_COMPILER}" ${CMAKE_C_COMPILER_LAUNCHER})
+_therock_meson_binary_array(_meson_cpp_bin "${CMAKE_CXX_COMPILER}" ${CMAKE_CXX_COMPILER_LAUNCHER})
+
+set(_meson_native_file "${CMAKE_CURRENT_BINARY_DIR}/therock-native.ini")
+file(WRITE "${_meson_native_file}"
+"[binaries]
+c = ${_meson_c_bin}
+cpp = ${_meson_cpp_bin}
+")
 
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
 
@@ -99,13 +121,12 @@ add_custom_target(
     # Required before patching because patch_source.ps1 modifies files
     # in the libva subproject after extraction.
     "${CMAKE_COMMAND}" -E env
-      "CC=${_meson_cc}"
-      "CXX=${_meson_cxx}"
       "${_meson_path_env}"
       ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
+        --native-file "${_meson_native_file}"
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
@@ -136,13 +157,12 @@ add_custom_target(
   COMMAND
     # Step 3: Reconfigure meson to build from patched source.
     "${CMAKE_COMMAND}" -E env
-      "CC=${_meson_cc}"
-      "CXX=${_meson_cxx}"
       "${_meson_path_env}"
       ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
+        --native-file "${_meson_native_file}"
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
