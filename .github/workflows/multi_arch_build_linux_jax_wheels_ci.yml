@@ -201,18 +201,19 @@ jobs:
             --workdir /workspace/jax-source \
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
+              ROCM_ROOT="$(rocm-sdk path --root)"
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
-                --bazel_options=--repo_env=ROCM_PATH=$(rocm-sdk path --root) \
+                --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
                 --verbose \
                 --detailed_timestamped_log \
-                --output_path=$(pwd)/dist
+                --output_path="$(pwd)/dist"
             '
 
       - name: Extract JAX versions from built wheels
