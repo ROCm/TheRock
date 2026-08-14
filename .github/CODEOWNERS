@@ -37,3 +37,7 @@
 
 # RFCs
 /docs/rfcs              @ROCm/rocm-product-managers
+
+# Native Linux packages.
+/build_tools/packaging/linux                                     @nunnikri @raramakr @arvindcheru @jonatluu @dileepr1
+/.github/workflows/test_native_linux_packages_install.yml        @nunnikri @raramakr @arvindcheru @jonatluu @dileepr1
