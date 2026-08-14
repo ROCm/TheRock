@@ -84,7 +84,7 @@ GENERIC_FAMILY = "generic"
 
 # Artifacts that are defined in BUILD_TOPOLOGY.toml but not uploaded to S3 as
 # standalone archives. Validated against S3 bucket contents (run 31633842914).
-# Only include artifacts that are truly NOT present in S3.
+# Only include artifacts that are truly NOT present in S3 for BOTH platforms.
 ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
     [
         # Third-party sysdeps - not in S3
@@ -96,6 +96,11 @@ ARTIFACTS_NOT_UPLOADED_TO_S3 = frozenset(
         "openmpi",
         # Core artifacts - not in S3 (no archives at all)
         "core-hipinfo",
+        # Artifacts only in Linux S3, not Windows (but we check both platforms)
+        # core-hiptests: only has _test_ archive, no _lib_/_dev_ for Windows check
+        "core-hiptests",
+        # wsl-rocdxg: built on Linux for WSL, not in Windows S3
+        "wsl-rocdxg",
     ]
 )
 
