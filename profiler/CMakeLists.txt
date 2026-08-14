@@ -290,6 +290,76 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 
 ##############################################################################
+# profiler-hub
+# General-purpose, schema-versioned data storage library for profiling and
+# tracing tools, designed to be built and consumed standalone by any tool
+# that needs it.
+##############################################################################
+if(THEROCK_ENABLE_PROFILER_HUB)
+  set(_profiler_hub_build_deps therock-nlohmann-json therock-spdlog therock-fmt)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _profiler_hub_build_deps therock-googletest)
+  endif()
+
+  therock_cmake_subproject_declare(profiler-hub
+    # profiler-hub is a pure host C++ library with no GPU/HIP code, so it
+    # does not require any AMDGPU targets to be selected.
+    DISABLE_AMDGPU_TARGETS
+    # Route profiler-hub through TheRock's in-tree LLVM/clang toolchain so
+    # therock_sanitizer_configure() injects -fsanitize=address (compile + link)
+    # and the clang-resource-dir rpath. Without a COMPILER_TOOLCHAIN the
+    # subproject builds with system gcc and profiler-hub_unit_tests is never
+    # sanitizer-linked, pulling ASan in only transitively via the clang-built
+    # rocpd .so (the ASAN CI link/runtime failure). amd-llvm, not amd-hip:
+    # pure host C++, no HIP dependency needed.
+    COMPILER_TOOLCHAIN amd-llvm
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DPROFILER_HUB_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DPROFILER_HUB_BUILD_BENCHMARKS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    BUILD_DEPS
+      ${_profiler_hub_build_deps}
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_INCLUDE_DIRS
+      include
+    INTERFACE_LINK_DIRS
+      lib
+  )
+  therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
+  therock_cmake_subproject_activate(profiler-hub)
+
+  # Actually run the gtest binary built above instead of only compiling it.
+  therock_cmake_subproject_build_test(profiler-hub
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
+  )
+
+  therock_test_validate_shared_lib(PATH ${CMAKE_CURRENT_BINARY_DIR}/profiler-hub/dist/lib
+    LIB_NAMES
+      libprofiler-hub.so
+  )
+
+  therock_provide_artifact(profiler-hub
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-profiler-hub.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      profiler-hub
+  )
+endif(THEROCK_ENABLE_PROFILER_HUB)
+
+##############################################################################
 # rocprofiler-systems
 ##############################################################################
 if(THEROCK_ENABLE_ROCPROFSYS)
@@ -313,6 +383,16 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     list(JOIN _rocprofsys_detected_python_versions "\;" _ROCPROFSYS_PYTHON_VERSIONS_STR)
     message(STATUS "Detected Python versions for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_VERSIONS_STR}")
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
+  endif()
+
+  # rocprofiler-systems' cmake/ProfilerHub.cmake calls find_package(profiler-hub).
+  # When profiler-hub is built as a super-project subproject, TheRock's dependency
+  # provider requires it to be declared as a dep here; when it is not, find_package
+  # falls back to profiler-hub's own sparse checkout. Only declare the dep when the
+  # profiler-hub subproject actually exists.
+  set(_rocprofsys_profiler_hub_dep "")
+  if(THEROCK_ENABLE_PROFILER_HUB)
+    set(_rocprofsys_profiler_hub_dep profiler-hub)
   endif()
 
   # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
@@ -358,6 +438,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       aqlprofile
       hip-clr
+      ${_rocprofsys_profiler_hub_dep}
       rocprofiler-register
       rocprofiler-sdk
       ${THEROCK_BUNDLED_LIBIBERTY}
