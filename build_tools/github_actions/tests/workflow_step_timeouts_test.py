@@ -56,7 +56,9 @@ def _find_violations(workflow: dict, workflow_name: str) -> list[str]:
             if not (_step_is_checkout(step) or _step_is_fetch_sources(step)):
                 continue
             if step.get("timeout-minutes") is None:
-                step_name = step.get("name") or step.get("uses") or step.get("run", "")[:60]
+                step_name = (
+                    step.get("name") or step.get("uses") or step.get("run", "")[:60]
+                )
                 errors.append(
                     f"{workflow_name} / {job_name} / '{step_name}': "
                     f"missing timeout-minutes"
@@ -81,8 +83,7 @@ class WorkflowStepTimeoutsTest(unittest.TestCase):
 
             warnings.warn(
                 "The following checkout/fetch_sources steps are missing timeout-minutes "
-                "(fix in follow-up PRs):\n"
-                + "\n".join(f"  - {e}" for e in errors),
+                "(fix in follow-up PRs):\n" + "\n".join(f"  - {e}" for e in errors),
                 stacklevel=2,
             )
 
