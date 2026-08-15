@@ -7,11 +7,11 @@
 
 set -euo pipefail
 
-GH_VERSION="${1:-2.74.0}"
+GH_VERSION="${1:-2.97.0}"
 ARCH="$(uname -m)"
 case "${GH_VERSION}:${ARCH}" in
-    2.74.0:x86_64)
-        GH_SHA256="e55c9d49dc49c0b0fef0a9acd3510482fd9e27ff52ae80f8a6e838cd25b4cd89"
+    2.97.0:x86_64)
+        GH_SHA256="a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112"
         ;;
     *)
         echo "Unsupported gh CLI version/architecture: ${GH_VERSION}/${ARCH}" >&2
