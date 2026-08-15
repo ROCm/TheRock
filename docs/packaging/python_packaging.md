@@ -122,6 +122,46 @@ objects fail to load at install time. See
 [environment_setup_guide.md#patchelf](../environment_setup_guide.md#patchelf)
 for supported install paths.
 
+#### Local ASAN wheels
+
+An ASAN artifact build must be packaged with `--asan`. This gives every ROCm
+wheel a non-release, PEP 440 local version such as
+`10.1.0+asan.20260807`, packages the shared Clang ASAN runtime in
+`rocm-sdk-core`, and validates that ASAN-linked ELFs in the split wheels can
+resolve that runtime through a relative RPATH.
+
+```bash
+python ./build_tools/build_python_packages.py \
+    --artifact-dir=/path/to/asan/build/artifacts \
+    --dest-dir=/path/to/local/rocm-asan-wheels \
+    --linux-amdgpu-families=gfx94X-dcgpu \
+    --asan
+```
+
+The default ASAN build ID is derived from `rocm_package_version` in the source
+artifact's `therock_manifest.json` (for example, `20260807` from
+`10.1.0a20260807`). Use `--asan-build-id=<id>` to select a different local
+identifier. An explicit `--version` is accepted only when it has the matching
+artifact base and canonical `<base>+asan.<build-id>` shape; this prevents an
+ASAN artifact set from being mislabeled as a release wheel.
+
+The kpack split is unchanged. For a gfx942 artifact set, the local output under
+`/path/to/local/rocm-asan-wheels/dist` includes:
+
+```text
+rocm-10.1.0+asan.20260807.tar.gz
+rocm_sdk_core-10.1.0+asan.20260807-*.whl
+rocm_sdk_libraries-10.1.0+asan.20260807-*.whl
+rocm_sdk_device_gfx942-10.1.0+asan.20260807-*.whl
+rocm_sdk_devel-10.1.0+asan.20260807-*.whl
+```
+
+`build_python_packages.py` only writes local files. It does not upload or
+promote packages. Also note that it consumes TheRock's structured `artifacts/`
+directory, not an already-flattened `therock-dist-*.tar.gz` SDK archive.
+See [Local ASan Python Package Index](local_asan_index.md) to stage the result
+under an isolated `whl-asan/gfx942-all/` tree and install it offline.
+
 ### Building from CI Artifacts
 
 You can also build packages from artifacts uploaded by CI workflows:
