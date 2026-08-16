@@ -299,7 +299,14 @@ pre-commit run --all-files
 
 # Install the git hook.
 pre-commit install
+
+# Run the markdown link checker (manual stage, not run on commit).
+pre-commit run --hook-stage manual --all-files lychee
 ```
+
+The `lychee` hook checks that repo-relative markdown links resolve to files that
+exist. It is confined to the `manual` stage because it downloads a `lychee`
+binary on first run, which the other hooks do not need.
 
 #### Requesting a code review
 

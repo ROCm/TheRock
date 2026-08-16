@@ -220,6 +220,14 @@ jobs:
 
       - name: Install test requirements
         run: |
+          # Some pinned test requirements have no cp314 wheel and build from
+          # source. The container ships clang but not gcc, and setuptools
+          # defaults to the CC=gcc baked into sysconfig. Scoped to this step so
+          # it does not affect the tests.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            export CC=clang
+            export CXX=clang++
+          fi
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
