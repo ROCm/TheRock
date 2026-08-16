@@ -1,0 +1,10 @@
+git submodule init rocm-libraries
+git submodule update rocm-libraries
+cd rocm-libraries/
+git checkout amd-compiler-2026-8-14-COT-revFFT
+git add .
+git checkout -b users/rlieberm/compiler-ww-33-SMP-1.2
+git commit --file ~/rockBin/ww33-SMP-1.1
+git branch
+echo git push origin users/rlieberm/compiler-ww-33-SMP-1.2
+
