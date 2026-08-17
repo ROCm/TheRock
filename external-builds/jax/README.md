@@ -173,14 +173,6 @@ For more detailed build options, see the `ROCm/jax` repository and the
    source jax_test_env/bin/activate
    ```
 
-1. Install requirements:
-
-   ```bash
-   cd jax
-   pip install -r build/test-requirements.txt
-   pip install pytest-html pytest-csv uv pytest-json-report
-   ```
-
 1. Install ROCm Python packages:
 
    ```bash
@@ -194,23 +186,109 @@ For more detailed build options, see the `ROCm/jax` repository and the
    ```bash
    # Replace <rocm_major> with the ROCm major version of the index you install
    # from, e.g. 7 for a ROCm 7.x release or 10 for a ROCm 10.x release.
-   pip install \
-   --index-url <package_index_url> \
-   jax_rocm<rocm_major>_plugin \
-   jax_rocm<rocm_major>_pjrt
-
-   # Install jax from PyPI to match the version
-   pip install jax==<JAX_VERSION>
+   python external-builds/jax/install_jax_wheels.py \
+     --index-url <package_index_url> \
+     --plugin-package jax_rocm<rocm_major>_plugin \
+     --pjrt-package jax_rocm<rocm_major>_pjrt \
+     --plugin-version <JAX_VERSION> \
+     --pjrt-version <JAX_VERSION> \
+     --jax-version <JAX_VERSION>
    ```
 
-1. Run JAX tests:
+1. Install the test requirements, which come from the checkout so that they match
+   the release under test:
 
    ```bash
-   cd jax
-   # Create a dist directory (required to run the pytest-rocm.sh script).
-   mkdir -p dist
-   sh ci/run_pytest_rocm.sh
+   python external-builds/jax/install_jax_test_requirements.py \
+     --jax-dir jax_tests \
+     --python-version 3.12
    ```
+
+1. Run the JAX tests:
+
+   ```bash
+   python external-builds/jax/run_jax_tests.py \
+     --jax-dir jax_tests \
+     --jax-version <JAX_VERSION> \
+     --amdgpu-family <amdgpu_family>
+   ```
+
+### How the test runner works
+
+[`run_jax_tests.py`](./run_jax_tests.py) is what CI runs, so the command above
+reproduces a CI job locally. The suite script in the `ROCm/jax` checkout
+(`ci/run_pytest_rocm.sh`) stays the source of truth for how the tests run, and
+the runner adds only what is ours:
+
+- The ROCm runtime workarounds this repository needs. Everything else about the
+  environment, such as the allocator and the XLA flags, is read back out of the
+  suite script so the retry pass below matches the run it checks. A version that
+  changes those values, including behind a conditional, needs no change here. If
+  the script's environment section cannot be read, because it was renamed, the
+  job fails with an error naming what to update, rather than retrying under an
+  environment that does not match the run.
+- The known-bad tests for the version and GPU family under test, as a pytest
+  `-k` expression. These live in [`skip_tests/`](./skip_tests/README.md), which
+  also documents how to inspect the expression or run only the skipped tests.
+- Two layers of retry, which are not interchangeable:
+  - **In-process reruns** (`--in-process-reruns`, default 2) are
+    pytest-rerunfailures. They repeat a failed test inside the same worker,
+    recovering a crashed worker or a one-off runtime error.
+  - **A fresh-process retry** (`--fresh-process-retry`, on by default) is a
+    separate pytest run over the tests the suite reported as failed. Some
+    failures are sticky: the first one leaves the process in a state where
+    every later test fails the same way, which no rerun inside that process can
+    clear. Only a new process tells a real failure apart from a poisoned worker,
+    which is why this pass decides the result. It only decides it when the
+    suite's own pytest sessions ran to the end, which their reported exit codes
+    are what say: a session that stopped early leaves the suite failure
+    standing, since its report lists only the tests it reached.
+- The CPUs the run may use. A container shares the host's kernel, so a job
+  holding 25 cores of a shared 8-GPU box still reads 192 cores and sizes every
+  thread pool from that: one worker holds 1021 threads, against 16 workers at a
+  time. On CI the allocation arrives in `KUBE_CPU_REQUEST`; anywhere else
+  `--cpus` says the same thing. The run is pinned to that many CPUs, which
+  takes a worker to 107 threads.
+
+Useful flags while debugging:
+
+```bash
+# Print the environment and the commands without running anything.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --dry-run
+
+# Run only the tests the skip lists would skip.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests \
+  --jax-version 0.10.2 --amdgpu-family gfx94X-dcgpu --debug
+
+# Run the suite alone, with both retry layers off.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --no-retries
+
+# Hold the run to 25 cores, as a CI pod would be.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --cpus 25
+```
+
+### Teaching an installed JAX about a new ROCm major version
+
+The plugin wheels carry the ROCm major version in their package name
+(`jax_rocm7_plugin`, `jax_rocm10_plugin`), and `jaxlib` looks that name up from a
+list of majors that existed when it was released. A newly bumped major is not
+found, so the GPU kernel modules resolve to `None` and `jax.devices()` fails with
+`'NoneType' object has no attribute ...`.
+
+[`patch_installed_jax_rocm_plugin_names.py`](./patch_installed_jax_rocm_plugin_names.py)
+adds the name to the installed `jaxlib`, and to the PJRT shim on wheels that
+predate the fix in ROCm/jax:
+
+```bash
+python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+    --plugin-package jax_rocm10_plugin
+```
+
+Run it between installing the wheels and running anything that imports `jax`. It
+edits the installed files in place, is idempotent, and detects the fixes that
+obsolete it, so it becomes a no-op once a `jaxlib` carrying
+[jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634) is installed. The
+ROCm 7 wheels need none of this.
 
 ## Nightly releases
 

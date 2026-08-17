@@ -32,7 +32,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(jax_refs), 1)
         self.assertEqual(
             set(matrix[0]),
-            {"python_version", "jax_ref", "jax_repository", "gfx_arch"},
+            {"python_version", "jax_ref", "jax_label", "jax_repository", "gfx_arch"},
         )
 
     def test_explicit_python_version_narrows_matrix(self):
@@ -57,6 +57,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(len(matrix), 1)
         self.assertEqual(matrix[0]["python_version"], "3.12")
         self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.0")
+        self.assertEqual(matrix[0]["jax_label"], "0.10.0")
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
 

@@ -50,6 +50,16 @@ repos:
     - id: actionlint
       args: [-shellcheck=, -ignore, 'label ".+" is unknown']
 
+- repo: https://github.com/lycheeverse/lychee.git
+  rev: lychee-v0.24.2
+  hooks:
+    - id: lychee
+      stages: [manual]
+      args:
+        - --offline
+        - --root-dir
+        - .
+
 - repo: local
   hooks:
   - id: forbidden-paths

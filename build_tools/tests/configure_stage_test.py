@@ -117,6 +117,10 @@ class ManifestValidationTest(unittest.TestCase):
                 f"Invalid feature '{feature}' for subproject '{subproject}'",
             )
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "manifest verification requires a Linux CMake configuration",
+    )
     def test_artifact_subprojects_matches_cmake(self):
         """Verify artifact_subprojects.json matches what CMake generates."""
         repo_root = Path(__file__).parent.parent.parent
