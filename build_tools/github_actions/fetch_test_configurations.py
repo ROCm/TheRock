@@ -150,6 +150,18 @@ _rocgdb_common = {
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# Capability-pinned SPM job uses CTest labels to run a subset of tests from the
+# same artifact (see rocprofiler-sdk vs rocprofiler-sdk-spm).
+
+# gfx94x CI families that schedule the rocprofiler-sdk-spm pinned job.
+_SPM_TEST_FAMILIES = {"gfx94X-dcgpu"}
+
+# Schedule the rocprofiler-sdk-spm pinned job on gfx94x CI families.
+_SPM_CI_ENABLED = True
+
+# Pinned runner for SPM tests.
+_ROCPROFILER_SDK_SPM_TEST_RUNNER = "linux-gfx942-gpu-rocm-profiler"
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -569,7 +581,7 @@ test_matrix = {
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash --ctest-label-exclude spm",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -579,6 +591,26 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+    },
+    # SPM tests run on a pinned gfx94x runner (see rocprofiler-sdk-spm).
+    "rocprofiler-sdk-spm": {
+        "job_name": "rocprofiler-sdk-spm",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 30,
+        "additional_requirements_files": [
+            "share/rocprofiler-sdk/tests/requirements.txt",
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --ctest-label spm",
+        "platform": ["linux"],
+        "container_options": ["--cap-add=SYS_PTRACE"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
+        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
+        # the specialized openmpi image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "test_runner": _ROCPROFILER_SDK_SPM_TEST_RUNNER,
     },
     # hipDNN tests
     "hipdnn": {
@@ -975,6 +1007,24 @@ def run():
         if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
+
+        if key == "rocprofiler-sdk-spm":
+            if not _SPM_CI_ENABLED:
+                logging.info(
+                    f"Excluding job {job_name}: SPM CI is disabled "
+                    "(set _SPM_CI_ENABLED=True to enable)"
+                )
+                continue
+            if amdgpu_families not in _SPM_TEST_FAMILIES:
+                logging.info(
+                    f"Excluding job {job_name}: SPM tests only run for gfx94x families"
+                )
+                continue
+            if build_variant in ("asan", "host-asan"):
+                logging.info(
+                    f"Excluding job {job_name}: SPM tests are disabled for ASAN builds"
+                )
+                continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
