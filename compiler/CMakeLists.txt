@@ -23,18 +23,32 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
   endif()
 
-  # Building Flang is very memory-intensive on systems with many cores. Allow
-  # users to specify the level of concurrency for these tasks so they can
+  # Building Flang is very memory-intensive on systems with many cores.
+  # At the same time there can be running compile jobs for flang,
+  # compile jobs for other llvm components and linking jobs for llvm components.
+  # Allow users to specify the level of concurrency for these tasks so they can
   # reduce the risk of running out of memory.
+  #
+  # Example of configure parameters for
+  # 32 GB DDR/16 GB swap/8 CPU core/16 CPU thread Linux system to
+  # allow the LLVM build to pass on single attempt:
+  #     -DLLVM_PARALLEL_COMPILE_JOBS=9
+  #     -DFLANG_PARALLEL_COMPILE_JOBS=4
+  #     -DLLVM_PARALLEL_LINK_JOBS=1
   if(FLANG_PARALLEL_COMPILE_JOBS)
     message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
     list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
   else()
      message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
   endif()
-
-  # LLVM linking is also very memory intensive. Allow users to adjust the number
-  # of parallel link jobs.
+  # Allow users to adjust the number of parallel jobs used for compiling non-Flang related files of the LLVM.
+  if(LLVM_PARALLEL_COMPILE_JOBS)
+    message(STATUS "LLVM build concurrency level set to ${LLVM_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_COMPILE_JOBS=${LLVM_PARALLEL_COMPILE_JOBS}")
+  else()
+    message(WARNING "LLVM concurrency is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_COMPILE_JOBS to reduce memory use.")
+  endif()
+  # Allow users to adjust the number of parallel link jobs when building LLVM.
   if(LLVM_PARALLEL_LINK_JOBS)
     message(STATUS "LLVM parallel link jobs set to ${LLVM_PARALLEL_LINK_JOBS}")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
