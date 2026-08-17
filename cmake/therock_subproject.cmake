@@ -1431,6 +1431,13 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
+  if(WIN32)
+    # Ensure sub-builds can find their own executables (e.g. bc2h) in the
+    # build directory. Windows 11 sets NoDefaultCurrentDirectoryInExePath=1
+    # by default, which prevents cmd.exe from locating executables in CWD.
+    list(APPEND _build_env_pairs "--unset=NoDefaultCurrentDirectoryInExePath")
+  endif()
+
   set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 

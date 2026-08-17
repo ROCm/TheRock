@@ -1,6 +1,20 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# If the compiler is not pristine (i.e. has patches), then there will be a
+# ".amd-llvm.smrev" file present which must be used instead of the auto
+# computed git revision. If present, this will have a stable hash of
+# revision plus applied patches suitable for run to run compiler
+# fingerprinting.
+# Read unconditionally so both 64-bit and 32-bit LLVM builds can use it.
+set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
+if(EXISTS "${LLVM_SMREV_FILE}")
+  file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
+  list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
+  list(GET LLVM_SMREV_LINES 1 LLVM_SMREV_REVISION)
+  message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
+endif()
+
 if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
     set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
@@ -40,19 +54,6 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
   else()
      message(WARNING "LLVM parallel link jobs is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_LINK_JOBS to reduce memory use.")
-  endif()
-
-  # If the compiler is not pristine (i.e. has patches), then there will be a
-  # ".amd-llvm.smrev" file present which must be used instead of the auto
-  # computed git revision. If present, this will have a stable hash of
-  # revision plus applied patches suitable for run to run compiler
-  # fingerprinting.
-  set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
-  if(EXISTS "${LLVM_SMREV_FILE}")
-    file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
-    list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
-    list(GET LLVM_SMREV_LINES 1 LLVM_SMREV_REVISION)
-    message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
   therock_cmake_subproject_declare(amd-llvm
@@ -251,95 +252,6 @@ if(THEROCK_ENABLE_COMPILER)
   )
 
   ##############################################################################
-  # 32-bit comgr (and its 32-bit LLVM dependency)
-  # Gated by THEROCK_ENABLE_COMGR32. Produces amd_comgr32.dll on Windows.
-  # The 64-bit amd-llvm / amd-comgr above are completely independent.
-  ##############################################################################
-
-  if(THEROCK_ENABLE_COMGR32)
-    therock_cmake_subproject_declare(amd-llvm32
-      CROSS_COMPILE_32BIT
-      USE_DIST_AMDGPU_TARGETS
-      NO_INSTALL_RPATH
-      EXTERNAL_SOURCE_DIR "amd-llvm"
-      CMAKE_LISTS_RELPATH "llvm"
-      BINARY_DIR "amd-llvm32"
-      BACKGROUND_BUILD
-      IGNORE_PACKAGES
-        ZLIB zstd
-      INTERFACE_PROGRAM_DIRS
-        lib/llvm/bin
-      CMAKE_ARGS
-        -DLLVM_APPEND_VC_REV=ON
-        "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
-        "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
-        -DLIBCXX_ENABLE_SHARED=OFF
-        -DLIBCXX_ENABLE_STATIC=ON
-        -DLIBCXX_INSTALL_LIBRARY=OFF
-        -DLIBCXX_INSTALL_HEADERS=OFF
-        -DLIBCXXABI_ENABLE_SHARED=OFF
-        -DLIBCXXABI_ENABLE_STATIC=ON
-        -DLLVM_INCLUDE_TESTS=OFF
-        -DTHEROCK_BUILD_COMGR_TESTS=OFF
-        -DLLVM_ENABLE_ZLIB=OFF
-        -DLLVM_ENABLE_Z3_SOLVER=OFF
-        -DLLVM_ENABLE_LIBXML2=OFF
-        -DLLVM_ENABLE_DIA_SDK=OFF
-        -DCLANG_DEFAULT_LINKER=lld
-        -DCLANG_DEFAULT_RTLIB=compiler-rt
-        -DCLANG_DEFAULT_UNWINDLIB=libgcc
-        -DCLANG_ENABLE_AMDCLANG=ON
-        -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
-        -DLLVM_BUILD_LLVM_C_DYLIB=OFF
-        -DLLVM_BUILD_EXAMPLES=OFF
-        -DLLVM_INCLUDE_EXAMPLES=OFF
-        -DCLANG_ENABLE_ARCMT=OFF
-        -DCLANG_ENABLE_STATIC_ANALYZER=OFF
-        -DCLANG_ENABLE_CLANGD=OFF
-        -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
-        -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=OFF
-        -DOPENMP_ENABLE_LIBOMPTARGET=OFF
-        -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=OFF
-        -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=OFF
-        -DSANITIZER_AMDGPU=OFF
-      BUILD_DEPS
-        rocm-cmake
-      INSTALL_DESTINATION "lib/llvm"
-      INTERFACE_LINK_DIRS
-        "lib/llvm/lib"
-      INTERFACE_INSTALL_RPATH_DIRS
-        "lib/llvm/lib"
-    )
-    therock_cmake_subproject_activate(amd-llvm32)
-
-    therock_cmake_subproject_declare(amd-comgr32
-      CROSS_COMPILE_32BIT
-      USE_DIST_AMDGPU_TARGETS
-      NO_INSTALL_RPATH
-      EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
-      BINARY_DIR "amd-comgr32"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        -DCOMGR_STATIC_LLVM=ON
-        -DTHEROCK_BUILD_COMGR_TESTS=OFF
-        "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
-        -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
-        "-DCOMGR_DLL_NAME=amd_comgr32.dll"
-      BUILD_DEPS
-        rocm-cmake
-      RUNTIME_DEPS
-        amd-llvm32
-      IGNORE_PACKAGES
-        LLVM Clang LLD AMDDeviceLibs
-      INTERFACE_LINK_DIRS
-        "lib"
-      INTERFACE_INSTALL_RPATH_DIRS
-        "lib"
-    )
-    therock_cmake_subproject_activate(amd-comgr32)
-  endif()
-
-  ##############################################################################
   # hipcc
   # Provides hipcc and hipconfig
   ##############################################################################
@@ -373,6 +285,117 @@ if(THEROCK_ENABLE_COMPILER)
       amd-comgr
   )
 endif(THEROCK_ENABLE_COMPILER)
+
+##############################################################################
+# 32-bit comgr (and its 32-bit LLVM dependency)
+# Gated by THEROCK_ENABLE_COMGR32. Produces amd_comgr32.dll on Windows.
+# Completely independent from the 64-bit amd-llvm / amd-comgr above.
+##############################################################################
+
+if(THEROCK_ENABLE_COMGR32)
+  therock_cmake_subproject_declare(amd-llvm32
+    CROSS_COMPILE_32BIT
+    USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH
+    EXTERNAL_SOURCE_DIR "amd-llvm"
+    CMAKE_LISTS_RELPATH "llvm"
+    BINARY_DIR "amd-llvm32"
+    BACKGROUND_BUILD
+    IGNORE_PACKAGES
+      ZLIB zstd
+    INTERFACE_PROGRAM_DIRS
+      lib/llvm/bin
+    CMAKE_ARGS
+      -DLLVM_APPEND_VC_REV=ON
+      "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
+      "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
+      -DLIBCXX_ENABLE_SHARED=OFF
+      -DLIBCXX_ENABLE_STATIC=ON
+      -DLIBCXX_INSTALL_LIBRARY=OFF
+      -DLIBCXX_INSTALL_HEADERS=OFF
+      -DLIBCXXABI_ENABLE_SHARED=OFF
+      -DLIBCXXABI_ENABLE_STATIC=ON
+      -DLLVM_INCLUDE_TESTS=OFF
+      -DTHEROCK_BUILD_COMGR_TESTS=OFF
+      -DLLVM_ENABLE_ZLIB=OFF
+      -DLLVM_ENABLE_Z3_SOLVER=OFF
+      -DLLVM_ENABLE_LIBXML2=OFF
+      -DLLVM_ENABLE_DIA_SDK=OFF
+      -DCLANG_DEFAULT_LINKER=lld
+      -DCLANG_DEFAULT_RTLIB=compiler-rt
+      -DCLANG_DEFAULT_UNWINDLIB=libgcc
+      -DCLANG_ENABLE_AMDCLANG=ON
+      -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
+      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
+      -DLLVM_BUILD_EXAMPLES=OFF
+      -DLLVM_INCLUDE_EXAMPLES=OFF
+      -DCLANG_ENABLE_ARCMT=OFF
+      -DCLANG_ENABLE_STATIC_ANALYZER=OFF
+      -DCLANG_ENABLE_CLANGD=OFF
+      -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=OFF
+      -DOPENMP_ENABLE_LIBOMPTARGET=OFF
+      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=OFF
+      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=OFF
+      -DSANITIZER_AMDGPU=OFF
+      # Force GCC/MinGW intrinsic checks off. CMAKE_TRY_COMPILE_TARGET_TYPE
+      # is STATIC_LIBRARY (for cross-compilation), which makes
+      # check_function_exists() always succeed — producing unresolved
+      # externals at link time.
+      -DHAVE__ALLOCA=0
+      -DHAVE___ALLOCA=0
+      -DHAVE___CHKSTK=0
+      -DHAVE___CHKSTK_MS=0
+      -DHAVE____CHKSTK=0
+      -DHAVE____CHKSTK_MS=0
+      -DHAVE___ASHLDI3=0
+      -DHAVE___ASHRDI3=0
+      -DHAVE___DIVDI3=0
+      -DHAVE___FIXDFDI=0
+      -DHAVE___FIXSFDI=0
+      -DHAVE___FLOATDIDF=0
+      -DHAVE___LSHRDI3=0
+      -DHAVE___MODDI3=0
+      -DHAVE___UDIVDI3=0
+      -DHAVE___UMODDI3=0
+      -DHAVE___MAIN=0
+      -DHAVE___CMPDI2=0
+    BUILD_DEPS
+      rocm-cmake
+    INSTALL_DESTINATION "lib/llvm"
+    INTERFACE_LINK_DIRS
+      "lib/llvm/lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib/llvm/lib"
+  )
+  therock_cmake_subproject_activate(amd-llvm32)
+
+  therock_cmake_subproject_declare(amd-comgr32
+    CROSS_COMPILE_32BIT
+    USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH
+    EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
+    BINARY_DIR "amd-comgr32"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DCOMGR_STATIC_LLVM=ON
+      -DTHEROCK_BUILD_COMGR_TESTS=OFF
+      "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
+      -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
+      "-DCOMGR_DLL_NAME=amd_comgr32.dll"
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm32
+    IGNORE_PACKAGES
+      LLVM Clang LLD AMDDeviceLibs
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_activate(amd-comgr32)
+endif(THEROCK_ENABLE_COMGR32)
 
 if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################

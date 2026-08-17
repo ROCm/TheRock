@@ -81,12 +81,13 @@ if(EXISTS "${_x86_lib_dir}")
   link_directories("${_x86_lib_dir}")
 endif()
 
-# MSVC include directories
+# MSVC include directories — use CMAKE_*_STANDARD_INCLUDE_DIRECTORIES only,
+# not include_directories(), to avoid leaking host paths into device-libs
+# OpenCL compilation (which reads INCLUDE_DIRECTORIES from directory scope).
 set(_x86_include_dir "${_THEROCK_VCTOOLS_INSTALL_DIR}/include")
 if(EXISTS "${_x86_include_dir}")
   list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_x86_include_dir}")
   list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_x86_include_dir}")
-  include_directories(SYSTEM "${_x86_include_dir}")
 endif()
 
 # ATL/MFC libraries (needed by DebugInfoPDB)
@@ -102,7 +103,6 @@ set(_atlmfc_include "${_vc_install_dir}/ATLMFC/include")
 if(EXISTS "${_atlmfc_include}")
   list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_atlmfc_include}")
   list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_atlmfc_include}")
-  include_directories(SYSTEM "${_atlmfc_include}")
 endif()
 
 # Windows SDK libraries and includes (ucrt, um, shared)
@@ -147,58 +147,47 @@ if(_winsdk_dir AND _winsdk_ver)
   if(EXISTS "${_ucrt_include}")
     list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_ucrt_include}")
     list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_ucrt_include}")
-    include_directories(SYSTEM "${_ucrt_include}")
   endif()
   if(EXISTS "${_um_include}")
     list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_um_include}")
     list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_um_include}")
-    include_directories(SYSTEM "${_um_include}")
   endif()
   if(EXISTS "${_shared_include}")
     list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_shared_include}")
     list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_shared_include}")
-    include_directories(SYSTEM "${_shared_include}")
   endif()
   if(EXISTS "${_winrt_include}")
     list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_winrt_include}")
     list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_winrt_include}")
-    include_directories(SYSTEM "${_winrt_include}")
   endif()
   if(EXISTS "${_cppwinrt_include}")
     list(APPEND CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "${_cppwinrt_include}")
     list(APPEND CMAKE_C_STANDARD_INCLUDE_DIRECTORIES "${_cppwinrt_include}")
-    include_directories(SYSTEM "${_cppwinrt_include}")
   endif()
 endif()
 
 # ---------------------------------------------------------------------------
-# Force linker to use x86 library paths for try_compile
+# Force linker to use x86 library paths and machine type.
+# Paths are quoted individually to handle spaces (e.g. "Program Files (x86)").
+# We rely on CMake's built-in MSVC link rules rather than overriding
+# CMAKE_*_LINK_EXECUTABLE / CMAKE_*_CREATE_SHARED_LIBRARY, since the
+# built-in rules handle response files and quoting correctly.
 # ---------------------------------------------------------------------------
-set(_link_dirs "")
+set(_link_flags "/machine:X86")
 if(DEFINED _x86_lib_dir AND EXISTS "${_x86_lib_dir}")
-  list(APPEND _link_dirs "/LIBPATH:${_x86_lib_dir}")
+  string(APPEND _link_flags " \"/LIBPATH:${_x86_lib_dir}\"")
 endif()
 if(DEFINED _x86_atlmfc_lib AND EXISTS "${_x86_atlmfc_lib}")
-  list(APPEND _link_dirs "/LIBPATH:${_x86_atlmfc_lib}")
+  string(APPEND _link_flags " \"/LIBPATH:${_x86_atlmfc_lib}\"")
 endif()
 if(DEFINED _ucrt_x86 AND EXISTS "${_ucrt_x86}")
-  list(APPEND _link_dirs "/LIBPATH:${_ucrt_x86}")
+  string(APPEND _link_flags " \"/LIBPATH:${_ucrt_x86}\"")
 endif()
 if(DEFINED _um_x86 AND EXISTS "${_um_x86}")
-  list(APPEND _link_dirs "/LIBPATH:${_um_x86}")
+  string(APPEND _link_flags " \"/LIBPATH:${_um_x86}\"")
 endif()
 
-if(_link_dirs)
-  string(REPLACE ";" " " _link_dirs_str "${_link_dirs}")
-  # Prepend /machine:X86 and override any /machine:x64 that CMake might add
-  set(CMAKE_EXE_LINKER_FLAGS_INIT "${_link_dirs_str}")
-  set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_link_dirs_str}")
-  set(CMAKE_MODULE_LINKER_FLAGS_INIT "${_link_dirs_str}")
-  set(CMAKE_STATIC_LINKER_FLAGS_INIT "")
-
-  # Override linker to always use x86 machine type
-  set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_LINKER> /nologo <OBJECTS> /out:<TARGET> /implib:<TARGET_IMPLIB> /machine:X86 <LINK_FLAGS> <LINK_LIBRARIES>")
-  set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_LINKER> /nologo <OBJECTS> /out:<TARGET> /implib:<TARGET_IMPLIB> /machine:X86 <LINK_FLAGS> <LINK_LIBRARIES>")
-  set(CMAKE_C_CREATE_SHARED_LIBRARY "<CMAKE_LINKER> /nologo <OBJECTS> /out:<TARGET> /implib:<TARGET_IMPLIB> /machine:X86 /DLL <LINK_FLAGS> <LINK_LIBRARIES>")
-  set(CMAKE_CXX_CREATE_SHARED_LIBRARY "<CMAKE_LINKER> /nologo <OBJECTS> /out:<TARGET> /implib:<TARGET_IMPLIB> /machine:X86 /DLL <LINK_FLAGS> <LINK_LIBRARIES>")
-endif()
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${_link_flags}")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_link_flags}")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "${_link_flags}")
+set(CMAKE_STATIC_LINKER_FLAGS_INIT "")

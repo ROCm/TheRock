@@ -285,7 +285,7 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 # 32-bit Windows builds (x86 cross-compilation from x64 host)
 cmake_dependent_option(THEROCK_ENABLE_COMGR32
   "Build 32-bit comgr (amd_comgr32.dll) for Windows"
-  OFF "WIN32;THEROCK_ENABLE_COMPILER" OFF)
+  OFF "WIN32" OFF)
 
 cmake_dependent_option(THEROCK_ENABLE_OCL32_RUNTIME
   "Build 32-bit OpenCL runtime (amdocl32.dll) for Windows"
