@@ -125,3 +125,71 @@ $content = $content.Replace($vaWin32Old, $vaWin32New)
 Set-Content $LibvaMesonBuild $content -NoNewline
 
 Write-Host "Patched $LibvaMesonBuild"
+
+# Patch libva's va.c so the VA-API driver (vaon12_drv_video.dll) is located
+# relative to ROCM_PATH, removing the need for a LIBVA_DRIVERS_PATH environment
+# variable. This mirrors the Linux sysdeps patch (patch_source.sh lines 47-67),
+# but builds the path with a portable snprintf()+malloc() sequence because MSVC
+# has no asprintf(). secure_getenv() is supplied on Windows by libva's own
+# compat_win32.h shim. The search path ends in bin/ (not lib/) because Windows
+# installs runtime .dll files to bin/ while lib/ holds only .lib import libs.
+$LibvaSource = "$($LibvaSubprojectDir.FullName)/va/va.c"
+if (-not (Test-Path $LibvaSource)) {
+  Write-Error "Could not find $LibvaSource - was libva extracted by meson setup?"
+  exit 1
+}
+
+$va = Convert-Lf (Get-Content $LibvaSource -Raw)
+
+# 1. Declare a scratch buffer for the ROCM_PATH-derived search path.
+$declOld = "    char *search_path = NULL;"
+$declNew = "    char *search_path = NULL;`n    char *temp_path = NULL;"
+if (-not $va.Contains($declOld)) {
+  Write-Error "Could not find 'char *search_path = NULL;' in $LibvaSource - patch may already be applied or file changed upstream."
+  exit 1
+}
+$va = $va.Replace($declOld, $declNew)
+
+# 2. Prefer <ROCM_PATH>/lib/rocm_sysdeps/lib, falling back to VA_DRIVERS_PATH.
+$searchOld = Convert-Lf @'
+    if (!search_path)
+        search_path = VA_DRIVERS_PATH;
+'@
+$searchNew = Convert-Lf @'
+    if (!search_path) {
+        char *rocm_path = secure_getenv("ROCM_PATH");
+        if (rocm_path) {
+            const char *suffix = "/lib/rocm_sysdeps/bin";
+            int n = snprintf(NULL, 0, "%s%s", rocm_path, suffix);
+            if (n < 0) {
+                temp_path = NULL;
+            } else {
+                temp_path = (char *)malloc(n + 1);
+                if (temp_path) {
+                    snprintf(temp_path, n + 1, "%s%s", rocm_path, suffix);
+                    search_path = temp_path;
+                }
+            }
+        } else {
+            search_path = VA_DRIVERS_PATH;
+        }
+    }
+'@
+if (-not $va.Contains($searchOld)) {
+  Write-Error "Could not find LIBVA_DRIVERS_PATH fallback block in $LibvaSource - patch may already be applied or file changed upstream."
+  exit 1
+}
+$va = $va.Replace($searchOld, $searchNew)
+
+# 3. Free the scratch buffer once search_path has been strdup()'d.
+$freeOld = "    search_path = strdup((const char *)search_path);"
+$freeNew = "    search_path = strdup((const char *)search_path);`n    if (temp_path) { free(temp_path); temp_path = NULL; }"
+if (-not $va.Contains($freeOld)) {
+  Write-Error "Could not find 'search_path = strdup(...)' in $LibvaSource - patch may already be applied or file changed upstream."
+  exit 1
+}
+$va = $va.Replace($freeOld, $freeNew)
+
+Set-Content $LibvaSource $va -NoNewline
+
+Write-Host "Patched $LibvaSource"
