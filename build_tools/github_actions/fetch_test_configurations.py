@@ -861,8 +861,10 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # hipTensor does not support gfx103X (see TheRock#2074)
-            "linux": ["gfx1030"],
+            # hipTensor requires composable_kernel, which is filtered out on some platforms,
+            # so no hipTensor test artifact is produced for that family (see TheRock#2074).
+            "linux": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
+            "windows": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
         },
     },
 }
