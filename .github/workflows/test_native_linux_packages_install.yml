@@ -46,6 +46,11 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      build_variant:
+        description: "Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages."
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -91,6 +96,10 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
+      build_variant:
+        description: "Build variant (e.g. 'asan'). Changes expected package names."
+        type: string
+        default: ""
 
 permissions:
   id-token: write
@@ -155,6 +164,7 @@ jobs:
       GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
     steps:
       - name: Install System Prerequisites
         run: |

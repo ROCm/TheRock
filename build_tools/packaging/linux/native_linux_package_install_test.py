@@ -366,6 +366,7 @@ class NativeLinuxPackageInstallTest:
         gfx_arch: str | list[str] | None = None,
         rocm_version: str | None = None,
         gpg_key_url: str | None = None,
+        build_variant: str = "",
     ):
         """Initialize the native Linux package install test runner.
 
@@ -383,6 +384,10 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
+        build_variant: Build variant (e.g. 'asan'). When set, '-{variant}' is
+        inserted before the version suffix in package names so that variant
+        packages are tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
+        ``amdrocm7.15-gfx942``).
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
@@ -400,29 +405,43 @@ class NativeLinuxPackageInstallTest:
             self.gfx_arch_list[0] if self.gfx_arch_list else None
         )
         self.gpg_key_url = gpg_key_url
+        self.build_variant = build_variant.strip().lower()
 
-        # Metapackage install targets (four combinations of optional inputs):
-        #   gfx_arch + rocm_version -> amdrocm{major.minor}-{arch} per arch
-        #   gfx_arch only           -> amdrocm / amdrocm-core-sdk (arch not in name)
-        #   rocm_version only       -> amdrocm{major.minor} / amdrocm-core-sdk{major.minor}
-        #   neither                 -> unversioned amdrocm / amdrocm-core-sdk
+        # Build variants that produce distinct package names with a '-{variant}'
+        # suffix inserted before the version. 'release' is the default build and
+        # does NOT alter the package name (amdrocm7.15, not amdrocm-release7.15).
+        _NAMED_VARIANTS = {"asan"}
+
+        # Metapackage install targets (four combinations of optional inputs).
+        # When build_variant is a named variant (e.g. 'asan'), '-{variant}' is
+        # inserted before the version suffix:
+        #   gfx_arch + rocm_version -> amdrocm-asan{major.minor}-{arch} per arch
+        #   gfx_arch only           -> amdrocm-asan / amdrocm-core-sdk-asan
+        #   rocm_version only       -> amdrocm-asan{major.minor} / amdrocm-core-sdk-asan{major.minor}
+        #   neither                 -> amdrocm-asan / amdrocm-core-sdk-asan
         ver = self.rocm_version_major_minor
+        variant_sep = (
+            f"-{self.build_variant}" if self.build_variant in _NAMED_VARIANTS else ""
+        )
         if self.gfx_arch_list and ver:
             self.package_names = []
             for arch in self.gfx_arch_list:
                 self.package_names.extend(
                     [
-                        f"amdrocm{ver}-{arch}",
-                        f"amdrocm-core-sdk{ver}-{arch}",
+                        f"amdrocm{variant_sep}{ver}-{arch}",
+                        f"amdrocm-core-sdk{variant_sep}{ver}-{arch}",
                     ]
                 )
         elif ver:
             self.package_names = [
-                f"amdrocm{ver}",
-                f"amdrocm-core-sdk{ver}",
+                f"amdrocm{variant_sep}{ver}",
+                f"amdrocm-core-sdk{variant_sep}{ver}",
             ]
         else:
-            self.package_names = ["amdrocm", "amdrocm-core-sdk"]
+            self.package_names = [
+                f"amdrocm{variant_sep}",
+                f"amdrocm-core-sdk{variant_sep}",
+            ]
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -1419,6 +1438,12 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         help="GPG key URL",
     )
     parser.add_argument(
+        "--build-variant",
+        type=str,
+        default="",
+        help="Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages.",
+    )
+    parser.add_argument(
         "--test-type",
         type=str,
         default="sanity",
@@ -1573,6 +1598,7 @@ def run_tests(args: Namespace) -> int:
         gfx_arch=args.gfx_arch,
         rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
+        build_variant=args.build_variant,
     )
 
     print("\n" + "=" * 80)
@@ -1676,6 +1702,9 @@ def _argv_from_ci_env() -> list[str] | None:
     gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
     if gpg:
         argv.extend(["--gpg-key-url", gpg])
+    build_variant = (os.environ.get("BUILD_VARIANT") or "").strip()
+    if build_variant:
+        argv.extend(["--build-variant", build_variant])
     return argv
 
 
