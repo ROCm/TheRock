@@ -367,7 +367,7 @@ class DebPackageVersionTest(unittest.TestCase):
         )
         self.assertRegex(
             version,
-            r"^8\.1\.0~20260811\+bkc\.[0-9]{8}$",
+            r"^8\.1\.0~20260811\.bkc\.[0-9]{8}$",
         )
 
     def test_prerelease_version(self):

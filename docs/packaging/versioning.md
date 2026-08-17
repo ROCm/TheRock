@@ -338,7 +338,7 @@ The script produces these versions for debian packages for each release type:
 | stable       | `X.Y.Z`                                      | `7.10.0`                                                               |
 | prerelease   | `X.Y.Z~preN`                                 | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
 | nightly      | `X.Y.Z~YYYYMMDD`                             | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
-| nightly-bkc  | `X.Y.Z~BASEDATE+bkc.YYYYMMDD`                | `10.1.0~20260811+bkc.20260814`                                         |
+| nightly-bkc  | `X.Y.Z~BASEDATE.bkc.YYYYMMDD`                | `10.1.0~20260811.bkc.20260814`                                         |
 | dev          | `X.Y.Z~devYYYYMMDD`                          | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)                  |
 | dev-bkc      | `X.Y.Z~devYYYYMMDD`<br>(same as regular dev) | `10.1.0~dev20260814`                                                   |
 

@@ -31,7 +31,7 @@ Sample usage:
 
   python compute_rocm_package_version.py --release-type=nightly-bkc
   # rocm_package_version=10.1.0a20260811+bkc.20260814
-  # rocm_deb_package_version=10.1.0~20260811+bkc.20260814
+  # rocm_deb_package_version=10.1.0~20260811.bkc.20260814
   # rocm_rpm_package_version=10.1.0~20260811.bkc.20260814
 
   python compute_rocm_package_version.py --custom-version-suffix=.dev0
@@ -240,10 +240,7 @@ def compute_version(
             # Format: <rocm-version>~<YYYYMMDD>
             version_suffix_str = f"~{current_date}"
         elif release_type == "nightly-bkc":
-            bkc_separator = "+" if package_type == "deb" else "."
-            version_suffix_str = (
-                f"~{release_metadata['base-date']}{bkc_separator}bkc.{current_date}"
-            )
+            version_suffix_str = f"~{release_metadata['base-date']}.bkc.{current_date}"
         elif release_type == "prerelease":
             # Construct a prerelease version
             # deb format: <rocm-version>~pre<N>
