@@ -305,6 +305,27 @@ function(therock_provide_artifact slice_name)
       )
     endif()
 
+    # Strip generic artifacts after kpack splitting (when split debug info is enabled).
+    # At this point, GPU code has been extracted to .kpack files, so strip is safe.
+    # This must happen AFTER splitting but BEFORE flattening.
+    if(THEROCK_SPLIT_DEBUG_INFO)
+      set(_strip_tool "${THEROCK_SOURCE_DIR}/build_tools/strip_artifact.py")
+      foreach(_component_dir ${_split_component_dirs})
+        # Only strip *_generic directories (arch-specific contain .kpack, not ELF)
+        if(_component_dir MATCHES "_generic$")
+          add_custom_command(
+            OUTPUT "${_component_dir}/.stripped"
+            COMMENT "Stripping binaries in ${_component_dir}"
+            COMMAND "${Python3_EXECUTABLE}" "${_strip_tool}" "${_component_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E touch "${_component_dir}/.stripped"
+            DEPENDS "${_component_dir}/artifact_manifest.txt"
+            VERBATIM
+          )
+          list(APPEND _split_manifest_files "${_component_dir}/.stripped")
+        endif()
+      endforeach()
+    endif()
+
     # Flatten split artifacts to dist/DISTRIBUTION after all splits complete.
     # This uses artifact-flatten-split which discovers split output dirs by
     # globbing at build time (per-target dir names can't be predicted at

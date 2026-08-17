@@ -1082,10 +1082,10 @@ function(therock_cmake_subproject_activate target_name)
     add_dependencies("${target_name}" "${target_name}+build")
 
     # stage install target.
+    # Note: We do NOT strip during install. When THEROCK_SPLIT_DEBUG_INFO is ON,
+    # stripping happens AFTER kpack artifact splitting to preserve .hip_fatbin
+    # content for GPU kernel extraction. See therock_artifacts.cmake.
     set(_install_strip_option)
-    if(THEROCK_SPLIT_DEBUG_INFO)
-      set(_install_strip_option "--strip")
-    endif()
     # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
     # --install once for each component, for some reason CMake doesn't support
     # multiple --component flags in one call.
