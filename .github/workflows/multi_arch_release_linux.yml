@@ -136,6 +136,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
+      build_variant: ${{ inputs.build_variant }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -153,6 +154,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
+      build_variant: ${{ inputs.build_variant }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -246,6 +248,7 @@ jobs:
               "os_profile": "${{ matrix.os_profile }}",
               "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "test_type": "${{ inputs.test_type }}",
+              "build_variant": "${{ inputs.build_variant }}",
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}"
             }
@@ -272,7 +275,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}"
             }
 
   trigger_release_jax_wheels:
