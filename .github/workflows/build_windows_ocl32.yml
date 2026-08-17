@@ -1,0 +1,136 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# 32-bit Windows OCL Build
+#
+# Builds the 32-bit comgr (amd_comgr32.dll) and OpenCL runtime (amdocl32.dll)
+# on Windows. This is a standalone workflow — the 32-bit build is independent
+# of the main 64-bit stage pipeline.
+
+name: Build Windows OCL32
+
+on:
+  push:
+    branches:
+      - main
+      - release/therock-*
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build_ocl32:
+    name: "Build OCL32 (x86)"
+    runs-on: azure-windows-scale-rocm
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_DIR: B:\build
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CACHE_DIR: ${{ github.workspace }}/.cache
+      TEATIME_FORCE_INTERACTIVE: 0
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Install requirements
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y ccache
+          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+
+      - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
+        with:
+          version: '3.62.0'
+
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          python build_tools/health_status.py
+
+      - name: Setup ccache
+        run: |
+          python ./build_tools/setup_ccache.py \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache" \
+            --log-dir "${BUILD_DIR}/logs/ccache"
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: python build_tools/fetch_sources.py --stage compiler-runtime --jobs 12 --depth 1
+
+      - name: Configure
+        run: |
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            --preset=windows-release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DTHEROCK_AMDGPU_FAMILIES=gfx1100 \
+            -DTHEROCK_ENABLE_ALL=OFF \
+            -DTHEROCK_ENABLE_COMGR32=ON \
+            -DTHEROCK_ENABLE_OCL32_RUNTIME=ON
+
+      - name: Build
+        run: |
+          cmake --build "${BUILD_DIR}" -- -k 0
+
+      - name: Verify 32-bit DLLs
+        run: |
+          python -c "
+          import struct, sys, os
+
+          build_dir = os.environ['BUILD_DIR']
+          dlls = {
+              'amd_comgr32.dll': os.path.join(build_dir, 'compiler', 'amd-comgr32', 'stage', 'bin', 'amd_comgr32.dll'),
+              'amdocl32.dll': os.path.join(build_dir, 'core', 'ocl-clr32', 'stage', 'bin', 'amdocl32.dll'),
+          }
+
+          for name, path in dlls.items():
+              if not os.path.exists(path):
+                  print(f'FAIL: {name} not found at {path}')
+                  sys.exit(1)
+              with open(path, 'rb') as f:
+                  # PE signature at offset stored at 0x3C
+                  f.seek(0x3C)
+                  pe_offset = struct.unpack('<I', f.read(4))[0]
+                  f.seek(pe_offset + 4)  # skip 'PE\0\0'
+                  machine = struct.unpack('<H', f.read(2))[0]
+              if machine != 0x14c:
+                  print(f'FAIL: {name} machine type 0x{machine:x}, expected 0x14c (i386)')
+                  sys.exit(1)
+              size_mb = os.path.getsize(path) / (1024 * 1024)
+              print(f'OK: {name} — x86 PE ({size_mb:.1f} MB)')
+          "
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "CCache Stats:"
+          ccache -s -v
