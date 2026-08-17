@@ -140,6 +140,8 @@ def compute_version(
             # Trust the custom suffix to satisfy the general rules:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/
             version_suffix = custom_version_suffix
+        elif release_type == "release":
+            version_suffix = ""
         elif release_type in ("ci", "dev"):
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
@@ -217,10 +219,7 @@ def main(argv):
         "--release-type",
         type=str,
         choices=["ci", "dev", "nightly", "prerelease", "release"],
-        help=(
-            "The type of package version to produce. "
-            "'ci' uses dev-style versions; 'release' is only valid for deb/rpm."
-        ),
+        help="The type of package version to produce. 'ci' uses dev-style versions.",
     )
     release_type_group.add_argument(
         "--custom-version-suffix",
@@ -249,9 +248,6 @@ def main(argv):
     args = parser.parse_args(argv)
 
     # Validation
-    if args.release_type == "release":
-        parser.error("'release' type is only valid for deb/rpm packages, not wheel")
-
     if args.release_type != "prerelease" and args.prerelease_version:
         parser.error("release type must be 'prerelease' if --prerelease-version is set")
     elif args.release_type == "prerelease" and not args.prerelease_version:
