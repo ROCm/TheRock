@@ -122,7 +122,6 @@ class PythonPackageVersionTest(unittest.TestCase):
         # pip install --upgrade selects the greatest available version, so enforce:
         # release > prerelease > nightly > dev.
         versions = self._compute_versions_by_release_type()
-        print(f"versions: {versions}")
 
         self.assertGreater(
             Version(versions["nightly"]),
@@ -336,15 +335,56 @@ class RpmPackageVersionTest(unittest.TestCase):
         self.assertEqual(version, "8.0.0~custom1")
 
 
+# Test meaningful combinations of argparse options through the real computation path,
+# including main()'s side effect of writing versions to GitHub Actions outputs.
 class MainFunctionTest(unittest.TestCase):
-    def test_sets_package_version_outputs(self):
+    def test_sets_dev_outputs_with_version_overrides(self):
+        override_git_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        with (
+            mock.patch.dict(os.environ, {"GITHUB_SHA": "f" * 40}),
+            mock.patch.object(
+                compute_rocm_package_version, "gha_set_output"
+            ) as gha_set_output,
+        ):
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "dev",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--override-git-sha",
+                    override_git_sha,
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(
+            set(outputs),
+            {
+                "rocm_package_version",
+                "rocm_deb_package_version",
+                "rocm_rpm_package_version",
+            },
+        )
+        self.assertEqual(
+            outputs["rocm_package_version"],
+            f"7.99.0.dev0+{override_git_sha}",
+        )
+        self.assertTrue(outputs["rocm_deb_package_version"].startswith("7.99.0~dev"))
+        self.assertTrue(outputs["rocm_rpm_package_version"].startswith("7.99.0~"))
+        self.assertTrue(outputs["rocm_rpm_package_version"].endswith("gabcdef12"))
+
+    def test_sets_prerelease_outputs(self):
         with mock.patch.object(
             compute_rocm_package_version, "gha_set_output"
         ) as gha_set_output:
             compute_rocm_package_version.main(
                 [
                     "--release-type",
-                    "release",
+                    "prerelease",
+                    "--prerelease-version",
+                    "2",
                     "--override-base-version",
                     "7.99.0",
                 ]
@@ -352,9 +392,30 @@ class MainFunctionTest(unittest.TestCase):
 
         gha_set_output.assert_called_once_with(
             {
-                "rocm_package_version": "7.99.0",
-                "rocm_deb_package_version": "7.99.0",
-                "rocm_rpm_package_version": "7.99.0",
+                "rocm_package_version": "7.99.0rc2",
+                "rocm_deb_package_version": "7.99.0~pre2",
+                "rocm_rpm_package_version": "7.99.0~rc2",
+            }
+        )
+
+    def test_sets_custom_suffix_outputs(self):
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--custom-version-suffix",
+                    ".custom1",
+                    "--override-base-version",
+                    "7.99.0",
+                ]
+            )
+
+        gha_set_output.assert_called_once_with(
+            {
+                "rocm_package_version": "7.99.0.custom1",
+                "rocm_deb_package_version": "7.99.0.custom1",
+                "rocm_rpm_package_version": "7.99.0.custom1",
             }
         )
 
