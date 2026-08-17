@@ -1,0 +1,59 @@
+#!/bin/bash
+
+is_debian_like() {
+    local id_like="$1"
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+do_update_alternatives(){
+    # skip update if program doesn't exist
+    command -v update-alternatives >/dev/null || return 0
+
+    {% if target == "deb" %}
+        PKG_INSTALL_PREFIX={{ install_prefix }}
+    {% else %}
+        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+
+    # Remove /opt/rocm/core soft link
+    update-alternatives --remove "core" "$PKG_INSTALL_PREFIX" || true
+    update-alternatives --remove "core-{{ version_major }}" "$PKG_INSTALL_PREFIX" || true
+
+    # Remove /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include soft links
+    update-alternatives --remove "rocm-bin" "$PKG_INSTALL_PREFIX/bin" || true
+    update-alternatives --remove "rocm-lib" "$PKG_INSTALL_PREFIX/lib" || true
+    update-alternatives --remove "rocm-include" "$PKG_INSTALL_PREFIX/include" || true
+
+    # Remove /opt/rocm/llvm, /opt/rocm/amdgcn, /opt/rocm/libexec, and /opt/rocm/share  soft links
+    update-alternatives --remove "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm" || true
+    update-alternatives --remove "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn" || true
+    update-alternatives --remove "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec" || true
+    update-alternatives --remove "rocm-share" "$PKG_INSTALL_PREFIX/share" || true
+}
+
+if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
+then
+   case "$1" in
+       (remove|upgrade)
+           do_update_alternatives
+       ;;
+       (purge)
+           # nothing to do
+       ;;
+       (*)
+           exit 0
+       ;;
+   esac
+else
+    # RPM: remove only on true uninstall ($1=0); upgrade's new %post already re-registered them.
+    if [ "${1:-0}" = "0" ]; then
+        do_update_alternatives
+    fi
+fi
