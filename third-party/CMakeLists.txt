@@ -52,6 +52,7 @@ if(THEROCK_ENABLE_MPI)
   add_subdirectory(openmpi)
 endif()
 
-# gRPC: Static library for RDC (built on-demand when depended upon)
-# See: docs/rfcs/RFC0007-rdc-therock-integration.md
-add_subdirectory(grpc)
+# gRPC depends on amd-llvm toolchain, only needed by RDC.
+if(THEROCK_ENABLE_RDC)
+  add_subdirectory(grpc)
+endif()
