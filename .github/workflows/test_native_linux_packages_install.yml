@@ -64,7 +64,6 @@ on:
         options:
           - ci
           - dev
-          - dev-bkc
       gpg_key_url:
         description: "GPG key URL for signed repos"
         type: string

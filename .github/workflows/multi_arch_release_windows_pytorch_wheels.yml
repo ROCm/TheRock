@@ -82,7 +82,6 @@ on:
         type: choice
         options:
           - dev
-          - dev-bkc
         default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."

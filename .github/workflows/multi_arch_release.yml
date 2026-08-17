@@ -68,7 +68,6 @@ on:
         # TheRock. Nightly release types are supplied by rockrel.
         options:
           - dev
-          - dev-bkc
         default: dev
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
