@@ -135,6 +135,7 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "enable_kpack": False,
         "pkg_names": None,
         "clean_build": False,
+        "build_variant": "",
     }
     defaults.update(overrides)
     return Namespace(**defaults)

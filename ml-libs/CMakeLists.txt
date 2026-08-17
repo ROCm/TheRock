@@ -170,6 +170,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
     RUNTIME_DEPS
       hip-clr
       hipDNN
+      rocRAND
   )
   therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
   SUBDIRS
