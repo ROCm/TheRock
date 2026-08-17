@@ -30,6 +30,16 @@ if (-not (Test-Path $LibvaMesonBuild)) {
 # tarball (extracted LF). All patterns below are normalized the same way.
 function Convert-Lf([string]$s) { return $s.Replace("`r`n", "`n") }
 
+# Write UTF-8 without a BOM. Set-Content -Encoding utf8 emits a BOM under
+# Windows PowerShell 5.1 (which CMakeLists invokes via `powershell`), and a
+# leading BOM can break Meson parsing; the default encoding there is UTF-16LE,
+# which is worse. The .NET writer is BOM-free and behaves identically on 5.1
+# and 7+.
+function Set-Utf8NoBom([string]$path, [string]$text) {
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($path, $text, $utf8NoBom)
+}
+
 $content = Convert-Lf (Get-Content $LibvaMesonBuild -Raw)
 
 # Replace the libva_win32_dep declare_dependency block to:
@@ -122,7 +132,7 @@ if ($content -notmatch [regex]::Escape($vaWin32Old)) {
 }
 $content = $content.Replace($vaWin32Old, $vaWin32New)
 
-Set-Content $LibvaMesonBuild $content -NoNewline
+Set-Utf8NoBom $LibvaMesonBuild $content
 
 Write-Host "Patched $LibvaMesonBuild"
 
@@ -190,6 +200,6 @@ if (-not $va.Contains($freeOld)) {
 }
 $va = $va.Replace($freeOld, $freeNew)
 
-Set-Content $LibvaSource $va -NoNewline
+Set-Utf8NoBom $LibvaSource $va
 
 Write-Host "Patched $LibvaSource"
