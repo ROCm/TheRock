@@ -467,6 +467,7 @@
   "rocrand": {
     "consumers": [
       "composable_kernel",
+      "hipdnn_integration_tests",
       "hiprand",
       "miopen",
       "rocalution",

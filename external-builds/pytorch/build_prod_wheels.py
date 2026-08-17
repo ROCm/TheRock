@@ -43,15 +43,17 @@ python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 
 2. Install rocm wheels:
 
-You must have the `rocm[libraries,devel]` packages installed. The `install-rocm`
-command gives a one-stop to fetch the latest nightlies from the CI or elsewhere.
-Below we are using nightly rocm-sdk packages from the CI bucket. See `RELEASES.md`
-for further options. Specific versions can be specified via `--rocm-sdk-version`
-and `--no-pre` (to disable searching for pre-release candidates). The installed
-version will be printed and subsequently will be embedded into torch builds as
-a dependency. Such an arrangement is a head-on-head build (i.e. torch head on top
-of ROCm head). Other arrangements are possible by passing pinned versions, official
-repositories, etc.
+You must have the `rocm[libraries,devel]` packages installed to build PyTorch.
+To run or test the resulting wheels, also install the device extra matching the
+GPU target you plan to build for, or use `device-all` to install every published
+target. The `install-rocm` command gives a one-stop to fetch these packages from
+the latest nightlies or elsewhere. Below we are using nightly rocm-sdk packages
+from the CI bucket. See `RELEASES.md` for further options. Specific versions can
+be specified via `--rocm-sdk-version` and `--no-pre` (to disable searching for
+pre-release candidates). The installed version will be printed and subsequently
+will be embedded into torch builds as a dependency. Such an arrangement is a
+head-on-head build (i.e. torch head on top of ROCm head). Other arrangements are
+possible by passing pinned versions, official repositories, etc.
 
 You can also install in the same invocation as build by passing `--install-rocm`
 to the build sub-command (useful for docker invocations).
@@ -60,12 +62,14 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
+    --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --rocm-extras device-gfx942
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
+    --index-url https://rocm.devreleases.amd.com/whl-multi-arch/ \
+    --rocm-extras device-gfx942
 ```
 
 3. Build torch, torchaudio and torchvision for one or more gfx architectures.
@@ -130,7 +134,9 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+        --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+        --rocm-extras device-gfx942 \
+        --pytorch-rocm-arch gfx942 \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -170,11 +176,6 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amd_smi",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
-    "rocprofiler-sdk-roctx",  # Linux only for the moment.
-    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
-    "roctracer64",  # Linux only for the moment.
-    "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -182,13 +183,20 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparse",
     "hipsparselt",
     "hipsolver",
-    "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
     "rocm_smi64",
+    # Linux only.
+    "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
+    "rocprofiler-sdk-roctx",
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
+    "roctracer64",
+    "roctx64",
+    "rccl",
+    "hipfile",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
