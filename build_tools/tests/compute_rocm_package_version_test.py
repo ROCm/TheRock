@@ -87,9 +87,10 @@ class VersionFileTest(unittest.TestCase):
 
     def test_rejects_invalid_base_date_metadata(self):
         for base_date in ("2026081", "20261301"):
-            with self.subTest(
-                base_date=base_date
-            ), tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                self.subTest(base_date=base_date),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
                 version_file = Path(temp_dir) / "version.json"
                 version_file.write_text(
                     f"""{{
@@ -176,8 +177,9 @@ class PythonPackageVersionTest(unittest.TestCase):
 
     def test_bkc_version_requires_base_date_metadata(self):
         for release_type in ("dev-bkc", "nightly-bkc"):
-            with self.subTest(release_type=release_type), self.assertRaisesRegex(
-                ValueError, "release-metadata.base-date"
+            with (
+                self.subTest(release_type=release_type),
+                self.assertRaisesRegex(ValueError, "release-metadata.base-date"),
             ):
                 compute_rocm_package_version.compute_version(
                     release_type=release_type,
@@ -478,7 +480,7 @@ class RpmPackageVersionTest(unittest.TestCase):
         )
         self.assertRegex(
             version,
-            r"^8\.1\.0~20260811\+bkc\.[0-9]{8}$",
+            r"^8\.1\.0~20260811\.bkc\.[0-9]{8}$",
         )
 
     def test_prerelease_version(self):

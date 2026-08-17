@@ -327,7 +327,7 @@ The script produces these versions for rpm packages for each release type:
 | stable       | `X.Y.Z`                                      | `7.10.0`                                                                                                                               |
 | prerelease   | `X.Y.Z~rcN`                                  | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
 | nightly      | `X.Y.Z~YYYYMMDD`                             | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
-| nightly-bkc  | `X.Y.Z~BASEDATE+bkc.YYYYMMDD`                | `10.1.0~20260811+bkc.20260814`                                                                                                         |
+| nightly-bkc  | `X.Y.Z~BASEDATE.bkc.YYYYMMDD`                | `10.1.0~20260811.bkc.20260814`                                                                                                         |
 | dev          | `X.Y.Z~YYYYMMDDg<git-hash>`                  | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 | dev-bkc      | `X.Y.Z~YYYYMMDDg<git-hash>`<br>(same as dev) | `10.1.0~20260814gefed3c3`                                                                                                              |
 
