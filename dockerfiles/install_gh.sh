@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Advanced Micro Devices, Inc.
+# Copyright 2026 Advanced Micro Devices, Inc.
 #
 # Licensed under the Apache License v2.0 with LLVM Exceptions.
 # See https://llvm.org/LICENSE.txt for license information.
