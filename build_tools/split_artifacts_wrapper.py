@@ -17,29 +17,23 @@ def patch_kpack():
     from rocm_kpack import binutils, artifact_splitter
     from rocm_kpack.kpack_transform import NotFatBinaryError
 
-    # Store original method
-    original_get_bundler_input = binutils.BundledBinary._get_bundler_input
+    # Patch unbundle() to catch FileNotFoundError from empty .hip_fatbin sections
+    original_unbundle = binutils.BundledBinary.unbundle
 
-    def patched_get_bundler_input(self):
+    def patched_unbundle(self, *, dest_dir=None, delete_on_close=True):
         """Patched version that raises NotFatBinaryError for empty sections."""
-        result = original_get_bundler_input(self)
+        try:
+            return original_unbundle(self, dest_dir=dest_dir, delete_on_close=delete_on_close)
+        except FileNotFoundError as e:
+            # objcopy --dump-section didn't create output file (empty section)
+            if "fatbin" in str(e):
+                raise NotFatBinaryError(
+                    f"Section .hip_fatbin in {self.file_path} has no extractable content "
+                    f"(possibly stripped). Skipping."
+                ) from e
+            raise
 
-        # Check if the file was actually created and has content
-        if not result.exists():
-            raise NotFatBinaryError(
-                f"Section .hip_fatbin in {self.file_path} has no extractable content "
-                f"(possibly stripped). Skipping."
-            )
-
-        if result.stat().st_size == 0:
-            raise NotFatBinaryError(
-                f"Section .hip_fatbin in {self.file_path} is empty "
-                f"(possibly stripped). Skipping."
-            )
-
-        return result
-
-    binutils.BundledBinary._get_bundler_input = patched_get_bundler_input
+    binutils.BundledBinary.unbundle = patched_unbundle
 
     # Store original process_fat_binaries method
     original_process_fat_binaries = artifact_splitter.ArtifactSplitter.process_fat_binaries
