@@ -193,6 +193,7 @@ jobs:
       os_profile: ubuntu2404
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -210,6 +211,7 @@ jobs:
       os_profile: rhel8
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -227,6 +229,7 @@ jobs:
       os_profile: rhel10
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -244,6 +247,7 @@ jobs:
       os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
