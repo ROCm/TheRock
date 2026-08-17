@@ -288,6 +288,20 @@ The script produces these versions for debian packages for each release type:
 | nightly      | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
 | dev          | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
 
+> [!WARNING]
+> Debian package versions currently sort as
+> `stable > prerelease > dev > nightly`, while the intended order to match
+> other package ecosystems is `stable > prerelease > nightly > dev`:
+>
+> ```python
+> >>> from debian.debian_support import NativeVersion
+> >>> NativeVersion("7.10.0~20251124") > NativeVersion("7.10.0~dev20251124")
+> False
+> ```
+>
+> As a result, apt may prefer a dev package over a nightly package when both
+> release indexes are configured.
+
 ## Native Windows package versions
 
 TODO: fill this in together with https://github.com/ROCm/TheRock/pull/2159
