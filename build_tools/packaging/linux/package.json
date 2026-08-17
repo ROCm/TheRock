@@ -2644,12 +2644,14 @@
       "amdrocm-dnn-devel",
       "amdrocm-runtime",
       "amdrocm-blas",
+      "amdrocm-rand",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
       "amdrocm-dnn-devel",
       "amdrocm-runtime",
       "amdrocm-blas",
+      "amdrocm-rand",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
