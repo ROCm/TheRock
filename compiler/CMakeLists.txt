@@ -360,6 +360,11 @@ if(THEROCK_ENABLE_COMGR32)
       -DHAVE___UMODDI3=0
       -DHAVE___MAIN=0
       -DHAVE___CMPDI2=0
+      # Force the NATIVE (host) tablegen build to use MSVC, not whatever
+      # compiler CMake happens to find on PATH (e.g. Strawberry Perl's GCC
+      # on CI runners). LLVM's CrossCompile.cmake leaves this empty when
+      # CMAKE_CROSSCOMPILING is true and no platform toolchain matches.
+      "-DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER};-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
     BUILD_DEPS
       rocm-cmake
     INSTALL_DESTINATION "lib/llvm"
