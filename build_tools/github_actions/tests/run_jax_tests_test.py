@@ -108,7 +108,7 @@ def write_split_suite_script(
     (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).parent.mkdir(
         parents=True, exist_ok=True
     )
-    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text(section)
+    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text(section + "\n")
     (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
         "#!/bin/bash\nsource ci/envs/default.env\n"
         f"source {runner.RELATIVE_SUITE_ENV_SCRIPT.as_posix()}\nexit 1\n"
@@ -241,6 +241,21 @@ class SuiteEnvironmentTest(unittest.TestCase):
             runner.suite_environment(self.jax_dir, dict(os.environ))
 
         self.assertIn("exited 1", str(caught.exception))
+
+    def test_a_failure_names_the_file_it_came_from(self):
+        # Either file can be the one at fault, so pointing at the other would
+        # send whoever reads this to the wrong checkout.
+        write_split_suite_script(self.jax_dir)
+        env_script = self.jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT
+        env_script.write_text(env_script.read_text() + "false\n")
+
+        with self.assertRaises(runner.SuiteEnvironmentError) as caught:
+            runner.suite_environment(self.jax_dir, dict(os.environ))
+
+        self.assertIn(
+            os.fspath(runner.RELATIVE_SUITE_ENV_SCRIPT), str(caught.exception)
+        )
+        self.assertNotIn(os.fspath(runner.RELATIVE_SUITE_SCRIPT), str(caught.exception))
 
     def test_a_missing_default_env_is_fatal(self):
         write_suite_script(self.jax_dir)
