@@ -1953,6 +1953,7 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
             ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
         )
 
+
 class VerifyNoRunpathTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.verify_no_runpath()."""
 
