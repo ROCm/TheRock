@@ -11,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -29,10 +30,10 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None):
+def run_command(command: list[str], cwd=None, env=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -52,6 +53,97 @@ def rocm_info_output():
         return str(run_command([f"{THEROCK_BIN_DIR}/rocminfo"]).stdout)
     except Exception as e:
         logger.info(str(e))
+        return None
+
+
+def _opencl_env():
+    """Point the system OpenCL ICD loader at this build's vendor runtime.
+
+    clinfo loads the vendor (amdocl64) through the system ICD loader; TheRock
+    ships the vendor but not the loader, and the CI container has no system ICD
+    registration. The container's ocl-icd honors OCL_ICD_VENDORS (a vendors
+    dir) but not OCL_ICD_FILENAMES, so register the vendor via an absolute-path
+    .icd in a dir pointed to by OCL_ICD_VENDORS.
+    """
+    env = os.environ.copy()
+    if is_windows():
+        # Bare-metal runner: the driver registers amdocl64 system-wide, so point
+        # at the build's vendor only if present; otherwise fall back to the loader.
+        vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+        if vendor.exists():
+            env["OCL_ICD_FILENAMES"] = str(vendor)
+        return env
+    # Linux runs in a container with no system ICD registration, so the vendor
+    # is required; fail loud rather than letting the search asserts fail opaquely.
+    lib = THEROCK_BIN_DIR.parent / "lib"
+    vendor = lib / "opencl" / "libamdocl64.so"
+    if not vendor.exists():
+        raise FileNotFoundError(f"amdocl64 vendor runtime not found at {vendor}")
+    icd_dir = Path(tempfile.mkdtemp(prefix="therock-ocl-icd-"))
+    (icd_dir / "amdocl64.icd").write_text(f"{vendor}\n")
+    env["OCL_ICD_VENDORS"] = str(icd_dir)
+    # The vendor's deps (libamd_comgr, libhsa-runtime64, sysdeps) are spread
+    # across the install's lib dirs; make them resolvable regardless of how the
+    # artifacts flatten, so the loader can dlopen the vendor.
+    candidates = (lib, lib / "llvm" / "lib", lib / "rocm_sysdeps" / "lib")
+    ld_path = [str(d) for d in candidates if d.is_dir()]
+    if env.get("LD_LIBRARY_PATH"):
+        ld_path.append(env["LD_LIBRARY_PATH"])
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_path)
+    return env
+
+
+def _log_opencl_diagnostics(env):
+    """On clinfo failure, dump the loader + vendor lib resolution (Linux only)."""
+    if is_windows():
+        return
+    logger.error(f"OCL_ICD_VENDORS={env.get('OCL_ICD_VENDORS')}")
+    for label, target in (
+        ("clinfo", f"{THEROCK_BIN_DIR}/clinfo"),
+        ("vendor", THEROCK_BIN_DIR.parent / "lib" / "opencl" / "libamdocl64.so"),
+    ):
+        r = subprocess.run(
+            ["ldd", str(target)], capture_output=True, text=True, env=env
+        )
+        logger.error(f"--- ldd {label} ---")
+        for line in (r.stdout + r.stderr).splitlines():
+            logger.error(line)
+
+
+@pytest.fixture(scope="session")
+def clinfo_output():
+    clinfo = f"{THEROCK_BIN_DIR}/clinfo" + (".exe" if is_windows() else "")
+    env = _opencl_env()
+    # TEMP validity diagnostic: which vendor DLL/registration was used, and which
+    # driver clinfo actually enumerated (build vs system driver).
+    win_vendor = THEROCK_BIN_DIR / "amdocl64.dll"
+    logger.error(
+        f"[clinfo-diag] FILENAMES={env.get('OCL_ICD_FILENAMES')} "
+        f"VENDORS={env.get('OCL_ICD_VENDORS')} "
+        f"win_vendor={win_vendor} exists={win_vendor.exists()}"
+    )
+    # TEMP validity discriminator (Windows): point OCL_ICD_FILENAMES at a bogus
+    # path. If a platform still enumerates, the loader used the registry (system
+    # driver) and ignored our env => the leg tests the system driver, not our
+    # build. Platform enumeration does not need a GPU, so this survives the
+    # GPU-detection flake.
+    if is_windows():
+        bogus = dict(env, OCL_ICD_FILENAMES=str(THEROCK_BIN_DIR / "does-not-exist.dll"))
+        r = subprocess.run([clinfo], capture_output=True, text=True, env=bogus)
+        for line in (r.stdout + r.stderr).splitlines():
+            if re.search(r"Number of platforms|Platform Name|clGetPlatformIDs", line):
+                logger.error(f"[clinfo-diag bogus-FILENAMES] {line.strip()}")
+    try:
+        out = str(run_command([clinfo], env=env).stdout)
+        for line in out.splitlines():
+            if re.search(
+                r"Platform Version|Driver Version|Platform Name|\bName:", line
+            ):
+                logger.error(f"[clinfo-diag] {line.strip()}")
+        return out
+    except Exception as e:
+        logger.info(str(e))
+        _log_opencl_diagnostics(env)
         return None
 
 
@@ -80,6 +172,35 @@ class TestROCmSanity:
         check.is_not_none(
             re.search(to_search, rocm_info_output),
             f"Failed to search for {to_search} in rocminfo output",
+        )
+
+    # clinfo enumerates the GPU through the system OpenCL ICD loader ->
+    # amdocl64, exercising the OpenCL runtime path that rocminfo does not.
+    # Runs on Windows too, where OpenCL (PAL backend) is the enumeration path
+    # that works (rocminfo is HSA-only and unsupported there).
+    @pytest.mark.skipif(
+        is_asan(),
+        reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.parametrize(
+        "to_search",
+        [
+            (r"Platform\s*Name:\s*AMD Accelerated Parallel Processing"),
+            (r"Device\s*Type:\s*CL_DEVICE_TYPE_GPU"),
+            (r"Name:\s*gfx"),
+        ],
+        ids=[
+            "clinfo - AMD Platform Search",
+            "clinfo - GPU Device Type Search",
+            "clinfo - GFX Name Search",
+        ],
+    )
+    def test_clinfo_output(self, clinfo_output, to_search):
+        if not clinfo_output:
+            pytest.fail("Command clinfo failed to run")
+        check.is_not_none(
+            re.search(to_search, clinfo_output),
+            f"Failed to search for {to_search} in clinfo output",
         )
 
     # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
