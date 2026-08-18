@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <?define ProductName    = "ROCm" ?>
+  <?define ProductVersion = "7.14" ?>
+  <?define UpgradeCode    = "9C8E3A7E-9B6D-4A9D-A6E1-AB3A2C1B7F11" ?>
+  <?define BuildRoot      = "B:\build" ?>
+</Include>
