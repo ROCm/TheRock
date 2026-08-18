@@ -10,7 +10,6 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-import bump_automation
 from bump_automation import (
     _clone_url,
     close_stale_prs,

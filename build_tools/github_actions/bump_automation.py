@@ -449,13 +449,9 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         print(f"[WARN] create_therock_bump failed: {e}")
 
 
-def main(argv=None) -> None:
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--event_type",
-        required=True,
-        choices=["schedule", "push"],
-    )
+    parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
     parser.add_argument(
         "--submodule",
         default="all",
@@ -467,7 +463,7 @@ def main(argv=None) -> None:
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
     parser.add_argument("--mesa_token", required=True)
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])
