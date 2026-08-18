@@ -87,6 +87,7 @@ def get_stage_features(
     stage_name: str,
     platform_name: str = "",
     enabled_flags: Optional[Set[str]] = None,
+    processor_name: str = "",
 ) -> Set[str]:
     """Get the set of feature names that should be enabled for a stage.
 
@@ -94,7 +95,7 @@ def get_stage_features(
     1. Features for artifacts produced by this stage
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
 
-    Artifacts disabled for platform_name are excluded.
+    Artifacts disabled for platform_name or processor_name are excluded.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
@@ -121,6 +122,8 @@ def get_stage_features(
                 platform_name,
                 enabled_flags=enabled_flags,
             ):
+                continue
+            if topology.is_artifact_disabled_on_processor(artifact, processor_name):
                 continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)

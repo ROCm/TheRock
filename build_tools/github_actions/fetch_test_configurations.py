@@ -133,6 +133,24 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+
+# Runner assignment for test components
+# =====================================
+# Most components have their runner selected at runtime by the per-component loop
+# below, which draws from the AMDGPU-family runner pool configured in
+# amdgpu_family_matrix.py / therock-ci-config.
+#
+# A component may instead pre-pin its runner by setting "test_runner" directly in
+# its test_matrix entry. The loop will detect this and leave the value untouched.
+# Use this when a component must run on a specific machine class regardless of the
+# GPU family being tested. For example, rocgdb-corefile requires runners that have
+# GPU core-dump support enabled, identified by the label
+# "linux-gfx942-gpu-rocm-mathlib", which is registered separately in the runner pool.
+#
+# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
+# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
+# expression. "multi_gpu_runner" routes to multi-GPU machines.
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -340,6 +358,21 @@ test_matrix = {
         "job_name": "rocgdb-gpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
     },
+    # Corefile tests require specific hardware support (GPU core dump capable runners).
+    # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    "rocgdb-corefile": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile",
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --tests"
+            " gdb.rocm/corefile.exp"
+            " gdb.rocm/core-no-read-special-files.exp"
+            " gdb.rocm/gcore-after-attach.exp"
+            " gdb.rocm/load-core-remote-system.exp"
+            " gdb.rocm/runtime-core.exp"
+        ),
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
@@ -467,11 +500,10 @@ test_matrix = {
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
     },
     "hipfft": {
@@ -703,6 +735,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        "container_options": ["--cap-add=SYS_PTRACE", "--cap-add=PERFMON"],
     },
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
@@ -828,8 +861,10 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # hipTensor does not support gfx103X (see TheRock#2074)
-            "linux": ["gfx1030"],
+            # hipTensor requires composable_kernel, which is filtered out on some platforms,
+            # so no hipTensor test artifact is produced for that family (see TheRock#2074).
+            "linux": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
+            "windows": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
         },
     },
 }
@@ -1051,7 +1086,9 @@ def run():
                     f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
-        else:
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels.
+            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             # For ASAN builds, use the sandbox runner if available
             if is_asan_build and test_runs_on_sandbox:
                 component["test_runner"] = test_runs_on_sandbox

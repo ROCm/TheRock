@@ -54,6 +54,22 @@ permissions:
   contents: read
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release Linux"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - release Linux"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   build_artifacts:
     name: Build Artifacts
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
@@ -78,6 +94,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
@@ -93,6 +110,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Python Packages
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -111,12 +129,14 @@ jobs:
     needs: [build_artifacts]
     name: Build DEB Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
+      build_variant: ${{ inputs.build_variant }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -127,12 +147,14 @@ jobs:
     needs: [build_artifacts]
     name: Build RPM Packages
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
+      build_variant: ${{ inputs.build_variant }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -226,6 +248,7 @@ jobs:
               "os_profile": "${{ matrix.os_profile }}",
               "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "test_type": "${{ inputs.test_type }}",
+              "build_variant": "${{ inputs.build_variant }}",
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}"
             }
@@ -252,7 +275,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}"
             }
 
   trigger_release_jax_wheels:
@@ -277,3 +301,21 @@ jobs:
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}"
             }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    name: "Quartz - completed - release Linux"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release Linux"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

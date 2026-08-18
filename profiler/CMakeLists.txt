@@ -272,6 +272,7 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${THEROCK_BUNDLED_ZLIB}
       ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
