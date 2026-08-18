@@ -887,7 +887,7 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[],
+        default=["AMDMIGraphX"],
     )
     parser.add_argument(
         "--media-libs-projects",
