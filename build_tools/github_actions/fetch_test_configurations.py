@@ -517,6 +517,48 @@ test_matrix = {
             "windows": 2,
         },
     },
+    # hipFFT multi-GPU subset: only the *multi_gpu* hipfft tests, scheduled on
+    # 8-GPU runners. Shares the hipfft-test binary/artifacts with the single-GPU
+    # "hipfft" job above. test_runner.py rewrites the ctest label to
+    # "multigpu_<category>" for this job (see MULTI_GPU_COMPONENTS), so it selects
+    # only the multigpu_* labelled tests from hipfft's test_categories.yaml.
+    "hipfft-multi-gpu": {
+        "job_name": "hipfft-multi-gpu",
+        # Selected whenever the base hipfft component is (test:hipfft /
+        # PROJECTS_TO_TEST=hipfft), since this variant has no label of its own.
+        "base_project": "hipfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # Only schedule on tiers that define multigpu_<tier> labels in hipfft's
+        # test_categories.yaml (multigpu_comprehensive/full). This keeps the scarce
+        # 8-GPU runner from being claimed by "quick"/"standard" runs that have no
+        # multi-GPU tests.
+        "run_for_test_types": ["comprehensive", "full"],
+        # Architectures that we have multi GPU setup for testing.
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
+    # rocFFT multi-GPU subset: mirror of hipfft-multi-gpu for rocFFT. Selects only
+    # the multigpu_* labelled tests from rocfft's test_categories.yaml on 8-GPU
+    # runners, sharing the rocfft-test binary/artifacts with the single-GPU
+    # "rocfft" job above.
+    "rocfft-multi-gpu": {
+        "job_name": "rocfft-multi-gpu",
+        "base_project": "rocfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "run_for_test_types": ["comprehensive", "full"],
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
@@ -969,18 +1011,40 @@ def run():
             )
             continue
 
+        # Key used for test-label / project selection. Split jobs (e.g. the
+        # multi-GPU variants) declare a "base_project" so that selecting the base
+        # component (via `test:hipfft` label or PROJECTS_TO_TEST=hipfft) also picks
+        # up the variant, which otherwise has no matching label of its own.
+        selection_key = selected_matrix[key].get("base_project", key)
+
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
         parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
-        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
+        if (
+            key != "sanity"
+            and parsed_test_labels
+            and selection_key not in parsed_test_labels
+        ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Some components only make sense for certain test tiers (e.g. multi-GPU
+        # split jobs whose tests are only labelled for comprehensive/full). Skip
+        # the component when the workflow TEST_TYPE is not one of its declared
+        # run_for_test_types. This avoids scheduling a scarce multi-GPU runner for
+        # a "quick"/"standard" run that has no multi-GPU tests to execute.
+        run_for_test_types = selected_matrix[key].get("run_for_test_types")
+        if run_for_test_types is not None and test_type not in run_for_test_types:
+            logging.info(
+                f"Excluding job {job_name}: test_type '{test_type}' not in {run_for_test_types}"
+            )
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
         if platform in selected_matrix[key]["platform"] and (
-            key == "sanity" or key in project_array or "*" in project_array
+            key == "sanity" or selection_key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
