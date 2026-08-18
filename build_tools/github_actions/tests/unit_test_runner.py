@@ -231,6 +231,24 @@ class ApplyComponentOverridesTest(unittest.TestCase):
         _, parallel = self._apply("rocwmma", 4)
         self.assertEqual(parallel, 4)
 
+    def test_zero_parallel_override_is_preserved(self):
+        # 0 is falsy but meaningful: it means "drop --parallel entirely".
+        # It must survive resolution rather than falling back to the default.
+        _, parallel = self._apply("rocprofiler-systems", 8)
+        self.assertEqual(parallel, 0)
+
+    def test_every_parallel_override_uses_the_canonical_key(self):
+        # apply_component_overrides() and build_ctest_command() must agree on
+        # one key name. A stray "ctest_parallel" entry would be silently
+        # ignored by one of them.
+        for job_name, overrides in test_runner.COMPONENT_OVERRIDES.items():
+            self.assertNotIn(
+                "ctest_parallel",
+                overrides,
+                f"{job_name} uses the obsolete 'ctest_parallel' key; "
+                "use 'ctest_parallel_count' instead",
+            )
+
 
 class ValidTestCategoriesTest(unittest.TestCase):
     """Tests for VALID_TEST_CATEGORIES and category validation."""
