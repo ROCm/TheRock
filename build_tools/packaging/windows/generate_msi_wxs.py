@@ -49,6 +49,7 @@ from pathlib import Path
 # Package definitions
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PackageDef:
     """Definition of one distributable MSI package."""
@@ -62,7 +63,8 @@ class PackageDef:
     # Default output filename stem (without extension).
     output_stem: str
 
-    # Versioned install subdirectory name (formatted with version=X.Y.Z).
+    # Versioned install subdirectory name. Formatted with the placeholders
+    # {version} (X.Y.Z), {major}, and {minor}.
     install_subdir: str
 
     # Fixed GUID for MajorUpgrade matching across versions.  Must never change.
@@ -84,9 +86,18 @@ class PackageDef:
     # collected without restriction.
     per_artifact_includes: dict[str, list[str]] = None
 
+    # DLL filenames to install into the Windows System32 directory as a
+    # default-enabled "legacy install" feature (for applications that load
+    # ROCm DLLs from System32 rather than PATH). Each name is resolved against
+    # the extracted artifacts and the _legacy/bin cache fallback. Empty means
+    # the package emits no legacy feature.
+    legacy_system32_dlls: list[str] = None
+
     def __post_init__(self):
         if self.per_artifact_includes is None:
             self.per_artifact_includes = {}
+        if self.legacy_system32_dlls is None:
+            self.legacy_system32_dlls = []
 
 
 # Keys are the --package selector values.
@@ -95,60 +106,68 @@ PACKAGES: dict[str, PackageDef] = {
         description="HIP runtime DLLs, hipcc, hipconfig, kernel package support",
         product_name="AMD ROCm HIP Runtime",
         artifacts=[
-            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
-            "core-kpack",    # Kernel package support (rocm_kpack.dll)
+            "core-hip",  # HIP runtime DLLs (amdhip64_7, hiprtc*) — lib component only
+            "core-kpack",  # Kernel package support (rocm_kpack.dll)
             "core-hipinfo",  # Windows-only: bin/hipInfo*
         ],
         output_stem="amdrocm-hip-runtime",
-        install_subdir="hip-runtime-{version}",
+        install_subdir="core-{major}.{minor}",
         upgrade_code="B2C3D4E5-F6A7-8901-BCDE-F12345678901",
         feature_id="HIPRuntime",
         feature_title="ROCm HIP Runtime",
-        registry_key="Software\\AMD\\ROCm\\hip-runtime\\{version}",
+        registry_key="Software\\AMD\\ROCm\\hip-runtime\\{major}.{minor}",
     ),
     "runtimes": PackageDef(
         description="ROCm runtime redistributable (HIP runtime + amd_comgr.dll)",
         product_name="AMD ROCm Runtimes",
         artifacts=[
-            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
-            "core-kpack",    # Kernel package support (rocm_kpack.dll)
-            "core-hipinfo",  # Windows-only: bin/hipInfo*
-            "amd-llvm",      # comgr only — see per_artifact_includes
+            "core-hip",  # HIP runtime DLLs (amdhip64_7, hiprtc*) — lib component only
+            "core-kpack",  # Kernel package support (rocm_kpack.dll)
+            "amd-llvm",  # comgr only — see per_artifact_includes
         ],
         output_stem="amdrocm-runtimes",
-        install_subdir="runtimes-{version}",
+        install_subdir="core-{major}.{minor}",
         upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
         feature_id="ROCmRuntimes",
         feature_title="AMD ROCm Runtimes",
-        registry_key="Software\\AMD\\ROCm\\runtimes\\{version}",
+        registry_key="Software\\AMD\\ROCm\\runtimes\\{major}.{minor}",
         per_artifact_includes={
             "amd-llvm": ["bin/amd_comgr.dll"],
         },
+        legacy_system32_dlls=[
+            "amdhip64_6.dll",  # ROCm 6.x HIP compat runtime (from AMD driver)
+            "amdhip64_7.dll",  # current HIP runtime
+            "amd_comgr.dll",  # code object manager
+            "amd_comgr_2.dll",  # comgr v2 compat (from AMD driver)
+        ],
     ),
     "core": PackageDef(
         description="ROCm core runtime redistributable (ROCR, HIP, AMDsmi, OpenCL)",
         product_name="AMD ROCm Core Runtime",
         artifacts=[
             "core-runtime",  # ROCR-Runtime + rocminfo
-            "core-hip",      # HIP runtime DLLs, hipcc, hipconfig, roc-obj, etc.
-            "core-kpack",    # Kernel package support (rocm_kpack.dll)
+            "core-hip",  # HIP runtime DLLs (amdhip64_7, hiprtc*) — lib component only
+            "core-kpack",  # Kernel package support (rocm_kpack.dll)
             "core-hipinfo",  # Windows-only: bin/hipInfo*
-            "core-amdsmi",   # AMD System Management Interface
+            "core-amdsmi",  # AMD System Management Interface
             "core-ocl-icd",  # OpenCL ICD loader (bin/OpenCL.dll on Windows)
         ],
         output_stem="amdrocm-core",
-        install_subdir="core-{version}",
+        install_subdir="core-{major}.{minor}",
         upgrade_code="A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
         feature_id="ROCmCore",
         feature_title="AMD ROCm Core Runtime",
-        registry_key="Software\\AMD\\ROCm\\core\\{version}",
+        registry_key="Software\\AMD\\ROCm\\core\\{major}.{minor}",
     ),
 }
 
 
-# Only package runtime-relevant components; exclude dev headers, debug
-# symbols, and docs from the MSI.
-PACKAGE_COMPONENTS: set[str] = {"run", "lib"}
+# Only collect the lib component. On Windows, DLLs live in bin/ which the
+# artifact TOML classifies as "run", but the run component also contains dev
+# tools (hipcc_cmake_linker_helper, hipdemangleatp, hrr-playback.exe) that
+# don't belong in a runtime redistributable. The lib component contains the
+# actual DLLs (amdhip64_7.dll, hiprtc*.dll) plus lib/ and share/ metadata.
+PACKAGE_COMPONENTS: set[str] = {"lib"}
 
 STANDARD_DIR_TOKENS: set[str] = {
     "ProgramFilesFolder",
@@ -243,8 +262,13 @@ def fetch_artifacts(
             # ArtifactCatalog can find it, then extract the rest of the files.
             with _open_zst(local_path) as tf:
                 manifest_member = tf.next()
-                if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
-                    sys.exit(f"Archive {filename} missing artifact_manifest.txt as first member")
+                if (
+                    manifest_member is None
+                    or manifest_member.name != "artifact_manifest.txt"
+                ):
+                    sys.exit(
+                        f"Archive {filename} missing artifact_manifest.txt as first member"
+                    )
                 manifest_text = tf.extractfile(manifest_member).read().decode()
                 manifest_path.write_text(manifest_text)
             if already_extracted:
@@ -303,15 +327,19 @@ def collect_files_from_catalog(
                 seen[relpath] = Path(direntry.path)
 
     if unrestricted:
+
         def _filter_unrestricted(name: ArtifactName) -> bool:
             return name.name in unrestricted and name.component in PACKAGE_COMPONENTS
+
         catalog = ArtifactCatalog(artifact_dir, filter=_filter_unrestricted)
         _collect_catalog(catalog)
 
     for artifact_name in restricted:
         includes = overrides[artifact_name]
+
         def _filter_restricted(name: ArtifactName, _a=artifact_name) -> bool:
             return name.name == _a and name.component in PACKAGE_COMPONENTS
+
         catalog = ArtifactCatalog(
             artifact_dir, filter=_filter_restricted, includes=includes
         )
@@ -325,6 +353,48 @@ def collect_files_from_catalog(
         return []
 
     return sorted((Path(r), s) for r, s in seen.items())
+
+
+def resolve_legacy_dlls(
+    artifact_dir: Path,
+    dll_names: list[str],
+) -> list[tuple[str, Path]]:
+    """Resolve legacy System32 DLLs to concrete source paths.
+
+    Each name is searched for (by basename) first among the extracted
+    artifacts in artifact_dir, then in the _legacy/bin cache fallback
+    (a sibling of artifact_dir, i.e. <cache>/_legacy/bin). Driver-sourced
+    DLLs like amdhip64_6.dll and amd_comgr_2.dll live only in the fallback.
+
+    Returns a list of (dll_name, source_path). Missing DLLs are reported as
+    a warning and skipped so the generator never fails on an absent legacy
+    DLL.
+    """
+    if not dll_names:
+        return []
+
+    legacy_fallback = artifact_dir.parent / "_legacy" / "bin"
+    resolved: list[tuple[str, Path]] = []
+    for name in dll_names:
+        found: Path | None = None
+        if artifact_dir.is_dir():
+            for candidate in artifact_dir.rglob(name):
+                if candidate.is_file():
+                    found = candidate
+                    break
+        if found is None:
+            fallback = legacy_fallback / name
+            if fallback.is_file():
+                found = fallback
+        if found is None:
+            print(
+                f"Warning: legacy DLL not found, skipping: {name} "
+                f"(searched {artifact_dir} and {legacy_fallback})",
+                file=sys.stderr,
+            )
+            continue
+        resolved.append((name, found))
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -341,8 +411,7 @@ def make_id(path: Path, prefix: str) -> str:
     collide).  The digest is deterministic across interpreter runs.
     """
     safe = "".join(
-        c if c.isalnum() or c == "_" else "_"
-        for c in str(path).replace("\\", "/")
+        c if c.isalnum() or c == "_" else "_" for c in str(path).replace("\\", "/")
     )
     h = hashlib.sha256(str(path).encode()).hexdigest()[:8]
     return f"{prefix}_{safe}"[:55] + f"_{h}"
@@ -453,9 +522,7 @@ def parse_args() -> argparse.Namespace:
         "--package-version",
         default=default_version,
         metavar="X.Y.Z",
-        help=(
-            f"MSI version string. Default: {default_version} (from version.json)"
-        ),
+        help=(f"MSI version string. Default: {default_version} (from version.json)"),
     )
 
     args = parser.parse_args()
@@ -502,6 +569,7 @@ def build_wxs(args: argparse.Namespace) -> None:
         artifact_dir = args.build_root / "artifacts"
 
     files = collect_files_from_catalog(artifact_dir, pkg_def)
+    legacy_dlls = resolve_legacy_dlls(artifact_dir, pkg_def.legacy_system32_dlls)
 
     ET.register_namespace("", "http://wixtoolset.org/schemas/v4/wxs")
     ns = "http://wixtoolset.org/schemas/v4/wxs"
@@ -523,6 +591,10 @@ def build_wxs(args: argparse.Namespace) -> None:
         InstallerVersion="500",
         Compressed="yes",
     )
+    # NOTE: package architecture is set at compile time via `wix build -arch
+    # x64`, not here (WiX v4 has no Package/@Platform attribute). x64 is
+    # required so SystemFolder resolves to C:\Windows\System32 rather than the
+    # WOW64-redirected SysWOW64, and so the 64-bit DLLs install correctly.
 
     ET.SubElement(
         pkg,
@@ -540,6 +612,10 @@ def build_wxs(args: argparse.Namespace) -> None:
     ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Secure="yes")
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
+    # Legacy System32 install is off by default; set LEGACY_INSTALL=1 to enable.
+    ET.SubElement(
+        pkg, f"{{{ns}}}Property", Id="LEGACY_INSTALL", Value="0", Secure="yes"
+    )
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
@@ -578,7 +654,12 @@ def build_wxs(args: argparse.Namespace) -> None:
     ver_dir = ET.SubElement(
         rocm_dir, f"{{{ns}}}Directory", Id="ROCmVerDir", Name=args.version_dir
     )
-    install_subdir_name = pkg_def.install_subdir.format(version=version)
+    version_parts = version.split(".")
+    major = version_parts[0] if len(version_parts) > 0 else ""
+    minor = version_parts[1] if len(version_parts) > 1 else ""
+    install_subdir_name = pkg_def.install_subdir.format(
+        version=version, major=major, minor=minor
+    )
     install_dir_el = ET.SubElement(
         ver_dir, f"{{{ns}}}Directory", Id="InstallDir", Name=install_subdir_name
     )
@@ -609,8 +690,7 @@ def build_wxs(args: argparse.Namespace) -> None:
             dir_key = str(accumulated)
             if dir_key not in dir_elements:
                 dir_id = "Dir_" + (
-                    dir_key
-                    .replace("\\", "_")
+                    dir_key.replace("\\", "_")
                     .replace("/", "_")
                     .replace("-", "_")
                     .replace(".", "_")
@@ -667,7 +747,7 @@ def build_wxs(args: argparse.Namespace) -> None:
             Action="set",
             System="yes",
         )
-        reg_key = pkg_def.registry_key.format(version=version)
+        reg_key = pkg_def.registry_key.format(version=version, major=major, minor=minor)
         ET.SubElement(
             env_comp,
             f"{{{ns}}}RegistryValue",
@@ -707,8 +787,55 @@ def build_wxs(args: argparse.Namespace) -> None:
     lp_feature = ET.SubElement(
         pkg, f"{{{ns}}}Feature", Id="LongPaths", Title="Enable Long Paths", Level="0"
     )
-    ET.SubElement(lp_feature, f"{{{ns}}}Level", Value="1", Condition="ENABLE_LONG_PATHS")
+    ET.SubElement(
+        lp_feature, f"{{{ns}}}Level", Value="1", Condition="ENABLE_LONG_PATHS"
+    )
     ET.SubElement(lp_feature, f"{{{ns}}}ComponentRef", Id="LongPathsEnable")
+
+    # -----------------------------------------------------------------------
+    # Legacy System32 DLL install (default-enabled; LEGACY_INSTALL=0 disables)
+    # -----------------------------------------------------------------------
+    if legacy_dlls:
+        # System64Folder is the real C:\Windows\System32 in an x64 package;
+        # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
+        # package architecture, which is not what we want for 64-bit DLLs.
+        sysfolder = ET.SubElement(
+            pkg, f"{{{ns}}}StandardDirectory", Id="System64Folder"
+        )
+        legacy_feature = ET.SubElement(
+            pkg,
+            f"{{{ns}}}Feature",
+            Id="LegacyInstall",
+            Title="Legacy System32 DLLs",
+            Level="0",
+        )
+        # Turn the feature on when LEGACY_INSTALL=1. Default property value
+        # is "0", so the feature is skipped unless explicitly enabled.
+        ET.SubElement(
+            legacy_feature,
+            f"{{{ns}}}Level",
+            Value="1",
+            Condition='LEGACY_INSTALL = "1"',
+        )
+        for dll_name, source in legacy_dlls:
+            comp_id = make_id(Path("System32") / dll_name, "c")
+            file_id = make_id(Path("System32") / dll_name, "f")
+            guid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"System32/{dll_name}")).upper()
+            comp_el = ET.SubElement(
+                sysfolder,
+                f"{{{ns}}}Component",
+                Id=comp_id,
+                Guid=guid,
+            )
+            ET.SubElement(
+                comp_el,
+                f"{{{ns}}}File",
+                Id=file_id,
+                Source=str(source.resolve()),
+                Name=dll_name,
+                KeyPath="yes",
+            )
+            ET.SubElement(legacy_feature, f"{{{ns}}}ComponentRef", Id=comp_id)
 
     # -----------------------------------------------------------------------
     # Serialize
