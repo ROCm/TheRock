@@ -99,9 +99,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   else()
     message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
     message(STATUS "Python executables: ${_detected_python_executables}")
-    # Join all detected Python versions into a single string separated by semicolons.
+    # Join all detected Python versions/executables into semicolon-separated strings.
     # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
+    list(JOIN _detected_python_executables "\;" _detected_python_executables_str)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
@@ -122,6 +123,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
+      -DROCPROFILER_PYTHON_EXECUTABLES:STRING="${_detected_python_executables_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     IGNORE_PACKAGES
