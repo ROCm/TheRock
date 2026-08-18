@@ -23,6 +23,7 @@ the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
 import argparse
 import boto3
 import datetime
+# gzip: read createrepo_c repodata/primary.xml.gz only (package-count validation).
 import gzip
 import os
 import shutil
@@ -118,7 +119,18 @@ def _list_s3_rpm_keys(s3: _S3Client, bucket: str, prefix: str) -> list[str]:
 
 def _count_primary_packages(primary_xml_gz: Path) -> int:
     """Count <package> entries in createrepo_c primary.xml.gz."""
-    root = ET.fromstring(gzip.open(primary_xml_gz, "rb").read())
+    try:
+        primary_xml = gzip.open(primary_xml_gz, "rb").read()
+    except OSError as exc:
+        raise RuntimeError(
+            f"Failed to read RPM primary metadata {primary_xml_gz}: {exc}"
+        ) from exc
+    try:
+        root = ET.fromstring(primary_xml)
+    except ET.ParseError as exc:
+        raise RuntimeError(
+            f"Malformed RPM primary metadata in {primary_xml_gz}: {exc}"
+        ) from exc
     if root.tag.startswith("{"):
         namespace = root.tag.split("}")[0][1:]
         return len(root.findall(f"{{{namespace}}}package"))
