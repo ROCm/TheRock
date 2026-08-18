@@ -458,7 +458,7 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
     def test_rules_file_excludes_code_objects_from_makeshlibs(
         self, _mock_dpkg: object, _mock_move: object
     ) -> None:
-        """Fix B: the rendered ``debian/rules`` must override dh_makeshlibs to skip
+        """The rendered ``debian/rules`` must override dh_makeshlibs to skip
         ``.co`` GPU code objects. hip-tests ships an intentionally-corrupted ELF
         fixture (elf_bad_shoff.co) that dh_makeshlibs cannot parse; without the
         ``-X.co`` exclusion it aborts dpkg-buildpackage for the whole package.
