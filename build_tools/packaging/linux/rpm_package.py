@@ -133,7 +133,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                logger.warning(
+                logger.error(
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
                 )
                 return False
