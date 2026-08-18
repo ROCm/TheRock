@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       prerelease_version:
@@ -62,8 +62,10 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
+        # Only dev-channel release types are exposed for manual dispatch in
+        # TheRock. Nightly release types are supplied by rockrel.
         options:
           - dev
         default: dev

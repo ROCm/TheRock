@@ -90,7 +90,9 @@ def _normalize_release_type(release_type: str) -> str:
     return aliases.get(rt, rt)
 
 
-_KNOWN_RELEASE_TYPES = frozenset({"prerelease", "release", "dev", "nightly", "ci"})
+_KNOWN_RELEASE_TYPES = frozenset(
+    {"prerelease", "release", "dev", "dev-bkc", "nightly", "nightly-bkc", "ci"}
+)
 
 
 def _normalize_and_validate_release_type(release_type: str) -> str:
