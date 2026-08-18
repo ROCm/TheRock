@@ -83,7 +83,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -162,6 +162,10 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
