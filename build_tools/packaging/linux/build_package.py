@@ -812,8 +812,8 @@ def main(argv: list[str]):
         "-j",
         "--parallel",
         type=int,
-        default=os.cpu_count() or 1,
-        help="Number of parallel package builds (default: all available cores)",
+        default=min(8, os.cpu_count() or 1),
+        help="Number of parallel package builds (default: min(8, cpu_count))",
     )
 
     args = p.parse_args(argv)
