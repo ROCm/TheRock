@@ -74,7 +74,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("hipthreads", "dev"),
     ("hipthreads", "test"),
     ("mirage", "dev"),  # new artifact, no packages yet.
-    ("profiler-hub", "dev"),  # packaging deferred to #7377; remove all five with it.
+    ("profiler-hub", "dev"),  # built, not packaged; the follow-on PR removes all five.
     ("profiler-hub", "doc"),
     ("profiler-hub", "lib"),
     ("profiler-hub", "run"),
