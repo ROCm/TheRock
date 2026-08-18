@@ -1,51 +1,30 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Copy release to dev bucket
+name: Stage ROCm 7.14 gfx942 and gfx950 stable packages in dev
 
 on:
   workflow_dispatch:
-    inputs:
-      rocm_version:
-        description: ROCm version to copy from nightly releases to dev releases, e.g. 7.14.0a20260617 (see https://rocm.nightlies.amd.com/whl-multi-arch/)
-        type: string
-      python_version:
-        type: choice
-        options:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        default: "3.12"
-      include_torch:
-        description: Copy 'torch' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
-      include_jax:
-        description: Copy 'jax' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
+
 permissions:
   contents: read
 
-run-name: >-
-  Copy nightly -> dev |
-  rocm ${{ inputs.rocm_version }} |
-  py ${{ inputs.python_version }} |
-  extras: ${{
-    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
-    inputs.include_torch && 'PyTorch' ||
-    inputs.include_jax && 'JAX' ||
-    'none'
-  }}
+run-name: Stage ROCm 7.14 gfx942 and gfx950 stable packages in dev
 
 jobs:
-  copy_python_packages:
-    name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+  copy_and_verify:
+    name: Copy stable device extras and verify destreleases installs
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      SOURCE_ROOT: https://repo.amd.com/rocm/whl-multi-arch/
+      DEV_INDEX: https://rocm.devreleases.amd.com/whl-multi-arch/
+      ROCM_VERSION: 7.14.0
+      TORCH_VERSION: 2.13.0+git46434d10.rocm7.14.0
+      TORCH_GIT_SHA: 46434d1076df59c2e84698a757e4bb3811b144ab
+      TRITON_VERSION: 3.8.0+git4cff872c.rocm7.14.0
+      PIP_CACHE_DIR: /tmp/pip-cache
 
     steps:
       - name: Checkout Repository
@@ -61,35 +40,149 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
-      - name: Select Python version
+      - name: Copy exact ROCm gfx942 and gfx950 device extras to destreleases
         run: |
-          python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+          echo "COPY_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
 
-      - name: Copy ROCm packages between S3 buckets
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "rocm*${{ inputs.rocm_version }}*"
+          while IFS= read -r filename
+          do
+            local_path="/tmp/${filename}"
+            curl --fail --location \
+              --retry 5 --retry-all-errors \
+              --output "${local_path}" \
+              "${SOURCE_ROOT}${filename}"
 
-      - name: Copy torch wheels between S3 buckets
-        if: ${{ inputs.include_torch }}
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            checksum="$(openssl dgst -sha256 -binary "${local_path}" | base64 -w0)"
+            uploaded_checksum="$(aws s3api put-object \
+              --bucket therock-dev-python \
+              --key "v4/whl/${filename}" \
+              --body "${local_path}" \
+              --checksum-algorithm SHA256 \
+              --checksum-sha256 "${checksum}" \
+              --query ChecksumSHA256 --output text)"
+            test "${checksum}" = "${uploaded_checksum}"
+            echo "${filename}: sha256 ${checksum}"
+            rm "${local_path}"
+          done <<'EOF'
+          rocm_sdk_device_gfx942-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx950-7.14.0-py3-none-linux_x86_64.whl
+          EOF
 
-      - name: Copy JAX wheels between S3 buckets
-        if: ${{ inputs.include_jax }}
+      - name: Wait for complete destreleases index
+        shell: python
         run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+          import email.utils
+          import os
+          import time
+          import urllib.request
+
+          started = int(os.environ["COPY_STARTED_EPOCH"])
+          expected = {
+              "rocm": ("rocm-7.14.0.tar.gz", False),
+              "rocm-bootstrap": (
+                  "rocm_bootstrap-0.1.0-py3-none-any.whl",
+                  False,
+              ),
+              "rocm-sdk-core": (
+                  "rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl",
+                  False,
+              ),
+              "rocm-sdk-devel": (
+                  "rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl",
+                  False,
+              ),
+              "rocm-sdk-libraries": (
+                  "rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl",
+                  False,
+              ),
+              "rocm-sdk-device-gfx942": (
+                  "rocm_sdk_device_gfx942-7.14.0-"
+                  "py3-none-linux_x86_64.whl",
+                  True,
+              ),
+              "rocm-sdk-device-gfx950": (
+                  "rocm_sdk_device_gfx950-7.14.0-"
+                  "py3-none-linux_x86_64.whl",
+                  True,
+              ),
+              "torch": (
+                  f"torch-{os.environ['TORCH_VERSION']}-"
+                  "cp312-cp312-linux_x86_64.whl",
+                  False,
+              ),
+              "amd-torch-device-gfx942": (
+                  "amd_torch_device_gfx942-"
+                  f"{os.environ['TORCH_VERSION']}-"
+                  "cp312-cp312-linux_x86_64.whl",
+                  False,
+              ),
+              "triton": (
+                  f"triton-{os.environ['TRITON_VERSION']}-"
+                  "cp312-cp312-linux_x86_64.whl",
+                  False,
+              ),
+          }
+          base = os.environ["DEV_INDEX"]
+          for _ in range(60):
+              missing = []
+              for package, (filename, require_fresh) in expected.items():
+                  try:
+                      response = urllib.request.urlopen(
+                          f"{base}{package}/index.html", timeout=30
+                      )
+                      page = response.read().decode()
+                      modified = email.utils.parsedate_to_datetime(
+                          response.headers["Last-Modified"]
+                      ).timestamp()
+                  except Exception:
+                      missing.append(package)
+                      continue
+                  if filename not in page or (require_fresh and modified < started):
+                      missing.append(package)
+              if not missing:
+                  print("Destreleases index contains gfx942 and gfx950 ROCm device extras")
+                  break
+              print(f"Waiting for index regeneration; missing: {missing}")
+              time.sleep(10)
+          else:
+              raise RuntimeError("Destreleases index did not complete within ten minutes")
+
+      - name: Verify destreleases gfx942 torch and gfx950 ROCm installs
+        run: |
+          python build_tools/setup_venv.py /tmp/pytorch-validation-gfx942 \
+            --packages "torch[device-gfx942]==${TORCH_VERSION} rocm[devel,device-gfx942]==${ROCM_VERSION}" \
+            --index-url="${DEV_INDEX}"
+          /tmp/pytorch-validation-gfx942/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+
+          import torch
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"], torch.__version__
+          assert torch.version.git_version == os.environ["TORCH_GIT_SHA"], (
+              torch.version.git_version
+          )
+          assert importlib.metadata.version("rocm") == os.environ["ROCM_VERSION"]
+          assert (
+              importlib.metadata.version("rocm-sdk-device-gfx942")
+              == os.environ["ROCM_VERSION"]
+          )
+          print("gfx942", torch.__version__, torch.version.git_version, torch.version.hip)
+          PY
+
+          # The 2.13 finder-fix rebuild published amd_torch_device_gfx942 only.
+          # Confirm the gfx950 ROCm extra resolves from destreleases alone.
+          python build_tools/setup_venv.py /tmp/rocm-validation-gfx950 \
+            --packages "rocm[devel,device-gfx950]==${ROCM_VERSION}" \
+            --index-url="${DEV_INDEX}"
+          /tmp/rocm-validation-gfx950/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+
+          assert importlib.metadata.version("rocm") == os.environ["ROCM_VERSION"]
+          assert (
+              importlib.metadata.version("rocm-sdk-device-gfx950")
+              == os.environ["ROCM_VERSION"]
+          )
+          print("gfx950", importlib.metadata.version("rocm-sdk-device-gfx950"))
+          PY
