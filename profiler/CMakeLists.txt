@@ -326,7 +326,6 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     INTERFACE_LINK_DIRS
       lib
   )
-  therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
   therock_cmake_subproject_activate(profiler-hub)
 
   # Actually run the gtest binary built above instead of only compiling it.
@@ -380,11 +379,10 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
-  # rocprofiler-systems' cmake/ProfilerHub.cmake calls find_package(profiler-hub).
-  # When profiler-hub is built as a super-project subproject, TheRock's dependency
-  # provider requires it to be declared as a dep here; when it is not, find_package
-  # falls back to profiler-hub's own sparse checkout. Only declare the dep when the
-  # profiler-hub subproject actually exists.
+  # profiler-hub is built and published as its own artifact above, but is not yet
+  # provided to rocprofiler-systems, which keeps its sparse-checkout fallback in
+  # cmake/ProfilerHub.cmake until profiler-hub is packaged in an immediate follow-on
+  # PR. This dep only orders the two subprojects.
   set(_rocprofsys_profiler_hub_dep "")
   if(THEROCK_ENABLE_PROFILER_HUB)
     set(_rocprofsys_profiler_hub_dep profiler-hub)
