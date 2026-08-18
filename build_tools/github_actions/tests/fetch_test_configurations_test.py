@@ -178,6 +178,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocroller", names)
 
     # -----------------------
+    # Expect-failure (xfail) logic
+    # -----------------------
+
+    def test_expect_failure_platform_marks_only_that_platform(self):
+        """A component runs on both platforms but is only xfail on one of them."""
+        os.environ["RUN_EXTENDED_TESTS"] = "true"
+        os.environ["PROJECTS_TO_TEST"] = "xfail1"
+        fetch_test_configurations.functional_matrix = {
+            "xfail1": {
+                "job_name": "xfail1",
+                "platform": ["linux", "windows"],
+                "expect_failure_platform": ["windows"],
+            }
+        }
+
+        fetch_test_configurations.run()
+        self.assertNotIn("expect_failure", self._get_components()[0])
+
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        fetch_test_configurations.run()
+        self.assertTrue(self._get_components()[0]["expect_failure"])
+
+    # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
 
