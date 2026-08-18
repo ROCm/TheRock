@@ -87,6 +87,11 @@ class TestROCmSanity:
         is_windows(),
         reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
     )
+    # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx125X-dcgpu",
+        reason="gfx1250 binary translator does not yet support this kernel code pattern, see #7458",
+    )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
