@@ -24,12 +24,33 @@ TEST_BKC_VERSION_DATA = {"release-metadata": {"base-date": "20260811"}}
 
 class VersionFileTest(unittest.TestCase):
     def test_loads_repository_version_file(self):
+        # The version file in this repository should always parse correctly.
         version_data = compute_rocm_package_version.load_version_file()
 
         self.assertIsInstance(version_data["rocm-version"], str)
         self.assertIsInstance(version_data["release-metadata"], dict)
 
+    def test_loads_version_file_without_metadata(self):
+        # Version files prior to introducing the metadata field should still
+        # parse and load without errors.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0"
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {"rocm-version": "7.9.0"},
+            )
+
     def test_loads_version_file_with_empty_metadata(self):
+        # Metadata is expected to be empty on the default branch.
+        # It may be populated on release branches.
         with tempfile.TemporaryDirectory() as temp_dir:
             version_file = Path(temp_dir) / "version.json"
             version_file.write_text(
