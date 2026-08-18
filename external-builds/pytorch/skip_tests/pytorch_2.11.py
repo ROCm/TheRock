@@ -4,18 +4,6 @@
 skip_tests = {
     "common": {
         "cuda": [
-            # AssertionError: False is not true
-            "test_memory_plots",
-            # AssertionError: Booleans mismatch: False is not True
-            "test_memory_plots_free_segment_stack",
-            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
-            "test_memory_snapshot",
-            # AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
-            "test_memory_snapshot_script",
-            # AssertionError: False is not true
-            "test_memory_snapshot_with_cpp",
-            # AssertionError: Scalars are not equal!
-            "test_mempool_ctx_multithread",
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_empty_cache_inactive",
             # RuntimeError: Error building extension 'dummy_allocator_v1'

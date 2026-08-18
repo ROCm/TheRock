@@ -6,8 +6,6 @@ skip_tests = {
         "cuda": [
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
-            # AssertionError: Scalars are not equal!
-            "test_mempool_ctx_multithread",
             # torch.AcceleratorError: HIP error: operation not permitted when
             # stream is capturing
             "test_cuda_graph_tensor_item_not_allowed",
