@@ -58,6 +58,13 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
     outputs:
       package_index_url:
         description: "Package index URL for the multi-arch release bucket."
@@ -111,6 +118,13 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
 run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, Multiarch)
@@ -323,6 +337,7 @@ jobs:
       jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

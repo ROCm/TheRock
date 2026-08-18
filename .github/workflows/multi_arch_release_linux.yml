@@ -49,6 +49,13 @@ on:
         description: "Build variant (release, asan). Affects publish paths."
         type: string
         default: "release"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -86,6 +93,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -102,6 +110,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -121,6 +130,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -138,6 +148,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -155,6 +166,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -220,7 +232,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}",
-              "build_variant": "${{ inputs.build_variant }}"
+              "build_variant": "${{ inputs.build_variant }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   # Install tests are dispatched asynchronously (sanity) so publish
@@ -247,7 +260,8 @@ jobs:
               "artifact_group": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "test_type": "${{ inputs.test_type }}",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
 
@@ -272,7 +286,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   trigger_release_jax_wheels:
@@ -295,7 +310,8 @@ jobs:
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   notify_quartz_completed:

@@ -48,6 +48,13 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -80,6 +87,9 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      quartz_tracking_id:
         type: string
         default: ""
     outputs:

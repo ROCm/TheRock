@@ -62,6 +62,13 @@ on:
         description: Runner label to execute tests on
         required: true
         type: string
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -122,6 +129,13 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 permissions:
   contents: read
   id-token: write
