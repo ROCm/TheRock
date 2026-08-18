@@ -551,8 +551,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # TEST_LABEL_GROUPS expansion
     # -----------------------
 
-    def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
-        """test:rocgdb should expand to both rocgdb-cpu and rocgdb-gpu."""
+    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
         with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
             fetch_test_configurations.run()
             components = self._get_components()
@@ -560,6 +560,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
 
     def test_all_rocgdb_label_excludes_unrelated_jobs(self):
         """test:rocgdb should not include jobs outside the rocgdb group."""
@@ -583,6 +584,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
         self.assertIn("rocblas", names)
 
     def test_unknown_group_label_is_treated_as_literal(self):
@@ -602,7 +604,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             os.environ,
             {
                 "TEST_LABELS": json.dumps(
-                    ["test:rocgdb", "test:rocgdb-cpu", "test:rocgdb-gpu"]
+                    [
+                        "test:rocgdb",
+                        "test:rocgdb-cpu",
+                        "test:rocgdb-gpu",
+                        "test:rocgdb-corefile",
+                    ]
                 )
             },
         ):
@@ -612,6 +619,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job_names = [job["job_name"] for job in components]
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
 
 
 if __name__ == "__main__":

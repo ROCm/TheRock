@@ -45,7 +45,7 @@ SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 # keys it expands to. Use this when a single label should select multiple
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
 }
 
 
