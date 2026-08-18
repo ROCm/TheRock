@@ -3,12 +3,7 @@
 include = [
   "lib/libprofiler-hub.so*",
 ]
-# profiler-hub ships no runtime executables or runtime data files.
-# 'run' has no default include patterns, so it is omitted entirely here
-# rather than declared bare - a bare entry would act as a catch-all and
-# claim the headers/static-lib/cmake files meant for 'dev' (see
-# build_tools/_therock_utils/artifact_builder.py ComponentDefaults("run", ...)).
-# Debug split is handled by the strip step; no extra files belong here.
+# 'run' omitted rather than declared bare: a bare 'run' is a catch-all and would claim dev's files.
 [components.dbg."profiler/profiler-hub/stage"]
 [components.dev."profiler/profiler-hub/stage"]
 include = [
