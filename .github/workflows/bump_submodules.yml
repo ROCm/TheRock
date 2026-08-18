@@ -99,8 +99,7 @@ jobs:
         if: github.event_name == 'push'
         continue-on-error: true
         run: |
-          python3 build_tools/github_actions/bump_automation.py \
-            --event_type "post_breadcrumbs" \
+          python3 build_tools/github_actions/post_bump_breadcrumbs.py \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
