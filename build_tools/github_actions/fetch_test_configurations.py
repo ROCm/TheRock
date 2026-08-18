@@ -402,6 +402,8 @@ test_matrix = {
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    # Only gfx942 has core-dump support, so include_family opts the job in to that
+    # family alone rather than enumerating every other architecture to exclude.
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
@@ -414,6 +416,9 @@ test_matrix = {
             " gdb.rocm/runtime-core.exp"
         ),
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",

@@ -266,6 +266,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertIn("inc-noexc", self._selected_names())
 
+    def test_corefile_included_on_gfx942(self):
+        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        self.assertIn("rocgdb-corefile", self._selected_names())
+
+    def test_corefile_excluded_on_other_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
+        self.assertNotIn("rocgdb-corefile", self._selected_names())
+
     # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
