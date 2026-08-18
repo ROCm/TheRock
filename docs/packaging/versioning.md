@@ -83,21 +83,15 @@ The script produces these versions for each release type:
 | nightly      | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
 | dev          | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
-Each distribution channel (and GPU family within that channel) is currently
-hosted on a separate release index that can be passed to `pip` or `uv` via
-`--index-url`. For example:
+Each distribution channel is currently hosted on a separate release index that
+can be passed to `pip` or `uv` via `--index-url`. For example:
 
 ```bash
-pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm
+pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
 ```
 
 See [RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 for details.
-
-> [!NOTE]
-> We plan on later providing a single multi-architecture index as part of
-> multi-arch work, see
-> [RFC0008-Multi-Arch-Packaging.md - Python Packaging](../rfcs/RFC0008-Multi-Arch-Packaging.md#python-packaging).
 
 ### External Python package versions
 
@@ -133,6 +127,21 @@ True
 >>> nightly > dev
 True
 ```
+
+> [!WARNING]
+> Known issue: https://github.com/ROCm/TheRock/issues/7183.
+>
+> Package versions using ROCm version 10.0.0+ sort as _older_ than previous
+> versions using this schema:
+>
+> ```python
+> >>> from packaging.version import Version
+> >>> Version("2.12.0+rocm10.0") > Version("2.12.0+rocm7.0")
+> False
+> ```
+>
+> We plan on publishing 10.0.0+ packages to a new index to avoid this issue for
+> future installs.
 
 #### PyTorch versions
 

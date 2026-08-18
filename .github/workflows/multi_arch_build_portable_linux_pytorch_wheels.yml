@@ -118,9 +118,9 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.12"
+        default: "release/2.13"
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
@@ -406,6 +406,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as

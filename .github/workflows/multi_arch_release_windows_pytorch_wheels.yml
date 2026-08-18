@@ -52,6 +52,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -106,6 +110,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -175,6 +183,7 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      build_runs_on: ${{ inputs.build_runs_on }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

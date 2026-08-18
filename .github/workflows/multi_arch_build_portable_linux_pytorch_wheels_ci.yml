@@ -30,7 +30,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.11"
+        default: "release/2.13"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -85,7 +85,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.11"
+        default: "release/2.13"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -293,6 +293,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split PyTorch fat wheel
         if: ${{ inputs.kpack_split == 'true' }}
         run: |
