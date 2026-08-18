@@ -82,11 +82,6 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
       # Escaping hack: experimentally determined to persist through the layers.
-      # Symbol versioning is applied per library target by patch_source.sh, which
-      # adds link_args : ['-Wl,--version-script=...'] to each library(). It must
-      # not be passed project wide: meson duplicates such arguments in its
-      # compiler sanity check (1.12.0) and `ld` then reports
-      # "duplicate version tag `AMDROCM_SYSDEPS_1.0'".
       "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
