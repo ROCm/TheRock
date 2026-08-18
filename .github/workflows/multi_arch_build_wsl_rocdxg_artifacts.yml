@@ -72,7 +72,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
-      MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb
+      MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
       # misparses during nested subproject configure.
