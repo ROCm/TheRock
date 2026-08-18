@@ -12,7 +12,7 @@ Coverage:
   - ``_list_s3_rpm_keys`` — only ``.rpm`` keys under ``prefix/x86_64/``; repodata
     metadata keys in the same prefix are excluded
   - ``_prepare_rpm_arch_dir_for_repodata`` — local RPMs copied first; missing S3
-    RPMs downloaded once; shared names prefer the local copy
+    RPMs downloaded once; shared names prefer the local copy; RPM lead magic verified
   - ``_validate_rpm_repodata`` — fail-fast when ``primary.xml.gz`` indexes fewer
     packages than ``.rpm`` files on disk
 
@@ -92,12 +92,21 @@ EXPECTED_LOCAL_RPM_COUNT = 2
 EXPECTED_DOWNLOADED_RPM_COUNT = 1
 EXPECTED_S3_DOWNLOAD_CALLS = 1
 
-FAKE_RPM_BYTES = b"fake-rpm"
-LOCAL_RPM_BYTES = b"local"
-SHARED_LOCAL_RPM_BYTES = b"shared-local"
-S3_RPM_BYTES = b"from-s3"
-PKG_A_RPM_BYTES = b"a"
-PKG_B_RPM_BYTES = b"b"
+RPM_LEAD_MAGIC = b"\xed\xab\xee\xdb"
+
+
+def _stub_rpm_bytes(payload: bytes) -> bytes:
+    """Return bytes with a valid RPM lead header prefix."""
+    return RPM_LEAD_MAGIC + payload
+
+
+FAKE_RPM_BYTES = _stub_rpm_bytes(b"fake-rpm")
+LOCAL_RPM_BYTES = _stub_rpm_bytes(b"local")
+SHARED_LOCAL_RPM_BYTES = _stub_rpm_bytes(b"shared-local")
+S3_RPM_BYTES = _stub_rpm_bytes(b"from-s3")
+PKG_A_RPM_BYTES = _stub_rpm_bytes(b"a")
+PKG_B_RPM_BYTES = _stub_rpm_bytes(b"b")
+INVALID_RPM_BYTES = b"not-rpm"
 
 
 class FakeS3:
@@ -228,6 +237,44 @@ class PrepareRpmArchDirTest(UploadPackageRepoTestCase):
         # shared.rpm must not be re-downloaded when already present locally.
         self.assertEqual(len(s3.download_calls), EXPECTED_S3_DOWNLOAD_CALLS)
         self.assertEqual(s3.download_calls[0][1], s3_key_only)
+
+    def test_raises_when_local_rpm_has_invalid_lead_magic(self) -> None:
+        """Reject corrupt local RPMs before S3 backfill or createrepo_c input."""
+        package_dir = self.temp_dir / "packages"
+        arch_dir = package_dir / RPM_ARCH_SUBDIR
+        arch_dir.mkdir(parents=True)
+        (arch_dir / LOCAL_ONLY_RPM).write_bytes(INVALID_RPM_BYTES)
+
+        s3 = FakeS3(rpm_keys=[])
+
+        with self.assertRaisesRegex(RuntimeError, "Not a valid RPM file"):
+            upload_repo._prepare_rpm_arch_dir_for_repodata(
+                s3=s3,
+                bucket=TEST_BUCKET,
+                prefix=TEST_LEGACY_PREFIX,
+                package_dir=package_dir,
+                work_dir=self.temp_dir / "work",
+            )
+
+
+# ---------------------------------------------------------------------------
+# _assert_rpm_lead_magic — RPM lead header sanity check
+# ---------------------------------------------------------------------------
+class AssertRpmLeadMagicTest(UploadPackageRepoTestCase):
+    """Tests for ``_assert_rpm_lead_magic()``."""
+
+    def test_accepts_valid_rpm_lead_magic(self) -> None:
+        """Files beginning with the RPM lead magic pass validation."""
+        rpm_path = self.temp_dir / LOCAL_ONLY_RPM
+        rpm_path.write_bytes(LOCAL_RPM_BYTES)
+        upload_repo._assert_rpm_lead_magic(rpm_path)
+
+    def test_raises_on_invalid_lead_magic(self) -> None:
+        """Non-RPM content is rejected before repodata generation."""
+        rpm_path = self.temp_dir / "bad.rpm"
+        rpm_path.write_bytes(INVALID_RPM_BYTES)
+        with self.assertRaisesRegex(RuntimeError, "Not a valid RPM file"):
+            upload_repo._assert_rpm_lead_magic(rpm_path)
 
 
 # ---------------------------------------------------------------------------
