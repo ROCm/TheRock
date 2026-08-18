@@ -635,6 +635,19 @@ if(THEROCK_ENABLE_OCL32_RUNTIME)
       "lib/opencl"
   )
   therock_cmake_subproject_activate(ocl-clr32)
+
+  therock_provide_artifact(core-ocl32
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl32.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      run
+    SUBPROJECT_DEPS
+      ocl-icd32
+      ocl-clr32
+  )
 endif(THEROCK_ENABLE_OCL32_RUNTIME)
 
 ##############################################################################

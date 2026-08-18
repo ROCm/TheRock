@@ -400,6 +400,17 @@ if(THEROCK_ENABLE_COMGR32)
       "lib"
   )
   therock_cmake_subproject_activate(amd-comgr32)
+
+  therock_provide_artifact(amd-comgr32
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-comgr32.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+    SUBPROJECT_DEPS
+      amd-comgr32
+  )
 endif(THEROCK_ENABLE_COMGR32)
 
 if(THEROCK_ENABLE_HIPIFY)
