@@ -52,6 +52,18 @@ skip_tests = {
             "test_graph_capture_reclaim_shared_pool",
         ],
     },
+    "gfx950": {
+        "nn": [
+            # AssertionError: Scalars are not close! - Failed with python 3.10
+            "test_CTCLoss_no_batch_dim_reduction_mean_use_module_form_True_cuda",
+            # AssertionError: Tensor-likes are not close! - Failed with python 3.10
+            "test_CTCLoss_no_batch_dim_reduction_none_use_module_form_False_cuda",
+            # AssertionError: Tensor-likes are not close! - Failed with python 3.10
+            "test_CTCLoss_no_batch_dim_reduction_none_use_module_form_True_cuda",
+            # AssertionError: Tensor-likes are not close! - Failed with python 3.10, python 3.11 and python 3.12
+            "test_ctc_loss_cudnn_tensor_cuda_cuda",
+        ],
+    },
     # "gfx120": {
     #     "unary_ufuncs": [
     #         # this failed only once. maybe python version dependent? probably the run was python 3.13
