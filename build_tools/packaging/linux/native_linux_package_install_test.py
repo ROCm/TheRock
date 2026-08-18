@@ -1405,7 +1405,15 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--release-type",
         type=str,
-        choices=["dev", "nightly", "prerelease", "release", "ci"],
+        choices=[
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+            "ci",
+        ],
         help="Type of release: 'dev', 'nightly', 'prerelease', 'release', or 'ci'",
     )
     parser.add_argument(

@@ -15,7 +15,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
+RELEASE_TYPES = [
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+]
 
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
