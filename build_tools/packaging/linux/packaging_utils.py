@@ -1382,9 +1382,11 @@ def filter_dependencies_by_artifacts(
             dep, artifacts_dir, GFX_HOST
         ):
             # Gfx-specific build missing artifacts, fall back to host version
-            print(f"INFO: {dep} has no {gfx_arch} artifacts, using host fallback")
+            logger.info(f"{dep} has no {gfx_arch} artifacts, using host fallback")
             host_fallback.append(dep)
         else:
-            logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)")
+            logger.warning(
+                f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)"
+            )
 
     return filtered, host_fallback
