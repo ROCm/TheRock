@@ -55,18 +55,13 @@ jobs:
     timeout-minutes: 210
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
-    container:
-      # If the component has specified an alternate image, honor that option.
-      # Otherwise use the default image.
-      image: >-
-        ${{ inputs.platform == 'linux' &&
-            (fromJSON(inputs.component).container_image || inputs.default_container_image)
-            || null
-        }}
-      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
-      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
-      # and any job-specific options
-      options: ${{ fromJSON(inputs.component).container_options }}
+    # Only Linux components run inside a container; the image + options come from
+    # build_tools/github_actions/fetch_test_configurations.py. Windows/other
+    # platforms run directly on the host, so the whole container must be null.
+    # (A null expression for the string-typed `options:` field is coerced to ''
+    # and rejected by the runner -- "Unexpected value ''" -- so image and options
+    # cannot be conditionalized individually; the entire container is gated instead.)
+    container: ${{ (inputs.platform == 'linux' && fromJSON(format('{{"image":{0},"options":{1}}}', toJSON(fromJSON(inputs.component).container_image || inputs.default_container_image), toJSON(fromJSON(inputs.component).container_options)))) || null }}
     strategy:
       fail-fast: false
       matrix:
