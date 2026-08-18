@@ -1603,7 +1603,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm foundational profiling tools and tracing infrastructure",
-    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), and rocprof-trace-decoder (trace analysis utilities). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
+    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), rocprof-trace-decoder (trace analysis utilities), and profiler-hub (rocpd profiling data storage). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1665,6 +1665,20 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False"
@@ -1689,7 +1703,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools test suite and validation binaries",
-    "Description_Long": "Test suite for rocprofiler-compute and rocprofiler-systems. Includes unit tests and validation binaries for compute workload profiling and system-level performance analysis. Provides test executables for verifying kernel profiling, hardware counter collection, and tracing functionality.",
+    "Description_Long": "Test suite for rocprofiler-compute, rocprofiler-systems, and profiler-hub. Includes unit tests and validation binaries for compute workload profiling and system-level performance analysis. Provides test executables for verifying kernel profiling, hardware counter collection, and tracing functionality.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1735,6 +1749,17 @@
         "Artifact_Subdir": [
           {
             "Name": "aqlprofile",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
             "Components": [
               "test"
             ]
