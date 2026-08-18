@@ -1217,6 +1217,8 @@ def filter_dependencies_by_artifacts(
             print(f"INFO: {dep} has no {gfx_arch} artifacts, using host fallback")
             host_fallback.append(dep)
         else:
-            logger.warning(f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)")
+            logger.warning(
+                f"WORKAROUND: Excluding {dep} (no artifacts for {gfx_arch} or host)"
+            )
 
     return filtered, host_fallback
