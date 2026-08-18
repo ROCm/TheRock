@@ -1,0 +1,55 @@
+From c01f73257fa91ef90418b0aa59975236f8a4cf65 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Wed, 10 Jun 2026 19:56:26 +0000
+Subject: [PATCH] [libhipcxx] Change conflicting enum
+
+__bool is a reserved keyword on some architectures e.g. PowerPC.
+
+Change to __boolean which is descriptive and does not conflict.
+---
+ include/cuda/std/__limits/numeric_limits.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/include/cuda/std/__limits/numeric_limits.h b/include/cuda/std/__limits/numeric_limits.h
+index ec615417d..5982be7b8 100644
+--- a/include/cuda/std/__limits/numeric_limits.h
++++ b/include/cuda/std/__limits/numeric_limits.h
+@@ -50,7 +50,7 @@ enum float_denorm_style
+ enum class __numeric_limits_type
+ {
+   __integral,
+-  __bool,
++  __boolean,
+   __floating_point,
+   __other,
+ };
+@@ -61,7 +61,7 @@ _LIBCUDACXX_HIDE_FROM_ABI constexpr __numeric_limits_type __make_numeric_limits_
+ #if !defined(_CCCL_NO_IF_CONSTEXPR)
+   if constexpr (_CCCL_TRAIT(is_same, _Tp, bool))
+   {
+-    return __numeric_limits_type::__bool;
++    return __numeric_limits_type::__boolean;
+   }
+   else if constexpr (_CCCL_TRAIT(is_integral, _Tp))
+   {
+@@ -77,7 +77,7 @@ _LIBCUDACXX_HIDE_FROM_ABI constexpr __numeric_limits_type __make_numeric_limits_
+   }
+ #else // ^^^ !_CCCL_NO_IF_CONSTEXPR ^^^ // vvv _CCCL_NO_IF_CONSTEXPR vvv
+   return _CCCL_TRAIT(is_same, _Tp, bool)
+-         ? __numeric_limits_type::__bool
++         ? __numeric_limits_type::__boolean
+          : (_CCCL_TRAIT(is_integral, _Tp)
+               ? __numeric_limits_type::__integral
+               : (_CCCL_TRAIT(is_floating_point, _Tp) || _CCCL_TRAIT(__is_extended_floating_point, _Tp)
+@@ -252,7 +252,7 @@ public:
+ };
+ 
+ template <>
+-class __numeric_limits_impl<bool, __numeric_limits_type::__bool>
++class __numeric_limits_impl<bool, __numeric_limits_type::__boolean>
+ {
+ public:
+   using type = bool;
+-- 
+2.52.0
+
