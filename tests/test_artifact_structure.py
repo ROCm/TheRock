@@ -74,6 +74,11 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("hipthreads", "dev"),
     ("hipthreads", "test"),
     ("mirage", "dev"),  # new artifact, no packages yet.
+    ("profiler-hub", "dev"),  # packaging deferred to #7377; remove all five with it.
+    ("profiler-hub", "doc"),
+    ("profiler-hub", "lib"),
+    ("profiler-hub", "run"),
+    ("profiler-hub", "test"),
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
     ("rocrtst", "lib"),
