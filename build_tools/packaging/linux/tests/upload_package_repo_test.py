@@ -4,20 +4,18 @@
 
 """Unit tests for ``upload_package_repo.py`` RPM repodata helpers.
 
-Regression guards for Issue #6540: full RPM repodata regen from local build
-tree + S3 backfill (dedupe-skipped packages must still appear in repodata).
+Regression guards for Issue #6540: repodata must index every RPM in the local
+build tree, then upload repodata/ after package upload (dedupe OK).
 
 Coverage:
 
-  - ``_list_s3_rpm_keys`` — only ``.rpm`` keys under ``prefix/x86_64/``; repodata
-    metadata keys in the same prefix are excluded
-  - ``_prepare_rpm_arch_dir_for_repodata`` — local RPMs copied first; missing S3
-    RPMs downloaded once; shared names prefer the local copy; RPM lead magic verified
+  - ``_assert_rpm_lead_magic`` — reject non-RPM content before createrepo_c
   - ``_validate_rpm_repodata`` — fail-fast when ``primary.xml.gz`` indexes fewer
     packages than ``.rpm`` files on disk
+  - ``upload_rpm_repodata_to_s3`` — upload local ``repodata/`` files to S3
 
-Not covered here: ``regenerate_rpm_metadata_from_s3`` end-to-end (requires
-``createrepo_c`` and a full S3 client); DEB merge path in the same module.
+Not covered here: ``create_rpm_repo`` end-to-end (requires ``createrepo_c``);
+DEB merge path in the same module.
 
 Prerequisites:
 
@@ -39,7 +37,6 @@ import sys
 import tempfile
 import types
 import unittest
-from collections.abc import Iterator
 from pathlib import Path
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -79,18 +76,11 @@ upload_repo = _import_upload_package_repo()
 # Test fixture defaults (avoid unexplained literals in assertions and helpers).
 TEST_BUCKET = "therock-test-bucket"
 TEST_RPM_PREFIX = "run-linux/packages/rpm"
-TEST_LEGACY_PREFIX = "prefix"
 RPM_ARCH_SUBDIR = "x86_64"
 
-LOCAL_ONLY_RPM = "local-only.rpm"
-SHARED_RPM = "shared.rpm"
-S3_ONLY_RPM = "s3-only.rpm"
 PKG_A_RPM = "pkg-a.rpm"
 PKG_B_RPM = "pkg-b.rpm"
-
-EXPECTED_LOCAL_RPM_COUNT = 2
-EXPECTED_DOWNLOADED_RPM_COUNT = 1
-EXPECTED_S3_DOWNLOAD_CALLS = 1
+LOCAL_ONLY_RPM = "local-only.rpm"
 
 RPM_LEAD_MAGIC = b"\xed\xab\xee\xdb"
 
@@ -100,56 +90,27 @@ def _stub_rpm_bytes(payload: bytes) -> bytes:
     return RPM_LEAD_MAGIC + payload
 
 
-FAKE_RPM_BYTES = _stub_rpm_bytes(b"fake-rpm")
 LOCAL_RPM_BYTES = _stub_rpm_bytes(b"local")
-SHARED_LOCAL_RPM_BYTES = _stub_rpm_bytes(b"shared-local")
-S3_RPM_BYTES = _stub_rpm_bytes(b"from-s3")
 PKG_A_RPM_BYTES = _stub_rpm_bytes(b"a")
 PKG_B_RPM_BYTES = _stub_rpm_bytes(b"b")
 INVALID_RPM_BYTES = b"not-rpm"
 
 
 class FakeS3:
-    """Minimal S3 client stub matching ``_S3Client`` for RPM helper tests."""
+    """Minimal S3 client stub for ``upload_rpm_repodata_to_s3`` tests."""
 
-    def __init__(
+    def __init__(self) -> None:
+        self.upload_calls: list[tuple[str, str, str]] = []
+
+    def upload_file(
         self,
-        rpm_keys: list[str],
-        downloads: dict[str, bytes] | None = None,
+        filename: str,
+        bucket: str,
+        key: str,
+        ExtraArgs: dict[str, str] | None = None,
     ) -> None:
-        """Configure listed RPM keys and optional per-key download payloads."""
-        self._rpm_keys = rpm_keys
-        self._downloads = downloads or {}
-        # Record download_file calls so tests can assert S3 backfill behavior.
-        self.download_calls: list[tuple[str, str, str]] = []
-
-    def get_paginator(self, op_name: str) -> object:
-        """Return a paginator stub that only supports list_objects_v2."""
-        if op_name != "list_objects_v2":
-            raise ValueError(f"Unexpected paginator: {op_name!r}")
-        s3 = self
-
-        class Dispatcher:
-            """Yields S3 list pages for prefix/x86_64/ queries only."""
-
-            def paginate(
-                self, *, Bucket: str, Prefix: str
-            ) -> Iterator[dict[str, list[dict[str, str]]]]:
-                # Mirror production: only keys under prefix/x86_64/ are RPM candidates.
-                del Bucket
-                if Prefix.endswith(f"/{RPM_ARCH_SUBDIR}/"):
-                    yield {
-                        "Contents": [{"Key": key} for key in s3._rpm_keys],
-                    }
-                else:
-                    yield {}
-
-        return Dispatcher()
-
-    def download_file(self, bucket: str, key: str, filename: str) -> None:
-        """Write stub RPM bytes to filename and record the S3 key requested."""
-        self.download_calls.append((bucket, key, filename))
-        Path(filename).write_bytes(self._downloads.get(key, FAKE_RPM_BYTES))
+        del ExtraArgs
+        self.upload_calls.append((filename, bucket, key))
 
 
 class UploadPackageRepoTestCase(unittest.TestCase):
@@ -163,98 +124,6 @@ class UploadPackageRepoTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         """Remove the per-test temp dir."""
         self._temp_context.cleanup()
-
-
-# ---------------------------------------------------------------------------
-# _list_s3_rpm_keys — S3 listing must exclude repodata metadata keys
-# ---------------------------------------------------------------------------
-class ListS3RpmKeysTest(unittest.TestCase):
-    """Tests for ``_list_s3_rpm_keys()``."""
-
-    def test_filters_non_rpm_keys(self) -> None:
-        """Only ``.rpm`` keys under prefix/x86_64/ are returned.
-
-        Repodata files (e.g. primary.xml.gz) live in the same S3 prefix but
-        must not be downloaded as packages during full repodata regeneration.
-        """
-        s3 = FakeS3(
-            rpm_keys=[
-                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/{PKG_A_RPM}",
-                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/repodata/primary.xml.gz",
-                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/{PKG_B_RPM}",
-            ]
-        )
-        keys = upload_repo._list_s3_rpm_keys(s3, TEST_BUCKET, TEST_RPM_PREFIX)
-        self.assertEqual(
-            keys,
-            [
-                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/{PKG_A_RPM}",
-                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/{PKG_B_RPM}",
-            ],
-        )
-
-
-# ---------------------------------------------------------------------------
-# _prepare_rpm_arch_dir_for_repodata — local tree + S3 backfill
-# ---------------------------------------------------------------------------
-class PrepareRpmArchDirTest(UploadPackageRepoTestCase):
-    """Tests for ``_prepare_rpm_arch_dir_for_repodata()``."""
-
-    def test_uses_local_tree_and_downloads_missing_s3_rpms(self) -> None:
-        """Local build RPMs are copied first; only missing S3 RPMs are downloaded.
-
-        Regression guard for upload dedupe: local-only RPMs must appear in the
-        working arch dir even when upload skipped them. Shared names prefer the
-        local copy; S3-only packages are fetched once for createrepo_c input.
-        """
-        package_dir = self.temp_dir / "packages"
-        arch_dir = package_dir / RPM_ARCH_SUBDIR
-        arch_dir.mkdir(parents=True)
-        # Two RPMs built locally this run (one will also exist on S3).
-        (arch_dir / LOCAL_ONLY_RPM).write_bytes(LOCAL_RPM_BYTES)
-        (arch_dir / SHARED_RPM).write_bytes(SHARED_LOCAL_RPM_BYTES)
-
-        s3_key_shared = f"{TEST_LEGACY_PREFIX}/{RPM_ARCH_SUBDIR}/{SHARED_RPM}"
-        s3_key_only = f"{TEST_LEGACY_PREFIX}/{RPM_ARCH_SUBDIR}/{S3_ONLY_RPM}"
-        s3 = FakeS3(
-            rpm_keys=[s3_key_shared, s3_key_only],
-            downloads={s3_key_only: S3_RPM_BYTES},
-        )
-
-        prep = upload_repo._prepare_rpm_arch_dir_for_repodata(
-            s3=s3,
-            bucket=TEST_BUCKET,
-            prefix=TEST_LEGACY_PREFIX,
-            package_dir=package_dir,
-            work_dir=self.temp_dir / "work",
-        )
-
-        self.assertEqual(prep.local_rpm_count, EXPECTED_LOCAL_RPM_COUNT)
-        self.assertEqual(prep.downloaded_rpm_count, EXPECTED_DOWNLOADED_RPM_COUNT)
-        self.assertTrue((prep.arch_dir / LOCAL_ONLY_RPM).exists())
-        self.assertTrue((prep.arch_dir / SHARED_RPM).exists())
-        self.assertTrue((prep.arch_dir / S3_ONLY_RPM).exists())
-        # shared.rpm must not be re-downloaded when already present locally.
-        self.assertEqual(len(s3.download_calls), EXPECTED_S3_DOWNLOAD_CALLS)
-        self.assertEqual(s3.download_calls[0][1], s3_key_only)
-
-    def test_raises_when_local_rpm_has_invalid_lead_magic(self) -> None:
-        """Reject corrupt local RPMs before S3 backfill or createrepo_c input."""
-        package_dir = self.temp_dir / "packages"
-        arch_dir = package_dir / RPM_ARCH_SUBDIR
-        arch_dir.mkdir(parents=True)
-        (arch_dir / LOCAL_ONLY_RPM).write_bytes(INVALID_RPM_BYTES)
-
-        s3 = FakeS3(rpm_keys=[])
-
-        with self.assertRaisesRegex(RuntimeError, "Not a valid RPM file"):
-            upload_repo._prepare_rpm_arch_dir_for_repodata(
-                s3=s3,
-                bucket=TEST_BUCKET,
-                prefix=TEST_LEGACY_PREFIX,
-                package_dir=package_dir,
-                work_dir=self.temp_dir / "work",
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -286,8 +155,8 @@ class ValidateRpmRepodataTest(UploadPackageRepoTestCase):
     def test_raises_when_primary_xml_indexes_fewer_packages_than_rpms(self) -> None:
         """Reject repodata when primary.xml.gz indexes fewer packages than on disk.
 
-        Catches the stale-repodata bug: mergerepo_c on a partial upload set could
-        leave repomd.xml pointing at fewer RPMs than dnf/zypper need at install time.
+        Guards the createrepo_c step: every local .rpm must appear in primary.xml.gz
+        before repodata is uploaded to S3 (Issue #6540).
         """
         arch_dir = self.temp_dir / RPM_ARCH_SUBDIR
         arch_dir.mkdir(parents=True)
@@ -311,6 +180,48 @@ class ValidateRpmRepodataTest(UploadPackageRepoTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "RPM repodata is incomplete"):
             upload_repo._validate_rpm_repodata(arch_dir)
+
+
+# ---------------------------------------------------------------------------
+# upload_rpm_repodata_to_s3 — push local repodata/ after package upload
+# ---------------------------------------------------------------------------
+class UploadRpmRepodataToS3Test(UploadPackageRepoTestCase):
+    """Tests for ``upload_rpm_repodata_to_s3()``."""
+
+    def test_uploads_all_repodata_files_under_x86_64(self) -> None:
+        """Every file in local repodata/ is uploaded under prefix/x86_64/repodata/."""
+        package_dir = self.temp_dir / "packages"
+        repodata_dir = package_dir / RPM_ARCH_SUBDIR / "repodata"
+        repodata_dir.mkdir(parents=True)
+        (repodata_dir / "primary.xml.gz").write_bytes(b"primary")
+        (repodata_dir / "repomd.xml").write_text(
+            '<?xml version="1.0"?><repomd/>', encoding="utf-8"
+        )
+
+        s3 = FakeS3()
+        upload_repo.upload_rpm_repodata_to_s3(
+            s3, TEST_BUCKET, TEST_RPM_PREFIX, package_dir
+        )
+
+        uploaded_keys = {call[2] for call in s3.upload_calls}
+        self.assertEqual(
+            uploaded_keys,
+            {
+                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/repodata/primary.xml.gz",
+                f"{TEST_RPM_PREFIX}/{RPM_ARCH_SUBDIR}/repodata/repomd.xml",
+            },
+        )
+
+    def test_skips_when_x86_64_directory_missing(self) -> None:
+        """No S3 uploads when the local package tree has no x86_64/ directory."""
+        package_dir = self.temp_dir / "packages"
+        package_dir.mkdir(parents=True)
+
+        s3 = FakeS3()
+        upload_repo.upload_rpm_repodata_to_s3(
+            s3, TEST_BUCKET, TEST_RPM_PREFIX, package_dir
+        )
+        self.assertEqual(s3.upload_calls, [])
 
 
 if __name__ == "__main__":
