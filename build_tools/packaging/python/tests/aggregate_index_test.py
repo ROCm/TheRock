@@ -29,6 +29,10 @@ from aggregate_index import (
 def _valid_manifest() -> dict[str, object]:
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
+        "streams": {
+            "known": ["dev", "nightly", "rc", "stable", "stable-staging"],
+            "default": ["dev", "nightly", "rc", "stable", "stable-staging"],
+        },
         "python_indexes": [
             {
                 "public_base": "/rocm/whl-next",
@@ -127,6 +131,13 @@ def test_checked_in_manifest_loads() -> None:
 
     assert manifest.schema_version == MANIFEST_SCHEMA_VERSION
     assert index.public_base == "/rocm/whl-next"
+    assert manifest.streams.known == (
+        "dev",
+        "nightly",
+        "rc",
+        "stable",
+        "stable-staging",
+    )
     assert "jax-rocm7-plugin" not in index.packages
     assert "jax-rocm7-pjrt" not in index.packages
     assert index.packages["jax-rocm10-plugin"].owner_path == "jax/whl-next"
@@ -142,7 +153,6 @@ def test_checked_in_manifest_uses_known_owner_paths() -> None:
 
     assert {
         *[package.owner_path for package in index.packages.values()],
-        *[pattern.owner_path for pattern in index.patterns.values()],
     } == known_owner_paths
 
 
@@ -172,6 +182,7 @@ def test_validate_product_indexes_success(tmp_path: Path) -> None:
     validated = validate_product_indexes(
         manifest,
         tmp_path,
+        stream="nightly",
         require_all_manifest_packages=False,
     )
 
@@ -197,6 +208,7 @@ def test_validate_product_indexes_allows_extra_package_by_default(
     validate_product_indexes(
         manifest,
         tmp_path,
+        stream="nightly",
         require_all_manifest_packages=False,
     )
 
@@ -213,39 +225,43 @@ def test_validate_product_indexes_strict_completeness_rejects_extra_package(
         validate_product_indexes(
             manifest,
             tmp_path,
+            stream="nightly",
             strict_completeness=True,
             require_all_manifest_packages=False,
         )
 
 
-def test_pattern_package_generates_exact_route_and_validation_source(
+def test_stream_package_generates_exact_route_and_validation_source(
     tmp_path: Path,
 ) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {},
-                    "patterns": {
-                        "rocm-sdk-device-gfx*": {"owner_path": "core/whl-next"},
-                    },
-                }
-            ],
-        }
-    )
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages.clear()
+    packages["rocm-sdk-device-gfx1201"] = {
+        "owner_path": "core/whl-next",
+        "streams": ["dev", "nightly"],
+    }
+    manifest = parse_ownership_manifest(data)
     content_root = tmp_path / "content"
     output_dir = tmp_path / "out"
     _write_product_root(content_root, "core/whl-next", ["rocm-sdk-device-gfx1201"])
     _write_package_page(content_root, "core/whl-next", "rocm-sdk-device-gfx1201")
 
-    outputs = generate_outputs(manifest, content_root, output_dir)
+    outputs = generate_outputs(
+        manifest,
+        output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
 
     route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
     validation_report = json.loads(
         outputs.validation_report.read_text(encoding="utf-8")
     )
+    assert route_table["stream"] == "nightly"
     assert route_table["routes"] == [
         {
             "owner_path": "core/whl-next",
@@ -259,113 +275,95 @@ def test_pattern_package_generates_exact_route_and_validation_source(
             "owner_path": "core/whl-next",
             "product_root_index": "/rocm/core/whl-next/index.html",
             "package_index": "/rocm/core/whl-next/rocm-sdk-device-gfx1201/index.html",
-            "source": "pattern",
-            "pattern": "rocm-sdk-device-gfx*",
+            "source": "exact",
         }
     ]
 
 
-def test_exact_package_ownership_takes_precedence_over_pattern(
+def test_stream_filtered_package_is_excluded_from_manifest_only_output(
     tmp_path: Path,
 ) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {
-                        "foo-gfx1201": {"owner_path": "core/whl-next"},
-                    },
-                    "patterns": {
-                        "foo-gfx*": {"owner_path": "pytorch/whl-next"},
-                    },
-                }
-            ],
-        }
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["rocm-sdk-device-gfx900"] = {
+        "owner_path": "core/whl-next",
+        "streams": ["dev", "nightly"],
+    }
+    manifest = parse_ownership_manifest(data)
+    output_dir = tmp_path / "out"
+
+    outputs = generate_outputs(manifest, output_dir, stream="stable")
+
+    route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
     )
-    _write_product_root(tmp_path, "core/whl-next", ["foo-gfx1201"])
-    _write_package_page(tmp_path, "core/whl-next", "foo-gfx1201")
-    _write_product_root(tmp_path, "pytorch/whl-next", [])
+    assert route_table["stream"] == "stable"
+    assert "rocm-sdk-device-gfx900" not in {
+        route["package"] for route in route_table["routes"]
+    }
+    assert validation_report["generation_mode"] == "manifest"
+    assert validation_report["content_validated"] is False
+    assert {package["source"] for package in validation_report["packages"]} == {
+        "manifest"
+    }
 
-    validated = validate_product_indexes(manifest, tmp_path)
 
-    assert validated.packages["foo-gfx1201"].owner_path == "core/whl-next"
-    assert validated.packages["foo-gfx1201"].source == "exact"
-    assert validated.packages["foo-gfx1201"].pattern is None
+@pytest.mark.parametrize(
+    "extra_arg",
+    [
+        "--allow-unpublished",
+        "--strict-completeness",
+    ],
+)
+def test_manifest_only_generate_rejects_content_validation_flags(
+    tmp_path: Path,
+    extra_arg: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_dir = tmp_path / "out"
+    manifest_path = tmp_path / "ownership.yaml"
+    manifest_path.write_text(json.dumps(_valid_manifest()), encoding="utf-8")
 
-
-def test_longest_pattern_prefix_wins(tmp_path: Path) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {},
-                    "patterns": {
-                        "foo*": {"owner_path": "core/whl-next"},
-                        "foo-bar*": {"owner_path": "pytorch/whl-next"},
-                    },
-                }
-            ],
-        }
+    exit_code = main(
+        [
+            "generate",
+            "--manifest",
+            os.fspath(manifest_path),
+            "--stream",
+            "nightly",
+            "--output-dir",
+            os.fspath(output_dir),
+            extra_arg,
+        ]
     )
-    _write_product_root(tmp_path, "core/whl-next", [])
-    _write_product_root(tmp_path, "pytorch/whl-next", ["foo-bar-gfx1201"])
-    _write_package_page(tmp_path, "pytorch/whl-next", "foo-bar-gfx1201")
 
-    validated = validate_product_indexes(manifest, tmp_path)
-
-    assert validated.packages["foo-bar-gfx1201"].owner_path == "pytorch/whl-next"
-    assert validated.packages["foo-bar-gfx1201"].pattern == "foo-bar*"
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "Content validation flags require --content-root" in captured.err
+    _assert_no_generated_outputs(output_dir)
 
 
-def test_pattern_owner_mismatch_is_rejected(tmp_path: Path) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {
-                        "core-sentinel": {"owner_path": "core/whl-next"},
-                    },
-                    "patterns": {
-                        "foo-gfx*": {"owner_path": "pytorch/whl-next"},
-                    },
-                }
-            ],
-        }
-    )
-    _write_product_root(tmp_path, "pytorch/whl-next", [])
-    _write_product_root(tmp_path, "core/whl-next", ["core-sentinel", "foo-gfx1201"])
-    _write_package_page(tmp_path, "core/whl-next", "core-sentinel")
-    _write_package_page(tmp_path, "core/whl-next", "foo-gfx1201")
-
-    with pytest.raises(IndexValidationError, match="resolves to owner path"):
-        validate_product_indexes(manifest, tmp_path)
-
-
-def test_strict_completeness_rejects_unknown_package_even_with_patterns(
+def test_strict_completeness_rejects_package_disabled_for_stream(
     tmp_path: Path,
 ) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {},
-                    "patterns": {
-                        "foo-gfx*": {"owner_path": "core/whl-next"},
-                    },
-                }
-            ],
-        }
-    )
-    _write_product_root(tmp_path, "core/whl-next", ["bar-gfx1201"])
-    _write_package_page(tmp_path, "core/whl-next", "bar-gfx1201")
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages.clear()
+    packages["rocm-sdk-device-gfx900"] = {
+        "owner_path": "core/whl-next",
+        "streams": ["dev", "nightly"],
+    }
+    manifest = parse_ownership_manifest(data)
+    _write_product_root(tmp_path, "core/whl-next", ["rocm-sdk-device-gfx900"])
+    _write_package_page(tmp_path, "core/whl-next", "rocm-sdk-device-gfx900")
 
     with pytest.raises(
         IndexValidationError, match="absent from the ownership manifest"
@@ -373,33 +371,9 @@ def test_strict_completeness_rejects_unknown_package_even_with_patterns(
         validate_product_indexes(
             manifest,
             tmp_path,
+            stream="stable",
             strict_completeness=True,
         )
-
-
-def test_require_all_manifest_packages_ignores_zero_match_patterns(
-    tmp_path: Path,
-) -> None:
-    manifest = parse_ownership_manifest(
-        {
-            "schema_version": MANIFEST_SCHEMA_VERSION,
-            "python_indexes": [
-                {
-                    "public_base": "/rocm/whl-next",
-                    "packages": {},
-                    "patterns": {
-                        "foo-gfx*": {"owner_path": "core/whl-next"},
-                    },
-                }
-            ],
-        }
-    )
-    _write_product_root(tmp_path, "core/whl-next", [])
-
-    validated = validate_product_indexes(manifest, tmp_path)
-
-    assert validated.packages == {}
-    assert validated.unpublished_packages == {}
 
 
 def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
@@ -408,7 +382,12 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    outputs = generate_outputs(manifest, content_root, output_dir)
+    outputs = generate_outputs(
+        manifest,
+        output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
 
     assert outputs.aggregate_root == output_dir / "rocm/whl-next/index.html"
     assert outputs.route_table == output_dir / "rocm-whl-next-routes.json"
@@ -433,6 +412,7 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     assert route_table == {
         "schema_version": ROUTES_SCHEMA_VERSION,
         "public_base": "/rocm/whl-next",
+        "stream": "nightly",
         "routes": [
             {
                 "owner_path": "core/whl-next",
@@ -462,6 +442,9 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     )
     assert validation_report["schema_version"] == VALIDATION_SCHEMA_VERSION
     assert validation_report["public_base"] == "/rocm/whl-next"
+    assert validation_report["stream"] == "nightly"
+    assert validation_report["generation_mode"] == "content"
+    assert validation_report["content_validated"] is True
     assert validation_report["package_count"] == 4
     assert validation_report["unpublished_package_count"] == 0
     assert validation_report["owners"] == {
@@ -487,7 +470,12 @@ def test_generate_outputs_requires_manifest_packages_by_default(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="missing canonical package link"):
-        generate_outputs(manifest, content_root, output_dir)
+        generate_outputs(
+            manifest,
+            output_dir,
+            stream="nightly",
+            content_root=content_root,
+        )
     _assert_no_generated_outputs(output_dir)
 
 
@@ -499,8 +487,9 @@ def test_generate_outputs_can_allow_unpublished_packages(tmp_path: Path) -> None
 
     outputs = generate_outputs(
         manifest,
-        content_root,
         output_dir,
+        stream="nightly",
+        content_root=content_root,
         require_all_manifest_packages=False,
     )
 
@@ -536,8 +525,9 @@ def test_generate_outputs_strict_completeness_rejects_extra_package(
     ):
         generate_outputs(
             manifest,
-            content_root,
             output_dir,
+            stream="nightly",
+            content_root=content_root,
             strict_completeness=True,
         )
     _assert_no_generated_outputs(output_dir)
@@ -550,8 +540,18 @@ def test_generate_outputs_is_byte_for_byte_deterministic(tmp_path: Path) -> None
     _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    generate_outputs(manifest, content_root, first_output_dir)
-    generate_outputs(manifest, content_root, second_output_dir)
+    generate_outputs(
+        manifest,
+        first_output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
+    generate_outputs(
+        manifest,
+        second_output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
 
     assert _generated_output_bytes(first_output_dir) == _generated_output_bytes(
         second_output_dir
@@ -569,8 +569,18 @@ def test_generate_outputs_is_deterministic_across_content_roots(
     _write_complete_content_root(second_content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    generate_outputs(manifest, first_content_root, first_output_dir)
-    generate_outputs(manifest, second_content_root, second_output_dir)
+    generate_outputs(
+        manifest,
+        first_output_dir,
+        stream="nightly",
+        content_root=first_content_root,
+    )
+    generate_outputs(
+        manifest,
+        second_output_dir,
+        stream="nightly",
+        content_root=second_content_root,
+    )
 
     assert _generated_output_bytes(first_output_dir) == _generated_output_bytes(
         second_output_dir
@@ -583,9 +593,19 @@ def test_generate_outputs_overwrite_is_deterministic(tmp_path: Path) -> None:
     _write_complete_content_root(content_root)
     manifest = parse_ownership_manifest(_valid_manifest())
 
-    generate_outputs(manifest, content_root, output_dir)
+    generate_outputs(
+        manifest,
+        output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
     first_output = _generated_output_bytes(output_dir)
-    generate_outputs(manifest, content_root, output_dir)
+    generate_outputs(
+        manifest,
+        output_dir,
+        stream="nightly",
+        content_root=content_root,
+    )
 
     assert _generated_output_bytes(output_dir) == first_output
 
@@ -604,8 +624,8 @@ def test_main_generate_default_writes_complete_outputs(
             "generate",
             "--manifest",
             os.fspath(manifest_path),
-            "--content-root",
-            os.fspath(content_root),
+            "--stream",
+            "nightly",
             "--output-dir",
             os.fspath(output_dir),
         ]
@@ -633,6 +653,8 @@ def test_main_generate_requires_manifest_packages_by_default(
             "generate",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
             "--output-dir",
@@ -663,6 +685,8 @@ def test_main_generate_allow_unpublished_succeeds(
             "generate",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
             "--output-dir",
@@ -693,6 +717,8 @@ def test_main_generate_strict_completeness_allow_unpublished_fails_on_extra_pack
             "generate",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
             "--output-dir",
@@ -724,6 +750,8 @@ def test_main_validate_content_default_requires_manifest_packages(
             "validate-content",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
         ]
@@ -750,6 +778,8 @@ def test_main_validate_content_allow_unpublished_succeeds(
             "validate-content",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
             "--allow-unpublished",
@@ -775,6 +805,8 @@ def test_main_validate_content_strict_completeness_with_allow_unpublished_fails_
             "validate-content",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
             "--allow-unpublished",
@@ -797,6 +829,8 @@ def test_main_validate_content_strict_completeness_with_allow_unpublished_fails_
             "generate",
             "--manifest",
             "ownership.yaml",
+            "--stream",
+            "nightly",
             "--content-root",
             "content",
             "--output-dir",
@@ -807,6 +841,8 @@ def test_main_validate_content_strict_completeness_with_allow_unpublished_fails_
             "validate-content",
             "--manifest",
             "ownership.yaml",
+            "--stream",
+            "nightly",
             "--content-root",
             "content",
             "--strict",
@@ -836,7 +872,14 @@ def test_main_reports_manifest_errors_without_traceback(
 ) -> None:
     manifest_path = tmp_path / "ownership.yaml"
     manifest_path.write_text(
-        "schema_version: 2\npython_indexes: []\n", encoding="utf-8"
+        """
+schema_version: 1
+streams:
+  known: [nightly]
+  default: [nightly]
+python_indexes: []
+""".lstrip(),
+        encoding="utf-8",
     )
 
     exit_code = main(["validate-manifest", "--manifest", os.fspath(manifest_path)])
@@ -845,7 +888,7 @@ def test_main_reports_manifest_errors_without_traceback(
     assert exit_code == 1
     assert captured.out == ""
     assert captured.err.startswith("error: ")
-    assert "schema_version must be 1" in captured.err
+    assert "schema_version must be 2" in captured.err
     assert "Traceback" not in captured.err
 
 
@@ -903,7 +946,10 @@ def test_main_reports_index_validation_errors_without_traceback(
     manifest_path = tmp_path / "ownership.yaml"
     manifest_path.write_text(
         """
-schema_version: 1
+schema_version: 2
+streams:
+  known: [nightly]
+  default: [nightly]
 python_indexes:
   - public_base: /rocm/whl-next
     packages:
@@ -918,6 +964,8 @@ python_indexes:
             "validate-content",
             "--manifest",
             os.fspath(manifest_path),
+            "--stream",
+            "nightly",
             "--content-root",
             os.fspath(content_root),
         ]
@@ -940,7 +988,7 @@ def test_validate_product_indexes_rejects_missing_product_root(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="Missing product root index"):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(manifest, tmp_path, stream="nightly")
 
 
 def test_validate_product_indexes_records_unpublished_package_by_default(
@@ -956,6 +1004,7 @@ def test_validate_product_indexes_records_unpublished_package_by_default(
     validated = validate_product_indexes(
         manifest,
         tmp_path,
+        stream="nightly",
         require_all_manifest_packages=False,
     )
 
@@ -980,6 +1029,7 @@ def test_validate_product_indexes_requires_manifest_packages_when_requested(
         validate_product_indexes(
             manifest,
             tmp_path,
+            stream="nightly",
             require_all_manifest_packages=True,
         )
 
@@ -995,7 +1045,7 @@ def test_validate_product_indexes_rejects_duplicate_package_link(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match="expected exactly one package link"):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(manifest, tmp_path, stream="nightly")
 
 
 @pytest.mark.parametrize(
@@ -1028,7 +1078,7 @@ def test_validate_product_indexes_rejects_bad_product_root_links(
     manifest = parse_ownership_manifest(_valid_manifest())
 
     with pytest.raises(IndexValidationError, match=match):
-        validate_product_indexes(manifest, tmp_path)
+        validate_product_indexes(manifest, tmp_path, stream="nightly")
 
 
 def test_validate_product_indexes_rejects_missing_package_page(
@@ -1042,6 +1092,7 @@ def test_validate_product_indexes_rejects_missing_package_page(
         validate_product_indexes(
             manifest,
             tmp_path,
+            stream="nightly",
             require_all_manifest_packages=False,
         )
 
@@ -1059,6 +1110,7 @@ def test_validate_product_indexes_rejects_empty_package_page(
         validate_product_indexes(
             manifest,
             tmp_path,
+            stream="nightly",
             require_all_manifest_packages=False,
         )
 
@@ -1068,20 +1120,33 @@ def test_validate_product_indexes_rejects_empty_package_page(
     [
         ({}, "missing required key"),
         (
-            {"schema_version": 2, "python_indexes": []},
-            "schema_version must be 1",
+            {
+                "schema_version": 1,
+                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "python_indexes": [],
+            },
+            "schema_version must be 2",
         ),
         (
-            {"schema_version": True, "python_indexes": []},
+            {
+                "schema_version": True,
+                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "python_indexes": [],
+            },
             "schema_version must be an integer",
         ),
         (
-            {"schema_version": 1, "python_indexes": []},
+            {
+                "schema_version": MANIFEST_SCHEMA_VERSION,
+                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "python_indexes": [],
+            },
             "exactly one /rocm/whl-next index",
         ),
         (
             {
-                "schema_version": 1,
+                "schema_version": MANIFEST_SCHEMA_VERSION,
+                "streams": {"known": ["nightly"], "default": ["nightly"]},
                 "python_indexes": [
                     {
                         "public_base": "/rocm/whl-next",
@@ -1089,7 +1154,7 @@ def test_validate_product_indexes_rejects_empty_package_page(
                     }
                 ],
             },
-            "packages and manifest.python_indexes\\[0\\].patterns must not both be empty",
+            "packages must not be empty",
         ),
     ],
 )
@@ -1099,53 +1164,59 @@ def test_rejects_malformed_top_level_data(data: object, match: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "pattern, match",
+    "streams, match",
     [
-        ("foo", "exactly one"),
-        ("foo*bar", "exactly one"),
-        ("foo**", "exactly one"),
-        ("foo_*", "pattern prefix"),
-        ("Foo*", "pattern prefix"),
-        ("*foo", "exactly one"),
+        ({"known": [], "default": ["nightly"]}, "known must not be empty"),
+        ({"known": ["nightly"], "default": []}, "default must not be empty"),
+        (
+            {"known": ["nightly", "nightly"], "default": ["nightly"]},
+            "duplicate stream",
+        ),
+        (
+            {"known": ["Nightly"], "default": ["Nightly"]},
+            "lowercase alphanumeric",
+        ),
+        (
+            {"known": ["release.1"], "default": ["release.1"]},
+            "lowercase alphanumeric",
+        ),
+        (
+            {"known": ["nightly"], "default": ["nightly", "rc"]},
+            "unknown stream",
+        ),
     ],
 )
-def test_rejects_invalid_patterns(pattern: str, match: str) -> None:
-    data = {
-        "schema_version": MANIFEST_SCHEMA_VERSION,
-        "python_indexes": [
-            {
-                "public_base": "/rocm/whl-next",
-                "packages": {},
-                "patterns": {
-                    pattern: {"owner_path": "core/whl-next"},
-                },
-            }
-        ],
-    }
+def test_rejects_invalid_stream_config(streams: dict[str, object], match: str) -> None:
+    data = _valid_manifest()
+    data["streams"] = streams
 
     with pytest.raises(ManifestError, match=match):
         parse_ownership_manifest(data)
 
 
-def test_rejects_duplicate_pattern_keys(tmp_path: Path) -> None:
-    manifest_path = tmp_path / "ownership.yaml"
-    manifest_path.write_text(
-        """
-schema_version: 1
-python_indexes:
-  - public_base: /rocm/whl-next
-    packages: {}
-    patterns:
-      foo*:
-        owner_path: core/whl-next
-      foo*:
-        owner_path: pytorch/whl-next
-""".lstrip(),
-        encoding="utf-8",
-    )
+def test_rejects_unknown_package_stream() -> None:
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["torch"] = {
+        "owner_path": "pytorch/whl-next",
+        "streams": ["nightly", "unknown"],
+    }
 
-    with pytest.raises(ManifestError, match="duplicate key 'foo\\*'"):
-        load_ownership_manifest(manifest_path)
+    with pytest.raises(ManifestError, match="unknown stream"):
+        parse_ownership_manifest(data)
+
+
+def test_rejects_patterns_key_in_schema_v2() -> None:
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    index["patterns"] = {"foo*": {"owner_path": "core/whl-next"}}
+
+    with pytest.raises(ManifestError, match="unknown key"):
+        parse_ownership_manifest(data)
 
 
 @pytest.mark.parametrize(

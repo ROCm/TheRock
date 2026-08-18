@@ -9,8 +9,8 @@ Validates and generates the routed aggregate Simple API index for:
     /rocm/whl-next/
 
 The generator is storage-independent. It consumes a checked-in ownership
-manifest plus a local directory tree mirroring the public product-local index
-layout:
+manifest and can optionally validate a local directory tree mirroring the
+public product-local index layout:
 
     <content-root>/rocm/<owner_path>/index.html
     <content-root>/rocm/<owner_path>/<normalized-package>/index.html
@@ -43,22 +43,30 @@ CLI subcommands:
         --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
         --content-root /tmp/rocm-whl-next-content
 
-    # Generate routed aggregate outputs from a validated local snapshot.
+    # Generate routed aggregate outputs directly from the manifest.
     python aggregate_index.py generate \
         --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
+        --stream nightly \
+        --output-dir /tmp/rocm-whl-next-output
+
+    # Validate a local public-tree snapshot while generating outputs.
+    python aggregate_index.py generate \
+        --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
+        --stream nightly \
         --content-root /tmp/rocm-whl-next-content \
         --output-dir /tmp/rocm-whl-next-output
 
-The deployment invocation should use ``generate --strict-completeness`` and
-must not use ``--allow-unpublished``. Both set-comparison directions are
-deployment-visible failures: a manifest-owned package that is not published
-would route to a missing product-local package page, while a published package
-absent from the manifest is unreachable through the aggregate index.
+When ``--content-root`` is provided, the deployment validation invocation should
+use ``generate --strict-completeness`` and must not use ``--allow-unpublished``.
+Both set-comparison directions are deployment-visible failures: a manifest-owned
+package that is not published would route to a missing product-local package
+page, while a published package absent from the manifest is unreachable through
+the aggregate index.
 
-``--allow-unpublished`` is only for explicit pre-publication inventory
-workflows. In that mode, manifest-owned packages absent from product roots are
-recorded as unpublished in ``validation.json`` and excluded from the aggregate
-root and exact route table.
+``--allow-unpublished`` is only for explicit pre-publication inventory workflows
+that also provide ``--content-root``. In that mode, manifest-owned packages
+absent from product roots are recorded as unpublished in ``validation.json`` and
+excluded from the aggregate root and exact route table.
 """
 
 import argparse
@@ -79,15 +87,15 @@ from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
 
-MANIFEST_SCHEMA_VERSION = 1
-ROUTES_SCHEMA_VERSION = 1
-VALIDATION_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 2
+ROUTES_SCHEMA_VERSION = 2
+VALIDATION_SCHEMA_VERSION = 2
 SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
 ROUTES_FILENAME = "rocm-whl-next-routes.json"
 VALIDATION_FILENAME = "validation.json"
 
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
-_PATTERN_PREFIX_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+_STREAM_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 class ManifestError(ValueError):
@@ -142,15 +150,15 @@ class PackageOwnership:
 
     name: str
     owner_path: str
+    streams: frozenset[str]
 
 
 @dataclasses.dataclass(frozen=True)
-class PatternOwnership:
-    """Ownership declaration for a normalized package prefix pattern."""
+class StreamConfig:
+    """Known streams and the default package stream set."""
 
-    pattern: str
-    prefix: str
-    owner_path: str
+    known: tuple[str, ...]
+    default: frozenset[str]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,8 +167,7 @@ class ResolvedOwnership:
 
     name: str
     owner_path: str
-    source: str
-    pattern: str | None = None
+    source: str = "exact"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -169,47 +176,32 @@ class PythonIndexOwnership:
 
     public_base: str
     packages: dict[str, PackageOwnership]
-    patterns: dict[str, PatternOwnership]
 
     def ordered_packages(self) -> list[PackageOwnership]:
         """Return packages in route JSON order: owner_path, then package name."""
         return sorted(self.packages.values(), key=lambda p: (p.owner_path, p.name))
 
-    def ordered_patterns(self) -> list[PatternOwnership]:
-        """Return ownership patterns in route JSON order."""
-        return sorted(self.patterns.values(), key=lambda p: (p.owner_path, p.pattern))
-
-    def owner_paths(self) -> set[str]:
-        """Return product-local roots referenced by exact or pattern ownership."""
-        return {
-            *[package.owner_path for package in self.packages.values()],
-            *[pattern.owner_path for pattern in self.patterns.values()],
-        }
-
-    def resolve_package(self, package_name: str) -> ResolvedOwnership | None:
-        """Resolve package ownership from exact declarations or patterns."""
-        exact = self.packages.get(package_name)
-        if exact is not None:
-            return ResolvedOwnership(
-                name=package_name,
-                owner_path=exact.owner_path,
-                source="exact",
-            )
-
-        matching_patterns = [
-            pattern
-            for pattern in self.patterns.values()
-            if package_name.startswith(pattern.prefix)
+    def active_packages(self, stream: str) -> dict[str, PackageOwnership]:
+        """Return packages enabled for one stream in route JSON order."""
+        packages = [
+            package for package in self.ordered_packages() if stream in package.streams
         ]
-        if not matching_patterns:
-            return None
+        return {package.name: package for package in packages}
 
-        pattern = max(matching_patterns, key=lambda p: len(p.prefix))
+    def owner_paths(self, stream: str) -> set[str]:
+        """Return product-local roots referenced by active package ownership."""
+        return {package.owner_path for package in self.active_packages(stream).values()}
+
+    def resolve_package(
+        self, package_name: str, stream: str
+    ) -> ResolvedOwnership | None:
+        """Resolve exact package ownership for one stream."""
+        exact = self.packages.get(package_name)
+        if exact is None or stream not in exact.streams:
+            return None
         return ResolvedOwnership(
             name=package_name,
-            owner_path=pattern.owner_path,
-            source="pattern",
-            pattern=pattern.pattern,
+            owner_path=exact.owner_path,
         )
 
 
@@ -218,6 +210,7 @@ class OwnershipManifest:
     """Parsed ownership manifest."""
 
     schema_version: int
+    streams: StreamConfig
     python_indexes: list[PythonIndexOwnership]
 
 
@@ -239,7 +232,6 @@ class ValidatedPackage:
     product_root_index: Path
     package_index: Path
     source: str
-    pattern: str | None = None
 
     @property
     def product_root_public_path(self) -> str:
@@ -271,6 +263,9 @@ class ValidatedIndexContent:
     """Validated product-local content for one aggregate index."""
 
     public_base: str
+    stream: str
+    generation_mode: str
+    content_validated: bool
     packages: dict[str, ValidatedPackage]
     unpublished_packages: dict[str, UnpublishedPackage]
 
@@ -314,12 +309,14 @@ class RouteTable:
 
     schema_version: int
     public_base: str
+    stream: str
     routes: list[Route]
 
     def to_json(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
             "public_base": self.public_base,
+            "stream": self.stream,
             "routes": [route.to_json() for route in self.routes],
         }
 
@@ -343,19 +340,15 @@ class ValidationPackage:
     product_root_index: str
     package_index: str
     source: str
-    pattern: str | None = None
 
     def to_json(self) -> dict[str, str]:
-        data = {
+        return {
             "name": self.name,
             "owner_path": self.owner_path,
             "product_root_index": self.product_root_index,
             "package_index": self.package_index,
             "source": self.source,
         }
-        if self.pattern is not None:
-            data["pattern"] = self.pattern
-        return data
 
 
 @dataclasses.dataclass(frozen=True)
@@ -376,6 +369,9 @@ class ValidationReport:
 
     schema_version: int
     public_base: str
+    stream: str
+    generation_mode: str
+    content_validated: bool
     package_count: int
     unpublished_package_count: int
     owners: dict[str, ValidationOwnerSummary]
@@ -386,6 +382,9 @@ class ValidationReport:
         return {
             "schema_version": self.schema_version,
             "public_base": self.public_base,
+            "stream": self.stream,
+            "generation_mode": self.generation_mode,
+            "content_validated": self.content_validated,
             "package_count": self.package_count,
             "unpublished_package_count": self.unpublished_package_count,
             "owners": {
@@ -469,6 +468,7 @@ def validate_product_indexes(
     manifest: OwnershipManifest,
     content_root: Path,
     *,
+    stream: str,
     strict_completeness: bool = False,
     require_all_manifest_packages: bool = True,
 ) -> ValidatedIndexContent:
@@ -490,11 +490,25 @@ def validate_product_indexes(
         IndexValidationError: If a referenced product-local root or package
         page is missing, empty, malformed, or invalid.
     """
+    _validate_manifest_stream(manifest, stream, "stream")
     index = manifest.python_indexes[0]
+    active_packages = index.active_packages(stream)
 
     validated_packages: dict[str, ValidatedPackage] = {}
     unpublished_packages: dict[str, UnpublishedPackage] = {}
-    for owner_path in sorted(index.owner_paths()):
+    owner_paths = index.owner_paths(stream)
+    if strict_completeness:
+        inactive_owner_paths = {
+            package.owner_path
+            for package in index.packages.values()
+            if package.owner_path not in owner_paths
+        }
+        for owner_path in inactive_owner_paths:
+            product_root_index = content_root / "rocm" / owner_path / "index.html"
+            if product_root_index.is_file():
+                owner_paths.add(owner_path)
+
+    for owner_path in sorted(owner_paths):
         product_root_index = content_root / "rocm" / owner_path / "index.html"
         root_links = parse_product_root_index(product_root_index)
         root_links_by_package: dict[str, list[ProductRootLink]] = {}
@@ -502,12 +516,13 @@ def validate_product_indexes(
             root_links_by_package.setdefault(link.package_name, []).append(link)
 
         for package_name, matching_links in sorted(root_links_by_package.items()):
-            ownership = index.resolve_package(package_name)
+            ownership = index.resolve_package(package_name, stream)
             if ownership is None:
                 if strict_completeness:
                     raise IndexValidationError(
                         f"{product_root_index}: product root contains package "
-                        f"{package_name!r} absent from the ownership manifest"
+                        f"{package_name!r} absent from the ownership manifest "
+                        f"for stream {stream!r}"
                     )
                 continue
             if ownership.owner_path != owner_path:
@@ -531,10 +546,12 @@ def validate_product_indexes(
                 product_root_index=product_root_index,
                 package_index=package_index,
                 source=ownership.source,
-                pattern=ownership.pattern,
             )
 
-    for package in index.ordered_packages():
+    for package in sorted(
+        active_packages.values(),
+        key=lambda p: (p.owner_path, p.name),
+    ):
         if package.name in validated_packages:
             continue
         product_root_index = content_root / "rocm" / package.owner_path / "index.html"
@@ -554,6 +571,9 @@ def validate_product_indexes(
     )
     return ValidatedIndexContent(
         public_base=index.public_base,
+        stream=stream,
+        generation_mode="content",
+        content_validated=True,
         packages={package.name: package for package in route_ordered_packages},
         unpublished_packages={
             package.name: package
@@ -566,25 +586,62 @@ def validate_product_indexes(
 
 def generate_outputs(
     manifest: OwnershipManifest,
-    content_root: Path,
     output_dir: Path,
     *,
+    stream: str,
+    content_root: Path | None = None,
     strict_completeness: bool = False,
     require_all_manifest_packages: bool = True,
 ) -> GeneratedOutputPaths:
-    """Validate product-local content and write aggregate routed outputs.
+    """Write aggregate routed outputs for one stream.
 
-    Generation is deploy-safe by default and requires every manifest-owned
-    package to be present. Pass ``require_all_manifest_packages=False`` only
-    for explicit pre-publication inventory output.
+    If ``content_root`` is provided, product-local content is validated before
+    outputs are written. Otherwise, outputs are generated directly from the
+    stream-filtered ownership manifest.
     """
-    validated = validate_product_indexes(
-        manifest,
-        content_root,
-        strict_completeness=strict_completeness,
-        require_all_manifest_packages=require_all_manifest_packages,
-    )
+    if content_root is None:
+        if strict_completeness or not require_all_manifest_packages:
+            raise IndexValidationError(
+                "Content validation flags require --content-root"
+            )
+        validated = declared_index_content(manifest, stream)
+    else:
+        validated = validate_product_indexes(
+            manifest,
+            content_root,
+            stream=stream,
+            strict_completeness=strict_completeness,
+            require_all_manifest_packages=require_all_manifest_packages,
+        )
     return write_generated_outputs(validated, output_dir)
+
+
+def declared_index_content(
+    manifest: OwnershipManifest,
+    stream: str,
+) -> ValidatedIndexContent:
+    """Build aggregate output content directly from manifest ownership."""
+    _validate_manifest_stream(manifest, stream, "stream")
+    index = manifest.python_indexes[0]
+    packages = [
+        ValidatedPackage(
+            name=package.name,
+            owner_path=package.owner_path,
+            product_root_index=Path(),
+            package_index=Path(),
+            source="manifest",
+        )
+        for package in index.active_packages(stream).values()
+    ]
+    route_ordered_packages = sorted(packages, key=lambda p: (p.owner_path, p.name))
+    return ValidatedIndexContent(
+        public_base=index.public_base,
+        stream=stream,
+        generation_mode="manifest",
+        content_validated=False,
+        packages={package.name: package for package in route_ordered_packages},
+        unpublished_packages={},
+    )
 
 
 def write_generated_outputs(
@@ -642,6 +699,7 @@ def build_route_table(validated: ValidatedIndexContent) -> RouteTable:
     return RouteTable(
         schema_version=ROUTES_SCHEMA_VERSION,
         public_base=validated.public_base,
+        stream=validated.stream,
         routes=[
             Route(
                 package=package.name,
@@ -661,6 +719,9 @@ def build_validation_report(validated: ValidatedIndexContent) -> ValidationRepor
     return ValidationReport(
         schema_version=VALIDATION_SCHEMA_VERSION,
         public_base=validated.public_base,
+        stream=validated.stream,
+        generation_mode=validated.generation_mode,
+        content_validated=validated.content_validated,
         package_count=len(validated.packages),
         unpublished_package_count=len(validated.unpublished_packages),
         owners={
@@ -674,7 +735,6 @@ def build_validation_report(validated: ValidatedIndexContent) -> ValidationRepor
                 product_root_index=package.product_root_public_path,
                 package_index=package.package_public_path,
                 source=package.source,
-                pattern=package.pattern,
             )
             for package in validated.ordered_packages()
         ],
@@ -726,7 +786,7 @@ def parse_ownership_manifest(
 ) -> OwnershipManifest:
     """Parse and validate ownership manifest data."""
     manifest = _require_mapping(data, context)
-    _require_keys(manifest, {"schema_version", "python_indexes"}, context)
+    _require_keys(manifest, {"schema_version", "streams", "python_indexes"}, context)
 
     schema_version = _require_int(
         manifest["schema_version"], f"{context}.schema_version"
@@ -737,6 +797,7 @@ def parse_ownership_manifest(
             f"got {schema_version}"
         )
 
+    streams = _parse_stream_config(manifest["streams"], f"{context}.streams")
     index_items = _require_list(manifest["python_indexes"], f"{context}.python_indexes")
     if len(index_items) != 1:
         raise ManifestError(
@@ -744,20 +805,58 @@ def parse_ownership_manifest(
         )
 
     python_indexes = [
-        _parse_python_index(item, f"{context}.python_indexes[{i}]")
+        _parse_python_index(item, f"{context}.python_indexes[{i}]", streams)
         for i, item in enumerate(index_items)
     ]
     return OwnershipManifest(
         schema_version=schema_version,
+        streams=streams,
         python_indexes=python_indexes,
     )
 
 
-def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
-    index = _require_mapping(data, context)
-    _require_keys(
-        index, {"public_base", "packages"}, context, optional_keys={"patterns"}
+def _parse_stream_config(data: object, context: str) -> StreamConfig:
+    stream_config = _require_mapping(data, context)
+    _require_keys(stream_config, {"known", "default"}, context)
+    known = _parse_stream_list(stream_config["known"], f"{context}.known")
+    default = frozenset(
+        _parse_stream_list(stream_config["default"], f"{context}.default")
     )
+    unknown_defaults = sorted(default - set(known))
+    if unknown_defaults:
+        raise ManifestError(
+            f"{context}.default contains unknown stream(s): "
+            f"{', '.join(unknown_defaults)}"
+        )
+    return StreamConfig(
+        known=tuple(known),
+        default=default,
+    )
+
+
+def _parse_stream_list(data: object, context: str) -> list[str]:
+    streams = _require_list(data, context)
+    if not streams:
+        raise ManifestError(f"{context} must not be empty")
+    parsed_streams: list[str] = []
+    seen_streams: set[str] = set()
+    for i, raw_stream in enumerate(streams):
+        stream = _require_str(raw_stream, f"{context}[{i}]")
+        _validate_stream_name(stream, f"{context}[{i}]")
+        if stream in seen_streams:
+            raise ManifestError(f"{context} contains duplicate stream {stream!r}")
+        seen_streams.add(stream)
+        parsed_streams.append(stream)
+    return parsed_streams
+
+
+def _parse_python_index(
+    data: object,
+    context: str,
+    stream_config: StreamConfig,
+) -> PythonIndexOwnership:
+    index = _require_mapping(data, context)
+    _require_keys(index, {"public_base", "packages"}, context)
 
     public_base = _require_str(index["public_base"], f"{context}.public_base")
     _validate_public_base(public_base, f"{context}.public_base")
@@ -768,11 +867,8 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
         )
 
     package_items = _require_mapping(index["packages"], f"{context}.packages")
-    pattern_items = _require_mapping(index.get("patterns", {}), f"{context}.patterns")
-    if not package_items and not pattern_items:
-        raise ManifestError(
-            f"{context}.packages and {context}.patterns must not both be empty"
-        )
+    if not package_items:
+        raise ManifestError(f"{context}.packages must not be empty")
 
     packages: dict[str, PackageOwnership] = {}
     for raw_name, raw_config in package_items.items():
@@ -798,6 +894,7 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
             package_config,
             {"owner_path"},
             f"{context}.packages.{package_name}",
+            optional_keys={"streams"},
         )
         owner_path = _require_str(
             package_config["owner_path"],
@@ -806,75 +903,61 @@ def _parse_python_index(data: object, context: str) -> PythonIndexOwnership:
         _validate_owner_path(
             owner_path, f"{context}.packages.{package_name}.owner_path"
         )
+        streams = _parse_package_streams(
+            package_config,
+            stream_config,
+            f"{context}.packages.{package_name}",
+        )
         packages[package_name] = PackageOwnership(
             name=package_name,
             owner_path=owner_path,
+            streams=streams,
         )
-
-    patterns = _parse_patterns(pattern_items, f"{context}.patterns")
-    _validate_pattern_conflicts(patterns, f"{context}.patterns")
 
     route_ordered_packages = sorted(
         packages.values(), key=lambda p: (p.owner_path, p.name)
     )
-    route_ordered_patterns = sorted(
-        patterns.values(), key=lambda p: (p.owner_path, p.pattern)
-    )
     return PythonIndexOwnership(
         public_base=public_base,
         packages={package.name: package for package in route_ordered_packages},
-        patterns={pattern.pattern: pattern for pattern in route_ordered_patterns},
     )
 
 
-def _parse_patterns(
-    pattern_items: Mapping[object, object],
+def _parse_package_streams(
+    package_config: Mapping[object, object],
+    stream_config: StreamConfig,
     context: str,
-) -> dict[str, PatternOwnership]:
-    patterns: dict[str, PatternOwnership] = {}
-    for raw_pattern, raw_config in pattern_items.items():
-        if not isinstance(raw_pattern, str):
-            raise ManifestError(f"{context} contains a non-string pattern")
-        _validate_pattern(raw_pattern, f"{context}.{raw_pattern}")
-        pattern_config = _require_mapping(raw_config, f"{context}.{raw_pattern}")
-        _require_keys(pattern_config, {"owner_path"}, f"{context}.{raw_pattern}")
-        owner_path = _require_str(
-            pattern_config["owner_path"],
-            f"{context}.{raw_pattern}.owner_path",
-        )
-        _validate_owner_path(owner_path, f"{context}.{raw_pattern}.owner_path")
-        patterns[raw_pattern] = PatternOwnership(
-            pattern=raw_pattern,
-            prefix=raw_pattern.removesuffix("*"),
-            owner_path=owner_path,
-        )
-    return patterns
-
-
-def _validate_pattern(pattern: str, context: str) -> None:
-    if pattern.count("*") != 1 or not pattern.endswith("*"):
-        raise ManifestError(f"{context}: pattern must end with exactly one '*'")
-    prefix = pattern.removesuffix("*")
-    if not _PATTERN_PREFIX_RE.fullmatch(prefix):
+) -> frozenset[str]:
+    if "streams" not in package_config:
+        return stream_config.default
+    streams = frozenset(
+        _parse_stream_list(package_config["streams"], f"{context}.streams")
+    )
+    unknown_streams = sorted(streams - set(stream_config.known))
+    if unknown_streams:
         raise ManifestError(
-            f"{context}: pattern prefix must be lowercase [a-z0-9-] and start "
-            "with an alphanumeric character"
+            f"{context}.streams contains unknown stream(s): "
+            f"{', '.join(unknown_streams)}"
         )
+    return streams
 
 
-def _validate_pattern_conflicts(
-    patterns: dict[str, PatternOwnership],
+def _validate_manifest_stream(
+    manifest: OwnershipManifest,
+    stream: str,
     context: str,
 ) -> None:
-    patterns_by_prefix: dict[str, PatternOwnership] = {}
-    for pattern in patterns.values():
-        existing = patterns_by_prefix.get(pattern.prefix)
-        if existing is not None and existing.owner_path != pattern.owner_path:
-            raise ManifestError(
-                f"{context}: patterns {existing.pattern!r} and {pattern.pattern!r} "
-                "have the same prefix but different owner paths"
-            )
-        patterns_by_prefix[pattern.prefix] = pattern
+    _validate_stream_name(stream, context)
+    if stream not in manifest.streams.known:
+        raise ManifestError(f"{context} contains unknown stream {stream!r}")
+
+
+def _validate_stream_name(stream: str, context: str) -> None:
+    if not _STREAM_RE.fullmatch(stream):
+        raise ManifestError(
+            f"{context} must start with lowercase alphanumeric and contain only "
+            "lowercase alphanumeric, '_', or '-'"
+        )
 
 
 def _require_mapping(data: object, context: str) -> Mapping[object, object]:
@@ -1087,15 +1170,21 @@ def _package_index_public_path(owner_path: str, package_name: str) -> str:
 def _validate_manifest_command(args: argparse.Namespace) -> int:
     manifest = load_ownership_manifest(args.manifest)
     index = manifest.python_indexes[0]
-    owner_counts: dict[str, int] = {}
-    for package in index.ordered_packages():
-        owner_counts[package.owner_path] = owner_counts.get(package.owner_path, 0) + 1
 
     print(f"schema_version: {manifest.schema_version}")
     print(f"public_base: {index.public_base}")
+    print(f"streams: {', '.join(manifest.streams.known)}")
+    print(f"default_streams: {', '.join(manifest.streams.default)}")
     print(f"packages: {len(index.packages)}")
-    for owner_path in sorted(owner_counts):
-        print(f"{owner_path}: {owner_counts[owner_path]}")
+    for stream in manifest.streams.known:
+        owner_counts: dict[str, int] = {}
+        for package in index.active_packages(stream).values():
+            owner_counts[package.owner_path] = (
+                owner_counts.get(package.owner_path, 0) + 1
+            )
+        print(f"stream {stream}: {sum(owner_counts.values())}")
+        for owner_path in sorted(owner_counts):
+            print(f"  {owner_path}: {owner_counts[owner_path]}")
     return 0
 
 
@@ -1103,8 +1192,9 @@ def _generate_command(args: argparse.Namespace) -> int:
     manifest = load_ownership_manifest(args.manifest)
     outputs = generate_outputs(
         manifest,
-        args.content_root,
         args.output_dir,
+        stream=args.stream,
+        content_root=args.content_root,
         strict_completeness=args.strict_completeness,
         require_all_manifest_packages=not args.allow_unpublished,
     )
@@ -1120,6 +1210,7 @@ def _validate_content_command(args: argparse.Namespace) -> int:
     validated = validate_product_indexes(
         manifest,
         args.content_root,
+        stream=args.stream,
         strict_completeness=args.strict_completeness,
         require_all_manifest_packages=not args.allow_unpublished,
     )
@@ -1128,6 +1219,7 @@ def _validate_content_command(args: argparse.Namespace) -> int:
         owner_counts[package.owner_path] = owner_counts.get(package.owner_path, 0) + 1
 
     print(f"public_base: {validated.public_base}")
+    print(f"stream: {validated.stream}")
     print(f"packages: {len(validated.packages)}")
     print(f"unpublished_packages: {len(validated.unpublished_packages)}")
     _warn_unpublished_packages(len(validated.unpublished_packages))
@@ -1151,13 +1243,13 @@ def _add_content_validation_flags(parser: argparse.ArgumentParser) -> None:
         "--allow-unpublished",
         action="store_true",
         help="allow manifest-owned packages absent from product roots and exclude "
-        "them from validated output",
+        "them from validated output; requires --content-root",
     )
     parser.add_argument(
         "--strict-completeness",
         action="store_true",
         help="fail if a product root publishes a package absent from the "
-        "ownership manifest",
+        "ownership manifest; requires --content-root",
     )
 
 
@@ -1179,7 +1271,8 @@ def main(argv: list[str]) -> int:
 
     generate_parser = subparsers.add_parser(
         "generate",
-        help="validate product-local content and generate aggregate routed outputs",
+        help="generate aggregate routed outputs, optionally validating "
+        "product-local content",
         allow_abbrev=False,
     )
     generate_parser.add_argument(
@@ -1189,10 +1282,15 @@ def main(argv: list[str]) -> int:
         help="Path to the ownership manifest YAML file",
     )
     generate_parser.add_argument(
+        "--stream",
+        required=True,
+        help="Concrete stream to generate, such as dev, nightly, rc, stable, "
+        "or stable-staging",
+    )
+    generate_parser.add_argument(
         "--content-root",
         type=Path,
-        required=True,
-        help="Local directory mirroring public /rocm/... product indexes",
+        help="Optional local directory mirroring public /rocm/... product indexes",
     )
     generate_parser.add_argument(
         "--output-dir",
@@ -1213,6 +1311,12 @@ def main(argv: list[str]) -> int:
         type=Path,
         required=True,
         help="Path to the ownership manifest YAML file",
+    )
+    content_parser.add_argument(
+        "--stream",
+        required=True,
+        help="Concrete stream to validate, such as dev, nightly, rc, stable, "
+        "or stable-staging",
     )
     content_parser.add_argument(
         "--content-root",
