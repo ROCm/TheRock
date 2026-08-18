@@ -124,7 +124,6 @@ class BuildUnmappedSummaryBodyTest(unittest.TestCase):
     def test_lists_commits_with_wording_matching_reverted_flag(self):
         included = post_bump_breadcrumbs.build_unmapped_summary_body(
             reverted=False,
-            submodule="rocm-systems",
             repo="ROCm/rocm-systems",
             unmapped_shas=["a" * 40, "b" * 40],
         )
@@ -138,7 +137,6 @@ class BuildUnmappedSummaryBodyTest(unittest.TestCase):
 
         reverted = post_bump_breadcrumbs.build_unmapped_summary_body(
             reverted=True,
-            submodule="rocm-systems",
             repo="ROCm/rocm-systems",
             unmapped_shas=["c" * 40],
         )

@@ -55,7 +55,7 @@ from bump_automation import (
 # rocm-systems/rocm-libraries PR once its commits land in TheRock via a
 # submodule bump.
 BREADCRUMB_MARKER = "<!-- therock-bump-breadcrumb -->"
-HISTORY_HEADER = "### TheRock submodule-bump history (newest first)"
+HISTORY_HEADER = "### TheRock Submodule Bump Activity\n_Newest first_"
 
 # Marker for the (single-use, no history needed) summary comment posted on
 # the TheRock bump PR itself for commits with no resolvable upstream PR.
@@ -190,14 +190,16 @@ def build_breadcrumb_body(
     return f"{BREADCRUMB_MARKER}\n{HISTORY_HEADER}\n\n{entries}\n"
 
 
-def build_unmapped_summary_body(reverted, submodule, repo, unmapped_shas):
+def build_unmapped_summary_body(reverted, repo, unmapped_shas):
     """Builds the summary comment posted on the TheRock bump PR for commits
     that could not be resolved to an upstream PR (e.g. pushed directly to the
     default branch)."""
     verb = "removed from" if reverted else "included in"
     lines = [
         UNMAPPED_MARKER,
-        f"### Unmapped `{submodule}` commits",
+        "### TheRock Submodule Bump Activity",
+        "_No upstream PR found for these commits_",
+        "",
         (
             f"The following {len(unmapped_shas)} commit(s) were {verb} this bump "
             f"but have no associated pull request on `{repo}`:"
@@ -313,7 +315,7 @@ def process_bump(changed, therock_after_sha, tokens, dry_run=False):
                 "no TheRock PR to summarize them on"
             )
         else:
-            body = build_unmapped_summary_body(reverted, name, repo, unmapped_shas)
+            body = build_unmapped_summary_body(reverted, repo, unmapped_shas)
             if dry_run:
                 print(
                     f"[DRY RUN] Would post unmapped-commit summary "
