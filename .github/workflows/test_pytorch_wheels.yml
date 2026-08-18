@@ -228,6 +228,10 @@ jobs:
             export CC=clang
             export CXX=clang++
           fi
+          # PyTorch's requirements-ci.txt pins some packages that predate the
+          # interpreters we test; override them before installing.
+          python external-builds/pytorch/patch_test_requirements.py \
+            external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
