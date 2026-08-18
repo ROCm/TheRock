@@ -21,6 +21,8 @@ if(THEROCK_ENABLE_ROCJITSU)
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_LIBDRM}
+    INSTALL_RPATH_DIRS
+      lib
   )
 
   therock_cmake_subproject_glob_c_sources(rocjitsu
@@ -69,6 +71,7 @@ if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu-hotswap"
     CMAKE_ARGS
       -DROCJITSU_HOTSWAP_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist/lib/libhsa_hotswap_rocjitsu.so
+      -DROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist/lib/librocjitsu_gfx1250_b0_to_a0.so
     BUILD_DEPS
       rocjitsu
   )

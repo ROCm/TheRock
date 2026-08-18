@@ -21,11 +21,14 @@ include = [
   # Test config TOMLs (e.g. HIP_KERNEL_ENGINE.toml) consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
   "bin/hip_kernel_provider/*.toml",
-  # rocKE IR parity gate: Python test scripts, harness, and golden data.
+  # rocKE IR parity gate: Python test scripts, harness, golden data, and the
+  # rocke Python package they import. The package is the fallback import source
+  # (via PYTHONPATH) when the wheels below are absent, e.g. ROCKE_BUILD_PYENV=OFF.
   "bin/hip_kernel_provider/*.py",
   "bin/hip_kernel_provider/golden/**",
-  # rocKE Python wheels (rocke + rocke-library), pip-installed by
-  # test_hipkernelprovider.py before running ctest.
+  "bin/hip_kernel_provider/rocke/**",
+  # rocKE Python wheels (rocke + rocke-library), installed by
+  # test_hipkernelprovider.py before running ctest when present.
   "bin/hip_kernel_provider/wheels/*.whl",
   # rocKE pytest suite
   "bin/hip_kernel_provider/tests/**",

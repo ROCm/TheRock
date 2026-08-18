@@ -46,6 +46,12 @@ on:
         description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
         type: string
         required: true
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -74,10 +80,14 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
   workflow_dispatch:
@@ -101,9 +111,15 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.12"
+        default: "release/2.13"
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
@@ -154,7 +170,7 @@ on:
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for nightly gfx94X-dcgpu Python 3.12 builds.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
 
@@ -166,7 +182,7 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
       id-token: write
       contents: read
@@ -189,7 +205,19 @@ jobs:
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       triton_version: ${{ steps.pytorch-versions.outputs.triton_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
+      - name: "Quartz - started - build PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -221,6 +249,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
@@ -239,9 +268,14 @@ jobs:
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
+          pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
+          if [ -z "${pytorch_origin}" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
@@ -358,6 +392,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as
@@ -418,6 +455,11 @@ jobs:
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
             --release-type="${{ inputs.release_type }}"
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   configure_pytorch_tests:
     name: Configure PyTorch Tests
     runs-on: ubuntu-24.04
@@ -426,6 +468,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -451,6 +494,11 @@ jobs:
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform linux
 
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
     if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
@@ -461,6 +509,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_pytorch_tests.outputs.matrix) }}
     uses: ./.github/workflows/test_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -478,13 +527,12 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to nightly gfx94X-dcgpu Python 3.12 builds for now.
+  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
     if: >-
       ${{
         inputs.run_full_pytorch_tests &&
-        inputs.release_type == 'nightly' &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
@@ -525,3 +573,21 @@ jobs:
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref }}"
             }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels, dispatch_pytorch_wheels_full_test]
+    name: "Quartz - completed - build PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

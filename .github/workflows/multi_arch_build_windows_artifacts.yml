@@ -75,6 +75,8 @@ jobs:
     name: ${{ inputs.stage_display_name }}
     runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
       id-token: write
@@ -82,6 +84,8 @@ jobs:
       run:
         shell: bash
     env:
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_windows_artifacts.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: B:\build
@@ -92,6 +96,17 @@ jobs:
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
@@ -245,3 +260,21 @@ jobs:
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

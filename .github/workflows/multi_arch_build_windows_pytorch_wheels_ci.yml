@@ -29,7 +29,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.11"
+        default: "release/2.13"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -60,6 +60,10 @@ on:
         description: "'true' if this is a kpack-split flat build."
         type: string
         default: "false"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "azure-windows-scale-rocm"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -80,7 +84,7 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
-        default: "release/2.11"
+        default: "release/2.13"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -110,7 +114,7 @@ run-name: Build Windows PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ i
 jobs:
   build_pytorch_wheels:
     name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
       id-token: write
       contents: read
@@ -196,6 +200,7 @@ jobs:
 
       - name: Checkout PyTorch source (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -205,6 +210,7 @@ jobs:
 
       - name: Checkout PyTorch source (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -274,7 +280,6 @@ jobs:
             --index-url="${{ inputs.rocm_package_index_url }}" ^
             --find-links="${{ inputs.rocm_package_find_links_url }}" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
-            --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             %CACHE_FLAG% ^
@@ -317,6 +322,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split PyTorch fat wheel
         if: ${{ inputs.kpack_split == 'true' }}
         run: |

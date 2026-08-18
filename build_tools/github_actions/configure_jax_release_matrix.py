@@ -113,6 +113,8 @@ def generate_jax_matrix(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
+                    # The ref without its prefix, for job names.
+                    "jax_label": ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v"),
                     "jax_repository": ref_cfg["jax_repository"],
                     # gfx_arch selects the ROCm device package for the manylinux
                     # build (e.g. device-all). This direct lookup raises
