@@ -59,6 +59,8 @@ if(THEROCK_ENABLE_RDC)
 
     INTERFACE_INSTALL_RPATH_DIRS
       lib
+
+    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rdc
     SUBDIRS .
