@@ -95,7 +95,9 @@ from packaging_utils import (  # noqa: E402
     GFX_META,
     PackageConfig,
     filter_components_fromartifactory,
+    filter_dependencies_by_artifacts,
     get_package_info,
+    has_artifact_for_arch,
     is_gfxarch_package,
     is_key_defined,
     update_package_name,
@@ -268,12 +270,15 @@ def _stage_package_artifacts(
 
             for component in components:
                 artifact_dir = artifacts_dir / f"{prefix}_{component}_{suffix}"
-                rel_path = f"{subdir_name}/{component}/{STAGING_PAYLOAD_NAME}"
-                payload = artifact_dir / rel_path
+                # Real manifests use directory paths, not file paths
+                dir_path = f"{subdir_name}/{component}"
+                payload = artifact_dir / dir_path / STAGING_PAYLOAD_NAME
                 payload.parent.mkdir(parents=True, exist_ok=True)
                 payload.write_bytes(STAGING_PAYLOAD_BYTES)
                 manifest = artifact_dir / "artifact_manifest.txt"
-                manifest.write_text(f"{rel_path}\n", encoding="utf-8")
+                # Append to manifest (multiple subdirs write to same artifact dir)
+                with manifest.open("a", encoding="utf-8") as f:
+                    f.write(f"{dir_path}\n")
                 if not manifest.exists():
                     raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
                 created.append(artifact_dir)
@@ -703,6 +708,78 @@ class ParseInputPackageListTest(BuildPackageTestCase):
         )
         self.assertEqual(set(pkg_list), {PKG_CORE_SDK, PKG_CK})
         self.assertEqual(skipped, [])
+
+
+# ---------------------------------------------------------------------------
+# Empty package skipping (#6766)
+# ---------------------------------------------------------------------------
+class EmptyPackageSkippingTest(BuildPackageTestCase):
+    """Packages with no artifacts are skipped in kpack mode."""
+
+    def test_skips_empty_non_meta_package(self) -> None:
+        """DEB/RPM generation skips gfxarch packages with no artifacts."""
+        test_cases = [
+            (
+                TEST_PKG_TYPE_DEB,
+                deb_package,
+                "package_with_dpkg_build",
+                "create_versioned_deb_package",
+            ),
+            (
+                TEST_PKG_TYPE_RPM,
+                rpm_package,
+                "package_with_rpmbuild",
+                "create_versioned_rpm_package",
+            ),
+        ]
+        for pkg_type, module, build_func, create_func in test_cases:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = _kpack_config(self.temp_dir, pkg_type=pkg_type)
+                device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+                with (
+                    patch.object(
+                        module, "move_packages_to_destination", return_value=[]
+                    ),
+                    patch.object(module, build_func) as mock_build,
+                ):
+                    result = getattr(module, create_func)(
+                        pkg_name=PKG_FFT, config=device_cfg
+                    )
+
+                self.assertEqual(result, [])
+                mock_build.assert_not_called()
+
+    def test_builds_meta_package_without_artifacts(self) -> None:
+        """DEB/RPM generation builds meta packages (they never have artifacts)."""
+        test_cases = [
+            (
+                TEST_PKG_TYPE_DEB,
+                deb_package,
+                "package_with_dpkg_build",
+                "create_versioned_deb_package",
+            ),
+            (
+                TEST_PKG_TYPE_RPM,
+                rpm_package,
+                "package_with_rpmbuild",
+                "create_versioned_rpm_package",
+            ),
+        ]
+        for pkg_type, module, build_func, create_func in test_cases:
+            with self.subTest(pkg_type=pkg_type):
+                cfg = _kpack_config(self.temp_dir, pkg_type=pkg_type)
+                meta_cfg = replace(cfg, gfx_arch=GFX_META)
+
+                with (
+                    patch.object(
+                        module, "move_packages_to_destination", return_value=[]
+                    ),
+                    patch.object(module, build_func) as mock_build,
+                ):
+                    getattr(module, create_func)(pkg_name=PKG_FFT, config=meta_cfg)
+
+                mock_build.assert_called_once()
 
 
 if __name__ == "__main__":
