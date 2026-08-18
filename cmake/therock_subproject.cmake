@@ -745,6 +745,9 @@ function(therock_cmake_subproject_activate target_name)
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
 
+  set_property(TARGET "${target_name}" PROPERTY
+    THEROCK_ACTIVE_AMDGPU_TARGETS "${_filtered_gpu_targets}")
+
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
   if(_private_program_dirs)
@@ -1847,6 +1850,7 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
+  set(_filtered_gpu_targets "${_filtered_gpu_targets}" PARENT_SCOPE)
   file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
 endfunction()
 

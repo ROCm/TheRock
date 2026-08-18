@@ -475,6 +475,16 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    "amdgcnspirv": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            "test-runs-on": "",
+            "family": "gpugeneric",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "nightly_check_only_for_family": True,
+        },
+    },
 }
 
 
