@@ -73,8 +73,9 @@ class TestMakeId(unittest.TestCase):
 
     def test_wix_legal_chars(self):
         import re
+
         result = make_id(Path("lib/llvm/lib/clang/17/include/stddef.h"), "f")
-        self.assertRegex(result, r'^[A-Za-z0-9_]+$')
+        self.assertRegex(result, r"^[A-Za-z0-9_]+$")
 
     def test_max_length(self):
         result = make_id(Path("a/very/deeply/nested/path/to/some/file/name.dll"), "f")
@@ -131,11 +132,13 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
         return [str(install_rel) for install_rel, _ in files]
 
     def test_collects_run_files(self):
+        # run component is intentionally excluded on Windows (contains dev tools
+        # not suitable for a runtime redistributable); lib component is used instead.
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
             _make_artifact_dir(artifacts, "foo", "run", self.BASEDIR, ["bin/tool.exe"])
             files = collect_files_from_catalog(artifacts, self._pkg(["foo"]))
-            self.assertEqual(self._names(files), ["tool.exe"])
+            self.assertEqual(self._names(files), [])
 
     def test_collects_lib_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -148,7 +151,7 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
         """install_rel must be relative to the stage root, not include basedir."""
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
-            _make_artifact_dir(artifacts, "foo", "run", self.BASEDIR, ["bin/tool.exe"])
+            _make_artifact_dir(artifacts, "foo", "lib", self.BASEDIR, ["bin/tool.exe"])
             files = collect_files_from_catalog(artifacts, self._pkg(["foo"]))
             self.assertEqual(self._install_rels(files), [str(Path("bin/tool.exe"))])
 
@@ -156,8 +159,8 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
         """Files in one artifact's stage must not appear in another artifact's results."""
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
-            _make_artifact_dir(artifacts, "foo", "run", self.BASEDIR, ["bin/foo.exe"])
-            _make_artifact_dir(artifacts, "bar", "run", self.BASEDIR, ["bin/bar.exe"])
+            _make_artifact_dir(artifacts, "foo", "lib", self.BASEDIR, ["bin/foo.exe"])
+            _make_artifact_dir(artifacts, "bar", "lib", self.BASEDIR, ["bin/bar.exe"])
             files = collect_files_from_catalog(artifacts, self._pkg(["foo"]))
             self.assertEqual(self._names(files), ["foo.exe"])
 
@@ -165,16 +168,16 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
         """Same file in two artifacts counts once."""
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
-            _make_artifact_dir(artifacts, "a", "run", self.BASEDIR, ["bin/shared.exe"])
-            _make_artifact_dir(artifacts, "b", "run", self.BASEDIR, ["bin/shared.exe"])
+            _make_artifact_dir(artifacts, "a", "lib", self.BASEDIR, ["bin/shared.exe"])
+            _make_artifact_dir(artifacts, "b", "lib", self.BASEDIR, ["bin/shared.exe"])
             files = collect_files_from_catalog(artifacts, self._pkg(["a", "b"]))
             self.assertEqual(len(files), 1)
 
     def test_dev_component_excluded(self):
-        """dev component must not be included (only run and lib are packaged)."""
+        """dev component must not be included (only lib is packaged)."""
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
-            _make_artifact_dir(artifacts, "foo", "run", self.BASEDIR, ["bin/tool.exe"])
+            _make_artifact_dir(artifacts, "foo", "lib", self.BASEDIR, ["bin/tool.exe"])
             _make_artifact_dir(artifacts, "foo", "dev", self.BASEDIR, ["include/foo.h"])
             files = collect_files_from_catalog(artifacts, self._pkg(["foo"]))
             self.assertNotIn("foo.h", self._names(files))
@@ -183,8 +186,8 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
     def test_multiple_artifacts_collected(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp)
-            _make_artifact_dir(artifacts, "a", "run", self.BASEDIR, ["bin/aaa.exe"])
-            _make_artifact_dir(artifacts, "b", "run", self.BASEDIR, ["bin/zzz.exe"])
+            _make_artifact_dir(artifacts, "a", "lib", self.BASEDIR, ["bin/aaa.exe"])
+            _make_artifact_dir(artifacts, "b", "lib", self.BASEDIR, ["bin/zzz.exe"])
             files = collect_files_from_catalog(artifacts, self._pkg(["a", "b"]))
             self.assertEqual(sorted(self._names(files)), ["aaa.exe", "zzz.exe"])
 
@@ -193,6 +196,7 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
             nonexistent = Path(tmp) / "no_such_dir"
             import io
             from contextlib import redirect_stderr
+
             buf = io.StringIO()
             with redirect_stderr(buf):
                 files = collect_files_from_catalog(nonexistent, self._pkg(["foo"]))
@@ -205,6 +209,7 @@ class TestCollectFilesFromCatalog(unittest.TestCase):
             artifacts = Path(tmp)
             import io
             from contextlib import redirect_stderr
+
             buf = io.StringIO()
             with redirect_stderr(buf):
                 files = collect_files_from_catalog(artifacts, self._pkg(["foo"]))
@@ -216,8 +221,13 @@ class TestBuildWxs(unittest.TestCase):
 
     BASEDIR = "some/stage"
 
-    def _run(self, tmp: str, artifact_specs: dict, package: str = "hip-runtime",
-             extra_args: dict = None):
+    def _run(
+        self,
+        tmp: str,
+        artifact_specs: dict,
+        package: str = "hip-runtime",
+        extra_args: dict = None,
+    ):
         """Set up artifact dirs and run build_wxs.
 
         artifact_specs: {artifact_name: {component: [files]}}
@@ -232,8 +242,9 @@ class TestBuildWxs(unittest.TestCase):
 
         for artifact_name, components in artifact_specs.items():
             for component, files in components.items():
-                _make_artifact_dir(artifacts, artifact_name, component,
-                                   self.BASEDIR, files)
+                _make_artifact_dir(
+                    artifacts, artifact_name, component, self.BASEDIR, files
+                )
 
         defaults = dict(
             package=package,
@@ -254,8 +265,8 @@ class TestBuildWxs(unittest.TestCase):
         return ET.parse(out).getroot()
 
     def _minimal_specs(self, package: str) -> dict:
-        """Return artifact specs with empty run components for all package artifacts."""
-        return {name: {"run": []} for name in PACKAGES[package].artifacts}
+        """Return artifact specs with empty lib components for all package artifacts."""
+        return {name: {"lib": []} for name in PACKAGES[package].artifacts}
 
     def test_produces_valid_xml(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,45 +279,47 @@ class TestBuildWxs(unittest.TestCase):
             pkg = root.find(_ns("Package"))
             self.assertEqual(pkg.get("Version"), "1.2.3")
             self.assertEqual(pkg.get("Manufacturer"), "Advanced Micro Devices, Inc.")
-            self.assertEqual(pkg.get("UpgradeCode"), PACKAGES["hip-runtime"].upgrade_code)
+            self.assertEqual(
+                pkg.get("UpgradeCode"), PACKAGES["hip-runtime"].upgrade_code
+            )
 
     def test_install_subdir_uses_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._run(tmp, self._minimal_specs("hip-runtime"))
             names = [d.get("Name") for d in root.iter(_ns("Directory"))]
-            self.assertIn("hip-runtime-1.2.3", names)
+            self.assertIn("core-1.2", names)
 
     def test_file_components_emitted(self):
         with tempfile.TemporaryDirectory() as tmp:
             specs = {
-                "core-hip": {"run": ["bin/hipcc.exe"]},
-                "core-kpack": {"run": []},
-                "core-hipinfo": {"run": []},
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
             }
             root = self._run(tmp, specs)
             names = [f.get("Name") for f in root.iter(_ns("File"))]
-            self.assertIn("hipcc.exe", names)
+            self.assertIn("amdhip64_7.dll", names)
 
     def test_stage_scoping_in_wxs(self):
         """Files from one artifact's stage must not appear via another artifact."""
         with tempfile.TemporaryDirectory() as tmp:
             specs = {
-                "core-hip": {"run": ["bin/hipcc.exe"]},
-                "core-kpack": {"run": []},
-                "core-hipinfo": {"run": []},
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
             }
             root = self._run(tmp, specs)
             names = [f.get("Name") for f in root.iter(_ns("File"))]
-            self.assertIn("hipcc.exe", names)
-            self.assertNotIn("foreign.exe", names)
+            self.assertIn("amdhip64_7.dll", names)
+            self.assertNotIn("foreign.dll", names)
 
     def test_install_layout_is_flat(self):
         """Directory tree in WXS must be flat (bin/, lib/) not nested with basedir."""
         with tempfile.TemporaryDirectory() as tmp:
             specs = {
-                "core-hip": {"run": ["bin/hipcc.exe"]},
-                "core-kpack": {"run": []},
-                "core-hipinfo": {"run": []},
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
             }
             root = self._run(tmp, specs)
             dir_names = [d.get("Name") for d in root.iter(_ns("Directory"))]
@@ -318,6 +331,7 @@ class TestBuildWxs(unittest.TestCase):
         an empty but valid WXS is still produced."""
         import io
         from contextlib import redirect_stderr
+
         with tempfile.TemporaryDirectory() as tmp:
             root_path = Path(tmp)
             # Use a build_root that has no artifacts/ subdir
@@ -345,9 +359,9 @@ class TestBuildWxs(unittest.TestCase):
     def test_path_component_added_when_bin_present(self):
         with tempfile.TemporaryDirectory() as tmp:
             specs = {
-                "core-hip": {"run": ["bin/hipcc.exe"]},
-                "core-kpack": {"run": []},
-                "core-hipinfo": {"run": []},
+                "core-hip": {"lib": ["bin/amdhip64_7.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
             }
             root = self._run(tmp, specs)
             comp_ids = [c.get("Id") for c in root.iter(_ns("Component"))]
@@ -387,9 +401,9 @@ class TestBuildWxs(unittest.TestCase):
     def test_component_refs_match_components(self):
         with tempfile.TemporaryDirectory() as tmp:
             specs = {
-                "core-hip": {"run": ["bin/a.exe", "bin/b.exe"]},
-                "core-kpack": {"run": []},
-                "core-hipinfo": {"run": []},
+                "core-hip": {"lib": ["bin/a.dll", "bin/b.dll"]},
+                "core-kpack": {"lib": []},
+                "core-hipinfo": {"lib": []},
             }
             root = self._run(tmp, specs)
             comp_ids = {c.get("Id") for c in root.iter(_ns("Component"))}
@@ -402,12 +416,15 @@ class TestBuildWxs(unittest.TestCase):
             pkg = root.find(_ns("Package"))
             self.assertEqual(pkg.get("UpgradeCode"), PACKAGES["runtimes"].upgrade_code)
             names = [d.get("Name") for d in root.iter(_ns("Directory"))]
-            self.assertIn("runtimes-1.2.3", names)
+            self.assertIn("core-1.2", names)
 
     def test_custom_install_root(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"),
-                             extra_args={"install_root": "C:\\MyROCm"})
+            root = self._run(
+                tmp,
+                self._minimal_specs("hip-runtime"),
+                extra_args={"install_root": "C:\\MyROCm"},
+            )
             targetdirs = [d.get("Id") for d in root.iter(_ns("Directory"))]
             self.assertIn("TARGETDIR", targetdirs)
 
@@ -427,11 +444,22 @@ class TestPackageDefs(unittest.TestCase):
 
     def test_install_subdir_contains_version_placeholder(self):
         for name, pkg in PACKAGES.items():
-            self.assertIn("{version}", pkg.install_subdir, msg=f"{name} missing {{version}}")
+            has_placeholder = any(
+                p in pkg.install_subdir for p in ("{version}", "{major}", "{minor}")
+            )
+            self.assertTrue(
+                has_placeholder,
+                msg=f"{name} install_subdir missing version placeholder",
+            )
 
     def test_registry_key_contains_version_placeholder(self):
         for name, pkg in PACKAGES.items():
-            self.assertIn("{version}", pkg.registry_key, msg=f"{name} missing {{version}}")
+            has_placeholder = any(
+                p in pkg.registry_key for p in ("{version}", "{major}", "{minor}")
+            )
+            self.assertTrue(
+                has_placeholder, msg=f"{name} registry_key missing version placeholder"
+            )
 
 
 if __name__ == "__main__":
