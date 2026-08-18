@@ -3,7 +3,6 @@
 default_patterns = false
 include = [
   "lib/librocjitsu.so",
-  "lib/librocjitsu_gfx1250_b0_to_a0.so*",
 ]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
