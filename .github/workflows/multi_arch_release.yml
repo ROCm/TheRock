@@ -59,13 +59,13 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
       enable_quartz_tracking:
-        description: >-
-          Enable Quartz release-lineage tracking by propagating this run's id
-          to every triggered workflow as quartz_tracking_id, formatted as
-          "<github.run_id>;<release_type>". Off by default. Note: tracking is
-          currently only meaningful for rockrel-initiated runs; enabling it for
-          a manual TheRock dispatch has no effect on Quartz tracking.
+        description: "Enable Quartz release-lineage tracking (off by default)."
         type: boolean
         default: false
   workflow_dispatch:
@@ -106,13 +106,13 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
       enable_quartz_tracking:
-        description: >-
-          Enable Quartz release-lineage tracking by propagating this run's id
-          to every triggered workflow as quartz_tracking_id, formatted as
-          "<github.run_id>;<release_type>". Off by default. Note: tracking is
-          currently only meaningful for rockrel-initiated runs; enabling it for
-          a manual TheRock dispatch has no effect on Quartz tracking.
+        description: "Enable Quartz release-lineage tracking (off by default)."
         type: boolean
         default: false
 
