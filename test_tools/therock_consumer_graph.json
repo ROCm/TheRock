@@ -834,6 +834,7 @@
       "kfdtest",
       "rdc",
       "rocgdb",
+      "rocprofiler-compute",
       "rocr-runtime",
       "therock-elfutils",
       "therock-grpc"
