@@ -23,6 +23,7 @@ the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
 import argparse
 import boto3
 import datetime
+
 # gzip: read createrepo_c repodata/primary.xml.gz only (package-count validation).
 import gzip
 import os
@@ -59,6 +60,9 @@ from github_actions_api import gha_append_step_summary
 # breaking dnf/zypper install. These helpers materialize the complete set
 # (local first, then S3 backfill), run createrepo_c, validate, and upload.
 # ---------------------------------------------------------------------------
+_RPM_LEAD_MAGIC = b"\xed\xab\xee\xdb"
+
+
 class _S3Client(Protocol):
     """Minimal boto3 S3 client surface used by RPM repodata helpers."""
 
@@ -100,6 +104,17 @@ def _rpm_arch_dir(package_dir: Path | None) -> Path | None:
 def _local_rpm_names(arch_dir: Path) -> set[str]:
     """Return basenames of RPMs already materialized in the working arch dir."""
     return {path.name for path in arch_dir.glob("*.rpm")}
+
+
+def _assert_rpm_lead_magic(rpm_path: Path) -> None:
+    """Fail fast when a file does not begin with the RPM lead magic bytes."""
+    try:
+        with rpm_path.open("rb") as handle:
+            lead = handle.read(len(_RPM_LEAD_MAGIC))
+    except OSError as exc:
+        raise RuntimeError(f"Cannot read RPM file {rpm_path}: {exc}") from exc
+    if lead != _RPM_LEAD_MAGIC:
+        raise RuntimeError(f"Not a valid RPM file (bad lead magic): {rpm_path}")
 
 
 def _list_s3_rpm_keys(s3: _S3Client, bucket: str, prefix: str) -> list[str]:
@@ -173,7 +188,9 @@ def _prepare_rpm_arch_dir_for_repodata(
     local_count = 0
     if local_arch_dir is not None:
         for rpm_file in local_arch_dir.glob("*.rpm"):
-            shutil.copy2(rpm_file, arch_dir / rpm_file.name)
+            dest = arch_dir / rpm_file.name
+            shutil.copy2(rpm_file, dest)
+            _assert_rpm_lead_magic(dest)
             local_count += 1
 
     # Step 2: backfill RPMs uploaded in prior runs but missing locally.
@@ -184,7 +201,9 @@ def _prepare_rpm_arch_dir_for_repodata(
         if filename in local_names:
             continue
         print(f"  Downloading existing S3 package for repodata: {filename}")
-        s3.download_file(bucket, key, str(arch_dir / filename))
+        dest = arch_dir / filename
+        s3.download_file(bucket, key, str(dest))
+        _assert_rpm_lead_magic(dest)
         downloaded_count += 1
 
     return RpmArchDirPrepResult(
