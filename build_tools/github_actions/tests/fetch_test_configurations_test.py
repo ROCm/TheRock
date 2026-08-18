@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import unittest
+from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -552,10 +553,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
         """test:rocgdb should expand to both rocgdb-cpu and rocgdb-gpu."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
 
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
@@ -563,10 +563,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_all_rocgdb_label_excludes_unrelated_jobs(self):
         """test:rocgdb should not include jobs outside the rocgdb group."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
 
         names = {job["job_name"] for job in components}
         self.assertNotIn("rocblas", names)
@@ -574,10 +573,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_group_label_and_individual_label_combine(self):
         """A group label and a plain label together should union their jobs."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb", "test:rocblas"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocgdb", "test:rocblas"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
 
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
@@ -586,10 +587,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_unknown_group_label_is_treated_as_literal(self):
         """A test: label not in TEST_LABEL_GROUPS should fall through as a literal key."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocblas"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
 
         names = {job["job_name"] for job in components}
         self.assertIn("rocblas", names)
@@ -598,12 +598,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_group_label_and_individual_member_label_do_not_duplicate(self):
         """Passing test:rocgdb alongside an explicit member label should not produce duplicate jobs."""
-        os.environ["TEST_LABELS"] = json.dumps(
-            ["test:rocgdb", "test:rocgdb-cpu", "test:rocgdb-gpu"]
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
+        with patch.dict(
+            os.environ,
+            {
+                "TEST_LABELS": json.dumps(
+                    ["test:rocgdb", "test:rocgdb-cpu", "test:rocgdb-gpu"]
+                )
+            },
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
 
         job_names = [job["job_name"] for job in components]
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
