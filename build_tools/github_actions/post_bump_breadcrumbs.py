@@ -50,6 +50,7 @@ from bump_automation import (
     submodule_changed,
 )
 
+
 # Marker for the single sticky "breadcrumb" comment posted on an upstream
 # rocm-systems/rocm-libraries PR once its commits land in TheRock via a
 # submodule bump.
@@ -209,6 +210,36 @@ def build_unmapped_summary_body(reverted, submodule, repo, unmapped_shas):
     return "\n".join(lines) + "\n"
 
 
+def get_submodule_url(path):
+    """Resolves a submodule's URL from .gitmodules by its `path`, since the
+    section name can differ from the path (e.g. rocgdb)."""
+    path_entries = run(
+        [
+            "git",
+            "config",
+            "--file",
+            ".gitmodules",
+            "--get-regexp",
+            r"^submodule\..*\.path$",
+        ]
+    )
+    for line in path_entries.splitlines():
+        key, _, value = line.partition(" ")
+        if value == path:
+            section = key[len("submodule.") : -len(".path")]
+            return run(
+                [
+                    "git",
+                    "config",
+                    "--file",
+                    ".gitmodules",
+                    "--get",
+                    f"submodule.{section}.url",
+                ]
+            )
+    raise ValueError(f"No .gitmodules entry found with path '{path}'")
+
+
 def process_bump(changed, therock_after_sha, tokens, dry_run=False):
     """Posts breadcrumb comments for one detected submodule bump.
 
@@ -227,9 +258,7 @@ def process_bump(changed, therock_after_sha, tokens, dry_run=False):
     app_token = tokens[SUBMODULE_CONFIG[name]["token_key"]]
     github_api = GitHubAPI(github_token=app_token)
 
-    submodule_url = run(
-        ["git", "config", "--file", ".gitmodules", "--get", f"submodule.{name}.url"]
-    )
+    submodule_url = get_submodule_url(name)
     api_base = get_api_base_from_url(submodule_url, name)
 
     therock_pr_number = resolve_therock_pr_number(therock_after_sha, github_api)

@@ -174,7 +174,7 @@ class ProcessBumpTest(unittest.TestCase):
 
         self.mocks = {}
         for target, default_return in (
-            ("run", "https://github.com/ROCm/rocm-systems.git"),
+            ("get_submodule_url", "https://github.com/ROCm/rocm-systems.git"),
             ("resolve_therock_pr_number", 99),
             ("is_revert", False),
             ("fetch_commits_in_range", [{"sha": "d" * 40}]),
