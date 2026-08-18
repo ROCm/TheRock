@@ -59,7 +59,7 @@ class DetermineVersionTest(unittest.TestCase):
         gha_set_env.assert_called_once_with(
             {
                 "optional_build_prod_arguments": (
-                    "--rocm-sdk-version ==7.0.0 --version-suffix +rocm7.0.0"
+                    "--rocm-sdk-version ===7.0.0 --version-suffix +rocm7.0.0"
                 ),
                 "version_suffix": "+rocm7.0.0",
             }
