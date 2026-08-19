@@ -142,10 +142,11 @@ python build_tools/find_artifacts_for_commit.py \
 
 #### Finding Release Versions Manually
 
-TheRock provides two types of release tarballs:
+TheRock provides three types of release tarballs:
 
-The installer reads published release tarballs directly from the matching S3
-release bucket. The public multi-arch indices below let users browse available
+The installer downloads published release tarballs through the CDN in front of
+the matching release bucket, so it needs no AWS credentials. The public
+multi-arch indices below are the same CDN paths, and let users browse available
 versions and manually download tarballs.
 
 ##### Nightly Tarballs
@@ -171,6 +172,34 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYY
 - `X.Y.Z` = ROCm version (e.g., `7.11.0`)
 - `a` = alpha version
 - `YYYYMMDD` = build date (e.g., `20251124` = November 24, 2025)
+
+##### Prerelease Tarballs
+
+Prerelease tarballs are release candidates and follow the naming pattern: `MAJOR.MINOR.PATCHrcN`
+
+**To find and use a prerelease:**
+
+1. Visit the [prerelease multi-arch tarball index](https://rocm.prereleases.amd.com/tarball-multi-arch/)
+1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-all-7.13.0rc2.tar.gz`
+1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
+   - In the example above, the version is: `7.13.0rc2`
+1. Use this version string with `--release`:
+   ```bash
+   python build_tools/install_rocm_from_artifacts.py \
+       --release 7.13.0rc2 \
+       --amdgpu-family gfx110X-all
+   ```
+
+**Version format:** `X.Y.ZrcN`
+
+- `X.Y.Z` = ROCm version (e.g., `7.13.0`)
+- `rc` = release candidate
+- `N` = release candidate counter (e.g., `2`)
+
+> [!NOTE]
+> The prerelease bucket grants no anonymous S3 read access, so prerelease
+> tarballs can only be downloaded through the CDN.
 
 ##### Dev Tarballs
 
