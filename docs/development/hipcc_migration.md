@@ -2,14 +2,14 @@
 
 `hipcc` is a compiler wrapper that historically injected HIP-specific flags
 (include paths, device library paths, GPU target flags, etc.) before invoking
-`clang++`. TheRock is deprecating `hipcc` in favor of calling `amdclang++`
-directly, which is a symlink to the same underlying clang binary with the HIP
-toolchain configured by CMake.
+`clang++`. TheRock now recommends calling `amdclang++` directly instead of
+using `hipcc`. `amdclang++` is a user-facing binary that provides the same
+HIP-capable compiler with the HIP toolchain configured by CMake.
 
-This document explains why the change is being made, what the equivalents are,
-and how to migrate your project.
+This document explains the recommended alternatives, the equivalents, and
+how to migrate your project.
 
-## Why deprecate hipcc?
+## Why migrate from hipcc?
 
 - **Redundant indirection.** The `amd-hip` CMake toolchain already injects
   `--hip-path`, `--hip-device-lib-path`, and all other necessary flags via
