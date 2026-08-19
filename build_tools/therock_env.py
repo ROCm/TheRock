@@ -227,6 +227,15 @@ def detect_gpu_arch() -> str:
     return "gfx1151"
 
 
+def ensure_submodules():
+    """Ensure Git submodules (rocm-systems, rocm-libraries, etc.) are initialized."""
+    hip_ver = REPO_ROOT / "rocm-systems/projects/hip/VERSION"
+    if not hip_ver.is_file():
+        log_info("Git submodules not found. Initializing and updating git submodules...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive"], cwd=str(REPO_ROOT))
+        log_success("Git submodules initialized successfully.")
+
+
 def ensure_venv(python_version: str, venv_dir: Path | None = None, force_recreate: bool = False) -> tuple[Path, Path]:
     """Ensure a virtual environment for the given Python version exists with dependencies installed."""
     uv_bin = find_uv()
@@ -501,6 +510,9 @@ def cmd_build(args):
     log_info(f"GPU Architecture  : \033[1;32m{gpu_arch}\033[0m")
     log_info(f"Build Directory   : \033[1;36m{build_dir}\033[0m")
     log_info(f"============================================================")
+
+    # 0. Ensure git submodules are present
+    ensure_submodules()
 
     # 1. Setup / ensure virtualenv
     custom_venv_dir = getattr(args, "venv_dir", None)

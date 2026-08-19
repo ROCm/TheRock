@@ -106,14 +106,15 @@ echo "  Build Output   : $BUILD_DIR"
 
 mkdir -p "$WORKSPACE_ROOT" "$ENV_DIR"
 
-# Step 4: Clone / Update TheRock Source Repository
-echo -e "\n\033[1;33m[4/5] Checking TheRock source repository...\033[0m"
+# Step 4: Clone / Update TheRock Source Repository & Submodules
+echo -e "\n\033[1;33m[4/5] Checking TheRock source repository and submodules...\033[0m"
 if [ ! -d "$SOURCE_DIR/.git" ]; then
-    echo "Cloning $REPO_URL (branch: $BRANCH) into $SOURCE_DIR..."
-    git clone -b "$BRANCH" "$REPO_URL" "$SOURCE_DIR"
+    echo "Cloning $REPO_URL (branch: $BRANCH) with submodules into $SOURCE_DIR..."
+    git clone --recursive -b "$BRANCH" "$REPO_URL" "$SOURCE_DIR"
 else
     echo "Existing TheRock source repository found at: $SOURCE_DIR"
     (cd "$SOURCE_DIR" && git checkout "$BRANCH" 2>/dev/null || true)
+    (cd "$SOURCE_DIR" && git submodule update --init --recursive)
 fi
 
 # Step 5: Provision Virtual Environment and Run Build Orchestrator
