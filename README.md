@@ -75,27 +75,66 @@ chmod +x bootstrap.sh
 
 ---
 
-### 📁 Hierarchical Multi-Version Workspace Architecture
+---
 
-To prevent commands (`rocminfo`, `amd-smi`) and Python packages from colliding between builds and ROCm releases, the workspace is structured across 3 dimensions (**ROCm Version × Python Version × Preset**):
+### 🔍 Under the Hood: Exactly What Happens During Installation
+
+Most installation scripts leave you guessing where files go and what gets modified. Here is the exact, step-by-step breakdown of how TheRock automates and isolates your environments:
+
+#### 1. The 6-Step Automated Lifecycle
+When you execute `./bootstrap.sh --rocm 7.14 --python 3.14 --preset llm`:
+1. **Directory Provisioning (`mkdir -p`)**: If `~/virtualenv` does not exist, it creates `~/virtualenv/therock-7.14/py314-llm/` from scratch.
+2. **Dependency & `uv` Check**: Checks if `uv`, `cmake`, `ninja`, and GCC 15 exist. If `uv` is missing, it installs `uv` in <1 second without touching system files.
+3. **Smart Source Sharing (Disk Optimization)**: Clones `analogbox/TheRock` into `~/virtualenv/therock-7.14/TheRock/`. If it was already cloned, it reuses the existing clone without re-downloading (~15 GB saved).
+4. **Dedicated Virtual Environment**: Provisions a hermetic Python 3.14 virtual environment at `~/virtualenv/therock-7.14/py314-llm/.venv/`.
+5. **Targeted Compilation**: Compiles only the requested preset (e.g. LLM inference) in `~/virtualenv/therock-7.14/py314-llm/build/` with `ccache` acceleration (~30 min).
+6. **Hermetic Command Injection**: Generates **226 executable wrappers** (`rocminfo`, `hipcc`, `amdclang`, `rocm-smi`) directly inside `py314-llm/.venv/bin/` and connects environment hooks in `py314-llm/.venv/bin/activate`.
+
+---
+
+#### 2. Running Multiple Python Versions Side-by-Side (e.g. Python 3.14 vs 3.13)
+When you build different Python versions or different presets, each one gets its own dedicated folder. They **never overwrite each other's binaries, pip packages, or libraries**:
 
 ```
 ~/virtualenv/
-└── therock-7.14/                      # [ROCm / TheRock Release]
-    ├── TheRock/                       # Shared Source Repository
+└── therock-7.14/                      # ROCm 7.14 Workspace Root
     │
-    ├── py314-llm/                     # [Python 3.14 + LLM Inference Environment]
-    │   ├── .venv/                     # Dedicated venv (with hermetic rocminfo/hipcc wrappers)
-    │   └── build/                     # Dedicated Build Tree (build/dist/rocm)
+    ├── TheRock/                       # [Shared Source Code] Cloned ONCE for this version
     │
-    ├── py314-vulkan/                  # [Python 3.14 + Vulkan / Multimedia Environment]
-    │   ├── .venv/
-    │   └── build/
+    ├── py314-llm/                     # [Python 3.14 + LLM Inference]
+    │   ├── .venv/                     # Python 3.14 runtime + packages (torch, numpy)
+    │   │   └── bin/                   # Contains 3.14-linked rocminfo, hipcc, amdclang
+    │   └── build/                     # 3.14 LLM build tree (dist/rocm)
     │
-    └── py313-llm/                     # [Python 3.13 + LLM Environment]
-        ├── .venv/
-        └── build/
+    ├── py313-llm/                     # [Python 3.13 + LLM Inference]
+    │   ├── .venv/                     # Python 3.13 runtime + packages (completely separate!)
+    │   │   └── bin/                   # Contains 3.13-linked rocminfo, hipcc, amdclang
+    │   └── build/                     # 3.13 LLM build tree (dist/rocm)
+    │
+    └── py314-vulkan/                  # [Python 3.14 + Vulkan / Multimedia]
+        ├── .venv/                     # Python 3.14 with Mesa/Vulkan tools
+        └── build/                     # Vulkan build tree
 ```
+
+#### 3. How Switching Environments Works in 1 Second
+Because each environment is completely self-contained, switching between Python versions or presets is as simple as activating the target `.venv`:
+
+```bash
+# Work on Python 3.14 LLM models:
+source ~/virtualenv/therock-7.14/py314-llm/.venv/bin/activate
+rocminfo   # Executes py314-llm's ROCm!
+
+# Switch to Python 3.13 LLM models:
+source ~/virtualenv/therock-7.14/py313-llm/.venv/bin/activate
+rocminfo   # Executes py313-llm's ROCm!
+
+# Switch to Vulkan / Media experiments:
+source ~/virtualenv/therock-7.14/py314-vulkan/.venv/bin/activate
+```
+
+> [!NOTE]
+> **Why this prevents system conflicts**:
+> When a `.venv` is activated, its `bin/` directory is placed at the very front of your shell's `$PATH`. Any global `/opt/rocm` or `/usr/bin/rocminfo` is completely shadowed and bypassed. When you type `deactivate`, your shell returns to its original state with zero leftover environment pollution.
 
 ---
 
