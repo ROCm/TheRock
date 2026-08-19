@@ -1,0 +1,4 @@
+# amd-comgr32 (32-bit Windows)
+[components.lib."compiler/amd-comgr32/stage"]
+[components.dbg."compiler/amd-comgr32/stage"]
+[components.dev."compiler/amd-comgr32/stage"]

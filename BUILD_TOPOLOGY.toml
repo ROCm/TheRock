@@ -519,6 +519,15 @@ artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
+[artifacts.amd-comgr32]
+artifact_group = "compiler"
+type = "target-neutral"
+platform = "windows"
+artifact_deps = ["amd-llvm"]
+feature_name = "COMGR32"
+feature_group = "ALL"
+disable_platforms = ["linux"]
+
 [artifacts.hipify]
 artifact_group = "compiler"
 type = "target-neutral"
@@ -580,6 +589,15 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "core-ocl-icd"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
+
+[artifacts.core-ocl32]
+artifact_group = "opencl-runtime"
+type = "target-neutral"
+platform = "windows"
+artifact_deps = ["amd-comgr32", "amd-llvm"]
+feature_name = "OCL32_RUNTIME"
+feature_group = "ALL"
+disable_platforms = ["linux"]
 
 [artifacts.rocrtst]
 artifact_group = "runtime-tests"

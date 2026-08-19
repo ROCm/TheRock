@@ -288,8 +288,6 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
-# Additional manual features that don't map to artifacts
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()

@@ -1,0 +1,14 @@
+# ocl-icd32
+[components.lib."core/ocl-icd32/stage"]
+include = [
+  "bin/**",
+]
+
+# ocl-clr32
+[components.lib."core/ocl-clr32/stage"]
+[components.run."core/ocl-clr32/stage"]
+include = [
+  "bin/**",
+]
+[components.dbg."core/ocl-clr32/stage"]
+[components.dev."core/ocl-clr32/stage"]

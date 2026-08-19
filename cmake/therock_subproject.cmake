@@ -352,7 +352,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;CROSS_COMPILE_32BIT"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
@@ -544,6 +544,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_PROGRAM_DIRS "${_interface_program_dirs}"
     THEROCK_IGNORE_PACKAGES "${ARG_IGNORE_PACKAGES}"
     THEROCK_COMPILER_TOOLCHAIN "${ARG_COMPILER_TOOLCHAIN}"
+    THEROCK_CROSS_COMPILE_32BIT "${ARG_CROSS_COMPILE_32BIT}"
     # Any extra depend files that must be added to the configure phase of dependents.
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
@@ -633,6 +634,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_build_deps "${target_name}" THEROCK_BUILD_DEPS)
   get_target_property(_build_pool "${target_name}" THEROCK_BUILD_POOL)
   get_target_property(_compiler_toolchain "${target_name}" THEROCK_COMPILER_TOOLCHAIN)
+  get_target_property(_cross_compile_32bit "${target_name}" THEROCK_CROSS_COMPILE_32BIT)
   get_target_property(_transitive_configure_depend_files "${target_name}" THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES)
   get_target_property(_dist_dir "${target_name}" THEROCK_DIST_DIR)
   get_target_property(_runtime_deps "${target_name}" THEROCK_RUNTIME_DEPS)
@@ -742,7 +744,8 @@ function(therock_cmake_subproject_activate target_name)
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
-    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+    "${_compiler_toolchain}" "${_cmake_project_toolchain_file}"
+    "${_cross_compile_32bit}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
 
   # Customize any other super-project CMake variables that are captured by
@@ -804,6 +807,24 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_IGNORE_PACKAGES \"@_ignore_packages@\")\n")
   string(APPEND _init_contents "list(PREPEND CMAKE_MODULE_PATH \"${THEROCK_SOURCE_DIR}/cmake/finders\")\n")
   string(APPEND _init_contents "list(PREPEND CMAKE_PREFIX_PATH \"@_prefix_dir@\")\n")
+
+  # When IGNORE_PACKAGES is set, find_package falls through to the system
+  # resolver. Add dist dirs of runtime deps to CMAKE_PREFIX_PATH so that
+  # ignored packages can be found there (e.g. 32-bit LLVM for comgr32).
+  if(_ignore_packages)
+    foreach(_dep ${_runtime_deps})
+      if(TARGET "${_dep}")
+        get_target_property(_dep_dist "${_dep}" THEROCK_DIST_DIR)
+        if(_dep_dist)
+          string(APPEND _init_contents "list(APPEND CMAKE_PREFIX_PATH \"${_dep_dist}\")\n")
+          get_target_property(_dep_install_dest "${_dep}" THEROCK_INSTALL_DESTINATION)
+          if(_dep_install_dest)
+            string(APPEND _init_contents "list(APPEND CMAKE_PREFIX_PATH \"${_dep_dist}/${_dep_install_dest}\")\n")
+          endif()
+        endif()
+      endif()
+    endforeach()
+  endif()
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
@@ -1438,6 +1459,13 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
+  if(WIN32)
+    # Ensure sub-builds can find their own executables (e.g. bc2h) in the
+    # build directory. Windows 11 sets NoDefaultCurrentDirectoryInExePath=1
+    # by default, which prevents cmd.exe from locating executables in CWD.
+    list(APPEND _build_env_pairs "--unset=NoDefaultCurrentDirectoryInExePath")
+  endif()
+
   set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
@@ -1657,7 +1685,7 @@ endfunction()
 #   * amd-hip: Extends the amd-llvm toolchain to also depend on HIP, making
 #     it ready to use to compile HIP code.
 function(_therock_cmake_subproject_setup_toolchain
-    target_name compiler_toolchain toolchain_file)
+    target_name compiler_toolchain toolchain_file cross_compile_32bit)
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
@@ -1732,6 +1760,16 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
+  endif()
+
+  # 32-bit cross-compilation: override compiler/linker with x86 MSVC tools.
+  if(cross_compile_32bit AND WIN32)
+    set(_win32_toolchain_file "${THEROCK_SOURCE_DIR}/cmake/toolchains/win32-x86-msvc.cmake")
+    if(NOT EXISTS "${_win32_toolchain_file}")
+      message(FATAL_ERROR "CROSS_COMPILE_32BIT requires ${_win32_toolchain_file}")
+    endif()
+    string(APPEND _toolchain_contents "set(THEROCK_HOST_CMAKE_CXX_COMPILER \"@CMAKE_CXX_COMPILER@\")\n")
+    string(APPEND _toolchain_contents "include(\"@_win32_toolchain_file@\")\n")
   endif()
 
   # Customize debug info generation.

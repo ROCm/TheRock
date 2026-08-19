@@ -565,6 +565,91 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)
 
+################################################################################
+# 32-bit OpenCL runtime
+# Gated by THEROCK_ENABLE_OCL32_RUNTIME (requires THEROCK_ENABLE_COMGR32).
+# Produces amdocl32.dll on Windows.
+################################################################################
+
+if(THEROCK_ENABLE_OCL32_RUNTIME)
+  therock_cmake_subproject_declare(ocl-icd32
+    CROSS_COMPILE_32BIT
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-icd32"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
+      "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_activate(ocl-icd32)
+
+  set(OCL32_CLR_CMAKE_ARGS)
+  if(WIN32)
+    set(_compute_pal_dir32 "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
+    cmake_path(NORMAL_PATH _compute_pal_dir32)
+    list(APPEND OCL32_CLR_CMAKE_ARGS
+      "-DUSE_PROF_API=OFF"
+      "-D__HIP_ENABLE_PCH=OFF"
+      "-DROCCLR_ENABLE_PAL=ON"
+      "-DROCCLR_ENABLE_HSA=OFF"
+      "-DROCCLR_ENABLE_HSAIL=OFF"
+      "-DROCCLR_ENABLE_LC=ON"
+      "-DROCR_DLL_LOAD=OFF"
+      "-DAMD_COMPUTE_WIN=${_compute_pal_dir32}"
+    )
+  endif()
+
+  therock_cmake_subproject_declare(ocl-clr32
+    CROSS_COMPILE_32BIT
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-clr32"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCLR_BUILD_OCL=ON"
+      ${OCL32_CLR_CMAKE_ARGS}
+    BUILD_DEPS
+      rocm-cmake
+      therock-simde
+    RUNTIME_DEPS
+      amd-llvm32
+      amd-comgr32
+      rocm-core
+      ocl-icd32
+    IGNORE_PACKAGES
+      amd_comgr LLVM Clang LLD AMDDeviceLibs
+    INSTALL_RPATH_LIBRARY_DIR
+      "lib/opencl"
+    INTERFACE_LINK_DIRS
+      "lib"
+      "lib/opencl"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+      "lib/opencl"
+  )
+  therock_cmake_subproject_activate(ocl-clr32)
+
+  therock_provide_artifact(core-ocl32
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl32.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      run
+    SUBPROJECT_DEPS
+      ocl-icd32
+      ocl-clr32
+  )
+endif(THEROCK_ENABLE_OCL32_RUNTIME)
+
 ##############################################################################
 # Runtime tests
 # These are in their own build stage (runtime-tests) so they don't block
