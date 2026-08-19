@@ -8,6 +8,11 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 
 This fork provides verified out-of-the-box support for **AMD Strix Halo APUs (`gfx1151` / Radeon 8060S / 8050S / Ryzen AI MAX+ 395)** on **Ubuntu 26.04 LTS (Resolute Raccoon)**, **GCC 15.2**, and **CMake 4.x**, featuring modular 30-minute builds and hermetic Python virtual environment isolation.
 
+> [!IMPORTANT]
+> **🚀 Purpose-Built & Validated for Ubuntu 26.04 LTS (Resolute Raccoon)**  
+> Standard ROCm packages and upstream builds fail on modern Ubuntu 26.04 due to strict **GCC 15.2 ISO C++20 standard header migration**, **CMake 4.x deferred dependency providers**, and **Linux 7.0+ kernel driver ABIs**.  
+> This repository is specifically engineered, patched, and benchmarked to provide a **100% stable, zero-friction ROCm platform on Ubuntu 26.04 LTS** with GCC 15 and AMD Strix Halo APUs.
+
 ---
 
 ## 🖥️ Verified Hardware & Testbed Environment
