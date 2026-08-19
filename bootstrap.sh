@@ -126,11 +126,27 @@ echo -e "\n\033[1;33m[4/5] Checking TheRock source repository and submodules...\
 if [ ! -d "$SOURCE_DIR/.git" ]; then
     echo "Cloning $REPO_URL (branch: $BRANCH) into $SOURCE_DIR..."
     git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$SOURCE_DIR"
-    (cd "$SOURCE_DIR" && git submodule update --init --depth 1 rocm-systems rocm-libraries third-party compiler 2>/dev/null || git submodule update --init --depth 1)
+
+    # Check if existing submodules are available locally to avoid redundant GB downloads
+    for candidate in "$BASE_DIR"/*/TheRock; do
+        if [ -d "$candidate/rocm-libraries" ] && [ "$candidate" != "$SOURCE_DIR" ]; then
+            echo -e "Reusing existing local submodules from: \033[1;36m$candidate\033[0m"
+            cp -a "$candidate/rocm-systems" "$candidate/rocm-libraries" "$candidate/third-party" "$SOURCE_DIR/" 2>/dev/null || true
+            break
+        fi
+    done
+
+    # Fetch submodules with live progress if not already populated
+    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ]; then
+        echo "Fetching top-level submodules with live progress..."
+        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress rocm-systems rocm-libraries third-party compiler)
+    fi
 else
     echo "Existing TheRock source repository found at: $SOURCE_DIR"
     (cd "$SOURCE_DIR" && git checkout "$BRANCH" 2>/dev/null || true)
-    (cd "$SOURCE_DIR" && git submodule update --init --depth 1 rocm-systems rocm-libraries third-party compiler 2>/dev/null || git submodule update --init --depth 1)
+    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ]; then
+        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress rocm-systems rocm-libraries third-party compiler)
+    fi
 fi
 
 # Step 5: Provision Virtual Environment and Run Build Orchestrator
