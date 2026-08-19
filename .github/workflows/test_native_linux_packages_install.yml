@@ -39,7 +39,7 @@ on:
         type: string
         default: ""
       run_uninstall:
-        description: "After install+verify, uninstall packages and assert clean teardown"
+        description: "Optional Step 4 after install+verify (sanity/full only): remove metapackages and assert no ROCm packages remain. SLES uses zypper --clean-deps."
         type: boolean
         default: false
       repository:
@@ -95,7 +95,7 @@ on:
         type: string
         default: ""
       run_uninstall:
-        description: "After install+verify, uninstall packages and assert clean teardown"
+        description: "Optional Step 4 after install+verify (sanity/full only): remove metapackages and assert no ROCm packages remain. SLES uses zypper --clean-deps."
         type: boolean
         default: false
       repository:

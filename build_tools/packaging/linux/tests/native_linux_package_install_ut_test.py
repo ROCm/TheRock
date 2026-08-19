@@ -908,13 +908,7 @@ class RunTestsTestTypeTest(unittest.TestCase):
     def _args_for_uninstall_run_tests(
         self, test_type: str, *, with_uninstall: bool = False
     ):
-        """Args for run_tests() paths that exercise --with-uninstall.
-
-        ``rocm_version`` is set here (not in ``_base_args``) so Step 1 does not
-        duplicate ``users/acheruva/update_pkg_linux_tests`` / CHECKIN. After
-        rebase onto that branch, ``_base_args`` will already include
-        ``rocm_version=None``.
-        """
+        """Build args for ``run_tests()`` uninstall integration tests."""
         args = self._base_args(test_type)
         args.rocm_version = None
         args.with_uninstall = with_uninstall
@@ -2022,7 +2016,7 @@ class ListInstalledRocmPackagesTest(unittest.TestCase):
 
 
 class UninstallDebPackagesTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.uninstall_packages() on DEB."""
+    """Tests for Step 4a ``uninstall_packages()`` on deb (apt remove + autoremove)."""
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_remove_and_autoremove_in_reverse_order(self, mock_streaming):
@@ -2063,7 +2057,7 @@ class UninstallDebPackagesTest(unittest.TestCase):
 
 
 class UninstallRpmPackagesTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.uninstall_packages() on RPM."""
+    """Tests for Step 4a ``uninstall_packages()`` on rpm (dnf / zypper --clean-deps)."""
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_dnf_remove_for_rhel(self, mock_streaming):
@@ -2082,6 +2076,7 @@ class UninstallRpmPackagesTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_zypper_remove_for_sles(self, mock_streaming):
+        """SLES must pass --clean-deps so dependency packages are removed."""
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -2099,7 +2094,7 @@ class UninstallRpmPackagesTest(unittest.TestCase):
 
 
 class RunUninstallVerificationTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.run_uninstall_verification()."""
+    """Tests for Step 4b ``run_uninstall_verification()``."""
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -2130,7 +2125,7 @@ class RunUninstallVerificationTest(unittest.TestCase):
 
 
 class RunUninstallAndVerifyTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.run_uninstall_and_verify()."""
+    """Tests for Step 4 ``run_uninstall_and_verify()`` orchestration."""
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
