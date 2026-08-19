@@ -687,7 +687,8 @@
   },
   "therock-hwloc": {
     "consumers": [
-      "rocrtst"
+      "rocrtst",
+      "amd-llvm"
     ]
   },
   "therock-libbacktrace": {
