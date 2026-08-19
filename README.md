@@ -27,15 +27,27 @@ TheRock is a modular open-source build platform for HIP and ROCm. This fork prov
 
 ## 🚀 Quick Start
 
-### 1. Automated Zero-Install (Recommended)
-On a fresh machine without cloning the repository, run this single command to automatically install dependencies, clone the repo, provision Python 3.14 virtualenv, and build:
+### Option 1: One-Liner Zero-Install (No Prior Clone Required!)
+On a fresh machine, run this single command to automatically install dependencies, clone the repo, provision Python 3.14 virtual environment, and build:
 
 ```bash
 # Complete LLM Inference & Fine-Tuning Stack (~30 min build):
 curl -fsSL https://raw.githubusercontent.com/analogbox/TheRock/main/bootstrap.sh | bash -s -- --preset llm --python 3.14
 ```
 
-### 2. Manual / Local Workflow
+### Option 2: Download `bootstrap.sh` Separately & Run
+If you prefer downloading `bootstrap.sh` first to inspect or run with custom flags:
+
+```bash
+# 1. Download bootstrap script
+curl -O https://raw.githubusercontent.com/analogbox/TheRock/main/bootstrap.sh
+chmod +x bootstrap.sh
+
+# 2. Run automated build (e.g. for LLM Inference Stack)
+./bootstrap.sh --preset llm --python 3.14
+```
+
+### Option 3: Local Repository Workflow (`therock-env`)
 If you already cloned the repository locally:
 
 ```bash
