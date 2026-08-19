@@ -789,7 +789,6 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
-      "profiler-hub",
       "therock-frugally-deep"
     ]
   },
