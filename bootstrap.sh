@@ -193,6 +193,9 @@ if [ "$DRY_RUN" = true ]; then
     BUILD_ARGS+=("--dry-run")
 fi
 
+# Clean any existing environment ROCm variables
+unset ROCM_PATH ROCM_DIR HIP_PATH HIP_DIR HIP_PLATFORM HIPCC_VERBOSE || true
+
 # Run therock_env.py orchestrator targeting the isolated ENV_DIR / VENV_DIR
 python3 "$SOURCE_DIR/build_tools/therock_env.py" "${BUILD_ARGS[@]}"
 

@@ -437,6 +437,18 @@ def apply_runtime_patches():
             )
             rocprim_bm_cmake.write_text(patched)
 
+    # 6. comgr test find_package(hip) isolation fix
+    comgr_test_cmake = REPO_ROOT / "compiler/amd-llvm/amd/comgr/test/CMakeLists.txt"
+    if comgr_test_cmake.is_file():
+        content = comgr_test_cmake.read_text()
+        if "find_package(hip CONFIG PATHS ${ROCM_INSTALL_PATH}/hip QUIET)" in content:
+            log_info("Applying hermetic find_package(hip) isolation patch to comgr tests...")
+            patched = content.replace(
+                "find_package(hip CONFIG PATHS ${ROCM_INSTALL_PATH}/hip QUIET)",
+                "# find_package(hip CONFIG PATHS ${ROCM_INSTALL_PATH}/hip QUIET) # Hermetically isolated",
+            )
+            comgr_test_cmake.write_text(patched)
+
 
 def ensure_ccache() -> bool:
     """Ensure ccache is available, attempting auto-installation if missing."""
@@ -810,6 +822,14 @@ def cmd_build(args):
 
     # 3. Configure
     env = os.environ.copy()
+    for var in ["ROCM_PATH", "ROCM_DIR", "HIP_PATH", "HIP_DIR", "HIP_PLATFORM", "HIPCC_VERBOSE"]:
+        env.pop(var, None)
+    if "CMAKE_PREFIX_PATH" in env:
+        filtered = [p for p in env["CMAKE_PREFIX_PATH"].split(":") if "rocm" not in p.lower() and "virtualenv" not in p]
+        env["CMAKE_PREFIX_PATH"] = ":".join(filtered)
+    if "LD_LIBRARY_PATH" in env:
+        filtered = [p for p in env["LD_LIBRARY_PATH"].split(":") if "rocm" not in p.lower() and "virtualenv" not in p]
+        env["LD_LIBRARY_PATH"] = ":".join(filtered)
     env["PATH"] = f"{venv_dir}/bin:{env.get('PATH', '')}"
 
     log_info("Running CMake configuration...")
