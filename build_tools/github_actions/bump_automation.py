@@ -73,6 +73,10 @@ SUBMODULE_CONFIG = {
         "updater": "submodule-only",
         # We will reuse the rocm-systems token for now.
         "token_key": "systems",
+        # Changes to mesa-fork can run a limited matrix of CI jobs:
+        #   * Build for all gfx archs
+        #   * mesa-fork tests only (no impact on other project builds/tests)
+        "labels": [*COMMON_CI_LABELS, "test:rocdecode", "test:rocjpeg"],
     },
 }
 
