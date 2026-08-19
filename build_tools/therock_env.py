@@ -250,6 +250,33 @@ def ensure_submodules():
         log_success("Git submodules initialized successfully.")
 
 
+def apply_runtime_patches():
+    """Apply necessary GCC 15 and Ubuntu 26.04 compatibility patches in-place to submodules."""
+    # 1. MIOpen <ciso646> -> <version> fix
+    miopen_header = REPO_ROOT / "rocm-libraries/projects/miopen/src/include/miopen/serializable.hpp"
+    if miopen_header.is_file():
+        content = miopen_header.read_text()
+        if "#include <ciso646>" in content and "#if __has_include(<version>)" not in content:
+            log_info("Applying GCC 15 <version> compatibility patch to MIOpen...")
+            patched = content.replace(
+                "#include <ciso646>",
+                "#if __has_include(<version>)\n#include <version>\n#else\n#include <ciso646>\n#endif",
+            )
+            miopen_header.write_text(patched)
+
+    # 2. rocprofiler-sdk sqlite3 public linkage fix
+    rocprof_cmake = REPO_ROOT / "rocm-systems/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt"
+    if rocprof_cmake.is_file():
+        content = rocprof_cmake.read_text()
+        if "PRIVATE\n            rocprofiler-sdk::rocprofiler-sdk-sqlite3" in content:
+            log_info("Applying SQLite3 PUBLIC linkage patch to rocprofiler-sdk...")
+            patched = content.replace(
+                "PRIVATE\n            rocprofiler-sdk::rocprofiler-sdk-sqlite3",
+                "PUBLIC\n            rocprofiler-sdk::rocprofiler-sdk-sqlite3",
+            )
+            rocprof_cmake.write_text(patched)
+
+
 def ensure_venv(python_version: str, venv_dir: Path | None = None, force_recreate: bool = False) -> tuple[Path, Path]:
     """Ensure a virtual environment for the given Python version exists with dependencies installed."""
     uv_bin = find_uv()
@@ -525,8 +552,9 @@ def cmd_build(args):
     log_info(f"Build Directory   : \033[1;36m{build_dir}\033[0m")
     log_info(f"============================================================")
 
-    # 0. Ensure git submodules are present
+    # 0. Ensure git submodules are present and patches applied
     ensure_submodules()
+    apply_runtime_patches()
 
     # 1. Setup / ensure virtualenv
     custom_venv_dir = getattr(args, "venv_dir", None)
