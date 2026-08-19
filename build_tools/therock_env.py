@@ -30,21 +30,9 @@ VENV_BASE_DIR = REPO_ROOT.parent.parent if REPO_ROOT.parent.name.startswith("ven
 
 # Predefined modular presets for experiments
 PRESETS = {
-    "hip": {
-        "name": "hip",
-        "description": "Minimal HIP Runtime + AMD Clang Compiler + rocminfo (Fastest ~20-30m)",
-        "cmake_flags": [
-            "-DTHEROCK_ENABLE_ALL=OFF",
-            "-DTHEROCK_ENABLE_COMPILER=ON",
-            "-DTHEROCK_ENABLE_CORE=ON",
-            "-DTHEROCK_ENABLE_CORE_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_CORE_AMDSMI=ON",
-        ],
-    },
-    "llm-inference": {
-        "name": "llm-inference",
-        "description": "LLM Inference (llama.cpp, vLLM, Ollama, ExLlamaV2) (Fast ~30-35m)",
+    "llm": {
+        "name": "llm",
+        "description": "LLM Inference & LoRA/QLoRA Fine-Tuning (vLLM, llama.cpp, Ollama, Unsloth, HuggingFace) (~30-35m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -58,9 +46,23 @@ PRESETS = {
             "-DTHEROCK_ENABLE_HIPTENSOR=ON",
         ],
     },
-    "cv-vision": {
-        "name": "cv-vision",
-        "description": "Computer Vision & Video Processing (RPP, rocDecode, rocJPEG, Mesa) (~25-35m)",
+    "ai-full": {
+        "name": "ai-full",
+        "description": "Full AI Training & Vision/CNN Stack (PyTorch Training, MIOpen, Composable Kernel, RCCL, hipDNN) (~3.5-4.5h)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_MATH_LIBS=ON",
+            "-DTHEROCK_ENABLE_ML_LIBS=ON",
+            "-DTHEROCK_ENABLE_MIOPEN=ON",
+            "-DTHEROCK_ENABLE_RCCL=ON",
+        ],
+    },
+    "vulkan-media": {
+        "name": "vulkan-media",
+        "description": "Graphics & Video Codecs (AMD Mesa Vulkan, rocDecode 4K/8K, rocJPEG, RPP) (~25-35m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -73,34 +75,21 @@ PRESETS = {
             "-DTHEROCK_ENABLE_RPP=ON",
         ],
     },
-    "vulkan": {
-        "name": "vulkan",
-        "description": "HIP + AMD Mesa (Vulkan/VAAPI) + rocDecode + rocJPEG (Multimedia) (~25-35m)",
+    "core-hip": {
+        "name": "core-hip",
+        "description": "Minimal Foundation Engine (AMD Clang 23 Compiler + HIP Runtime + rocminfo) (~20-25m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
             "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_CORE_RUNTIME=ON",
             "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON",
-            "-DTHEROCK_ENABLE_MEDIA_LIBS=ON",
-            "-DTHEROCK_ENABLE_ROCDECODE=ON",
-            "-DTHEROCK_ENABLE_ROCJPEG=ON",
+            "-DTHEROCK_ENABLE_CORE_AMDSMI=ON",
         ],
     },
-    "math": {
-        "name": "math",
-        "description": "HIP + Math Libraries (rocBLAS, hipBLASLt, rocRAND, rocPRIM, rocThrust, rocSOLVER, rocFFT)",
-        "cmake_flags": [
-            "-DTHEROCK_ENABLE_ALL=OFF",
-            "-DTHEROCK_ENABLE_COMPILER=ON",
-            "-DTHEROCK_ENABLE_CORE=ON",
-            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_MATH_LIBS=ON",
-        ],
-    },
-    "hpc": {
-        "name": "hpc",
-        "description": "Scientific & HPC Computing (BLAS, FFT, SOLVER, SPARSE, ALUTION, PRIM)",
+    "math-hpc": {
+        "name": "math-hpc",
+        "description": "Scientific & HPC Math (rocBLAS, hipBLASLt, rocFFT, rocSOLVER, rocSPARSE, rocALUTION, rocRAND)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -108,31 +97,6 @@ PRESETS = {
             "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
             "-DTHEROCK_ENABLE_MATH_LIBS=ON",
             "-DTHEROCK_ENABLE_ROCALUTION=ON",
-        ],
-    },
-    "ai": {
-        "name": "ai",
-        "description": "PyTorch / JAX AI Stack (HIP + Math + MIOpen + Composable Kernel + RCCL + hipDNN)",
-        "cmake_flags": [
-            "-DTHEROCK_ENABLE_ALL=OFF",
-            "-DTHEROCK_ENABLE_COMPILER=ON",
-            "-DTHEROCK_ENABLE_CORE=ON",
-            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_MATH_LIBS=ON",
-            "-DTHEROCK_ENABLE_ML_LIBS=ON",
-            "-DTHEROCK_ENABLE_MIOPEN=ON",
-            "-DTHEROCK_ENABLE_RCCL=ON",
-        ],
-    },
-    "hipify": {
-        "name": "hipify",
-        "description": "CUDA to HIP Source Code Translation Tools (HIPIFY + Clang)",
-        "cmake_flags": [
-            "-DTHEROCK_ENABLE_ALL=OFF",
-            "-DTHEROCK_ENABLE_COMPILER=ON",
-            "-DTHEROCK_ENABLE_CORE=ON",
-            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_HIPIFY=ON",
         ],
     },
     "profiler": {
@@ -150,6 +114,17 @@ PRESETS = {
             "-DTHEROCK_ENABLE_ROCPROFSYS=ON",
         ],
     },
+    "hipify": {
+        "name": "hipify",
+        "description": "CUDA to HIP Translation Tools (HIPIFY + Clang)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_HIPIFY=ON",
+        ],
+    },
     "opencl": {
         "name": "opencl",
         "description": "OpenCL & HIP Runtimes (ocl-clr, hip-clr, OpenCL ICD)",
@@ -163,7 +138,7 @@ PRESETS = {
     },
     "full": {
         "name": "full",
-        "description": "Complete ROCm Stack (All 50+ libraries and tools)",
+        "description": "Complete Monolithic ROCm Stack (All 50+ libraries and tools) (~4.5-5.5h)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=ON",
         ],
@@ -172,10 +147,24 @@ PRESETS = {
 
 # Aliases for convenience
 PRESET_ALIASES = {
-    "llm": "llm-inference",
-    "inference": "llm-inference",
-    "vision": "cv-vision",
-    "cv": "cv-vision",
+    "llm-inference": "llm",
+    "lora": "llm",
+    "finetuning": "llm",
+    "inference": "llm",
+    "ai": "ai-full",
+    "training": "ai-full",
+    "pytorch": "ai-full",
+    "vulkan": "vulkan-media",
+    "media": "vulkan-media",
+    "vision": "vulkan-media",
+    "cv": "vulkan-media",
+    "cv-vision": "vulkan-media",
+    "hip": "core-hip",
+    "core": "core-hip",
+    "minimal": "core-hip",
+    "math": "math-hpc",
+    "hpc": "math-hpc",
+    "scientific": "math-hpc",
 }
 
 

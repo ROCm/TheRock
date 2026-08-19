@@ -170,41 +170,59 @@ source "$HOME/.cargo/env"
 
 ---
 
-### Step 3: Build Your Desired Preset (in ~20 to 35 minutes)
+### Step 3: Choose Your Workload Preset
 
-Choose **one** of the following options based on your target workload:
+Select the preset matching your project goals:
 
-#### ⚡ Option A: AI & LLM Inference (llama.cpp, vLLM, Ollama) - Recommended!
+#### ⚡ Tier 1: AI & LLM Workloads (Recommended for Most Users)
+
+##### Option A: LLM Inference & LoRA / QLoRA Fine-Tuning (`llm`) - Most Popular!
 > **Build Time: ~30 - 35 minutes**  
-> Compiles Clang 23, HIP runtime, rocBLAS, hipBLASLt, rocPRIM, rocRAND, and hipTensor.
+> **Included**: Clang 23, HIP runtime, `rocBLAS`, `hipBLASLt`, `rocPRIM`, `rocRAND`, `hipTensor`.  
+> **Use Case**: Running **vLLM, Ollama, llama.cpp (HIP)**, and **LoRA / QLoRA / SFT fine-tuning with Unsloth / Hugging Face**.  
+> *(Note: LLMs use matrix multiplication, so they do NOT need heavy convolution libraries like MIOpen!)*
 ```bash
 ./therock-env build --preset llm --python 3.14
 ```
 
-#### ⚡ Option B: Minimal HIP Runtime (Fastest Build)
-> **Build Time: ~20 - 25 minutes**  
-> Compiles Clang 23 compiler, ROCR, HIP runtime (`clr`), AMDSMI, and `rocminfo`.
+##### Option B: Full PyTorch AI Training & Vision/CNN Stack (`ai-full`)
+> **Build Time: ~3.5 - 4.5 hours**  
+> **Included**: Everything in `llm` + `MIOpen` (Deep Learning Convolutions) + `RCCL` (Multi-GPU Distributed) + `hipDNN`.  
+> **Use Case**: Full pre-training from scratch, CNN/Vision models (ResNet, YOLO), and Stable Diffusion.
 ```bash
-./therock-env build --preset hip --python 3.14
+./therock-env build --preset ai-full --python 3.14
 ```
 
-#### ⚡ Option C: Multimedia & Vulkan Acceleration (rocDecode + rocJPEG)
+---
+
+#### ⚡ Tier 2: Graphics & Multimedia Acceleration
+
+##### Option C: Vulkan & Hardware Video Acceleration (`vulkan-media`)
 > **Build Time: ~25 - 35 minutes**  
-> Compiles AMD Mesa (RADV Vulkan), hardware video decoder (`rocDecode`), and JPEG decoder (`rocJPEG`).
+> **Included**: AMD Mesa (RADV Vulkan), hardware video decoder (`rocDecode` 4K/8K AV1/HEVC), and `rocJPEG`.  
+> **Use Case**: Vulkan graphics rendering, hardware video decoding pipelines, and `llama.cpp` Vulkan backend.
 ```bash
-./therock-env build --preset vulkan --python 3.14
+./therock-env build --preset vulkan-media --python 3.14
 ```
 
-#### ⚡ Option D: Math & Scientific Computing (FFT, Matrix Solvers)
-> **Build Time: ~1.5 - 2 hours**
+---
+
+#### ⚡ Tier 3: Core Foundations & Scientific HPC
+
+##### Option D: Minimal HIP Foundation Engine (`core-hip`)
+> **Build Time: ~20 - 25 minutes**  
+> **Included**: AMD Clang 23 compiler, ROCR, HIP runtime (`clr`), AMDSMI, and `rocminfo`.  
+> **Use Case**: Lightweight C++/HIP kernel development and basic GPU testing.
 ```bash
-./therock-env build --preset math --python 3.14
+./therock-env build --preset core-hip --python 3.14
 ```
 
-#### ⚡ Option E: Full PyTorch AI Training Stack (with MIOpen & RCCL)
-> **Build Time: ~3.5 - 4.5 hours**
+##### Option E: Scientific Math & Simulation (`math-hpc`)
+> **Build Time: ~1.5 - 2 hours**  
+> **Included**: HIP + `rocBLAS` + `rocFFT` + `rocSOLVER` + `rocSPARSE` + `rocALUTION`.  
+> **Use Case**: Fast Fourier Transforms (FFT), sparse matrix solvers, and physics simulations.
 ```bash
-./therock-env build --preset ai --python 3.14
+./therock-env build --preset math-hpc --python 3.14
 ```
 
 ---
@@ -217,11 +235,11 @@ Simply activate your virtual environment, and the built ROCm binaries will take 
 
 ```bash
 # 1. Activate the Python virtual environment (ROCm paths are auto-loaded!)
-source ~/virtualenv/venv314/.venv314/bin/activate
+source ~/virtualenv/therock-7.14/py314-llm/.venv/bin/activate
 
 # 2. Verify binary location (points to your venv, NOT system /opt/rocm)
 which rocminfo
-# Output: /home/analogbox/virtualenv/venv314/.venv314/bin/rocminfo
+# Output: /home/analogbox/virtualenv/therock-7.14/py314-llm/.venv/bin/rocminfo
 
 # 3. Check GPU detection
 rocminfo
@@ -242,19 +260,17 @@ Agent 2: gfx1151 / AMD Radeon 8060S Graphics (GPU, 40 Compute Units)
 
 ---
 
-## 🍕 Available Presets
+## 🍕 Available Presets Overview
 
-| Preset Name | Aliases | Included Libraries & Components | Recommended Use Case | Build Time |
-| :--- | :--- | :--- | :--- | :--- |
-| **`llm-inference`** | **`llm`**, `inference` | HIP + `rocBLAS` + `hipBLASLt` + `rocPRIM` + `hipTensor` | **vLLM, llama.cpp, Ollama, ExLlamaV2** | **~30 min** |
-| **`hip`** | `hip` | AMD Clang 23 + HIP Runtime + AMDSMI + `rocminfo` | Lightweight C++/HIP development | **~20 min** |
-| **`cv-vision`** | `vision`, `cv` | HIP + `RPP` + `rocDecode` + `rocJPEG` + AMD Mesa | OpenCV, realtime video AI preprocessing | **~30 min** |
-| **`vulkan`** | `vulkan` | HIP + AMD Mesa (RADV Vulkan) + Video codecs | Vulkan graphics & hardware decoding | **~30 min** |
-| **`math`** | `math` | HIP + `rocBLAS` + `rocFFT` + `rocRAND` + `rocSOLVER` | FFT signal processing & numerical math | ~1.5 hours |
-| **`hpc`** | `hpc` | HIP + Math Stack + `rocALUTION` + `rocSPARSE` | Physics simulations & engineering HPC | ~1.5 hours |
-| **`ai`** | `ai` | HIP + Math + `MIOpen` (CK) + `RCCL` + `hipDNN` | Full PyTorch / JAX training framework | ~4 hours |
-| **`profiler`** | `profiler` | `rocprofiler-sdk`, `rocprofiler-systems`, `rocgdb` | Performance tracing & GPU debugging | ~40 min |
-| **`full`** | `full` | Complete ROCm stack (all 50+ libraries) | Full distribution release build | ~5 hours |
+| Workload Tier | Preset Name | Convenient Aliases | Included Components | Recommended Use Case | Build Time |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 1 (AI / LLM)** | **`llm`** | `llm-inference`, `lora`, `finetuning` | HIP + `rocBLAS` + `hipBLASLt` + `rocPRIM` + `hipTensor` | **vLLM, llama.cpp (HIP), Ollama, LoRA/QLoRA Fine-Tuning** | **~30 min** |
+| **Tier 1 (AI / LLM)** | **`ai-full`** | `ai`, `training`, `pytorch` | `llm` stack + `MIOpen` (CK) + `RCCL` + `hipDNN` | Full PyTorch training, CNN/Vision, Stable Diffusion | ~4 hours |
+| **Tier 2 (Media)** | **`vulkan-media`** | `vulkan`, `media`, `vision`, `cv` | AMD Mesa (RADV Vulkan) + `rocDecode` + `rocJPEG` | Vulkan graphics, 4K/8K video decode, llama.cpp (Vulkan) | **~25 min** |
+| **Tier 3 (Engine)** | **`core-hip`** | `hip`, `core`, `minimal` | AMD Clang 23 + HIP Runtime + AMDSMI + `rocminfo` | Minimal C++/HIP kernel development | **~20 min** |
+| **Tier 3 (Math)** | **`math-hpc`** | `math`, `hpc`, `scientific` | `rocBLAS` + `rocFFT` + `rocSOLVER` + `rocSPARSE` + `rocALUTION` | FFT signal processing, matrix solvers, simulations | ~1.5 hours |
+| **Tools** | **`profiler`** | `profiler` | `rocprofiler-sdk`, `rocprofiler-systems`, `rocgdb` | GPU performance tracing & interactive debugging | ~40 min |
+| **Monolithic** | **`full`** | `full` | Complete ROCm stack (all 50+ libraries) | Full monolithic distribution release build | ~5 hours |
 
 ---
 
