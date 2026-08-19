@@ -27,7 +27,7 @@ __pycache__
 /optional-sources/
 
 # Output directories.
-/build/
-/install/
+/build*/
+/install*/
 /output-*/
 /out/
