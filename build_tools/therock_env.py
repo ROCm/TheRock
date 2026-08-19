@@ -291,14 +291,22 @@ def ensure_submodules():
         for candidate in Path.home().glob("virtualenv/**/TheRock"):
             if candidate != REPO_ROOT and (candidate / "rocm-systems/projects/hip/VERSION").is_file() and (candidate / "compiler/amd-llvm/llvm/CMakeLists.txt").is_file():
                 log_info(f"Reusing existing local submodules from: {candidate}")
-                for sm in ["compiler", "rocm-systems", "rocm-libraries", "base", "math-libs", "third-party", "debug-tools"]:
-                    src_sm = candidate / sm
-                    dst_sm = REPO_ROOT / sm
-                    if src_sm.is_dir():
-                        shutil.copytree(src_sm, dst_sm, dirs_exist_ok=True)
-                if hip_ver.is_file() and llvm_cmake.is_file():
-                    log_success("Local submodules linked successfully.")
-                    return
+                try:
+                    for sm in ["compiler", "rocm-systems", "rocm-libraries", "base", "math-libs", "third-party", "debug-tools"]:
+                        src_sm = candidate / sm
+                        dst_sm = REPO_ROOT / sm
+                        if src_sm.is_dir():
+                            shutil.copytree(
+                                src_sm,
+                                dst_sm,
+                                dirs_exist_ok=True,
+                                ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "*.pack", "*.idx", "*.rev"),
+                            )
+                    if hip_ver.is_file() and llvm_cmake.is_file():
+                        log_success("Local submodules linked successfully.")
+                        return
+                except Exception as e:
+                    log_warning(f"Failed to copy all local submodules ({e}). Falling back to git clone.")
 
         log_info("Initializing all top-level git submodules using fast shallow clone (--depth 1)...")
         subprocess.check_call(["git", "submodule", "update", "--init", "--depth", "1"], cwd=str(REPO_ROOT))

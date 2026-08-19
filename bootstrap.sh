@@ -134,7 +134,16 @@ if [ ! -d "$SOURCE_DIR/.git" ]; then
         if [ -d "$candidate/rocm-libraries" ] && [ -d "$candidate/compiler/amd-llvm" ] && [ "$candidate" != "$SOURCE_DIR" ]; then
             echo -e "  \033[1;32m✓ Found local submodule cache at:\033[0m $candidate"
             echo -e "  \033[1;33m→ Copying local submodules (0 MB internet download needed)...\033[0m"
-            cp -a "$candidate/compiler" "$candidate/rocm-systems" "$candidate/rocm-libraries" "$candidate/base" "$candidate/math-libs" "$candidate/third-party" "$candidate/debug-tools" "$SOURCE_DIR/" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                for sm in compiler rocm-systems rocm-libraries base math-libs third-party debug-tools; do
+                    if [ -d "$candidate/$sm" ]; then
+                        mkdir -p "$SOURCE_DIR/$sm"
+                        rsync -a --exclude='.git' --exclude='*.pack' --exclude='*.idx' --exclude='*.rev' "$candidate/$sm/" "$SOURCE_DIR/$sm/" 2>/dev/null || true
+                    fi
+                done
+            else
+                cp -a "$candidate/compiler" "$candidate/rocm-systems" "$candidate/rocm-libraries" "$candidate/base" "$candidate/math-libs" "$candidate/third-party" "$candidate/debug-tools" "$SOURCE_DIR/" 2>/dev/null || true
+            fi
             echo -e "  \033[1;32m✓ Local submodules linked successfully!\033[0m"
             break
         fi
