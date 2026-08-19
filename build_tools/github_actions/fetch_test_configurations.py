@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
+import emulation
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
@@ -855,6 +856,25 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Also run these against an emulated GPU, pinned to a cheap category
+        # and told it is emulated. See docs/development/adding_tests.md.
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
+        "emulate_env": {"ROCRTST_PLATFORM_OVERRIDE": "EMULATOR"},
+    },
+    # Checks that mirage, rocjitsu and the ROCr runtime in the artifacts agree.
+    # When this fails, every other emulated job is expected to fail too.
+    "emulation": {
+        "job_name": "emulation",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 3,
+        "test_script": f"python {_get_script_path('test_emulation.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "emulate": "rocjitsu",
+        "emulate_only": True,
     },
     # hipTensor tests
     "hiptensor": {
@@ -922,6 +942,11 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
+    # The mirage profile for this family, or None if we do not emulate it.
+    emulate_profile = emulation.get_emulated_profile(amdgpu_families, platform)
+    if emulate_profile:
+        logging.info(f"Emulating {amdgpu_families} with profile {emulate_profile}")
+
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
@@ -950,6 +975,17 @@ def run():
     all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
+        emulator = selected_matrix[key].get("emulate")
+        emulate_only = selected_matrix[key].get("emulate_only", False)
+
+        # Components that only make sense under an emulator are skipped
+        # wholesale on families we do not emulate.
+        if emulate_only and not (emulator and emulate_profile):
+            logging.info(
+                f"Excluding job {job_name} since it only runs emulated and "
+                f"family {amdgpu_families} is not emulated on {platform}"
+            )
+            continue
 
         # If the test is disabled for a particular platform, skip the test.
         # Check both the family group string (e.g. "gfx120X-all") and the individual
@@ -994,7 +1030,11 @@ def run():
         if platform in selected_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            if emulate_only:
+                # This entry is only a template for the emulated variant below.
+                logging.info(f"Including job {job_name} emulated only")
+            else:
+                logging.info(f"Including job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
             # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
@@ -1054,6 +1094,19 @@ def run():
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
+            # Derived *before* the multi-GPU block below, which `continue`s
+            # when the family has no multi-GPU pool -- an emulated variant needs
+            # no GPU at all.
+            if emulator and emulate_profile:
+                emulated_job = emulation.build_emulated_job(
+                    job_config_data, emulator, emulate_profile
+                )
+                logging.info(
+                    f"Including job {emulated_job['job_name']} on the CPU runner "
+                    f"(timeout {emulated_job['timeout_minutes']} min)"
+                )
+                all_components.append(emulated_job)
+
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
@@ -1075,7 +1128,10 @@ def run():
                     )
                     continue
 
-            all_components.append(job_config_data)
+            if not emulate_only:
+                for emulation_key in emulation.MATRIX_KEYS:
+                    job_config_data.pop(emulation_key, None)
+                all_components.append(job_config_data)
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
