@@ -245,8 +245,8 @@ def ensure_submodules():
                     log_success("Local submodules linked successfully.")
                     return
 
-        log_info("Initializing git submodules using fast shallow clone (--depth 1)...")
-        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive", "--depth", "1"], cwd=str(REPO_ROOT))
+        log_info("Initializing top-level git submodules using fast shallow clone (--depth 1)...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--depth", "1", "rocm-systems", "rocm-libraries", "third-party"], cwd=str(REPO_ROOT))
         log_success("Git submodules initialized successfully.")
 
 
