@@ -618,16 +618,16 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
     return an.name in [
+        "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
 
 
 # File-path allowlist for the rocm-profiler wheel, applied on top of
-# profiler_artifact_filter(). rocprofiler-systems' own ProfilerHub.cmake
-# vendors profiler-hub as a runtime .so dependency (NEEDED libprofiler-hub.so.0);
-# it stages into the same lib/ dir as librocprof-sys* but needs its own glob
-# entry here, or it gets silently dropped from the wheel.
+# profiler_artifact_filter(). librocprof-sys* keeps its NEEDED entry on
+# libprofiler-hub.so.0, but the library now ships in profiler-hub's own
+# artifact, so that name must appear in the filter above as well as here.
 PROFILER_WHEEL_INCLUDES = [
     # rocprofiler-systems
     "bin/rocprof-sys-*",
