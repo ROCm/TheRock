@@ -995,7 +995,9 @@ class ArgvFromCiEnvTest(unittest.TestCase):
         }
         for value in ("true", "YES"):
             with self.subTest(value=value):
-                with patch.dict(os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False):
+                with patch.dict(
+                    os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False
+                ):
                     argv = native_linux_package_install_test._argv_from_ci_env()
                 self.assertIsNotNone(argv)
                 self.assertIn("--with-uninstall", argv)
@@ -1010,7 +1012,9 @@ class ArgvFromCiEnvTest(unittest.TestCase):
         }
         for value in ("0", "false", "NO"):
             with self.subTest(value=value):
-                with patch.dict(os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False):
+                with patch.dict(
+                    os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False
+                ):
                     argv = native_linux_package_install_test._argv_from_ci_env()
                 self.assertIsNotNone(argv)
                 self.assertNotIn("--with-uninstall", argv)
