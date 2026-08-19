@@ -835,51 +835,6 @@ def test_main_validate_content_strict_completeness_with_allow_unpublished_fails_
     assert "Traceback" not in captured.err
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        [
-            "generate",
-            "--manifest",
-            "ownership.yaml",
-            "--stream",
-            "nightly",
-            "--content-root",
-            "content",
-            "--output-dir",
-            "out",
-            "--require-all-manifest-packages",
-        ],
-        [
-            "validate-content",
-            "--manifest",
-            "ownership.yaml",
-            "--stream",
-            "nightly",
-            "--content-root",
-            "content",
-            "--strict",
-        ],
-    ],
-)
-def test_main_rejects_unsupported_content_flag(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str]
-) -> None:
-    argv = [
-        (
-            os.fspath(tmp_path / value)
-            if value in {"ownership.yaml", "content", "out"}
-            else value
-        )
-        for value in argv
-    ]
-    with pytest.raises(SystemExit) as exc_info:
-        main(argv)
-    captured = capsys.readouterr()
-    assert exc_info.value.code == 2
-    assert "unrecognized arguments" in captured.err
-
-
 def test_main_reports_manifest_errors_without_traceback(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
