@@ -123,9 +123,11 @@ class BuildBreadcrumbBodyTest(unittest.TestCase):
 class BuildUnmappedSummaryBodyTest(unittest.TestCase):
     def test_lists_commits_with_wording_matching_reverted_flag(self):
         included = post_bump_breadcrumbs.build_unmapped_summary_body(
+            existing_body=None,
             reverted=False,
             repo="ROCm/rocm-systems",
             unmapped_shas=["a" * 40, "b" * 40],
+            event_key="k1",
         )
         self.assertTrue(included.startswith(post_bump_breadcrumbs.UNMAPPED_MARKER))
         self.assertIn("included in", included)
@@ -136,9 +138,11 @@ class BuildUnmappedSummaryBodyTest(unittest.TestCase):
         )
 
         reverted = post_bump_breadcrumbs.build_unmapped_summary_body(
+            existing_body=None,
             reverted=True,
             repo="ROCm/rocm-systems",
             unmapped_shas=["c" * 40],
+            event_key="k2",
         )
         self.assertIn("removed from", reverted)
 
@@ -214,8 +218,8 @@ class ProcessBumpTest(unittest.TestCase):
         )
 
     def test_posts_comment_to_each_resolved_pr(self):
-        """A bump range spanning multiple upstream PRs must post a comment
-        to each independently, not just the first."""
+        """A bump range spanning multiple upstream PRs posts a comment to
+        each of them."""
         self.mocks["resolve_prs_for_commits"].return_value = ({10, 20}, [])
 
         self._run()
@@ -261,8 +265,8 @@ class HandlePostBreadcrumbsDispatchTest(unittest.TestCase):
         process_mock.assert_not_called()
 
     def test_processes_each_changed_submodule_independently(self):
-        """A single push touching two monitored submodules must post
-        breadcrumbs for both, not just the first detected."""
+        """A single push touching two monitored submodules posts breadcrumbs
+        for both."""
         changed_a = {"name": "rocm-systems", "repo": "ROCm/rocm-systems"}
         changed_b = {"name": "rocm-libraries", "repo": "ROCm/rocm-libraries"}
         tokens = {"systems": "tok"}
@@ -284,6 +288,8 @@ class HandlePostBreadcrumbsDispatchTest(unittest.TestCase):
         )
 
     def test_one_submodule_failure_does_not_block_the_next(self):
+        """The second submodule is still attempted after the first fails,
+        and the overall call raises once both have been attempted."""
         changed_a = {"name": "rocm-systems", "repo": "ROCm/rocm-systems"}
         changed_b = {"name": "rocm-libraries", "repo": "ROCm/rocm-libraries"}
         tokens = {"systems": "tok"}
@@ -296,7 +302,8 @@ class HandlePostBreadcrumbsDispatchTest(unittest.TestCase):
             "process_bump",
             side_effect=[RuntimeError("boom"), None],
         ) as process_mock:
-            post_bump_breadcrumbs.handle_post_breadcrumbs("aaa", "bbb", tokens)
+            with self.assertRaisesRegex(RuntimeError, "rocm-systems"):
+                post_bump_breadcrumbs.handle_post_breadcrumbs("aaa", "bbb", tokens)
 
         self.assertEqual(process_mock.call_count, 2)
 
@@ -305,8 +312,8 @@ class DetectChangedSubmodulesTest(unittest.TestCase):
     """Tests for detect_changed_submodules()."""
 
     def test_returns_details_for_every_changed_submodule(self):
-        """A push touching both rocm-systems and rocm-libraries must return
-        correct details for both, not silently drop the second one."""
+        """A push touching both rocm-systems and rocm-libraries returns
+        correct details for both."""
         with mock.patch.object(
             post_bump_breadcrumbs,
             "submodule_changed",

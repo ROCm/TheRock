@@ -6,9 +6,10 @@
 commits land in (or get reverted out of) TheRock via a submodule bump.
 
 Posts a single sticky comment per upstream PR (see BREADCRUMB_MARKER) with a
-newest-first history list of every land/revert event, and a separate summary
-comment on the TheRock bump PR itself for any commits that couldn't be
-resolved to an upstream PR.
+newest-first history list of every land/revert event, and a separate sticky
+summary comment on the TheRock bump PR itself (see UNMAPPED_MARKER) for any
+commits that couldn't be resolved to an upstream PR -- one section per
+submodule, since a single push can bump more than one.
 
 Example usage:
   python build_tools/github_actions/post_bump_breadcrumbs.py \\
@@ -60,6 +61,7 @@ HISTORY_HEADER = "### TheRock Submodule Bump Activity\n_Newest first_"
 # Marker for the (single-use, no history needed) summary comment posted on
 # the TheRock bump PR itself for commits with no resolvable upstream PR.
 UNMAPPED_MARKER = "<!-- therock-bump-breadcrumb-unmapped -->"
+UNMAPPED_HEADER = "### TheRock Submodule Bump Activity\n_No upstream PR found for these commits_"
 
 _COMMENT_SEARCH_MAX_PAGES = 10
 _COMMENT_SEARCH_PER_PAGE = 100
@@ -190,26 +192,38 @@ def build_breadcrumb_body(
     return f"{BREADCRUMB_MARKER}\n{HISTORY_HEADER}\n\n{entries}\n"
 
 
-def build_unmapped_summary_body(reverted, repo, unmapped_shas):
-    """Builds the summary comment posted on the TheRock bump PR for commits
-    that could not be resolved to an upstream PR (e.g. pushed directly to the
-    default branch)."""
+def build_unmapped_summary_entry(reverted, repo, unmapped_shas, event_key):
+    """Builds a single submodule's section of the unmapped-commit summary."""
     verb = "removed from" if reverted else "included in"
     lines = [
-        UNMAPPED_MARKER,
-        "### TheRock Submodule Bump Activity",
-        "_No upstream PR found for these commits_",
-        "",
-        (
-            f"The following {len(unmapped_shas)} commit(s) were {verb} this bump "
-            f"but have no associated pull request on `{repo}`:"
-        ),
+        f"The following {len(unmapped_shas)} commit(s) were {verb} this bump "
+        f"but have no associated pull request on `{repo}`:"
     ]
     lines.extend(
         f"- [{sha[:7]}](https://github.com/{repo}/commit/{sha})"
         for sha in unmapped_shas
     )
-    return "\n".join(lines) + "\n"
+    lines.append(event_key_marker(event_key))
+    return "\n".join(lines)
+
+
+def build_unmapped_summary_body(existing_body, reverted, repo, unmapped_shas, event_key):
+    """Builds/updates the sticky unmapped-commit summary comment on the
+    TheRock bump PR, with one section per submodule-bump event, keyed by
+    `event_key`.
+    """
+    if history_has_event(existing_body, event_key):
+        return existing_body
+
+    new_section = build_unmapped_summary_entry(reverted, repo, unmapped_shas, event_key)
+
+    prior_sections = ""
+    if existing_body and UNMAPPED_HEADER in existing_body:
+        prior_sections = existing_body.split(UNMAPPED_HEADER, 1)[1].strip()
+
+    sections = f"{new_section}\n\n{prior_sections}" if prior_sections else new_section
+
+    return f"{UNMAPPED_MARKER}\n{UNMAPPED_HEADER}\n\n{sections}\n"
 
 
 def get_submodule_url(path):
@@ -315,32 +329,45 @@ def process_bump(changed, therock_after_sha, tokens, dry_run=False):
                 "no TheRock PR to summarize them on"
             )
         else:
-            body = build_unmapped_summary_body(reverted, repo, unmapped_shas)
-            if dry_run:
+            existing_unmapped_body = find_existing_comment_body(
+                therock_pr_number, UNMAPPED_MARKER, THEROCK_REPO, github_api
+            )
+            if history_has_event(existing_unmapped_body, event_key):
                 print(
-                    f"[DRY RUN] Would post unmapped-commit summary "
-                    f"({len(unmapped_shas)} commits) to "
-                    f"{THEROCK_REPO}#{therock_pr_number}:\n{body}"
+                    f"[INFO] {THEROCK_REPO}#{therock_pr_number} already has an "
+                    f"unmapped-commit entry for this event ({event_key}); "
+                    "skipping (idempotent rerun)."
                 )
             else:
-                gha_update_pr_comment(
-                    pr_number=therock_pr_number,
-                    marker=UNMAPPED_MARKER,
-                    body=body,
-                    github_repository=THEROCK_REPO,
-                    github_api=github_api,
+                body = build_unmapped_summary_body(
+                    existing_unmapped_body, reverted, repo, unmapped_shas, event_key
                 )
-                print(
-                    f"[INFO] Posted unmapped-commit summary "
-                    f"({len(unmapped_shas)} commits) to "
-                    f"{THEROCK_REPO}#{therock_pr_number}"
-                )
+                if dry_run:
+                    print(
+                        f"[DRY RUN] Would post unmapped-commit summary "
+                        f"({len(unmapped_shas)} commits) to "
+                        f"{THEROCK_REPO}#{therock_pr_number}:\n{body}"
+                    )
+                else:
+                    gha_update_pr_comment(
+                        pr_number=therock_pr_number,
+                        marker=UNMAPPED_MARKER,
+                        body=body,
+                        github_repository=THEROCK_REPO,
+                        github_api=github_api,
+                    )
+                    print(
+                        f"[INFO] Posted unmapped-commit summary "
+                        f"({len(unmapped_shas)} commits) to "
+                        f"{THEROCK_REPO}#{therock_pr_number}"
+                    )
 
 
 def handle_post_breadcrumbs(before, after, tokens, dry_run=False):
     """Notifies upstream PRs for every monitored submodule that changed
-    between `before` and `after`, processing each independently so one
-    submodule's failure doesn't block breadcrumbs for the others."""
+    between `before` and `after`. Each submodule is attempted
+    independently; if any fail, raises once at the end.
+    """
     changed_list = detect_changed_submodules(before, after)
     if not changed_list:
         print(
@@ -349,11 +376,19 @@ def handle_post_breadcrumbs(before, after, tokens, dry_run=False):
         )
         return
 
+    failures = []
     for changed in changed_list:
         try:
             process_bump(changed, after, tokens, dry_run=dry_run)
         except Exception as e:
             print(f"[WARN] Failed to process bump for {changed['name']}: {e}")
+            failures.append(f"{changed['name']}: {e}")
+
+    if failures:
+        raise RuntimeError(
+            f"Failed to process {len(failures)}/{len(changed_list)} submodule "
+            "bump(s): " + "; ".join(failures)
+        )
 
 
 def main(argv=None) -> None:
