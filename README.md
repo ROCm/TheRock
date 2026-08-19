@@ -50,9 +50,48 @@ Building the entire ROCm superproject from scratch compiles over 50 libraries an
 
 ---
 
-## 🚀 4-Step Quick Start Tutorial
+## 🚀 Quick Start & Automated Bootstrapper
 
-### Step 1: Install System Prerequisites (One-time setup)
+### ⚡ One-Line Automated Bootstrapper (`bootstrap.sh`)
+
+Instead of manually creating directories and configuring paths, run `bootstrap.sh` to automatically install `uv`, configure the hierarchical workspace, provision the isolated virtual environment, and compile your preset:
+
+```bash
+# Automated Zero-to-Hero Build (Sets up ~/virtualenv/therock-7.14/py314-llm/ in one step)
+./bootstrap.sh --rocm 7.14 --python 3.14 --preset llm
+```
+
+---
+
+### 📁 Hierarchical Multi-Version Workspace Architecture
+
+To prevent commands (`rocminfo`, `amd-smi`) and Python packages from colliding between builds and ROCm releases, the workspace is structured across 3 dimensions (**ROCm Version × Python Version × Preset**):
+
+```
+~/virtualenv/
+└── therock-7.14/                      # [ROCm / TheRock Release]
+    ├── TheRock/                       # Shared Source Repository
+    │
+    ├── py314-llm/                     # [Python 3.14 + LLM Inference Environment]
+    │   ├── .venv/                     # Dedicated venv (with hermetic rocminfo/hipcc wrappers)
+    │   └── build/                     # Dedicated Build Tree (build/dist/rocm)
+    │
+    ├── py314-vulkan/                  # [Python 3.14 + Vulkan / Multimedia Environment]
+    │   ├── .venv/
+    │   └── build/
+    │
+    └── py313-llm/                     # [Python 3.13 + LLM Environment]
+        ├── .venv/
+        └── build/
+```
+
+---
+
+### Manual 4-Step Walkthrough
+
+If you prefer to configure steps individually:
+
+#### Step 1: Install System Prerequisites (One-time setup)
 
 ```bash
 # Install essential compilers and build dependencies
@@ -71,17 +110,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --defaul
 source "$HOME/.cargo/env"
 ```
 
----
-
-### Step 2: Clone Repository & Create Virtual Environment
+#### Step 2: Provision Virtual Environment
 
 ```bash
-# 1. Create workspace directory and clone repository
-mkdir -p ~/virtualenv/venv314 && cd ~/virtualenv/venv314
-git clone https://github.com/analogbox/TheRock.git
-cd TheRock
-
-# 2. Provision Python 3.14 virtual environment with uv (takes <1 second)
+# Provision Python 3.14 virtual environment with uv (takes <1 second)
 ./therock-env setup-venv 3.14
 ```
 
