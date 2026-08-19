@@ -30,8 +30,9 @@ This fork has been completely compiled, tested, and validated on the following h
 Building the entire ROCm superproject from scratch compiles over 50 libraries and takes **~4.5 to 5.5 hours**. However, with TheRock's modular workflow, you can build **only what you need in ~20 to 35 minutes**:
 
 ```
-🍕 Python Virtual Environments (via uv):
-   Keeps Python versions (3.14, 3.13, etc.) isolated in clean, dedicated directories (~/virtualenv/venv314/).
+🍕 3-Dimensional Hierarchical Workspaces (via uv):
+   Keeps ROCm releases, Python versions (3.14, 3.13), and build presets cleanly separated
+   (e.g. ~/virtualenv/therock-7.14/py314-llm/ vs ~/virtualenv/therock-7.14/py314-vulkan/).
 
 🍔 Modular Presets:
    Instead of waiting hours for 50+ unused components, select targeted packages:
@@ -52,12 +53,23 @@ Building the entire ROCm superproject from scratch compiles over 50 libraries an
 
 ## 🚀 Quick Start & Automated Bootstrapper
 
-### ⚡ One-Line Automated Bootstrapper (`bootstrap.sh`)
+### ⚡ One-Line Zero-Install Bootstrapper (No Prior Clone Required!)
 
-Instead of manually creating directories and configuring paths, run `bootstrap.sh` to automatically install `uv`, configure the hierarchical workspace, provision the isolated virtual environment, and compile your preset:
+On a fresh machine without having cloned the repository yet, run this single command. It will **automatically install `uv`, create the hierarchical workspace directory, clone your fork repository, provision the Python 3.14 virtual environment, and compile ROCm**:
 
 ```bash
-# Automated Zero-to-Hero Build (Sets up ~/virtualenv/therock-7.14/py314-llm/ in one step)
+# Direct Single-Command Installation (Fresh Machine / Zero-Install)
+curl -fsSL https://raw.githubusercontent.com/analogbox/TheRock/feature/ubuntu-26.04-gcc15-gfx1151/bootstrap.sh | bash -s -- --rocm 7.14 --python 3.14 --preset llm
+```
+
+Or if you prefer downloading `bootstrap.sh` first:
+
+```bash
+# Download bootstrap script and run
+curl -O https://raw.githubusercontent.com/analogbox/TheRock/feature/ubuntu-26.04-gcc15-gfx1151/bootstrap.sh
+chmod +x bootstrap.sh
+
+# Run automated build (e.g. for LLM Inference)
 ./bootstrap.sh --rocm 7.14 --python 3.14 --preset llm
 ```
 
