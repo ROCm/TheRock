@@ -13,12 +13,14 @@ multi-accelerator script.
 Multi-GPU runners are scarce, so the second job is only worth its queue slot
 when full testing is asked for. Short testing, which is what a pull request
 gets, runs the suite on the 1-GPU runner alone, and a nightly asks for full
-testing one day a week rather than every night. Which day that is comes from
---run-date, the day the run was created, so a rerun repeats the matrix of the
-attempt it repeats rather than the one its own day would give.
+testing one day a week rather than every night. Which day it is comes from the
+wall clock, as it does for the PyTorch pipeline, so re-running a whole Sunday
+nightly on a later day gives that day's matrix; dispatch a full run to get the
+multi-accelerator tests back.
 """
 
 import argparse
+import calendar
 import json
 import sys
 from datetime import date, datetime, timezone
@@ -165,23 +167,23 @@ def main(argv: list[str]) -> None:
         choices=RELEASE_TYPES,
         help="Release type the build is for (default: dev)",
     )
-    parser.add_argument(
-        "--run-date",
-        type=date.fromisoformat,
-        # The day the run was created rather than the day this runs, so that a
-        # rerun repeats the matrix of the attempt it is repeating.
-        default=None,
-        help="Date the run was created, UTC YYYY-MM-DD (default: today)",
-    )
     args = parser.parse_args(argv)
 
-    today = args.run_date or today_utc()
+    today = today_utc()
     scope = resolve_scope(args.test_scope, args.release_type, today)
     print(
         f"Configuring {args.platform} JAX tests for {args.target}:"
         f" {scope} scope (release type {args.release_type},"
         f" {today} ({today:%A}) in UTC)"
     )
+    if scope == TEST_SCOPE_SHORT and args.release_type in WEEKLY_FULL_RELEASE_TYPES:
+        # Annotated so that a nightly re-run onto another day is a visible loss
+        # of the week's multi-accelerator coverage rather than a silent one.
+        print(
+            "::notice::The multi-accelerator tests run on"
+            f" {calendar.day_name[WEEKLY_FULL_WEEKDAY]}; dispatch this workflow"
+            " with test_scope full to run them today"
+        )
     matrix = build_test_matrix(
         target=args.target,
         platform=args.platform,
