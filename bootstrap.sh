@@ -68,7 +68,7 @@ echo -e "  Build Preset           : \033[1;36m$PRESET\033[0m"
 echo -e "\033[1;34m====================================================================\033[0m"
 
 # Step 1: Install System Dependencies if needed
-if [ "$INSTALL_SYSDEPS" = true ] || ! command -v ninja &> /dev/null || ! command -v cmake &> /dev/null; then
+if [ "$INSTALL_SYSDEPS" = true ] || ! command -v ninja &> /dev/null || ! command -v cmake &> /dev/null || [ ! -f /usr/include/sqlite3.h ]; then
     echo -e "\n\033[1;33m[1/5] Installing system packages (apt)...\033[0m"
     if command -v apt-get &> /dev/null; then
         sudo apt-get update -y
@@ -78,7 +78,7 @@ if [ "$INSTALL_SYSDEPS" = true ] || ! command -v ninja &> /dev/null || ! command
             libsqlite3-dev texinfo bison flex curl make ccache
     fi
 else
-    echo -e "\n\033[1;32m[1/5] Essential build tools (cmake, ninja, gcc) already present. Skipping apt.\033[0m"
+    echo -e "\n\033[1;32m[1/5] Essential build tools (cmake, ninja, gcc, sqlite3-dev) already present. Skipping apt.\033[0m"
 fi
 
 # Check and auto-install ccache if requested

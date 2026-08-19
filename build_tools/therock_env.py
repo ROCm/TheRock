@@ -380,6 +380,29 @@ def apply_runtime_patches():
                 )
                 rj_cmake.write_text(patched)
 
+    # 4. rocprofiler-sdk sqlite3 include patch (output library & python bindings)
+    rocprof_out_cmake = REPO_ROOT / "rocm-systems/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt"
+    if rocprof_out_cmake.is_file():
+        content = rocprof_out_cmake.read_text()
+        if "target_include_directories(" not in content and "add_subdirectory(sql)" in content:
+            log_info("Applying hermetic sqlite3 include path patch to rocprofiler-sdk output library...")
+            patched = content.replace(
+                "add_subdirectory(sql)",
+                "target_include_directories(\n    rocprofiler-sdk-output-library SYSTEM\n    PUBLIC ${ROCM_PATH}/lib/rocm_sysdeps/include\n           ${CMAKE_INSTALL_PREFIX}/lib/rocm_sysdeps/include\n           /usr/include)\n\nadd_subdirectory(sql)",
+            )
+            rocprof_out_cmake.write_text(patched)
+
+    rocprof_py_cmake = REPO_ROOT / "rocm-systems/projects/rocprofiler-sdk/source/lib/python/utilities.cmake"
+    if rocprof_py_cmake.is_file():
+        content = rocprof_py_cmake.read_text()
+        if "PRIVATE ${Python3_INCLUDE_DIRS}" in content and "rocm_sysdeps/include" not in content:
+            log_info("Applying hermetic sqlite3 include path patch to rocprofiler-sdk python bindings...")
+            patched = content.replace(
+                "PRIVATE ${Python3_INCLUDE_DIRS}",
+                "PRIVATE ${Python3_INCLUDE_DIRS}\n                                       ${ROCM_PATH}/lib/rocm_sysdeps/include\n                                       ${CMAKE_INSTALL_PREFIX}/lib/rocm_sysdeps/include\n                                       /usr/include",
+            )
+            rocprof_py_cmake.write_text(patched)
+
 
 def ensure_ccache() -> bool:
     """Ensure ccache is available, attempting auto-installation if missing."""

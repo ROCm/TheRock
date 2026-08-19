@@ -27,6 +27,15 @@ TheRock is a modular open-source build platform for HIP and ROCm. This fork prov
 
 ## 🚀 Quick Start
 
+### 📋 Host Prerequisites (Ubuntu 26.04)
+On a fresh Ubuntu machine, ensure essential build packages and development headers are installed:
+```bash
+sudo apt update && sudo apt install -y \
+  build-essential gcc g++ gfortran git ninja-build cmake \
+  pkg-config xxd automake libtool python3-dev libegl1-mesa-dev \
+  libsqlite3-dev texinfo bison flex curl make ccache
+```
+
 ### Option 1: One-Liner Zero-Install (No Prior Clone Required!)
 On a fresh machine, run this single command to automatically install dependencies, clone the repo, provision Python 3.14 virtual environment, and build:
 
