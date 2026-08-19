@@ -102,8 +102,6 @@ add_custom_target(
       # Disable symlink creation
       "-DCREATE_XZ_SYMLINKS=OFF"
       "-DCREATE_LZMA_SYMLINKS=OFF"
-      # Disable writing pc files: we will do so ourselves.
-      -DSKIP_INSTALL_FILES=ON
       # Set versioning to generic to override with a private map
       -DXZ_SYMBOL_VERSIONING=generic
 
@@ -136,11 +134,5 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/liblzma-config.cmake
   @ONLY
 )
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/liblzma.pc.in
-  ${CMAKE_CURRENT_BINARY_DIR}/liblzma.pc
-  @ONLY
-)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblzma-config.cmake" DESTINATION lib/cmake/LIBLZMA)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblzma.pc" DESTINATION lib/pkgconfig)
