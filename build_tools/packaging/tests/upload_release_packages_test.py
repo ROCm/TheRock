@@ -35,6 +35,40 @@ class StructuredUploadTest(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertEqual(infer_structured_product(filename), "pytorch")
 
+    def test_infer_structured_product_rejects_unknown_package(self):
+        with self.assertRaises(ValueError):
+            infer_structured_product("some-unrelated-tool-1.0.0-py3-none-any.whl")
+
+    def test_structured_python_dry_run_skips_unknown_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wheels = root / "wheels"
+            wheels.mkdir()
+            (wheels / "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl").write_text("x")
+            (wheels / "some-unrelated-tool-1.0.0-py3-none-any.whl").write_text("x")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                count = upload_python_files(
+                    root,
+                    bucket_name="unused",
+                    bucket_prefix="unused",
+                    execute=False,
+                    structured=True,
+                    python_index="whl-next",
+                    repo_stream="rc",
+                )
+
+            text = output.getvalue()
+            # Only the known package is counted/uploaded; the unknown one is
+            # skipped with an error instead of silently landing in "core".
+            self.assertEqual(count, 1)
+            self.assertIn(
+                "s3://therock-repo-amd-rc-core/v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+                text,
+            )
+            self.assertIn("[ERROR]: Skipping some-unrelated-tool", text)
+
     def test_structured_python_dry_run_routes_to_product_buckets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
