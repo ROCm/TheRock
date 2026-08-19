@@ -1683,7 +1683,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools test",
-    "Description_Long": "Contains tests for rocprofiler-compute, rocprofiler-systems and profiler-hub",
+    "Description_Long": "Contains tests for rocprofiler-compute and rocprofiler-systems",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1729,17 +1729,6 @@
         "Artifact_Subdir": [
           {
             "Name": "aqlprofile",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "profiler-hub",
-        "Artifact_Subdir": [
-          {
-            "Name": "profiler-hub",
             "Components": [
               "test"
             ]
