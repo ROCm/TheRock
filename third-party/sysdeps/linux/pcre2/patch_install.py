@@ -57,7 +57,9 @@ if platform.system() == "Linux":
     target_lib = lib_dir / "libpcre2-8.so"
     if target_lib.exists():
         try:
-            subprocess.run([patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)], check=True)
+            subprocess.run(
+                [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)], check=True
+            )
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True)
 

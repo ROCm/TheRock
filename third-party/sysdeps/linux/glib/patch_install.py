@@ -32,7 +32,9 @@ def sh(*args):
 
 
 def needed(patchelf_exe, path):
-    out = subprocess.check_output([patchelf_exe, "--print-needed", str(path)], text=True)
+    out = subprocess.check_output(
+        [patchelf_exe, "--print-needed", str(path)], text=True
+    )
     return out.split()
 
 
