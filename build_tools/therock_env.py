@@ -238,10 +238,13 @@ def detect_gpu_arch() -> str:
     return "gfx1151"
 
 
-def ensure_venv(python_version: str, force_recreate: bool = False) -> tuple[Path, Path]:
+def ensure_venv(python_version: str, venv_dir: Path | None = None, force_recreate: bool = False) -> tuple[Path, Path]:
     """Ensure a virtual environment for the given Python version exists with dependencies installed."""
     uv_bin = find_uv()
-    parent_dir, venv_dir = get_venv_path(python_version)
+    if venv_dir is None:
+        parent_dir, venv_dir = get_venv_path(python_version)
+    else:
+        parent_dir = venv_dir.parent
     venv_python = venv_dir / "bin/python3" if not platform.system() == "Windows" else venv_dir / "Scripts/python.exe"
 
     if venv_python.exists() and not force_recreate:
@@ -511,7 +514,8 @@ def cmd_build(args):
     log_info(f"============================================================")
 
     # 1. Setup / ensure virtualenv
-    venv_dir, venv_python = ensure_venv(py_ver)
+    custom_venv_dir = getattr(args, "venv_dir", None)
+    venv_dir, venv_python = ensure_venv(py_ver, venv_dir=custom_venv_dir)
 
     # 2. Setup CMake Flags
     cmake_cmd = [
@@ -637,6 +641,7 @@ def main():
     def add_build_options(p):
         p.add_argument("--python", default="3.14", help="Python version to target (default: 3.14)")
         p.add_argument("--gpu-target", default=None, help="GPU target (default: auto-detected, e.g. gfx1151)")
+        p.add_argument("--venv-dir", type=Path, default=None, help="Custom virtual environment directory")
         p.add_argument("--build-dir", default=None, help="Custom build directory name")
         p.add_argument("--no-ccache", action="store_true", help="Disable ccache")
         p.add_argument("--configure-only", action="store_true", help="Only run CMake configure")
