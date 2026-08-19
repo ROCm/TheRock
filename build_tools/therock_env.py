@@ -365,6 +365,21 @@ def apply_runtime_patches():
             )
             rocprof_cmake.write_text(patched)
 
+    # 3. rocjitsu GCC 15 -Wno-error=maybe-uninitialized patch
+    for rj_cmake in [
+        REPO_ROOT / "rocm-systems/emulation/rocjitsu/cmake/rj_configure_target.cmake",
+        REPO_ROOT / "rocm-systems/emulation/rocjitsu/cmake/rj_add_object_library.cmake",
+    ]:
+        if rj_cmake.is_file():
+            content = rj_cmake.read_text()
+            if "-Wall -Wextra -Wpedantic -Werror" in content and "-Wno-error=maybe-uninitialized" not in content:
+                log_info(f"Applying GCC 15 uninitialized warning patch to {rj_cmake.name}...")
+                patched = content.replace(
+                    "-Wall -Wextra -Wpedantic -Werror",
+                    "-Wall -Wextra -Wpedantic -Werror -Wno-error=maybe-uninitialized -Wno-maybe-uninitialized",
+                )
+                rj_cmake.write_text(patched)
+
 
 def ensure_ccache() -> bool:
     """Ensure ccache is available, attempting auto-installation if missing."""
