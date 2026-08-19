@@ -61,7 +61,7 @@ rocminfo   # Shows AMD Radeon 8060S / gfx1151
 
 ---
 
-## 🍕 Workload Presets
+## 🍕 Workload Presets (`--preset`)
 
 Instead of waiting 5+ hours for 50+ unused components, select targeted packages:
 
