@@ -202,8 +202,8 @@ RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
-# Pytest/CI only: workflow ``run_uninstall: true`` sets this to ``1``, which adds
-# ``--with-uninstall`` (Step 4). Accepted: 1/true/yes (enable), 0/false/no (disable),
+# Pytest/CI only: workflow ``run_uninstall: true`` sets this env (typically ``true``),
+# which adds ``--with-uninstall`` (Step 4). Accepted: 1/true/yes (enable), 0/false/no (disable),
 # unset (disable). Any other non-empty value raises ValueError (fail-fast).
 ENV_RUN_UNINSTALL = "RUN_UNINSTALL"
 _RUN_UNINSTALL_ENABLE = frozenset({"1", "true", "yes"})
