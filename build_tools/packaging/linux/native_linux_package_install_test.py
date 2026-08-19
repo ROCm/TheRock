@@ -63,6 +63,7 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
 For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
 For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
+Optional Step 4 uninstall: set ``RUN_UNINSTALL`` to ``1`` (or ``true``/``yes``) in CI, or pass ``--with-uninstall`` on the CLI (``sanity``/``full`` only). Use ``0``/``false``/``no`` to disable; any other non-empty value is a configuration error.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
@@ -106,6 +107,21 @@ Example invocations:
          --os-profile ubuntu2404 \\
          --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --with-uninstall (Step 4): after sanity/full succeed, remove metapackages and verify clean teardown
+ python3 native_linux_package_install_test.py --test-type sanity \\
+         --os-profile ubuntu2404 \\
+         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core \\
+         --with-uninstall
+
+ # SLES: zypper remove --clean-deps is required for dependency cleanup during Step 4
+ python3 native_linux_package_install_test.py --test-type sanity \\
+         --os-profile sles16 \\
+         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+         --release-type prerelease --install-prefix /opt/rocm/core \\
+         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
+         --with-uninstall
 
  # --test-type install: repo install only (no verification)
  python3 native_linux_package_install_test.py --test-type install \\
@@ -192,8 +208,11 @@ RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 # Pytest/CI only: becomes ``--rocm-version``.
 ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 # Pytest/CI only: workflow ``run_uninstall: true`` sets this to ``1``, which adds
-# ``--with-uninstall`` (Step 4). Accepted values: 1, true, yes (case-insensitive).
+# ``--with-uninstall`` (Step 4). Accepted: 1/true/yes (enable), 0/false/no (disable),
+# unset (disable). Any other non-empty value raises ValueError (fail-fast).
 ENV_RUN_UNINSTALL = "RUN_UNINSTALL"
+_RUN_UNINSTALL_ENABLE = frozenset({"1", "true", "yes"})
+_RUN_UNINSTALL_DISABLE = frozenset({"0", "false", "no"})
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -220,6 +239,26 @@ _TEST_TYPE_MAP = {
     "sanity": "sanity",
     "simulate": "simulate",
 }
+
+
+def _parse_run_uninstall_ci_env() -> bool:
+    """Return whether CI env enables Step 4 uninstall.
+
+    Raises:
+        ValueError: If ``RUN_UNINSTALL`` is set to an unrecognized value.
+    """
+    raw = (os.environ.get(ENV_RUN_UNINSTALL) or "").strip()
+    if not raw:
+        return False
+    normalized = raw.lower()
+    if normalized in _RUN_UNINSTALL_ENABLE:
+        return True
+    if normalized in _RUN_UNINSTALL_DISABLE:
+        return False
+    raise ValueError(
+        f"Invalid RUN_UNINSTALL value: {raw!r}. "
+        "Expected: 1/true/yes (enable) or 0/false/no (disable)."
+    )
 
 
 def _normalize_test_type(test_type: str | None) -> str:
@@ -1703,6 +1742,19 @@ Examples:
  --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
+ # --with-uninstall (Step 4): after sanity/full succeed, remove metapackages and verify clean teardown
+ python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
+ --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core \\
+ --with-uninstall
+
+ # SLES: zypper remove --clean-deps is required for dependency cleanup during Step 4
+ python native_linux_package_install_test.py --test-type sanity --os-profile sles16 \\
+ --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+ --release-type prerelease --install-prefix /opt/rocm/core \\
+ --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
+ --with-uninstall
+
  # --test-type install: install only
  python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
@@ -2047,8 +2099,10 @@ def _argv_from_ci_env() -> list[str] | None:
     Required for sanity/full: OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX.
     Optional: GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT; ``NATIVE_LINUX_INSTALL_ROCM_VERSION``
     maps to ``--rocm-version`` when versioned package names are needed;
-    ``RUN_UNINSTALL`` (1/true/yes) maps to ``--with-uninstall`` for Step 4.
+    ``RUN_UNINSTALL`` (1/true/yes) maps to ``--with-uninstall`` for Step 4;
+    0/false/no disables; any other non-empty value raises ``ValueError``.
     """
+    with_uninstall = _parse_run_uninstall_ci_env()
     test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
 
     if test_type == "simulate":
@@ -2107,8 +2161,7 @@ def _argv_from_ci_env() -> list[str] | None:
     build_variant = (os.environ.get("BUILD_VARIANT") or "").strip()
     if build_variant:
         argv.extend(["--build-variant", build_variant])
-    run_uninstall = (os.environ.get(ENV_RUN_UNINSTALL) or "").strip().lower()
-    if run_uninstall in ("1", "true", "yes"):
+    if with_uninstall:
         argv.append("--with-uninstall")
     return argv
 
@@ -2123,11 +2176,14 @@ def test_native_linux_package_install() -> None:
             pytest.fail(
                 "Missing required environment variables for native install test "
                 "(expected OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX; "
-                "optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; or for simulate: PACKAGES_DIR)."
+                "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+                "NATIVE_LINUX_INSTALL_ROCM_VERSION, RUN_UNINSTALL; "
+                "or for simulate: PACKAGES_DIR)."
             )
         pytest.skip(
             "Set workflow env vars (OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX); "
-            "optional GFX_ARCH and NATIVE_LINUX_INSTALL_ROCM_VERSION."
+            "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION, RUN_UNINSTALL."
         )
 
     args = parse_cli_arguments(argv, raise_instead_of_exit=True)

@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 # Unit test coverage for native_linux_package_install_test.py:
-#   All testable behaviour is covered with unit tests (pure logic or mocked I/O/subprocess).
-#   Integration-only (real apt/rpm/zypper, network, root): main() execution path after validation.
+#   All testable behaviour is covered with unit tests (pure logic or mocked I/O/subprocess),
+#   including optional Step 4 uninstall (--with-uninstall / RUN_UNINSTALL).
+#   Integration-only (real apt/rpm/zypper, network, root): main() and pytest CI entry paths.
 
 import contextlib
 import importlib.util
@@ -17,10 +18,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-# Used only by the real-ELF fixture tests (VerifyNoRunpathRealElfTest) below.
-import shutil
-import subprocess
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -987,6 +984,49 @@ class ArgvFromCiEnvTest(unittest.TestCase):
             argv = native_linux_package_install_test._argv_from_ci_env()
         self.assertIsNotNone(argv)
         self.assertIn("--with-uninstall", argv)
+
+    def test_adds_with_uninstall_for_true_and_yes_values(self):
+        base_env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        for value in ("true", "YES"):
+            with self.subTest(value=value):
+                with patch.dict(os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False):
+                    argv = native_linux_package_install_test._argv_from_ci_env()
+                self.assertIsNotNone(argv)
+                self.assertIn("--with-uninstall", argv)
+
+    def test_run_uninstall_false_values_do_not_add_flag(self):
+        base_env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        for value in ("0", "false", "NO"):
+            with self.subTest(value=value):
+                with patch.dict(os.environ, {**base_env, "RUN_UNINSTALL": value}, clear=False):
+                    argv = native_linux_package_install_test._argv_from_ci_env()
+                self.assertIsNotNone(argv)
+                self.assertNotIn("--with-uninstall", argv)
+
+    def test_raises_for_invalid_run_uninstall_value(self):
+        env = {
+            "TEST_TYPE": "sanity",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+            "RUN_UNINSTALL": "maybe",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with self.assertRaisesRegex(ValueError, "Invalid RUN_UNINSTALL value"):
+                native_linux_package_install_test._argv_from_ci_env()
 
 
 class RunTestsTestTypeTest(unittest.TestCase):
@@ -2150,7 +2190,7 @@ class TestRdhcTest(unittest.TestCase):
 
 
 class ListInstalledRocmPackagesTest(unittest.TestCase):
-    """Tests for NativeLinuxPackageInstallTest.list_installed_rocm_packages()."""
+    """Tests for Step 4b query helper ``list_installed_rocm_packages()``."""
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_deb_parses_installed_package_names(self, mock_run):
