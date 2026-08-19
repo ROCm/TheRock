@@ -620,16 +620,12 @@ if(_ck_enabled)
   )
 endif()
 
-if(THEROCK_ENABLE_HIPTENSOR)
+# Gate on _ck_enabled so CK-less families don't publish a stub-only hipTensor
+# _generic that would clobber the real library _generic on the shared artifact key.
+if(THEROCK_ENABLE_HIPTENSOR AND _ck_enabled)
   ##############################################################################
   # hipTensor
   ##############################################################################
-
-  # Set composable_kernel as a build dependency only when it's available.
-  set(_hiptensor_build_deps)
-  if(_ck_enabled)
-    list(APPEND _hiptensor_build_deps composable_kernel)
-  endif()
 
   therock_cmake_subproject_declare(hipTensor
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
@@ -649,7 +645,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
-      ${_hiptensor_build_deps}
+      composable_kernel
     RUNTIME_DEPS
       hip-clr
   )

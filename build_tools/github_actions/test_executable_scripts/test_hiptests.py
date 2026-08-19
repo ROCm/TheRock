@@ -151,6 +151,8 @@ def setup_env(env):
     # Set ROCM Path, to find rocm_agent_enum etc
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
+    # required for hip-tests to avoid optimizing out multi-stream tests
+    env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
     if platform.system() == "Linux":
         HIP_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
         logging.info(f"++ Setting LD_LIBRARY_PATH={HIP_LIB_PATH}")
