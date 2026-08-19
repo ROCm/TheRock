@@ -13,12 +13,13 @@ of truth for how the tests run. This adds only what is ours:
   * holding the run to the CPUs the pod was given, described under "Resources".
 
 Nothing the suite script decides is repeated here. Its environment is read back
-out of the script, so a version that changes its allocator or its XLA flags,
-including behind a conditional, needs no change in this file. Reading it is
-required rather than best-effort: the retry pass decides the result, so running
-it under a different environment than the suite would make that verdict
-meaningless. A script whose section markers have been renamed fails the run with
-an error naming them.
+out of ci/utilities/rocm_test_env.sh, which the suite sources, or out of the
+marked section of the suite script in a checkout from before that file existed,
+so a version that changes its allocator or its XLA flags, including behind a
+conditional, needs no change in this file. Reading it is required rather than
+best-effort: the retry pass decides the result, so running it under a different
+environment than the suite would make that verdict meaningless. A checkout that
+holds neither fails the run with an error naming both.
 
 Retries
 -------
@@ -104,11 +105,15 @@ REPORT_GLOB = "logs/pytest_results*.json"
 PYTEST_EXIT_ALL_PASSED = 0
 PYTEST_EXIT_TESTS_FAILED = 1
 
-# The section of the suite script that only computes the environment: exports,
-# echoes and device queries, with the installs above it and the test run below it.
-# Evaluating it is how the per-version environment reaches the retry pass, which
-# has to match the run it is checking. Sourcing the script itself would run the
-# tests, and copying its values here would be a second source of truth.
+# What the suite script sources for its environment: exports, echoes and device
+# queries, and nothing that installs or tests. Evaluating it is how the
+# per-version environment reaches the retry pass, which has to match the run it
+# is checking. Sourcing the suite script itself would run the tests, and copying
+# its values here would be a second source of truth.
+RELATIVE_SUITE_ENV_SCRIPT = Path("ci") / "utilities" / "rocm_test_env.sh"
+
+# Where that environment lived before it moved into the file above, as a section
+# of the suite script, with the installs above it and the test run below it.
 ENV_SECTION_START = "# Set up the generic test environment variables"
 ENV_SECTION_END = "# Run tests"
 
@@ -209,28 +214,51 @@ def _read_env_dump(path: Path) -> dict[str, str]:
     return {name: value for name, separator, value in pairs if separator}
 
 
-def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
-    """What the suite script's environment section exports.
+def suite_env_program(jax_dir: Path) -> tuple[str, Path]:
+    """The shell that computes the suite's environment, and the file it came from.
 
-    Evaluated in a shell that dumps its environment on either side of the section,
-    so the result is what the section itself changed rather than a guess at which
-    names look interesting.
+    A checkout from before the environment moved out of the suite script keeps it
+    in a marked section there, which is what gets evaluated instead. The caller
+    reports failures against the file this picked, since either can be the one at
+    fault.
 
     Raises:
-        SuiteEnvironmentError: if the section cannot be found or evaluated. This
-            fails the run by design, because the retry pass decides the result and
-            a wrong environment there would decide it wrongly.
+        SuiteEnvironmentError: if the checkout holds neither.
     """
-    section = env_section((jax_dir / RELATIVE_SUITE_SCRIPT).read_text())
+    if (jax_dir / RELATIVE_SUITE_ENV_SCRIPT).exists():
+        program = f"source {shlex.quote(os.fspath(RELATIVE_SUITE_ENV_SCRIPT))}"
+        return program, RELATIVE_SUITE_ENV_SCRIPT
+
+    older = jax_dir / RELATIVE_SUITE_SCRIPT
+    section = env_section(older.read_text()) if older.exists() else ""
     if not section:
         raise SuiteEnvironmentError(
-            f"{RELATIVE_SUITE_SCRIPT} has no section between '{ENV_SECTION_START}' and"
-            f" '{ENV_SECTION_END}'. The script most likely renamed them, so update"
-            " ENV_SECTION_START and ENV_SECTION_END to match it."
+            f"{jax_dir / RELATIVE_SUITE_ENV_SCRIPT} does not exist and"
+            f" {RELATIVE_SUITE_SCRIPT} has no section between"
+            f" '{ENV_SECTION_START}' and '{ENV_SECTION_END}', so there is nothing"
+            " to read the suite's environment from. Update"
+            " RELATIVE_SUITE_ENV_SCRIPT, or ENV_SECTION_START and"
+            " ENV_SECTION_END, to match what the checkout has."
         )
+    return section, RELATIVE_SUITE_SCRIPT
+
+
+def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
+    """What the suite exports before it runs anything.
+
+    Evaluated in a shell that dumps its environment on either side, so the result
+    is what the suite itself changed rather than a guess at which names look
+    interesting.
+
+    Raises:
+        SuiteEnvironmentError: if it cannot be found or evaluated. This fails the
+            run by design, because the retry pass decides the result and a wrong
+            environment there would decide it wrongly.
+    """
+    program, source = suite_env_program(jax_dir)
     if not (jax_dir / RELATIVE_SUITE_ENV_FILE).exists():
         raise SuiteEnvironmentError(
-            f"{RELATIVE_SUITE_ENV_FILE} is missing, and the section reads its defaults."
+            f"{RELATIVE_SUITE_ENV_FILE} is missing, and {source} reads its defaults."
             f" Is {jax_dir} a complete ROCm/jax checkout?"
         )
 
@@ -238,16 +266,16 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         before = Path(tmp) / "before"
         after = Path(tmp) / "after"
         dump = "env -0 > {}".format
-        # The section's own status, kept across the dump that follows it, which
+        # The program's own status, kept across the dump that follows it, which
         # would otherwise be the status of the shell and always zero.
         script = "\n".join(
             [
                 f"source {shlex.quote(os.fspath(RELATIVE_SUITE_ENV_FILE))}",
                 dump(shlex.quote(os.fspath(before))),
-                section,
-                "section_status=$?",
+                program,
+                "program_status=$?",
                 dump(shlex.quote(os.fspath(after))),
-                "exit ${section_status}",
+                "exit ${program_status}",
             ]
         )
         proc = subprocess.run(
@@ -260,16 +288,16 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         )
         if not (before.exists() and after.exists()):
             raise SuiteEnvironmentError(
-                f"Evaluating the section of {RELATIVE_SUITE_SCRIPT} produced no environment:"
+                f"Evaluating the environment {source} sets produced none:"
                 f" {proc.stderr.strip()}"
             )
         if proc.returncode != 0:
             # It exports and queries devices, so a failure means some of what it
             # exported was computed from a command that did not work.
             raise SuiteEnvironmentError(
-                f"The section of {RELATIVE_SUITE_SCRIPT} exited"
-                f" {proc.returncode}, so the environment it exported is only"
-                f" partly what the suite will run under: {proc.stderr.strip()}"
+                f"The environment {source} sets exited {proc.returncode}, so what"
+                f" it exported is only partly what the suite will run under:"
+                f" {proc.stderr.strip()}"
             )
         baseline, exported = _read_env_dump(before), _read_env_dump(after)
 

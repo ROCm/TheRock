@@ -89,12 +89,29 @@ exit 1
 
 
 def write_suite_script(jax_dir: Path, allocator="address", conditional="yes") -> None:
+    """A checkout from before the environment moved out of the suite script."""
     (jax_dir / "ci" / "envs").mkdir(parents=True, exist_ok=True)
     (jax_dir / "ci" / "envs" / "default.env").write_text(
         "export JAXCI_ENABLE_X64=${JAXCI_ENABLE_X64:-0}\n"
     )
     (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
         SUITE_SCRIPT_TEMPLATE.format(allocator=allocator, conditional=conditional)
+    )
+
+
+def write_split_suite_script(
+    jax_dir: Path, allocator="address", conditional="yes"
+) -> None:
+    """A checkout as it is now, with the environment in its own file."""
+    write_suite_script(jax_dir, allocator=allocator, conditional=conditional)
+    section = runner.env_section((jax_dir / runner.RELATIVE_SUITE_SCRIPT).read_text())
+    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).parent.mkdir(
+        parents=True, exist_ok=True
+    )
+    (jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT).write_text(section + "\n")
+    (jax_dir / runner.RELATIVE_SUITE_SCRIPT).write_text(
+        "#!/bin/bash\nsource ci/envs/default.env\n"
+        f"source {runner.RELATIVE_SUITE_ENV_SCRIPT.as_posix()}\nexit 1\n"
     )
 
 
@@ -182,6 +199,16 @@ class SuiteEnvironmentTest(unittest.TestCase):
     def test_the_retry_pass_inherits_skipping_slow_tests(self):
         self.assertEqual(self.suite_env()["JAX_SKIP_SLOW_TESTS"], "true")
 
+    def test_the_environment_file_is_read_when_the_checkout_has_one(self):
+        # Newer ROCm/jax keeps the environment in its own file rather than in a
+        # marked section of the suite script.
+        write_split_suite_script(self.jax_dir, allocator="platform")
+
+        env = runner.suite_environment(self.jax_dir, dict(os.environ))
+
+        self.assertEqual(env["XLA_PYTHON_CLIENT_ALLOCATOR"], "platform")
+        self.assertNotIn("SHOULD_NOT_LEAK", env)
+
     def test_a_renamed_section_is_fatal(self):
         # Carrying on would run the retry pass, which decides the result, under an
         # environment that does not match the run it is checking.
@@ -193,9 +220,12 @@ class SuiteEnvironmentTest(unittest.TestCase):
         with self.assertRaises(runner.SuiteEnvironmentError) as caught:
             runner.suite_environment(self.jax_dir, dict(os.environ))
 
-        # The message has to say what to fix, since the markers live upstream.
+        # The message has to say what to fix, since the scripts live upstream.
         self.assertIn(runner.ENV_SECTION_START, str(caught.exception))
         self.assertIn("ENV_SECTION_START", str(caught.exception))
+        self.assertIn(
+            os.fspath(runner.RELATIVE_SUITE_ENV_SCRIPT), str(caught.exception)
+        )
 
     def test_a_section_that_fails_is_fatal(self):
         # Its device queries feed the values it exports, so a section that
@@ -211,6 +241,21 @@ class SuiteEnvironmentTest(unittest.TestCase):
             runner.suite_environment(self.jax_dir, dict(os.environ))
 
         self.assertIn("exited 1", str(caught.exception))
+
+    def test_a_failure_names_the_file_it_came_from(self):
+        # Either file can be the one at fault, so pointing at the other would
+        # send whoever reads this to the wrong checkout.
+        write_split_suite_script(self.jax_dir)
+        env_script = self.jax_dir / runner.RELATIVE_SUITE_ENV_SCRIPT
+        env_script.write_text(env_script.read_text() + "false\n")
+
+        with self.assertRaises(runner.SuiteEnvironmentError) as caught:
+            runner.suite_environment(self.jax_dir, dict(os.environ))
+
+        self.assertIn(
+            os.fspath(runner.RELATIVE_SUITE_ENV_SCRIPT), str(caught.exception)
+        )
+        self.assertNotIn(os.fspath(runner.RELATIVE_SUITE_SCRIPT), str(caught.exception))
 
     def test_a_missing_default_env_is_fatal(self):
         write_suite_script(self.jax_dir)

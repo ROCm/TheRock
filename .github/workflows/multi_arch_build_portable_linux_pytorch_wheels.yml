@@ -191,11 +191,17 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: "therock-pytorch-sccache-${{ inputs.release_type }}"
+      # TODO: Move the sccache bucket and IAM role mapping into a shared script.
+      SCCACHE_BUCKET: >-
+        ${{
+          inputs.release_type == 'dev-bkc' && 'therock-pytorch-sccache-dev'
+          || inputs.release_type == 'nightly-bkc' && 'therock-pytorch-sccache-nightly'
+          || format('therock-pytorch-sccache-{0}', inputs.release_type)
+        }}
       SCCACHE_REGION: us-east-1
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
@@ -306,7 +312,12 @@ jobs:
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          role-to-assume: >-
+            ${{
+              inputs.release_type == 'dev-bkc' && 'arn:aws:iam::324352301041:role/therock-dev'
+              || inputs.release_type == 'nightly-bkc' && 'arn:aws:iam::324352301041:role/therock-nightly'
+              || format('arn:aws:iam::324352301041:role/therock-{0}', inputs.release_type)
+            }}
           # Multi-package PyTorch builds can exceed the default 1h credential
           # window; the role's MaxSessionDuration must be >= this value.
           role-duration-seconds: 21600

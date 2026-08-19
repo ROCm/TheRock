@@ -753,6 +753,7 @@ disable_platforms = ["windows"]
 artifact_group = "comm-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
+split_databases = ["hotswap_cache"]
 disable_platforms = ["windows"]
 
 [artifacts.rocshmem]

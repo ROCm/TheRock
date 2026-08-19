@@ -29,7 +29,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       external_repo_config:
@@ -160,7 +160,7 @@ jobs:
     secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
@@ -177,7 +177,7 @@ jobs:
     secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
