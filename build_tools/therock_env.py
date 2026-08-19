@@ -426,6 +426,17 @@ def apply_runtime_patches():
             )
             rocrand_bm_cmake.write_text(patched)
 
+    rocprim_bm_cmake = REPO_ROOT / "rocm-libraries/projects/rocprim/benchmark/CMakeLists.txt"
+    if rocprim_bm_cmake.is_file():
+        content = rocprim_bm_cmake.read_text()
+        if "target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)" in content:
+            log_info("Applying amd_smi link target guard patch to rocprim benchmarks...")
+            patched = content.replace(
+                "target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)",
+                "if(TARGET amd_smi)\n      target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)\n    else()\n      target_compile_definitions(${BENCHMARK_TARGET} PUBLIC PRIMBENCH_NO_MONITORING)\n    endif()",
+            )
+            rocprim_bm_cmake.write_text(patched)
+
 
 def ensure_ccache() -> bool:
     """Ensure ccache is available, attempting auto-installation if missing."""
