@@ -134,9 +134,35 @@ rocminfo   # Executes py313-llm's ROCm!
 source ~/virtualenv/therock-7.14/py314-vulkan/.venv/bin/activate
 ```
 
-> [!NOTE]
-> **Why this prevents system conflicts**:
-> When a `.venv` is activated, its `bin/` directory is placed at the very front of your shell's `$PATH`. Any global `/opt/rocm` or `/usr/bin/rocminfo` is completely shadowed and bypassed. When you type `deactivate`, your shell returns to its original state with zero leftover environment pollution.
+---
+
+#### 4. The "Source Factory" vs "Virtual Environment Injection" Model
+
+To understand how commands like `rocminfo` and `hipcc` run inside your virtual environment without conflicting with system `/opt/rocm`:
+
+```
+[1. Source Code Factory]
+  ~/virtualenv/therock-7.14/TheRock/ (Shared Git Source & Build Scripts)
+             │
+             ▼ (Compiles targeted preset in ~30 min)
+[2. Build Output Artifacts]
+  ~/virtualenv/therock-7.14/py314-llm/build/dist/rocm/ (Compiled ROCm Libraries)
+             │
+             ▼ (Automatic Wrapper Injection & Path Linking)
+[3. Hermetically Installed inside your Virtualenv!]
+  ~/virtualenv/therock-7.14/py314-llm/.venv/bin/
+             ├── python3
+             ├── pip
+             ├── rocminfo     ← (Auto-injected wrapper for this specific build!)
+             ├── hipcc        ← (Auto-injected wrapper!)
+             ├── amdclang     ← (Auto-injected wrapper!)
+             └── rocm-smi     ← (Auto-injected wrapper!)
+```
+
+* **When you activate (`source .../.venv/bin/activate`)**:
+  `which rocminfo` returns `/home/analogbox/virtualenv/therock-7.14/py314-llm/.venv/bin/rocminfo`. Your shell automatically uses this environment's ROCm and ignores `/opt/rocm`.
+* **When you deactivate (`deactivate`)**:
+  All ROCm environment variables are unset, and your shell instantly reverts to the clean default Ubuntu environment with zero leftover residue.
 
 ---
 
