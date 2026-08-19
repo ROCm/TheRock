@@ -137,34 +137,64 @@ ninja -C build
 
 ---
 
-## Automated Modular Experiments & Virtual Environments (`experiment.py`)
+## Multi-Environment & Modular Build Orchestrator (`therock-env`)
 
-For running lightweight experiments or testing specific submodules (e.g. HIP runtime only, Vulkan/Media only, Math only, PyTorch AI only) without rebuilding the entire 50+ library stack, use the automated experiment tool:
+The included `./therock-env` tool automates:
+1. **Python Virtual Environment Management (`uv`)**: Automatically provisions isolated Python virtual environments by version (`~/virtualenv/venv314/.venv314`, `~/virtualenv/venv313/.venv313`, etc.) and installs build dependencies in milliseconds.
+2. **Modular Preset Builds**: Build only the components you need (HIP, Vulkan/Media, Math, PyTorch AI) into independent build directories without rebuilding the full 50+ library stack.
+3. **Sequential Matrix Builds**: Automate running multiple preset builds one after another within a specific Python environment.
+4. **Environment Activation**: Automatically generates `activate_env.sh` inside each build tree so you can activate Python + ROCm in one command.
+
+### 1. Managing Python Environments
 
 ```bash
-# 1. List available presets and descriptions
-./build_tools/experiment.py --help
+# Create or update a Python 3.14 virtual environment
+./therock-env setup-venv 3.14
 
-# 2. Build Minimal HIP Runtime (~20-30 min build) in an isolated uv virtual environment
-./build_tools/experiment.py --preset hip-minimal --python 3.14
+# Create multiple virtual environments at once (e.g. 3.14 and 3.13)
+./therock-env setup-venv 3.14 3.13
 
-# 3. Build Vulkan / Mesa / Media Acceleration stack (rocDecode + rocJPEG)
-./build_tools/experiment.py --preset vulkan-media --python 3.14
+# List all detected virtual environments
+./therock-env list-envs
+```
 
-# 4. Build PyTorch AI Stack (HIP + Math + MIOpen + RCCL + hipDNN)
-./build_tools/experiment.py --preset ai-pytorch --python 3.14
+### 2. Building Modular Presets
 
-# 5. Activate the compiled environment (both Python virtualenv and ROCm paths in one command)
-source build_hip_minimal/activate_env.sh
+```bash
+# Build Minimal HIP Runtime (~20-30 min) in Python 3.14 environment
+./therock-env build --preset hip --python 3.14
+
+# Build Vulkan / Mesa / Media Acceleration stack (rocDecode + rocJPEG)
+./therock-env build --preset vulkan --python 3.14
+
+# Build Math Stack (rocBLAS, hipBLASLt, rocRAND, rocFFT, rocSOLVER)
+./therock-env build --preset math --python 3.14
+
+# Build PyTorch AI Stack (HIP + Math + MIOpen + RCCL + hipDNN)
+./therock-env build --preset ai --python 3.14
+
+# Run a sequential batch build of multiple presets
+./therock-env build-matrix --presets hip,vulkan,math --python 3.14
+```
+
+### 3. Inspecting and Activating Builds
+
+```bash
+# List all completed build trees, their disk sizes, and status
+./therock-env list-builds
+
+# Activate a specific build environment (activates Python venv + exports ROCm paths)
+source build_py314_hip/activate_env.sh
 ```
 
 | Preset | Included Components | Estimated Build Time |
 | :--- | :--- | :--- |
-| **`hip-minimal`** | Clang 23, HIP Runtime (`clr`), ROCR, AMDSMI, rocminfo | ~20 - 30 min |
-| **`vulkan-media`** | HIP + AMD Mesa (Vulkan/VAAPI), rocDecode, rocJPEG | ~25 - 35 min |
-| **`math-blas`** | HIP + rocBLAS, hipBLASLt, rocRAND, rocPRIM, rocFFT, rocSOLVER | ~1.5 - 2 hours |
-| **`ai-pytorch`** | HIP + Math + MIOpen (Composable Kernel) + RCCL + hipDNN | ~3.5 - 4.5 hours |
-| **`profiler`** | rocprofiler-sdk, rocprofiler-systems (Dyninst), rocgdb, roctracer | ~40 - 50 min |
+| **`hip`** | Clang 23, HIP Runtime (`clr`), ROCR, AMDSMI, `rocminfo` | ~20 - 30 min |
+| **`vulkan`** | HIP + AMD Mesa (Vulkan/VAAPI), `rocDecode`, `rocJPEG` | ~25 - 35 min |
+| **`math`** | HIP + `rocBLAS`, `hipBLASLt`, `rocRAND`, `rocPRIM`, `rocFFT`, `rocSOLVER` | ~1.5 - 2 hours |
+| **`ai`** | HIP + Math + `MIOpen` (Composable Kernel) + `RCCL` + `hipDNN` | ~3.5 - 4.5 hours |
+| **`profiler`** | `rocprofiler-sdk`, `rocprofiler-systems` (Dyninst), `rocgdb`, `roctracer` | ~40 - 50 min |
+| **`opencl`** | OpenCL Runtime (`ocl-clr`), HIP Runtime, AMD Clang | ~20 - 30 min |
 | **`full`** | Complete ROCm stack (All 50+ libraries) | ~4.5 - 5.5 hours |
 
 ---

@@ -1,0 +1,14 @@
+#!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Convenience runner for TheRock environment orchestrator
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="$(which python3 2>/dev/null || which python 2>/dev/null)"
+
+if [ -z "$PYTHON_BIN" ]; then
+    echo "Error: Python 3 executable not found in PATH."
+    exit 1
+fi
+
+exec "$PYTHON_BIN" "$SCRIPT_DIR/build_tools/therock_env.py" "$@"
