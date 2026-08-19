@@ -265,6 +265,7 @@ You can customize any preset on-the-fly by adding or removing individual compone
 
 ## 📚 Documentation & References
 
+* [Upstream Sync & Rebase Guide](docs/UPSTREAM_SYNC_AND_REBASE_GUIDE.md): Step-by-step workflow for upgrading your fork when AMD releases new ROCm versions.
 * [GCC 15 & Ubuntu 26.04 Technical Porting Guide](docs/GCC15_UBUNTU2604_PORTING_GUIDE.md): Technical details on GCC 15 libstdc++ `<version>` migration, CMake 4.x deferred dependency provider, and Meson symbol version script fixes.
 * [Development Guide](docs/development/development_guide.md): Guide for component developers.
 * [Supported GPUs](SUPPORTED_GPUS.md): AMD GPU architecture roadmap.
