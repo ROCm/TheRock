@@ -154,7 +154,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
-        default: "rocm-jaxlib-v0.11.0"
+        default: "rocm-jaxlib-v0.11.1"
       jax_version:
         description: "Built JAX version"
         type: string

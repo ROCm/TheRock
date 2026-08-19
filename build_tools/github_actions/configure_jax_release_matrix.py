@@ -53,6 +53,13 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
+    "rocm-jaxlib-v0.11.1": {
+        "jax_ref": "rocm-jaxlib-v0.11.1",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
 }
 
 # Keep release behavior equivalent to the old generate_jax_matrix(None):
@@ -66,6 +73,7 @@ RELEASE_JAX_REFS = {
         "rocm-jaxlib-v0.10.1",
         "rocm-jaxlib-v0.10.2",
         "rocm-jaxlib-v0.11.0",
+        "rocm-jaxlib-v0.11.1",
     ],
 }
 
@@ -74,7 +82,7 @@ RELEASE_JAX_REFS = {
 # rather than every release version. Additional refs can be opted in as needed.
 CI_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.11.0",
+        "rocm-jaxlib-v0.11.1",
     ],
 }
 
