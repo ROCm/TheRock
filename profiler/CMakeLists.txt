@@ -348,7 +348,6 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       doc
       lib
       run
-      test
     SUBPROJECT_DEPS
       profiler-hub
   )
