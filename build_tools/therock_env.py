@@ -228,11 +228,25 @@ def detect_gpu_arch() -> str:
 
 
 def ensure_submodules():
-    """Ensure Git submodules (rocm-systems, rocm-libraries, etc.) are initialized."""
+    """Ensure Git submodules (rocm-systems, rocm-libraries, etc.) are initialized with fast shallow clone."""
     hip_ver = REPO_ROOT / "rocm-systems/projects/hip/VERSION"
     if not hip_ver.is_file():
-        log_info("Git submodules not found. Initializing and updating git submodules...")
-        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive"], cwd=str(REPO_ROOT))
+        log_info("Git submodules not found. Checking for local submodule cache...")
+        # Check if another TheRock clone exists locally to avoid downloading GBs over network
+        for candidate in Path.home().glob("virtualenv/**/TheRock"):
+            if candidate != REPO_ROOT and (candidate / "rocm-systems/projects/hip/VERSION").is_file():
+                log_info(f"Reusing existing local submodules from: {candidate}")
+                for sm in ["rocm-systems", "rocm-libraries", "third-party"]:
+                    src_sm = candidate / sm
+                    dst_sm = REPO_ROOT / sm
+                    if src_sm.is_dir() and not (dst_sm / ".git").exists():
+                        shutil.copytree(src_sm, dst_sm, dirs_exist_ok=True)
+                if hip_ver.is_file():
+                    log_success("Local submodules linked successfully.")
+                    return
+
+        log_info("Initializing git submodules using fast shallow clone (--depth 1)...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive", "--depth", "1"], cwd=str(REPO_ROOT))
         log_success("Git submodules initialized successfully.")
 
 
