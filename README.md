@@ -137,6 +137,38 @@ ninja -C build
 
 ---
 
+## Automated Modular Experiments & Virtual Environments (`experiment.py`)
+
+For running lightweight experiments or testing specific submodules (e.g. HIP runtime only, Vulkan/Media only, Math only, PyTorch AI only) without rebuilding the entire 50+ library stack, use the automated experiment tool:
+
+```bash
+# 1. List available presets and descriptions
+./build_tools/experiment.py --help
+
+# 2. Build Minimal HIP Runtime (~20-30 min build) in an isolated uv virtual environment
+./build_tools/experiment.py --preset hip-minimal --python 3.14
+
+# 3. Build Vulkan / Mesa / Media Acceleration stack (rocDecode + rocJPEG)
+./build_tools/experiment.py --preset vulkan-media --python 3.14
+
+# 4. Build PyTorch AI Stack (HIP + Math + MIOpen + RCCL + hipDNN)
+./build_tools/experiment.py --preset ai-pytorch --python 3.14
+
+# 5. Activate the compiled environment (both Python virtualenv and ROCm paths in one command)
+source build_hip_minimal/activate_env.sh
+```
+
+| Preset | Included Components | Estimated Build Time |
+| :--- | :--- | :--- |
+| **`hip-minimal`** | Clang 23, HIP Runtime (`clr`), ROCR, AMDSMI, rocminfo | ~20 - 30 min |
+| **`vulkan-media`** | HIP + AMD Mesa (Vulkan/VAAPI), rocDecode, rocJPEG | ~25 - 35 min |
+| **`math-blas`** | HIP + rocBLAS, hipBLASLt, rocRAND, rocPRIM, rocFFT, rocSOLVER | ~1.5 - 2 hours |
+| **`ai-pytorch`** | HIP + Math + MIOpen (Composable Kernel) + RCCL + hipDNN | ~3.5 - 4.5 hours |
+| **`profiler`** | rocprofiler-sdk, rocprofiler-systems (Dyninst), rocgdb, roctracer | ~40 - 50 min |
+| **`full`** | Complete ROCm stack (All 50+ libraries) | ~4.5 - 5.5 hours |
+
+---
+
 ## Using the Built ROCm Installation
 
 Upon build completion, the complete unified ROCm environment is staged in `build/dist/rocm/`.
