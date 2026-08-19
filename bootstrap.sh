@@ -19,7 +19,7 @@ set -euo pipefail
 ROCM_VER="7.14"
 PYTHON_VER="3.14"
 PRESET="llm"
-BRANCH="feature/ubuntu-26.04-gcc15-gfx1151"
+BRANCH="main"
 REPO_URL="https://github.com/analogbox/TheRock.git"
 BASE_DIR="$HOME/virtualenv"
 DRY_RUN=false

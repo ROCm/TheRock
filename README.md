@@ -61,14 +61,14 @@ On a fresh machine without having cloned the repository yet, run this single com
 
 ```bash
 # Direct Single-Command Installation (Fresh Machine / Zero-Install)
-curl -fsSL https://raw.githubusercontent.com/analogbox/TheRock/feature/ubuntu-26.04-gcc15-gfx1151/bootstrap.sh | bash -s -- --rocm 7.14 --python 3.14 --preset llm
+curl -fsSL https://raw.githubusercontent.com/analogbox/TheRock/main/bootstrap.sh | bash -s -- --rocm 7.14 --python 3.14 --preset llm
 ```
 
 Or if you prefer downloading `bootstrap.sh` first:
 
 ```bash
 # Download bootstrap script and run
-curl -O https://raw.githubusercontent.com/analogbox/TheRock/feature/ubuntu-26.04-gcc15-gfx1151/bootstrap.sh
+curl -O https://raw.githubusercontent.com/analogbox/TheRock/main/bootstrap.sh
 chmod +x bootstrap.sh
 
 # Run automated build (e.g. for LLM Inference)
