@@ -309,9 +309,46 @@ Agent 2: gfx1151 / AMD Radeon 8060S Graphics (GPU, 40 Compute Units)
 
 ---
 
+## 🎨 Fully Custom Builds (`--preset custom` & `--components`)
+
+If the pre-packaged presets do not match your exact needs, you can build a **100% tailor-made ROCm environment** by choosing precisely the components you want:
+
+### 1. Zero-Install Custom One-Liner
+```bash
+# Build custom environment with BLAS, Vulkan, MIOpen, and Fast Fourier Transforms (rocFFT)
+curl -fsSL https://raw.githubusercontent.com/analogbox/TheRock/main/bootstrap.sh | bash -s -- --components blas,vulkan,miopen,fft --python 3.14
+```
+
+### 2. Using `bootstrap.sh` or `therock-env`
+```bash
+# Build custom preset with specific components
+./bootstrap.sh --components blas,vulkan,media,profiler --python 3.14
+
+# Or using therock-env directly
+./therock-env build --preset custom --components blas,vulkan,miopen --python 3.14
+```
+
+### 📋 Supported Component Tokens Reference
+
+| Component Token | Aliases / Sub-libraries | Included Functionality |
+| :--- | :--- | :--- |
+| **`blas`** | `rocblas`, `hipblas`, `hipblaslt` | Dense matrix multiplication & GEMM kernels |
+| **`vulkan`** | `mesa`, `radv` | AMD Mesa Vulkan runtime & shader compiler |
+| **`miopen`** | `ck`, `composable-kernel` | Deep learning convolutions & attention operators |
+| **`rccl`** | `comm` | Multi-GPU collective communication primitives |
+| **`fft`** | `rocfft` | Fast Fourier Transforms (1D, 2D, 3D FFT) |
+| **`solver`** | `rocsolver` | Dense linear system & eigenvalue solvers |
+| **`sparse`** | `rocsparse` | Sparse matrix storage & sparse linear algebra |
+| **`rand`** | `rocrand` | Pseudo-random and quasi-random number generators |
+| **`tensor`** | `hiptensor` | High-dimensional tensor contraction math |
+| **`media`** | `rocdecode`, `rocjpeg` | 4K/8K hardware video decoding (AV1/HEVC) & JPEG codec |
+| **`profiler`** | `rocprofv3`, `rocprofiler-sdk`, `rocgdb` | Kernel performance profiling, tracing, and GDB debugger |
+
+---
+
 ## 🧀 Component Customization Flags (`--with-*`)
 
-You can customize any preset on-the-fly by adding or removing individual components:
+You can also customize standard presets on-the-fly by adding individual toggles:
 
 ```bash
 # Example 1: Build LLM preset with GPU Profiler and Debugger

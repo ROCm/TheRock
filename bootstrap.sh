@@ -25,6 +25,7 @@ BASE_DIR="$HOME/virtualenv"
 DRY_RUN=false
 INSTALL_SYSDEPS=false
 WITH_CCACHE=false
+COMPONENTS=""
 
 # Parse Command Line Arguments
 while [ $# -gt 0 ]; do
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
         --rocm) ROCM_VER="$2"; shift 2 ;;
         --python) PYTHON_VER="$2"; shift 2 ;;
         --preset) PRESET="$2"; shift 2 ;;
+        --components) COMPONENTS="$2"; PRESET="custom"; shift 2 ;;
         --branch) BRANCH="$2"; shift 2 ;;
         --repo-url) REPO_URL="$2"; shift 2 ;;
         --base-dir) BASE_DIR="$2"; shift 2 ;;
@@ -42,15 +44,16 @@ while [ $# -gt 0 ]; do
         -h|--help)
             echo "Usage: ./bootstrap.sh [OPTIONS]"
             echo "Options:"
-            echo "  --rocm <version>     TheRock / ROCm version tag (default: 7.14)"
-            echo "  --python <version>   Python version to use (default: 3.14)"
-            echo "  --preset <name>      Build preset: llm, hip, vulkan, math, ai, hpc, full (default: llm)"
-            echo "  --branch <name>      Git branch to checkout (default: main)"
-            echo "  --repo-url <url>     Git repository URL to clone"
-            echo "  --base-dir <path>    Base directory for virtualenvs (default: ~/virtualenv)"
-            echo "  --with-ccache        Enable and auto-install ccache for build acceleration"
-            echo "  --install-sysdeps    Force installing apt system packages with sudo"
-            echo "  --dry-run            Print what would be executed without running build"
+            echo "  --rocm <version>       TheRock / ROCm version tag (default: 7.14)"
+            echo "  --python <version>     Python version to use (default: 3.14)"
+            echo "  --preset <name>        Build preset: llm, hip, vulkan, math, ai, custom, full (default: llm)"
+            echo "  --components <list>    Comma-separated custom components (e.g. blas,vulkan,miopen,fft)"
+            echo "  --branch <name>        Git branch to checkout (default: main)"
+            echo "  --repo-url <url>       Git repository URL to clone"
+            echo "  --base-dir <path>      Base directory for virtualenvs (default: ~/virtualenv)"
+            echo "  --with-ccache          Enable and auto-install ccache for build acceleration"
+            echo "  --install-sysdeps      Force installing apt system packages with sudo"
+            echo "  --dry-run              Print what would be executed without running build"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -146,6 +149,10 @@ BUILD_ARGS=(
 
 if [ "$WITH_CCACHE" = true ]; then
     BUILD_ARGS+=("--with-ccache")
+fi
+
+if [ -n "$COMPONENTS" ]; then
+    BUILD_ARGS+=("--components" "$COMPONENTS")
 fi
 
 if [ "$DRY_RUN" = true ]; then

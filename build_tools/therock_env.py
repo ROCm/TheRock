@@ -126,15 +126,26 @@ PRESETS = {
             "-DTHEROCK_ENABLE_HIPIFY=ON",
         ],
     },
-    "opencl": {
-        "name": "opencl",
-        "description": "OpenCL & HIP Runtimes (ocl-clr, hip-clr, OpenCL ICD)",
+    "custom": {
+        "name": "custom",
+        "description": "Fully Customizable User-Defined Component Suite (--components ...)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
             "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_CORE_RUNTIME=ON",
             "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_OCL_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_CORE_AMDSMI=ON",
+        ],
+    },
+    "opencl": {
+        "name": "opencl",
+        "description": "OpenCL & SPIRV Foundation",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_OPENCL_RUNTIME=ON",
         ],
     },
     "full": {
@@ -144,6 +155,45 @@ PRESETS = {
             "-DTHEROCK_ENABLE_ALL=ON",
         ],
     },
+}
+
+# Granular component mapping for custom builds (--components blas,vulkan,miopen,fft,etc.)
+COMPONENT_MAP = {
+    "blas": ["-DTHEROCK_ENABLE_BLAS=ON"],
+    "rocblas": ["-DTHEROCK_ENABLE_BLAS=ON"],
+    "hipblas": ["-DTHEROCK_ENABLE_BLAS=ON"],
+    "hipblaslt": ["-DTHEROCK_ENABLE_BLAS=ON"],
+    "prim": ["-DTHEROCK_ENABLE_PRIM=ON"],
+    "rocprim": ["-DTHEROCK_ENABLE_PRIM=ON"],
+    "hipcub": ["-DTHEROCK_ENABLE_PRIM=ON"],
+    "rocthrust": ["-DTHEROCK_ENABLE_PRIM=ON"],
+    "rand": ["-DTHEROCK_ENABLE_RAND=ON"],
+    "rocrand": ["-DTHEROCK_ENABLE_RAND=ON"],
+    "tensor": ["-DTHEROCK_ENABLE_HIPTENSOR=ON"],
+    "hiptensor": ["-DTHEROCK_ENABLE_HIPTENSOR=ON"],
+    "vulkan": ["-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON"],
+    "mesa": ["-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON"],
+    "radv": ["-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON"],
+    "miopen": ["-DTHEROCK_ENABLE_MIOPEN=ON", "-DTHEROCK_ENABLE_ML_LIBS=ON"],
+    "ck": ["-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON"],
+    "composable-kernel": ["-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON"],
+    "rccl": ["-DTHEROCK_ENABLE_RCCL=ON", "-DTHEROCK_ENABLE_COMM_LIBS=ON"],
+    "fft": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "rocfft": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "solver": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "rocsolver": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "sparse": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "rocsparse": ["-DTHEROCK_ENABLE_MATH_LIBS=ON"],
+    "alution": ["-DTHEROCK_ENABLE_ROCALUTION=ON"],
+    "rocalution": ["-DTHEROCK_ENABLE_ROCALUTION=ON"],
+    "media": ["-DTHEROCK_ENABLE_MEDIA_LIBS=ON", "-DTHEROCK_ENABLE_ROCDECODE=ON", "-DTHEROCK_ENABLE_ROCJPEG=ON"],
+    "rocdecode": ["-DTHEROCK_ENABLE_ROCDECODE=ON", "-DTHEROCK_ENABLE_MEDIA_LIBS=ON"],
+    "rocjpeg": ["-DTHEROCK_ENABLE_ROCJPEG=ON", "-DTHEROCK_ENABLE_MEDIA_LIBS=ON"],
+    "rpp": ["-DTHEROCK_ENABLE_RPP=ON", "-DTHEROCK_ENABLE_CV_LIBS=ON"],
+    "profiler": ["-DTHEROCK_ENABLE_PROFILER=ON", "-DTHEROCK_ENABLE_ROCPROFV3=ON", "-DTHEROCK_ENABLE_ROCGDB=ON"],
+    "rocgdb": ["-DTHEROCK_ENABLE_ROCGDB=ON", "-DTHEROCK_ENABLE_DEBUG_TOOLS=ON"],
+    "hipify": ["-DTHEROCK_ENABLE_HIPIFY=ON"],
+    "opencl": ["-DTHEROCK_ENABLE_OPENCL_RUNTIME=ON"],
 }
 
 # Aliases for convenience
@@ -166,6 +216,8 @@ PRESET_ALIASES = {
     "math": "math-hpc",
     "hpc": "math-hpc",
     "scientific": "math-hpc",
+    "diy": "custom",
+    "manual": "custom",
 }
 
 
@@ -593,6 +645,19 @@ def cmd_build(args):
     ]
     cmake_cmd.extend(preset_data["cmake_flags"])
 
+    # Process custom --components flag (e.g. --components blas,vulkan,miopen,fft)
+    custom_components = getattr(args, "components", None)
+    if custom_components:
+        comp_tokens = [c.strip().lower() for c in custom_components.split(",") if c.strip()]
+        log_info(f"Custom Components: \033[1;32m{', '.join(comp_tokens)}\033[0m")
+        for token in comp_tokens:
+            if token in COMPONENT_MAP:
+                for flag in COMPONENT_MAP[token]:
+                    if flag not in cmake_cmd:
+                        cmake_cmd.append(flag)
+            else:
+                log_warning(f"Unknown component '{token}'. Available: {', '.join(sorted(COMPONENT_MAP.keys()))}")
+
     # Process custom --with-* and --without-* flags
     if getattr(args, "with_miopen", False):
         log_info("Custom Flag: Enabling MIOpen (+Composable Kernel)")
@@ -715,6 +780,7 @@ def main():
         p.add_argument("--gpu-target", default=None, help="GPU target (default: auto-detected, e.g. gfx1151)")
         p.add_argument("--venv-dir", type=Path, default=None, help="Custom virtual environment directory")
         p.add_argument("--build-dir", default=None, help="Custom build directory name")
+        p.add_argument("--components", default=None, help="Comma-separated custom components (e.g. blas,vulkan,miopen,fft,profiler,media)")
         p.add_argument("--with-ccache", action="store_true", help="Enable and auto-install ccache compiler cache")
         p.add_argument("--no-ccache", action="store_true", help="Disable ccache")
         p.add_argument("--configure-only", action="store_true", help="Only run CMake configure")
