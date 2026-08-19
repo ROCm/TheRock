@@ -497,6 +497,9 @@ class StageImpactTest(unittest.TestCase):
                 "full_rebuild_required",
                 "reasons",
                 "unmatched_inputs",
+                "impacted_artifacts",
+                "reusable_artifacts",
+                "artifact_level_analysis",
             },
         )
         self.assertEqual(payload["changed_inputs"], ("rocm-libraries",))
@@ -504,6 +507,170 @@ class StageImpactTest(unittest.TestCase):
         self.assertEqual(payload["unmatched_inputs"], ())
         self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
         self.assertFalse(payload["full_rebuild_required"])
+
+
+class ArtifactLevelAnalysisTest(unittest.TestCase):
+    """Test cases for granular artifact-level analysis."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as temp_file:
+            self.topology_path = temp_file.name
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.topology_path):
+            os.unlink(self.topology_path)
+
+    def write_topology(self, content: str) -> None:
+        """Write topology content to temp file."""
+        with open(self.topology_path, "w", encoding="utf-8") as f:
+            f.write(textwrap.dedent(content))
+
+    def write_math_libs_topology(self) -> None:
+        """Write a topology with multiple math-libs artifacts."""
+        self.write_topology(
+            """
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-libraries"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.blas]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            components = ["rocblas", "hipblas"]
+
+            [artifacts.fft]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            components = ["rocfft", "hipfft"]
+
+            [artifacts.prim]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            components = ["rocprim", "hipcub", "rocthrust"]
+
+            [artifacts.rand]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            components = ["rocrand", "hiprand"]
+            """
+        )
+
+    def test_rocblas_change_identifies_blas_artifact(self):
+        """A rocblas change should identify blas as impacted artifact."""
+        self.write_math_libs_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["rocm-libraries/projects/rocblas/src/foo.cpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertIn("blas", result.impacted_artifacts)
+        # Other artifacts should be reusable
+        self.assertIn("fft", result.reusable_artifacts)
+        self.assertIn("prim", result.reusable_artifacts)
+        self.assertIn("rand", result.reusable_artifacts)
+
+    def test_multiple_project_changes(self):
+        """Multiple project changes should identify multiple impacted artifacts."""
+        self.write_math_libs_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            [
+                "rocm-libraries/projects/rocblas/src/foo.cpp",
+                "rocm-libraries/projects/rocfft/src/bar.cpp",
+            ],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertIn("blas", result.impacted_artifacts)
+        self.assertIn("fft", result.impacted_artifacts)
+        # prim and rand should still be reusable
+        self.assertIn("prim", result.reusable_artifacts)
+        self.assertIn("rand", result.reusable_artifacts)
+
+    def test_shared_change_disables_artifact_analysis(self):
+        """A shared/ change should disable artifact-level analysis."""
+        self.write_math_libs_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["rocm-libraries/shared/common.hpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        # Artifact-level analysis should NOT be enabled due to conservative fallback
+        self.assertFalse(result.artifact_level_analysis)
+        self.assertEqual(result.impacted_artifacts, ())
+        self.assertEqual(result.reusable_artifacts, ())
+
+    def test_submodule_root_disables_artifact_analysis(self):
+        """A submodule root (no subpath) should not enable artifact analysis."""
+        self.write_math_libs_topology()
+
+        topology = BuildTopology(self.topology_path)
+        # Just the submodule name, no specific file path
+        result = analyze_stage_impact(
+            ["rocm-libraries"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        # Cannot do artifact-level analysis without specific file paths
+        self.assertFalse(result.artifact_level_analysis)
+
+    def test_non_rocm_libraries_no_artifact_analysis(self):
+        """Non-rocm-libraries changes should not enable artifact analysis."""
+        self.write_topology(
+            """
+            [source_sets.compilers]
+            description = "Compilers"
+            submodules = ["llvm-project"]
+
+            [artifact_groups.compiler]
+            description = "Compiler"
+            type = "generic"
+            source_sets = ["compilers"]
+
+            [build_stages.compiler-runtime]
+            description = "Compiler runtime"
+            artifact_groups = ["compiler"]
+
+            [artifacts.amd-llvm]
+            artifact_group = "compiler"
+            type = "target-neutral"
+            """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["llvm-project/llvm/lib/Target/AMDGPU/foo.cpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        # No artifact-level analysis for non-rocm-libraries
+        self.assertFalse(result.artifact_level_analysis)
 
 
 if __name__ == "__main__":

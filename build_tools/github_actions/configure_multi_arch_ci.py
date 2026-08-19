@@ -122,6 +122,71 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _compute_artifacts_from_changed_projects(
+    changed_projects: list[str],
+) -> tuple[list[str], list[str]]:
+    """Compute rebuild/reusable artifacts from external repo changed_projects.
+
+    Maps project paths (e.g., "projects/rocprim", "shared/rocroller") to artifact
+    names (e.g., "prim", "blas") using BUILD_TOPOLOGY.toml component mappings.
+
+    Shared directories (like shared/rocroller, shared/origami) are handled the same
+    way as project directories - the last path component is extracted and looked up
+    in the alias map. This works because BUILD_TOPOLOGY.toml explicitly lists shared
+    components in their artifact's components array (e.g., blas includes rocroller).
+
+    Returns:
+        (rebuild_artifacts, reusable_artifacts) tuple
+    """
+    from _therock_utils.build_topology import get_topology
+
+    topology = get_topology()
+
+    # Collect artifacts with component mappings (derived from topology, not hardcoded)
+    granular_source_sets = set(topology.get_source_sets_with_components())
+    all_stage_artifacts: set[str] = set()
+    for stage in topology.get_build_stages():
+        for group_name in stage.artifact_groups:
+            group = topology.artifact_groups.get(group_name)
+            if group and set(group.source_sets) & granular_source_sets:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    if artifact.components:
+                        all_stage_artifacts.add(artifact.name)
+
+    # Map changed projects to artifacts
+    directly_changed: set[str] = set()
+    alias_map = topology.get_alias_to_artifact_map()
+    for project in changed_projects:
+        normalized = project.split("/")[-1].lower()
+        if normalized in alias_map:
+            directly_changed.add(alias_map[normalized])
+        else:
+            print(
+                f"  WARNING: unknown project '{project}' - not mapped to any artifact"
+            )
+
+    # Expand rebuild set to include downstream dependents
+    # If prim changes, sparse/solver/rocalution (which depend on prim) must also rebuild
+    downstream_dependents = topology.get_reverse_artifact_deps(directly_changed)
+    rebuild_artifacts = directly_changed | downstream_dependents
+
+    if downstream_dependents:
+        print(f"  downstream dependents: {sorted(downstream_dependents)}")
+
+    # Artifacts not in rebuild set are reusable
+    reusable_artifacts = all_stage_artifacts - rebuild_artifacts
+
+    rebuild_list = sorted(rebuild_artifacts)
+    reusable_list = sorted(reusable_artifacts)
+
+    print(f"External repo artifact analysis:")
+    print(f"  changed_projects: {changed_projects}")
+    print(f"  rebuild_artifacts: {rebuild_list}")
+    print(f"  reusable_artifacts: {reusable_list}")
+
+    return rebuild_list, reusable_list
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -161,6 +226,8 @@ class CIInputs:
     baseline_run_id: str = ""
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
+    # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
+    changed_projects: list[str] = field(default_factory=list)
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
@@ -269,6 +336,7 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
 
@@ -436,6 +504,9 @@ class BuildRocmDecision(JobGroupDecision):
     # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
     # TheRock's baseline runs instead of their own.
     baseline_repository: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -532,6 +603,9 @@ class BuildConfig:
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -539,6 +613,8 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["rebuild_artifacts"] = ",".join(self.rebuild_artifacts)
+        d["reusable_artifacts"] = ",".join(self.reusable_artifacts)
         return d
 
 
@@ -942,11 +1018,23 @@ def decide_jobs(
     if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
         baseline_run_id = auto_stage_reuse.baseline_run_id
 
+    # For external repos, use changed_projects to determine artifact-level reuse.
+    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
+    # changed-file analysis.
+    rebuild_artifacts: list[str] = list(auto_stage_reuse.rebuild_artifacts)
+    reusable_artifacts: list[str] = list(auto_stage_reuse.reusable_artifacts)
+    if ci_inputs.changed_projects and not rebuild_artifacts:
+        rebuild_artifacts, reusable_artifacts = (
+            _compute_artifacts_from_changed_projects(ci_inputs.changed_projects)
+        )
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
+        rebuild_artifacts=rebuild_artifacts,
+        reusable_artifacts=reusable_artifacts,
     )
 
     # Test ROCm.
@@ -1214,6 +1302,8 @@ def _expand_build_config_for_platform(
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
+        rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
+        reusable_artifacts=jobs.build_rocm.reusable_artifacts,
     )
 
 

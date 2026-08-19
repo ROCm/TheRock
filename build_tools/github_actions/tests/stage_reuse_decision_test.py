@@ -68,6 +68,18 @@ class FakeTopology:
     def get_source_set_for_path(self, path, platform=None):
         return None
 
+    def get_source_sets_with_components(self):
+        return []
+
+    def get_all_artifacts_for_source_set(self, source_set_name):
+        return frozenset()
+
+    def parse_changed_path(self, path):
+        return (None, None)
+
+    def get_artifact_for_path(self, path):
+        return None
+
 
 def _baseline(run_id, matched_filenames):
     summary = WorkflowRunSummary(
