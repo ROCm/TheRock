@@ -288,17 +288,6 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
-# Additional manual features that don't map to artifacts
-
-# 32-bit Windows builds (x86 cross-compilation from x64 host)
-cmake_dependent_option(THEROCK_ENABLE_COMGR32
-  "Build 32-bit comgr (amd_comgr32.dll) for Windows"
-  OFF "WIN32" OFF)
-
-cmake_dependent_option(THEROCK_ENABLE_OCL32_RUNTIME
-  "Build 32-bit OpenCL runtime (amdocl32.dll) for Windows"
-  OFF "WIN32;THEROCK_ENABLE_COMGR32" OFF)
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()

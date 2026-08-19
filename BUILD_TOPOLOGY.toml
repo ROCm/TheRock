@@ -524,6 +524,7 @@ platform = "windows"
 artifact_deps = ["amd-llvm"]
 feature_name = "COMGR32"
 feature_group = "ALL"
+disable_platforms = ["linux"]
 
 [artifacts.hipify]
 artifact_group = "compiler"
@@ -594,6 +595,7 @@ platform = "windows"
 artifact_deps = ["amd-comgr32", "amd-llvm"]
 feature_name = "OCL32_RUNTIME"
 feature_group = "ALL"
+disable_platforms = ["linux"]
 
 [artifacts.rocrtst]
 artifact_group = "runtime-tests"
