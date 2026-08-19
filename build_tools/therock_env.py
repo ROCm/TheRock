@@ -303,6 +303,9 @@ def ensure_submodules():
                                         "--exclude=.git",
                                         "--exclude=build*",
                                         "--exclude=compile_commands.json",
+                                        "--exclude=CMakeCache.txt",
+                                        "--exclude=CMakeFiles",
+                                        "--exclude=*-subbuild",
                                         "--exclude=*.pack",
                                         "--exclude=*.idx",
                                         "--exclude=*.rev",
@@ -318,8 +321,11 @@ def ensure_submodules():
                                     dst_sm,
                                     dirs_exist_ok=True,
                                     symlinks=True,
-                                    ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "compile_commands.json", "*.pack", "*.idx", "*.rev"),
+                                    ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "compile_commands.json", "CMakeCache.txt", "CMakeFiles", "*-subbuild", "*.pack", "*.idx", "*.rev"),
                                 )
+                    # Clean up any stale in-source subbuilds
+                    for subb in REPO_ROOT.glob("rocm-*/**/*-subbuild"):
+                        shutil.rmtree(subb, ignore_errors=True)
                     if hip_ver.is_file() and llvm_cmake.is_file():
                         log_success("Local submodules linked successfully.")
                         return
@@ -328,6 +334,8 @@ def ensure_submodules():
 
         log_info("Initializing all top-level git submodules using fast shallow clone (--depth 1)...")
         subprocess.check_call(["git", "submodule", "update", "--init", "--depth", "1"], cwd=str(REPO_ROOT))
+        for subb in REPO_ROOT.glob("rocm-*/**/*-subbuild"):
+            shutil.rmtree(subb, ignore_errors=True)
         log_success("All top-level git submodules initialized successfully.")
 
 
