@@ -21,6 +21,23 @@ For detailed technical notes on the GCC 15 and Ubuntu 26.04 port, see [docs/GCC1
 
 ---
 
+## Verified Hardware & Testbed Environment
+
+This fork has been completely compiled, tested, and validated on the following hardware platform:
+
+| Component | Specification |
+| :--- | :--- |
+| **System / Model** | **GMKtec NucBox EVO-X2** (SKU: EVO-X2-001) |
+| **APU / Processor** | **AMD Ryzen™ AI MAX+ 395** (16 Cores, 32 Threads, Strix Halo) |
+| **Integrated Graphics** | **AMD Radeon™ 8060S Graphics** (40 Compute Units / 2560 SPs, RDNA 3.5, ISA: `gfx1151`) |
+| **System Memory** | **128 GB LPDDR5X** Unified High-Speed Memory |
+| **Operating System** | **Ubuntu 26.04 LTS (Resolute Raccoon)** |
+| **Linux Kernel** | `Linux 7.0.0-29-generic` (x86_64) |
+| **Host Toolchain** | GCC 15.2.0 (`gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0`) / G++ 15.2.0 |
+| **Build Tools** | CMake 4.2.3, Ninja 1.12.1, Python 3.14 |
+
+---
+
 ## Quick Start (Ubuntu 26.04 LTS / GCC 15)
 
 ### 1. Prerequisites & System Dependencies

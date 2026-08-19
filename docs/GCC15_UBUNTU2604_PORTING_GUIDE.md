@@ -4,6 +4,19 @@
 
 This document summarizes the modifications made to [ROCm/TheRock](https://github.com/ROCm/TheRock) to enable complete compatibility with **Ubuntu 26.04 LTS (Resolute Raccoon)**, **GCC 15.2.0**, **CMake 4.x**, and the **AMD Strix Halo APU (`gfx1151` / Radeon 8060S / 8050S)**.
 
+### Verified Reference Hardware Platform
+
+| Specification Item | Value |
+| :--- | :--- |
+| **System / Model** | **GMKtec NucBox EVO-X2** (SKU: EVO-X2-001) |
+| **APU / Processor** | **AMD Ryzen™ AI MAX+ 395** (16 Cores, 32 Threads, Strix Halo) |
+| **Integrated GPU** | **AMD Radeon™ 8060S Graphics** (40 CUs / 2560 SPs, RDNA 3.5, ISA: `gfx1151`) |
+| **System Memory** | **128 GB LPDDR5X** Unified High-Speed Memory |
+| **Operating System** | **Ubuntu 26.04 LTS (Resolute Raccoon)** |
+| **Kernel Version** | `Linux 7.0.0-29-generic` (x86_64) |
+| **Host Toolchain** | GCC 15.2.0 (`gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0`) / G++ 15.2.0 |
+| **Build Tools** | CMake 4.2.3, Ninja 1.12.1, Python 3.14 |
+
 ---
 
 ## 1. Summary of Porting Modifications
