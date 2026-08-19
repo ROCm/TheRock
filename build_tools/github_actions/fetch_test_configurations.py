@@ -251,8 +251,23 @@ test_matrix = {
     "tensilelite": {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        # +15 min over the pytest-only baseline for the added ctest stage below
+        # (AIHPBLAS-4410); re-measure once CI timing is observed and adjust.
+        "timeout_minutes": 30,
+        # Runs the existing Python/pytest suite (rocisa + TensileLite unit),
+        # then the tensilelite/tests C++ gtest suite via ctest (AIHPBLAS-4410).
+        # The ctest stage is skipped for TEST_TYPE=quick: tensilelite/tests'
+        # test_categories.yaml only defines standard/comprehensive/full so far
+        # (promote to quick once the standard tier proves stable, see plan).
+        "test_script": (
+            f"python {_get_script_path('pytest_runner.py')} && "
+            '(if [ "$TEST_TYPE" = "quick" ]; then '
+            "echo 'Skipping TensileLite C++ ctest suite for TEST_TYPE=quick "
+            "(not yet promoted from standard; see AIHPBLAS-4410)'; "
+            "else "
+            f"TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}; "
+            "fi)"
+        ),
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
