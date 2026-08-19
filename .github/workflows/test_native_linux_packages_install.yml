@@ -51,6 +51,11 @@ on:
         required: false
         type: string
         default: ""
+      run_uninstall:
+        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Disabled by default."
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -100,6 +105,11 @@ on:
         description: "Build variant (e.g. 'asan'). Changes expected package names."
         type: string
         default: ""
+      run_uninstall:
+        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Disabled by default."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -165,6 +175,7 @@ jobs:
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
+      RUN_UNINSTALL: ${{ inputs.run_uninstall || '' }}
     steps:
       - name: Install System Prerequisites
         run: |
