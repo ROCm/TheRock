@@ -445,6 +445,23 @@ def list_architectures(
         sys.exit(1)
 
 
+def _version_matches(filename: str, version: str) -> bool:
+    """Check whether `filename` contains an exact match of `version`.
+
+    A plain `version in filename` substring check is unsound for dotted
+    version strings: "7.13.0rc1" is a substring of "7.13.0rc10", and "3.0.0"
+    is a substring of "13.0.0". This only matches when `version` (or, for
+    torch-style local versions, `rocm{version}`) is not directly abutted by
+    another alphanumeric character on either side, so it can't partially
+    match a longer/different version.
+    """
+    for candidate in (version, f"rocm{version}"):
+        pattern = r"(?<![A-Za-z0-9])" + re.escape(candidate) + r"(?![A-Za-z0-9])"
+        if re.search(pattern, filename):
+            return True
+    return False
+
+
 def exists_version_single_arch(
     s3_client, bucket_name: str, bucket_prefix: str, arch: str, version: str
 ) -> bool:
@@ -458,7 +475,7 @@ def exists_version_single_arch(
                 continue
 
             for obj in page["Contents"]:
-                if version in obj["Key"]:
+                if _version_matches(obj["Key"], version):
                     return True
 
         return False
@@ -495,7 +512,7 @@ def exists_version_multi_arch(s3_client, bucket, prefix, directory, version):
             continue
 
         for obj in page["Contents"]:
-            if version in obj["Key"]:
+            if _version_matches(obj["Key"], version):
                 return True
 
     return False
@@ -545,7 +562,7 @@ def list_packages_multi_arch(
             #   rocm_sdk_core-7.13.0rc0-...
             # or:
             #   torch-2.10.0+rocm7.13.0rc0-...
-            matches_version = version in filename or f"rocm{version}" in filename
+            matches_version = _version_matches(filename, version)
 
             if matches_version and is_allowed_multi_arch_package(
                 filename,
@@ -594,7 +611,7 @@ def list_packages_structured(
                 ):
                     continue
 
-                matches_version = version in filename or f"rocm{version}" in filename
+                matches_version = _version_matches(filename, version)
                 if matches_version and is_allowed_multi_arch_package(
                     filename,
                     architectures,
@@ -651,7 +668,7 @@ def list_packages_for_arch(
                 category = categorize_package(filename)
 
                 if category == "promote":
-                    if version in filename:
+                    if _version_matches(filename, version):
                         packages_to_promote.append((key, obj["Size"]))
                 elif category == "dependency":
                     dependencies.append((key, obj["Size"]))
@@ -714,10 +731,12 @@ def list_tarball_for_package(
                 if (
                     filename.startswith("therock-dist")
                     and filename.endswith(".tar.gz")
-                    and version in filename
+                    and _version_matches(filename, version)
                 ):
                     # If package filter specified, enforce it
-                    if package is not None and package + "-" + version not in filename:
+                    if package is not None and not _version_matches(
+                        filename, f"{package}-{version}"
+                    ):
                         continue
 
                     tarballs.append((key, obj["Size"]))

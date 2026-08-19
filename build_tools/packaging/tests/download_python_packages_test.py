@@ -234,6 +234,87 @@ class StructuredDownloadTest(unittest.TestCase):
 
         self.assertEqual(args.tarball_output_dir, Path("downloads") / "tarball-asan")
 
+    def test_version_matching_rejects_numeric_prefix_collision(self):
+        # Requesting "3.0.0" must not also match "13.0.0": a plain substring
+        # check would incorrectly find "3.0.0" inside "13.0.0".
+        objects = {
+            (
+                "therock-repo-amd-rc-core",
+                "v5/rocm/core/whl-next/",
+            ): [
+                {
+                    "Key": "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-3.0.0-py3-none-linux_x86_64.whl",
+                    "Size": 10,
+                },
+                {
+                    "Key": "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-13.0.0-py3-none-linux_x86_64.whl",
+                    "Size": 20,
+                },
+            ],
+        }
+        client = FakeS3Client(objects)
+
+        packages = list_packages_structured(
+            client,
+            "rc",
+            ["core"],
+            "whl-next",
+            "3.0.0",
+        )
+
+        self.assertEqual(
+            packages,
+            [
+                (
+                    "therock-repo-amd-rc-core",
+                    "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-3.0.0-py3-none-linux_x86_64.whl",
+                    10,
+                ),
+            ],
+        )
+
+    def test_version_matching_rejects_rc_suffix_collision(self):
+        # Requesting "7.13.0rc1" must not also match "7.13.0rc10": a plain
+        # substring check would incorrectly find "7.13.0rc1" as a prefix of
+        # "7.13.0rc10".
+        objects = {
+            "Contents": [
+                {
+                    "Key": "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0rc1.tar.gz",
+                    "Size": 10,
+                },
+                {
+                    "Key": "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0rc10.tar.gz",
+                    "Size": 20,
+                },
+            ]
+        }
+        client = FakeS3Client(
+            {
+                ("therock-repo-amd-rc-core", core_tarball_prefix("release")): objects[
+                    "Contents"
+                ]
+            }
+        )
+
+        tarballs = list_tarball_for_package(
+            client,
+            "therock-repo-amd-rc-core",
+            core_tarball_prefix("release"),
+            None,
+            "7.13.0rc1",
+        )
+
+        self.assertEqual(
+            tarballs,
+            [
+                (
+                    "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0rc1.tar.gz",
+                    10,
+                )
+            ],
+        )
+
     def test_core_tarball_prefixes_reuse_legacy_tarball_listing(self):
         objects = {
             "Contents": [
