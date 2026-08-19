@@ -296,12 +296,30 @@ def ensure_submodules():
                         src_sm = candidate / sm
                         dst_sm = REPO_ROOT / sm
                         if src_sm.is_dir():
-                            shutil.copytree(
-                                src_sm,
-                                dst_sm,
-                                dirs_exist_ok=True,
-                                ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "*.pack", "*.idx", "*.rev"),
-                            )
+                            if shutil.which("rsync"):
+                                subprocess.run(
+                                    [
+                                        "rsync", "-a",
+                                        "--exclude=.git",
+                                        "--exclude=build*",
+                                        "--exclude=compile_commands.json",
+                                        "--exclude=*.pack",
+                                        "--exclude=*.idx",
+                                        "--exclude=*.rev",
+                                        f"{src_sm}/",
+                                        f"{dst_sm}/",
+                                    ],
+                                    check=True,
+                                    capture_output=True,
+                                )
+                            else:
+                                shutil.copytree(
+                                    src_sm,
+                                    dst_sm,
+                                    dirs_exist_ok=True,
+                                    symlinks=True,
+                                    ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "compile_commands.json", "*.pack", "*.idx", "*.rev"),
+                                )
                     if hip_ver.is_file() and llvm_cmake.is_file():
                         log_success("Local submodules linked successfully.")
                         return
