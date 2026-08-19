@@ -131,28 +131,28 @@ if [ ! -d "$SOURCE_DIR/.git" ]; then
     # Check if existing submodules are available locally to avoid redundant GB downloads
     echo -e "\n\033[1;36m[i] Checking for existing local submodules in $BASE_DIR to speed up setup...\033[0m"
     for candidate in "$BASE_DIR"/*/TheRock; do
-        if [ -d "$candidate/rocm-libraries" ] && [ "$candidate" != "$SOURCE_DIR" ]; then
+        if [ -d "$candidate/rocm-libraries" ] && [ -d "$candidate/compiler/amd-llvm" ] && [ "$candidate" != "$SOURCE_DIR" ]; then
             echo -e "  \033[1;32m✓ Found local submodule cache at:\033[0m $candidate"
             echo -e "  \033[1;33m→ Copying local submodules (0 MB internet download needed)...\033[0m"
-            cp -a "$candidate/rocm-systems" "$candidate/rocm-libraries" "$candidate/third-party" "$SOURCE_DIR/" 2>/dev/null || true
+            cp -a "$candidate/compiler" "$candidate/rocm-systems" "$candidate/rocm-libraries" "$candidate/base" "$candidate/math-libs" "$candidate/third-party" "$candidate/debug-tools" "$SOURCE_DIR/" 2>/dev/null || true
             echo -e "  \033[1;32m✓ Local submodules linked successfully!\033[0m"
             break
         fi
     done
 
     # Fetch submodules with live progress if not already populated
-    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ]; then
-        echo -e "\n\033[1;33m[i] Downloading top-level ROCm submodules from GitHub (rocm-systems, rocm-libraries)...\033[0m"
+    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ] || [ ! -f "$SOURCE_DIR/compiler/amd-llvm/llvm/CMakeLists.txt" ]; then
+        echo -e "\n\033[1;33m[i] Downloading top-level ROCm submodules from GitHub (llvm, hip, rocm-libraries)...\033[0m"
         echo -e "    Please wait while submodules are downloaded and unpacked..."
-        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress rocm-systems rocm-libraries third-party compiler)
+        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress)
         echo -e "\033[1;32m[✓] Submodules downloaded successfully.\033[0m"
     fi
 else
     echo -e "\033[1;32m[✓] Existing TheRock source repository found at:\033[0m $SOURCE_DIR"
     (cd "$SOURCE_DIR" && git checkout "$BRANCH" 2>/dev/null || true)
-    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ]; then
+    if [ ! -f "$SOURCE_DIR/rocm-systems/projects/hip/VERSION" ] || [ ! -f "$SOURCE_DIR/compiler/amd-llvm/llvm/CMakeLists.txt" ]; then
         echo -e "\n\033[1;33m[i] Populating submodules...\033[0m"
-        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress rocm-systems rocm-libraries third-party compiler)
+        (cd "$SOURCE_DIR" && git submodule update --init --depth 1 --progress)
         echo -e "\033[1;32m[✓] Submodules ready.\033[0m"
     fi
 fi

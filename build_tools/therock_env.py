@@ -281,26 +281,28 @@ def detect_gpu_arch() -> str:
 
 
 def ensure_submodules():
-    """Ensure Git submodules (rocm-systems, rocm-libraries, etc.) are initialized with fast shallow clone."""
+    """Ensure all top-level Git submodules (amd-llvm, rocm-systems, rocm-libraries, etc.) are initialized."""
     hip_ver = REPO_ROOT / "rocm-systems/projects/hip/VERSION"
-    if not hip_ver.is_file():
-        log_info("Git submodules not found. Checking for local submodule cache...")
+    llvm_cmake = REPO_ROOT / "compiler/amd-llvm/llvm/CMakeLists.txt"
+
+    if not hip_ver.is_file() or not llvm_cmake.is_file():
+        log_info("Checking for local submodule cache in existing workspaces...")
         # Check if another TheRock clone exists locally to avoid downloading GBs over network
         for candidate in Path.home().glob("virtualenv/**/TheRock"):
-            if candidate != REPO_ROOT and (candidate / "rocm-systems/projects/hip/VERSION").is_file():
+            if candidate != REPO_ROOT and (candidate / "rocm-systems/projects/hip/VERSION").is_file() and (candidate / "compiler/amd-llvm/llvm/CMakeLists.txt").is_file():
                 log_info(f"Reusing existing local submodules from: {candidate}")
-                for sm in ["rocm-systems", "rocm-libraries", "third-party"]:
+                for sm in ["compiler", "rocm-systems", "rocm-libraries", "base", "math-libs", "third-party", "debug-tools"]:
                     src_sm = candidate / sm
                     dst_sm = REPO_ROOT / sm
-                    if src_sm.is_dir() and not (dst_sm / ".git").exists():
+                    if src_sm.is_dir():
                         shutil.copytree(src_sm, dst_sm, dirs_exist_ok=True)
-                if hip_ver.is_file():
+                if hip_ver.is_file() and llvm_cmake.is_file():
                     log_success("Local submodules linked successfully.")
                     return
 
-        log_info("Initializing top-level git submodules using fast shallow clone (--depth 1)...")
-        subprocess.check_call(["git", "submodule", "update", "--init", "--depth", "1", "rocm-systems", "rocm-libraries", "third-party"], cwd=str(REPO_ROOT))
-        log_success("Git submodules initialized successfully.")
+        log_info("Initializing all top-level git submodules using fast shallow clone (--depth 1)...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--depth", "1"], cwd=str(REPO_ROOT))
+        log_success("All top-level git submodules initialized successfully.")
 
 
 def apply_runtime_patches():
