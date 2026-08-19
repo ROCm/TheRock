@@ -297,7 +297,7 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 # that needs it.
 ##############################################################################
 if(THEROCK_ENABLE_PROFILER_HUB)
-  set(_profiler_hub_build_deps therock-nlohmann-json therock-spdlog therock-fmt)
+  set(_profiler_hub_build_deps therock-spdlog therock-fmt)
   if(THEROCK_BUILD_TESTING)
     list(APPEND _profiler_hub_build_deps therock-googletest)
   endif()
