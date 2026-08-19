@@ -99,7 +99,7 @@ def generate_index_s3(
         raise FileNotFoundError(f"No .tar.gz files found in bucket {bucket_name}.")
 
     # Page title
-    page_title = "Tarballs"
+    page_title = "Tarball index"
 
     # Prepare filter options and files array for JS
     gpu_families = extract_gpu_details(files)
