@@ -178,3 +178,51 @@ def plan_key_copies(
             )
         )
     return plans
+
+
+# Product classification for the flat local promotion layout, where core,
+# PyTorch, and JAX artifacts are intermixed in a single directory before being
+# routed to their per-product structured buckets. Kept as an explicit
+# allowlist (rather than defaulting unmatched packages to "core") so an
+# unrecognized or renamed package fails loudly instead of silently landing in
+# the wrong product bucket.
+PYTORCH_PACKAGE_NAMES = frozenset({"apex", "triton"})
+PYTORCH_PACKAGE_PREFIXES = ("torch", "amd-torch")
+JAX_PACKAGE_PREFIXES = ("jax", "jaxlib", "jax-rocm")
+CORE_PACKAGE_PREFIXES = (
+    "rocm-sdk-core",
+    "rocm-sdk-devel",
+    "rocm-sdk-device",
+    "rocm-sdk-libraries",
+    "rocm-profiler",
+    "rocm",
+)
+
+
+def infer_structured_product(filename: str) -> str:
+    """Infer the repo.amd.com product for a flat-layout distribution artifact.
+
+    Args:
+        filename: Wheel or sdist filename from the flat local promotion
+            layout (core/pytorch/jax artifacts intermixed in one directory).
+
+    Returns:
+        One of "pytorch", "jax", "core".
+
+    Raises:
+        ValueError: if filename cannot be parsed as a wheel/sdist, or its
+            package name doesn't match any known core/pytorch/jax package.
+    """
+    package_name = package_name_from_filename(filename)
+    if package_name in PYTORCH_PACKAGE_NAMES or package_name.startswith(
+        PYTORCH_PACKAGE_PREFIXES
+    ):
+        return "pytorch"
+    if package_name.startswith(JAX_PACKAGE_PREFIXES):
+        return "jax"
+    if package_name.startswith(CORE_PACKAGE_PREFIXES):
+        return "core"
+    raise ValueError(
+        f"Cannot infer structured product for package {package_name!r} "
+        f"(file: {filename!r}); expected a known core/pytorch/jax package"
+    )

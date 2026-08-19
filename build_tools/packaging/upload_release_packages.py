@@ -121,7 +121,7 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.python_package_paths import (
-    package_name_from_filename,
+    infer_structured_product,
     structured_key,
 )
 
@@ -147,13 +147,6 @@ CORE_TARBALL_PREFIXES = {
     "asan": "v5/rocm/core/tarball-asan/",
 }
 
-PYTORCH_PACKAGES = {
-    "apex",
-    "triton",
-}
-PYTORCH_PACKAGE_PREFIXES = ("torch", "amd-torch")
-JAX_PACKAGE_PREFIXES = ("jax", "jaxlib", "jax-rocm")
-
 
 def core_tarball_prefix(tarball_variant: str) -> str:
     return CORE_TARBALL_PREFIXES[tarball_variant]
@@ -165,17 +158,6 @@ def repo_product_bucket(stream: str, product: str) -> str:
 
 def core_tarball_dir_name(tarball_variant: str) -> str:
     return "tarball-asan" if tarball_variant == "asan" else "tarball"
-
-
-def infer_structured_product(filename: str) -> str:
-    package_name = package_name_from_filename(filename)
-    if package_name in PYTORCH_PACKAGES or package_name.startswith(
-        PYTORCH_PACKAGE_PREFIXES
-    ):
-        return "pytorch"
-    if package_name.startswith(JAX_PACKAGE_PREFIXES):
-        return "jax"
-    return "core"
 
 
 def upload_python_files(
@@ -270,7 +252,11 @@ def upload_python_files(
 
         for file_path in sorted(files_to_upload):
             if structured:
-                product = infer_structured_product(file_path.name)
+                try:
+                    product = infer_structured_product(file_path.name)
+                except ValueError as e:
+                    print(f"    [ERROR]: Skipping {file_path.name}: {e}")
+                    continue
                 upload_bucket = repo_product_bucket(repo_stream, product)
                 s3_key = structured_key(product, python_index, file_path.name)
             elif multi_arch:
