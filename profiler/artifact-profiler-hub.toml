@@ -12,4 +12,3 @@ include = [
   "lib/cmake/profiler-hub/**",
 ]
 [components.doc."profiler/profiler-hub/stage"]
-[components.test."profiler/profiler-hub/stage"]
