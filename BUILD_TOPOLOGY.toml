@@ -799,7 +799,7 @@ disable_platforms = ["windows"]
 [artifacts.profiler-hub]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base", "rocprofiler-sdk", "spdlog", "nlohmann-json"]
+artifact_deps = ["core-runtime", "base", "rocprofiler-sdk", "spdlog"]
 feature_name = "PROFILER_HUB"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
