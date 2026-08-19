@@ -699,9 +699,9 @@ distributions.
 ```bash
 # Step 1: Find the latest release from
 #         https://rocm.nightlies.amd.com/packages-asan/deb/
-#         Look for directories like "20260714-29296019987"
+#         Look for directories like "20260819-32200219095"
 # Step 2: Set the variable below
-export RELEASE_ID=20260714-29296019987  # replace with the latest date-runid
+export RELEASE_ID=20260819-32200219095  # replace with the latest date-runid
 
 # Step 3: Add repository and install
 echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-asan/deb/${RELEASE_ID} stable main" \
@@ -709,10 +709,10 @@ echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-asan/deb/${RELEA
 sudo apt update
 
 # Install all supported GPU architectures (larger download):
-sudo apt install amdrocm
+sudo apt install amdrocm-asan
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo apt install amdrocm7.15-gfx942   # MI300X / MI300A
-sudo apt install amdrocm7.15-gfx950   # MI350X
+sudo apt install amdrocm-asan10.0-gfx942   # MI300X / MI300A
+sudo apt install amdrocm-asan10.0-gfx950   # MI350X
 ```
 
 ##### RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
@@ -720,9 +720,9 @@ sudo apt install amdrocm7.15-gfx950   # MI350X
 ```bash
 # Step 1: Find the latest release from
 #         https://rocm.nightlies.amd.com/packages-asan/rpm/
-#         Look for directories like "20260714-29296019987"
+#         Look for directories like "20260819-32200219095"
 # Step 2: Set the variable below
-export RELEASE_ID=20260714-29296019987  # replace with the latest date-runid
+export RELEASE_ID=20260819-32200219095  # replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo tee /etc/yum.repos.d/rocm-asan-nightly.repo <<EOF
@@ -737,19 +737,19 @@ EOF
 sudo dnf clean all
 
 # Install all supported GPU architectures (larger download):
-sudo dnf install amdrocm
+sudo dnf install amdrocm-asan
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo dnf install amdrocm7.15-gfx942   # MI300X / MI300A
-sudo dnf install amdrocm7.15-gfx950   # MI350X
+sudo dnf install amdrocm-asan10.0-gfx942   # MI300X / MI300A
+sudo dnf install amdrocm-asan10.0-gfx950   # MI350X
 ```
 
 #### Installing via tarball
 
 Browse https://rocm.nightlies.amd.com/tarball-asan/ for the latest available
-release and set `ROCM_VERSION` accordingly (e.g. `7.15.0a20260714`).
+release and set `ROCM_VERSION` accordingly (e.g. `10.1.0a20260819`).
 
 ```bash
-export ROCM_VERSION=7.15.0a20260714   # replace with the latest from the link above
+export ROCM_VERSION=10.1.0a20260819   # replace with the latest from the link above
 export ASAN_TARBALL_BASE_URL=https://rocm.nightlies.amd.com/asan/tarball/
 ```
 
