@@ -138,7 +138,7 @@ if [ ! -d "$SOURCE_DIR/.git" ]; then
                 for sm in compiler rocm-systems rocm-libraries base math-libs third-party debug-tools; do
                     if [ -d "$candidate/$sm" ]; then
                         mkdir -p "$SOURCE_DIR/$sm"
-                        rsync -a --exclude='.git' --exclude='*.pack' --exclude='*.idx' --exclude='*.rev' --exclude='CMakeCache.txt' --exclude='CMakeFiles' --exclude='*-subbuild' --exclude='build*' "$candidate/$sm/" "$SOURCE_DIR/$sm/" 2>/dev/null || true
+                        rsync -a --exclude='.git' --exclude='*.pack' --exclude='*.idx' --exclude='*.rev' --exclude='CMakeCache.txt' --exclude='CMakeFiles' --exclude='*-subbuild' --exclude='build/' "$candidate/$sm/" "$SOURCE_DIR/$sm/" 2>/dev/null || true
                     fi
                 done
                 rm -rf "$SOURCE_DIR"/rocm-*/**/*-subbuild 2>/dev/null || true

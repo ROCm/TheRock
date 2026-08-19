@@ -301,7 +301,7 @@ def ensure_submodules():
                                     [
                                         "rsync", "-a",
                                         "--exclude=.git",
-                                        "--exclude=build*",
+                                        "--exclude=build/",
                                         "--exclude=compile_commands.json",
                                         "--exclude=CMakeCache.txt",
                                         "--exclude=CMakeFiles",
@@ -321,7 +321,7 @@ def ensure_submodules():
                                     dst_sm,
                                     dirs_exist_ok=True,
                                     symlinks=True,
-                                    ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "build*", "compile_commands.json", "CMakeCache.txt", "CMakeFiles", "*-subbuild", "*.pack", "*.idx", "*.rev"),
+                                    ignore=shutil.ignore_patterns(".git", "*.pyc", "__pycache__", "compile_commands.json", "CMakeCache.txt", "CMakeFiles", "*-subbuild", "*.pack", "*.idx", "*.rev"),
                                 )
                     # Clean up any stale in-source subbuilds
                     for subb in REPO_ROOT.glob("rocm-*/**/*-subbuild"):
