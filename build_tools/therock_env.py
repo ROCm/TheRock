@@ -7,8 +7,9 @@
 Manages:
 1. Python virtual environments per version (3.14, 3.13, 3.12, etc.) using `uv`.
 2. Multiple independent modular ROCm builds within/across any Python virtual environment.
-3. Batch matrix builds (building multiple presets sequentially).
-4. Inspecting and activating specific build/environment pairs.
+3. Convenient component customization flags (--with-miopen, --with-profiler, etc.).
+4. Batch matrix builds (building multiple presets sequentially).
+5. Inspecting and activating specific build/environment pairs.
 """
 
 import argparse
@@ -29,7 +30,7 @@ VENV_BASE_DIR = REPO_ROOT.parent.parent if REPO_ROOT.parent.name.startswith("ven
 PRESETS = {
     "hip": {
         "name": "hip",
-        "description": "Minimal HIP Runtime + AMD Clang Compiler + rocminfo (Fast ~20-30m)",
+        "description": "Minimal HIP Runtime + AMD Clang Compiler + rocminfo (Fastest ~20-30m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -39,9 +40,40 @@ PRESETS = {
             "-DTHEROCK_ENABLE_CORE_AMDSMI=ON",
         ],
     },
+    "llm-inference": {
+        "name": "llm-inference",
+        "description": "LLM Inference (llama.cpp, vLLM, Ollama, ExLlamaV2) (Fast ~30-35m)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_CORE_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_CORE_AMDSMI=ON",
+            "-DTHEROCK_ENABLE_BLAS=ON",
+            "-DTHEROCK_ENABLE_PRIM=ON",
+            "-DTHEROCK_ENABLE_RAND=ON",
+            "-DTHEROCK_ENABLE_HIPTENSOR=ON",
+        ],
+    },
+    "cv-vision": {
+        "name": "cv-vision",
+        "description": "Computer Vision & Video Processing (RPP, rocDecode, rocJPEG, Mesa) (~25-35m)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON",
+            "-DTHEROCK_ENABLE_MEDIA_LIBS=ON",
+            "-DTHEROCK_ENABLE_ROCDECODE=ON",
+            "-DTHEROCK_ENABLE_ROCJPEG=ON",
+            "-DTHEROCK_ENABLE_RPP=ON",
+        ],
+    },
     "vulkan": {
         "name": "vulkan",
-        "description": "HIP + AMD Mesa (Vulkan/VAAPI) + rocDecode + rocJPEG (Video & Multimedia)",
+        "description": "HIP + AMD Mesa (Vulkan/VAAPI) + rocDecode + rocJPEG (Multimedia) (~25-35m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -64,6 +96,18 @@ PRESETS = {
             "-DTHEROCK_ENABLE_MATH_LIBS=ON",
         ],
     },
+    "hpc": {
+        "name": "hpc",
+        "description": "Scientific & HPC Computing (BLAS, FFT, SOLVER, SPARSE, ALUTION, PRIM)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_MATH_LIBS=ON",
+            "-DTHEROCK_ENABLE_ROCALUTION=ON",
+        ],
+    },
     "ai": {
         "name": "ai",
         "description": "PyTorch / JAX AI Stack (HIP + Math + MIOpen + Composable Kernel + RCCL + hipDNN)",
@@ -76,6 +120,17 @@ PRESETS = {
             "-DTHEROCK_ENABLE_ML_LIBS=ON",
             "-DTHEROCK_ENABLE_MIOPEN=ON",
             "-DTHEROCK_ENABLE_RCCL=ON",
+        ],
+    },
+    "hipify": {
+        "name": "hipify",
+        "description": "CUDA to HIP Source Code Translation Tools (HIPIFY + Clang)",
+        "cmake_flags": [
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_COMPILER=ON",
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_HIPIFY=ON",
         ],
     },
     "profiler": {
@@ -111,6 +166,14 @@ PRESETS = {
             "-DTHEROCK_ENABLE_ALL=ON",
         ],
     },
+}
+
+# Aliases for convenience
+PRESET_ALIASES = {
+    "llm": "llm-inference",
+    "inference": "llm-inference",
+    "vision": "cv-vision",
+    "cv": "cv-vision",
 }
 
 
@@ -307,9 +370,9 @@ def cmd_list_builds(args):
 
 def cmd_build(args):
     """Command: Configure and build a specific preset in a Python environment."""
-    preset_key = args.preset
+    preset_key = PRESET_ALIASES.get(args.preset, args.preset)
     if preset_key not in PRESETS:
-        log_error(f"Unknown preset: {preset_key}. Available: {', '.join(PRESETS.keys())}")
+        log_error(f"Unknown preset: {args.preset}. Available: {', '.join(PRESETS.keys())}")
         sys.exit(1)
 
     preset_data = PRESETS[preset_key]
@@ -318,7 +381,8 @@ def cmd_build(args):
 
     # Determine build directory
     py_slug = py_ver.replace(".", "")
-    build_dir_name = args.build_dir or f"build_py{py_slug}_{preset_key}"
+    preset_slug = preset_key.replace("-", "_")
+    build_dir_name = args.build_dir or f"build_py{py_slug}_{preset_slug}"
     build_dir = REPO_ROOT / build_dir_name
 
     log_info(f"============================================================")
@@ -342,6 +406,31 @@ def cmd_build(args):
         f"-DTHEROCK_AMDGPU_FAMILIES={gpu_arch}",
     ]
     cmake_cmd.extend(preset_data["cmake_flags"])
+
+    # Process custom --with-* and --without-* flags
+    if getattr(args, "with_miopen", False):
+        log_info("Custom Flag: Enabling MIOpen (+Composable Kernel)")
+        cmake_cmd.append("-DTHEROCK_ENABLE_MIOPEN=ON")
+    if getattr(args, "with_rccl", False):
+        log_info("Custom Flag: Enabling RCCL (Collective Communications)")
+        cmake_cmd.append("-DTHEROCK_ENABLE_RCCL=ON")
+    if getattr(args, "with_profiler", False):
+        log_info("Custom Flag: Enabling Profiler & Debug Tools")
+        cmake_cmd.extend(["-DTHEROCK_ENABLE_PROFILER=ON", "-DTHEROCK_ENABLE_ROCPROFV3=ON", "-DTHEROCK_ENABLE_ROCGDB=ON"])
+    if getattr(args, "with_fft", False):
+        log_info("Custom Flag: Enabling rocFFT")
+        cmake_cmd.append("-DTHEROCK_ENABLE_MATH_LIBS=ON")
+    if getattr(args, "with_media", False) or getattr(args, "with_vulkan", False):
+        log_info("Custom Flag: Enabling Mesa / Vulkan / Video Codecs")
+        cmake_cmd.extend([
+            "-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON",
+            "-DTHEROCK_ENABLE_MEDIA_LIBS=ON",
+            "-DTHEROCK_ENABLE_ROCDECODE=ON",
+            "-DTHEROCK_ENABLE_ROCJPEG=ON",
+        ])
+    if getattr(args, "without_blas", False):
+        log_info("Custom Flag: Disabling BLAS libraries")
+        cmake_cmd.append("-DTHEROCK_ENABLE_BLAS=OFF")
 
     if not args.no_ccache:
         cmake_cmd.extend([
@@ -382,11 +471,12 @@ def cmd_build(args):
 
 def cmd_build_matrix(args):
     """Command: Build multiple presets sequentially."""
-    presets = [p.strip() for p in args.presets.split(",")]
-    log_info(f"Running matrix build for presets: {presets} on Python {args.python}")
+    raw_presets = [p.strip() for p in args.presets.split(",")]
+    log_info(f"Running matrix build for presets: {raw_presets} on Python {args.python}")
 
-    for idx, preset_name in enumerate(presets, 1):
-        log_info(f"\n>>> [{idx}/{len(presets)}] Starting build for preset: {preset_name} <<<")
+    for idx, raw_preset in enumerate(raw_presets, 1):
+        preset_name = PRESET_ALIASES.get(raw_preset, raw_preset)
+        log_info(f"\n>>> [{idx}/{len(raw_presets)}] Starting build for preset: {preset_name} <<<")
         args.preset = preset_name
         args.build_dir = None
         cmd_build(args)
@@ -413,27 +503,34 @@ def main():
     p_list_builds = subparsers.add_parser("list-builds", help="List all completed and partial ROCm build trees")
     p_list_builds.set_defaults(func=cmd_list_builds)
 
+    # Helper function to add build flags
+    def add_build_options(p):
+        p.add_argument("--python", default="3.14", help="Python version to target (default: 3.14)")
+        p.add_argument("--gpu-target", default=None, help="GPU target (default: auto-detected, e.g. gfx1151)")
+        p.add_argument("--build-dir", default=None, help="Custom build directory name")
+        p.add_argument("--no-ccache", action="store_true", help="Disable ccache")
+        p.add_argument("--configure-only", action="store_true", help="Only run CMake configure")
+        p.add_argument("--dry-run", action="store_true", help="Print commands without executing")
+        # Component toggle flags
+        p.add_argument("--with-miopen", action="store_true", help="Add MIOpen (Deep Learning Convolutions) to build")
+        p.add_argument("--with-rccl", action="store_true", help="Add RCCL (Multi-GPU Communications) to build")
+        p.add_argument("--with-profiler", action="store_true", help="Add Profiler & rocgdb tools to build")
+        p.add_argument("--with-fft", action="store_true", help="Add rocFFT to build")
+        p.add_argument("--with-media", action="store_true", help="Add Mesa, rocDecode, rocJPEG to build")
+        p.add_argument("--with-vulkan", action="store_true", help="Add AMD Mesa Vulkan to build")
+        p.add_argument("--without-blas", action="store_true", help="Exclude BLAS math libraries")
+        p.add_argument("--extra-cmake-args", nargs="*", default=[], help="Extra CMake options")
+
     # Command: build
     p_build = subparsers.add_parser("build", help="Build a modular ROCm preset in a Python virtualenv")
-    p_build.add_argument("--preset", choices=list(PRESETS.keys()), default="hip", help="Preset to build (default: hip)")
-    p_build.add_argument("--python", default="3.14", help="Python version to target (default: 3.14)")
-    p_build.add_argument("--gpu-target", default=None, help="GPU target (default: auto-detected, e.g. gfx1151)")
-    p_build.add_argument("--build-dir", default=None, help="Custom build directory name")
-    p_build.add_argument("--no-ccache", action="store_true", help="Disable ccache")
-    p_build.add_argument("--configure-only", action="store_true", help="Only run CMake configure")
-    p_build.add_argument("--dry-run", action="store_true", help="Print commands without executing")
-    p_build.add_argument("--extra-cmake-args", nargs="*", default=[], help="Extra CMake options")
+    p_build.add_argument("--preset", default="hip", help="Preset to build (e.g. hip, llm, vulkan, math, ai, hpc, cv)")
+    add_build_options(p_build)
     p_build.set_defaults(func=cmd_build)
 
     # Command: build-matrix
     p_matrix = subparsers.add_parser("build-matrix", help="Build multiple presets sequentially")
-    p_matrix.add_argument("--presets", default="hip,vulkan,math", help="Comma-separated presets (e.g. hip,vulkan,math)")
-    p_matrix.add_argument("--python", default="3.14", help="Python version to target (default: 3.14)")
-    p_matrix.add_argument("--gpu-target", default=None, help="GPU target (default: auto-detected)")
-    p_matrix.add_argument("--no-ccache", action="store_true", help="Disable ccache")
-    p_matrix.add_argument("--configure-only", action="store_true", help="Only run CMake configure")
-    p_matrix.add_argument("--dry-run", action="store_true", help="Print commands without executing")
-    p_matrix.add_argument("--extra-cmake-args", nargs="*", default=[], help="Extra CMake options")
+    p_matrix.add_argument("--presets", default="hip,llm,vulkan", help="Comma-separated presets (e.g. hip,llm,vulkan)")
+    add_build_options(p_matrix)
     p_matrix.set_defaults(func=cmd_build_matrix)
 
     args = parser.parse_args()

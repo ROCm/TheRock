@@ -8,20 +8,7 @@ This fork provides out-of-the-box support for **Ubuntu 26.04 LTS (Resolute Racco
 
 ---
 
-## Features
-
-- **Full ROCm Stack & HIP Super-Project**: Build ROCm from source in a single unified build tree.
-- **Ubuntu 26.04 LTS & GCC 15 Ready**: Complete compatibility with GCC 15 (C23 default, stricter C++20 template semantics, ISO C++ `<version>` header conformance).
-- **CMake 4.x Lifecycle Compatibility**: Deferred top-level dependency provider initialization.
-- **AMD Strix Halo (`gfx1151`) First-Class Support**: Targeted builds for AMD Ryzen AI MAX+ 395 and Radeon 8060S/8050S graphics.
-- **Unified Distribution Output**: All components installed into a relocatable, single folder at `build/dist/rocm/`.
-- **Framework Support**: Build PyTorch and JAX with full ROCm GPU acceleration from source.
-
-For detailed technical notes on the GCC 15 and Ubuntu 26.04 port, see [docs/GCC15_UBUNTU2604_PORTING_GUIDE.md](docs/GCC15_UBUNTU2604_PORTING_GUIDE.md).
-
----
-
-## Verified Hardware & Testbed Environment
+## 🖥️ Verified Hardware & Testbed Environment
 
 This fork has been completely compiled, tested, and validated on the following hardware platform:
 
@@ -34,257 +21,190 @@ This fork has been completely compiled, tested, and validated on the following h
 | **Operating System** | **Ubuntu 26.04 LTS (Resolute Raccoon)** |
 | **Linux Kernel** | `Linux 7.0.0-29-generic` (x86_64) |
 | **Host Toolchain** | GCC 15.2.0 (`gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0`) / G++ 15.2.0 |
-| **Build Tools** | CMake 4.2.3, Ninja 1.12.1, Python 3.14 |
+| **Build Tools** | CMake 4.2.3, Ninja 1.12.1, Python 3.14, `uv` 0.x |
 
 ---
 
-## Quick Start (Ubuntu 26.04 LTS / GCC 15)
+## 📖 쉬운 개념 이해 (비유로 배우는 빌드 방식)
 
-### 1. Prerequisites & System Dependencies
+ROCm 전체를 바닥부터 빌드하면 50개가 넘는 라이브러리를 만드느라 **약 5시간**이 걸립니다. 하지만 우리는 내가 원하는 작업에 꼭 필요한 것만 골라서 **30분 만에 뚝딱** 만들 수 있습니다!
 
-```bash
-# Update package lists and install build dependencies
-sudo apt update
-sudo apt install -y \
-  build-essential \
-  gcc \
-  g++ \
-  gfortran \
-  git \
-  ninja-build \
-  cmake \
-  pkg-config \
-  xxd \
-  automake \
-  libtool \
-  python3-dev \
-  libegl1-mesa-dev \
-  libsqlite3-dev \
-  texinfo \
-  bison \
-  flex \
-  curl \
-  make \
-  ccache
+```
+🍕 파이썬 가상환경 (uv):
+   파이썬 버전(3.14, 3.13)마다 서로 다른 재료가 섞이지 않도록 방을 깨끗하게 따로 나누는 것!
 
-# Install uv (fast Python package and environment manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source "$HOME/.local/bin/env"
+🍔 모듈형 프리셋 (Preset):
+   뷔페의 50가지 음식을 다 차리느라 5시간 기다릴 필요 없이,
+   "LLM 추론 세트", "비디오/미디어 세트", "기본 HIP 세트"처럼 딱 필요한 메뉴만 주문해서 30분 만에 받는 것!
+
+🧀 토핑 추가 옵션 (--with-*):
+   햄버거 세트에 치즈나 베이컨을 얹듯이,
+   기본 LLM 세트에 내가 원하는 라이브러리(MIOpen, 프로파일러 등)만 플래그 하나로 쏙쏙 추가하는 것!
 ```
 
-### 2. Rust Toolchain Setup (for Mirage emulator & tools)
+---
+
+## 🚀 초간단 4단계 시작하기 (Step-by-Step Tutorial)
+
+### 1단계: 필수 프로그램 설치 (처음 1회만 실행)
+
+터미널을 열고 복사해서 붙여넣기만 하면 됩니다:
 
 ```bash
+# 기본 컴파일러 및 빌드 도구 설치
+sudo apt update
+sudo apt install -y \
+  build-essential gcc g++ gfortran git ninja-build cmake \
+  pkg-config xxd automake libtool python3-dev libegl1-mesa-dev \
+  libsqlite3-dev texinfo bison flex curl make ccache
+
+# 초고속 파이썬 도구 uv 설치
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
+
+# Mirage 에뮬레이터용 Rust 설치
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0
 source "$HOME/.cargo/env"
 ```
 
-### 3. Create Workspace & Python 3.14 Virtual Environment with `uv`
+---
+
+### 2단계: 저장소 다운로드 및 가상환경 생성
 
 ```bash
-# Create directory structure for virtual environment
+# 1. 저장소 클론 및 이동
 mkdir -p ~/virtualenv/venv314 && cd ~/virtualenv/venv314
-
-# Create and activate Python 3.14 virtual environment using uv
-uv venv .venv314 --python 3.14
-source .venv314/bin/activate
-
-# Clone TheRock repository
 git clone https://github.com/analogbox/TheRock.git
 cd TheRock
 
-# Install Python dependencies with uv
-uv pip install -r requirements.txt
-
-# Download submodules and apply patches
-python3 ./build_tools/fetch_sources.py
-```
-
----
-
-## Building ROCm from Source
-
-### Hardware Architecture Targets
-
-Select the GPU architecture matching your system using `-DTHEROCK_AMDGPU_FAMILIES` or `-DTHEROCK_AMDGPU_TARGETS`:
-
-| GPU / Architecture | Target Flag |
-| :--- | :--- |
-| **AMD Strix Halo (Ryzen AI MAX+ 395 / Radeon 8060S / 8050S)** | `-DTHEROCK_AMDGPU_FAMILIES=gfx1151` |
-| **AMD Radeon RX 7900 XTX / XT / GRE (RDNA3)** | `-DTHEROCK_AMDGPU_FAMILIES=gfx1100` |
-| **AMD Radeon RX 7800 XT / 7700 XT (RDNA3)** | `-DTHEROCK_AMDGPU_FAMILIES=gfx1101` |
-| **AMD Radeon RX 7600 (RDNA3)** | `-DTHEROCK_AMDGPU_FAMILIES=gfx1102` |
-| **AMD Instinct MI300X / MI300A (CDNA3)** | `-DTHEROCK_AMDGPU_FAMILIES=gfx942` |
-| **All Supported RDNA3 / 3.5 Architectures** | `-DTHEROCK_AMDGPU_FAMILIES=gfx110X-all` |
-
-### Recommended Build with `ccache` Acceleration
-
-Building ROCm from scratch compiles LLVM, HIP runtimes, and tens of thousands of GPU kernels. Utilizing `ccache` speeds up subsequent and iterative builds dramatically:
-
-```bash
-# 1. Configure CCache environment
-eval "$(./build_tools/setup_ccache.py)"
-
-# 2. Configure CMake super-project (adjust target for your GPU)
-cmake -B build -GNinja \
-  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1151
-
-# 3. Compile all ROCm components
-ninja -C build
-```
-
----
-
-## Multi-Environment & Modular Build Orchestrator (`therock-env`)
-
-The included `./therock-env` tool automates:
-1. **Python Virtual Environment Management (`uv`)**: Automatically provisions isolated Python virtual environments by version (`~/virtualenv/venv314/.venv314`, `~/virtualenv/venv313/.venv313`, etc.) and installs build dependencies in milliseconds.
-2. **Modular Preset Builds**: Build only the components you need (HIP, Vulkan/Media, Math, PyTorch AI) into independent build directories without rebuilding the full 50+ library stack.
-3. **Sequential Matrix Builds**: Automate running multiple preset builds one after another within a specific Python environment.
-4. **Environment Activation**: Automatically generates `activate_env.sh` inside each build tree so you can activate Python + ROCm in one command.
-
-### 1. Managing Python Environments
-
-```bash
-# Create or update a Python 3.14 virtual environment
+# 2. 파이썬 3.14 가상환경 생성 (uv로 1초 만에 완료!)
 ./therock-env setup-venv 3.14
-
-# Create multiple virtual environments at once (e.g. 3.14 and 3.13)
-./therock-env setup-venv 3.14 3.13
-
-# List all detected virtual environments
-./therock-env list-envs
 ```
-
-### 2. Building Modular Presets
-
-```bash
-# Build Minimal HIP Runtime (~20-30 min) in Python 3.14 environment
-./therock-env build --preset hip --python 3.14
-
-# Build Vulkan / Mesa / Media Acceleration stack (rocDecode + rocJPEG)
-./therock-env build --preset vulkan --python 3.14
-
-# Build Math Stack (rocBLAS, hipBLASLt, rocRAND, rocFFT, rocSOLVER)
-./therock-env build --preset math --python 3.14
-
-# Build PyTorch AI Stack (HIP + Math + MIOpen + RCCL + hipDNN)
-./therock-env build --preset ai --python 3.14
-
-# Run a sequential batch build of multiple presets
-./therock-env build-matrix --presets hip,vulkan,math --python 3.14
-```
-
-### 3. Inspecting and Activating Builds
-
-```bash
-# List all completed build trees, their disk sizes, and status
-./therock-env list-builds
-
-# Activate a specific build environment (activates Python venv + exports ROCm paths)
-source build_py314_hip/activate_env.sh
-```
-
-| Preset | Included Components | Estimated Build Time |
-| :--- | :--- | :--- |
-| **`hip`** | Clang 23, HIP Runtime (`clr`), ROCR, AMDSMI, `rocminfo` | ~20 - 30 min |
-| **`vulkan`** | HIP + AMD Mesa (Vulkan/VAAPI), `rocDecode`, `rocJPEG` | ~25 - 35 min |
-| **`math`** | HIP + `rocBLAS`, `hipBLASLt`, `rocRAND`, `rocPRIM`, `rocFFT`, `rocSOLVER` | ~1.5 - 2 hours |
-| **`ai`** | HIP + Math + `MIOpen` (Composable Kernel) + `RCCL` + `hipDNN` | ~3.5 - 4.5 hours |
-| **`profiler`** | `rocprofiler-sdk`, `rocprofiler-systems` (Dyninst), `rocgdb`, `roctracer` | ~40 - 50 min |
-| **`opencl`** | OpenCL Runtime (`ocl-clr`), HIP Runtime, AMD Clang | ~20 - 30 min |
-| **`full`** | Complete ROCm stack (All 50+ libraries) | ~4.5 - 5.5 hours |
 
 ---
 
-## Using the Built ROCm Installation
+### 3단계: 원하는 용도에 맞게 30분 만에 빌드하기!
 
-Upon build completion, the complete unified ROCm environment is staged in `build/dist/rocm/`.
+원하는 목적에 따라 아래 명령어 중 **하나만 골라서 실행**하세요:
 
-### Setting Environment Variables
-
+#### ⚡ 옵션 A: AI / LLM 모델 돌리기 (llama.cpp, vLLM, Ollama) - 추천!
+> **소요 시간: 약 30 ~ 35분**  
+> 행렬 연산(BLAS)과 텐서 가속기만 쏙 골라 빌드합니다.
 ```bash
-export ROCM_PATH="$(pwd)/build/dist/rocm"
-export PATH="$ROCM_PATH/bin:$ROCM_PATH/lib/llvm/bin:$PATH"
-export LD_LIBRARY_PATH="$ROCM_PATH/lib:$ROCM_PATH/lib/rocm_sysdeps/lib:$LD_LIBRARY_PATH"
-export HIP_DEVICE_LIB_PATH="$ROCM_PATH/lib/llvm/amdgcn/bitcode"
+./therock-env build --preset llm --python 3.14
 ```
 
-### Verifying GPU Detection
+#### ⚡ 옵션 B: 최소형 HIP 런타임 (가장 빠른 빌드)
+> **소요 시간: 약 20 ~ 25분**  
+> Clang 23 컴파일러와 기본 HIP 드라이버만 빠르게 만듭니다.
+```bash
+./therock-env build --preset hip --python 3.14
+```
 
-Verify that the runtime and GPU agent are active:
+#### ⚡ 옵션 C: 영상/비디오 및 Vulkan 미디어 가속 (rocDecode + rocJPEG)
+> **소요 시간: 약 25 ~ 35분**  
+> 하드웨어 비디오 디코딩 및 그래픽스 가속기를 만듭니다.
+```bash
+./therock-env build --preset vulkan --python 3.14
+```
+
+#### ⚡ 옵션 D: 수학 & 과학 계산 (FFT, 행렬 분해, SOLVER)
+> **소요 시간: 약 1.5 ~ 2시간**
+```bash
+./therock-env build --preset math --python 3.14
+```
+
+#### ⚡ 옵션 E: PyTorch AI 학습 풀 스택 (MIOpen + RCCL 포함)
+> **소요 시간: 약 3.5 ~ 4.5시간**
+```bash
+./therock-env build --preset ai --python 3.14
+```
+
+---
+
+### 4단계: 빌드된 환경 켜기 (Activate) 및 GPU 작동 확인
+
+빌드가 끝나면 터미널에 나온 `source ...` 명령어를 실행하면 끝납니다!
 
 ```bash
+# 1. 빌드된 LLM 환경 켜기 (파이썬 가상환경 + ROCm 경로가 한 번에 켜집니다)
+source build_py314_llm_inference/activate_env.sh
+
+# 2. 내 GPU가 정상 작동하는지 확인!
 rocminfo
 ```
 
-Example output on **AMD Strix Halo (Radeon 8060S)**:
+출력 결과에 내 그래픽 카드(**AMD Radeon 8060S / gfx1151**)가 나오면 완벽하게 성공입니다! 🎉
+
 ```
 =====================    
 HSA Agents               
 =====================    
 Agent 1: AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (CPU)
-Agent 2: gfx1151 / AMD Radeon 8060S Graphics (GPU)
-  Supported ISA:
-    - amdgcn-amd-amdhsa--gfx1151
-    - amdgcn-amd-amdhsa--gfx11-generic
+Agent 2: gfx1151 / AMD Radeon 8060S Graphics (GPU, 40 Compute Units)
 ```
 
 ---
 
-## Modular Component Development
+## 🍕 프리셋 전체 메뉴판 (Preset List)
 
-TheRock allows compiling and iterating on individual components without rebuilding the entire project:
+| 프리셋 이름 | 별칭 (단축어) | 포함된 라이브러리 | 추천 용도 | 예상 소요 시간 |
+| :--- | :--- | :--- | :--- | :--- |
+| **`hip`** | `hip` | AMD Clang + HIP Runtime + AMDSMI + `rocminfo` | 초경량 HIP C++ 개발 | **~20분** |
+| **`llm-inference`** | **`llm`** | HIP + `rocBLAS` + `hipBLASLt` + `rocPRIM` + `hipTensor` | **vLLM, llama.cpp, Ollama, ExLlamaV2** | **~30분** |
+| **`cv-vision`** | `vision`, `cv` | HIP + `RPP` + `rocDecode` + `rocJPEG` + AMD Mesa | OpenCV, 실시간 영상/비전 AI 전처리 | **~30분** |
+| **`vulkan`** | `vulkan` | HIP + AMD Mesa (RADV Vulkan) + `rocDecode` + `rocJPEG` | Vulkan 그래픽스 & 비디오 가속 | **~30분** |
+| **`math`** | `math` | HIP + `rocBLAS` + `rocFFT` + `rocRAND` + `rocSOLVER` | FFT 신호처리 및 수학 계산 | ~1.5시간 |
+| **`hpc`** | `hpc` | HIP + Math 전체 + `rocALUTION` + `rocSPARSE` | 공학/물리 시뮬레이션 | ~1.5시간 |
+| **`ai`** | `ai` | HIP + Math + `MIOpen` (CK) + `RCCL` + `hipDNN` | PyTorch / JAX 전체 학습 환경 | ~4시간 |
+| **`profiler`** | `profiler` | `rocprofiler-sdk`, `rocprofiler-systems`, `rocgdb` | 성능 측정 및 GPU 디버깅 | ~40분 |
+| **`full`** | `full` | 50개 이상 전체 ROCm 스택 풀 빌드 | 전체 배포본 생성 | ~5시간 |
 
-| Action | Command |
-| :--- | :--- |
-| **Rebuild HIP / CLR Runtime** | `ninja -C build clr+build` |
-| **Rebuild MIOpen** | `ninja -C build MIOpen+build` |
-| **Rebuild rocBLAS** | `ninja -C build rocblas+build` |
-| **Rebuild rocprofiler-sdk** | `ninja -C build rocprofiler-sdk+build` |
-| **Clean component build** | `ninja -C build <component>+expunge` |
+---
 
-### Building a Lightweight Subset of ROCm
+## 🧀 토핑 추가 옵션 (--with-*) 사용법
 
-To build only specific components (e.g., HIP runtime + BLAS + MIOpen):
+기본 프리셋에 내가 원하는 기능만 살짝 얹어서 빌드할 수 있습니다:
 
 ```bash
-cmake -B build -GNinja \
-  -DTHEROCK_ENABLE_ALL=OFF \
-  -DTHEROCK_ENABLE_HIP_RUNTIME=ON \
-  -DTHEROCK_ENABLE_BLAS=ON \
-  -DTHEROCK_ENABLE_MIOPEN=ON \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1151
+# 예시 1: LLM 프리셋에 프로파일러(디버거) 추가하기
+./therock-env build --preset llm --python 3.14 --with-profiler
 
-ninja -C build
+# 예시 2: LLM 프리셋에 MIOpen(합성곱 AI 라이브러리) 추가하기
+./therock-env build --preset llm --python 3.14 --with-miopen
+
+# 예시 3: HIP 기본 프리셋에 rocFFT(고속 푸리에 변환) 추가하기
+./therock-env build --preset hip --python 3.14 --with-fft
+
+# 예시 4: 여러 개를 차례대로 밤새 연속 빌드하기 (배치 매트릭스 빌드)
+./therock-env build-matrix --presets hip,llm,vulkan --python 3.14
+```
+
+### 지원하는 토핑 플래그 요약
+
+* **`--with-miopen`**: 이미지/합성곱 딥러닝 라이브러리 MIOpen 추가
+* **`--with-rccl`**: 다중 GPU 간 고속 통신 라이브러리 RCCL 추가
+* **`--with-profiler`**: GPU 프로파일러(`rocprofv3`) 및 디버거(`rocgdb`) 추가
+* **`--with-fft`**: 고속 푸리에 변환 `rocFFT` 추가
+* **`--with-media`** / **`--with-vulkan`**: 비디오 디코더(`rocDecode`, `rocJPEG`) 및 Vulkan Mesa 추가
+* **`--without-blas`**: 행렬 곱셈(BLAS) 제외
+
+---
+
+## 📁 빌드 목록 확인 및 관리
+
+```bash
+# 1. 생성된 모든 파이썬 가상환경 보기
+./therock-env list-envs
+
+# 2. 현재 빌드 완료된 모든 ROCm 빌드 폴더 및 용량 확인
+./therock-env list-builds
 ```
 
 ---
 
-## Project Structure
+## 📚 기술 문서 및 포팅 가이드
 
-```
-TheRock/
-├── base/           # Core foundations (driver, rocm-cmake, half)
-├── compiler/       # AMD LLVM / Clang 23, LLD, Device Libs, hipify
-├── core/           # CLR (HIP & OpenCL runtime), ROCR-Runtime, amdsmi
-├── math-libs/      # rocBLAS, hipBLASLt, rocFFT, rocRAND, rocPRIM, rocThrust, rocSOLVER
-├── ml-libs/        # MIOpen, composable_kernel, hipDNN
-├── comm-libs/      # RCCL, rocSHMEM
-├── profiler/       # rocprofiler-sdk, rocprofiler-systems, roctracer
-├── media-libs/     # rocDecode, rocJPEG
-├── third-party/    # Bundled sysdeps (libdrm, amd-mesa, elfutils, libnl, sqlite3)
-├── build_tools/    # Python build utilities and patch automation
-└── docs/           # Documentation and porting guides
-```
-
----
-
-## Documentation & References
-
-- [GCC 15 & Ubuntu 26.04 Porting Guide](docs/GCC15_UBUNTU2604_PORTING_GUIDE.md): Technical details of GCC 15, C23, and CMake 4.x changes.
-- [Development Guide](docs/development/development_guide.md): Guide for component developers.
-- [Supported GPUs](SUPPORTED_GPUS.md): GPU architecture roadmap and details.
-- [CONTRIBUTING.md](CONTRIBUTING.md): Guidelines for contributing to TheRock.
+* [GCC 15 & Ubuntu 26.04 Technical Porting Guide](docs/GCC15_UBUNTU2604_PORTING_GUIDE.md): GCC 15 표준 헤더 수정, CMake 4.x 수명주기 호환, Meson 링커 스크립트 수정에 대한 상세 기술 문서.
+* [Development Guide](docs/development/development_guide.md): TheRock 소스코드 개발자 매뉴얼.
+* [Supported GPUs](SUPPORTED_GPUS.md): AMD GPU 아키텍처 지원 로드맵.
