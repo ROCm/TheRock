@@ -82,7 +82,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
         options:
           - dev

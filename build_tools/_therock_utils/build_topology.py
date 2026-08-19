@@ -118,6 +118,9 @@ class Artifact:
     disable_platforms_if_flags_not_set: Dict[str, str] = field(
         default_factory=dict
     )  # Platforms disabled unless the named build flag is set
+    disable_processors: List[str] = field(
+        default_factory=list
+    )  # CPU processors where disabled (canonical: x86_64, aarch64, ppc64le)
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
@@ -234,6 +237,7 @@ class BuildTopology:
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
+                disable_processors=artifact_data.get("disable_processors", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
@@ -267,6 +271,16 @@ class BuildTopology:
             return False
         enabled_flags = enabled_flags or set()
         return required_flag not in enabled_flags
+
+    def is_artifact_disabled_on_processor(
+        self,
+        artifact: Artifact,
+        processor_name: str,
+    ) -> bool:
+        """Return whether an artifact is disabled for a CPU processor."""
+        if not processor_name:
+            return False
+        return processor_name in artifact.disable_processors
 
     def get_artifact_feature_name(self, artifact: Artifact) -> str:
         """Get the effective feature name for an artifact."""
@@ -411,6 +425,7 @@ class BuildTopology:
         valid_stage_types = {"generic", "per-arch"}
         valid_artifact_types = {"target-neutral", "target-specific"}
         valid_platforms = {"windows", "linux"}
+        valid_processors = {"x86_64", "aarch64", "ppc64le"}
 
         # Validate build stage names and types
         for stage_name, stage in self.build_stages.items():
@@ -482,6 +497,12 @@ class BuildTopology:
                     errors.append(
                         f"Artifact '{artifact_name}' disable_platforms_if_flags_not_set "
                         f"entry for '{platform}' should be UPPERCASE_WITH_UNDERSCORES"
+                    )
+            for proc in artifact.disable_processors:
+                if proc not in valid_processors:
+                    errors.append(
+                        f"Artifact '{artifact_name}' has invalid disable_processor "
+                        f"'{proc}' (expected: {valid_processors})"
                     )
 
         # Validate source set disable_platforms
@@ -1231,6 +1252,7 @@ class BuildTopology:
         project_names: List[str],
         platform_name: str = "",
         build_dir: Optional[Path] = None,
+        processor_name: str = "",
     ) -> Set[str]:
         """Resolve project names to CMake feature names."""
         features: Set[str] = set()
@@ -1250,6 +1272,8 @@ class BuildTopology:
             if artifact_name and artifact_name in self.artifacts:
                 artifact = self.artifacts[artifact_name]
                 if platform_name and platform_name in artifact.disable_platforms:
+                    continue
+                if self.is_artifact_disabled_on_processor(artifact, processor_name):
                     continue
                 features.add(self.get_artifact_feature_name(artifact))
 

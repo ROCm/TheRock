@@ -90,6 +90,10 @@ upload to this bucket and do not need `aws-actions/configure-aws-credentials`.
 Each release type (`dev`, `nightly`, `prerelease`, `release`) has a matching
 set of buckets.
 
+The `dev-bkc` and `nightly-bkc` release types currently use the existing `dev`
+and `nightly` buckets, IAM roles, and CDN indexes, respectively. A dedicated
+BKC bucket and index may be added in the future.
+
 The `dev`, `nightly`, and `prerelease` types are accessed via
 the `therock-{release_type}` IAM role while stable `release` buckets are
 manually promoted from prereleases via IAM user policies (see

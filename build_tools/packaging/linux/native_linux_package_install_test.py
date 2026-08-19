@@ -966,6 +966,11 @@ gpgcheck=0
         except subprocess.CalledProcessError:
             print(" [WARN] Could not query installed packages")
 
+        # Verify installed ELF files use RPATH and not RUNPATH.
+        if not self.verify_no_runpath():
+            print("\n[FAIL] Basic verification FAILED (ELF files still using RUNPATH)")
+            return False
+
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
         if rocminfo_path.exists():
@@ -1301,6 +1306,120 @@ gpgcheck=0
             print(f" [WARN] Could not run rdhc.py: {e}")
             return False
 
+    def verify_no_runpath(self) -> bool:
+        """Verify installed ELF files use DT_RPATH (not DT_RUNPATH).
+
+        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py).
+        Each installed ELF's dynamic section is read with ``readelf -d`` and
+        classified by looking for DT_RPATH first, falling back to DT_RUNPATH:
+
+        * has DT_RPATH -> converted correctly (expected)
+        * no DT_RPATH but has DT_RUNPATH -> conversion was missed (failure)
+        * neither tag -> nothing to convert; counted and reported for
+          visibility only, not treated as a failure
+
+        For files that do have DT_RPATH, the rpath value is additionally
+        inspected for entries that are not ``$ORIGIN``-relative (i.e. fixed or
+        absolute paths). A relocatable package should only use
+        ``$ORIGIN``-relative rpaths, so fixed paths are reported for visibility
+        but are not treated as a failure here.
+
+        If ``readelf`` is unavailable the check is skipped (non-fatal), matching
+        the tolerant behaviour used elsewhere in basic verification.
+
+        Returns:
+        True if no installed ELF uses DT_RUNPATH (or the check could not run),
+        False if any offending file is found.
+        """
+        print("\nVerifying installed ELF files use RPATH (not RUNPATH)...")
+        install_path = Path(self.install_prefix)
+        runpath_only: list[str] = []
+        no_path: list[str] = []
+        fixed_rpath: list[tuple[str, list[str]]] = []
+        rpath_count = 0
+        for root, _dirs, files in os.walk(install_path):
+            for name in files:
+                filepath = Path(root) / name
+                if filepath.is_symlink():
+                    continue
+                try:
+                    # Cheap ELF magic check before invoking readelf.
+                    with open(filepath, "rb") as f:
+                        if f.read(4) != b"\x7fELF":
+                            continue
+                except OSError:
+                    continue
+                try:
+                    result = subprocess.run(
+                        ["readelf", "-d", str(filepath)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                except OSError as e:
+                    print(
+                        f" [WARN] 'readelf' unavailable ({e}); skipping RUNPATH check"
+                    )
+                    return True
+                if result.returncode != 0:
+                    print(
+                        f" [WARN] readelf failed for {filepath}: {result.stderr.strip()}"
+                    )
+                    continue
+                # Confirm DT_RPATH is present; only fall back to DT_RUNPATH if
+                # it is not. Note "(RPATH)" is not a substring of "(RUNPATH)".
+                if "(RPATH)" in result.stdout:
+                    rpath_count += 1
+                    fixed = self._fixed_rpath_entries(result.stdout)
+                    if fixed:
+                        fixed_rpath.append((str(filepath), fixed))
+                elif "(RUNPATH)" in result.stdout:
+                    runpath_only.append(str(filepath))
+                else:
+                    no_path.append(str(filepath))
+        print(
+            f" Scanned ELF files: {rpath_count} with DT_RPATH, "
+            f"{len(runpath_only)} with DT_RUNPATH only, "
+            f"{len(no_path)} with neither"
+        )
+        if no_path:
+            # Count only; the individual files are not interesting to list.
+            print(
+                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH"
+            )
+        if fixed_rpath:
+            # List every offending file and its non-$ORIGIN entries in full.
+            print(
+                f" [WARN] {len(fixed_rpath)} ELF file(s) have DT_RPATH entries that are "
+                "not $ORIGIN-relative (fixed/absolute paths):"
+            )
+            for path, entries in fixed_rpath:
+                print(f"   {path}: {':'.join(entries)}")
+        if runpath_only:
+            print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
+            for entry in runpath_only[:10]:
+                print(f"   {entry}")
+            if len(runpath_only) > 10:
+                print(f"   ... and {len(runpath_only) - 10} more")
+            return False
+        print(" [PASS] No installed ELF files use DT_RUNPATH")
+        return True
+
+    @staticmethod
+    def _fixed_rpath_entries(readelf_output: str) -> list[str]:
+        """Return DT_RPATH entries that are not ``$ORIGIN``-relative.
+
+        Parses the ``Library rpath: [...]`` value from ``readelf -d`` output and
+        returns each colon-separated entry that does not reference ``$ORIGIN``
+        (i.e. fixed or absolute paths). Returns an empty list if there is no
+        rpath value or all entries are ``$ORIGIN``-relative.
+        """
+        match = re.search(r"\(RPATH\)\s+Library rpath: \[([^\]]*)\]", readelf_output)
+        if not match:
+            return []
+        entries = [entry for entry in match.group(1).split(":") if entry]
+        return [entry for entry in entries if "$ORIGIN" not in entry]
+
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
@@ -1424,7 +1543,15 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--release-type",
         type=str,
-        choices=["dev", "nightly", "prerelease", "release", "ci"],
+        choices=[
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+            "ci",
+        ],
         help="Type of release: 'dev', 'nightly', 'prerelease', 'release', or 'ci'",
     )
     parser.add_argument(

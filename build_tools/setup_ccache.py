@@ -255,14 +255,14 @@ def main(argv: list[str]):
     preset_group.add_argument(
         "--release-type",
         type=str,
-        choices=["ci", "dev", "nightly", "prerelease"],
-        help='Shorthand for --config-preset: "ci" and "dev" map to github-oss-dev, '
-        "others map to github-oss-release.",
+        choices=["ci", "dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
+        help='Shorthand for --config-preset: "ci", "dev", and "dev-bkc" map '
+        "to github-oss-dev; others map to github-oss-release.",
     )
 
     args = p.parse_args(argv)
     if args.release_type is not None:
-        if args.release_type in ("ci", "dev"):
+        if args.release_type in ("ci", "dev", "dev-bkc"):
             args.config_preset = "github-oss-dev"
         else:
             args.config_preset = "github-oss-release"

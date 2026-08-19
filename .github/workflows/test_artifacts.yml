@@ -39,7 +39,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type: "ci" or "dev".'
+        description: 'Release type for the artifacts being tested.'
         type: choice
         options:
           - ci
