@@ -333,6 +333,8 @@ You can customize any preset on-the-fly by adding or removing individual compone
 * **`--with-fft`**: Adds `rocFFT` math library.
 * **`--with-media`** / **`--with-vulkan`**: Adds AMD Mesa, `rocDecode`, and `rocJPEG`.
 * **`--without-blas`**: Excludes BLAS matrix math libraries.
+* **`--with-ccache`**: Enables compiler caching with `ccache` (automatically installs `ccache` if missing).
+* **`--no-ccache`**: Explicitly disables `ccache` compiler caching.
 
 ---
 

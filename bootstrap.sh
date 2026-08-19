@@ -24,6 +24,7 @@ REPO_URL="https://github.com/analogbox/TheRock.git"
 BASE_DIR="$HOME/virtualenv"
 DRY_RUN=false
 INSTALL_SYSDEPS=false
+WITH_CCACHE=false
 
 # Parse Command Line Arguments
 while [ $# -gt 0 ]; do
@@ -34,6 +35,8 @@ while [ $# -gt 0 ]; do
         --branch) BRANCH="$2"; shift 2 ;;
         --repo-url) REPO_URL="$2"; shift 2 ;;
         --base-dir) BASE_DIR="$2"; shift 2 ;;
+        --with-ccache|--enable-ccache) WITH_CCACHE=true; shift ;;
+        --without-ccache|--no-ccache) WITH_CCACHE=false; shift ;;
         --install-sysdeps) INSTALL_SYSDEPS=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         -h|--help)
@@ -42,9 +45,10 @@ while [ $# -gt 0 ]; do
             echo "  --rocm <version>     TheRock / ROCm version tag (default: 7.14)"
             echo "  --python <version>   Python version to use (default: 3.14)"
             echo "  --preset <name>      Build preset: llm, hip, vulkan, math, ai, hpc, full (default: llm)"
-            echo "  --branch <name>      Git branch to checkout (default: feature/ubuntu-26.04-gcc15-gfx1151)"
+            echo "  --branch <name>      Git branch to checkout (default: main)"
             echo "  --repo-url <url>     Git repository URL to clone"
             echo "  --base-dir <path>    Base directory for virtualenvs (default: ~/virtualenv)"
+            echo "  --with-ccache        Enable and auto-install ccache for build acceleration"
             echo "  --install-sysdeps    Force installing apt system packages with sudo"
             echo "  --dry-run            Print what would be executed without running build"
             exit 0
@@ -72,6 +76,14 @@ if [ "$INSTALL_SYSDEPS" = true ] || ! command -v ninja &> /dev/null || ! command
     fi
 else
     echo -e "\n\033[1;32m[1/5] Essential build tools (cmake, ninja, gcc) already present. Skipping apt.\033[0m"
+fi
+
+# Check and auto-install ccache if requested
+if [ "$WITH_CCACHE" = true ] && ! command -v ccache &> /dev/null; then
+    echo -e "\n\033[1;33mccache requested but not installed. Auto-installing ccache via apt...\033[0m"
+    if command -v apt-get &> /dev/null; then
+        sudo apt-get update -y && sudo apt-get install -y ccache || echo "Failed to install ccache via sudo, continuing without ccache."
+    fi
 fi
 
 # Step 2: Ensure `uv` is installed
@@ -131,6 +143,10 @@ BUILD_ARGS=(
     "--venv-dir" "$VENV_DIR"
     "--build-dir" "$BUILD_DIR"
 )
+
+if [ "$WITH_CCACHE" = true ]; then
+    BUILD_ARGS+=("--with-ccache")
+fi
 
 if [ "$DRY_RUN" = true ]; then
     BUILD_ARGS+=("--dry-run")
