@@ -1129,6 +1129,58 @@ class RestrictFamiliesTest(TmpDirTestCase):
         self.assertNotIn("AVAILABLE_TARGET_FAMILIES.clear()", content)
         self.assertNotIn("gfx94X-dcgpu", content)
 
+    def test_dist_info_object_matches_generated_file(self):
+        """params.dist_info (in-memory, built via direct attribute assignment
+        onto the static template) and the _dist_info.py written to disk (built
+        via repr()-encoded source text) must agree on every user-controlled
+        field, so the two initialization paths can't silently drift apart the
+        way they did when a version bug was previously introduced in only one
+        of the two places.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx942")
+        self._add_artifact(artifact_dir, "base", "lib", "gfx1100")
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="7.0.0",
+            version_suffix="rc1",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+
+        ns: dict = {}
+        exec(params.dist_info_contents, ns)
+
+        self.assertEqual(ns["__version__"], params.dist_info.__version__)
+        self.assertEqual(
+            ns["PY_PACKAGE_SUFFIX_NONCE"], params.dist_info.PY_PACKAGE_SUFFIX_NONCE
+        )
+        self.assertEqual(
+            ns["DEFAULT_TARGET_FAMILY"], params.dist_info.DEFAULT_TARGET_FAMILY
+        )
+        self.assertEqual(
+            sorted(ns["AVAILABLE_TARGET_FAMILIES"]),
+            sorted(params.dist_info.AVAILABLE_TARGET_FAMILIES),
+        )
+
+        meta = PopulatedDistPackage(params, logical_name="meta")
+        env = os.environ.copy()
+        env["ROCM_SDK_TARGET_FAMILY"] = "gfx942"
+        subprocess.run(
+            [sys.executable, "setup.py", "egg_info"],
+            cwd=meta.path,
+            env=env,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        pkg_info = (meta.path / "src" / "rocm.egg-info" / "PKG-INFO").read_text()
+        self.assertNotIn("Requires-Dist: rocm==7.0.0\n", pkg_info)
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.0.0\n", pkg_info)
+
 
 # ---------------------------------------------------------------------------
 # Tests for cross-platform family awareness in the rocm sdist
