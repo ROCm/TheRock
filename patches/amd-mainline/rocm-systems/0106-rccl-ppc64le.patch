@@ -1,4 +1,4 @@
-From 5f2e979b203e822523b777c9455c5e6f5b611bc4 Mon Sep 17 00:00:00 2001
+From 09c906e9065b1c7fbffa740a1fd72c2d4725b07c Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
 Date: Wed, 29 Jul 2026 15:35:41 +0000
 Subject: [PATCH] rccl: guard x86-only cpuid code for ppc64le portability
@@ -9,10 +9,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>
  1 file changed, 4 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index b709cc99a4a..263e8e15856 100644
+index d248bc76d93..9f31fa85334 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
-@@ -78,7 +78,9 @@
+@@ -80,7 +80,9 @@
  #include "dda_all_reduce.h"
  #include "ipc_init.h"
  #include "fabric_init.h"
@@ -22,15 +22,15 @@ index b709cc99a4a..263e8e15856 100644
  #include <stdio.h>
  #include <stdlib.h>
  #include "kernel_config.h"
-@@ -296,6 +298,7 @@ static ncclResult_t ncclInit() {
+@@ -299,6 +301,7 @@ static ncclResult_t ncclInit() {
    }
    INFO(NCCL_INIT, "Kernel version: %s", verStr);
    if (strstr(verStr, "cray") == NULL) {
 +#if defined(__x86_64__) || defined(__i386__)
      unsigned int eax, ebx, ecx, edx;
      if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) ecx = 0; // cpuid not supported
-     NCCLCHECK(ncclTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue));
-@@ -315,6 +318,7 @@ static ncclResult_t ncclInit() {
+     NCCLCHECK(ncclOsTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue, sizeof(strValue)));
+@@ -318,6 +321,7 @@ static ncclResult_t ncclInit() {
        if (!ncclIommuPassthroughOk(cmdlinePtr))
          WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
      }
