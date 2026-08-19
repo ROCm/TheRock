@@ -113,8 +113,10 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             if line.strip()
         ]
 
-    def _reconcile(self) -> int:
-        return _devel._reconcile_device_links(self.site, self.devel_dir, VERSION)
+    def _reconcile(self, expected_version: str = VERSION) -> int:
+        return _devel._reconcile_device_links(
+            self.site, self.devel_dir, expected_version
+        )
 
     # ----- tests ----------------------------------------------------------
 
@@ -184,9 +186,29 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             {".kpack/blas_lib_gfx942.kpack": "kpack data"},
             version="9.9.9",
         )
-        # Device wheel version does not match the SDK version -> skip entirely.
+        # Device wheel major/minor does not match the SDK -> skip entirely.
         self.assertEqual(self._reconcile(), 0)
         self.assertFalse((self.devel_dir / ".kpack/blas_lib_gfx942.kpack").exists())
+
+    def test_patch_and_post_versions_reconciled(self):
+        expected_version = "7.14.0.post1"
+        compatible_versions = (
+            ("gfx1100", "7.14.0"),
+            ("gfx1101", "7.14.1"),
+            ("gfx1102", "7.14.2.post3"),
+        )
+
+        for target_family, device_version in compatible_versions:
+            with self.subTest(device_version=device_version):
+                relpath = f".kpack/blas_lib_{target_family}.kpack"
+                self._add_device_wheel(
+                    target_family,
+                    {relpath: "kpack data"},
+                    version=device_version,
+                )
+
+                self.assertEqual(self._reconcile(expected_version), 1)
+                self.assertTrue((self.devel_dir / relpath).is_file())
 
     def test_prune_semantics_record_lists_links(self):
         record = self._add_device_wheel(
