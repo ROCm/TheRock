@@ -32,7 +32,7 @@ VENV_BASE_DIR = REPO_ROOT.parent.parent if REPO_ROOT.parent.name.startswith("ven
 PRESETS = {
     "llm": {
         "name": "llm",
-        "description": "LLM Inference & LoRA/QLoRA Fine-Tuning (vLLM, llama.cpp, Ollama, Unsloth, HuggingFace) (~30-35m)",
+        "description": "Complete LLM Inference & Fine-Tuning Stack (HIP + Vulkan, vLLM, llama.cpp HIP/Vulkan, Ollama, MLC-LLM, LoRA/QLoRA) (~30-35m)",
         "cmake_flags": [
             "-DTHEROCK_ENABLE_ALL=OFF",
             "-DTHEROCK_ENABLE_COMPILER=ON",
@@ -44,6 +44,7 @@ PRESETS = {
             "-DTHEROCK_ENABLE_PRIM=ON",
             "-DTHEROCK_ENABLE_RAND=ON",
             "-DTHEROCK_ENABLE_HIPTENSOR=ON",
+            "-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON",
         ],
     },
     "ai-full": {

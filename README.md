@@ -209,10 +209,12 @@ Select the preset matching your project goals:
 
 #### ⚡ Tier 1: AI & LLM Workloads (Recommended for Most Users)
 
-##### Option A: LLM Inference & LoRA / QLoRA Fine-Tuning (`llm`) - Most Popular!
+##### Option A: Complete LLM Inference & LoRA / QLoRA Fine-Tuning (`llm`) - Most Popular!
 > **Build Time: ~30 - 35 minutes**  
-> **Included**: Clang 23, HIP runtime, `rocBLAS`, `hipBLASLt`, `rocPRIM`, `rocRAND`, `hipTensor`.  
-> **Use Case**: Running **vLLM, Ollama, llama.cpp (HIP)**, and **LoRA / QLoRA / SFT fine-tuning with Unsloth / Hugging Face**.  
+> **Included**: Clang 23, HIP runtime, `rocBLAS`, `hipBLASLt`, `rocPRIM`, `rocRAND`, `hipTensor`, and **AMD Mesa (RADV Vulkan)**.  
+> **Use Case**:
+> * **HIP Backend**: Running **vLLM, Ollama (HIP), llama.cpp (HIP)**, and **LoRA / QLoRA / SFT fine-tuning with Unsloth / Hugging Face**.
+> * **Vulkan Backend**: Running **llama.cpp (Vulkan backend), MLC-LLM, WebLLM**.  
 > *(Note: LLMs use matrix multiplication, so they do NOT need heavy convolution libraries like MIOpen!)*
 ```bash
 ./therock-env build --preset llm --python 3.14
@@ -297,7 +299,7 @@ Agent 2: gfx1151 / AMD Radeon 8060S Graphics (GPU, 40 Compute Units)
 
 | Workload Tier | Preset Name | Convenient Aliases | Included Components | Recommended Use Case | Build Time |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1 (AI / LLM)** | **`llm`** | `llm-inference`, `lora`, `finetuning` | HIP + `rocBLAS` + `hipBLASLt` + `rocPRIM` + `hipTensor` | **vLLM, llama.cpp (HIP), Ollama, LoRA/QLoRA Fine-Tuning** | **~30 min** |
+| **Tier 1 (AI / LLM)** | **`llm`** | `llm-inference`, `lora`, `finetuning` | HIP + `rocBLAS` + `hipBLASLt` + `rocPRIM` + `hipTensor` + **AMD Mesa (RADV Vulkan)** | **vLLM, llama.cpp (HIP & Vulkan), Ollama, MLC-LLM, LoRA/QLoRA Fine-Tuning** | **~30 min** |
 | **Tier 1 (AI / LLM)** | **`ai-full`** | `ai`, `training`, `pytorch` | `llm` stack + `MIOpen` (CK) + `RCCL` + `hipDNN` | Full PyTorch training, CNN/Vision, Stable Diffusion | ~4 hours |
 | **Tier 2 (Media)** | **`vulkan-media`** | `vulkan`, `media`, `vision`, `cv` | AMD Mesa (RADV Vulkan) + `rocDecode` + `rocJPEG` | Vulkan graphics, 4K/8K video decode, llama.cpp (Vulkan) | **~25 min** |
 | **Tier 3 (Engine)** | **`core-hip`** | `hip`, `core`, `minimal` | AMD Clang 23 + HIP Runtime + AMDSMI + `rocminfo` | Minimal C++/HIP kernel development | **~20 min** |
