@@ -112,10 +112,15 @@ class ROCmCoreTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
+
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
