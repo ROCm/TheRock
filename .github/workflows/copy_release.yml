@@ -1,57 +1,37 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Copy release to dev bucket
+name: Copy combined 7.14 torch wheels to destreleases staging
 
 on:
   workflow_dispatch:
-    inputs:
-      rocm_version:
-        description: ROCm version to copy from nightly releases to dev releases, e.g. 7.14.0a20260617 (see https://rocm.nightlies.amd.com/whl-multi-arch/)
-        type: string
-      python_version:
-        type: choice
-        options:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        default: "3.12"
-      include_torch:
-        description: Copy 'torch' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
-      include_jax:
-        description: Copy 'jax' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
+
 permissions:
   contents: read
 
-run-name: >-
-  Copy nightly -> dev |
-  rocm ${{ inputs.rocm_version }} |
-  py ${{ inputs.python_version }} |
-  extras: ${{
-    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
-    inputs.include_torch && 'PyTorch' ||
-    inputs.include_jax && 'JAX' ||
-    'none'
-  }}
+run-name: Copy combined 2.13.0+git46434d10 wheels to destreleases staging
 
 jobs:
-  copy_python_packages:
-    name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+  copy_and_verify:
+    name: Copy origin wheels to v4/whl-staging and verify gfx950 extra
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+    env:
+      SOURCE_PREFIX: s3://therock-dev-python/v4/whl/
+      STAGING_PREFIX: s3://therock-dev-python/v4/whl-staging/
+      STAGING_INDEX: https://rocm.devreleases.amd.com/whl-staging-multi-arch/
+      ROCM_VERSION: 7.14.0
+      TORCH_VERSION: 2.13.0+git46434d10.rocm7.14.0
+      TORCH_GIT_SHA: 46434d1076df59c2e84698a757e4bb3811b144ab
+      TRITON_VERSION: 3.8.0+git4cff872c.rocm7.14.0
+      TORCHVISION_VERSION: 0.28.0+git8fb87713.rocm7.14.0
+      TORCHAUDIO_VERSION: 2.11.0.2+gitb3ec2afa.rocm7.14.0
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # TODO: migrate to boto3 Python package instead of this native tool?
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
 
@@ -61,35 +41,134 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
-      - name: Select Python version
+      - name: Copy combined wheels and ROCm 7.14.0 from dest S3 origin to staging
         run: |
-          python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+          echo "COPY_STARTED_EPOCH=$(date -u +%s)" >> "${GITHUB_ENV}"
 
-      - name: Copy ROCm packages between S3 buckets
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "rocm*${{ inputs.rocm_version }}*"
+          # Server-side copy from destreleases *origin*, not the CloudFront URL.
+          # The public destreleases host torch object is still a stale gfx942-only
+          # CloudFront HIT; s3://therock-dev-python/v4/whl/ already has both extras.
+          while IFS= read -r filename
+          do
+            test -n "${filename}" || continue
+            echo "Copy ${filename}"
+            aws s3 cp \
+              "${SOURCE_PREFIX}${filename}" \
+              "${STAGING_PREFIX}${filename}"
+          done <<'EOF'
+          torch-2.13.0+git46434d10.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          amd_torch_device_gfx942-2.13.0+git46434d10.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          amd_torch_device_gfx950-2.13.0+git46434d10.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          torchvision-0.28.0+git8fb87713.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          amd_torchvision_device_gfx942-0.28.0+git8fb87713.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          amd_torchvision_device_gfx950-0.28.0+git8fb87713.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          torchaudio-2.11.0.2+gitb3ec2afa.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          triton-3.8.0+git4cff872c.rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          apex-1.13.0+rocm7.14.0-cp312-cp312-linux_x86_64.whl
+          rocm-7.14.0.tar.gz
+          rocm_bootstrap-0.1.0-py3-none-any.whl
+          rocm_sdk_core-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_devel-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_libraries-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx942-7.14.0-py3-none-linux_x86_64.whl
+          rocm_sdk_device_gfx950-7.14.0-py3-none-linux_x86_64.whl
+          EOF
 
-      - name: Copy torch wheels between S3 buckets
-        if: ${{ inputs.include_torch }}
+      - name: Wait for staging index to list combined torch extras
+        shell: python
         run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "apex*${{ inputs.rocm_version }}*${{ env.cp_version }}*" \
-            --include "triton*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+          import email.utils
+          import os
+          import time
+          import urllib.request
 
-      - name: Copy JAX wheels between S3 buckets
-        if: ${{ inputs.include_jax }}
+          started = int(os.environ["COPY_STARTED_EPOCH"])
+          torch_ver = os.environ["TORCH_VERSION"]
+          triton_ver = os.environ["TRITON_VERSION"]
+          expected = {
+              "torch": (
+                  f"torch-{torch_ver}-cp312-cp312-linux_x86_64.whl",
+                  True,
+              ),
+              "amd-torch-device-gfx942": (
+                  f"amd_torch_device_gfx942-{torch_ver}-"
+                  "cp312-cp312-linux_x86_64.whl",
+                  True,
+              ),
+              "amd-torch-device-gfx950": (
+                  f"amd_torch_device_gfx950-{torch_ver}-"
+                  "cp312-cp312-linux_x86_64.whl",
+                  True,
+              ),
+              "triton": (
+                  f"triton-{triton_ver}-cp312-cp312-linux_x86_64.whl",
+                  True,
+              ),
+              "rocm": ("rocm-7.14.0.tar.gz", False),
+              "rocm-sdk-device-gfx950": (
+                  "rocm_sdk_device_gfx950-7.14.0-"
+                  "py3-none-linux_x86_64.whl",
+                  False,
+              ),
+          }
+          base = os.environ["STAGING_INDEX"]
+          for _ in range(60):
+              missing = []
+              for package, (filename, require_fresh) in expected.items():
+                  try:
+                      response = urllib.request.urlopen(
+                          f"{base}{package}/", timeout=30
+                      )
+                      page = response.read().decode()
+                      modified = email.utils.parsedate_to_datetime(
+                          response.headers["Last-Modified"]
+                      ).timestamp()
+                  except Exception:
+                      missing.append(package)
+                      continue
+                  if filename not in page or (require_fresh and modified < started):
+                      missing.append(package)
+              if not missing:
+                  print("Staging index lists combined torch and gfx950 device extra")
+                  break
+              print(f"Waiting for staging index regeneration; missing: {missing}")
+              time.sleep(10)
+          else:
+              raise RuntimeError("Staging index did not complete within ten minutes")
+
+      - name: Verify staging torch[device-gfx950] install
         run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "jax*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+          python build_tools/setup_venv.py /tmp/pytorch-validation-gfx950 \
+            --packages "torch[device-gfx950]==${TORCH_VERSION} rocm[devel,device-gfx950]==${ROCM_VERSION}" \
+            --index-url="${STAGING_INDEX}"
+          /tmp/pytorch-validation-gfx950/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+          import pathlib
+          import zipfile
+
+          import torch
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"], torch.__version__
+          assert torch.version.git_version == os.environ["TORCH_GIT_SHA"], (
+              torch.version.git_version
+          )
+          assert importlib.metadata.version("amd-torch-device-gfx950") == os.environ["TORCH_VERSION"]
+          assert importlib.metadata.version("rocm") == os.environ["ROCM_VERSION"]
+          assert (
+              importlib.metadata.version("rocm-sdk-device-gfx950")
+              == os.environ["ROCM_VERSION"]
+          )
+
+          dist = importlib.metadata.distribution("torch")
+          extras = dist.metadata.get_all("Provides-Extra") or []
+          assert "device-gfx942" in extras, extras
+          assert "device-gfx950" in extras, extras
+          print("staging extras", extras)
+          print(
+              "gfx950",
+              torch.__version__,
+              torch.version.git_version,
+              torch.version.hip,
+          )
+          PY
