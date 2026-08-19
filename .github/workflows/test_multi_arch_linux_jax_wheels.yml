@@ -80,6 +80,18 @@ on:
         required: false
         type: string
         default: "all"
+      test_timeout_minutes:
+        description: "Budget for the test step, from configure_jax_test_matrix.py."
+        required: false
+        type: number
+        default: 120
+      test_list:
+        description: >-
+          File of test paths to run instead of the whole subset, from
+          configure_jax_test_matrix.py. Empty runs all of it.
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -112,7 +124,8 @@ on:
         description: >-
           How much of test_subset to run: "small" takes the PR-sized selection,
           which exists for the "all" subset only, and "medium" and "large" take
-          all of it. On the "multi" subset it picks the end-to-end scope.
+          all of it. On the "multi" subset it picks the end-to-end scope. A run
+          dispatched here names its selection in test_list instead.
         type: choice
         options:
           - small
@@ -162,6 +175,17 @@ on:
         type: choice
         options: ["all", "multi"]
         default: "all"
+      test_timeout_minutes:
+        description: "Budget for the test step, in minutes."
+        type: number
+        default: 120
+      test_list:
+        description: >-
+          File of test paths to run instead of the whole subset, e.g.
+          external-builds/jax/test_selection/small_tests.txt. Empty runs all of
+          it.
+        type: string
+        default: ""
 permissions:
   contents: read
   id-token: write
@@ -327,14 +351,11 @@ jobs:
       # allocation and both layers of retry, so that the same command
       # reproduces this job locally. See the comments in the script.
       - name: Run JAX tests
-        # The single-accelerator suite runs 35-70 min across versions, so 60
-        # left no headroom: one job reached 100% of the tests and was still
-        # killed. The multi-accelerator subset is a fraction of that.
-        timeout-minutes: ${{ inputs.test_subset == 'multi' && 90 || (inputs.test_size == 'small' && 45 || 120) }}
+        # What a size selects and how long that takes is decided once, in
+        # configure_jax_test_matrix.py, and arrives here as the caller's inputs.
+        timeout-minutes: ${{ inputs.test_timeout_minutes }}
         env:
-          # A size is a selection over the one suite; only small narrows it, and
-          # only for the subset it selects from.
-          JAX_TEST_LIST: ${{ (inputs.test_size == 'small' && inputs.test_subset == 'all') && 'external-builds/jax/test_selection/small_tests.txt' || '' }}
+          JAX_TEST_LIST: ${{ inputs.test_list }}
         run: |
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \

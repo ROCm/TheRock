@@ -29,11 +29,15 @@ def subsets(matrix: dict) -> list[str]:
     return [job["test_subset"] for job in matrix["include"]]
 
 
-def runner_for(matrix: dict, subset: str) -> str:
+def job_for(matrix: dict, subset: str) -> dict:
     for job in matrix["include"]:
         if job["test_subset"] == subset:
-            return job["test_runs_on"]
+            return job
     raise AssertionError(f"no {subset} job in {matrix}")
+
+
+def runner_for(matrix: dict, subset: str) -> str:
+    return job_for(matrix, subset)["test_runs_on"]
 
 
 class WantsMultiGpuTest(unittest.TestCase):
@@ -117,6 +121,23 @@ class BuildTestMatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.matrix(target="gfx-not-a-family")
 
+    def test_only_small_narrows_the_single_gpu_job(self):
+        small = job_for(self.matrix(size="small"), "all")
+        medium = job_for(self.matrix(size="medium"), "all")
+
+        self.assertEqual(small["test_list"], matrix_script.SMALL_TEST_LIST)
+        self.assertEqual(small["test_timeout_minutes"], 45)
+        self.assertEqual(medium["test_list"], "")
+        self.assertEqual(medium["test_timeout_minutes"], 120)
+
+    def test_the_multi_gpu_job_runs_all_of_its_subset(self):
+        # There is no reduced form of the multi-accelerator script, so a size
+        # only decides whether this job runs, not what it runs.
+        job = job_for(self.matrix(size="large"), "multi")
+
+        self.assertEqual(job["test_list"], "")
+        self.assertEqual(job["test_timeout_minutes"], 90)
+
 
 class OutputsTest(unittest.TestCase):
     def outputs(self, argv: list[str], today=TUESDAY) -> dict[str, str]:
@@ -144,8 +165,18 @@ class OutputsTest(unittest.TestCase):
             json.loads(outputs["matrix"]),
             {
                 "include": [
-                    {"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU},
-                    {"test_subset": "multi", "test_runs_on": GFX94X_MULTI_GPU},
+                    {
+                        "test_subset": "all",
+                        "test_runs_on": GFX94X_SINGLE_GPU,
+                        "test_timeout_minutes": 120,
+                        "test_list": "",
+                    },
+                    {
+                        "test_subset": "multi",
+                        "test_runs_on": GFX94X_MULTI_GPU,
+                        "test_timeout_minutes": 90,
+                        "test_list": "",
+                    },
                 ]
             },
         )
@@ -155,7 +186,16 @@ class OutputsTest(unittest.TestCase):
 
         self.assertEqual(
             json.loads(outputs["matrix"]),
-            {"include": [{"test_subset": "all", "test_runs_on": GFX94X_SINGLE_GPU}]},
+            {
+                "include": [
+                    {
+                        "test_subset": "all",
+                        "test_runs_on": GFX94X_SINGLE_GPU,
+                        "test_timeout_minutes": 45,
+                        "test_list": matrix_script.SMALL_TEST_LIST,
+                    }
+                ]
+            },
         )
 
     def test_the_nightly_picks_up_the_multi_gpu_job_on_its_day(self):

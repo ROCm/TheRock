@@ -41,9 +41,9 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
 from github_actions.github_actions_api import gha_set_output
 
-# Values of --test-size, as the module docstring above describes them. What each
-# one selects on the 1-GPU runner is the test workflow's business; what they
-# decide here is whether the multi-GPU job runs.
+# Values of --test-size, as the module docstring above describes them. A size
+# decides whether the multi-GPU job runs, and what each job selects and how long
+# it is given.
 TEST_SIZE_SMALL = "small"
 TEST_SIZE_MEDIUM = "medium"
 TEST_SIZE_LARGE = "large"
@@ -58,6 +58,18 @@ WEEKLY_MULTI_GPU_WEEKDAY = 6
 # and "multi" is ci/run_pytest_rocm_multi.sh, the multi-accelerator tests alone.
 TEST_SUBSET_ALL = "all"
 TEST_SUBSET_MULTI = "multi"
+
+# Step budgets in minutes, emitted with each job so the test workflow reads one
+# rather than deriving it. The single-accelerator suite runs 35-70 minutes
+# across versions, so 60 left no headroom: one job reached 100% of the tests and
+# was still killed. The other two are a fraction of that run.
+TIMEOUT_MINUTES_ALL = 120
+TIMEOUT_MINUTES_MULTI = 90
+TIMEOUT_MINUTES_SMALL = 45
+
+# The PR-sized selection, which exists for the single-accelerator subset only:
+# there is no reduced form of the multi-accelerator script.
+SMALL_TEST_LIST = "external-builds/jax/test_selection/small_tests.txt"
 
 
 def platform_entry(target: str, platform: str) -> dict | None:
@@ -101,16 +113,27 @@ def build_test_matrix(
     platform: str,
     size: str,
     today: date,
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict[str, str | int]]]:
     entry = platform_entry(target, platform)
     if entry is None:
         raise ValueError(f"No {platform} AMDGPU family entry found for {target!r}")
 
-    include: list[dict[str, str]] = []
+    include: list[dict[str, str | int]] = []
 
     single_runner = entry.get("test-runs-on")
     if single_runner:
-        include.append({"test_subset": TEST_SUBSET_ALL, "test_runs_on": single_runner})
+        small = size == TEST_SIZE_SMALL
+        include.append(
+            {
+                "test_subset": TEST_SUBSET_ALL,
+                "test_runs_on": single_runner,
+                "test_timeout_minutes": (
+                    TIMEOUT_MINUTES_SMALL if small else TIMEOUT_MINUTES_ALL
+                ),
+                # Empty means the whole subset, which is every size but small.
+                "test_list": SMALL_TEST_LIST if small else "",
+            }
+        )
     else:
         # A family with no hardware configured carries an empty label, so this is
         # a skip rather than an error. Annotated because everything below it then
@@ -124,7 +147,12 @@ def build_test_matrix(
         multi_runner = entry.get("test-runs-on-multi-gpu")
         if multi_runner:
             include.append(
-                {"test_subset": TEST_SUBSET_MULTI, "test_runs_on": multi_runner}
+                {
+                    "test_subset": TEST_SUBSET_MULTI,
+                    "test_runs_on": multi_runner,
+                    "test_timeout_minutes": TIMEOUT_MINUTES_MULTI,
+                    "test_list": "",
+                }
             )
         else:
             # Sending them to a 1-GPU runner would skip every one of them.

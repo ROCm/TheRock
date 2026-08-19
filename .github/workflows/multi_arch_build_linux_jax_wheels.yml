@@ -354,6 +354,8 @@ jobs:
       jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
       test_runs_on: ${{ matrix.test_runs_on }}
       test_subset: ${{ matrix.test_subset }}
+      test_timeout_minutes: ${{ matrix.test_timeout_minutes }}
+      test_list: ${{ matrix.test_list }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
