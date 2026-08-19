@@ -403,6 +403,29 @@ def apply_runtime_patches():
             )
             rocprof_py_cmake.write_text(patched)
 
+    # 5. primbench.hpp amdsmi include guard and rocrand benchmark link fix
+    primbench_header = REPO_ROOT / "rocm-libraries/shared/primbench/primbench.hpp"
+    if primbench_header.is_file():
+        content = primbench_header.read_text()
+        if "#include <amd_smi/amdsmi.h>" in content and "__has_include(<amd_smi/amdsmi.h>)" not in content:
+            log_info("Applying amdsmi header guard patch to primbench.hpp...")
+            patched = content.replace(
+                "#include <amd_smi/amdsmi.h>",
+                "#if __has_include(<amd_smi/amdsmi.h>)\n        #include <amd_smi/amdsmi.h>\n        #else\n        #undef PRIMBENCH_HAS_MONITORING\n        #define PRIMBENCH_HAS_MONITORING 0\n        #endif",
+            )
+            primbench_header.write_text(patched)
+
+    rocrand_bm_cmake = REPO_ROOT / "rocm-libraries/projects/rocrand/benchmark/CMakeLists.txt"
+    if rocrand_bm_cmake.is_file():
+        content = rocrand_bm_cmake.read_text()
+        if "target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)" in content:
+            log_info("Applying amd_smi link target guard patch to rocrand benchmarks...")
+            patched = content.replace(
+                "target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)",
+                "if(TARGET amd_smi)\n      target_link_libraries(${BENCHMARK_TARGET} PRIVATE amd_smi)\n    else()\n      target_compile_definitions(${BENCHMARK_TARGET} PRIVATE PRIMBENCH_NO_MONITORING)\n    endif()",
+            )
+            rocrand_bm_cmake.write_text(patched)
+
 
 def ensure_ccache() -> bool:
     """Ensure ccache is available, attempting auto-installation if missing."""
