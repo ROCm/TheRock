@@ -365,3 +365,14 @@ def build_per_target_extras() -> "dict[str, list[str]]":
             all_requires.append(req)
         result[f"{pkg.logical_name}-all"] = all_requires
     return result
+
+
+def build_install_requires(target_family: str) -> list[str]:
+    """Builds install_requires for the rocm meta package."""
+    return [
+        pkg.get_dist_package_require(target_family=target_family)
+        for pkg in ALL_PACKAGES.values()
+        # Excludes the meta package itself so the rocm sdist never
+        # declares a Requires-Dist on its own distribution name.
+        if pkg.required and pkg.logical_name != "meta"
+    ]
