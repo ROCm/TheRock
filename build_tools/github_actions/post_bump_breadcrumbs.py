@@ -61,7 +61,9 @@ HISTORY_HEADER = "### TheRock Submodule Bump Activity\n_Newest first_"
 # Marker for the (single-use, no history needed) summary comment posted on
 # the TheRock bump PR itself for commits with no resolvable upstream PR.
 UNMAPPED_MARKER = "<!-- therock-bump-breadcrumb-unmapped -->"
-UNMAPPED_HEADER = "### TheRock Submodule Bump Activity\n_No upstream PR found for these commits_"
+UNMAPPED_HEADER = (
+    "### TheRock Submodule Bump Activity\n_No upstream PR found for these commits_"
+)
 
 _COMMENT_SEARCH_MAX_PAGES = 10
 _COMMENT_SEARCH_PER_PAGE = 100
@@ -207,7 +209,9 @@ def build_unmapped_summary_entry(reverted, repo, unmapped_shas, event_key):
     return "\n".join(lines)
 
 
-def build_unmapped_summary_body(existing_body, reverted, repo, unmapped_shas, event_key):
+def build_unmapped_summary_body(
+    existing_body, reverted, repo, unmapped_shas, event_key
+):
     """Builds/updates the sticky unmapped-commit summary comment on the
     TheRock bump PR, with one section per submodule-bump event, keyed by
     `event_key`.
