@@ -12,5 +12,5 @@
 # rocPRIM adds its own find_package(amd_smi).
 
 if(NOT TARGET amd_smi)
-  find_package(amd_smi REQUIRED CONFIG)
+  cmake_language(DEFER CALL find_package amd_smi REQUIRED CONFIG)
 endif()

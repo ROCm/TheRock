@@ -1,6 +1,15 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Suppress strict GCC 15 warnings from turning into build-breaking errors
+add_compile_options(
+  -Wno-error=maybe-uninitialized
+  -Wno-error=template-body
+  -Wno-error=dangling-reference
+  -Wno-error=stringop-overread
+  -Wno-maybe-uninitialized
+)
+
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()

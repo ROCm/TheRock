@@ -81,7 +81,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
       # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
-      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --

@@ -68,3 +68,5 @@ sed -i '/^[[:space:]]*search_path = strdup((const char \*)*search_path);$/a\    
 
 # Modify pkgconfig generation to make driverdir relative to ${libdir} for relocatable packages
 sed -i "/va_vars = vars + \['driverdir=' + driverdir\]/c\va_vars = vars + ['driverdir=\${libdir}']" "$LIBVA_PKGCONFIG_MESON_BUILD"
+
+

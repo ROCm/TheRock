@@ -37,3 +37,8 @@ cat >> "$AMDGPU_IDS" << 'EOF'
 7551,	C1,	AMD Radeon AI Pro R9700S
 7551,	C8,	AMD Radeon AI Pro R9600D
 EOF
+
+VERSION_LDS="$(dirname "$0")/version.lds"
+
+# Insert link arguments right after the C compiler lookup (before any targets are declared)
+sed -i "/cc = meson.get_compiler('c')/a add_project_link_arguments('-Wl,--version-script=${VERSION_LDS}', language : ['c', 'cpp'])" "$1/meson.build"

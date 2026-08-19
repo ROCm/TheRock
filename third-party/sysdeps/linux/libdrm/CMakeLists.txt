@@ -81,19 +81,17 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Escaping hack: experimentally determined to persist through the layers.
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # Remove --version-script from LDFLAGS to prevent duplicate tag errors on GCC 15
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure
-        # We generate relocatable, arch neutral directory layouts and use
-        # DESTDIR to install int ot the lib/rocm_sysdeps tree.
+        # Keep all the original configuration options intact
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
-        # Only enable the libraries we want.
         -Damdgpu=enabled
         -Dintel=disabled
         -Dman-pages=disabled
