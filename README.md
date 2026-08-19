@@ -57,7 +57,6 @@ sudo apt install -y \
   xxd \
   automake \
   libtool \
-  python3-venv \
   python3-dev \
   libegl1-mesa-dev \
   libsqlite3-dev \
@@ -67,6 +66,10 @@ sudo apt install -y \
   curl \
   make \
   ccache
+
+# Install uv (fast Python package and environment manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
 ```
 
 ### 2. Rust Toolchain Setup (for Mirage emulator & tools)
@@ -76,18 +79,22 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --defaul
 source "$HOME/.cargo/env"
 ```
 
-### 3. Clone Repository & Setup Python Virtual Environment
+### 3. Create Workspace & Python 3.14 Virtual Environment with `uv`
 
 ```bash
-# Clone the repository
+# Create directory structure for virtual environment
+mkdir -p ~/virtualenv/venv314 && cd ~/virtualenv/venv314
+
+# Create and activate Python 3.14 virtual environment using uv
+uv venv .venv314 --python 3.14
+source .venv314/bin/activate
+
+# Clone TheRock repository
 git clone https://github.com/analogbox/TheRock.git
 cd TheRock
 
-# Initialize Python virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+# Install Python dependencies with uv
+uv pip install -r requirements.txt
 
 # Download submodules and apply patches
 python3 ./build_tools/fetch_sources.py
