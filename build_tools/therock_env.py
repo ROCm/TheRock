@@ -597,11 +597,13 @@ def cmd_build(args):
         log_info("Custom Flag: Disabling BLAS libraries")
         cmake_cmd.append("-DTHEROCK_ENABLE_BLAS=OFF")
 
-    if not args.no_ccache:
+    if not args.no_ccache and shutil.which("ccache"):
         cmake_cmd.extend([
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
         ])
+    elif not args.no_ccache and not shutil.which("ccache"):
+        log_info("ccache not found on system. Building directly with GCC/Clang.")
 
     if args.extra_cmake_args:
         cmake_cmd.extend(args.extra_cmake_args)
