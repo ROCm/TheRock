@@ -90,8 +90,26 @@ Select precisely the components you want:
 * `profiler` (`rocgdb`): Profiler, tracer, and GDB debugger.
 
 ### 2. On-The-Fly Mix-and-Match Flags (`--with-*`)
+
+You can customize any preset on-the-fly by adding or removing individual components:
+
+```bash
+# Example 1: Build LLM preset with GPU Profiler & GDB Debugger
+./therock-env build --preset llm --python 3.14 --with-profiler
+
+# Example 2: Build LLM preset with MIOpen for CNN/Vision hybrid tasks
+./therock-env build --preset llm --python 3.14 --with-miopen
+
+# Example 3: Build HIP foundation engine with Fast Fourier Transforms (rocFFT)
+./therock-env build --preset core-hip --python 3.14 --with-fft
+
+# Example 4: Build LLM preset with ccache compiler acceleration
+./bootstrap.sh --preset llm --python 3.14 --with-ccache
+```
+
+**Supported Flags**:
 * `--with-miopen`: Adds MIOpen & Composable Kernel.
-* `--with-rccl`: Adds multi-GPU RCCL.
+* `--with-rccl`: Adds multi-GPU collective communications (RCCL).
 * `--with-profiler`: Adds `rocprofv3`, `rocprofiler-sdk`, and `rocgdb`.
 * `--with-fft`: Adds `rocFFT` math library.
 * `--with-media` / `--with-vulkan`: Adds AMD Mesa, `rocDecode`, and `rocJPEG`.
