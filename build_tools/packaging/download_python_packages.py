@@ -135,12 +135,15 @@ except ImportError:
 MAX_S3_KEYS_CHECK = 100
 BYTES_TO_MB = 1024 * 1024  # Conversion factor from bytes to MB
 
+# The JAX plugin/pjrt wheels embed the ROCm major version in their package name
+# (jax_rocm7_plugin for ROCm 7, jax_rocm10_plugin for ROCm 10), so they are
+# matched by pattern instead of listed once per ROCm release.
+JAX_ROCM_PACKAGE_PATTERN = re.compile(r"^jax_rocm\d+_(plugin|pjrt)$")
+
 # Package categories
 # Note: replace - in package names with _ to match the filename patterns in S3
 PACKAGES_TO_PROMOTE = {
     "apex",
-    "jax_rocm7_pjrt",
-    "jax_rocm7_plugin",
     "jaxlib",
     "rocm",
     "rocm_profiler",
@@ -264,6 +267,9 @@ def is_allowed_multi_arch_package(
     base = re.split(r"-\d", filename, maxsplit=1)[0]
     base = base.lower().replace("-", "_")
 
+    if JAX_ROCM_PACKAGE_PATTERN.match(base):
+        return True
+
     for pkg in PACKAGES_TO_PROMOTE_MULTI_ARCH:
 
         # Device packages contain gfx targets
@@ -301,8 +307,12 @@ def categorize_package(filename: str) -> str:
     """
     pkg_name = filename.split("-", 1)[0]
 
-    # Check for rocm-sdk-libraries-* pattern
-    if pkg_name.startswith("rocm_sdk_libraries") or pkg_name in PACKAGES_TO_PROMOTE:
+    # Check for rocm-sdk-libraries-* and jax-rocm<major>-* patterns
+    if (
+        pkg_name.startswith("rocm_sdk_libraries")
+        or JAX_ROCM_PACKAGE_PATTERN.match(pkg_name)
+        or pkg_name in PACKAGES_TO_PROMOTE
+    ):
         return "promote"
 
     if pkg_name in DEPENDENCY_PACKAGES:

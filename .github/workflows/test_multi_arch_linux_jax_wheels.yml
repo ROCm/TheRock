@@ -1,0 +1,321 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Multi-Arch Linux JAX Wheels
+
+on:
+  workflow_call:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        required: true
+        type: string
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version
+        required: true
+        type: string
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      release_type:
+        description: "Release type"
+        type: string
+        required: true
+      python_version:
+        description: Python version to test
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        required: true
+        type: string
+      jax_version:
+        description: "Built JAX version"
+        required: false
+        type: string
+      jaxlib_version:
+        description: "Built jaxlib version"
+        required: false
+        type: string
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        required: false
+        type: string
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        required: false
+        type: string
+      test_runs_on:
+        description: Runner label to execute tests on
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        type: string
+        default: "gfx94X-dcgpu"
+      package_index_url:
+        description: Base URL for the multi-arch Python package index
+        type: string
+        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      rocm_version:
+        description: ROCm version
+        type: string
+        default: "7.14.0.dev0"
+      rocm_package_find_links_url:
+        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        type: string
+        default: ""
+      release_type:
+        description: 'Release type; developer-triggered jobs should use "dev".'
+        type: choice
+        options:
+          - dev
+        default: dev
+      python_version:
+        description: Python version to test
+        type: string
+        default: "3.13"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        type: string
+        default: "rocm-jaxlib-v0.11.0"
+      jax_version:
+        description: "Built JAX version"
+        type: string
+        default: ""
+      jaxlib_version:
+        description: "Built jaxlib version"
+        type: string
+        default: ""
+      jax_plugin_version:
+        description: "Built jax_rocm7_plugin version"
+        type: string
+        default: ""
+      jax_pjrt_version:
+        description: "Built jax_rocm7_pjrt version"
+        type: string
+        default: ""
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test_jax_wheels:
+    name: Test JAX | ${{ inputs.test_amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 120
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      options: >-
+        --shm-size=128g
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add render
+        --group-add video
+        --user root
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e KUBE_CPU_REQUEST
+        -e KUBE_MEMORY_REQUEST
+        --dns 8.8.8.8
+        --dns 8.8.4.4
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      QUARTZ_REPORTING_WORKFLOW: test_linux_jax_wheels_partial.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test JAX wheels (partial)"
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+
+    steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout rocm-jax
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Checkout JAX
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: jax
+          repository: ROCm/jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ inputs.python_version }}
+          check-latest: true
+
+      - name: System deps, venv configure
+        run: |
+          python3 -m venv "${VIRTUAL_ENV}"
+          echo "PATH=${VIRTUAL_ENV}/bin:${PATH}" >> "$GITHUB_ENV"
+          python3 build_tools/setup_venv.py \
+            "${VIRTUAL_ENV}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Install base JAX test requirements
+        run: |
+          pip install -r external-builds/jax/requirements-jax.txt
+
+      - name: Determine JAX package versions
+        run: |
+          # The plugin/pjrt wheels embed the ROCm major version in their package
+          # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
+          # built against.
+          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${rocm_major%%.*}"
+          if [ -z "${rocm_major}" ]; then
+            echo "::error::rocm_version is required to determine the JAX plugin package name"
+            exit 1
+          fi
+          echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
+          echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
+
+          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
+            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
+          else
+            pip install packaging
+
+            python build_tools/github_actions/compute_jax_package_version.py \
+              --rocm-version "${{ inputs.rocm_version }}" \
+              --jax-requirements rocm-jax/build/requirements.txt
+          fi
+      - name: Compute ROCm device extras
+        id: expand
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
+            --output-mode=device-extras
+
+      # rocm[libraries] alone, since that is what RELEASES.md tells users to
+      # install: anything the wheels need belongs there, not in [devel].
+      - name: Install ROCm packages
+        env:
+          ROCM_PACKAGES: rocm[libraries${{ steps.expand.outputs.device_extras && format(',{0}', steps.expand.outputs.device_extras) || '' }}]==${{ inputs.rocm_version }}
+        run: |
+          python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
+            --packages "${ROCM_PACKAGES}" \
+            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
+
+      # Package names, versions and the index arrive as env vars set above.
+      - name: Install JAX wheels from package index
+        run: |
+          python external-builds/jax/install_jax_wheels.py
+
+      # jaxlib comes from upstream PyPI and only knows the ROCm majors that
+      # existed when it was released, so it has to be taught about newer ones.
+      - name: Patch installed JAX for the ROCm major version
+        run: |
+          python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
+            --plugin-package "${JAX_PLUGIN_PACKAGE}"
+
+      # The device serial numbers it prints identify a recurring bad device
+      # across runs, since the runner and the device index change every time.
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python build_tools/print_driver_gpu_info.py
+
+      - name: Install JAX test requirements
+        run: |
+          python external-builds/jax/install_jax_test_requirements.py \
+            --jax-dir jax \
+            --python-version "${PYTHON_VERSION}"
+
+      # The runner owns the test environment, the skip lists, the pod's CPU
+      # allocation and both layers of retry, so that the same command
+      # reproduces this job locally. See the comments in the script.
+      - name: Run JAX tests
+        # The suite runs 35-70 min across versions, so 60 left no headroom: one
+        # job reached 100% of the tests and was still killed by the timeout.
+        timeout-minutes: 120
+        run: |
+          python external-builds/jax/run_jax_tests.py \
+            --jax-dir jax \
+            --jax-ref "${{ inputs.jax_ref }}" \
+            --amdgpu-family "${{ inputs.test_amdgpu_family }}"
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}
+          path: |
+            jax/logs/
+            jax/test-artifacts/
+          if-no-files-found: ignore
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -6,13 +6,13 @@ name: "Configure AWS credentials for artifact uploads"
 description: >-
   Determine the IAM role for the artifacts S3 bucket and assume it via OIDC.
   * Forks and external repos skip OIDC and use runner base credentials.
-  * Release builds (dev/nightly/prerelease) use 'therock-{release_type}' roles.
+  * Release builds use the IAM role for their destination release bucket.
   * Other CI runs use the 'therock-ci' role.
   See the "Authentication" section in docs/development/s3_buckets.md.
 
 inputs:
   release_type:
-    description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+    description: 'Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease"'
     default: ci
 
 runs:
@@ -28,7 +28,7 @@ runs:
 
     - name: Configure AWS Credentials
       if: ${{ always() && steps.iam.outputs.iam_role != '' }}
-      uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
       with:
         aws-region: ${{ steps.iam.outputs.aws_region }}
         role-to-assume: ${{ steps.iam.outputs.iam_role }}

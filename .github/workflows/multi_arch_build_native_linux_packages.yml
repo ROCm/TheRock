@@ -25,8 +25,13 @@ on:
         required: false
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (e.g. 'asan'). When set to 'asan', changes the install prefix to DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR (e.g. /opt/rocm/core-asan-7.15)."
+        required: false
+        type: string
+        default: ""
       release_type:
-        description: "Release type: 'ci', 'dev', 'nightly', or 'prerelease'"
+        description: "Release type used for artifact storage and package publishing."
         required: false
         type: string
         default: ci
@@ -55,11 +60,12 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
-      options: -v /runner/config:/home/awsconfig/
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_native_linux_packages.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build rpm/deb packages"
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix }}
@@ -69,14 +75,25 @@ jobs:
       PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
@@ -92,6 +109,7 @@ jobs:
           sudo apt-get install -y llvm-20
           sudo apt-get install -y rpm debhelper-compat build-essential
           sudo apt-get install -y dpkg-dev createrepo-c
+          sudo apt-get install -y patchelf
 
       - name: Fetch Artifacts for all GPU families
         run: |
@@ -117,7 +135,8 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
+            --build-variant "${{ inputs.build_variant }}"
 
       - name: Simulated install Test
         id: test-packages
@@ -139,3 +158,21 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

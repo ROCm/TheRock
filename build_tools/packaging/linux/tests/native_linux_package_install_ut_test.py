@@ -7,12 +7,20 @@
 
 import contextlib
 import importlib.util
+import io
 import os
+import stat
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+# Used only by the real-ELF fixture tests (VerifyNoRunpathRealElfTest) below.
+import shutil
+import subprocess
 
 # Load the module: look in same dir as this file, then parent (covers linux/ or linux/tests/ layout).
 _this_file = Path(__file__).resolve()
@@ -878,6 +886,8 @@ class RunTestsTestTypeTest(unittest.TestCase):
             gpg_key_url=None,
             packages_dir=None,
             pkg_type=None,
+            rocm_version=None,
+            build_variant="",
         )
 
     @patch.object(
@@ -989,10 +999,16 @@ class RunBasicVerificationTest(unittest.TestCase):
         )
         self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_when_enough_components_found(self, mock_run):
+    def test_returns_true_when_enough_components_found(self, mock_run, mock_security):
         # Test that run_basic_verification returns True when install_prefix exists and at least
         # VERIFY_MIN_COMPONENTS key components exist; subprocess (dpkg/rpm, rocminfo) is mocked.
+        # The file-security check is stubbed here (covered separately in its own tests).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "bin").mkdir()
@@ -1020,8 +1036,15 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_called_process_error_when_querying_packages(self, mock_run):
+    def test_handles_called_process_error_when_querying_packages(
+        self, mock_run, mock_security
+    ):
         # Test that run_basic_verification handles CalledProcessError when querying packages (continues, then passes if enough components).
         import subprocess
 
@@ -1038,8 +1061,13 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertTrue(t.run_basic_verification())
 
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=True,
+    )
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_handles_rocminfo_timeout(self, mock_run):
+    def test_handles_rocminfo_timeout(self, mock_run, mock_security):
         # Test that run_basic_verification handles rocminfo TimeoutExpired (warns but still passes if enough components).
         import subprocess
 
@@ -1058,6 +1086,304 @@ class RunBasicVerificationTest(unittest.TestCase):
                 install_prefix=d,
             )
             self.assertTrue(t.run_basic_verification())
+
+
+class VerifyInstalledFileSecurityTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_installed_file_security()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_find_reports_no_offending_paths(self, mock_run):
+        # Empty find output means every path is root-owned with safe permissions.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_find_reports_offending_paths(self, mock_run):
+        # Non-empty find output lists non-root-owned or insecure paths -> failure.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="/opt/rocm/core/bin/foo\n/opt/rocm/core/bin/setuid-tool\n",
+            stderr="",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_ignores_blank_lines_in_find_output(self, mock_run):
+        # Trailing/blank lines alone should not be treated as offending paths.
+        mock_run.return_value = MagicMock(returncode=0, stdout="\n\n", stderr="")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_nonzero_find_returncode_warns_but_still_evaluates_output(self, mock_run):
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial output; that output is still evaluated.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="/opt/rocm/core/bin/foo\n",
+            stderr="find: '/opt/rocm/core/x': Permission denied\n",
+        )
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_builds_expected_find_command(self, mock_run):
+        # Verify the single find invocation follows the prefix symlink (-H),
+        # stays on one filesystem (-xdev), checks ownership (uid/gid), writable
+        # (0o022) on non-symlinks (! -type l) and setid (0o6000) on regular
+        # files only (-type f).
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with _suppress_script_output():
+            self._make("/opt/rocm/core").verify_installed_file_security()
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[0], "find")
+        self.assertEqual(cmd[1], "-H")
+        self.assertEqual(cmd[2], "/opt/rocm/core")
+        self.assertIn("-xdev", cmd)
+        self.assertIn("-uid", cmd)
+        self.assertIn("-gid", cmd)
+        self.assertIn("/022", cmd)
+        self.assertIn("/6000", cmd)
+        self.assertIn("!", cmd)
+        # symlinks are excluded from the writable portion (! -type l)
+        self.assertIn("-type", cmd)
+        self.assertIn("l", cmd)
+        # setuid/setgid is scoped to regular files (-type f) so benign setgid
+        # directories (drwxr-sr-x) are not flagged.
+        self.assertIn("f", cmd)
+        setid_idx = cmd.index("/6000")
+        self.assertEqual(cmd[setid_idx - 3 : setid_idx], ["-type", "f", "-perm"])
+        # no sticky-bit special-casing anymore
+        self.assertNotIn("-1000", cmd)
+        # no in-process timeout (style guide: no timeouts on basic binutils)
+        self.assertNotIn("timeout", mock_run.call_args[1])
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_installed_file_security_python",
+        return_value=True,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_falls_back_to_python_when_find_not_available(
+        self, mock_run, mock_fallback
+    ):
+        # If find cannot be executed (OSError), fall back to the Python scan
+        # rather than silently skipping; the fallback result is returned.
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertTrue(self._make().verify_installed_file_security())
+        mock_fallback.assert_called_once()
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "_verify_installed_file_security_python",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_find_missing_fallback_can_fail(self, mock_run, mock_fallback):
+        # When find is missing and the Python fallback finds offenders, the
+        # overall check fails.
+        mock_run.side_effect = OSError("find not found")
+        with _suppress_script_output():
+            self.assertFalse(self._make().verify_installed_file_security())
+        mock_fallback.assert_called_once()
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_passes_for_safe_root_owned_tree(
+        self, mock_walk, mock_lstat
+    ):
+        # Python fallback returns True for root-owned 0755 dir / 0644 file modes.
+        mock_walk.return_value = [
+            ("/opt/rocm/core", ["bin"], ["a.txt"]),
+            ("/opt/rocm/core/bin", [], ["rocminfo"]),
+        ]
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o755),  # bin dir
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),  # a.txt
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o755),  # rocminfo
+        ]
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_entry(self, mock_walk, mock_lstat):
+        # Python fallback returns False when any entry is not owned by root.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["a.txt", "b.txt"])]
+        mock_lstat.side_effect = [
+            MagicMock(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644),
+            MagicMock(st_uid=1000, st_gid=1000, st_mode=stat.S_IFREG | 0o644),
+        ]
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_world_writable(self, mock_walk, mock_lstat):
+        # A root-owned but world-writable directory (PATH-hijack case) is flagged.
+        mock_walk.return_value = [("/opt/rocm/core", ["bin"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_flags_sticky_world_writable_dir(
+        self, mock_walk, mock_lstat
+    ):
+        # ROCm ships no world-writable dirs, so even a sticky one (mode 1777)
+        # is flagged rather than exempted.
+        mock_walk.return_value = [("/opt/rocm/core", ["tmp"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISVTX | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setuid(self, mock_walk, mock_lstat):
+        # A root-owned setuid binary is flagged as a privilege-escalation surface.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setuid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISUID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_setgid_file(self, mock_walk, mock_lstat):
+        # A root-owned setgid *regular file* is still flagged.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["setgid-tool"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFREG | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_setgid_directory(self, mock_walk, mock_lstat):
+        # A root-owned setgid *directory* (drwxr-sr-x, mode 2755) is a benign
+        # group-inheritance pattern and must NOT be flagged. This is the common
+        # ROCm install-tree case (2287 such dirs surfaced in CI).
+        mock_walk.return_value = [("/opt/rocm/core", ["libexec"], [])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | stat.S_ISGID | 0o755
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_allows_root_owned_symlink(self, mock_walk, mock_lstat):
+        # A root-owned symlink (mode 0o777, but bits are meaningless) is allowed.
+        # This is the /opt/rocm/core -> /opt/rocm/core-X.Y case from CI.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=0, st_gid=0, st_mode=stat.S_IFLNK | 0o777
+        )
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_fails_on_non_root_symlink(self, mock_walk, mock_lstat):
+        # A non-root-owned symlink is still flagged (ownership is meaningful).
+        mock_walk.return_value = [("/opt/rocm/core", [], ["link"])]
+        mock_lstat.return_value = MagicMock(
+            st_uid=1000, st_gid=1000, st_mode=stat.S_IFLNK | 0o777
+        )
+        with _suppress_script_output():
+            self.assertFalse(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch("native_linux_package_install_test.os.lstat")
+    @patch("native_linux_package_install_test.os.walk")
+    def test_python_fallback_skips_unstatable_entries(self, mock_walk, mock_lstat):
+        # Entries that cannot be lstat'd (e.g. race/permission) are skipped, not fatal.
+        mock_walk.return_value = [("/opt/rocm/core", [], ["gone.txt"])]
+        mock_lstat.side_effect = OSError("no such file")
+        with _suppress_script_output():
+            self.assertTrue(
+                self._make()._verify_installed_file_security_python(
+                    Path("/opt/rocm/core")
+                )
+            )
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_installed_file_security",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_security_check_fails(
+        self, mock_run, mock_security
+    ):
+        # Even with enough key components present, a failed file-security check
+        # (bad ownership or insecure permissions) fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_security.assert_called_once()
 
 
 class SetupGpgKeyTest(unittest.TestCase):
@@ -1081,10 +1407,9 @@ class SetupGpgKeyTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_gpg_key())
 
-    @patch("native_linux_package_install_test.os.chmod")
     @patch("native_linux_package_install_test.subprocess.run")
-    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run, mock_chmod):
-        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir and pipeline succeed.
+    def test_returns_true_for_deb_when_mock_succeeds(self, mock_run):
+        # Test that for DEB with gpg_key_url, setup_gpg_key returns True when mkdir, pipeline, and chmod succeed.
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
@@ -1092,7 +1417,7 @@ class SetupGpgKeyTest(unittest.TestCase):
             gpg_key_url="https://example.com/rocm.gpg",
         )
         self.assertTrue(t.setup_gpg_key())
-        self.assertEqual(mock_run.call_count, 2)  # mkdir, then pipeline
+        self.assertEqual(mock_run.call_count, 3)  # mkdir, pipeline, chmod
 
     @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_false_for_deb_when_subprocess_fails(self, mock_run):
@@ -1114,11 +1439,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.setup_deb_repository()."""
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_when_apt_update_succeeds_no_gpg(
-        self, mock_write_text, mock_streaming
+        self, mock_run, mock_streaming
     ):
-        # Test that setup_deb_repository writes repo entry (trusted=yes) and returns True when apt update returns 0.
+        # Test that setup_deb_repository writes repo entry via sudo tee (trusted=yes) and returns True when apt update returns 0.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1127,8 +1453,9 @@ class SetupDebRepositoryTest(unittest.TestCase):
             gfx_arch="gfx94x",
         )
         self.assertTrue(t.setup_deb_repository())
-        mock_write_text.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0][:2], ["sudo", "tee"])
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("trusted=yes", written)
         self.assertIn("https://repo.example.com", written)
 
@@ -1138,11 +1465,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
         "setup_gpg_key",
         return_value=True,
     )
-    @patch("native_linux_package_install_test.Path.write_text")
+    @patch("native_linux_package_install_test.subprocess.run")
     def test_returns_true_with_gpg_when_apt_update_succeeds(
-        self, mock_write_text, mock_gpg, mock_streaming
+        self, mock_run, mock_gpg, mock_streaming
     ):
         # Test that with gpg_key_url, setup_gpg_key is called and repo entry uses signed-by.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 0
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1152,7 +1480,7 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertTrue(t.setup_deb_repository())
         mock_gpg.assert_called_once()
-        written = mock_write_text.call_args[0][0]
+        written = mock_run.call_args.kwargs["input"].decode()
         self.assertIn("signed-by", written)
 
     @patch.object(
@@ -1169,13 +1497,14 @@ class SetupDebRepositoryTest(unittest.TestCase):
         )
         self.assertFalse(t.setup_deb_repository())
 
-    @patch("native_linux_package_install_test._run_streaming")
-    @patch(
-        "native_linux_package_install_test.Path.write_text",
-        side_effect=OSError("Permission denied"),
-    )
-    def test_returns_false_when_open_raises(self, mock_write_text, mock_streaming):
-        # Test that setup_deb_repository returns False when writing sources list raises OSError.
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_open_raises(self, mock_run):
+        # Test that setup_deb_repository returns False when sudo tee fails.
+        import subprocess
+
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "tee", stderr=b"permission denied"
+        )
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
             os_profile="ubuntu2404",
@@ -1185,9 +1514,10 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_fails(self, mock_write_text, mock_streaming):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_fails(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when apt update returns non-zero.
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.return_value = 1
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1198,13 +1528,12 @@ class SetupDebRepositoryTest(unittest.TestCase):
         self.assertFalse(t.setup_deb_repository())
 
     @patch("native_linux_package_install_test._run_streaming")
-    @patch("native_linux_package_install_test.Path.write_text")
-    def test_returns_false_when_apt_update_times_out(
-        self, mock_write_text, mock_streaming
-    ):
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_false_when_apt_update_times_out(self, mock_run, mock_streaming):
         # Test that setup_deb_repository returns False when _run_streaming raises TimeoutExpired.
         import subprocess
 
+        mock_run.return_value = MagicMock(returncode=0)
         mock_streaming.side_effect = subprocess.TimeoutExpired("apt", 120)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1245,8 +1574,6 @@ class SetupDnfRepositoryTest(unittest.TestCase):
     @patch("native_linux_package_install_test.Path.write_text")
     def test_returns_true_after_writing_repo_file(self, mock_write_text, mock_run):
         # Test that _setup_dnf_repository writes repo file and returns True (dnf clean may be mocked).
-        # Uses Path.write_text, not open().
-        mock_run.side_effect = None
         mock_run.return_value = MagicMock(returncode=0)
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://repo.example.com",
@@ -1304,7 +1631,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         )
         self.assertTrue(t.install_deb_packages())
         call_args = mock_streaming.call_args[0][0]
-        self.assertEqual(call_args[0], "apt")
+        self.assertEqual(call_args[:4], ["sudo", "apt", "install", "-y"])
         self.assertIn("amdrocm", call_args)
 
     @patch("native_linux_package_install_test._run_streaming")
@@ -1321,7 +1648,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertTrue(t.install_deb_packages())
         cmd = mock_streaming.call_args[0][0]
-        self.assertEqual(cmd[:3], ["apt", "install", "-y"])
+        self.assertEqual(cmd[:4], ["sudo", "apt", "install", "-y"])
         self.assertIn("amdrocm7.13-gfx94x", cmd)
         self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
         self.assertIn("amdrocm7.13-gfx1100", cmd)
@@ -1556,6 +1883,370 @@ class RunStreamingTest(unittest.TestCase):
         with self.assertRaises(sp.TimeoutExpired):
             native_linux_package_install_test._run_streaming(["slow-cmd"], 30)
         mock_proc.kill.assert_called_once()
+
+
+class BuildVariantPackageNamesTest(unittest.TestCase):
+    """Verify that build_variant='asan' inserts '-asan' before version in package names."""
+
+    def test_asan_with_gfx_arch_and_rocm_version(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
+        )
+
+    def test_asan_with_rocm_version_only(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="rhel10",
+            rocm_version="7.15.0",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
+        )
+
+    def test_asan_without_version_or_arch(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan", "amdrocm-core-sdk-asan"],
+        )
+
+    def test_no_build_variant_unchanged(self):
+        # Verify default (no build_variant) is unaffected.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+        )
+
+    def test_release_build_variant_does_not_alter_package_names(self):
+        # 'release' is the default build type label passed from CI build_variant_label.
+        # It must NOT insert '-release' into package names — there is no
+        # amdrocm-release7.15 package.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+            build_variant="release",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+        )
+
+
+class VerifyNoRunpathTest(unittest.TestCase):
+    """Tests for NativeLinuxPackageInstallTest.verify_no_runpath()."""
+
+    def _make(self, install_prefix="/opt/rocm/core"):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def _elf_tree(self, d):
+        # Create two files with ELF magic and one non-ELF file under d.
+        (Path(d) / "bin").mkdir()
+        (Path(d) / "lib").mkdir()
+        (Path(d) / "bin" / "hipcc").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "lib" / "libamdhip64.so").write_bytes(b"\x7fELF" + b"\x00" * 32)
+        (Path(d) / "readme.txt").write_text("not an elf file")
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_no_elf_uses_runpath(self, mock_run):
+        # readelf output showing (RPATH) for every ELF -> pass.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf invoked for the two ELF files only, not the .txt file.
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_an_elf_uses_runpath(self, mock_run):
+        # Any (RUNPATH) line marks the file as offending -> fail.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_passes_when_elf_has_no_dynamic_path(self, mock_run):
+        # ELF with neither RPATH nor RUNPATH is acceptable.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_skips_non_elf_files(self, mock_run):
+        # A tree with no ELF files performs no readelf calls and passes.
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "a.txt").write_text("plain")
+            (Path(d) / "b.json").write_text("{}")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        mock_run.assert_not_called()
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_returns_true_when_readelf_unavailable(self, mock_run):
+        # If readelf cannot be executed (OSError), the check is skipped (non-fatal).
+        mock_run.side_effect = OSError("readelf not found")
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_skips_file_when_readelf_returns_nonzero(self, mock_run):
+        # readelf returning non-zero (corrupt ELF, etc.) is non-fatal; the file
+        # is skipped with a warning and the overall check still passes.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="readelf: Error: Not an ELF file\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        # readelf was invoked for both ELF files despite the non-zero exit.
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_rpath_present_is_not_flagged_even_with_runpath(self, mock_run):
+        # DT_RPATH is checked first; a file that reports both tags is treated as
+        # converted (RPATH present) and is not flagged.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+                " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+            ),
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fails_when_only_some_files_are_runpath_only(self, mock_run):
+        # A mixed tree (one RPATH file, one RUNPATH-only file) still fails
+        # because at least one ELF is missing RPATH and carries RUNPATH.
+        def fake_readelf(cmd, **kwargs):
+            filepath = cmd[-1]
+            if filepath.endswith("libamdhip64.so"):
+                stdout = (
+                    " 0x000000000000001d (RUNPATH) Library runpath: [$ORIGIN/../lib]\n"
+                )
+            else:
+                stdout = " 0x000000000000000f (RPATH) Library rpath: [$ORIGIN/../lib]\n"
+            return MagicMock(returncode=0, stdout=stdout)
+
+        mock_run.side_effect = fake_readelf
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_files_with_neither_tag_pass_and_are_counted(self, mock_run):
+        # ELFs with neither DT_RPATH nor DT_RUNPATH are reported but not fatal.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x0000000000000001 (NEEDED) Shared library: [libc.so.6]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_fixed_path_rpath_is_reported_but_not_fatal(self, mock_run):
+        # An rpath with a non-$ORIGIN (fixed/absolute) entry is warned about but
+        # does not fail the check.
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=" 0x000000000000000f (RPATH) Library rpath: [/opt/rocm/lib]\n",
+        )
+        with tempfile.TemporaryDirectory() as d:
+            self._elf_tree(d)
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_fixed_rpath_entries_helper(self):
+        # Helper flags only entries that lack $ORIGIN, preserving order.
+        fn = (
+            native_linux_package_install_test.NativeLinuxPackageInstallTest._fixed_rpath_entries
+        )
+        # Pure $ORIGIN-relative rpath -> nothing flagged.
+        self.assertEqual(
+            fn(" 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:$ORIGIN/../lib64]\n"),
+            [],
+        )
+        # Mixed rpath -> only the fixed entries are returned.
+        self.assertEqual(
+            fn(
+                " 0x0f (RPATH) Library rpath: [$ORIGIN/../lib:/opt/rocm/lib:/usr/lib]\n"
+            ),
+            ["/opt/rocm/lib", "/usr/lib"],
+        )
+        # No rpath value present -> empty.
+        self.assertEqual(fn(" 0x01 (NEEDED) Shared library: [libc.so.6]\n"), [])
+
+    @patch.object(
+        native_linux_package_install_test.NativeLinuxPackageInstallTest,
+        "verify_no_runpath",
+        return_value=False,
+    )
+    @patch("native_linux_package_install_test.subprocess.run")
+    def test_basic_verification_fails_when_runpath_check_fails(
+        self, mock_run, mock_rpath
+    ):
+        # Even with enough components present, a failed RUNPATH check fails Step 2.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "bin").mkdir()
+            (Path(d) / "lib").mkdir()
+            (Path(d) / "bin" / "rocminfo").write_text("")
+            (Path(d) / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            with _suppress_script_output():
+                self.assertFalse(t.run_basic_verification())
+        mock_rpath.assert_called_once()
+
+
+# These fixtures build real ELF shared objects with GNU-ld options like
+# -Wl,-rpath and --disable-new-dtags. That only works with a Linux-targeting
+# toolchain: on Windows the runner ships MinGW (cc/readelf are on PATH) but its
+# ld targets PE/COFF and rejects those ELF-only options, so gate on Linux too.
+_ELF_TOOLCHAIN_AVAILABLE = bool(
+    sys.platform.startswith("linux") and shutil.which("cc") and shutil.which("readelf")
+)
+
+
+@unittest.skipUnless(
+    _ELF_TOOLCHAIN_AVAILABLE,
+    "real-ELF fixtures are Linux-only and require cc + readelf",
+)
+class VerifyNoRunpathRealElfTest(unittest.TestCase):
+    """End-to-end tests for verify_no_runpath() against real ELF files.
+
+    Unlike VerifyNoRunpathTest, which mocks readelf, these compile small shared
+    objects with known DT_RPATH/DT_RUNPATH tags and run the real ``readelf`` so
+    the actual subprocess code path is exercised. They only run on Linux with a
+    C compiler and readelf, and are skipped elsewhere (for example the
+    windows-2022 CI leg, whose MinGW ld cannot produce ELF with these options).
+    Error paths that cannot be produced from a real file (readelf missing,
+    non-zero exit) remain covered by the mocked VerifyNoRunpathTest.
+    """
+
+    def _compile_so(self, directory, name, *link_flags):
+        # $ORIGIN is passed literally (no shell), so the linker records it as-is.
+        src = Path(directory) / "src.c"
+        if not src.exists():
+            src.write_text("int f(void) { return 0; }\n")
+        out = Path(directory) / name
+        subprocess.run(
+            ["cc", "-shared", "-fPIC", "-o", str(out), *link_flags, str(src)],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return out
+
+    def _make(self, install_prefix):
+        return native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            install_prefix=install_prefix,
+        )
+
+    def test_real_rpath_origin_relative_passes(self):
+        # DT_RPATH with an $ORIGIN-relative value -> pass.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--disable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_runpath_fails(self):
+        # DT_RUNPATH (new dtags) with no DT_RPATH -> conversion missed -> fail.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "librunpath.so",
+                "-Wl,-rpath,$ORIGIN/../lib",
+                "-Wl,--enable-new-dtags",
+            )
+            with _suppress_script_output():
+                self.assertFalse(self._make(d).verify_no_runpath())
+
+    def test_real_neither_tag_passes(self):
+        # No rpath/runpath tag at all -> pass (nothing to convert).
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(d, "libnone.so")
+            with _suppress_script_output():
+                self.assertTrue(self._make(d).verify_no_runpath())
+
+    def test_real_fixed_rpath_is_reported_but_not_fatal(self):
+        # DT_RPATH with a non-$ORIGIN (absolute) entry -> warned, not fatal.
+        with tempfile.TemporaryDirectory() as d:
+            self._compile_so(
+                d,
+                "libfixed.so",
+                "-Wl,-rpath,/opt/rocm/lib",
+                "-Wl,--disable-new-dtags",
+            )
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result = self._make(d).verify_no_runpath()
+        output = buf.getvalue()
+        self.assertTrue(result)
+        self.assertIn("not $ORIGIN-relative", output)
+        self.assertIn("/opt/rocm/lib", output)
 
 
 if __name__ == "__main__":

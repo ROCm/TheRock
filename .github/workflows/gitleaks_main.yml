@@ -14,6 +14,9 @@ on:
   # the Security tab can be refreshed without an unrelated commit.
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   gitleaks:
     uses: ./.github/workflows/gitleaks.yml

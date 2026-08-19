@@ -1,21 +1,23 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(THEROCK_ENABLE_RAND)
-  # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
-  # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
-  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
-  # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
-  if(WIN32 OR NOT TARGET amdsmi)
+set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+set(_primlibs_benchmark_deps)
+set(_primlibs_benchmark_includes)
+# amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
+# (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
+# amdsmi, so they must be disabled when amdsmi is unavailable (e.g., the
+# prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
+if(NOT WIN32)
+  if(NOT TARGET amdsmi)
     set(_primlibs_benchmark_enable "OFF")
-    set(_primlibs_benchmark_deps)
-    set(_primlibs_benchmark_includes)
   else()
-    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
     set(_primlibs_benchmark_deps amdsmi)
     set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
   endif()
+endif()
 
+if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
   ##############################################################################
@@ -41,8 +43,6 @@ if(THEROCK_ENABLE_RAND)
       ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipRAND
   )
   therock_cmake_subproject_glob_c_sources(rocRAND
     SUBDIRS
@@ -74,7 +74,6 @@ if(THEROCK_ENABLE_RAND)
     RUNTIME_DEPS
       hip-clr
       rocRAND
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS
@@ -120,10 +119,6 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipCUB
-      rocThrust
-      rocSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -131,20 +126,6 @@ if(THEROCK_ENABLE_PRIM)
   )
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
-
-  # amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
-  # (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
-  # amd_smi, so they must be disabled when amdsmi is unavailable (e.g., the
-  # prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
-  if(WIN32 OR NOT TARGET amdsmi)
-    set(_primlibs_benchmark_enable "OFF")
-    set(_primlibs_benchmark_deps)
-    set(_primlibs_benchmark_includes)
-  else()
-    set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
-    set(_primlibs_benchmark_deps amdsmi)
-    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
-  endif()
 
   if(THEROCK_BUILD_TESTING)
     ##############################################################################
@@ -299,15 +280,12 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
     RUNTIME_DEPS
       hip-clr
       hipRAND
-    TEST_SUBPROJECTS
-      hipFFT
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -335,14 +313,12 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
     RUNTIME_DEPS
       hip-clr
       rocFFT
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipFFT
     SUBDIRS
@@ -437,7 +413,6 @@ if(THEROCK_ENABLE_ROCWMMA)
       hip-clr
       rocBLAS
       ${_rocwmma_optional_deps}
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
@@ -512,6 +487,16 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   # libhipcxx
   ##############################################################################
 
+  set(libhipcxx_runtime_deps)
+  # Used on Linux when amd-smi is available. amdsmi is only declared when
+  # THEROCK_ENABLE_CORE_AMDSMI is ON (see core/CMakeLists.txt), so guard on the
+  # target existing to keep narrow configs (e.g. THEROCK_ENABLE_LIBHIPCXX=ON /
+  # THEROCK_ENABLE_ALL=OFF, as in the hipThreads nightly) from referencing a
+  # non-existent target.
+  if(NOT WIN32 AND TARGET amdsmi)
+    list(APPEND libhipcxx_runtime_deps amdsmi)
+  endif()
+
   therock_cmake_subproject_declare(libhipcxx
     # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
     #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
@@ -531,19 +516,19 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
-      hipcc
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
       amd-llvm
       hip-clr
-      hipcc
+      ${libhipcxx_runtime_deps}
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
       .
   )
   therock_cmake_subproject_require_host_program(libhipcxx lit)
+  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx
@@ -634,7 +619,9 @@ if(_ck_enabled)
   )
 endif()
 
-if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
+# Gate on _ck_enabled so CK-less families don't publish a stub-only hipTensor
+# _generic that would clobber the real library _generic on the shared artifact key.
+if(THEROCK_ENABLE_HIPTENSOR AND _ck_enabled)
   ##############################################################################
   # hipTensor
   ##############################################################################
@@ -679,3 +666,57 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
       hipTensor
   )
 endif()
+
+if(THEROCK_ENABLE_HIPTHREADS)
+  ##############################################################################
+  # hipthreads
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipthreads
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipthreads"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipthreads"
+    BACKGROUND_BUILD
+    # libhipthreads.a is a static archive of device bitcode that is identical
+    # regardless of which per-arch shard builds it. Build all test targets once
+    # and publish a single target-neutral (_generic) artifact (see TARGET_NEUTRAL
+    # on therock_provide_artifact below) so per-arch CI upload races are harmless.
+    USE_TEST_AMDGPU_TARGETS
+    CMAKE_ARGS
+      -DHIPTHREADS_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      -DCMAKE_CXX_STANDARD=17
+      # hipThreads compiles with -Werror plus strict warnings (-Wshadow,
+      # -Wold-style-cast, ...). The HIP runtime headers are included with -I
+      # (not -isystem) and trip those warnings, so disable -Werror here.
+      -DDISABLE_WERROR=ON
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      libhipcxx
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipthreads
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(hipthreads lit)
+  therock_cmake_subproject_activate(hipthreads)
+
+  therock_provide_artifact(hipthreads
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipthreads.toml
+    COMPONENTS
+      dev
+      test
+    SUBPROJECT_DEPS
+      hipthreads
+  )
+endif(THEROCK_ENABLE_HIPTHREADS)
