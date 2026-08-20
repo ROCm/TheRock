@@ -74,9 +74,22 @@ s3_bucket_configs = [
 
 _BUCKET_CONFIGS_BY_NAME = {c.name: c for c in s3_bucket_configs}
 
-_ALLOWED_ARTIFACT_RELEASE_TYPES = {"ci", "dev", "nightly", "prerelease"}
+_ALLOWED_ARTIFACT_RELEASE_TYPES = {
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+}
 
-_ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
+_ALLOWED_RELEASE_TYPES = {
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+}
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
 
@@ -89,7 +102,8 @@ def get_artifacts_bucket_config(
     """Look up the artifacts bucket config for a repository.
 
     Args:
-        release_type: "ci", "dev", "nightly", or "prerelease".
+        release_type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
         repository: GitHub repository (e.g. "ROCm/TheRock").
         is_pr_from_fork: Whether this is a PR from a fork.
 
@@ -108,7 +122,12 @@ def get_artifacts_bucket_config(
         else:
             bucket_name = "therock-ci-artifacts"
     else:
-        bucket_name = f"therock-{release_type}-artifacts"
+        if release_type == "dev-bkc":
+            bucket_name = "therock-dev-artifacts"
+        elif release_type == "nightly-bkc":
+            bucket_name = "therock-nightly-artifacts"
+        else:
+            bucket_name = f"therock-{release_type}-artifacts"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
@@ -119,11 +138,13 @@ def get_release_bucket_config(
     """Look up the release bucket config for a given release type and bucket type.
 
     Args:
-        release_type: "dev", "nightly", or "prerelease".
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
         bucket_type: "tarball", "python", or "packages".
 
     Returns:
-        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``.
+        S3BucketConfig for the selected release bucket. BKC release types use
+        the corresponding dev or nightly bucket.
 
     Raises:
         ValueError: If release_type or bucket_type is invalid.
@@ -138,7 +159,12 @@ def get_release_bucket_config(
             f"bucket_type={bucket_type!r} is invalid, "
             f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
         )
-    bucket_name = f"therock-{release_type}-{bucket_type}"
+    if release_type == "dev-bkc":
+        bucket_name = f"therock-dev-{bucket_type}"
+    elif release_type == "nightly-bkc":
+        bucket_name = f"therock-nightly-{bucket_type}"
+    else:
+        bucket_name = f"therock-{release_type}-{bucket_type}"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 

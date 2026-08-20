@@ -14,7 +14,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       repository:
@@ -31,11 +31,34 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release Windows"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - release Windows"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_windows.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   build_artifacts:
     name: Build Artifacts
     uses: ./.github/workflows/multi_arch_build_windows.yml
@@ -52,6 +75,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -60,6 +84,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Tarballs
     uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -67,6 +92,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -75,6 +101,7 @@ jobs:
     needs: [build_artifacts]
     name: Build Python Packages
     uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -85,6 +112,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -149,7 +177,8 @@ jobs:
               "test_type": "${{ inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
@@ -172,5 +201,25 @@ jobs:
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
               "release_type": "${{ inputs.release_type }}",
               "ref": "${{ inputs.ref || '' }}",
-              "python_version": "${{ inputs.python_version }}"
+              "python_version": "${{ inputs.python_version }}",
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
+    name: "Quartz - completed - release Windows"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release Windows"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_windows.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

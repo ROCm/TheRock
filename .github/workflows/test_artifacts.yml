@@ -39,7 +39,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type: "ci" or "dev".'
+        description: 'Release type for the artifacts being tested.'
         type: choice
         options:
           - ci
@@ -58,6 +58,13 @@ on:
           - release
           - asan
         default: release
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -105,6 +112,9 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      quartz_tracking_id:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -126,6 +136,17 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
+      - name: "Quartz - started - test ROCm artifacts"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: test_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,6 +198,7 @@ jobs:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
     uses: './.github/workflows/test_component.yml'
+    secrets: inherit
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -191,6 +213,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -220,7 +243,7 @@ jobs:
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
       #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
-      #      User-triggered means github.actor does NOT contain 'github-actions'.
+      #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
       #   3. Benchmark components use the dedicated benchmark runner
@@ -228,7 +251,8 @@ jobs:
       #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
-          (!contains(github.actor, 'github-actions') &&
+          (github.event_name == 'workflow_dispatch' &&
+            !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&
@@ -246,3 +270,22 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [configure_test_matrix, test_sanity_check, test_components]
+    name: "Quartz - completed - test ROCm artifacts"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - test ROCm artifacts"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: test_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

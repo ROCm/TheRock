@@ -230,6 +230,9 @@ the runner adds only what is ours:
 - The known-bad tests for the version and GPU family under test, as a pytest
   `-k` expression. These live in [`skip_tests/`](./skip_tests/README.md), which
   also documents how to inspect the expression or run only the skipped tests.
+- An optional subset, when `--test-list` names one. CI uses it to get a
+  PR-sized run out of the same suite the nightly runs; see
+  [`test_selection/`](./test_selection/README.md) for the sizes and the format.
 - Two layers of retry, which are not interchangeable:
   - **In-process reruns** (`--in-process-reruns`, default 2) are
     pytest-rerunfailures. They repeat a failed test inside the same worker,
@@ -265,6 +268,10 @@ python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --no-retries
 
 # Hold the run to 25 cores, as a CI pod would be.
 python external-builds/jax/run_jax_tests.py --jax-dir jax_tests --cpus 25
+
+# Run the subset PR CI runs, rather than the whole suite.
+python external-builds/jax/run_jax_tests.py --jax-dir jax_tests \
+  --test-list external-builds/jax/test_selection/small_tests.txt
 ```
 
 ### Teaching an installed JAX about a new ROCm major version
