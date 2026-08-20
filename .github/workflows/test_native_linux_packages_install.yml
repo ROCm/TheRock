@@ -47,7 +47,10 @@ on:
         type: string
         required: false
       test_runs_on:
-        description: "GitHub runner label to use for the test job."
+        description: >-
+          GitHub runner label for the test job. The runner should match the GPU
+          pool for artifact_group (e.g. linux-gfx942-1gpu-ccs-csp-ossci-rocm for
+          gfx94X-dcgpu).
         required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
@@ -102,7 +105,11 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
       test_runs_on:
-        description: "GitHub runner label to use for the test job."
+        description: >-
+          GitHub runner label for the test job. The runner should match the GPU
+          pool for artifact_group (e.g. linux-gfx942-1gpu-ccs-csp-ossci-rocm for
+          gfx94X-dcgpu).
+        required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
@@ -160,7 +167,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.test_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
