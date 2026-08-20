@@ -357,13 +357,13 @@ test_matrix = {
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
@@ -371,7 +371,7 @@ test_matrix = {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
         "test_script": (
-            "python ./build/tests/rocgdb/test_rocgdb.py --tests"
+            "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
             " gdb.rocm/corefile.exp"
             " gdb.rocm/core-no-read-special-files.exp"
             " gdb.rocm/gcore-after-attach.exp"
