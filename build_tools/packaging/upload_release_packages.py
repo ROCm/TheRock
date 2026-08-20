@@ -139,7 +139,7 @@ STRUCTURED_DEFAULT_INDEX = "whl-next"
 REPO_STREAMS = ("dev", "nightly", "rc")
 REPO_BUCKET_PRODUCT_NAMES = {
     "core": "core",
-    "pytorch": "python",
+    "pytorch": "pytorch",
     "jax": "jax",
 }
 CORE_TARBALL_PREFIXES = {

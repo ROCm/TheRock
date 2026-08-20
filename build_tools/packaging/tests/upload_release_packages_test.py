@@ -106,11 +106,11 @@ class StructuredUploadTest(unittest.TestCase):
                 text,
             )
             self.assertIn(
-                "s3://therock-repo-amd-rc-python/v5/rocm/pytorch/whl-next/torch/torch-2.10.0+rocm7.13.0-cp312-cp312-linux_x86_64.whl",
+                "s3://therock-repo-amd-rc-pytorch/v5/rocm/pytorch/whl-next/torch/torch-2.10.0+rocm7.13.0-cp312-cp312-linux_x86_64.whl",
                 text,
             )
             self.assertIn(
-                "s3://therock-repo-amd-rc-python/v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/amd_torch_device_gfx942-2.10.0+rocm7.13.0-py3-none-linux_x86_64.whl",
+                "s3://therock-repo-amd-rc-pytorch/v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/amd_torch_device_gfx942-2.10.0+rocm7.13.0-py3-none-linux_x86_64.whl",
                 text,
             )
             self.assertIn(
