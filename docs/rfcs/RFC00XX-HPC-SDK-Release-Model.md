@@ -12,7 +12,8 @@ status: draft
 > `hpc-sdk/` folder. It is now built **along with ROCm Core**, shipped
 > as an **extra meta-package** (`amdrocm-hpc`) that is **not** part of
 > the default `amdrocm` meta-package. The independent-cadence model is
-> preserved in `RFC00YY-HPC-SDK-Release-Model.md` for reference.
+> preserved in the v1 draft of this RFC ([PR #5613 history](https://github.com/ROCm/TheRock/pull/5613/commits))
+> for reference.
 
 ## Related RFCs
 
@@ -39,7 +40,7 @@ meta-package. Users who want the HPC SDK opt in by installing
 
 Repository hierarchy, stream subdomains, `amdrocm-repo` packaging,
 install locations, and versioning are all inherited from the Core SDK
-(RFC00XX / RFC0009) and are not redefined here.
+(RFC0012 / RFC0009) and are not redefined here.
 
 ## Versioning and cadence
 
@@ -79,6 +80,7 @@ component at the exact version shipped in that Core release.
 - It is a **standalone, opt-in** meta-package — the default `amdrocm`
   meta-package does **not** depend on it, so a default ROCm install
   does not pull in the HPC SDK.
+
 - Installing `amdrocm-hpc` adds the HPC SDK components on top of the
   matching Core SDK install:
 
@@ -90,10 +92,54 @@ component at the exact version shipped in that Core release.
 - Because HPC components ship with Core, `amdrocm-hpc`'s component
   dependencies resolve against the Core SDK version already on the
   system (or are pulled from the same stream).
+
 - Available in both rpm and deb formats for every supported distro.
+
 - Component list is owned by the HPC SDK team and reviewed each
   release so new components are added to the meta-package
   automatically.
+
+## Tarball
+
+The HPC SDK is also published as a **tarball**, alongside the Core SDK
+tarball under the Core SDK's existing `core/tarball/` location
+(RFC0012).
+
+**Definition.** The HPC SDK tarball is a **superset of the ROCm Core
+SDK tarball**. It contains:
+
+- every component **exclusive to the HPC SDK** (the components covered
+  by the `amdrocm-hpc` meta-package), **and**
+- **every component of the ROCm Core SDK** — the full contents of the
+  matching Core SDK tarball.
+
+It is therefore **self-contained**: extracting the HPC SDK tarball
+yields a complete, working ROCm Core SDK install plus the HPC SDK
+components. It is not an overlay or an add-on archive, and it does not
+require the Core SDK tarball to be extracted first.
+
+This differs deliberately from the package path, where `amdrocm-hpc`
+is a thin opt-in meta-package that depends on an existing Core SDK
+install. Tarballs have no dependency resolver, so the only way to
+deliver a usable HPC SDK by tarball is to ship the full stack.
+
+**Consequences:**
+
+- The Core SDK tarball and the HPC SDK tarball are **alternatives, not
+  companions** — a user picks one. Extracting both into the same
+  prefix is redundant, not additive.
+- The two tarballs carry the **same version** and are produced from
+  the same build, so the Core SDK content in the HPC tarball is
+  bit-identical to the standalone Core SDK tarball of that release.
+- The HPC SDK tarball is produced for the **same targets, OSes, and
+  streams** as the Core SDK tarball, with no HPC-specific matrix.
+- Naming follows the Core SDK tarball convention with an `hpc`
+  discriminator so the two sort together and are trivially
+  distinguishable, e.g.
+  `therock-dist-hpc-linux-<target>-<version>.tar.gz` next to
+  `therock-dist-linux-<target>-<version>.tar.gz`.
+- The Windows `.zip` archive follows the same rule if and when the HPC
+  SDK ships on Windows.
 
 ## Component versioning
 
