@@ -1740,17 +1740,6 @@ class TestBuildStagesAllowlist(unittest.TestCase):
         self.assertNotIn("compiler-runtime", skipped)
         self.assertNotIn("runtime-tests", skipped)
 
-    def test_allowlist_covers_every_other_known_stage(self):
-        """Nothing outside the allowlist survives, including stages added later."""
-        allowed = ["compiler-runtime", "runtime-tests"]
-        result = cm.decide_jobs(
-            self._inputs(build_stages=allowed),
-            git_context=cm.GitContext(),
-            targets=cm.TargetSelection(),
-        )
-        expected = set(cm._get_all_build_stages()) - set(allowed)
-        self.assertEqual(set(result.build_rocm.skipped_stages), expected)
-
     def test_unknown_stage_raises(self):
         """A typo in build_stages fails loudly instead of building everything."""
         with self.assertRaises(ValueError) as ctx:

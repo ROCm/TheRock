@@ -24,18 +24,46 @@ import subprocess
 import sys
 from typing import List, Optional
 
+# Import ASAN helpers from amdgpu_family_matrix
+_THIS_DIR = Path(__file__).resolve().parent
+_GITHUB_ACTIONS_DIR = _THIS_DIR / "github_actions"
+if _GITHUB_ACTIONS_DIR.exists():
+    sys.path.insert(0, str(_GITHUB_ACTIONS_DIR))
+    from amdgpu_family_matrix import get_asan_lib_path, is_asan_instrumented
+else:
+    # Fallback if running standalone
+    def is_asan_instrumented():
+        return os.getenv("BUILD_VARIANT", "") in ("asan", "host-asan")
+
+    def get_asan_lib_path(bin_dir):
+        arch = platform.machine()
+        clang_path = str(Path(bin_dir).parent / "lib" / "llvm" / "bin" / "clang++")
+        asan_lib = f"libclang_rt.asan-{arch}.so"
+        cmd = [clang_path, f"-print-file-name={asan_lib}"]
+        result = subprocess.run(cmd, check=True, text=True, capture_output=True)
+        resolved = result.stdout.strip()
+        if not resolved or resolved == asan_lib or not Path(resolved).is_file():
+            raise FileNotFoundError(f"Could not locate ASan runtime '{asan_lib}'")
+        return str(Path(resolved).resolve())
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
-def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
+def run_command(
+    args: List[str | Path], cwd: Optional[Path] = None, env: Optional[dict] = None
+) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
 
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
 
     try:
         proc = subprocess.run(
@@ -46,8 +74,14 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
             text=True,
             check=True,
             stdin=subprocess.DEVNULL,
+            env=run_env,
         )
         log(proc.stdout.rstrip())
+    except subprocess.CalledProcessError as e:
+        # Print the output even on failure so we can diagnose the issue
+        if e.stdout:
+            log(e.stdout.rstrip())
+        raise
     except FileNotFoundError:
         log(f"{args[0]}: command not found")
 
@@ -57,6 +91,7 @@ def run_command_with_search(
     command: str,
     args: List[str],
     extra_command_search_paths: List[Path],
+    env: Optional[dict] = None,
 ) -> None:
     """
     Run a command, searching in extra paths first, then PATH.
@@ -74,14 +109,14 @@ def run_command_with_search(
         candidate = base / command
         if candidate.exists():
             log(f"\n=== {label} ===")
-            run_command([candidate] + args)
+            run_command([candidate] + args, env=env)
             return
 
     # Then fall back to PATH
     resolved = shutil.which(command)
     if resolved:
         log(f"\n=== {label} ===")
-        run_command([resolved] + args)
+        run_command([resolved] + args, env=env)
         return
 
     # Nothing found
@@ -95,6 +130,22 @@ def run_sanity(os_name: str) -> None:
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
 
     log("=== Sanity check: driver / GPU info ===")
+
+    # Set up ASAN runtime preload for instrumented builds (asan or host-asan).
+    # Executables that load ASAN-instrumented ROCm libraries need the runtime
+    # preloaded, otherwise they abort with "ASan runtime does not come first
+    # in initial library list".
+    asan_env: Optional[dict] = None
+    if os_name.lower() != "windows" and is_asan_instrumented():
+        try:
+            asan_lib = get_asan_lib_path(bin_dir)
+            asan_env = {
+                "LD_PRELOAD": asan_lib,
+                "ASAN_OPTIONS": "detect_leaks=0",
+            }
+            log(f"ASAN instrumented build detected, preloading: {asan_lib}")
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            log(f"Warning: Could not resolve ASAN runtime: {e}")
 
     if os_name.lower() == "windows":
         # Windows: only hipInfo.exe
@@ -111,12 +162,14 @@ def run_sanity(os_name: str) -> None:
             command="amd-smi",
             args=["static"],
             extra_command_search_paths=[bin_dir],
+            env=asan_env,
         )
         run_command_with_search(
             label="rocminfo",
             command="rocminfo",
             args=[],
             extra_command_search_paths=[bin_dir],
+            env=asan_env,
         )
         run_command_with_search(
             label="Kernel version",
