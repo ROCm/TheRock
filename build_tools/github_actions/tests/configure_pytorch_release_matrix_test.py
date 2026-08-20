@@ -33,12 +33,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                    "test_amdgpu_families": "auto",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
                     "test_amdgpu_families": "auto",
@@ -68,15 +62,15 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
+                    "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
                     "test_amdgpu_families": "auto",
                 },
             ],
         )
 
-    def test_nightly_release_types_exclude_release_2_11(self):
-        for release_type in ("nightly", "nightly-bkc"):
+    def test_dev_and_nightly_release_types_exclude_release_2_11(self):
+        for release_type in ("dev", "dev-bkc", "nightly", "nightly-bkc"):
             with self.subTest(release_type=release_type):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type=release_type,
@@ -90,20 +84,18 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                 self.assertIn("release/2.12", refs)
                 self.assertIn("nightly", refs)
 
-    def test_non_nightly_release_types_keep_release_2_11(self):
-        for release_type in ("dev", "dev-bkc", "prerelease"):
-            with self.subTest(release_type=release_type):
-                matrix = m.generate_pytorch_matrix_for_release_type(
-                    release_type=release_type,
-                    python_versions=["3.12"],
-                    amdgpu_families="gfx94X-dcgpu",
-                    platform="linux",
-                )
-                refs = {row["pytorch_git_ref"] for row in matrix}
+    def test_prerelease_keeps_release_2_11(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="prerelease",
+            python_versions=["3.12"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+        refs = {row["pytorch_git_ref"] for row in matrix}
 
-                self.assertIn("release/2.11", refs)
+        self.assertIn("release/2.11", refs)
 
-    def test_nightly_explicit_release_2_11_still_builds(self):
+    def test_explicit_release_2_11_still_builds(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
             python_versions=["3.12"],
