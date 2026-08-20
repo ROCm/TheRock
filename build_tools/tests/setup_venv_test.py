@@ -112,16 +112,38 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_name(self, mock_run, mock_find_python):
-        """Passing index_name without index_url uses a known url."""
+    def test_index_names_use_repo_amd_aggregate_urls(self, mock_run, mock_find_python):
+        """Passing index_name without index_url uses current repo.amd.com urls."""
+        expected_urls = {
+            "stable": "https://repo.amd.com/rocm/whl-next/",
+            "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
+            "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
+            "dev": "https://dev.repo.amd.com/rocm/whl-next/",
+        }
+        for index_name, expected_url in expected_urls.items():
+            with self.subTest(index_name=index_name):
+                mock_run.reset_mock()
+                install_packages_into_venv(
+                    venv_dir=self.venv_dir,
+                    packages=["rocm"],
+                    index_name=index_name,
+                )
+
+                cmd = mock_run.call_args[0][0]
+                self.assertIn(f"--index-url={expected_url}", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_explicit_old_index_url_is_preserved(self, mock_run, mock_find_python):
+        """Passing index_url uses the URL as-is, including old release indexes."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            index_name="stable",
+            index_url="https://rocm.nightlies.amd.com/whl-multi-arch/",
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://repo.amd.com/rocm/whl-multi-arch/", cmd)
+        self.assertIn("--index-url=https://rocm.nightlies.amd.com/whl-multi-arch/", cmd)
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
