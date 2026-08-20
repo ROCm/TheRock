@@ -36,6 +36,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import sys
 import tarfile
@@ -219,14 +220,9 @@ def _record_has_entries(record_path: Path, names: list[str]) -> bool:
     return all(n in existing for n in names)
 
 
-def _major_minor_version(version: str) -> tuple[int, int] | None:
-    parts = version.split(".", 2)
-    if len(parts) < 2:
-        return None
-    try:
-        return int(parts[0]), int(parts[1])
-    except ValueError:
-        return None
+def _without_post_release(version: str) -> str:
+    """Remove a canonical PEP 440 post-release segment from a version."""
+    return re.sub(r"\.post\d+", "", version, count=1)
 
 
 def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
@@ -250,13 +246,11 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
         if name != "rocm-sdk-device" and not name.startswith("rocm-sdk-device-"):
             continue
 
-        # The device wheel and the SDK are major/minor version-locked. A
-        # mismatched wheel's link targets may not line up with this devel tree,
-        # so skip it loudly.
-        expected_major_minor = _major_minor_version(expected_version)
-        if (
-            expected_major_minor is None
-            or _major_minor_version(dist.version) != expected_major_minor
+        # The device wheel and the SDK are version-locked except for post-release
+        # segments. Other differences may indicate that the wheel's link targets
+        # do not line up with this devel tree, so skip it loudly.
+        if _without_post_release(dist.version) != _without_post_release(
+            expected_version
         ):
             print(
                 f"WARNING: skipping {name} {dist.version}: does not match "
