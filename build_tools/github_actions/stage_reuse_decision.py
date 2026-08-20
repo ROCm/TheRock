@@ -55,6 +55,7 @@ import os
 import logging
 import functools
 import sys
+import time
 import baseline_runs
 import github_actions_api
 from pathlib import Path
@@ -373,7 +374,13 @@ def compute_auto_stage_reuse(
         # Configuration errors (e.g. a bad required-artifacts request) indicate
         # a bug and must surface, so they are left to propagate.
         try:
+            _t_sel = time.monotonic()
             baseline = selector(required)
+            logger.info(
+                "%s select_baseline_run(platform=%s): %.2fs -> run_id=%s",
+                LOG_PREFIX, platform, time.monotonic() - _t_sel,
+                baseline.run_id if baseline is not None else None,
+            )
         except GitHubAPIError as exc:
             baseline_error = str(exc)
             baseline = None
@@ -535,10 +542,16 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     effective_commit_sha = current_commit_sha
     if current_commit_sha is not None:
         try:
+            _t0 = time.monotonic()
             ordered_commit_shas = github_actions_api.gha_query_recent_branch_commits(
                 github_repository_name=github_repository,
                 branch=branch,
                 max_count=history_count,
+            )
+            logger.info(
+                "%s gha_query_recent_branch_commits(%s, branch=%s, max_count=%d): %.2fs, %d commits",
+                LOG_PREFIX, github_repository, branch, history_count,
+                time.monotonic() - _t0, len(ordered_commit_shas),
             )
         except GitHubAPIError as exc:
             if is_external_repo:

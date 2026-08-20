@@ -49,6 +49,7 @@ import enum
 import json
 import os
 import sys
+import time
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
@@ -923,12 +924,14 @@ def decide_jobs(
     # their builds and copies artifacts instead. The platforms and families to
     # verify come straight from the resolved target selection.
 
+    _t_stage_reuse = time.monotonic()
     auto_stage_reuse = compute_auto_stage_reuse(
         changed_files=git_context.changed_files,
         mode=StageReuseMode.from_environ(),
         linux_amdgpu_families=targets.linux_families,
         windows_amdgpu_families=targets.windows_families,
     )
+    print(f"[TIMING] compute_auto_stage_reuse: {time.monotonic() - _t_stage_reuse:.2f}s")
 
     baseline_repository = ci_inputs.baseline_repository
     baseline_run_id = ci_inputs.baseline_run_id
@@ -1482,9 +1485,23 @@ def main():
         # a "prior commit" to compare against.
         git_context = GitContext.empty()
 
+    _t_configure = time.monotonic()
     outputs = configure(ci_inputs, git_context)
+    print(f"[TIMING] configure(): {time.monotonic() - _t_configure:.2f}s")
+
+    _t_write = time.monotonic()
     write_outputs(ci_inputs=ci_inputs, outputs=outputs)
+    print(f"[TIMING] write_outputs(): {time.monotonic() - _t_write:.2f}s")
+
+    print(f"[TIMING] total main(): {time.monotonic() - _t_main:.2f}s")
 
 
 if __name__ == "__main__":
+    import logging as _logging
+    _log_level = os.environ.get("PYTHONLOGLEVEL", "WARNING").upper()
+    _logging.basicConfig(
+        level=getattr(_logging, _log_level, _logging.WARNING),
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    _t_main = time.monotonic()
     main()

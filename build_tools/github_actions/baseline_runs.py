@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 import logging
 from pathlib import Path
 import sys
+import time
 from urllib.parse import urlencode, quote
 
 logger = logging.getLogger(__name__)
@@ -753,6 +754,7 @@ def select_baseline_run(
             )
     check_recency = max_age_hours is not None
 
+    _t_candidates = time.monotonic()
     candidates = (
         list(workflow_runs)
         if workflow_runs is not None
@@ -763,12 +765,26 @@ def select_baseline_run(
             max_runs=max_runs,
         )
     )
+    logger.info(
+        "[BASELINE] query_completed_workflow_runs(repo=%s, workflow=%s, branch=%s, max=%d): %.2fs -> %d runs",
+        github_repository, workflow_name, branch, max_runs,
+        time.monotonic() - _t_candidates, len(candidates),
+    )
 
+    _t_loop_start = time.monotonic()
+    _runs_checked = 0
     for workflow_run in candidates[:max_runs]:
         run_id = str(workflow_run["id"])
+        _runs_checked += 1
+        _t_run = time.monotonic()
         if run_id in excluded:
+            logger.info("[BASELINE] run %s: excluded, skipping", run_id)
             continue
         if not is_completed_workflow_run(workflow_run):
+            logger.info(
+                "[BASELINE] run %s: status=%s (not completed), skipping",
+                run_id, workflow_run.get("status"),
+            )
             continue
 
         # Cheap, local checks (recency, commit ancestry) run before the
@@ -782,8 +798,8 @@ def select_baseline_run(
             )
             if not run_recency.is_valid:
                 logger.info(
-                    "Skipping run %s: too old or not date-parseable "
-                    "(age_hours=%s, max_age_hours=%s)",
+                    "[BASELINE] run %s: too old or not date-parseable "
+                    "(age_hours=%s, max_age_hours=%s), skipping",
                     run_id,
                     run_recency.age_hours,
                     run_recency.max_age_hours,
@@ -794,8 +810,7 @@ def select_baseline_run(
         if check_commit:
             candidate_head_sha = (workflow_run.get("head_sha", "") or "").strip()
             if not candidate_head_sha:
-                # A run without a head_sha cannot be confirmed compatible.
-                logger.info("Skipping run %s: no head_sha to compare", run_id)
+                logger.info("[BASELINE] run %s: no head_sha to compare, skipping", run_id)
                 continue
             commit_compatibility = validate_commit_compatibility(
                 candidate_head_sha=candidate_head_sha,
@@ -804,7 +819,7 @@ def select_baseline_run(
             )
             if not commit_compatibility.is_valid:
                 logger.info(
-                    "Skipping run %s: commit %s is %s relative to current %s",
+                    "[BASELINE] run %s: commit %s is %s relative to current %s, skipping",
                     run_id,
                     candidate_head_sha,
                     commit_compatibility.relationship,
@@ -812,32 +827,51 @@ def select_baseline_run(
                 )
                 continue
 
+        _t_jobs = time.monotonic()
+        fetched_jobs = workflow_jobs_fetcher(workflow_run, github_repository)
+        _jobs_elapsed = time.monotonic() - _t_jobs
+        logger.info(
+            "[BASELINE] run %s: query_workflow_run_jobs: %.2fs, %d jobs",
+            run_id, _jobs_elapsed, len(fetched_jobs),
+        )
         job_health = validate_required_jobs_successful(
-            workflow_jobs=workflow_jobs_fetcher(workflow_run, github_repository),
+            workflow_jobs=fetched_jobs,
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
             logger.info(
-                "Skipping run %s: required build jobs not healthy "
-                "(failed=%s, missing=%s)",
+                "[BASELINE] run %s: required build jobs not healthy "
+                "(failed=%s, missing=%s), skipping",
                 run_id,
                 job_health.failed_job_names,
                 job_health.missing_name_substrings,
             )
             continue
 
+        _t_artifacts = time.monotonic()
         backend = backend_factory(workflow_run, github_repository, platform)
         availability = validate_required_artifacts_available(
             backend=backend,
             required_artifacts=requirements,
         )
+        _artifacts_elapsed = time.monotonic() - _t_artifacts
+        logger.info(
+            "[BASELINE] run %s: validate_required_artifacts_available: %.2fs, valid=%s",
+            run_id, _artifacts_elapsed, availability.is_valid,
+        )
         if not availability.is_valid:
             logger.info(
-                "Skipping run %s: missing artifacts %s",
+                "[BASELINE] run %s: missing artifacts %s, skipping",
                 run_id,
                 availability.missing_artifacts,
             )
             continue
+
+        logger.info(
+            "[BASELINE] run %s: SELECTED after %.2fs (total loop so far: %.2fs, %d runs checked)",
+            run_id, time.monotonic() - _t_run,
+            time.monotonic() - _t_loop_start, _runs_checked,
+        )
 
         source_ref = create_workflow_run_summary(
             workflow_run,
@@ -854,4 +888,8 @@ def select_baseline_run(
             run_recency=run_recency,
         )
 
+    logger.info(
+        "[BASELINE] no baseline found after checking %d runs in %.2fs",
+        _runs_checked, time.monotonic() - _t_loop_start,
+    )
     return None
