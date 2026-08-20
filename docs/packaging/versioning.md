@@ -130,6 +130,59 @@ The script produces these versions for each release type:
 | dev          | `X.Y.Z.dev0+NNNN`                          | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 | dev-bkc      | `X.Y.Z.dev0+NNNN`<br>(same as regular dev) | `10.1.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`                                                                                                              |
 
+### Post releases
+
+Python package versions may add a PEP 440 post-release segment to an existing
+stable version. For example, `7.14.0.post1` is newer than `7.14.0` but older
+than `7.14.1`:
+
+```text
+7.14.0 < 7.14.0.post1 < 7.14.0.post2 < 7.14.1
+```
+
+Post releases let us publish a corrected Python distribution derived from a
+stable release without changing the underlying ROCm release number. Suitable
+uses include correcting package metadata, dependency declarations, or other
+Python packaging and publication errors while retaining the stable release's
+native payload. Published distributions are immutable, so a corrected artifact
+must have a new version rather than replacing the file for `7.14.0`.
+
+Post releases should not be used as a substitute for ROCm patch releases. If a
+change fixes ROCm software, changes native binaries, or changes an interface or
+ABI, prefer a new patch release such as `7.14.1`. This follows the
+[Python packaging guidance for post releases](https://packaging.python.org/en/latest/specifications/version-specifiers/#post-releases),
+which strongly discourages using them for maintenance releases containing
+software bug fixes.
+
+TheRock can construct post releases from stable release inputs in a few ways:
+
+- Repackage an unchanged stable payload with corrected Python metadata.
+- Publish a post release of a leaf or selector package when its compatibility
+  constraints allow it to work with the base stable packages.
+- Publish a coordinated post release of all packages in a tightly coupled set
+  when their metadata requires exact matching versions.
+
+Post releases are not currently a regular release type produced by
+`compute_rocm_package_version.py`, and `promote_packages.py --dest-version` does
+not currently accept `.postN`. Creating one therefore requires a purpose-built
+repackaging flow or an extension to the promotion tooling. The resulting
+artifacts must still go through the normal validation and publishing process.
+
+Compatibility must be considered before deciding whether to post-release one
+package or a coordinated set:
+
+- An exact requirement such as `rocm-sdk-device-gfx1100==7.14.0` does not accept
+  `7.14.0.post1`, and the reverse exact requirement does not accept `7.14.0`.
+- Runtime checks based on string equality have the same problem and may reject
+  an otherwise compatible mix of base, patch, and post releases.
+- A major/minor constraint such as `==7.14.*` permits patch and post releases.
+  Use it only at boundaries where that compatibility is an intentional
+  contract. Keep exact pins where packages must be built, tested, and installed
+  as one versioned set.
+- Before publishing, test clean installs as well as upgrades from the base
+  stable version. Check that dependency resolution does not downgrade another
+  SDK package or produce a mixture that the runtime cannot use.
+
 ### BKC versions
 
 For `nightly-bkc`, `BASEDATE` comes from `release-metadata.base-date` in
@@ -257,6 +310,51 @@ When working with versions please use these tools and avoid custom parsing
   >>> v2.base_version
   '1.2.0'
   ```
+
+- The `packaging.specifiers.SpecifierSet` utility:
+  https://packaging.pypa.io/en/stable/specifiers.html
+
+  Use `SpecifierSet` when code needs to apply the same compatibility rules as
+  Python package metadata. A prefix match can express compatibility across a
+  ROCm major/minor release while accepting stable patch and post releases:
+
+  ```python
+  >>> from packaging.specifiers import SpecifierSet
+  >>> from packaging.version import Version
+  >>> compatible_rocm = SpecifierSet("==7.14.*")
+  >>> Version("7.14.0") in compatible_rocm
+  True
+  >>> Version("7.14.0.post1") in compatible_rocm
+  True
+  >>> Version("7.14.1") in compatible_rocm
+  True
+  >>> Version("7.15.0") in compatible_rocm
+  False
+  ```
+
+  Exact equality has different semantics and excludes post releases:
+
+  ```python
+  >>> exact_release = SpecifierSet("==7.14.0")
+  >>> Version("7.14.0") in exact_release
+  True
+  >>> Version("7.14.0.post1") in exact_release
+  False
+  ```
+
+  `SpecifierSet("~=7.14.0")` is another way to accept `7.14.0` or newer
+  versions in the `7.14` series. Prefer `==7.14.*` when the policy is simply
+  "the major and minor components must match"; use `~=` when its lower bound is
+  also part of the compatibility requirement. Pre-releases are excluded by
+  default unless explicitly enabled or otherwise selected according to the
+  standard Python packaging rules.
+
+  The `packaging` project is available to TheRock build and release tooling,
+  but it is not automatically a runtime dependency of every generated package.
+  Do not add a `packaging` import to installed SDK code unless the corresponding
+  distribution declares that dependency. Runtime code without that dependency
+  should use a small, narrowly scoped comparison for the specific version
+  policy it implements.
 
 - Existing Python scripts:
 
