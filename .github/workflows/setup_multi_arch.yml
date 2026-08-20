@@ -61,6 +61,14 @@ on:
           Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
         type: string
         default: "50"
+      stage_reuse_current_sha:
+        description: >-
+          Override the commit SHA used for stage-reuse ancestry checking. When
+          set, this value is used instead of the SHA resolved from the ref
+          checkout. Useful when the checked-out ref is a diagnostic/instrumented
+          branch whose tip is not in the baseline branch history.
+        type: string
+        default: ""
       build_python_packages:
         description: "Build ROCm Python packages (rocm-sdk, rocm-profiler, etc.)."
         type: boolean
@@ -206,7 +214,9 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          # stage_reuse_current_sha overrides this when the checked-out ref is
+          # an instrumented/diagnostic branch not in the baseline history.
+          STAGE_REUSE_CURRENT_SHA: ${{ inputs.stage_reuse_current_sha || steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
