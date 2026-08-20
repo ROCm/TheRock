@@ -67,11 +67,7 @@ class BaselineRunsTest(unittest.TestCase):
         )
 
     def test_is_successful_workflow_run(self):
-        self.assertTrue(
-            baseline_runs.is_successful_workflow_run(
-                _workflow_run("1", conclusion="success")
-            )
-        )
+        self.assertTrue(baseline_runs.is_successful_workflow_run(_workflow_run("1")))
         self.assertFalse(
             baseline_runs.is_successful_workflow_run(
                 _workflow_run("1", conclusion="failure")
@@ -89,7 +85,10 @@ class BaselineRunsTest(unittest.TestCase):
         )
         self.assertTrue(
             baseline_runs.is_successful_workflow_job(
-                _workflow_job("Notify", conclusion="skipped")
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                )
             )
         )
         self.assertFalse(
@@ -360,6 +359,14 @@ class BaselineRunsTest(unittest.TestCase):
             workflow_jobs=[
                 _workflow_job("Build Multi-Arch Stages / linux"),
                 _workflow_job("Build Multi-Arch Stages / windows"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
                 _workflow_job("Test hip-tests", conclusion="failure"),
             ],
             required_name_substrings=["Build Multi-Arch Stages"],
@@ -371,6 +378,8 @@ class BaselineRunsTest(unittest.TestCase):
             (
                 "Build Multi-Arch Stages / linux",
                 "Build Multi-Arch Stages / windows",
+                "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                "Build Multi-Arch Stages / Quartz - completed - build ROCm",
             ),
         )
         self.assertEqual(job_health.failed_job_names, ())
@@ -383,8 +392,11 @@ class BaselineRunsTest(unittest.TestCase):
                     "Build Multi-Arch Stages / linux",
                     conclusion="failure",
                 ),
-                _workflow_job("Test hip-tests", conclusion="success"),
-                _workflow_job("Notify Quartz Completed", conclusion="skipped"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job("Test hip-tests", conclusion="failure"),
             ],
             required_name_substrings=[
                 "Build Multi-Arch Stages",
@@ -393,7 +405,6 @@ class BaselineRunsTest(unittest.TestCase):
         )
 
         self.assertFalse(job_health.is_valid)
-        # Note: successful and skipped jobs do _not_ appear in this list.
         self.assertEqual(
             job_health.failed_job_names,
             ("Build Multi-Arch Stages / linux (completed/failure)",),
@@ -465,7 +476,6 @@ class BaselineRunsTest(unittest.TestCase):
     def test_select_baseline_run_skips_run_when_required_build_job_failed(self):
         runs = [
             _workflow_run("failed-build", conclusion="failure"),
-            _workflow_run("safely-skipped", conclusion="skipped"),
             _workflow_run("usable", conclusion="success"),
         ]
         artifacts_by_run_id = {
@@ -480,9 +490,20 @@ class BaselineRunsTest(unittest.TestCase):
         }
         jobs_by_run_id = {
             "failed-build": [
-                _workflow_job("Build Multi-Arch Stages", conclusion="failure")
+                _workflow_job("Build Multi-Arch Stages", conclusion="failure"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - completed - build ROCm",
+                    conclusion="skipped",
+                ),
             ],
-            "usable": [_workflow_job("Build Multi-Arch Stages")],
+            "usable": [
+                _workflow_job("Build Multi-Arch Stages"),
+                _workflow_job(
+                    "Build Multi-Arch Stages / Quartz - started - build ROCm",
+                    conclusion="skipped",
+                ),
+                _workflow_job("Test hip-tests", conclusion="failure"),
+            ],
         }
 
         def backend_factory(workflow_run, github_repository, platform):
