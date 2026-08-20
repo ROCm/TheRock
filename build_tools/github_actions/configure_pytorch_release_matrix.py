@@ -48,10 +48,16 @@ RELEASE_STABLE_PYTORCH_REFS = {
     ],
 }
 
-# Refs for the "nightly" release type: stable refs + "nightly" branch.
+# Refs for dev release types: stable refs + "nightly" branch.
 RELEASE_PYTORCH_REFS = {
     platform: [*refs, "nightly"]
     for platform, refs in RELEASE_STABLE_PYTORCH_REFS.items()
+}
+
+# PyTorch 2.11 remains available for CI, dev, prerelease, and explicit builds.
+NIGHTLY_PYTORCH_REFS = {
+    platform: [ref for ref in refs if ref != "release/2.11"]
+    for platform, refs in RELEASE_PYTORCH_REFS.items()
 }
 
 CI_PYTORCH_REFS = {
@@ -105,6 +111,8 @@ def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
         return list(CI_PYTORCH_REFS[platform])
     if release_type == "prerelease":
         return list(RELEASE_STABLE_PYTORCH_REFS[platform])
+    if release_type in ["nightly", "nightly-bkc"]:
+        return list(NIGHTLY_PYTORCH_REFS[platform])
     return list(RELEASE_PYTORCH_REFS[platform])
 
 
