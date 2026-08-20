@@ -57,7 +57,7 @@ RELEASE_PYTORCH_REFS = {
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.11", "release/2.12", "release/2.13", "release/2.14"],
+    "linux": ["release/2.11", "release/2.12", "release/2.13"],
     "windows": ["release/2.11"],
 }
 
