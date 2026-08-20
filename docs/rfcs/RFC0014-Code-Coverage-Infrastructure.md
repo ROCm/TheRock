@@ -296,7 +296,7 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
 3. Upload artifacts:
    ```bash
    python build_tools/artifact_manager.py
-   python build_tools/post_build_upload.py
+   python build_tools/github_actions/post_stage_upload.py
    ```
 
 #### Test Phase
