@@ -252,7 +252,7 @@ if(THEROCK_ENABLE_COMPILER)
 
   ##############################################################################
   # hipcc
-  # Provides hipcc and hipconfig
+  # Provides hipcc (deprecated) and hipconfig (deprecated)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipcc
