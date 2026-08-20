@@ -342,8 +342,11 @@ Modify existing test workflows:
    - Uses component-specific library object file
 
 **Artifact naming conventions:**
-- Coverage builds use same artifact naming as regular builds
-- Artifacts downloaded via existing `fetch_artifact_args` mechanism
+- Coverage builds require unique artifact names to avoid confusion with regular builds
+- Add `-coverage` suffix to artifact names (similar to `-asan` for ASAN builds)
+- Example: `hiprand-gfx942-coverage.tar.gz` vs `hiprand-gfx942.tar.gz`
+- Prevents developers/CI from accidentally downloading instrumented coverage artifacts when expecting regular builds
+- Artifacts downloaded via `fetch_artifact_args` mechanism with coverage-specific paths
 - Profraw files: `${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw`
 - Coverage data: `coverage.profdata`
 - Coverage report: `coverage.info` (lcov format)
