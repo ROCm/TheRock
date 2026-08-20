@@ -39,6 +39,40 @@ ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 # Valid aggregate index names (the second path segment).
 INDEX_NAMES = ("whl", "whl-next")
+DEFAULT_INDEX = "whl-next"
+
+# repo.amd.com release streams and the per-product bucket naming scheme:
+# therock-repo-amd-<stream>-<product>. Centralized here (rather than
+# duplicated in download_python_packages.py and upload_release_packages.py)
+# so a bucket-name typo like "pytorch" -> "python" can't be introduced in one
+# copy and missed in the other.
+REPO_STREAMS = ("dev", "nightly", "rc")
+REPO_BUCKET_PRODUCT_NAMES = {
+    "core": "core",
+    "pytorch": "pytorch",
+    "jax": "jax",
+}
+
+# ROCm Core tarball prefixes under the structured layout, keyed by variant.
+CORE_TARBALL_PREFIXES = {
+    "release": "v5/rocm/core/tarball/",
+    "asan": "v5/rocm/core/tarball-asan/",
+}
+
+
+def repo_product_bucket(stream: str, product: str) -> str:
+    """Return the repo.amd.com bucket name for a product on a given stream."""
+    return f"therock-repo-amd-{stream}-{REPO_BUCKET_PRODUCT_NAMES[product]}"
+
+
+def core_tarball_prefix(tarball_variant: str) -> str:
+    """Return the structured S3 prefix for a ROCm Core tarball variant."""
+    return CORE_TARBALL_PREFIXES[tarball_variant]
+
+
+def core_tarball_dir_name(tarball_variant: str) -> str:
+    """Return the local directory name used for a ROCm Core tarball variant."""
+    return "tarball-asan" if tarball_variant == "asan" else "tarball"
 
 
 def pep503_normalize(name: str) -> str:

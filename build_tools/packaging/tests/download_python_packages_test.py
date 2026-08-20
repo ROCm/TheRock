@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from download_python_packages import (
+    PackageEntry,
     categorize_package,
     core_tarball_prefix,
     is_allowed_multi_arch_package,
@@ -24,6 +25,10 @@ from download_python_packages import (
     list_tarball_for_package,
     parse_arguments,
 )
+
+# download_python_packages inserts build_tools onto sys.path on import, so
+# _therock_utils is importable here too.
+from _therock_utils.storage_location import StorageLocation
 
 JAX_ROCM7_WHEELS = [
     "jax_rocm7_plugin-0.9.2+rocm7.15.0-cp312-cp312-manylinux_2_28_x86_64.whl",
@@ -163,24 +168,32 @@ class StructuredDownloadTest(unittest.TestCase):
         self.assertEqual(
             packages,
             [
-                (
-                    "therock-repo-amd-rc-core",
-                    "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0rc1-py3-none-linux_x86_64.whl",
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-core",
+                        "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0rc1-py3-none-linux_x86_64.whl",
+                    ),
                     10,
                 ),
-                (
-                    "therock-repo-amd-rc-pytorch",
-                    "v5/rocm/pytorch/whl-next/torch/torch-2.10.0+rocm7.13.0rc1-cp312-cp312-linux_x86_64.whl",
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-pytorch",
+                        "v5/rocm/pytorch/whl-next/torch/torch-2.10.0+rocm7.13.0rc1-cp312-cp312-linux_x86_64.whl",
+                    ),
                     20,
                 ),
-                (
-                    "therock-repo-amd-rc-pytorch",
-                    "v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/amd_torch_device_gfx942-2.10.0+rocm7.13.0rc1-py3-none-linux_x86_64.whl",
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-pytorch",
+                        "v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/amd_torch_device_gfx942-2.10.0+rocm7.13.0rc1-py3-none-linux_x86_64.whl",
+                    ),
                     30,
                 ),
-                (
-                    "therock-repo-amd-rc-jax",
-                    "v5/rocm/jax/whl-next/jax-rocm7-plugin/jax_rocm7_plugin-0.9.2+rocm7.13.0rc1-cp312-cp312-manylinux_2_28_x86_64.whl",
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-jax",
+                        "v5/rocm/jax/whl-next/jax-rocm7-plugin/jax_rocm7_plugin-0.9.2+rocm7.13.0rc1-cp312-cp312-manylinux_2_28_x86_64.whl",
+                    ),
                     40,
                 ),
             ],
@@ -265,9 +278,11 @@ class StructuredDownloadTest(unittest.TestCase):
         self.assertEqual(
             packages,
             [
-                (
-                    "therock-repo-amd-rc-core",
-                    "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-3.0.0-py3-none-linux_x86_64.whl",
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-core",
+                        "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-3.0.0-py3-none-linux_x86_64.whl",
+                    ),
                     10,
                 ),
             ],
