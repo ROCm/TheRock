@@ -49,7 +49,7 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertEqual(dest.relative_path, "v4/whl")
         self.assertEqual(call_args.kwargs.get("include"), ["*.whl"])
         mock_set_output.assert_called_once_with(
-            {"package_index_url": "https://dev.repo.amd.com/rocm/whl-next/"}
+            {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")

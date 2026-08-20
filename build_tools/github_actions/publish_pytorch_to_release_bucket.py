@@ -42,6 +42,15 @@ from github_actions.github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
+LEGACY_MULTI_ARCH_INDEX_URLS = {
+    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "dev-bkc": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "nightly-bkc": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+}
+
+
 def _publish_structured(source_dir, dest_bucket, index, backend) -> None:
     """Upload wheels into product-local package directories.
 
@@ -100,6 +109,7 @@ def main(argv: list[str]) -> None:
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "pytorch")
         _publish_structured(args.source_dir, bucket.name, args.python_index, backend)
+        package_index_url = get_release_package_index_url(args.release_type)
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")
@@ -108,10 +118,9 @@ def main(argv: list[str]) -> None:
         logger.info("Uploaded %d wheel files", count)
         if count == 0:
             raise FileNotFoundError(f"No wheels found at {args.source_dir}")
+        package_index_url = LEGACY_MULTI_ARCH_INDEX_URLS[args.release_type]
 
-    gha_set_output(
-        {"package_index_url": get_release_package_index_url(args.release_type)}
-    )
+    gha_set_output({"package_index_url": package_index_url})
 
 
 if __name__ == "__main__":
