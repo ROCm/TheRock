@@ -67,7 +67,11 @@ class BaselineRunsTest(unittest.TestCase):
         )
 
     def test_is_successful_workflow_run(self):
-        self.assertTrue(baseline_runs.is_successful_workflow_run(_workflow_run("1")))
+        self.assertTrue(
+            baseline_runs.is_successful_workflow_run(
+                _workflow_run("1", conclusion="success")
+            )
+        )
         self.assertFalse(
             baseline_runs.is_successful_workflow_run(
                 _workflow_run("1", conclusion="failure")
@@ -82,6 +86,11 @@ class BaselineRunsTest(unittest.TestCase):
     def test_is_successful_workflow_job(self):
         self.assertTrue(
             baseline_runs.is_successful_workflow_job(_workflow_job("Build"))
+        )
+        self.assertTrue(
+            baseline_runs.is_successful_workflow_job(
+                _workflow_job("Notify", conclusion="skipped")
+            )
         )
         self.assertFalse(
             baseline_runs.is_successful_workflow_job(
@@ -374,7 +383,8 @@ class BaselineRunsTest(unittest.TestCase):
                     "Build Multi-Arch Stages / linux",
                     conclusion="failure",
                 ),
-                _workflow_job("Test hip-tests"),
+                _workflow_job("Test hip-tests", conclusion="success"),
+                _workflow_job("Notify Quartz Completed", conclusion="skipped"),
             ],
             required_name_substrings=[
                 "Build Multi-Arch Stages",
@@ -383,6 +393,7 @@ class BaselineRunsTest(unittest.TestCase):
         )
 
         self.assertFalse(job_health.is_valid)
+        # Note: successful and skipped jobs do _not_ appear in this list.
         self.assertEqual(
             job_health.failed_job_names,
             ("Build Multi-Arch Stages / linux (completed/failure)",),
@@ -454,7 +465,8 @@ class BaselineRunsTest(unittest.TestCase):
     def test_select_baseline_run_skips_run_when_required_build_job_failed(self):
         runs = [
             _workflow_run("failed-build", conclusion="failure"),
-            _workflow_run("usable"),
+            _workflow_run("safely-skipped", conclusion="skipped"),
+            _workflow_run("usable", conclusion="success"),
         ]
         artifacts_by_run_id = {
             "failed-build": [
