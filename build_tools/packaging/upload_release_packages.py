@@ -115,13 +115,19 @@ NOTE:
 import argparse
 import sys
 from pathlib import Path
-from typing import Tuple
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.python_package_paths import (
+    CORE_TARBALL_PREFIXES,
+    DEFAULT_INDEX,
+    INDEX_NAMES,
+    REPO_STREAMS,
+    core_tarball_dir_name,
+    core_tarball_prefix,
     infer_structured_product,
+    repo_product_bucket,
     structured_key,
 )
 
@@ -134,30 +140,10 @@ except ImportError:
     sys.exit(1)
 
 
-STRUCTURED_INDEXES = ("whl", "whl-next")
-STRUCTURED_DEFAULT_INDEX = "whl-next"
-REPO_STREAMS = ("dev", "nightly", "rc")
-REPO_BUCKET_PRODUCT_NAMES = {
-    "core": "core",
-    "pytorch": "pytorch",
-    "jax": "jax",
-}
-CORE_TARBALL_PREFIXES = {
-    "release": "v5/rocm/core/tarball/",
-    "asan": "v5/rocm/core/tarball-asan/",
-}
-
-
-def core_tarball_prefix(tarball_variant: str) -> str:
-    return CORE_TARBALL_PREFIXES[tarball_variant]
-
-
-def repo_product_bucket(stream: str, product: str) -> str:
-    return f"therock-repo-amd-{stream}-{REPO_BUCKET_PRODUCT_NAMES[product]}"
-
-
-def core_tarball_dir_name(tarball_variant: str) -> str:
-    return "tarball-asan" if tarball_variant == "asan" else "tarball"
+# Thin aliases so existing choices=STRUCTURED_INDEXES call sites don't need to
+# change now that the underlying names live in _therock_utils.
+STRUCTURED_INDEXES = INDEX_NAMES
+STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
 
 
 def upload_python_files(
@@ -191,34 +177,24 @@ def upload_python_files(
     s3_client = boto3.client("s3") if execute else None
     upload_count = 0
 
-    if structured:
+    if structured or multi_arch:
         wheels_dir = input_dir / "wheels"
+        label = "Structured" if structured else "Multi-arch"
 
         if not wheels_dir.exists():
-            print(f"[ERROR]: Structured wheels directory not found: {wheels_dir}")
+            print(f"[ERROR]: {label} wheels directory not found: {wheels_dir}")
             return 0
 
-        print("\nStructured wheels")
+        print(f"\n{label} wheels")
 
-        files_to_upload = []
-        files_to_upload.extend(wheels_dir.glob("*.whl"))
-        files_to_upload.extend(wheels_dir.glob("*.tar.gz"))
-        files_to_upload.extend(wheels_dir.glob("*.zip"))
-
-        upload_dirs = [(None, files_to_upload)]
-
-    elif multi_arch:
-        wheels_dir = input_dir / "wheels"
-
-        if not wheels_dir.exists():
-            print(f"[ERROR]: Multi-arch wheels directory not found: {wheels_dir}")
-            return 0
-
-        print("\nMulti-arch wheels")
-
-        files_to_upload = []
-        files_to_upload.extend(wheels_dir.glob("*.whl"))
-        files_to_upload.extend(wheels_dir.glob("*.tar.gz"))
+        # Structured layout also accepts sdists/zips (e.g. ROCm Core tarballs);
+        # multi-arch's flat layout is wheels/tarballs only.
+        extensions = (
+            ("*.whl", "*.tar.gz", "*.zip") if structured else ("*.whl", "*.tar.gz")
+        )
+        files_to_upload = [
+            path for extension in extensions for path in wheels_dir.glob(extension)
+        ]
 
         upload_dirs = [(None, files_to_upload)]
 
@@ -408,8 +384,11 @@ Safety Features:
         action=argparse.BooleanOptionalAction,
         default=False,
         help=(
-            "Upload flat local wheels from <input-dir>/wheels into product-local "
-            "structured roots v5/rocm/<product>/<index>/<package>/. Implies --multi-arch."
+            "Upload to the per-product repo.amd.com layout (RFC0012) instead of the "
+            "flat testing/release bucket: routes each core/pytorch/jax wheel from "
+            "<input-dir>/wheels to its own product bucket at "
+            "v5/rocm/<product>/<index>/<package>/. Forces --multi-arch on, even if "
+            "--no-multi-arch was also passed. See --repo-stream and --python-index."
         ),
     )
 
@@ -418,8 +397,9 @@ Safety Features:
         default="rc",
         choices=REPO_STREAMS,
         help=(
-            "repo.amd.com stream used with --structured "
-            "(selects therock-repo-amd-<stream>-<product> buckets; default: rc)"
+            "repo.amd.com release stream to publish to with --structured: "
+            "dev (continuous), nightly, or rc (release-candidate). Selects the "
+            "therock-repo-amd-<stream>-<product> destination buckets (default: rc)"
         ),
     )
 
@@ -428,8 +408,9 @@ Safety Features:
         default=STRUCTURED_DEFAULT_INDEX,
         choices=STRUCTURED_INDEXES,
         help=(
-            "Product-local Python index used with --structured "
-            f"(default: {STRUCTURED_DEFAULT_INDEX})"
+            "Product-local aggregate index to publish into with --structured: "
+            "whl is the flat pip-installable index, whl-next is the device-extra "
+            f"index used for gfx-specific builds (default: {STRUCTURED_DEFAULT_INDEX})"
         ),
     )
 
@@ -541,7 +522,7 @@ def upload_release_packages(
     python_index: str = STRUCTURED_DEFAULT_INDEX,
     repo_stream: str = "rc",
     tarball_variant: str = "release",
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Upload promoted packages to S3 release bucket.
 
     Args:
@@ -655,9 +636,14 @@ def upload_release_packages(
     if execute:
         print("Execution mode: EXECUTED")
         if wheels_uploaded > 0:
-            print(
-                f"\nPython packages uploaded: {wheels_uploaded} (location: s3://{bucket_name}/{bucket_prefix})"
-            )
+            if structured:
+                print(
+                    f"\nPython packages uploaded: {wheels_uploaded} (see per-product destinations above)"
+                )
+            else:
+                print(
+                    f"\nPython packages uploaded: {wheels_uploaded} (location: s3://{bucket_name}/{bucket_prefix})"
+                )
         if tarballs_uploaded > 0:
             print(
                 f"Tarballs uploaded: {tarballs_uploaded} (location: s3://{tarball_bucket_name}/{tarball_bucket_prefix})"
