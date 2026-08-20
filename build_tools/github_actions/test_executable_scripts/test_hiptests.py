@@ -93,6 +93,8 @@ TEST_TO_IGNORE = {
             # ROCM-29275: SDMA COPY_SWAP hangs the GPU on gfx1250 (rocm-systems#9923).
             "Unit_hipMemcpyBatchAsync_Swap",
             "Unit_hipMemcpyBatchAsync_P2P_Swap",
+            # TODO(#7499): Re-enable test once crash issue is resolved.
+            "Unit_hipVoteSync_All",
         ]
     },
 }
@@ -151,6 +153,8 @@ def setup_env(env):
     # Set ROCM Path, to find rocm_agent_enum etc
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
+    # required for hip-tests to avoid optimizing out multi-stream tests
+    env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
     if platform.system() == "Linux":
         HIP_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
         logging.info(f"++ Setting LD_LIBRARY_PATH={HIP_LIB_PATH}")

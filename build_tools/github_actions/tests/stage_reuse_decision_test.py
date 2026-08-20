@@ -307,7 +307,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["sha-current", "sha-old", "sha-older"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -322,7 +325,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return []
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -335,7 +341,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             raise GitHubAPIError("api down")
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -350,7 +359,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["x"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": None},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": None,
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -414,6 +426,75 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         )
         self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
         self.assertIn("compiler-runtime", result.available_stages)
+
+    def test_platforms_use_only_their_own_target_families(self):
+        captured_required = {}
+
+        per_platform = {
+            "linux": _baseline(
+                "B1",
+                [
+                    "base_lib_gfx94x.tar.zst",
+                    "base_lib_generic.tar.zst",
+                ],
+            ),
+            "windows": _baseline(
+                "B1",
+                [
+                    "base_lib_gfx110x.tar.zst",
+                    "base_lib_generic.tar.zst",
+                ],
+            ),
+        }
+
+        def selector_factory(platform):
+            def selector(required):
+                captured_required[platform] = {
+                    (artifact.name, artifact.target_family) for artifact in required
+                }
+                return per_platform[platform]
+
+            return selector
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.REUSE_STAGE,
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+            topology=FakeTopology(),
+            baseline_selector_factory=selector_factory,
+        )
+
+        self.assertEqual(
+            captured_required["linux"],
+            {
+                ("base", "gfx94x"),
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            captured_required["windows"],
+            {
+                ("base", "gfx110x"),
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            result.platform_available["linux"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.platform_available["windows"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
 
     def test_single_platform_default_is_linux(self):
         result = compute_auto_stage_reuse(

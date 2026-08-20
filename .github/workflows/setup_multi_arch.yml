@@ -11,8 +11,9 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "ci", "dev", "nightly", or "prerelease"; controls
-          artifact bucket selection, IAM role, and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
         default: ci
       prerelease_version:

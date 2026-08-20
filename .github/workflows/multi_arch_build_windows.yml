@@ -44,7 +44,7 @@ on:
       rocm_package_version:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       repository:

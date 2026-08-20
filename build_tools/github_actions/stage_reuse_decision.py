@@ -142,6 +142,20 @@ def _target_families(
     return tuple(families)
 
 
+def _platform_target_families(
+    platform: str,
+    linux_amdgpu_families: Sequence[str],
+    windows_amdgpu_families: Sequence[str],
+) -> tuple[str, ...]:
+    """Return the target families required for one build platform."""
+
+    if platform == "linux":
+        return _target_families(linux_amdgpu_families, ())
+    if platform == "windows":
+        return _target_families((), windows_amdgpu_families)
+    raise ValueError(f"unsupported build platform: {platform}")
+
+
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
@@ -277,8 +291,6 @@ def compute_auto_stage_reuse(
     if topology is None and changed_files is not None:
         topology = get_topology()
 
-    families = _target_families(linux_amdgpu_families, windows_amdgpu_families)
-
     plan = plan_stage_reuse(
         changed_files=changed_files,
         platform=platforms[0],
@@ -327,7 +339,6 @@ def compute_auto_stage_reuse(
             )
         )
 
-    required = _required_artifacts_for_stages(topology, candidates, families)
     # Verify artifact availability independently for each platform. A single
     # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
     # a per-platform selector is built so each platform is checked against a
@@ -338,6 +349,18 @@ def compute_auto_stage_reuse(
     baseline_error: str | None = None
 
     for platform in platforms:
+        platform_families = _platform_target_families(
+            platform,
+            linux_amdgpu_families,
+            windows_amdgpu_families,
+        )
+
+        required = _required_artifacts_for_stages(
+            topology,
+            candidates,
+            platform_families,
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -364,12 +387,17 @@ def compute_auto_stage_reuse(
 
         available_filenames = _matched_filenames(baseline)
         available_here: list[str] = []
+
         if baseline is not None:
             for stage_name in candidates:
                 if _stage_artifacts_available(
-                    topology, stage_name, families, available_filenames
+                    topology,
+                    stage_name,
+                    platform_families,
+                    available_filenames,
                 ):
                     available_here.append(stage_name)
+
         per_platform_available[platform] = tuple(available_here)
 
     selected_run_ids = {
