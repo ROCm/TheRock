@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
-from configure_stage import generate_cmake_args, get_project_features
+from configure_stage import generate_cmake_args, get_project_features, get_stage_features
 
 
 class ProjectResolutionTest(unittest.TestCase):
@@ -74,6 +74,22 @@ class FeatureOrientedResolutionTest(unittest.TestCase):
         """rocBLAS resolves to BLAS (no override)."""
         features = self.topology.resolve_projects_to_features(["rocBLAS"])
         self.assertIn("BLAS", features)
+
+
+class StageDependencyFeatureTest(unittest.TestCase):
+    """Tests for features enabled through staged artifact dependencies."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_comm_libs_enables_rocjitsu_hotswap_for_rccl_pretranslation(self):
+        """The staged RCCL build must include its pretranslation toolchain."""
+        features = get_stage_features(
+            self.topology, "comm-libs", platform_name="linux"
+        )
+
+        self.assertIn("ROCJITSU", features)
+        self.assertIn("ROCJITSU_HOTSWAP", features)
 
 
 class RocmSystemsMappingTest(unittest.TestCase):
