@@ -11,11 +11,11 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "" for CI builds, or "dev", "nightly", "prerelease"
-          for release builds. Controls artifact bucket selection, IAM role,
-          and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
-        default: ""
+        default: ci
       prerelease_version:
         description: Prerelease version number such as '2'. This gets appended to the computed version after 'rc', like '7.10.0rc2'
         type: string
@@ -42,6 +42,39 @@ on:
         default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      stage_reuse_mode:
+        description: >-
+          Automatic stage-reuse mode (separate from the manual prebuilt_stages
+          input): "dry-run" (default) only reports which unaffected stages could
+          be reused; "reuse-stage" actually reuses them.
+        type: string
+        default: "dry-run"
+      stage_reuse_max_age_hours:
+        description: >-
+         Automatic stage reuse: reject baseline runs older than this many hours. default: "72"
+        type: string
+        default: "72"
+      stage_reuse_commit_history:
+        description: >-
+          Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
+        type: string
+        default: "50"
+      build_python_packages:
+        description: "Build ROCm Python packages (rocm-sdk, rocm-profiler, etc.)."
+        type: boolean
+        default: true
+      build_pytorch:
+        description: "Build PyTorch wheels."
+        type: boolean
+        default: true
+      build_jax:
+        description: "Build JAX wheels."
+        type: boolean
+        default: false
+      python_version:
+        description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
         default: ""
       repository:
@@ -96,6 +129,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 jobs:
   setup:
@@ -112,15 +146,37 @@ jobs:
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+    env:
+      QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- setup"
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
         id: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           # We need the parent commit to do a diff
           fetch-depth: 2
+
+      - name: Checkout CI config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
 
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
@@ -131,25 +187,43 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
+          BUILD_PYTORCH: ${{ inputs.build_pytorch }}
+          BUILD_JAX: ${{ inputs.build_jax }}
+          PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
-          # Skip path filtering for external repos (git sha won't exist in TheRock)
-          SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
+          STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
+          # The checkout commit is used for commit-compatibility checking.
+          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
+          STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
+          # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
+          # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          # Token for GitHub API calls (branch history, baseline workflow runs)
+          GITHUB_TOKEN: ${{ github.token }}
+          # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
+          CI_CONFIG_PATH: ci-config
+          # External repo family overrides allow callers to add/modify GPU family configs
+          # (e.g., adding test runners for architectures not enabled in TheRock's default config)
+          EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
       # Here we set to a "dev" package version even for CI builds:
       #
-      # type of build                         | package version | version example
-      # ------------------------------------- | --------------- | ------------------
-      # ci ("" empty string for release_type) | dev             | 7.10.0.dev0+f689a8
-      # dev                                   | dev             | 7.10.0.dev0+f689a8
-      # nightly                               | nightly         | 7.10.0a20251021
-      # prerelease                            | prerelease      | 7.10.0rc2
+      # release_type | package version | version example
+      # ------------ | --------------- | ------------------
+      # ci           | dev             | 7.10.0.dev0+f689a8
+      # dev          | dev             | 7.10.0.dev0+f689a8
+      # nightly      | nightly         | 7.10.0a20251021
+      # prerelease   | prerelease      | 7.10.0rc2
       #
       # Other scripts upload "ci" and "dev release" packages to different
       # buckets, use different ccache namespaces, etc.
@@ -157,7 +231,7 @@ jobs:
         id: rocm_package_version
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type || 'dev' }} \
+            --release-type=${{ inputs.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
@@ -167,3 +241,16 @@ jobs:
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

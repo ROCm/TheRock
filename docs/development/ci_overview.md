@@ -53,7 +53,7 @@ graph LR
     B --> D[Upload to S3]
 ```
 
-**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), and more.
+**What gets built:** Compiler (LLVM, etc.), core runtime (HIP, ROCr, etc.), math libraries (rocBLAS, rocFFT, etc.), ML libraries (MIOpen, etc.), media libraries (rocDecode, rocJPEG), computer vision libraries (RPP), and more.
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
@@ -167,6 +167,8 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
+- [stage_reuse.md](stage_reuse.md) - Reusing unaffected build stages from a baseline run
+- [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
 
 ## Getting Help
 

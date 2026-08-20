@@ -50,13 +50,13 @@ on:
         default: ""
         description: "CMake preset name for this build variant (optional)"
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease". Controls artifact bucket and IAM role.'
+        description: 'Release type; controls artifact bucket and IAM role'
         type: string
-        default: ""
+        default: ci
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "azure-linux-scale-rocm"
+        default: "aws-linux-scale-rocm-prod"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -70,18 +70,24 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
     runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     permissions:
+      contents: read
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
-      options: -v /runner/config:/home/awsconfig/
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      QUARTZ_REPORTING_WORKFLOW: multi_arch_build_portable_linux_artifacts.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       BUILD_DIR: build
@@ -92,15 +98,28 @@ jobs:
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
@@ -138,7 +157,11 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
 
       - name: Get stage configuration
         id: stage_config
@@ -162,13 +185,29 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
-      - name: Run build tests
+      - name: Generate failed log summaries
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/github_actions/detect_failed_logs.py
+
+      - name: Run build tests (Comgr, blocking)
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+        env:
+          TEATIME_FORCE_INTERACTIVE: 1
+        run: |
+          cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
+
+      # Remaining build tests (e.g. rocjitsu, mirage) still run and report, but
+      # are not yet gating. Comgr is split out above so its failures block CI.
+      # TODO(#6112): rocjitsu tests are being moved out; drop this step once done.
+      - name: Run build tests (other, non-blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         continue-on-error: true
         env:
@@ -214,3 +253,21 @@ jobs:
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

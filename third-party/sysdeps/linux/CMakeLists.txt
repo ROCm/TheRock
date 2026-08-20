@@ -19,6 +19,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # Core system deps that depend on the above.
 add_subdirectory(elfutils)
+add_subdirectory(libiberty)
 
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
@@ -34,6 +35,7 @@ therock_provide_artifact(sysdeps
     therock-libbacktrace
     therock-libcap
     therock-libdrm
+    therock-libiberty
     therock-liblzma
     therock-libmnl
     therock-libnl
@@ -143,5 +145,19 @@ if(THEROCK_ENABLE_SYSDEPS_HWLOC)
       lib
     SUBPROJECT_DEPS
       therock-hwloc
+  )
+endif()
+
+# Optional sysdep: util-linux (for libmount, etc.)
+if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
+  add_subdirectory(util-linux)
+  therock_provide_artifact(sysdeps-util-linux
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-util-linux.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-util-linux
   )
 endif()

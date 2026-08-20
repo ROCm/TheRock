@@ -229,6 +229,30 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
 
+    def native_linux_packages_log_dir(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/logs/packaging/{pkg_type}``
+        (e.g. ``12345678901-linux/logs/packaging/deb``).
+
+        This directory contains per-package build logs generated during
+        native package creation (e.g., ``deb-amdrocm-core.log``).
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}")
+
+    def native_linux_packages_log_index(self, pkg_type: str) -> StorageLocation:
+        """Location for native Linux packaging logs index HTML.
+
+        Args:
+            pkg_type: Package type ('deb' or 'rpm').
+        """
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:
@@ -248,6 +272,10 @@ class WorkflowOutputRoot:
     def tarballs(self) -> StorageLocation:
         """Location for the tarballs directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/tarballs")
+
+    def tarball(self, filename: str) -> StorageLocation:
+        """Location for a specific tarball file."""
+        return StorageLocation(self.bucket, f"{self.prefix}/tarballs/{filename}")
 
     # -- Factories --------------------------------------------------------------
 
@@ -279,7 +307,7 @@ class WorkflowOutputRoot:
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
-            release_type: Release type override (e.g. "dev", "nightly"). If
+            release_type: Release type override (e.g. "ci", "dev", "nightly"). If
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (

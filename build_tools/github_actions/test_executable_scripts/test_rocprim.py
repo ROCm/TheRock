@@ -141,8 +141,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocprim",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--resource-spec-file",
     resource_spec_file,
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
@@ -155,9 +153,9 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
     cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
+# Otherwise, we run the standard test suite.
 environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 

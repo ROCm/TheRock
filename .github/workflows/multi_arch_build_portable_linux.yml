@@ -9,10 +9,12 @@
 # 3. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library (after compiler-runtime)
 # 4. math-libs (per-arch) - BLAS, FFT, etc.
 # 5. comm-libs (per-arch) - RCCL, rocshmem (parallel to math-libs)
-# 6. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
-# 7. dctools-core (generic) - RDC (parallel to math-libs)
-# 8. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 9. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 6. storage-libs (generic) - hipfile (parallel to math-libs)
+# 7. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
+# 8. dctools-core (generic) - RDC (parallel to math-libs)
+# 9. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 10. cv-libs (generic) - rpp
+# 11. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -33,8 +35,6 @@ on:
         type: string
       build_variant_suffix:
         type: string
-      expect_failure:
-        type: boolean
       rocm_package_version:
         type: string
       prebuilt_stages:
@@ -43,12 +43,12 @@ on:
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
       build_runs_on:
         type: string
-        default: "azure-linux-scale-rocm"
+        default: "aws-linux-scale-rocm-prod"
         description: "Build runner label (selected by configure script with weighted distribution)"
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        description: "Release type used for artifact storage and package versioning."
         type: string
-        default: ""
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -67,6 +67,22 @@ permissions:
 
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - build ROCm"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
@@ -200,6 +216,32 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: storage-libs (generic, single job parallel to math-libs)
+  # hipFile is a TARGET_NEUTRAL artifact.
+  # ==========================================================================
+  storage-libs:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: storage-libs
+      stage_display_name: "Stage - Storage Libs"
+      timeout_minutes: 240  # 4 hours
+      amdgpu_family: ""
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: debug-tools (generic, parallel to math-libs)
   # ==========================================================================
   debug-tools:
@@ -272,6 +314,30 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: cv-libs (generic)
+  # ==========================================================================
+  cv-libs:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: cv-libs
+      stage_display_name: "Stage - CV Libs"
+      timeout_minutes: 180  # 3 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # STAGE: media-libs (generic)
   # ==========================================================================
   media-libs:
@@ -294,3 +360,21 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [compiler-runtime, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
+    name: "Quartz - completed - build ROCm"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build ROCm"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

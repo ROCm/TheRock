@@ -1,0 +1,26 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Pre-commit security gate: fast, PR-side security scanners that run on
+# every pull request. The security counterpart to `pre-commit.yml`.
+# Sibling scanners can be added as additional jobs in this file as they
+# come online, keeping all PR-side security gates discoverable in one
+# place.
+
+name: Pre commit security
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Scan commits introduced by this PR (`scan_mode: changed`, the
+  # reusable workflow's default). CSV report is uploaded as a build
+  # artifact and printed to the job summary so reviewers can browse
+  # findings directly from the PR's Checks tab.
+  gitleaks:
+    uses: ./.github/workflows/gitleaks.yml
+    with:
+      report_formats: csv

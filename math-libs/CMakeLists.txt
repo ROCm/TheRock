@@ -1,6 +1,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
+set(_primlibs_benchmark_deps)
+set(_primlibs_benchmark_includes)
+# amdsmi is Linux-only and only declared when THEROCK_ENABLE_CORE_AMDSMI is ON
+# (see core/CMakeLists.txt). Benchmarks depend on primbench which requires
+# amdsmi, so they must be disabled when amdsmi is unavailable (e.g., the
+# prim-isolated CI group THEROCK_ENABLE_ALL=OFF / THEROCK_ENABLE_PRIM=ON).
+if(NOT WIN32)
+  if(NOT TARGET amdsmi)
+    set(_primlibs_benchmark_enable "OFF")
+  else()
+    set(_primlibs_benchmark_deps amdsmi)
+    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
+  endif()
+endif()
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
@@ -16,16 +32,17 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipRAND
   )
   therock_cmake_subproject_glob_c_sources(rocRAND
     SUBDIRS
@@ -38,6 +55,7 @@ if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # hipRAND
   ##############################################################################
+  # Note: hipRAND has no benchmarks
 
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
@@ -56,7 +74,6 @@ if(THEROCK_ENABLE_RAND)
     RUNTIME_DEPS
       hip-clr
       rocRAND
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS
@@ -102,10 +119,6 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
-    TEST_SUBPROJECTS
-      hipCUB
-      rocThrust
-      rocSPARSE
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -120,19 +133,8 @@ if(THEROCK_ENABLE_PRIM)
     ##############################################################################
 
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
-    # that depend on rocPRIM
-    # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
-    # amdsmi is Linux-only; benchmarks depend on primbench which requires amd_smi
-    if(WIN32)
-      set(_rocprim_benchmark_enable "OFF")
-      set(_rocprim_benchmark_deps)
-      set(_rocprim_benchmark_includes)
-    else()
-      set(_rocprim_benchmark_enable "ON")
-      set(_rocprim_benchmark_deps amdsmi)
-      set(_rocprim_benchmark_includes therock_rocprim_benchmark_deps.cmake)
-    endif()
-
+    # that depend on rocPRIM.
+    # Passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding.
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
@@ -142,17 +144,17 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_TEST=ON
-        -DBUILD_BENCHMARK=${_rocprim_benchmark_enable}
+        -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
         -DUSE_SYSTEM_LIB=ON
       CMAKE_INCLUDES
-        ${_rocprim_benchmark_includes}
+        ${_primlibs_benchmark_includes}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
         therock-googletest
         rocPRIM
-        ${_rocprim_benchmark_deps}
+        ${_primlibs_benchmark_deps}
       RUNTIME_DEPS
         hip-clr
     )
@@ -173,13 +175,16 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
       rocPRIM
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
   )
@@ -199,7 +204,9 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
-      -DBUILD_BENCHMARK=${THEROCK_BUILD_TESTING}
+      -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+    CMAKE_INCLUDES
+      ${_primlibs_benchmark_includes}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -207,6 +214,7 @@ if(THEROCK_ENABLE_PRIM)
       rocPRIM
       rocRAND
       therock-googletest
+      ${_primlibs_benchmark_deps}
     RUNTIME_DEPS
       hip-clr
       ${THEROCK_BUNDLED_SQLITE3}
@@ -272,15 +280,12 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
     RUNTIME_DEPS
       hip-clr
       hipRAND
-    TEST_SUBPROJECTS
-      hipFFT
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -308,14 +313,12 @@ if(THEROCK_ENABLE_FFT)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-googletest
       therock-fftw3
       therock-fftw3f
     RUNTIME_DEPS
       hip-clr
       rocFFT
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(hipFFT
     SUBDIRS
@@ -348,13 +351,39 @@ if(THEROCK_ENABLE_BLAS)
 endif()
 
 if(THEROCK_ENABLE_ROCWMMA)
+  set(_rocwmma_build_samples ON)
+  set(_rocwmma_build_tests ${THEROCK_BUILD_TESTING})
+  set(_rocwmma_enable_benchmarks ${THEROCK_ROCWMMA_ENABLE_BENCHMARKS})
+  set(_rocwmma_artifact_components dbg dev lib test)
+
+  # rocWMMA intentionally supports only targets with MFMA/WMMA instructions.
+  # Use the same target filtering metadata as CK to recognize all-filtered
+  # shards, but keep the host/API subproject declared for downstream users.
+  # For those shards, omit only target-dependent samples/tests/benchmarks so
+  # they do not publish an untransformed rocwmma_test_generic artifact.
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(
+      _rocwmma_gpu_targets rocWMMA ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _rocwmma_gpu_targets)
+      string(JOIN " " _rocwmma_requested_targets ${THEROCK_AMDGPU_TARGETS})
+      message(STATUS
+        "rocWMMA: no supported GPU targets remain after filtering "
+        "(${_rocwmma_requested_targets}); disabling samples, tests, "
+        "and benchmarks.")
+      set(_rocwmma_build_samples OFF)
+      set(_rocwmma_build_tests OFF)
+      set(_rocwmma_enable_benchmarks OFF)
+      list(REMOVE_ITEM _rocwmma_artifact_components test)
+    endif()
+  endif()
+
   ##############################################################################
   # rocWMMA
   ##############################################################################
 
   # Configure optional dependencies
   set(_rocwmma_optional_deps)
-  if(THEROCK_ROCWMMA_ENABLE_BENCHMARKS)
+  if(_rocwmma_enable_benchmarks)
     list(APPEND _rocwmma_optional_deps rocm_smi_lib)
   endif()
 
@@ -366,10 +395,11 @@ if(THEROCK_ENABLE_ROCWMMA)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DROCWMMA_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      "-DROCWMMA_BUILD_SAMPLES=$<BOOL:${_rocwmma_build_samples}>"
+      "-DROCWMMA_BUILD_TESTS=$<BOOL:${_rocwmma_build_tests}>"
       "-DROCWMMA_VALIDATE_WITH_ROCBLAS=ON"
-      "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>"
-      "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>"
+      "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<BOOL:${_rocwmma_enable_benchmarks}>"
+      "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${_rocwmma_enable_benchmarks}>"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
       -DROCWMMA_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
     CMAKE_INCLUDES
@@ -383,7 +413,6 @@ if(THEROCK_ENABLE_ROCWMMA)
       hip-clr
       rocBLAS
       ${_rocwmma_optional_deps}
-    TEST_SUBPROJECTS
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
@@ -395,19 +424,78 @@ if(THEROCK_ENABLE_ROCWMMA)
   therock_provide_artifact(rocwmma
     DESCRIPTOR artifact-rocwmma.toml
     COMPONENTS
-      dbg
-      dev
-      lib
-      test
+      ${_rocwmma_artifact_components}
     SUBPROJECT_DEPS
       rocWMMA
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
+if(THEROCK_ENABLE_ROCALUTION)
+  ##############################################################################
+  # rocALUTION
+  ##############################################################################
+
+  therock_cmake_subproject_declare(rocALUTION
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocalution"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocALUTION"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DSUPPORT_HIP=ON
+      -DSUPPORT_MPI=OFF
+      -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+      -DBUILD_CLIENTS_BENCHMARKS=OFF
+      -DBUILD_CLIENTS_SAMPLES=OFF
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      rocPRIM
+      therock-googletest
+    RUNTIME_DEPS
+      hip-clr
+      rocBLAS
+      rocSPARSE
+      rocRAND
+  )
+  therock_cmake_subproject_glob_c_sources(rocALUTION
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(rocALUTION rocalution lib/cmake/rocalution)
+  therock_cmake_subproject_activate(rocALUTION)
+
+  therock_provide_artifact(rocalution
+    DESCRIPTOR artifact-rocalution.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      rocALUTION
+  )
+endif(THEROCK_ENABLE_ROCALUTION)
+
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
   # libhipcxx
   ##############################################################################
+
+  set(libhipcxx_runtime_deps)
+  # Used on Linux when amd-smi is available. amdsmi is only declared when
+  # THEROCK_ENABLE_CORE_AMDSMI is ON (see core/CMakeLists.txt), so guard on the
+  # target existing to keep narrow configs (e.g. THEROCK_ENABLE_LIBHIPCXX=ON /
+  # THEROCK_ENABLE_ALL=OFF, as in the hipThreads nightly) from referencing a
+  # non-existent target.
+  if(NOT WIN32 AND TARGET amdsmi)
+    list(APPEND libhipcxx_runtime_deps amdsmi)
+  endif()
 
   therock_cmake_subproject_declare(libhipcxx
     # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
@@ -428,19 +516,19 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
-      hipcc
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
       amd-llvm
       hip-clr
-      hipcc
+      ${libhipcxx_runtime_deps}
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
       .
   )
   therock_cmake_subproject_require_host_program(libhipcxx lit)
+  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx
@@ -454,3 +542,181 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       libhipcxx
   )
 endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# Most libraries need to depend on the profiler, but is conditionally only used
+# on Posix.
+set(optional_profiler_deps)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
+  list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+endif()
+
+# composable_kernel only supports a subset of gfx targets (per its own
+# rocm_check_target_ids allowlist). The per-arch EXCLUDE_TARGET_PROJECTS
+# mechanism in cmake/therock_amdgpu_targets.cmake removes unsupported arches
+# from the CK subproject's GPU_TARGETS at activate time. If no targets remain
+# after that filter (e.g. a single-arch shard for a CK-unsupported arch),
+# declaring CK with an empty GPU_TARGETS list breaks CK's own HIP try-compile
+# with "HIP_ARCHITECTURES is empty", so flip the global gate off here and let
+# MIOpen build with MIOPEN_USE_COMPOSABLEKERNEL=OFF.
+# See https://github.com/ROCm/TheRock/issues/4836
+set(_ck_enabled ${THEROCK_ENABLE_COMPOSABLE_KERNEL})
+if(_ck_enabled)
+  therock_filter_amdgpu_targets(_ck_targets composable_kernel ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ck_targets)
+    message(STATUS
+      "composable_kernel: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
+    set(_ck_enabled OFF)
+  endif()
+endif()
+# composable_kernel now lives in math-libs but MIOpen (in ml-libs) gates its CK
+# usage on _ck_enabled. math-libs is configured before ml-libs, so push the
+# resolved value to the parent scope where ml-libs will inherit it.
+set(_ck_enabled ${_ck_enabled} PARENT_SCOPE)
+
+if(_ck_enabled)
+  ##############################################################################
+  # Composable_kernel
+  ##############################################################################
+
+  therock_cmake_subproject_declare(composable_kernel
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      -DMIOPEN_REQ_LIBS_ONLY=ON
+      "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      hip-clr
+      rocm-half
+      rocRAND
+      ${THEROCK_BUNDLED_BZIP2}
+      ${optional_profiler_deps}
+  )
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
+
+  therock_cmake_subproject_activate(composable_kernel)
+
+  therock_provide_artifact(composable-kernel
+    DESCRIPTOR artifact-composable-kernel.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      composable_kernel
+  )
+endif()
+
+# Gate on _ck_enabled so CK-less families don't publish a stub-only hipTensor
+# _generic that would clobber the real library _generic on the shared artifact key.
+if(THEROCK_ENABLE_HIPTENSOR AND _ck_enabled)
+  ##############################################################################
+  # hipTensor
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipTensor
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipTensor"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIPTENSOR_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      -DHIPTENSOR_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-googletest
+      composable_kernel
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipTensor
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(hipTensor hiptensor lib/cmake/hiptensor)
+  therock_cmake_subproject_activate(hipTensor)
+
+  therock_provide_artifact(hiptensor
+    DESCRIPTOR artifact-hiptensor.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipTensor
+  )
+endif()
+
+if(THEROCK_ENABLE_HIPTHREADS)
+  ##############################################################################
+  # hipthreads
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipthreads
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipthreads"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipthreads"
+    BACKGROUND_BUILD
+    # libhipthreads.a is a static archive of device bitcode that is identical
+    # regardless of which per-arch shard builds it. Build all test targets once
+    # and publish a single target-neutral (_generic) artifact (see TARGET_NEUTRAL
+    # on therock_provide_artifact below) so per-arch CI upload races are harmless.
+    USE_TEST_AMDGPU_TARGETS
+    CMAKE_ARGS
+      -DHIPTHREADS_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      -DCMAKE_CXX_STANDARD=17
+      # hipThreads compiles with -Werror plus strict warnings (-Wshadow,
+      # -Wold-style-cast, ...). The HIP runtime headers are included with -I
+      # (not -isystem) and trip those warnings, so disable -Werror here.
+      -DDISABLE_WERROR=ON
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      libhipcxx
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipthreads
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(hipthreads lit)
+  therock_cmake_subproject_activate(hipthreads)
+
+  therock_provide_artifact(hipthreads
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipthreads.toml
+    COMPONENTS
+      dev
+      test
+    SUBPROJECT_DEPS
+      hipthreads
+  )
+endif(THEROCK_ENABLE_HIPTHREADS)

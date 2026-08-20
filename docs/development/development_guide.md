@@ -4,6 +4,10 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+Linux source builds of Mirage require Rust 1.95 and Cargo. Install them through
+`rustup` by following the
+[Environment Setup Guide](../environment_setup_guide.md#required-build-toolchains).
+
 Table of contents:
 
 - [Overall build architecture](#overall-build-architecture)
@@ -157,6 +161,17 @@ The following CMake flags are mirrored to component projects (see `THEROCK_DEFAU
 - `THEROCK_SOURCE_DIR`
 - `THEROCK_BINARY_DIR`
 - `ROCM_SYMLINK_LIBS`
+
+#### Feature availability by platform and processor
+
+Some features are not available on all platforms or CPU architectures. Features
+may be hard-disabled on certain OS platforms (cannot be overridden) or
+soft-disabled on certain CPU processors (defaults to OFF but can be overridden
+with `-DTHEROCK_ENABLE_<feature>=ON`).
+
+See [Build Topology — Conditional Availability](./build_system.md#conditional-availability)
+for details on how `disable_platforms` and `disable_processors` work in
+`BUILD_TOPOLOGY.toml`.
 
 In addition, if a component is using the host toolchain, the following are mirrored:
 
