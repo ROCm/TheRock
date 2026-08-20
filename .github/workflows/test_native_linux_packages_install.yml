@@ -48,9 +48,10 @@ on:
         required: false
       test_runs_on:
         description: >-
-          GitHub runner label for the test job. The runner should match the GPU
-          pool for artifact_group (e.g. linux-gfx942-1gpu-ccs-csp-ossci-rocm for
-          gfx94X-dcgpu).
+          GitHub runner label for the test job (Linux only). The runner should
+          match the GPU pool for artifact_group (e.g.
+          linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
+          runner labels are rejected.
         required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
@@ -106,9 +107,10 @@ on:
         type: string
       test_runs_on:
         description: >-
-          GitHub runner label for the test job. The runner should match the GPU
-          pool for artifact_group (e.g. linux-gfx942-1gpu-ccs-csp-ossci-rocm for
-          gfx94X-dcgpu).
+          GitHub runner label for the test job (Linux only). The runner should
+          match the GPU pool for artifact_group (e.g.
+          linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
+          runner labels are rejected.
         required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
@@ -132,6 +134,16 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
+      - name: Validate test_runs_on input
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          RUNNER="${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' }}"
+          if echo "${RUNNER}" | grep -qi 'windows'; then
+            echo "::error::test_runs_on must be a Linux runner label (got: ${RUNNER})"
+            exit 1
+          fi
+          echo "Using runner label: ${RUNNER}"
+
       - name: "Quartz - started - test rpm/deb install"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
