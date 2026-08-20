@@ -42,11 +42,6 @@ if(THEROCK_ENABLE_ROCJITSU)
     LIB_NAMES
       librocjitsu.so
   )
-  therock_test_validate_shared_lib(PATH rocjitsu/dist/lib
-    LIB_NAMES
-      libhsa_hotswap_rocjitsu.so
-  )
-
   therock_provide_artifact(rocjitsu
     TARGET_NEUTRAL
     DESCRIPTOR artifact-rocjitsu.toml
@@ -77,6 +72,11 @@ if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)
   )
 
   therock_cmake_subproject_activate(rocjitsu-hotswap)
+
+  therock_test_validate_shared_lib(PATH rocjitsu-hotswap/dist/lib
+    LIB_NAMES
+      libhsa_hotswap_rocjitsu.so
+  )
 
   therock_provide_artifact(rocjitsu-hotswap
     TARGET_NEUTRAL
