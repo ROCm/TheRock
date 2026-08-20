@@ -57,7 +57,6 @@ Support for JAX is provided via stable release branches from
 | 0.11.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.0) | ❌ Not supported |
 | 0.10.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.2) | ❌ Not supported |
 | 0.10.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.1) | ❌ Not supported |
-| 0.10.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.10.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.10.0) | ❌ Not supported |
 
 > [!NOTE]
 > Python 3.11 is not supported for JAX 0.11.0 and later (dropped upstream).
@@ -75,7 +74,7 @@ This repository builds the following ROCm-enabled JAX artifacts:
 - **`jax_rocm<major>_plugin`** (JAX runtime plugin for ROCm)
 
 > [!NOTE]
-> jaxlib is **not built** for supported JAX versions (0.10.0+); it is installed
+> jaxlib is **not built** for supported JAX versions (0.10.1+); it is installed
 > from upstream PyPI (e.g. `pip install jaxlib==0.11.1`). Only
 > **`jax_rocm<major>_pjrt`** and **`jax_rocm<major>_plugin`** are built.
 
@@ -84,7 +83,7 @@ This repository builds the following ROCm-enabled JAX artifacts:
 The [downstream ROCm/jax](https://github.com/ROCm/jax) build instructions
 assume that a stable ROCm version is already installed on the system.
 
-Supported JAX versions (0.10.0+) build against ROCm Python packages installed
+Supported JAX versions (0.10.1+) build against ROCm Python packages installed
 from the TheRock multi-arch Python package index (the manylinux flow).
 
 ### Prerequisites
@@ -109,7 +108,7 @@ from the TheRock multi-arch Python package index (the manylinux flow).
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.10.0`, `0.10.1`, `0.10.2`, `0.11.0`, or `0.11.1`
+   - **JAX version**: e.g. `0.10.1`, `0.10.2`, `0.11.0`, or `0.11.1`
    - **Python version**: e.g. `3.12`
    - **Package index**: the TheRock multi-arch Python package index.
 

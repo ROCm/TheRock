@@ -50,14 +50,14 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
 
     def test_generate_jax_matrix_uses_requested_refs_only(self):
         matrix = m.generate_jax_matrix(
-            jax_refs=["rocm-jaxlib-v0.10.0"],
+            jax_refs=["rocm-jaxlib-v0.10.1"],
             python_versions=["3.12"],
         )
 
         self.assertEqual(len(matrix), 1)
         self.assertEqual(matrix[0]["python_version"], "3.12")
-        self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.0")
-        self.assertEqual(matrix[0]["jax_label"], "0.10.0")
+        self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.1")
+        self.assertEqual(matrix[0]["jax_label"], "0.10.1")
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
 
