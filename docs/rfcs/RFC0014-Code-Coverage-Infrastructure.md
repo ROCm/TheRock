@@ -329,17 +329,36 @@ Modify existing test workflows:
    - Sets `LLVM_PROFILE_FILE` environment variable with component name and shard index
    - Pattern `%p-%m` provides unique identifiers per process/module
 
-4. **Merge profraw and generate coverage report** (conditional on `coverage_enabled`):
+4. **Upload profraw files as artifacts** (conditional on `coverage_enabled`):
+   - Each test shard uploads its profraw files as workflow artifacts
+   - Do NOT merge profraw on test nodes - aggregation happens later
+   - Artifact name: `coverage-profraw-${COMPONENT_NAME}-shard${SHARD_INDEX}`
+
+5. **Coverage aggregation job** (separate node that runs after all test shards complete):
    ```bash
+   # Download profraw artifacts from all shards
+   # (GitHub Actions: actions/download-artifact downloads all matching artifacts)
+   
+   # Merge profraw from ALL shards
    cd ${GITHUB_WORKSPACE}/coverage-report
-   ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-profdata merge -sparse -o coverage.profdata profraw/*.profraw
+   ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-profdata merge -sparse \
+     -o coverage.profdata \
+     shard1/*.profraw shard2/*.profraw shard3/*.profraw shard4/*.profraw
+   
+   # Generate final coverage report
    ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-cov export \
      -object ${GITHUB_WORKSPACE}/build/lib/lib${COMPONENT_NAME}.so \
      -instr-profile=coverage.profdata --format=lcov > coverage.info
    ```
-   - Merges all profraw files from all shards into single profdata
-   - Exports coverage in lcov format for codecov.io upload
-   - Uses component-specific library object file
+   
+   **Why aggregation is required:**
+   Tests are sharded across multiple nodes for performance. Without aggregation:
+   - Shard 1 only covers tests 1-25 (25% coverage)
+   - Shard 2 only covers tests 26-50 (25% coverage)
+   - Shard 3 only covers tests 51-75 (25% coverage)
+   - Shard 4 only covers tests 76-100 (25% coverage)
+   
+   Aggregation merges profraw from all shards to produce complete 100% coverage report.
 
 **Artifact naming conventions:**
 - Coverage builds require unique artifact names to avoid confusion with regular builds
@@ -375,8 +394,20 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 - No downstream testing - only the changed project itself
 
 **Node allocation:**
-- One build node per coverage-enabled project that changed
-- One test node per coverage-enabled project that changed
+- Build nodes per coverage-enabled project:
+  - Coverage builds can leverage multi-arch CI pipeline structure with build stages
+  - May use multiple build nodes in parallel (e.g., different stages running concurrently)
+  - Can reuse prebuilt artifacts for unmodified dependencies/stages
+  - Exact staging depends on whether coverage build uses single-stage or multi-stage approach
+- Multiple test nodes per coverage-enabled project (tests are sharded for performance)
+  - Number of test shards determined by project test suite size
+  - Example: 4 shards = 4 parallel test nodes
+  - Each shard runs subset of tests and generates profraw files
+- One aggregation node per coverage-enabled project
+  - Runs after all test shards complete
+  - Downloads profraw artifacts from all test shards
+  - Merges profraw files and generates final coverage report
+  - Uploads to codecov.io
 - Resource sizing should align with single-project testing requirements
 
 **Expected characteristics:**
@@ -546,4 +577,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
-- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling
+- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
