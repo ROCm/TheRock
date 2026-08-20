@@ -621,6 +621,43 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
         self.assertEqual(job_names.count("rocgdb-corefile"), 1)
 
+    # -----------------------
+    # mesa-fork labels
+    # -----------------------
+
+    def test_rocdecode_label_selects_rocdecode_job(self):
+        """test:rocdecode should select the rocdecode job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocdecode"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertNotIn("rocjpeg", names)
+
+    def test_rocjpeg_label_selects_rocjpeg_job(self):
+        """test:rocjpeg should select the rocjpeg job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocjpeg"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocjpeg", names)
+        self.assertNotIn("rocdecode", names)
+
+    def test_rocdecode_and_rocjpeg_labels_together(self):
+        """test:rocdecode and test:rocjpeg together should select both jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocdecode", "test:rocjpeg"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertIn("rocjpeg", names)
+
 
 if __name__ == "__main__":
     unittest.main()

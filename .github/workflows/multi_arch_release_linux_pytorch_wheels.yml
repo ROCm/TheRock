@@ -60,6 +60,13 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -115,6 +122,13 @@ on:
         description: "Build runner label"
         type: string
         default: "aws-linux-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -173,6 +187,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -187,6 +202,7 @@ jobs:
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

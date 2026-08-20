@@ -58,6 +58,13 @@ on:
           - release
           - asan
         default: release
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -105,6 +112,9 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      quartz_tracking_id:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -203,6 +213,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -259,6 +270,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

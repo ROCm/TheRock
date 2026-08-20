@@ -1216,16 +1216,19 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_amdgpu_families": "auto",
                 },
             ],
         )
@@ -1236,6 +1239,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.11",
                     "amdgpu_families": "gfx110X-all",
+                    "test_amdgpu_families": "auto",
                 }
             ],
         )
