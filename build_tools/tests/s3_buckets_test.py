@@ -63,6 +63,19 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
         )
         self.assertEqual(config.name, "therock-nightly-artifacts")
 
+    def test_bkc_release_types_use_existing_artifacts_buckets(self):
+        for release_type, bucket_name in (
+            ("dev-bkc", "therock-dev-artifacts"),
+            ("nightly-bkc", "therock-nightly-artifacts"),
+        ):
+            with self.subTest(release_type=release_type):
+                config = get_artifacts_bucket_config(
+                    release_type=release_type,
+                    repository="ROCm/TheRock",
+                    is_pr_from_fork=False,
+                )
+                self.assertEqual(config.name, bucket_name)
+
     def test_release_type_invalid_raises(self):
         with self.assertRaises(ValueError) as cm:
             get_artifacts_bucket_config(
@@ -107,6 +120,17 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
         )
         self.assertEqual(config.name, "therock-prerelease-packages")
         self.assertEqual(config.iam_role, "therock-prerelease")
+
+    def test_bkc_release_types_use_existing_release_buckets(self):
+        for release_type, bucket_name in (
+            ("dev-bkc", "therock-dev-python"),
+            ("nightly-bkc", "therock-nightly-python"),
+        ):
+            with self.subTest(release_type=release_type):
+                config = get_release_bucket_config(
+                    release_type=release_type, bucket_type="python"
+                )
+                self.assertEqual(config.name, bucket_name)
 
     def test_all_combinations_exist(self):
         for release_type in ("dev", "nightly", "prerelease"):

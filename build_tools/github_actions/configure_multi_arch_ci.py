@@ -141,7 +141,7 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or one of the supported release types
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
@@ -871,10 +871,11 @@ def _determine_test_type(
         return "full", "test labels specified"
 
     # Priority 3: release builds run deeper test suites than regular CI.
-    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
+    #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
     # * 'dev' falls through to later priorities so changes can be tested quickly
-    if ci_inputs.release_type == "nightly":
+    if ci_inputs.release_type in ("nightly", "nightly-bkc"):
         return "comprehensive", "release build (nightly)"
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"

@@ -105,6 +105,19 @@ therock_declare_flag(
     amd-llvm
 )
 
+therock_declare_flag(
+  NAME WINDOWS_DRIVER_BUILD
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  GLOBAL_PROPAGATE_FLAG
+  CMAKE_VARS
+    COMGR_DLL_NAME=amd_comgr_drivers.dll
+  SUB_PROJECTS
+    amd-comgr
+    hip-clr
+    ocl-clr
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on

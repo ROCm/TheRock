@@ -11,8 +11,9 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "ci", "dev", "nightly", or "prerelease"; controls
-          artifact bucket selection, IAM role, and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
         default: ci
       prerelease_version:
@@ -86,6 +87,13 @@ on:
         default: ""
       external_repo:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
     outputs:

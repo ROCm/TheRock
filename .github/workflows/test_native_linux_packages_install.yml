@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       release_type:
-        description: "Release Type (ci, dev, nightly, prerelease)."
+        description: "Release type for the packages being tested."
         required: true
         type: string
       gpg_key_url:
@@ -51,6 +51,13 @@ on:
         required: false
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -58,7 +65,7 @@ on:
         required: true
         type: string
       release_type:
-        description: 'Release type: "ci" or "dev"'
+        description: "Release type for the packages being tested."
         required: true
         type: choice
         options:
@@ -98,6 +105,13 @@ on:
         type: string
       build_variant:
         description: "Build variant (e.g. 'asan'). Changes expected package names."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
 
@@ -177,7 +191,8 @@ jobs:
               curl \
               ca-certificates \
               gpg \
-              lsb-release
+              lsb-release \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -191,7 +206,8 @@ jobs:
               ca-certificates \
               gpg2 \
               lsb-release \
-              update-alternatives
+              update-alternatives \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -203,7 +219,8 @@ jobs:
               curl \
               ca-certificates \
               gnupg2 \
-              dnf-plugins-core
+              dnf-plugins-core \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
