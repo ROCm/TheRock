@@ -57,12 +57,22 @@ install locations, and versioning are all inherited from the Core SDK
 
 ## Repo placement
 
-The HPC SDK is **not** a top-level peer and has **no** dedicated
-`hpc-sdk/` folder or expansion path. Its component packages are
-published with the rest of the Core SDK's packages under the Core
-SDK's existing `core/` location on each stream subdomain. The
-`amdrocm-repo-<stream>` packages that already configure Core also
-surface the HPC SDK components — no additional repo wiring is needed.
+The HPC SDK is **not** a top-level peer and has **no** expansion path
+or independent cadence.
+
+**Packages.** HPC SDK component packages are published with the rest
+of the Core SDK's packages under the Core SDK's existing `core/`
+location on each stream subdomain. The `amdrocm-repo-<stream>`
+packages that already configure Core also surface the HPC SDK
+components — no additional repo wiring is needed.
+
+**Tarball.** The HPC SDK tarball is published under **`hpc/tarball/`**
+on each stream subdomain, not under `core/`. It is a distinct artifact
+from the Core SDK tarball (a superset of it — see *Tarball*), so it
+gets its own path rather than sitting alongside Core's tarball where
+the two would be easy to confuse. `hpc/` holds the tarball only; it is
+not an expansion folder and carries no packages, no separate cadence,
+and no separate versioning.
 
 ## Install location
 
@@ -101,9 +111,10 @@ component at the exact version shipped in that Core release.
 
 ## Tarball
 
-The HPC SDK is also published as a **tarball**, alongside the Core SDK
-tarball under the Core SDK's existing `core/tarball/` location
-(RFC0012).
+The HPC SDK is also published as a **tarball**, under **`hpc/tarball/`**
+on each stream subdomain. This is the only HPC-specific path in the
+tree; package artifacts still ship under the Core SDK's `core/`
+location (see *Repo placement*).
 
 **Definition.** The HPC SDK tarball is a **superset of the ROCm Core
 SDK tarball**. It contains:
@@ -134,12 +145,9 @@ deliver a usable HPC SDK by tarball is to ship the full stack.
 - The HPC SDK tarball is produced for the **same targets, OSes, and
   streams** as the Core SDK tarball, with no HPC-specific matrix.
 - Naming follows the Core SDK tarball convention with an `hpc`
-  discriminator so the two sort together and are trivially
-  distinguishable, e.g.
-  `therock-dist-hpc-linux-<target>-<version>.tar.gz` next to
-  `therock-dist-linux-<target>-<version>.tar.gz`.
-- The Windows `.zip` archive follows the same rule if and when the HPC
-  SDK ships on Windows.
+  discriminator, e.g.
+  `therock-dist-hpc-linux-<target>-<version>.tar.gz` next to the Core
+  SDK's `therock-dist-linux-<target>-<version>.tar.gz`.
 
 ## Component versioning
 
