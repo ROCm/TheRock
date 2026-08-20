@@ -88,22 +88,22 @@ DIRECTORY STRUCTURE:
         ...
 
   S3 bucket structure:
-    v3/whl/<arch>/
+    v3/rocm/whl/<arch>/
       package1.whl
       package2.whl
       ...
-    v3/tarball/
+    v3/rocm/tarball/
       therock-dist-linux-<arch1>-<version>.tar.gz
       therock-dist-windows-<arch2>-<version>.tar.gz
       ...
 
   S3 bucket structure for mult-arch:
-    v4/whl/
+    v4/rocm/whl/
     package1.whl
     package2.whl
     package1.tar.gz
 
-  v4/tarball/
+  v4/rocm/tarball/
     therock-dist-linux-<arch1>-<version>.tar.gz
     therock-dist-windows-<arch2>-<version>.tar.gz
 
@@ -405,7 +405,8 @@ Safety Features:
 
     parser.add_argument(
         "--structured",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help=(
             "Upload flat local wheels from <input-dir>/wheels into product-local "
             "structured roots v5/rocm/<product>/<index>/<package>/. Implies --multi-arch."
@@ -485,7 +486,7 @@ Safety Features:
         "--use-release-buckets",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Overwrite buckets to use production release buckets: therock-release-tarball:v3/tarball and therock-release-python:v3/whl",
+        help="Overwrite buckets to use production release buckets: therock-release-tarball:v3/rocm/tarball and therock-release-python:v3/rocm/whl",
     )
 
     args = parser.parse_args(argv)
