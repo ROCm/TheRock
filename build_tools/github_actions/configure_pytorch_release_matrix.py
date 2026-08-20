@@ -37,20 +37,18 @@ CI_PYTHON_VERSIONS = {
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
 RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
-        "release/2.11",
         "release/2.12",
         "release/2.13",
     ],
     "windows": [
-        "release/2.11",
         "release/2.12",
         "release/2.13",
     ],
 }
 
-# PyTorch 2.11 remains available for prerelease and explicit builds.
+# Refs for release types: stable refs + "nightly" branch.
 RELEASE_PYTORCH_REFS = {
-    platform: [ref for ref in refs if ref != "release/2.11"] + ["nightly"]
+    platform: [*refs, "nightly"]
     for platform, refs in RELEASE_STABLE_PYTORCH_REFS.items()
 }
 

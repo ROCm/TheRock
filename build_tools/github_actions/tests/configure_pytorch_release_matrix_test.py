@@ -69,8 +69,14 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
-    def test_dev_and_nightly_release_types_exclude_release_2_11(self):
-        for release_type in ("dev", "dev-bkc", "nightly", "nightly-bkc"):
+    def test_default_release_types_exclude_release_2_11(self):
+        for release_type in (
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+        ):
             with self.subTest(release_type=release_type):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type=release_type,
@@ -82,18 +88,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
                 self.assertNotIn("release/2.11", refs)
                 self.assertIn("release/2.12", refs)
-                self.assertIn("nightly", refs)
-
-    def test_prerelease_keeps_release_2_11(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="prerelease",
-            python_versions=["3.12"],
-            amdgpu_families="gfx94X-dcgpu",
-            platform="linux",
-        )
-        refs = {row["pytorch_git_ref"] for row in matrix}
-
-        self.assertIn("release/2.11", refs)
+                self.assertEqual("nightly" in refs, release_type != "prerelease")
 
     def test_explicit_release_2_11_still_builds(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
