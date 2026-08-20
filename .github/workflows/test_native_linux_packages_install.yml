@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       release_type:
-        description: "Release Type (ci, dev, nightly, prerelease)."
+        description: "Release type for the packages being tested."
         required: true
         type: string
       gpg_key_url:
@@ -46,6 +46,18 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      build_variant:
+        description: "Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages."
+        required: false
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -53,7 +65,7 @@ on:
         required: true
         type: string
       release_type:
-        description: 'Release type: "ci" or "dev"'
+        description: "Release type for the packages being tested."
         required: true
         type: choice
         options:
@@ -91,6 +103,17 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
+      build_variant:
+        description: "Build variant (e.g. 'asan'). Changes expected package names."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   id-token: write
@@ -107,8 +130,19 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
+      - name: "Quartz - started - test rpm/deb install"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: test_native_linux_packages_install.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -135,7 +169,6 @@ jobs:
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
-        --privileged
     env:
       REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
@@ -145,6 +178,7 @@ jobs:
       GFX_ARCH: ${{ needs.prepare_install_context.outputs.gfx_arch }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -157,7 +191,8 @@ jobs:
               curl \
               ca-certificates \
               gpg \
-              lsb-release
+              lsb-release \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -171,7 +206,8 @@ jobs:
               ca-certificates \
               gpg2 \
               lsb-release \
-              update-alternatives
+              update-alternatives \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -183,7 +219,8 @@ jobs:
               curl \
               ca-certificates \
               gnupg2 \
-              dnf-plugins-core
+              dnf-plugins-core \
+              binutils
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
@@ -191,7 +228,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -215,3 +252,21 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [prepare_install_context, test_native_linux_packages_install]
+    name: "Quartz - completed - test rpm/deb install"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - test rpm/deb install"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: test_native_linux_packages_install.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -81,6 +81,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 concurrency:
   # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
@@ -110,6 +111,7 @@ jobs:
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
+    secrets: inherit
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -173,7 +175,7 @@ jobs:
       - manifest_diff
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Evaluate workflow results
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -10,6 +10,7 @@ Table of contents:
 - [Overview](#overview)
   - [Constraints and design guidelines](#constraints-and-design-guidelines)
   - [Distribution channels (dev, nightly, release)](#distribution-channels-dev-nightly-release)
+- [Release branch metadata](#release-branch-metadata)
 - [Python package versions](#python-package-versions)
 - [Native Linux package versions](#native-linux-package-versions)
 - [Native Windows package versions](#native-windows-package-versions)
@@ -24,9 +25,22 @@ where
 - `Z` is the "patch version"
 
 The [`version.json`](/version.json) file at the root of TheRock defines the
-base version used for packages, while subprojects may have their own independent
-library versions (for example `HIPBLASLT_PROJECT_VERSION` in
-[`rocm-libraries/projects/hipblaslt/CMakeLists.txt`](https://github.com/ROCm/rocm-libraries/blob/develop/projects/hipblaslt/CMakeLists.txt)).
+base version used for packages:
+
+```json
+{
+  "rocm-version": "10.1.0"
+}
+```
+
+> [!NOTE]
+> Subprojects may have their own independent
+> library versions (for example `HIPBLASLT_PROJECT_VERSION` in
+> [`rocm-libraries/projects/hipblaslt/CMakeLists.txt`](https://github.com/ROCm/rocm-libraries/blob/develop/projects/hipblaslt/CMakeLists.txt)):
+>
+> ```cmake
+> set(HIPBLASLT_PROJECT_VERSION "1.4.1" CACHE STRING "Semantic version string.")
+> ```
 
 <!-- TODO: touch on ABI versions in libraries (.so/.dll) -->
 
@@ -60,12 +74,43 @@ users who want early previews of upcoming releases, and QA/test team members.
 | stable releases      | https://repo.amd.com/rocm/        | Manually promoted prereleases                                                                                                                                                                                |
 | prereleases          | https://rocm.prereleases.amd.com/ | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
 | nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
+| BKC releases         | TBD                               | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
 | dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
+
+Each distribution channel is currently hosted on a separate release index that
+can be passed to package managers like `pip` (see
+[RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
+for details). For example:
+
+```bash
+pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
+pip install --index-url=https://rocm.devreleases.amd.com/whl-multi-arch/ rocm
+```
 
 With the exception of "dev releases", each distribution channel only contains
 release artifacts of the matching release type. The "dev releases" channel
 _can_ contain any type of release.
+
+## Release branch metadata
+
+The `version.json` file also contains a generic `release-metadata` object
+hosting fields that release types can interpret as needed. These fields should
+be empty on the base branch and may be populated by commits on release branches:
+
+```jsonc
+{
+  "rocm-version": "10.1.0",
+  "release-metadata": {
+    // Empty on the base branch.
+    "base-date": ""
+    // A BKC release branch could set base-date to 20260811 for a package
+    // version like 10.1.0a20260811+bkc.20260813 where
+    //   * 20260811 is fixed to when the release branch forked from mainline
+    //   * 20260813 is the current date
+  }
+}
+```
 
 ## Python package versions
 
@@ -76,28 +121,26 @@ Python package versions are handled by scripts:
 
 The script produces these versions for each release type:
 
-| Release type | Version format    | Version example                                                                                                                                                     |
-| ------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| stable       | `X.Y.Z`           | `7.10.0`                                                                                                                                                            |
-| prerelease   | `X.Y.ZrcN`        | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
-| nightly      | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
-| dev          | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format                             | Version example                                                                                                                                                     |
+| ------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`                                    | `7.10.0`                                                                                                                                                            |
+| prerelease   | `X.Y.ZrcN`                                 | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
+| nightly      | `X.Y.ZaYYYYMMDD`                           | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
+| nightly-bkc  | `X.Y.ZaBASEDATE+bkc.YYYYMMDD`              | `10.1.0a20260811+bkc.20260814`                                                                                                                                      |
+| dev          | `X.Y.Z.dev0+NNNN`                          | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| dev-bkc      | `X.Y.Z.dev0+NNNN`<br>(same as regular dev) | `10.1.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`                                                                                                              |
 
-Each distribution channel (and GPU family within that channel) is currently
-hosted on a separate release index that can be passed to `pip` or `uv` via
-`--index-url`. For example:
+### BKC versions
 
-```bash
-pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm
+For `nightly-bkc`, `BASEDATE` comes from `release-metadata.base-date` in
+`version.json` and identifies the regular nightly used to create the BKC
+branch. The date in the `bkc.YYYYMMDD` local version identifier is the BKC
+build date. This makes a BKC build sort newer than its base nightly but older
+than the next regular nightly:
+
+```text
+10.1.0a20260811 < 10.1.0a20260811+bkc.20260814 < 10.1.0a20260812
 ```
-
-See [RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
-for details.
-
-> [!NOTE]
-> We plan on later providing a single multi-architecture index as part of
-> multi-arch work, see
-> [RFC0008-Multi-Arch-Packaging.md - Python Packaging](../rfcs/RFC0008-Multi-Arch-Packaging.md#python-packaging).
 
 ### External Python package versions
 
@@ -110,11 +153,12 @@ For example, for torch version `2.9.0` built with ROCm version `7.10.0` we
 generate a composite torch version `2.9.0+rocm7.10.0`. See this table for more
 possible version combinations:
 
-| ROCm release type | ROCm version example | Composite torch version example                                                    |
-| ----------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| stable            | `7.10.0`             | `2.9.0+rocm7.10.0`                                                                 |
-| nightly           | `7.10.0a20251124`    | `2.9.0+rocm7.10.0a20251124`                                                        |
-| dev               | `7.10.0.dev0+efed3c` | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
+| ROCm release type | ROCm version example           | Composite torch version example                                                    |
+| ----------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| stable            | `7.10.0`                       | `2.9.0+rocm7.10.0`                                                                 |
+| nightly           | `7.10.0a20251124`              | `2.9.0+rocm7.10.0a20251124`                                                        |
+| nightly-bkc       | `10.1.0a20260811+bkc.20260813` | `2.13.0+rocm10.1.0a20260811.bkc.20260813`                                          |
+| dev               | `7.10.0.dev0+efed3c`           | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
 
 These local version identifiers are specially constructed such that the expected
 version sorting of `stable > nightly > dev` is preserved. Note that per the
@@ -133,6 +177,21 @@ True
 >>> nightly > dev
 True
 ```
+
+> [!WARNING]
+> Known issue: https://github.com/ROCm/TheRock/issues/7183.
+>
+> Package versions using ROCm version 10.0.0+ sort as _older_ than previous
+> versions using this schema:
+>
+> ```python
+> >>> from packaging.version import Version
+> >>> Version("2.12.0+rocm10.0") > Version("2.12.0+rocm7.0")
+> False
+> ```
+>
+> We plan on publishing 10.0.0+ packages to a new index to avoid this issue for
+> future installs.
 
 #### PyTorch versions
 
@@ -157,6 +216,8 @@ The scripts produce these versions for each distribution channel:
 | torchaudio   | `2.9.0+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
 | torchvision  | `0.24.0+rocm7.10.0`                       | `0.24.0+rocm7.11.0a20251124`                |
 | triton       | `3.3.1+rocm7.10.0`                        | `3.5.1+rocm7.11.0a20251124`                 |
+
+For manually dispatched `dev` PyTorch builds (`build_prod_wheels.py --release-type dev`), each wheel version is additionally tagged with its own 8-character source commit in the PEP 440 local version segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`. This applies to the `torch`, `torchaudio`, and `torchvision` wheels, so each records exactly which source commit produced it.
 
 #### JAX versions
 
@@ -261,21 +322,25 @@ Native package versions are handled by scripts:
 
 The script produces these versions for rpm packages for each release type:
 
-| Release type | Version format              | Version example                                                                                                                        |
-| ------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| stable       | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
-| prerelease   | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
-| nightly      | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
-| dev          | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format                               | Version example                                                                                                                        |
+| ------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`                                      | `7.10.0`                                                                                                                               |
+| prerelease   | `X.Y.Z~rcN`                                  | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
+| nightly      | `X.Y.Z~YYYYMMDD`                             | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
+| nightly-bkc  | `X.Y.Z~BASEDATE.bkc.YYYYMMDD`                | `10.1.0~20260811.bkc.20260814`                                                                                                         |
+| dev          | `X.Y.Z~YYYYMMDDg<git-hash>`                  | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| dev-bkc      | `X.Y.Z~YYYYMMDDg<git-hash>`<br>(same as dev) | `10.1.0~20260814gefed3c3`                                                                                                              |
 
 The script produces these versions for debian packages for each release type:
 
-| Release type | Version format      | Version example                                                        |
-| ------------ | ------------------- | ---------------------------------------------------------------------- |
-| stable       | `X.Y.Z`             | `7.10.0`                                                               |
-| prerelease   | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
-| nightly      | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
-| dev          | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
+| Release type | Version format                               | Version example                                                        |
+| ------------ | -------------------------------------------- | ---------------------------------------------------------------------- |
+| stable       | `X.Y.Z`                                      | `7.10.0`                                                               |
+| prerelease   | `X.Y.Z~preN`                                 | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
+| nightly      | `X.Y.Z~YYYYMMDD`                             | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
+| nightly-bkc  | `X.Y.Z~BASEDATE.bkc.YYYYMMDD`                | `10.1.0~20260811.bkc.20260814`                                         |
+| dev          | `X.Y.Z~devYYYYMMDD`                          | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)                  |
+| dev-bkc      | `X.Y.Z~devYYYYMMDD`<br>(same as regular dev) | `10.1.0~dev20260814`                                                   |
 
 ## Native Windows package versions
 

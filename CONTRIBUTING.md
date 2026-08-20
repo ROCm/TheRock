@@ -131,6 +131,53 @@ for maintainers).
 
 ## Development workflows and contributing guide
 
+### Finding an issue to work on
+
+If you want to contribute but don't have a specific problem in mind, the
+[issue tracker](https://github.com/ROCm/TheRock/issues) is the best place to
+start. These two labels mark work we hope someone outside the core team will
+pick up:
+
+| Label                                                                                                                 | What it means                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [`help wanted`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22)           | Understood well enough for someone outside the core team to pick up, and no maintainer is working on it. Start here. |
+| [`good first issue`](https://github.com/ROCm/TheRock/issues?q=is%3Aissue+state%3Aopen+label%3A%22good+first+issue%22) | Small in scope and unlikely to need wide-ranging changes across the build. Usually also carries `help wanted`.       |
+
+Triaged issues carry other labels you can combine with those two to find
+something in an area you already know:
+
+- `status: *` shows how far along an issue is. `status: assessed` means the root
+  cause is already known.
+- `project: *`, `gfx*`, `platform: *`, and `ecosystem: *` identify the affected
+  component, GPU family, host platform, and downstream project.
+- `build issue`, `CICD`, `documentation`, and `test-debt` are good places to look
+  for contributions that don't need specific GPU hardware.
+
+> [!TIP]
+> Don't have the hardware to reproduce an issue? A precise reproduction, a
+> narrowed-down regression range, or better diagnostics are valuable
+> contributions on their own.
+
+If an issue is missing information you need, or you think it deserves one of the
+labels above, say so in the thread and a maintainer will take another look.
+
+#### Do I need to ask before working on an issue?
+
+No, but please comment on the issue to say you are picking it up so others don't
+duplicate your effort. We don't lock issues to one person, and an existing
+assignee doesn't stop you from opening a pull request. If multiple pull requests
+address the same issue, we take the highest quality one (or the first one, if
+they are comparable).
+
+> [!NOTE]
+> Issues without `help wanted` are still fair game, but they may already be in
+> progress internally or blocked on an upstream change, so ask first. Some
+> issues filed here are ultimately bugs in a component that TheRock builds from
+> a submodule, in which case the fix belongs in that repository instead.
+
+When your change is ready, follow
+[Creating pull requests](#creating-pull-requests).
+
 ### Using GitHub Issues for bug reporting
 
 Before filing a new issue, please search through
@@ -172,11 +219,15 @@ following standards:
 | ✅ Branch naming patterns             | <ul><li>Repository ruleset</li></ul>                                                                                                         | <ul><li>[Branch naming policy](#branch-naming-policy)<br>(`users/USERNAME/feature-name`)</li></ul>                                                        |
 | ✅ Pull requests should link an issue | <ul><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul>                                                              | <ul><li>[`pull_request_template.md`](/.github/pull_request_template.md)<li>Policy Bot [`FAQ.md`](/skills/therock_pr_bot/FAQ.md#-pr-description)</li></ul> |
 | ✅ Lint pre-commit checks             | <ul><li>[`pre-commit.yml`](.github/workflows/pre-commit.yml)</li></ul>                                                                       | <ul><li>[pre-commit checks](#pre-commit-checks)</li></ul>                                                                                                 |
-| ✅ Changes should be unit tested      | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>(Planned) `TESTING.md` file</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
+| ✅ Changes should be tested           | <ul><li>[`unit_tests.yml`](.github/workflows/unit_tests.yml)</li><li>[`therock-pr-bot.yml`](/.github/workflows/therock-pr-bot.yml)</li></ul> | <ul><li>[`TESTING.md`](/TESTING.md)</li><li>[`docs/development/adding_tests.md`](docs/development/adding_tests.md)</li></ul>                              |
 
 > [!NOTE]
 > For more information about the PR Policy Bot which enforces some of these
 > policies see [`therock_pr_bot/FAQ.md`](/skills/therock_pr_bot/FAQ.md).
+
+#### Testing practices
+
+Project testing practices are documented in [TESTING.md](/TESTING.md).
 
 #### Coding style guides
 
@@ -248,7 +299,14 @@ pre-commit run --all-files
 
 # Install the git hook.
 pre-commit install
+
+# Run the markdown link checker (manual stage, not run on commit).
+pre-commit run --hook-stage manual --all-files lychee
 ```
+
+The `lychee` hook checks that repo-relative markdown links resolve to files that
+exist. It is confined to the `manual` stage because it downloads a `lychee`
+binary on first run, which the other hooks do not need.
 
 #### Requesting a code review
 

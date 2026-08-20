@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       prerelease_version:
@@ -59,11 +59,22 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
+        # Only dev-channel release types are exposed for manual dispatch in
+        # TheRock. Nightly release types are supplied by rockrel.
         options:
           - dev
         default: dev
@@ -97,9 +108,19 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
@@ -107,6 +128,22 @@ run-name: >-
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
 
 jobs:
+  notify_quartz_start:
+    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    name: "Quartz - started - release"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - started - release"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
@@ -120,6 +157,8 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+    secrets: inherit
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -140,6 +179,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -160,7 +200,26 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [setup, linux_release, windows_release]
+    name: "Quartz - completed - release"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
