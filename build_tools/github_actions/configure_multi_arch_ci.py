@@ -607,24 +607,31 @@ def should_skip_ci(
         return True
 
     # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
+    # This avoids running expensive ASAN builds on every PR in TheRock.
+    # External repos (e.g., rocm-libraries) that create an ASAN workflow have
+    # explicitly opted in, so they don't require labels.
     # Labels that enable ASAN CI:
     #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
+    is_asan_variant = ci_inputs.build_variant in ("asan", "host-asan")
     if (
         ci_inputs.is_pull_request
-        and ci_inputs.build_variant == "asan"
+        and is_asan_variant
         and not has_asan_label
+        and not ci_inputs.external_repo  # External repos opt-in by creating the workflow
     ):
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
-    if has_asan_label and ci_inputs.build_variant == "asan":
+    if has_asan_label and is_asan_variant:
         print("  Running: ASAN CI triggered by PR label")
+
+    if ci_inputs.external_repo and is_asan_variant:
+        print("  Running: ASAN CI for external repo (opted in via workflow)")
 
     # External repo builds skip path filtering - they always run CI and use
     # stage reuse to determine which stages to rebuild.
