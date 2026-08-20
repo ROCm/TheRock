@@ -160,6 +160,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}

@@ -62,6 +62,13 @@ on:
         description: Runner label to execute tests on
         required: true
         type: string
+      test_subset:
+        description: >-
+          Accelerator subset to run: "all", or "multi" for the multi-accelerator
+          tests alone, which fails unless test_runs_on is a multi-GPU runner.
+        required: false
+        type: string
+        default: "all"
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -122,15 +129,25 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+      test_subset:
+        description: >-
+          Accelerator subset to run: "all", or "multi" for the multi-accelerator
+          tests alone, which fails unless test_runs_on is a multi-GPU runner.
+        type: choice
+        options: ["all", "multi"]
+        default: "all"
 permissions:
   contents: read
   id-token: write
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.test_amdgpu_family }}
+    name: Test JAX | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_subset }}
     runs-on: ${{ inputs.test_runs_on }}
-    timeout-minutes: 120
+    # Room for the longest subset plus its setup, where installing the ROCm
+    # packages alone has taken over an hour; the test step below holds each
+    # subset to its own budget.
+    timeout-minutes: 240
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
 
@@ -284,19 +301,21 @@ jobs:
       # reproduces this job locally. See the comments in the script.
       - name: Run JAX tests
         # The suite runs 35-70 min across versions, so 60 left no headroom: one
-        # job reached 100% of the tests and was still killed by the timeout.
-        timeout-minutes: 120
+        # job reached 100% of the tests and was still killed by the timeout. The
+        # multi-accelerator subset is a fraction of that.
+        timeout-minutes: ${{ inputs.test_subset == 'multi' && 90 || 120 }}
         run: |
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
             --jax-ref "${{ inputs.jax_ref }}" \
-            --amdgpu-family "${{ inputs.test_amdgpu_family }}"
+            --amdgpu-family "${{ inputs.test_amdgpu_family }}" \
+            --test-subset "${{ inputs.test_subset }}"
 
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}
+          name: jax-test-logs-${{ inputs.jax_ref }}-py${{ inputs.python_version }}-${{ inputs.test_amdgpu_family }}-${{ inputs.test_subset }}
           path: |
             jax/logs/
             jax/test-artifacts/
