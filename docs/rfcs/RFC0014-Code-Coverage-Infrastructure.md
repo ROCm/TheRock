@@ -321,7 +321,15 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 - Can be disabled at component owner's discretion
 - Same policy as regular pre-checkin test handling
 
-### Multi-Architecture Coverage Strategy
+### Specialized Coverage Scenarios
+
+Coverage testing requires different strategies for three distinct types of code paths that cannot be covered by default single-architecture testing:
+
+1. **Multi-Architecture Code**: Architecture-specific optimizations (e.g., gfx90a vs gfx942)
+2. **Multi-GPU Code**: Code paths requiring multiple GPUs (parallel operations, multi-GPU algorithms)
+3. **Mock-Required Code**: Error handling paths that need upstream dependency error injection
+
+#### Multi-Architecture Coverage Strategy
 
 **Problem:**
 Architecture-specific code paths (e.g., gfx90a vs gfx942 optimizations) require architecture-specific coverage testing. Testing all architectures for all components on every PR creates unsustainable resource overhead, especially given coverage test runtime (e.g., rocPRIM: 20min → 3hr with instrumentation).
@@ -388,6 +396,57 @@ The aggregate report includes:
 - Test different architectures on different nights (round-robin) OR
 - Test all architectures weekly/monthly to refresh baselines
 
+#### Multi-GPU Coverage Strategy
+
+**Problem:**
+Some code paths only execute when multiple GPUs are available (e.g., multi-GPU GEMM operations, distributed algorithms, peer-to-peer memory transfers). Default single-GPU coverage testing cannot exercise these paths.
+
+**Detection:**
+- Identify PRs that modify multi-GPU specific code
+- Requires code organization/annotation to distinguish multi-GPU paths
+- Similar to architecture-specific detection but for GPU count
+
+**Testing approach:**
+- Default coverage runs on single-GPU nodes (majority of code)
+- When multi-GPU code changes detected:
+  - Trigger coverage job on multi-GPU node
+  - Aggregate multi-GPU report with default single-GPU report
+- Multi-GPU testing likely limited to specific components (not all projects have multi-GPU code)
+
+**Resource implications:**
+- Multi-GPU nodes are scarcer than single-GPU nodes
+- May require dedicated multi-GPU coverage node pool
+- Nightly multi-GPU coverage sweeps to maintain baseline
+
+#### Mock-Based Coverage Strategy
+
+**Problem:**
+Error handling code for upstream dependency failures cannot be covered without error injection. Example: Component A calls Component B's API - to cover A's error handling when B fails, we need to inject failures into B. However:
+- Cannot safely inject errors into real upstream components during coverage testing
+- Instrumenting upstream components provides no value for downstream coverage
+- Need controlled error injection to trigger error paths
+
+**Solution: Mocking upstream dependencies**
+- Create mock implementations of upstream APIs that can inject controlled errors
+- Mock testing exercises error handling paths in component under test
+- **Does NOT require instrumentation of upstream components** - only the component under test is instrumented
+- Mocks simulate failures without affecting real dependency behavior
+
+**Integration with default architecture:**
+- Mock-based coverage tests can run on default architecture (gfx942/gfx950)
+- No special hardware requirements - mocks are software-level abstractions
+- Can be integrated into Phase 1 (no multi-arch dependency)
+
+**Detection:**
+- Identify components with error handling for upstream dependencies
+- May require component teams to flag mock-requiring code paths
+- Build/test matrix determines which components need mock coverage
+
+**Open questions:**
+- Should all components provide mock implementations for error injection?
+- How to maintain mocks as upstream APIs evolve?
+- Should mock coverage be mandatory or optional?
+
 ## Open Questions
 
 1. **Codecov.io vs. alternatives**: Should we standardize on codecov.io or evaluate other platforms? Must support tag-based architecture aggregation for Phase 4+.
@@ -397,11 +456,14 @@ The aggregate report includes:
 5. **Artifact retention**: How long should coverage artifacts be retained?
 6. **Report aggregation**: Should TheRock provide a unified coverage dashboard across all components?
 7. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
-8. **Baseline initialization**: Self-healing all-arch coverage vs manual initialization vs graceful degradation?
-9. **Multi-arch nightly cadence**: Round-robin architectures or weekly/monthly full sweeps?
+8. **Multi-GPU detection**: How to identify multi-GPU specific code paths? Similar refactoring/annotation needs.
+9. **Mock coverage mandate**: Should all components provide mocks for upstream error injection? Mandatory or optional?
+10. **Baseline initialization**: Self-healing all-arch coverage vs manual initialization vs graceful degradation?
+11. **Multi-arch nightly cadence**: Round-robin architectures or weekly/monthly full sweeps?
+12. **Multi-GPU node allocation**: Dedicated pool vs shared with other multi-GPU workloads?
 
 ## Revision History
 
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
-- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy to address architecture-specific code coverage needs
+- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios
