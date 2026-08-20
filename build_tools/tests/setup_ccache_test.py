@@ -14,7 +14,6 @@ import shutil
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -50,16 +49,15 @@ class GenConfigTest(unittest.TestCase):
             config[key] = value
         return config
 
-    def test_prerelease_with_no_remote_cache_is_local_only(self):
+    def test_prerelease_is_local_only(self):
         """Shipped builds must not be able to read from the remote cache."""
-        config = self.gen_config("--release-type", "prerelease", "--no-remote-cache")
+        config = self.gen_config("--release-type", "prerelease")
         self.assertNotIn("remote_storage", config)
         self.assertIn("cache_dir", config)
 
-    def test_prerelease_without_flag_still_uses_remote(self):
-        """The local-only behavior comes from the flag, not the release type."""
-        config = self.gen_config("--release-type", "prerelease")
-        self.assertEqual(config["remote_storage"], setup_ccache.CACHE_SRV_REL)
+    def test_nightly_bkc_is_local_only(self):
+        config = self.gen_config("--release-type", "nightly-bkc")
+        self.assertNotIn("remote_storage", config)
         self.assertIn("cache_dir", config)
 
     def test_nightly_uses_release_remote_cache(self):
@@ -70,37 +68,24 @@ class GenConfigTest(unittest.TestCase):
         config = self.gen_config("--release-type", "dev")
         self.assertEqual(config["remote_storage"], setup_ccache.CACHE_SRV_DEV)
 
-    def test_local_path_is_honored_with_no_remote_cache(self):
+    def test_dev_bkc_uses_dev_remote_cache(self):
+        config = self.gen_config("--release-type", "dev-bkc")
+        self.assertEqual(config["remote_storage"], setup_ccache.CACHE_SRV_DEV)
+
+    def test_local_path_is_honored_for_prerelease(self):
         local_path = self.tmp_dir / "cache"
         config = self.gen_config(
             "--release-type",
             "prerelease",
-            "--no-remote-cache",
             "--local-path",
             os.fspath(local_path),
         )
         self.assertEqual(config["cache_dir"], os.fspath(local_path))
 
-    def test_no_remote_cache_rejects_remote(self):
-        """--remote bypasses the preset, so the combination must not be silent."""
-        with self.assertRaises(SystemExit):
-            self.gen_config(
-                "--remote",
-                "--remote-storage",
-                "http://example.invalid|layout=bazel",
-                "--no-remote-cache",
-            )
-
-    def test_no_remote_cache_fails_if_remote_survives(self):
-        """A preset change must not be able to quietly re-add remote_storage."""
-        preset = dict(setup_ccache.CONFIG_PRESETS_MAP["github-oss-release"])
-        # Whitespace ccache tolerates but a naive prefix check would miss.
-        preset["remote_storage "] = "http://example.invalid"
-        with patch.dict(
-            setup_ccache.CONFIG_PRESETS_MAP, {"github-oss-release": preset}
-        ):
-            with self.assertRaises(ValueError):
-                self.gen_config("--release-type", "prerelease", "--no-remote-cache")
+    def test_explicit_local_preset_is_local_only(self):
+        config = self.gen_config("--config-preset=local")
+        self.assertNotIn("remote_storage", config)
+        self.assertIn("cache_dir", config)
 
 
 class ConfigValueTest(unittest.TestCase):

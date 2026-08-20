@@ -97,12 +97,6 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     _log(f"Config preset: {config_preset}")
     _log(f"Platform: {'Windows' if IS_WINDOWS else 'POSIX'}")
     for k, v in selected_config.items():
-        # Release builds disable the remote cache (local cache only) so a shipped
-        # object never comes from a remote cache hit and cannot depend on the
-        # compiler_check fingerprint being complete across runners. The local
-        # cache is kept for performance and runner stability (notably Windows).
-        if k == "remote_storage" and args.no_remote_cache:
-            continue
         lines.append(f"{k} = {v}")
 
     # Log paths: use --log-dir if provided, otherwise default to
@@ -161,24 +155,14 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
 
     # Summarize the effective cache mode on one line, read back out of the
-    # generated config rather than from the flags. Readers (and CI log
-    # scrapers) can then confirm what was actually written instead of
-    # inferring "remote is off" from the absence of a line. This is the check
-    # that catches a workflow conditional silently failing to pass
-    # --no-remote-cache for a release build.
+    # generated config rather than inferred from the selected preset. Readers
+    # and CI log scrapers can then confirm what was actually written.
     remote_storage = _config_value(lines, "remote_storage")
     cache_dir = _config_value(lines, "cache_dir")
-    if args.no_remote_cache and remote_storage is not None:
-        raise ValueError(
-            "--no-remote-cache was requested but the generated config still sets "
-            f"'remote_storage = {remote_storage}'"
-        )
-    remote_desc = remote_storage or (
-        "disabled (--no-remote-cache)" if args.no_remote_cache else "disabled"
-    )
     _log(
         f"Cache mode: release_type={args.release_type or '(unset)'} "
-        f"preset={config_preset} remote={remote_desc} local={cache_dir or 'disabled'}"
+        f"preset={config_preset} remote={remote_storage or 'disabled'} "
+        f"local={cache_dir or 'disabled'}"
     )
 
     # End with blank line.
@@ -285,14 +269,6 @@ def main(argv: list[str]):
         "On Windows CI, pass BUILD_DIR/logs/ccache so logs land in the build tree.",
     )
 
-    p.add_argument(
-        "--no-remote-cache",
-        action="store_true",
-        help="Disable the remote cache and use the local cache only. Release "
-        "builds use this so a shipped object never comes from a remote cache hit, "
-        "while the local cache still provides performance and runner stability.",
-    )
-
     preset_group = p.add_mutually_exclusive_group()
     preset_group.add_argument(
         "--config-preset",
@@ -306,18 +282,16 @@ def main(argv: list[str]):
         type=str,
         choices=["ci", "dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         help='Shorthand for --config-preset: "ci", "dev", and "dev-bkc" map '
-        "to github-oss-dev; others map to github-oss-release.",
+        'to github-oss-dev; "nightly-bkc" and "prerelease" map to local; '
+        "others map to github-oss-release.",
     )
 
     args = p.parse_args(argv)
-    # --remote writes remote_storage from --remote-storage, bypassing the preset,
-    # so the combination would otherwise leave a remote-only cache configured
-    # while appearing to honor --no-remote-cache.
-    if args.no_remote_cache and args.remote:
-        p.error("--no-remote-cache cannot be combined with --remote")
     if args.release_type is not None:
         if args.release_type in ("ci", "dev", "dev-bkc"):
             args.config_preset = "github-oss-dev"
+        elif args.release_type in ("nightly-bkc", "prerelease"):
+            args.config_preset = "local"
         else:
             args.config_preset = "github-oss-release"
     run(args)

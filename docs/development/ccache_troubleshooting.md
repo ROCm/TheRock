@@ -88,39 +88,30 @@ another if they compile the same source files with compatible flags.
 
 ### Release builds use the local cache only (no remote)
 
-Prerelease (release-candidate) builds disable the remote cache and use only the
-local cache (`setup_ccache.py --no-remote-cache`, wired for
-`release_type == 'prerelease'` in the reusable build workflows).
+Prerelease (release-candidate) and `nightly-bkc` builds use only the local
+cache. The `--release-type prerelease` and `--release-type nightly-bkc` options
+automatically select the `local` config preset. Users can select the same
+local-only behavior explicitly with `--config-preset=local`.
 
-This is deliberate. Stable releases are a repackage of the prerelease
-artifacts, so the prerelease compile is what actually ships. Reading only from
-the local cache means a shipped object never comes from a remote cache hit, so
-it cannot depend on the `compiler_check` fingerprint (which covers the compiler
-binary and its shared libraries, but not the device bitcode libraries or `lld`)
-being complete across runners. The local cache is kept because some builds
-(notably Windows) need at least a local cache for performance and runner
-stability.
+Stable releases are a repackage of the prerelease artifacts and reading only
+from the local cache guards against cache poisoning attacks. The local cache is
+kept because some builds (notably Windows) need at least a local cache for
+performance and runner stability.
 
-Expect zero remote hits in the prerelease "Report" step; local hits are
-expected and fine. Nightly, `dev`, and `ci` builds are unaffected and continue
-to use the shared remote cache.
+Expect zero remote hits in prerelease and `nightly-bkc` "Report" steps; local
+hits are expected and fine. Nightly, `dev-bkc`, `dev`, and `ci` builds are
+unaffected and continue to use a shared remote cache.
 
-To confirm which cache a run actually used, look for the `Cache mode` line in
-the "Setup ccache" step. It is read back out of the generated `ccache.conf`,
-so it reports what was written rather than what was requested:
-
-```text
-[setup_ccache] Cache mode: release_type=prerelease preset=github-oss-release remote=disabled (--no-remote-cache) local=/.../ccache
-[setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=/.../ccache
-```
-
-A prerelease run reporting anything other than `remote=disabled` means the
-workflow did not pass `--no-remote-cache`, and the build read from the shared
-cache. You can reproduce either line locally:
-
-```bash
-./build_tools/setup_ccache.py --release-type prerelease --no-remote-cache --init
-```
+> [!TIP]
+> To confirm which cache a run actually used, look for the `Cache mode` line in
+> the "Setup ccache" step. It is read back from the generated `ccache.conf`, so
+> it reports what was written rather than only the requested options:
+>
+> ```text
+> [setup_ccache] Cache mode: release_type=prerelease preset=local remote=disabled local=/.../ccache
+> [setup_ccache] Cache mode: release_type=nightly-bkc preset=local remote=disabled local=/.../ccache
+> [setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=/.../ccache
+> ```
 
 ## Downloading and inspecting CI logs
 

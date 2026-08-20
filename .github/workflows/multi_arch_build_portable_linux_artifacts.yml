@@ -137,15 +137,11 @@ jobs:
           git config fetch.parallel 10
 
       - name: Setup ccache
-        # Prerelease builds use the local cache only (remote disabled) so a shipped
-        # object never comes from a remote cache hit; the local cache is kept for
-        # performance and runner stability. See docs/development/ccache_troubleshooting.md.
         run: |
           ./build_tools/setup_ccache.py \
             --release-type "${{ inputs.release_type }}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CACHE_DIR/ccache" \
-            ${{ inputs.release_type == 'prerelease' && '--no-remote-cache' || '' }}
+            --local-path "$CACHE_DIR/ccache"
 
       - name: Runner health status
         run: |
