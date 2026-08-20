@@ -251,6 +251,8 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
 def is_torch_package_name(package_name: str) -> bool:
     """Return True for torch-family packages eligible for ROCm dep floating."""
     normalized = canonicalize_name(package_name)
+    # Keep apex and triton in this policy set; this is a no-op until they have
+    # ROCm-specific Requires-Dist dependencies.
     return normalized in {
         "torch",
         "torchvision",
@@ -348,29 +350,14 @@ def rewrite_metadata_rocm_line(
     return requires_match.group("prefix") + requires_match.group("name") + tail
 
 
-_CHECK_VERSION_RE = re.compile(
-    r"(?P<prefix>\bcheck_version\s*=\s*['\"])(?P<version>[^'\"]+)(?P<suffix>['\"])"
-)
-
-
 def rewrite_rocm_init_check_version(
     line: str, old_rocm_version: str, new_rocm_version: str
 ) -> str:
-    """Rewrite torch _rocm_init.py stable checks to ROCm major/minor wildcard."""
-    rewritten = line.replace(old_rocm_version, new_rocm_version)
-    check_version_match = _CHECK_VERSION_RE.search(rewritten)
-    if check_version_match is None:
-        return rewritten
-    if check_version_match.group("version") != new_rocm_version:
-        return rewritten
+    """Rewrite torch _rocm_init.py stable check to a ROCm major/minor wildcard."""
     minor_spec = stable_minor_spec(new_rocm_version)
     if minor_spec is None:
-        return rewritten
-    return (
-        rewritten[: check_version_match.start("version")]
-        + minor_spec
-        + rewritten[check_version_match.end("version") :]
-    )
+        return line.replace(old_rocm_version, new_rocm_version)
+    return line.replace(old_rocm_version, minor_spec)
 
 
 def update_metadata_rocm_requires_dist(
@@ -394,8 +381,9 @@ def update_metadata_rocm_requires_dist(
             inplace=True,
         ) as f:
             for line in f:
+                lower_line = line.casefold()
                 if line.startswith("Summary:") and (
-                    "TheRock" in line or "rocm" in line
+                    "therock" in lower_line or "rocm" in lower_line
                 ):
                     print(
                         rewrite_metadata_rocm_line(
@@ -930,8 +918,8 @@ def wheel_change_extra_files(
     new_dir_path: pathlib.Path,
     old_version: Version,
     new_version: Version,
+    dest_version: str,
     multi_arch_targets: list[str] | None = None,
-    dest_version: str = "release",
 ) -> None:
     # Always run the keep-list pass when archs are requested; do this *before*
     # version rewrites so the version replacement sees a consistent file
@@ -998,6 +986,7 @@ def wheel_change_extra_files(
         files_to_change = [
             new_dir_path / package_name_no_version / "_dist_info.py",
         ]
+        files_to_float = []
 
         if new_dir_path.name.startswith("rocm_sdk_core"):
             files_to_change.append(
@@ -1010,13 +999,19 @@ def wheel_change_extra_files(
     # only torch and NOT triton, torchaudio, torchvision
     elif "torch" == package_name_no_version:
         files_to_change = [
-            new_dir_path / package_name_no_version / "_rocm_init.py",
             new_dir_path / package_name_no_version / "version.py",
         ]
+        files_to_float = [
+            new_dir_path / package_name_no_version / "_rocm_init.py",
+        ]
+        if not float_rocm_dependency_patch:
+            files_to_change.extend(files_to_float)
+            files_to_float = []
     elif "apex" in package_name_no_version:
         files_to_change = [
             new_dir_path / package_name_no_version / "git_version_info_installed.py",
         ]
+        files_to_float = []
     else:
         # we have multiple packages that have a version.py that needs updating
         need_change_version_py = ["torchaudio", "torchvision", "jaxlib"]
@@ -1024,29 +1019,30 @@ def wheel_change_extra_files(
             files_to_change = [
                 new_dir_path / package_name_no_version / "version.py",
             ]
+            files_to_float = []
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
             # currently applying to: triton
             return
 
-    for f in files_to_change:
-        print(f"      {f}")
-    with fileinput.input(files=files_to_change, encoding="utf-8", inplace=True) as f:
-        for line in f:
-            print(line.replace(old_rocm_version, new_rocm_version), end="")
+    def rewrite_exact(line: str) -> str:
+        return line.replace(old_rocm_version, new_rocm_version)
 
-    if float_rocm_dependency_patch and "torch" == package_name_no_version:
-        rocm_init_path = new_dir_path / package_name_no_version / "_rocm_init.py"
-        with fileinput.input(
-            files=[rocm_init_path], encoding="utf-8", inplace=True
-        ) as f:
+    def rewrite_rocm_init(line: str) -> str:
+        return rewrite_rocm_init_check_version(line, old_rocm_version, new_rocm_version)
+
+    rewrite_groups = [
+        (files_to_change, rewrite_exact),
+        (files_to_float, rewrite_rocm_init),
+    ]
+    for files, rewrite_line in rewrite_groups:
+        if not files:
+            continue
+        for f in files:
+            print(f"      {f}")
+        with fileinput.input(files=files, encoding="utf-8", inplace=True) as f:
             for line in f:
-                print(
-                    rewrite_rocm_init_check_version(
-                        line, old_rocm_version, new_rocm_version
-                    ),
-                    end="",
-                )
+                print(rewrite_line(line), end="")
 
     print("    ...done")
 
