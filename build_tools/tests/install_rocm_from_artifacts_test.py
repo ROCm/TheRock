@@ -6,6 +6,7 @@
 
 import argparse
 import io
+from botocore.exceptions import ClientError
 from datetime import datetime
 from pathlib import Path
 import os
@@ -294,6 +295,56 @@ class TestReleaseDiscovery(unittest.TestCase):
             f"s3://{mod.DEV_TARBALL_BUCKET.name}/{mod.MULTIARCH_TARBALL_S3_PREFIX}/",
             output.getvalue(),
         )
+
+    def test_release_download_falls_back_to_legacy_tarball_bucket(self) -> None:
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
+
+        def write_tarball(_, __, file) -> None:
+            file.write(b"tarball contents")
+
+        missing = ClientError(
+            {
+                "Error": {
+                    "Code": "NoSuchKey",
+                    "Message": "not found",
+                }
+            },
+            "GetObject",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            with (
+                mock.patch.object(
+                    mod.s3_client,
+                    "download_fileobj",
+                    side_effect=[missing, write_tarball],
+                ) as download_fileobj,
+                mock.patch.object(mod, "_untar_files") as untar_files,
+            ):
+                mod._retrieve_multiarch_tarball_with_legacy_fallback(
+                    mod.NIGHTLY_TARBALL_BUCKET.name,
+                    mod.LEGACY_NIGHTLY_TARBALL_BUCKET.name,
+                    asset_name,
+                    output_dir,
+                )
+
+            calls = download_fileobj.call_args_list
+            self.assertEqual(calls[0].args[0], mod.NIGHTLY_TARBALL_BUCKET.name)
+            self.assertEqual(
+                calls[0].args[1],
+                mod._multiarch_tarball_s3_key(
+                    asset_name, mod.MULTIARCH_TARBALL_S3_PREFIX
+                ),
+            )
+            self.assertEqual(calls[1].args[0], mod.LEGACY_NIGHTLY_TARBALL_BUCKET.name)
+            self.assertEqual(
+                calls[1].args[1],
+                mod._multiarch_tarball_s3_key(
+                    asset_name, mod.LEGACY_MULTIARCH_TARBALL_S3_PREFIX
+                ),
+            )
+            untar_files.assert_called_once_with(output_dir, output_dir / asset_name)
 
     def test_extract_version_ignores_test_tarball(self) -> None:
         self.assertIsNone(

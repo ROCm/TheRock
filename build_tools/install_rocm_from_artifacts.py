@@ -124,12 +124,16 @@ is passed, it will overwrite the default "therock-build" directory.
 
 import argparse
 import boto3
+from botocore.exceptions import ClientError
 from botocore import UNSIGNED
 from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
-from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.s3_buckets import (
+    get_product_release_bucket_config,
+    get_release_bucket_config,
+)
 from pathlib import Path
 import platform
 import re
@@ -140,9 +144,12 @@ import tarfile
 from typing import Optional
 
 PLATFORM = platform.system().lower()
-NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
-DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
-MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
+NIGHTLY_TARBALL_BUCKET = get_product_release_bucket_config("nightly", "core")
+DEV_TARBALL_BUCKET = get_product_release_bucket_config("dev", "core")
+LEGACY_NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
+LEGACY_DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
+MULTIARCH_TARBALL_S3_PREFIX = "v5/rocm/core/tarball"
+LEGACY_MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
 s3_client = boto3.client(
     "s3",
     region_name=NIGHTLY_TARBALL_BUCKET.region,
@@ -188,14 +195,20 @@ def extract_version_from_asset_name(
     return match["version"]
 
 
-def _multiarch_tarball_s3_key(asset_name: str) -> str:
+def _multiarch_tarball_s3_key(
+    asset_name: str,
+    prefix: str = MULTIARCH_TARBALL_S3_PREFIX,
+) -> str:
     """Return the S3 key for a published multi-arch tarball."""
-    return f"{MULTIARCH_TARBALL_S3_PREFIX}/{asset_name}"
+    return f"{prefix}/{asset_name}"
 
 
-def _multiarch_tarball_asset_name(s3_key: str) -> Optional[str]:
+def _multiarch_tarball_asset_name(
+    s3_key: str,
+    prefix: str = MULTIARCH_TARBALL_S3_PREFIX,
+) -> Optional[str]:
     """Return the asset name from a published multi-arch tarball S3 key."""
-    key_prefix = f"{MULTIARCH_TARBALL_S3_PREFIX}/"
+    key_prefix = f"{prefix}/"
     if not s3_key.startswith(key_prefix):
         return None
     return s3_key.removeprefix(key_prefix)
@@ -323,9 +336,10 @@ def _retrieve_multiarch_tarball(
     release_bucket: str,
     asset_name: str,
     output_dir: Path,
+    s3_prefix: str = MULTIARCH_TARBALL_S3_PREFIX,
 ) -> None:
     """Download a multi-arch tarball from S3, then extract it."""
-    s3_key = _multiarch_tarball_s3_key(asset_name)
+    s3_key = _multiarch_tarball_s3_key(asset_name, s3_prefix)
     destination = output_dir / asset_name
     log(f"Downloading s3://{release_bucket}/{s3_key}")
 
@@ -333,6 +347,35 @@ def _retrieve_multiarch_tarball(
         s3_client.download_fileobj(release_bucket, s3_key, file)
 
     _untar_files(output_dir, destination)
+
+
+def _is_missing_s3_object_error(error: ClientError) -> bool:
+    code = error.response.get("Error", {}).get("Code")
+    return code in {"404", "NoSuchKey", "NotFound"}
+
+
+def _retrieve_multiarch_tarball_with_legacy_fallback(
+    release_bucket: str,
+    legacy_release_bucket: str,
+    asset_name: str,
+    output_dir: Path,
+) -> None:
+    """Download a current-layout tarball, falling back to the legacy layout."""
+    try:
+        _retrieve_multiarch_tarball(release_bucket, asset_name, output_dir)
+    except ClientError as e:
+        if not _is_missing_s3_object_error(e):
+            raise
+        log(
+            "Current repo.amd.com tarball object was not found; "
+            "trying legacy release bucket layout."
+        )
+        _retrieve_multiarch_tarball(
+            legacy_release_bucket,
+            asset_name,
+            output_dir,
+            LEGACY_MULTIARCH_TARBALL_S3_PREFIX,
+        )
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -643,10 +686,10 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly or dev release version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://rocm.nightlies.amd.com/tarball-multi-arch/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            "\t - https://nightly.repo.amd.com/rocm/core/tarball/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
-            "\t - https://rocm.devreleases.amd.com/tarball-multi-arch/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            "\t - https://dev.repo.amd.com/rocm/core/tarball/ (dev example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
         )
         log("Exiting...")
         return
@@ -654,6 +697,9 @@ def retrieve_artifacts_by_release(args):
     release_version = args.release
     asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
     release_bucket = NIGHTLY_TARBALL_BUCKET if nightly_release else DEV_TARBALL_BUCKET
+    legacy_release_bucket = (
+        LEGACY_NIGHTLY_TARBALL_BUCKET if nightly_release else LEGACY_DEV_TARBALL_BUCKET
+    )
     release_kind = "nightly" if nightly_release else "dev"
 
     log(
@@ -668,7 +714,12 @@ def retrieve_artifacts_by_release(args):
         )
         return
 
-    _retrieve_multiarch_tarball(release_bucket.name, asset_name, output_dir)
+    _retrieve_multiarch_tarball_with_legacy_fallback(
+        release_bucket.name,
+        legacy_release_bucket.name,
+        asset_name,
+        output_dir,
+    )
 
 
 def retrieve_artifacts_by_input_dir(args):
