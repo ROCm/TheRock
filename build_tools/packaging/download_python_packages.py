@@ -1247,7 +1247,8 @@ Examples:
 
     parser.add_argument(
         "--structured",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help=(
             "Download Python packages from product-local structured roots "
             "v5/rocm/<product>/<index>/<package>/. Implies --multi-arch."
@@ -1306,16 +1307,16 @@ Examples:
 
     if args.arch:
         args.arch = [arch.strip() for arch in args.arch.split(",")]
-    args.product = parse_csv_args(args.product) or list(STRUCTURED_PRODUCTS)
-    invalid_products = sorted(set(args.product) - set(STRUCTURED_PRODUCTS))
-    if invalid_products:
-        parser.error(
-            f"Unsupported --product value(s): {', '.join(invalid_products)}. "
-            f"Expected one or more of: {', '.join(STRUCTURED_PRODUCTS)}"
-        )
 
     if args.structured:
         args.multi_arch = True
+        args.product = parse_csv_args(args.product) or list(STRUCTURED_PRODUCTS)
+        invalid_products = sorted(set(args.product) - set(STRUCTURED_PRODUCTS))
+        if invalid_products:
+            parser.error(
+                f"Unsupported --product value(s): {', '.join(invalid_products)}. "
+                f"Expected one or more of: {', '.join(STRUCTURED_PRODUCTS)}"
+            )
 
     # Validate arguments
     if args.include_tarballs:
