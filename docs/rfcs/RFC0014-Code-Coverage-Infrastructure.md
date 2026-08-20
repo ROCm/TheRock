@@ -148,19 +148,96 @@ This allows the test runner to discover test binaries automatically rather than 
 ### TheRock CMake Changes
 
 #### Component-Specific Coverage Flags
-Rename `-DBUILD_CODE_COVERAGE` to project-specific flags to prevent cross-contamination:
-- `-DROCPRIM_ENABLE_COVERAGE`
-- `-DROCFFT_ENABLE_COVERAGE`
-- `-DHIPBLASLT_ENABLE_COVERAGE`
-- etc.
 
-Add TheRock passthrough:
+**Problem:**
+Projects currently use generic `-DBUILD_CODE_COVERAGE` flag. If multiple projects use the same flag name, enabling coverage for one project accidentally enables it for others, causing unwanted instrumentation and cross-contamination.
+
+**Solution:**
+Use project-specific coverage flags that match the project's logical target name:
+- `-DROCPRIM_ENABLE_COVERAGE=ON`
+- `-DROCFFT_ENABLE_COVERAGE=ON` (matches casing of rocFFT target)
+- `-DHIPBLASLT_ENABLE_COVERAGE=ON`
+- `-DHIPDNN_ENABLE_COVERAGE=ON` (uppercase conversion of hipDNN)
+
+**Passthrough Options:**
+
+TheRock provides several mechanisms to pass coverage flags from super-build to subprojects:
+
+**Option 1: Direct project-specific flags (implemented)**
 ```cmake
-# In TheRock super-build
 cmake -B build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
-  -DROCFFT_ENABLE_COVERAGE=ON
+  -DROCFFT_ENABLE_COVERAGE=ON \
+  -DHIPBLASLT_ENABLE_COVERAGE=ON
 ```
+
+Implementation in `cmake/therock_subproject.cmake`:
+```cmake
+# Passthrough -D<PROJECT_NAME>_ENABLE_COVERAGE=ON to the subproject
+# Convert logical target name to uppercase (e.g., hipDNN -> HIPDNN_ENABLE_COVERAGE)
+string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+
+if(DEFINED ${_coverage_var_name})
+  list(APPEND _cmake_args "-D${_coverage_var_name}=${${_coverage_var_name}}")
+endif()
+```
+
+**Option 2: Existing {project}_CMAKE_ARGS mechanism**
+```cmake
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
+  -DhipDNN_CMAKE_ARGS="-DHIPDNN_ENABLE_COVERAGE=ON"
+```
+
+**Option 3: Dedicated coverage project list**
+```cmake
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
+  -DTHEROCK_COVERAGE_PROJECTS="rocFFT;hipBLASLt;rocPRIM"
+```
+
+Would require additional logic to convert project list to individual `<PROJECT>_ENABLE_COVERAGE` flags.
+
+**Option 4: Comma-separated list (alternative syntax)**
+```cmake
+cmake -B build -GNinja \
+  -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
+  -DENABLE_COVERAGE="rocFFT,hipBLASLt,rocPRIM"
+```
+
+Also supports special values `none` or `all`.
+
+**CI Workflow Integration Consideration:**
+
+CI workflows detect changed projects and need a simple way to pass project names to TheRock. The project names may be in various cases (hiprand, rocFFT, hipBLASLt) depending on the source. TheRock should accept project names case-insensitively and handle the conversion internally.
+
+**Recommended approach: Option 3 or 4 (list-based)**
+
+Options 3 and 4 are better suited for CI integration because:
+- Accept project names as values, not as formatted arguments
+- No formatting burden on the caller - TheRock handles case conversion
+- Single flag instead of multiple project-specific flags
+- Easier to programmatically construct from CI-detected changes
+
+Example implementation in TheRock CMake:
+```cmake
+# Option 3: -DTHEROCK_COVERAGE_PROJECTS="rocfft;hiprand;hipblaslt"
+if(DEFINED THEROCK_COVERAGE_PROJECTS)
+  foreach(_proj IN LISTS THEROCK_COVERAGE_PROJECTS)
+    string(TOUPPER "${_proj}" _proj_upper)
+    set(${_proj_upper}_ENABLE_COVERAGE ON)
+  endforeach()
+endif()
+```
+
+This approach:
+- Accepts any case: "hiprand", "hipRAND", "HIPRAND" all work
+- Converts to correct uppercase flag: `HIPRAND_ENABLE_COVERAGE=ON`
+- Simplifies caller code - just pass the project name
+
+**Option 1 still useful for manual builds:**
+Direct project flags remain valuable for developers doing local coverage builds on specific projects without needing to construct lists.
 
 #### Required Compiler Flags (for device-side coverage)
 Recent amd-llvm changes enable device-side coverage, requiring:
@@ -466,4 +543,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
-- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios
+- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling
