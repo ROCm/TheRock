@@ -432,6 +432,24 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 - Can be disabled at component owner's discretion
 - Same policy as regular pre-checkin test handling
 
+### Critical Dependency: amd-llvm
+
+**Problem:**
+Code coverage infrastructure is critically dependent on amd-llvm's code coverage support. Changes to amd-llvm's profiling implementation can break the entire coverage pipeline across all ROCm components.
+
+**Historical incident:**
+A change in ROCm 7.14 broke the code coverage process, preventing coverage report generation for all projects. This failure was not caught before merge, blocking coverage reporting until the issue was diagnosed and fixed.
+
+**Required safeguard:**
+amd-llvm changes must be gatekept with code coverage smoke tests before merge:
+- Smoke test builds a sample instrumented project with coverage flags enabled
+- Runs minimal test suite to generate profraw files
+- Verifies profraw merging with `llvm-profdata merge`
+- Verifies coverage report generation with `llvm-cov export`
+- Test must pass before amd-llvm changes are merged
+
+Without this safeguard, amd-llvm regressions can break coverage reporting for weeks across the entire ROCm ecosystem.
+
 ### Specialized Coverage Scenarios
 
 Coverage testing requires different strategies for three distinct types of code paths that cannot be covered by default single-architecture testing:
