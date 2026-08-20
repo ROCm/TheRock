@@ -267,6 +267,34 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
+  # Wheel tests are dispatched asynchronously (like native install tests) so
+  # publish is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
+  trigger_test_wheels_per_family:
+    needs: [build_python_packages]
+    name: Trigger Test Wheels (${{ matrix.amdgpu_family }}, py${{ matrix.python_version }})
+    if: ${{ toJSON(fromJSON(inputs.build_config).test_python_packages_matrix) != '[]' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
+    steps:
+      - name: Trigger test_rocm_wheels
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: test_rocm_wheels.yml
+          inputs: |
+            { "amdgpu_family": "${{ matrix.amdgpu_family }}",
+              "test_runs_on": "${{ matrix.test_runs_on }}",
+              "package_find_links_url": "${{ needs.build_python_packages.outputs.kpack_split == 'true' && needs.build_python_packages.outputs.package_find_links_url || format('{0}/{1}/index.html', needs.build_python_packages.outputs.package_find_links_url, matrix.amdgpu_family) }}",
+              "python_version": "${{ matrix.python_version }}",
+              "rocm_version": "${{ inputs.rocm_package_version }}",
+              "container_image_name": "${{ matrix.container_image_name }}",
+              "container_image_url": "${{ matrix.container_image_url }}",
+              "kpack_split": "${{ needs.build_python_packages.outputs.kpack_split }}"
+            }
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
   #   bucket if the job order is not altered.
@@ -320,7 +348,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_test_wheels_per_family, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
