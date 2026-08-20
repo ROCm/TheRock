@@ -376,14 +376,11 @@ def _run_kpack_split(
             # Header-only libraries not included in runtime packages.
             "prim",
             "rocwmma",
-            "libhipcxx",
             # Third party dependencies needed by hipDNN consumers.
             "flatbuffers",
             "nlohmann-json",
             # rocshmem only provides a static library.
             "rocshmem",
-            # hipthreads only provides a static library.
-            "hipthreads",
             # rocjitsu emulation suite.
             "rocjitsu",
             "mirage",

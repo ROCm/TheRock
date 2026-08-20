@@ -1524,17 +1524,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "libhipcxx",
-        "Artifact_Subdir": [
-          {
-            "Name": "libhipcxx",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
       }
     ],
     "Disable_DWZ": "True",
@@ -1581,18 +1570,6 @@
           {
             "Name": "rocThrust",
             "Components": [
-              "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "libhipcxx",
-        "Artifact_Subdir": [
-          {
-            "Name": "libhipcxx",
-            "Components": [
-              "lib",
               "dev"
             ]
           }
@@ -3422,6 +3399,7 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
+    "Disablepackaging": "True",
     "DEBDepends": [
       "amdrocm-runtime",
       "amdrocm-sysdeps"
@@ -3460,6 +3438,7 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
+    "Disablepackaging": "True",
     "DEBDepends": [
       "amdrocm-threads"
     ],
@@ -3677,8 +3656,7 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel",
-      "amdrocm-threads"
+      "amdrocm-jpeg-devel"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -3697,8 +3675,7 @@
       "amdrocm-dnn-devel",
       "amdrocm-hipfile-devel",
       "amdrocm-decode-devel",
-      "amdrocm-jpeg-devel",
-      "amdrocm-threads"
+      "amdrocm-jpeg-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",

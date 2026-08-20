@@ -111,6 +111,7 @@ submodules = ["rocm-libraries"]
 [source_sets.math-libs]
 description = "Additional math library submodules"
 submodules = ["libhipcxx"]
+disable_platforms = ["linux", "windows"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
@@ -639,6 +640,7 @@ artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+disable_platforms = ["linux", "windows"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
@@ -646,6 +648,7 @@ artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+disable_platforms = ["linux", "windows"]
 
 [artifacts.support]
 artifact_group = "math-libs"
