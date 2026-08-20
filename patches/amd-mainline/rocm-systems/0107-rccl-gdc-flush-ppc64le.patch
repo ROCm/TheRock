@@ -1,54 +1,36 @@
-From b47c476ca863e33ddf73cc0e342d22422ee6b519 Mon Sep 17 00:00:00 2001
+From 2d2b780a335cce339b14d84490b7acd9de6cb985 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Wed, 19 Aug 2026 15:51:00 +0000
-Subject: [PATCH] rccl: use memcpy instead of ncclGdrCudaRead in portable GDC
- flush path
+Date: Thu, 20 Aug 2026 17:55:08 +0000
+Subject: [PATCH] rccl: add ncclGdrCudaRead to the HIP/AMD GDR wrapper
 
-ncclGdrCudaRead is not available when __HIP_PLATFORM_AMD__ is defined.
-Use memcpy instead in the portable (non-x86) fallback path.
+The NCCL v2.30.7 sync introduced a portable (non-x86) GDC flush path
+that calls ncclGdrCudaRead, but this function was never implemented in
+the __HIP_PLATFORM_AMD__ branch of gdrwrap.h. This causes a build
+failure on any non-x86 AMD/HIP platform.
+
+Add the missing function, consistent with ncclGdrCudaCopy which also
+uses a plain memcpy since the AMD path allocates CPU-accessible
+fine-grained device memory rather than using gdrcopy.
 ---
- projects/rccl/src/transport/coll_net.cc | 6 +++---
- projects/rccl/src/transport/net.cc      | 6 +++---
- 2 files changed, 6 insertions(+), 6 deletions(-)
+ projects/rccl/src/include/gdrwrap.h | 5 +++++
+ 1 file changed, 5 insertions(+)
 
-diff --git a/projects/rccl/src/transport/coll_net.cc b/projects/rccl/src/transport/coll_net.cc
-index 273b86c8bca..bf3f0b0acb6 100644
---- a/projects/rccl/src/transport/coll_net.cc
-+++ b/projects/rccl/src/transport/coll_net.cc
-@@ -1277,11 +1277,11 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct
-               // Force a PCI-E read from GPU memory
-               asm volatile("mov (%0), %%eax" ::"l"(resources->gdcFlush) : "%eax", "memory");
- #else
--              // Portable equivalent. seq_cst fence keeps the load inside
--              // ncclGdrCudaRead from being reordered ahead of the CQE poll.
-+              // Portable equivalent. seq_cst fence keeps the memcpy read
-+              // from being reordered ahead of the CQE poll.
-               std::atomic_thread_fence(std::memory_order_seq_cst);
-               uint64_t dummy;
--              NCCLCHECK(ncclGdrCudaRead(resources->gdrDesc, &dummy, resources->gdcFlush, sizeof(dummy)));
-+              memcpy(&dummy, resources->gdcFlush, sizeof(dummy));
- #endif
-             } else {
-               NCCLCHECK(collNetRecvFlush(proxyState, resources, args, sub, groupStart, totalSize, recvBeg,
-diff --git a/projects/rccl/src/transport/net.cc b/projects/rccl/src/transport/net.cc
-index 0a58bdc7404..c382dcdd344 100644
---- a/projects/rccl/src/transport/net.cc
-+++ b/projects/rccl/src/transport/net.cc
-@@ -2097,11 +2097,11 @@ static ncclResult_t recvProxyProgress(struct ncclProxyState* proxyState, struct
-                 INFO(NCCL_INIT, "%s: issued GDC flush", __func__);
-               }
- #else
--              // Portable equivalent. seq_cst fence keeps the load inside
--              // ncclGdrCudaRead from being reordered ahead of the CQE poll.
-+              // Portable equivalent. seq_cst fence keeps the memcpy read
-+              // from being reordered ahead of the CQE poll.
-               std::atomic_thread_fence(std::memory_order_seq_cst);
-               uint64_t dummy;
--              NCCLCHECK(ncclGdrCudaRead(resources->gdrDesc, &dummy, resources->gdcFlush, sizeof(dummy)));
-+              memcpy(&dummy, resources->gdcFlush, sizeof(dummy));
- #endif
-             } else {
-               int subCount = 0;
+diff --git a/projects/rccl/src/include/gdrwrap.h b/projects/rccl/src/include/gdrwrap.h
+index 2db5241434a..a40bf82a533 100644
+--- a/projects/rccl/src/include/gdrwrap.h
++++ b/projects/rccl/src/include/gdrwrap.h
+@@ -249,6 +249,11 @@ static ncclResult_t ncclGdrCudaCopy(void *gdrHandle, T* dst, T* src, size_t nele
+   return ncclSuccess;
+ }
+ 
++static ncclResult_t ncclGdrCudaRead(void* gdrHandle, void* dst, const void* src, size_t size) {
++  memcpy(dst, src, size);
++  return ncclSuccess;
++}
++
+ static ncclResult_t ncclGdrCudaFree(void* gdrHandle, struct ncclMemManager* manager) {
+   gdr_mem_desc_t *md = (gdr_mem_desc_t*)gdrHandle;
+   NCCLCHECK(ncclCudaFree(md->gdrDevMem, manager));
 -- 
 2.52.0
 
