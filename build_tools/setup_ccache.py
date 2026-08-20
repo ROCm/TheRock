@@ -75,6 +75,20 @@ def _log(msg: str):
     print(f"[setup_ccache] {msg}", file=sys.stderr)
 
 
+def _config_value(lines: list[str], key: str) -> str | None:
+    """Returns the value assigned to `key` in generated config `lines`, if any.
+
+    Splits on the first '=' and strips surrounding whitespace, matching how
+    ccache itself parses the file, so a readback cannot disagree with the
+    setting ccache will actually load.
+    """
+    for line in lines:
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == key:
+            return value.strip()
+    return None
+
+
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines = []
 
@@ -139,6 +153,17 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   use the appropriate compilation flags that ccache understands. See
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
+
+    # Summarize the effective cache mode on one line, read back out of the
+    # generated config rather than inferred from the selected preset. Readers
+    # and CI log scrapers can then confirm what was actually written.
+    remote_storage = _config_value(lines, "remote_storage")
+    cache_dir = _config_value(lines, "cache_dir")
+    _log(
+        f"Cache mode: release_type={args.release_type or '(unset)'} "
+        f"preset={config_preset} remote={remote_storage or 'disabled'} "
+        f"local={cache_dir or 'disabled'}"
+    )
 
     # End with blank line.
     lines.append("")
@@ -255,8 +280,9 @@ def main(argv: list[str]):
     preset_group.add_argument(
         "--release-type",
         type=str,
-        choices=["ci", "dev", "nightly", "prerelease"],
-        help='Shorthand for --config-preset: "ci" and "dev" map to github-oss-dev, '
+        choices=["ci", "dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
+        help='Shorthand for --config-preset: "ci", "dev", and "dev-bkc" map '
+        'to github-oss-dev; "nightly-bkc" and "prerelease" map to local; '
         "others map to github-oss-release.",
     )
 
@@ -264,6 +290,8 @@ def main(argv: list[str]):
     if args.release_type is not None:
         if args.release_type in ("ci", "dev"):
             args.config_preset = "github-oss-dev"
+        elif args.release_type in ("nightly-bkc", "prerelease"):
+            args.config_preset = "local"
         else:
             args.config_preset = "github-oss-release"
     run(args)
