@@ -878,6 +878,8 @@ class RunTestsTestTypeTest(unittest.TestCase):
             gpg_key_url=None,
             packages_dir=None,
             pkg_type=None,
+            rocm_version=None,
+            build_variant="",
         )
 
     @patch.object(
@@ -1554,6 +1556,75 @@ class RunStreamingTest(unittest.TestCase):
         with self.assertRaises(sp.TimeoutExpired):
             native_linux_package_install_test._run_streaming(["slow-cmd"], 30)
         mock_proc.kill.assert_called_once()
+
+
+class BuildVariantPackageNamesTest(unittest.TestCase):
+    """Verify that build_variant='asan' inserts '-asan' before version in package names."""
+
+    def test_asan_with_gfx_arch_and_rocm_version(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
+        )
+
+    def test_asan_with_rocm_version_only(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="rhel10",
+            rocm_version="7.15.0",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
+        )
+
+    def test_asan_without_version_or_arch(self):
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            build_variant="asan",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm-asan", "amdrocm-core-sdk-asan"],
+        )
+
+    def test_no_build_variant_unchanged(self):
+        # Verify default (no build_variant) is unaffected.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+        )
+
+    def test_release_build_variant_does_not_alter_package_names(self):
+        # 'release' is the default build type label passed from CI build_variant_label.
+        # It must NOT insert '-release' into package names — there is no
+        # amdrocm-release7.15 package.
+        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+            repo_url="https://example.com",
+            os_profile="ubuntu2404",
+            gfx_arch="gfx942",
+            rocm_version="7.15.0",
+            build_variant="release",
+        )
+        self.assertEqual(
+            t.package_names,
+            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+        )
 
 
 if __name__ == "__main__":

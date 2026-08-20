@@ -8,21 +8,30 @@
 create RPM and DEB packages and upload to artifactory server
 
 ```
-# With explicit target specification:
+# Standard release build (auto-detection of targets from artifact directory):
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
-        --target gfx94X-dcgpu \
         --dest-dir ./OUTPUT_PKGDIR \
-        --rocm-version 7.1.0 \
+        --rocm-version 7.15.0 \
         --pkg-type deb (or rpm) \
-        --version-suffix build_type (daily/master/nightly/release)
+        --version-suffix 28484694006
 
-# With auto-detection of targets from artifact directory:
+# ASAN build — package name gets -asan suffix, install prefix gets -asan-MAJOR.MINOR:
+#   Package:        amdrocm-core-asan7.15
+#   Install prefix: /opt/rocm/core-asan-7.15
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
         --dest-dir ./OUTPUT_PKGDIR \
-        --rocm-version 7.1.0 \
+        --rocm-version 7.15.0 \
         --pkg-type deb (or rpm) \
-        --version-suffix build_type (daily/master/nightly/release)
+        --version-suffix 28484694006 \
+        --build-variant asan
 ```
+
+--version-suffix: CI run ID appended to the DEB/RPM version field
+  (e.g. '7.15.0-28484694006' for DEB, release='28484694006' for RPM).
+  Does not affect the package name or install prefix.
+
+--build-variant: Build type that modifies both the package name and
+  install prefix. Currently supports 'asan'.
 """
 
 import argparse
@@ -575,10 +584,15 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
-    # Append version to default install prefix
+    # Append version (and build variant for ASAN) to default install prefix.
+    # Release:  /opt/rocm/core-7.15
+    # ASAN:     /opt/rocm/core-asan-7.15
     prefix = args.install_prefix
     if prefix == DEFAULT_INSTALL_PREFIX:
-        prefix = f"{prefix}-{modified_rocm_version}"
+        if args.build_variant == "asan":
+            prefix = f"{prefix}-{args.build_variant}-{modified_rocm_version}"
+        else:
+            prefix = f"{prefix}-{modified_rocm_version}"
 
     # Validate package type
     pkg_type = (args.pkg_type or "").lower()
@@ -598,6 +612,7 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         gfx_arch=default_gfx_arch,
         enable_kpack=args.enable_kpack,
         gfxarch_list=tuple(gfxarch_list),
+        build_variant=args.build_variant,
     )
 
 
@@ -722,13 +737,29 @@ def main(argv: list[str]):
         "--version-suffix",
         type=str,
         nargs="?",
-        help="Version suffix to append to package names",
+        help=(
+            "Release identifier appended to the package version field in DEB/RPM "
+            "metadata (e.g. a CI run ID like '28484694006'). "
+            "For DEB this becomes the debian revision (e.g. '7.15.0-28484694006'); "
+            "for RPM this sets the release field. "
+            "Does not affect the package name or install prefix."
+        ),
     )
 
     p.add_argument(
         "--install-prefix",
         default=f"{DEFAULT_INSTALL_PREFIX}",
         help="Base directory where package will be installed",
+    )
+
+    p.add_argument(
+        "--build-variant",
+        default="",
+        help=(
+            "Build variant (e.g. 'asan'). When set to 'asan', the install prefix "
+            "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
+            "(e.g. /opt/rocm/core-asan-7.15)."
+        ),
     )
 
     p.add_argument(
