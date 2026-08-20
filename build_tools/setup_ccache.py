@@ -75,6 +75,20 @@ def _log(msg: str):
     print(f"[setup_ccache] {msg}", file=sys.stderr)
 
 
+def _config_value(lines: list[str], key: str) -> str | None:
+    """Returns the value assigned to `key` in generated config `lines`, if any.
+
+    Splits on the first '=' and strips surrounding whitespace, matching how
+    ccache itself parses the file, so a readback cannot disagree with the
+    setting ccache will actually load.
+    """
+    for line in lines:
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == key:
+            return value.strip()
+    return None
+
+
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines = []
 
@@ -88,7 +102,6 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         # compiler_check fingerprint being complete across runners. The local
         # cache is kept for performance and runner stability (notably Windows).
         if k == "remote_storage" and args.no_remote_cache:
-            _log("Remote cache disabled (--no-remote-cache): using local cache only")
             continue
         lines.append(f"{k} = {v}")
 
@@ -146,6 +159,27 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     #   use the appropriate compilation flags that ccache understands. See
     #   https://ccache.dev/manual/4.7.html#_precompiled_headers for details.
     lines.append(f"sloppiness = include_file_ctime,pch_defines,time_macros")
+
+    # Summarize the effective cache mode on one line, read back out of the
+    # generated config rather than from the flags. Readers (and CI log
+    # scrapers) can then confirm what was actually written instead of
+    # inferring "remote is off" from the absence of a line. This is the check
+    # that catches a workflow conditional silently failing to pass
+    # --no-remote-cache for a release build.
+    remote_storage = _config_value(lines, "remote_storage")
+    cache_dir = _config_value(lines, "cache_dir")
+    if args.no_remote_cache and remote_storage is not None:
+        raise ValueError(
+            "--no-remote-cache was requested but the generated config still sets "
+            f"'remote_storage = {remote_storage}'"
+        )
+    remote_desc = remote_storage or (
+        "disabled (--no-remote-cache)" if args.no_remote_cache else "disabled"
+    )
+    _log(
+        f"Cache mode: release_type={args.release_type or '(unset)'} "
+        f"preset={config_preset} remote={remote_desc} local={cache_dir or 'disabled'}"
+    )
 
     # End with blank line.
     lines.append("")
@@ -276,6 +310,11 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
+    # --remote writes remote_storage from --remote-storage, bypassing the preset,
+    # so the combination would otherwise leave a remote-only cache configured
+    # while appearing to honor --no-remote-cache.
+    if args.no_remote_cache and args.remote:
+        p.error("--no-remote-cache cannot be combined with --remote")
     if args.release_type is not None:
         if args.release_type in ("ci", "dev"):
             args.config_preset = "github-oss-dev"

@@ -105,6 +105,23 @@ Expect zero remote hits in the prerelease "Report" step; local hits are
 expected and fine. Nightly, `dev`, and `ci` builds are unaffected and continue
 to use the shared remote cache.
 
+To confirm which cache a run actually used, look for the `Cache mode` line in
+the "Setup ccache" step. It is read back out of the generated `ccache.conf`,
+so it reports what was written rather than what was requested:
+
+```text
+[setup_ccache] Cache mode: release_type=prerelease preset=github-oss-release remote=disabled (--no-remote-cache) local=/.../ccache
+[setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=/.../ccache
+```
+
+A prerelease run reporting anything other than `remote=disabled` means the
+workflow did not pass `--no-remote-cache`, and the build read from the shared
+cache. You can reproduce either line locally:
+
+```bash
+./build_tools/setup_ccache.py --release-type prerelease --no-remote-cache --init
+```
+
 ## Downloading and inspecting CI logs
 
 ### Finding a workflow run
