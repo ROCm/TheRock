@@ -174,9 +174,14 @@ Recent amd-llvm changes enable device-side coverage, requiring:
 #### Separate Coverage Pipeline
 Code coverage requires its own build/test pipeline separate from pre-checkin:
 - **Reason**: Custom instrumented build with different compiler flags
-- **Architecture**: Single architecture (typically gfx942)
-  - Minimal variation between architectures
-  - Negligible gain from multi-arch coverage
+- **Architecture strategy**: Phased approach to multi-architecture coverage
+  - **Phase 1 (initial)**: Single default architecture (gfx942 or gfx950) for all coverage runs - achieves parity with Math CI
+  - **Phase 2+**: Multi-architecture coverage for architecture-specific code
+    - Always test on default/base architecture (covers common code paths)
+    - Detect architecture-specific code changes in PRs
+    - Run coverage on additional architectures only when architecture-specific code changes
+    - Aggregate reports across architectures via tagging (codecov.io) or profraw merging
+    - Optional optimization: Replace default architecture with changed architecture when architecture-specific code changes (since changed arch covers common code too)
 
 #### Build Phase
 1. Determine coverage-enabled projects from PR changes via `therock_configure_coverage.py`:
@@ -280,9 +285,13 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 
 ### Resource Allocation
 
-**Architecture scope:**
-- Coverage runs on single architecture only (typically gfx942)
-- Multi-architecture testing provides negligible gain in coverage reporting
+**Architecture scope (phased approach):**
+- **Phase 1**: Single default architecture (gfx942/gfx950) - common code paths only
+- **Phase 2+**: Multi-architecture coverage
+  - Default architecture always tested
+  - Additional architectures tested when architecture-specific code changes detected
+  - Requires architecture-specific change detection capability (team buy-in and potential refactoring)
+  - Nightly jobs test various architectures based on hash-range changes
 - No downstream testing - only the changed project itself
 
 **Node allocation:**
@@ -312,6 +321,62 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 - Can be disabled at component owner's discretion
 - Same policy as regular pre-checkin test handling
 
+### Multi-Architecture Coverage Strategy
+
+**Problem:**
+Architecture-specific code paths (e.g., gfx90a vs gfx942 optimizations) require architecture-specific coverage testing. Testing all architectures for all components on every PR creates unsustainable resource overhead, especially given coverage test runtime (e.g., rocPRIM: 20min → 3hr with instrumentation).
+
+**Solution - Phased Rollout:**
+
+**Phase 1: Default Architecture Only (Math CI parity)**
+- Test all components on single default architecture (gfx942 or gfx950 - most abundant nodes)
+- Covers all common code paths shared across architectures
+- Establishes baseline coverage infrastructure
+
+**Phase 2: Architecture-Specific Change Detection**
+- Implement detection of architecture-specific code changes in PRs
+- Requires team buy-in and potentially refactoring to identify arch-specific code paths
+- Foundation for conditional multi-arch testing
+
+**Phase 3: Nightly Multi-Architecture Coverage**
+- Run coverage on various architectures using hash-range changes (between nightly runs)
+- Builds baseline coverage reports for all architectures
+- Populates coverage history for architecture-specific code
+
+**Phase 4: PR-Triggered Multi-Architecture Coverage**
+- Always test on default architecture (covers common code)
+- When architecture-specific code changes detected:
+  - Trigger coverage jobs for affected architectures
+  - Aggregate reports with default architecture report
+
+**Phase 5: Optimization - Replace Default When Appropriate**
+- When PR modifies only architecture-specific code for a single architecture:
+  - Run coverage on that architecture only (it covers common code too)
+  - Skip default architecture to avoid redundancy
+
+**Report Aggregation Options:**
+
+1. **Preferred: Tag-based aggregation (codecov.io)**
+   - Upload each architecture's report with architecture tag
+   - Coverage service handles aggregation automatically
+   - Requires verification that chosen platform supports this
+
+2. **Alternative: Profraw merging**
+   - Accumulate profraw files from all tested architectures
+   - Merge on aggregate node before uploading
+   - More complex, less flexible if changing platforms
+
+**Baseline Coverage Initialization:**
+The aggregate report includes:
+- Current PR's default architecture coverage
+- Current PR's architecture-specific coverage (if arch-specific changes detected)
+- Historical coverage for untested architectures (from nightly runs or previous PRs)
+
+**Open question:** How to handle missing baseline reports? Options:
+- Self-healing: Kick off all-architecture coverage run when baseline missing (expensive, susceptible to transient failures)
+- Manual initialization: Run comprehensive all-architecture coverage once at Phase 3 start
+- Graceful degradation: Report only tested architectures until baseline available
+
 ### Nightly Runs
 
 **Recommendation:** Achieve parity with Math CI:
@@ -319,19 +384,24 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 - Rely on codecov.io (or chosen platform) for aggregation
 - Avoids resource stress from full-ROCm coverage builds
 
-**Open question:** Can we consolidate to fewer nightly runs without resource issues?
+**Multi-architecture nightly strategy (Phase 3+):**
+- Test different architectures on different nights (round-robin) OR
+- Test all architectures weekly/monthly to refresh baselines
 
 ## Open Questions
 
-1. **Codecov.io vs. alternatives**: Should we standardize on codecov.io or evaluate other platforms?
+1. **Codecov.io vs. alternatives**: Should we standardize on codecov.io or evaluate other platforms? Must support tag-based architecture aggregation for Phase 4+.
 2. **Nightly run frequency**: Per-component nightly or consolidated runs?
 3. **Coverage thresholds**: Should we enforce 80% coverage gates at the TheRock level or per-component?
-4. **Multi-arch coverage**: Is there any benefit to running coverage on multiple GPU architectures?
-5. **Test naming standardization**: Should we enforce `test_*` naming convention across all projects?
-6. **Artifact retention**: How long should coverage artifacts be retained?
-7. **Report aggregation**: Should TheRock provide a unified coverage dashboard across all components?
+4. **Test naming standardization**: Should we enforce `test_*` naming convention across all projects?
+5. **Artifact retention**: How long should coverage artifacts be retained?
+6. **Report aggregation**: Should TheRock provide a unified coverage dashboard across all components?
+7. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
+8. **Baseline initialization**: Self-healing all-arch coverage vs manual initialization vs graceful degradation?
+9. **Multi-arch nightly cadence**: Round-robin architectures or weekly/monthly full sweeps?
 
 ## Revision History
 
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
+- 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy to address architecture-specific code coverage needs
