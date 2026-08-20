@@ -334,6 +334,28 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
 
 
 class ComponentScannerTest(TmpDirTestCase):
+    def testRocjitsuRunArtifactIncludesPretranslationTools(self):
+        """Staged consumers receive both RocJitsu pretranslation entry points."""
+        stage_dir = self.temp_dir / "src" / "emulation" / "rocjitsu" / "stage"
+        self.touch(stage_dir / "lib" / "librocjitsu.so")
+        self.touch(stage_dir / "bin" / "rj_pretranslate")
+        self.touch(stage_dir / "bin" / "rocjitsu-pretranslate.py")
+        self.touch(stage_dir / "share" / "rocjitsu" / "configs" / "default.json")
+
+        therock_dir = Path(__file__).resolve().parent.parent.parent
+        descriptor = builder.ArtifactDescriptor.load_toml_file(
+            therock_dir / "emulation" / "artifact-rocjitsu.toml",
+            artifact_name="rocjitsu",
+        )
+        scanner = builder.ComponentScanner(self.temp_dir / "src", descriptor)
+
+        run_files = set()
+        for pattern_matcher in scanner.components["run"].basedir_contents.values():
+            run_files.update(relpath for relpath, _ in pattern_matcher.matches())
+
+        self.assertIn("bin/rj_pretranslate", run_files)
+        self.assertIn("bin/rocjitsu-pretranslate.py", run_files)
+
     def testNoRootDirNoop(self):
         self.write_indented(
             "descriptor.toml",
