@@ -302,7 +302,9 @@
     ]
   },
   "rocjitsu-hotswap": {
-    "consumers": []
+    "consumers": [
+      "rccl-translate"
+    ]
   },
   "rocjpeg": {
     "consumers": [
