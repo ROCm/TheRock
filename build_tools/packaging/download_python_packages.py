@@ -23,7 +23,8 @@ defined by RFC0012 instead of the flat prerelease bucket: core, PyTorch, and JAX
 wheels each live in their own bucket (therock-repo-amd-<stream>-<product>) under
 v5/rocm/<product>/<index>/<package>/. This is "product-local" in the sense that
 each product's packages are discovered independently, per-product, rather than
-scanned out of one shared bucket/prefix.
+scanned out of one shared bucket/prefix. The structured layout is only used from
+ROCm 10 onward; earlier releases only exist in the flat prerelease bucket.
 
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
@@ -145,9 +146,11 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.python_package_paths import (
+    ACCEPTED_FILE_EXTENSIONS,
     CORE_TARBALL_PREFIXES,
     DEFAULT_INDEX,
     INDEX_NAMES,
+    REPO_BUCKET_PRODUCT_NAMES,
     REPO_STREAMS,
     core_tarball_dir_name,
     core_tarball_prefix,
@@ -235,7 +238,7 @@ DEPENDENCY_PACKAGES = {
     "setuptools",
 }
 
-STRUCTURED_PRODUCTS = ("core", "pytorch", "jax")
+STRUCTURED_PRODUCTS = tuple(REPO_BUCKET_PRODUCT_NAMES.keys())
 # Thin aliases so existing choices=STRUCTURED_INDEXES call sites don't need to
 # change now that the underlying names live in _therock_utils.
 STRUCTURED_INDEXES = INDEX_NAMES
@@ -244,7 +247,6 @@ STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
 # repo.amd.com layout; see structured_key() in python_package_paths.py for
 # the analogous per-file key computation used on the upload side.
 STRUCTURED_S3_ROOT_PREFIX = "v5/rocm"
-STRUCTURED_PACKAGE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
 
 @dataclasses.dataclass
@@ -288,7 +290,7 @@ def is_structured_package_key(root: str, key: str) -> bool:
 
 def is_python_artifact(filename: str) -> bool:
     # Also matches ROCm Core tarball filenames (.tar.gz), not just wheels/sdists.
-    return filename.endswith(STRUCTURED_PACKAGE_EXTENSIONS)
+    return filename.endswith(ACCEPTED_FILE_EXTENSIONS)
 
 
 def filter_package_entries(
@@ -468,17 +470,13 @@ def list_architectures(
 
 
 def _version_matches(filename: str, version: str) -> bool:
-    """Check whether `filename` contains an exact match of `version`.
-
-    A plain `version in filename` substring check is unsound for dotted
-    version strings: "7.13.0rc1" is a substring of "7.13.0rc10", and "3.0.0"
-    is a substring of "13.0.0". This only matches when `version` (or, for
-    torch-style local versions, `rocm{version}`) is not directly abutted by
-    another alphanumeric character on either side, so it can't partially
-    match a longer/different version.
+    """Check whether `filename` contains an exact match of `version`, not
+    merely a substring match (so "7.13.0rc1" doesn't match "7.13.0rc10").
     """
     for candidate in (version, f"rocm{version}"):
-        pattern = r"(?<![A-Za-z0-9])" + re.escape(candidate) + r"(?![A-Za-z0-9])"
+        pattern = (
+            r"(?<![A-Za-z0-9])" + re.escape(candidate) + r"(?=-|\.tar\.gz|\.zip|$)"
+        )
         if re.search(pattern, filename):
             return True
     return False
@@ -548,7 +546,12 @@ def _scan_bucket_prefix(
     architectures=None,
     extra_filter=None,
 ) -> list[PackageEntry]:
-    """Paginate a bucket/prefix, filter by version+arch, return PackageEntry list.
+    """List every object under `bucket`/`prefix`, keep the ones that match
+    `version` (and `architectures`, if given), and return them as PackageEntry.
+
+    This is the shared core of both list_packages_multi_arch() and
+    list_packages_structured(): it pages through the S3 listing once, and for
+    each object applies (in order) `extra_filter`, then version/arch matching.
 
     Args:
         s3_client: boto3 S3 client
@@ -556,8 +559,11 @@ def _scan_bucket_prefix(
         prefix: S3 prefix to paginate
         version: Version pattern to filter packages
         architectures: Optional list of architectures used for filtering
-        extra_filter: Optional callable(key, filename) -> bool applied before
-            version/arch filtering (e.g. structured layout key validation)
+        extra_filter: Optional callable(key, filename) -> bool, checked before
+            version/arch matching. list_packages_structured() uses this to
+            reject keys that aren't a direct child of the product's package
+            directory (see is_structured_package_key()); pass None to accept
+            every key (the plain multi-arch case).
 
     Returns:
         List of PackageEntry for matching objects.
@@ -646,7 +652,9 @@ def list_packages_structured(
                 root,
                 version,
                 architectures,
-                extra_filter=lambda key, filename: is_python_artifact(filename)
+                extra_filter=lambda key, filename, root=root: is_python_artifact(
+                    filename
+                )
                 and is_structured_package_key(root, key),
             )
         )
@@ -1288,8 +1296,8 @@ Examples:
         choices=REPO_STREAMS,
         help=(
             "repo.amd.com release stream to read from with --structured: "
-            "dev (continuous), nightly, or rc (release-candidate). Selects the "
-            "therock-repo-amd-<stream>-<product> source buckets (default: rc)"
+            "dev, nightly, or rc. Selects the therock-repo-amd-<stream>-<product> "
+            "source buckets (default: rc)"
         ),
     )
 
@@ -1583,16 +1591,23 @@ def download_prerelease_packages(
     print("=" * 80)
     print("Download Prerelease Packages")
     print("=" * 80)
-    print(f"Bucket: {bucket_name}")
     print(f"Version: {version}")
     if structured:
-        print(f"Structured products: {products or list(STRUCTURED_PRODUCTS)}")
+        structured_products = products or list(STRUCTURED_PRODUCTS)
         print(f"Repo stream: {repo_stream}")
         print(f"Python index: {python_index}")
+        print("Python buckets:")
+        for product in structured_products:
+            print(
+                f"  {product}: s3://{repo_product_bucket(repo_stream, product)}/"
+                f"v5/rocm/{product}/{python_index}/"
+            )
         if include_tarballs:
             print(
                 f"Tarball variant: {tarball_variant} ({core_tarball_prefix(tarball_variant)})"
             )
+    else:
+        print(f"Bucket: {bucket_name}")
 
     if architectures:
         print(f"Architectures: {architectures} (user-specified)")

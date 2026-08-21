@@ -97,7 +97,7 @@ DIRECTORY STRUCTURE:
       therock-dist-windows-<arch2>-<version>.tar.gz
       ...
 
-  S3 bucket structure for mult-arch:
+  S3 bucket structure for multi-arch:
     v4/rocm/whl/
     package1.whl
     package2.whl
@@ -120,9 +120,11 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.python_package_paths import (
+    ACCEPTED_FILE_EXTENSIONS,
     CORE_TARBALL_PREFIXES,
     DEFAULT_INDEX,
     INDEX_NAMES,
+    REPO_BUCKET_PRODUCT_NAMES,
     REPO_STREAMS,
     core_tarball_dir_name,
     core_tarball_prefix,
@@ -130,6 +132,8 @@ from _therock_utils.python_package_paths import (
     repo_product_bucket,
     structured_key,
 )
+
+STRUCTURED_PRODUCTS = tuple(REPO_BUCKET_PRODUCT_NAMES.keys())
 
 try:
     import boto3
@@ -190,7 +194,9 @@ def upload_python_files(
         # Structured layout also accepts sdists/zips (e.g. ROCm Core tarballs);
         # multi-arch's flat layout is wheels/tarballs only.
         extensions = (
-            ("*.whl", "*.tar.gz", "*.zip") if structured else ("*.whl", "*.tar.gz")
+            tuple(f"*{ext}" for ext in ACCEPTED_FILE_EXTENSIONS)
+            if structured
+            else ("*.whl", "*.tar.gz")
         )
         files_to_upload = [
             path for extension in extensions for path in wheels_dir.glob(extension)
@@ -231,8 +237,8 @@ def upload_python_files(
                 try:
                     product = infer_structured_product(file_path.name)
                 except ValueError as e:
-                    print(f"    [ERROR]: Skipping {file_path.name}: {e}")
-                    continue
+                    print(f"    [ERROR]: {e}")
+                    sys.exit(1)
                 upload_bucket = repo_product_bucket(repo_stream, product)
                 s3_key = structured_key(product, python_index, file_path.name)
             elif multi_arch:
@@ -398,7 +404,7 @@ Safety Features:
         choices=REPO_STREAMS,
         help=(
             "repo.amd.com release stream to publish to with --structured: "
-            "dev (continuous), nightly, or rc (release-candidate). Selects the "
+            "dev, nightly, or rc. Selects the "
             "therock-repo-amd-<stream>-<product> destination buckets (default: rc)"
         ),
     )
@@ -548,9 +554,9 @@ def upload_release_packages(
     if structured:
         print(f"Repo stream: {repo_stream}")
         print("Python buckets:")
-        for product in ("core", "pytorch", "jax"):
+        for product in STRUCTURED_PRODUCTS:
             print(
-                f"  {product}: s3://{repo_product_bucket(repo_stream, product)}/"
+                f"  {product}: {repo_product_bucket(repo_stream, product)}/"
                 f"v5/rocm/{product}/{python_index}/"
             )
     else:

@@ -330,6 +330,54 @@ class StructuredDownloadTest(unittest.TestCase):
             ],
         )
 
+    def test_version_matching_rejects_post_and_dev_suffix_collision(self):
+        # Requesting "7.13.0" must not also match "7.13.0.post1" or
+        # "7.13.0.dev0": the "." separator in these PEP 440 pre/post-release
+        # suffixes is not a word-boundary character in regex, so a naive
+        # right-boundary check would incorrectly treat "7.13.0" as ending
+        # exactly before the ".post1"/".dev0" suffix.
+        objects = {
+            "Contents": [
+                {
+                    "Key": "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0.tar.gz",
+                    "Size": 10,
+                },
+                {
+                    "Key": "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0.post1.tar.gz",
+                    "Size": 20,
+                },
+                {
+                    "Key": "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0.dev0.tar.gz",
+                    "Size": 30,
+                },
+            ]
+        }
+        client = FakeS3Client(
+            {
+                ("therock-repo-amd-rc-core", core_tarball_prefix("release")): objects[
+                    "Contents"
+                ]
+            }
+        )
+
+        tarballs = list_tarball_for_package(
+            client,
+            "therock-repo-amd-rc-core",
+            core_tarball_prefix("release"),
+            None,
+            "7.13.0",
+        )
+
+        self.assertEqual(
+            tarballs,
+            [
+                (
+                    "v5/rocm/core/tarball/therock-dist-linux-multiarch-7.13.0.tar.gz",
+                    10,
+                )
+            ],
+        )
+
     def test_core_tarball_prefixes_reuse_legacy_tarball_listing(self):
         objects = {
             "Contents": [
