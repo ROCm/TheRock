@@ -29,6 +29,7 @@ therock_declare_flag(
     HIPDNN_ENABLE_SDPA=ON
   SUB_PROJECTS
     hipDNN
+    hipkernelprovider
 )
 
 therock_declare_flag(
@@ -75,6 +76,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
+  CMAKE_VARS
+    HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
@@ -103,6 +114,19 @@ therock_declare_flag(
     LLVM_ENABLE_ASSERTIONS=ON
   SUB_PROJECTS
     amd-llvm
+)
+
+therock_declare_flag(
+  NAME WINDOWS_DRIVER_BUILD
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  GLOBAL_PROPAGATE_FLAG
+  CMAKE_VARS
+    COMGR_DLL_NAME=amd_comgr_drivers.dll
+  SUB_PROJECTS
+    amd-comgr
+    hip-clr
+    ocl-clr
 )
 
 ###############################################################################

@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import unittest
+from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -26,6 +27,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._orig_get_all_families = (
             fetch_test_configurations.get_all_families_for_trigger_types
         )
+        # Snapshot the matrix keys so tests can inject temporary jobs and have
+        # them removed in tearDown.
+        self._orig_test_matrix_keys = set(fetch_test_configurations.test_matrix.keys())
 
         os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
         os.environ["TEST_TYPE"] = "full"
@@ -53,6 +57,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.get_all_families_for_trigger_types = (
             self._orig_get_all_families
         )
+        # Remove any temporary jobs injected by a test.
+        for key in list(fetch_test_configurations.test_matrix.keys()):
+            if key not in self._orig_test_matrix_keys:
+                del fetch_test_configurations.test_matrix[key]
 
     def _get_components(self):
         self.assertIn("components", self.gha_output)
@@ -176,6 +184,97 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         names = {job["job_name"] for job in components}
         self.assertNotIn("rocroller", names)
+
+    # -----------------------
+    # include_family / exclude_family matching
+    # -----------------------
+
+    def _inject_job(self, name, **extra):
+        """Register a temporary linux job and target only it via PROJECTS_TO_TEST."""
+        os.environ["PROJECTS_TO_TEST"] = name
+        fetch_test_configurations.test_matrix[name] = {
+            "job_name": name,
+            "platform": ["linux"],
+            "total_shards_dict": {"linux": 1},
+            **extra,
+        }
+
+    def _selected_names(self):
+        fetch_test_configurations.run()
+        return {job["job_name"] for job in self._get_components()}
+
+    def test_family_matches_by_group_string(self):
+        self.assertTrue(
+            fetch_test_configurations._family_matches(
+                ["gfx94X-dcgpu"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_by_gfx_target(self):
+        self.assertTrue(
+            fetch_test_configurations._family_matches(
+                ["gfx942"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_returns_false_when_absent(self):
+        self.assertFalse(
+            fetch_test_configurations._family_matches(
+                ["gfx1100"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_empty_list_is_false(self):
+        self.assertFalse(
+            fetch_test_configurations._family_matches([], "gfx94X-dcgpu", ["gfx942"])
+        )
+
+    def test_include_family_matches_by_gfx_target(self):
+        self._inject_job("inc-match", include_family={"linux": ["gfx942"]})
+        self.assertIn("inc-match", self._selected_names())
+
+    def test_include_family_matches_by_group_string(self):
+        self._inject_job("inc-group", include_family={"linux": ["gfx94X-dcgpu"]})
+        self.assertIn("inc-group", self._selected_names())
+
+    def test_include_family_skips_when_not_listed(self):
+        self._inject_job("inc-miss", include_family={"linux": ["gfx1100"]})
+        self.assertNotIn("inc-miss", self._selected_names())
+
+    def test_include_family_for_other_platform_does_not_gate(self):
+        # An include list scoped to a different platform must not gate this one.
+        self._inject_job("inc-otherplat", include_family={"windows": ["gfx1100"]})
+        self.assertIn("inc-otherplat", self._selected_names())
+
+    def test_no_include_or_exclude_runs(self):
+        self._inject_job("plain")
+        self.assertIn("plain", self._selected_names())
+
+    def test_include_and_exclude_both_match_excludes_wins(self):
+        self._inject_job(
+            "inc-exc",
+            include_family={"linux": ["gfx942"]},
+            exclude_family={"linux": ["gfx942"]},
+        )
+        self.assertNotIn("inc-exc", self._selected_names())
+
+    def test_include_matches_and_exclude_does_not(self):
+        self._inject_job(
+            "inc-noexc",
+            include_family={"linux": ["gfx942"]},
+            exclude_family={"linux": ["gfx1100"]},
+        )
+        self.assertIn("inc-noexc", self._selected_names())
+
+    def test_corefile_included_on_gfx942(self):
+        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        self.assertIn("rocgdb-corefile", self._selected_names())
+
+    def test_corefile_excluded_on_other_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
+        self.assertNotIn("rocgdb-corefile", self._selected_names())
 
     # -----------------------
     # Functional test merging via run_extended_tests
@@ -545,6 +644,117 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         hipblas = next(j for j in components if j["job_name"] == "hipblas")
         self.assertEqual(hipblas["test_runner"], "linux-gfx942-default")
+
+    # -----------------------
+    # TEST_LABEL_GROUPS expansion
+    # -----------------------
+
+    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
+
+    def test_all_rocgdb_label_excludes_unrelated_jobs(self):
+        """test:rocgdb should not include jobs outside the rocgdb group."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("rocblas", names)
+        self.assertNotIn("hipblas", names)
+
+    def test_group_label_and_individual_label_combine(self):
+        """A group label and a plain label together should union their jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocgdb", "test:rocblas"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
+        self.assertIn("rocblas", names)
+
+    def test_unknown_group_label_is_treated_as_literal(self):
+        """A test: label not in TEST_LABEL_GROUPS should fall through as a literal key."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocblas"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocblas", names)
+        self.assertNotIn("rocgdb-cpu", names)
+        self.assertNotIn("rocgdb-gpu", names)
+
+    def test_group_label_and_individual_member_label_do_not_duplicate(self):
+        """Passing test:rocgdb alongside an explicit member label should not produce duplicate jobs."""
+        with patch.dict(
+            os.environ,
+            {
+                "TEST_LABELS": json.dumps(
+                    [
+                        "test:rocgdb",
+                        "test:rocgdb-cpu",
+                        "test:rocgdb-gpu",
+                        "test:rocgdb-corefile",
+                    ]
+                )
+            },
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        job_names = [job["job_name"] for job in components]
+        self.assertEqual(job_names.count("rocgdb-cpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-gpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
+
+    # -----------------------
+    # mesa-fork labels
+    # -----------------------
+
+    def test_rocdecode_label_selects_rocdecode_job(self):
+        """test:rocdecode should select the rocdecode job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocdecode"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertNotIn("rocjpeg", names)
+
+    def test_rocjpeg_label_selects_rocjpeg_job(self):
+        """test:rocjpeg should select the rocjpeg job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocjpeg"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocjpeg", names)
+        self.assertNotIn("rocdecode", names)
+
+    def test_rocdecode_and_rocjpeg_labels_together(self):
+        """test:rocdecode and test:rocjpeg together should select both jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocdecode", "test:rocjpeg"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertIn("rocjpeg", names)
 
 
 if __name__ == "__main__":

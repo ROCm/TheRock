@@ -321,22 +321,22 @@ def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
 def compute_build_version(
     source_dir: Path, version_suffix: str, release_type: str
 ) -> str:
-    """Compute a wheel version, tagging dev builds with the source commit.
+    """Compute a wheel version, tagging dev release types with the source commit.
 
     Reads `<source_dir>/version.txt` as the base version and appends
     `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
-    builds the 8-char source commit is merged into that single local segment,
-    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
-    torchvision) records exactly which source commit produced it. PyTorch's
-    setup.py validates the version as PEP 440, which only allows a commit hash
-    in the local segment (after `+`).
+    and `dev-bkc` builds, the 8-char source commit is merged into that single
+    local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
+    (torch, torchaudio, torchvision) records exactly which source commit
+    produced it. PyTorch's setup.py validates the version as PEP 440, which only
+    allows a commit hash in the local segment (after `+`).
     TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
     upfront, manifest-based version computation lands so the built version
     always matches what the manifest records.
     """
     base_version = (source_dir / "version.txt").read_text().strip()
     build_version = base_version + version_suffix
-    if release_type == "dev":
+    if release_type in ("dev", "dev-bkc"):
         commit = get_source_commit_short(source_dir)
         if commit:
             # version_suffix is a local identifier like `+rocm7.10.0`; merge the
@@ -1591,13 +1591,16 @@ def main(argv: list[str]):
     )
     build_p.add_argument(
         "--release-type",
-        choices=["ci", "dev", "nightly", "prerelease"],
+        choices=["ci", "dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         default="nightly",
-        help="Release type of the build. For `dev` builds the torch wheel "
-        "version is tagged with the 8-char torch source commit in the local "
-        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
-        "The default is non-appending so other callers (CI, nightly, "
-        "prerelease) keep their plain `<base>+<suffix>` versions.",
+        help=(
+            "Release type of the build. For `dev` and `dev-bkc` builds the "
+            "torch wheel version is tagged with the 8-char torch source commit "
+            "in the local segment, e.g. "
+            "`2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). The default "
+            "is non-appending so other callers (CI, nightly, prerelease) keep "
+            "their plain `<base>+<suffix>` versions."
+        ),
     )
     build_p.add_argument(
         "--clean",
