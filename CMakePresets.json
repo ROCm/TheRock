@@ -23,12 +23,10 @@
       }
     },
     {
-      "name": "linux-release-asan",
-      "displayName": "Linux release ASAN build (no debug info)",
-      "description": "Ninja generator, Release build type with ASAN instrumentation. No debug info \u2014 optimized for CI speed. Use linux-release-asan-debug for builds with debug symbols.",
+      "name": "linux-asan-base",
+      "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "amd-llvm_BUILD_TYPE": "Release",
         "therock-host-blas_BUILD_TYPE": "Release",
         "therock-SuiteSparse_BUILD_TYPE": "Release",
@@ -41,15 +39,14 @@
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
-      }
+      },
+      "description": "Hidden base for full ASAN variants. Sets all sanitizer flags and per-subproject overrides. Variants inherit this and only set CMAKE_BUILD_TYPE (and optionally debug flags)."
     },
     {
-      "name": "linux-release-host-asan",
-      "displayName": "Linux release host-only ASAN build (no debug info)",
-      "description": "Ninja generator, Release build type with host-side ASAN only. No debug info \u2014 optimized for CI speed. Use linux-release-host-asan-debug for builds with debug symbols.",
+      "name": "linux-host-asan-base",
+      "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "amd-llvm_BUILD_TYPE": "Release",
         "therock-host-blas_BUILD_TYPE": "Release",
         "therock-SuiteSparse_BUILD_TYPE": "Release",
@@ -62,56 +59,51 @@
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+      },
+      "description": "Hidden base for host-only ASAN variants. Like linux-asan-base but scopes instrumentation to host code only (no device-side, no xnack+ required)."
+    },
+    {
+      "name": "linux-release-asan",
+      "displayName": "Linux release ASAN build (no debug info)",
+      "description": "CI builds: Release + full ASAN, no debug info. Inherits linux-asan-base.",
+      "inherits": "linux-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "linux-release-asan-debug",
       "displayName": "Linux release ASAN build with debug info",
-      "description": "Ninja generator, RelWithDebInfo build type with full ASAN instrumentation and minimal debug info (-g1 -gdwarf-4). Used for nightly and release ASAN builds where stack traces need source line info.",
-      "generator": "Ninja",
+      "description": "Nightly/release builds: RelWithDebInfo + full ASAN + -g1 -gdwarf-4 for stack traces. Inherits linux-asan-base.",
+      "inherits": "linux-asan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "amd-llvm_BUILD_TYPE": "Release",
-        "therock-host-blas_BUILD_TYPE": "Release",
-        "therock-SuiteSparse_BUILD_TYPE": "Release",
-        "THEROCK_SANITIZER": "ASAN",
-        "amd-llvm_SANITIZER": "OFF",
-        "amd-comgr_SANITIZER": "ASAN",
-        "hipcc_SANITIZER": "OFF",
-        "hipify_SANITIZER": "OFF",
-        "aqlprofile_SANITIZER": "OFF",
-        "rocprof-trace-decoder_SANITIZER": "OFF",
-        "roctracer_SANITIZER": "OFF",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
+      }
+    },
+    {
+      "name": "linux-release-host-asan",
+      "displayName": "Linux release host-only ASAN build (no debug info)",
+      "description": "CI builds: Release + host-only ASAN, no debug info. Inherits linux-host-asan-base.",
+      "inherits": "linux-host-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "linux-release-host-asan-debug",
       "displayName": "Linux release host-only ASAN build with debug info",
-      "description": "Ninja generator, RelWithDebInfo build type with host-side ASAN only and minimal debug info (-g1 -gdwarf-4). Used for nightly and release host-ASAN builds where stack traces need source line info.",
-      "generator": "Ninja",
+      "description": "Nightly/release builds: RelWithDebInfo + host-only ASAN + -g1 -gdwarf-4 for stack traces. Inherits linux-host-asan-base.",
+      "inherits": "linux-host-asan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "amd-llvm_BUILD_TYPE": "Release",
-        "therock-host-blas_BUILD_TYPE": "Release",
-        "therock-SuiteSparse_BUILD_TYPE": "Release",
-        "THEROCK_SANITIZER": "HOST_ASAN",
-        "amd-llvm_SANITIZER": "OFF",
-        "amd-comgr_SANITIZER": "HOST_ASAN",
-        "hipcc_SANITIZER": "OFF",
-        "hipify_SANITIZER": "OFF",
-        "aqlprofile_SANITIZER": "OFF",
-        "rocprof-trace-decoder_SANITIZER": "OFF",
-        "roctracer_SANITIZER": "OFF",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
       }
     },
     {
