@@ -48,6 +48,12 @@ WORKDIR /install-awscli
 COPY install_awscli.sh ./
 RUN ./install_awscli.sh && rm -rf /install-awscli
 
+######## GitHub CLI (gh) ########
+WORKDIR /install-gh
+ENV GH_VERSION="2.97.0"
+COPY install_gh.sh ./
+RUN ./install_gh.sh "${GH_VERSION}" && rm -rf /install-gh
+
 ######## Installing Google test #######
 WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
