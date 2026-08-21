@@ -278,6 +278,30 @@ table below. See also the
 [GPU architecture specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)
 for a full list of supported AMD GPUs.
 
+###### Detect your GPU automatically
+
+If you don't know your GPU architecture, use the
+[`rocm-bootstrap`](https://pypi.org/project/rocm-bootstrap/) package to detect
+it before installing. `rocm-bootstrap` is a lightweight package with no
+dependencies — it does not require ROCm to be installed and supports both Linux
+and Windows:
+
+```bash
+pip install rocm-bootstrap
+rocm-bootstrap-detect
+```
+
+This prints your GPU's `gfx` target (e.g. `gfx1103`), which you can then use
+with the matching `device-*` extra from the table below:
+
+```bash
+$ rocm-bootstrap-detect
+gfx1103
+
+$ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    "rocm[libraries,device-gfx1103]"
+```
+
 | Product Name                                         | GFX Target | Device Extra     |
 | ---------------------------------------------------- | ---------- | ---------------- |
 | *All supported GPUs*                                 | (all)      | `device-all`     |
