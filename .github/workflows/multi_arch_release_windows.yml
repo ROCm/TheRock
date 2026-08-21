@@ -31,6 +31,13 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -68,6 +75,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -84,6 +92,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -103,6 +112,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -169,7 +179,8 @@ jobs:
               "test_type": "${{ inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
@@ -193,7 +204,8 @@ jobs:
               "release_type": "${{ inputs.release_type }}",
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}",
-              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}"
+              "build_runs_on": "${{ fromJSON(inputs.build_config).build_runs_on }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   notify_quartz_completed:

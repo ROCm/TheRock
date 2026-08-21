@@ -85,6 +85,13 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-windows-scale-rocm-prod-mix"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -167,6 +174,13 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-windows-scale-rocm-prod-mix"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -577,6 +591,7 @@ jobs:
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
