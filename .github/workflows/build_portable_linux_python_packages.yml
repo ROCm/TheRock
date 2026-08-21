@@ -181,6 +181,36 @@ jobs:
             --linux-amdgpu-families="${{ inputs.linux_amdgpu_families }}" \
             --windows-amdgpu-families="${{ inputs.windows_amdgpu_families }}"
 
+      # NOTE: rocshmem4py is a compiled nanobind extension, so unlike the
+      # rocm-sdk-* wheels it can't be repackaged from artifacts; it is built
+      # against an installed rocSHMEM, into dist/ for the upload step below.
+      - name: Build rocshmem4py wheel
+        run: |
+          if [ ! -d "${{ env.ARTIFACTS_DIR }}/rocshmem_dev_generic" ]; then
+            echo "No rocshmem artifacts fetched; skipping rocshmem4py wheel"
+            exit 0
+          fi
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init --depth=1 rocm-systems
+          ROCM_PREFIX="$GITHUB_WORKSPACE/rocm-prefix"
+
+          # Generic artifacts only, unlike the usual flatten-everything: rocSHMEM
+          # and the compiler are target-neutral, and flattening several
+          # per-family trees into one prefix would collide.
+          python ./build_tools/fileset_tool.py artifact-flatten \
+            "${{ env.ARTIFACTS_DIR }}"/*_generic \
+            -o "$ROCM_PREFIX"
+
+          # Without the device bitcode the build still succeeds, but silently
+          # yields a single-architecture wheel that aborts with
+          # hipErrorInvalidKernelFile (218) on every other GPU.
+          ls "$ROCM_PREFIX"/lib/librocshmem_device_*.bc > /dev/null
+
+          cd rocm-systems/python/rocshmem
+          ROCM_PATH="$ROCM_PREFIX" \
+          CMAKE_PREFIX_PATH="$ROCM_PREFIX" \
+            python -m build --wheel --outdir "${{ env.PACKAGES_DIR }}/dist"
+
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
