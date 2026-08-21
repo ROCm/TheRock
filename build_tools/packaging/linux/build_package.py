@@ -44,6 +44,7 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -68,6 +69,14 @@ logger = TheRockLogger(__name__)
 
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
+
+
+class BuildTask(NamedTuple):
+    """Task for parallel package building via ProcessPoolExecutor."""
+
+    pkg_name: str
+    config: PackageConfig
+    logs_dir: Path
 
 
 def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
@@ -614,33 +623,33 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     )
 
 
-def build_pkg(args):
+def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
     """Build a single package in isolated process. Used by ProcessPoolExecutor."""
-    pkg_name, config, logs_dir = args
-    pkg_log_file = logs_dir / f"{config.pkg_type}-{pkg_name}.log"
-    temp_dir = tempfile.mkdtemp(prefix=f"pkg_{pkg_name}_")
-    try:
-        pkg_config = replace(config, dest_dir=Path(temp_dir))
-        with capture_console(pkg_log_file):
-            output_list = build_package_variants(pkg_name, pkg_config)
-        # Move packages to final dest
-        result = []
-        config.dest_dir.mkdir(parents=True, exist_ok=True)
-        for f in output_list:
-            src = Path(temp_dir) / f
-            if src.exists():
-                dst = config.dest_dir / f
-                shutil.move(str(src), str(dst))
-                result.append(f)
-        return (pkg_name, result, None)
-    except SystemExit as e:
-        logger.error(f"SystemExit: exited with code {e.code}")
-        return (pkg_name, [], f"SystemExit: exited with code {e.code}")
-    except Exception as e:
-        logger.error(f"{type(e).__name__}: {e}")
-        return (pkg_name, [], f"{type(e).__name__}: {e}")
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+    pkg_log_file = task.logs_dir / f"{task.config.pkg_type}-{task.pkg_name}.log"
+    with tempfile.TemporaryDirectory(
+        prefix=f"pkg_{task.pkg_name}_", ignore_cleanup_errors=True
+    ) as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
+        try:
+            pkg_config = replace(task.config, dest_dir=temp_dir)
+            with capture_console(pkg_log_file):
+                output_list = build_package_variants(task.pkg_name, pkg_config)
+            # Move packages from temp_dir to final dest_dir.
+            # output_list contains plain filenames (e.g., "amdrocm-core-7.1.1.deb"), not paths.
+            # This is guaranteed by move_packages_to_destination() which appends file_path.name.
+            result: list[str] = []
+            task.config.dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in output_list:
+                src = temp_dir / f
+                if src.exists():
+                    dst = task.config.dest_dir / f
+                    shutil.move(str(src), str(dst))
+                    result.append(f)
+            return (task.pkg_name, result, None)
+        except SystemExit as e:
+            return (task.pkg_name, [], f"SystemExit: exited with code {e.code}")
+        except Exception as e:
+            return (task.pkg_name, [], f"{type(e).__name__}: {e}")
 
 
 def run(args: argparse.Namespace):
@@ -671,7 +680,8 @@ def run(args: argparse.Namespace):
 
     with ProcessPoolExecutor(max_workers=args.parallel) as executor:
         futures = {
-            executor.submit(build_pkg, (pkg, config, logs_dir)): pkg for pkg in pkg_list
+            executor.submit(build_pkg, BuildTask(pkg, config, logs_dir)): pkg
+            for pkg in pkg_list
         }
         for future in as_completed(futures):
             pkg_name = futures[future]
