@@ -95,7 +95,7 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref (e.g. rocm-jaxlib-v0.10.0, rocm-jaxlib-v0.10.2)."
+        description: "JAX / rocm-jax release ref (e.g. rocm-jaxlib-v0.11.0, rocm-jaxlib-v0.11.1)."
         type: string
         required: true
       rocm_version:
