@@ -29,7 +29,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       external_repo_config:
@@ -160,8 +160,9 @@ jobs:
     secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -176,8 +177,9 @@ jobs:
     secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -196,6 +198,7 @@ jobs:
       os_profile: ubuntu2404
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -214,6 +217,7 @@ jobs:
       os_profile: rhel8
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -232,6 +236,7 @@ jobs:
       os_profile: rhel10
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -250,6 +255,7 @@ jobs:
       os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -368,6 +374,10 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      # One representative family, so a PR pays for the JAX tests once rather
+      # than once per family it builds. An empty value builds without testing.
+      test_amdgpu_family: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}
+      test_size: small
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
