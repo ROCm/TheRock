@@ -65,7 +65,7 @@ add_custom_target(
     # Step 1: Initial meson setup to download libva-2.22.0 subproject
     # This is required before patching because patch_source.sh modifies files in the libva subproject
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
@@ -111,7 +111,7 @@ add_custom_target(
     # Step 3: Reconfigure meson to build from patched source
     # This ensures the build system uses the modified source files
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
