@@ -30,11 +30,16 @@ Limitations (cases this test does NOT catch):
 """
 
 import subprocess
+import sys
 import tomllib
 import unittest
 from pathlib import Path
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _therock_utils.artifacts import STAGE_DIR_NAME, prebuilt_marker_relpath
 
 
 def get_descriptor_paths() -> list[Path]:
@@ -125,6 +130,54 @@ class ArtifactDescriptorOverlapTest(unittest.TestCase):
                 "https://github.com/ROCm/TheRock/issues/3758):\n"
                 + "\n".join(f"  - {e}" for e in errors)
             )
+
+
+class BootstrapMarkerBasedirTest(unittest.TestCase):
+    """Verifies the bootstrap marker derived from each basedir names a stage dir.
+
+    `--bootstrap` writes a ".prebuilt" marker per artifact manifest basedir, and
+    therock_subproject.cmake only ever looks for "${_stage_dir}.prebuilt". A
+    basedir nested below its stage dir (see `dctools/artifact-rdc.toml`) would
+    otherwise produce a marker the build never checks.
+    """
+
+    def test_every_basedir_yields_a_stage_dir_marker(self):
+        descriptors = sorted(get_descriptor_paths())
+        self.assertGreater(
+            len(descriptors),
+            0,
+            f"No artifact descriptors found, check THEROCK_DIR ('{THEROCK_DIR}')",
+        )
+
+        basedirs: set[str] = set()
+        for descriptor_path in descriptors:
+            basedirs |= get_basedirs(descriptor_path)
+
+        # Any basedir whose marker is not simply "<basedir>.prebuilt" must have
+        # been truncated to an enclosing stage dir, never anywhere else.
+        rewritten: dict[str, str] = {}
+        for basedir in sorted(basedirs):
+            marker = prebuilt_marker_relpath(basedir)
+            if marker == basedir + ".prebuilt":
+                continue
+            stage_dir = marker[: -len(".prebuilt")]
+            self.assertTrue(
+                basedir.startswith(stage_dir + "/"),
+                f"Marker for '{basedir}' escaped its own basedir: '{marker}'",
+            )
+            self.assertTrue(
+                stage_dir.endswith("/" + STAGE_DIR_NAME),
+                f"Marker for '{basedir}' does not name a stage dir: '{marker}'",
+            )
+            rewritten[basedir] = marker
+
+        # Only descriptors that declare a basedir below their stage dir are
+        # affected. If this list grows, confirm the new marker is the one the
+        # subproject's stage dir would produce.
+        self.assertEqual(
+            rewritten,
+            {"dctools/rdc/stage/portable-rdc": "dctools/rdc/stage.prebuilt"},
+        )
 
 
 if __name__ == "__main__":
