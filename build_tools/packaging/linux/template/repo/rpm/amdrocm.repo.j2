@@ -1,0 +1,8 @@
+[{{ repo_id }}]
+name={{ name }}
+baseurl={{ baseurl }}
+enabled=1
+gpgcheck={{ 1 if signed else 0 }}
+{% if signed %}
+gpgkey=file://{{ rpm_gpg_key_path }}
+{% endif %}
