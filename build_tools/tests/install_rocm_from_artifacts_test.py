@@ -112,6 +112,7 @@ class TestMultiarchTarballNamePattern(unittest.TestCase):
         test_cases = [
             ("linux", "gfx94X-dcgpu", "7.15.0a20260722"),
             ("windows", "gfx110X-all", "7.15.0rc20260722"),
+            ("linux", "gfx94X-dcgpu", "10.0.0rc4"),
             ("linux", "gfx90a", "7.15.0.dev0+deadbeef"),
             ("windows", "multiarch", "7.15.0"),
         ]
@@ -295,6 +296,61 @@ class TestReleaseDiscovery(unittest.TestCase):
             f"s3://{mod.DEV_TARBALL_BUCKET.name}/{mod.MULTIARCH_TARBALL_S3_PREFIX}/",
             output.getvalue(),
         )
+
+    def test_prerelease_uses_rc_multiarch_tarball_bucket(self) -> None:
+        version = "10.0.0rc4"
+        output_dir = Path("/tmp/therock-test")
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
+        args = argparse.Namespace(
+            artifact_group="gfx94X-dcgpu",
+            output_dir=output_dir,
+            release=version,
+            dry_run=False,
+        )
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(
+                mod, "_retrieve_multiarch_tarball_with_legacy_fallback"
+            ) as retrieve_tarball,
+            mock.patch("sys.stdout", output),
+        ):
+            mod.retrieve_artifacts_by_release(args)
+
+        retrieve_tarball.assert_called_once_with(
+            mod.PRERELEASE_TARBALL_BUCKET.name,
+            mod.LEGACY_PRERELEASE_TARBALL_BUCKET.name,
+            asset_name,
+            output_dir,
+        )
+        self.assertIn(
+            f"Retrieving prerelease multi-arch artifacts from "
+            f"s3://{mod.PRERELEASE_TARBALL_BUCKET.name}/"
+            f"{mod.MULTIARCH_TARBALL_S3_PREFIX}/",
+            output.getvalue(),
+        )
+
+    def test_legacy_dated_rc_release_uses_nightly_bucket(self) -> None:
+        version = "7.15.0rc20260722"
+        asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
+        expected_s3_uri = (
+            f"s3://{mod.NIGHTLY_TARBALL_BUCKET.name}/"
+            f"{mod._multiarch_tarball_s3_key(asset_name)}"
+        )
+        output = io.StringIO()
+
+        with mock.patch("sys.stdout", output):
+            mod.main(
+                [
+                    "--release",
+                    version,
+                    "--artifact-group",
+                    "gfx94X-dcgpu",
+                    "--dry-run",
+                ]
+            )
+
+        self.assertIn(f"Would download: {expected_s3_uri}", output.getvalue())
 
     def test_release_download_falls_back_to_legacy_tarball_bucket(self) -> None:
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
