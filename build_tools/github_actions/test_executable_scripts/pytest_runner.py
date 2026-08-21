@@ -201,11 +201,14 @@ def build_environment(rocm_path, component_name):
     llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
     sysdeps_lib_path = rocm_path / "lib" / "rocm_sysdeps" / "lib"
     ld_paths = [str(lib_path), str(llvm_lib_path)]
-    # GNUInstallDirs puts libomp.so under a platform-specific triple subdir
-    # (e.g. x86_64-unknown-linux-gnu/) instead of lib/llvm/lib/ directly.
-    llvm_platform_dirs = list(llvm_lib_path.glob("*-linux-*"))
-    if llvm_platform_dirs:
-        ld_paths.append(str(llvm_platform_dirs[0]))
+    # GNUInstallDirs puts libomp.so under one or more platform-specific triple
+    # subdirs (e.g. x86_64-unknown-linux-gnu/) instead of lib/llvm/lib/ directly.
+    # Add every triple dir (sorted) so the result is deterministic and does not
+    # depend on glob order or break when a new triple is added to the location.
+    llvm_platform_dirs = sorted(
+        p for p in llvm_lib_path.glob("*-linux-*") if p.is_dir()
+    )
+    ld_paths.extend(str(p) for p in llvm_platform_dirs)
     if sysdeps_lib_path.is_dir():
         ld_paths.append(str(sysdeps_lib_path))
     existing_ld = env.get("LD_LIBRARY_PATH", "")
