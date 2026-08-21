@@ -188,4 +188,5 @@ add_custom_target(
       "${CMAKE_INSTALL_PREFIX}/lib/libd3dx12-format-properties.a"
       "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/DirectX-Headers.pc"
       "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/libva.pc"
+      "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/libva-win32.pc"
 )
