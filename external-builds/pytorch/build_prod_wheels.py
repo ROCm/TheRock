@@ -188,7 +188,6 @@ LINUX_LIBRARY_PRELOADS = [
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
-    "rocm_smi64",
     # Linux only.
     "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",
