@@ -403,6 +403,7 @@ set(THEROCK_BUNDLED_UTIL_LINUX)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
 set(THEROCK_BUNDLED_AMDMESA)
+set(THEROCK_BUNDLED_FWUPD)
 
 
 if(THEROCK_BUNDLE_SYSDEPS)
@@ -447,6 +448,10 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
       set(THEROCK_BUNDLED_UTIL_LINUX therock-util-linux)
+    endif()
+    if(THEROCK_ENABLE_SYSDEPS_FWUPD)
+      # libfwupd + its private stack (glib -> libffi/pcre2, plus libcurl).
+      set(THEROCK_BUNDLED_FWUPD therock-libfwupd)
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_program(MESON_BUILD meson)
