@@ -1,20 +1,19 @@
-From f71e94599fbe2b2df9ab47f6cdd41f654b7fc844 Mon Sep 17 00:00:00 2001
+From 93d58fafb6bab845a7299517ab4d4454940b5eba Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Fri, 17 Jul 2026 18:14:57 +0000
+Date: Fri, 21 Aug 2026 01:20:49 +0000
 Subject: [PATCH] rocshmem: fix x86-only intrinsics and asm for portability
 
 Remove unused x86 intrinsic headers (immintrin.h, smmintrin.h) from
 backend_ro.cpp. Replace bare sfence asm in queue.cpp with
-platform-guarded barriers for x86 and PowerPC.
-
-Co-Authored-By: Claude <noreply@anthropic.com>
+platform-guarded barriers for x86 and PowerPC, with a build error
+for other unsupported architectures.
 ---
  projects/rocshmem/src/reverse_offload/backend_ro.cpp | 2 --
- projects/rocshmem/src/reverse_offload/queue.cpp      | 8 +++++++-
- 2 files changed, 7 insertions(+), 3 deletions(-)
+ projects/rocshmem/src/reverse_offload/queue.cpp      | 6 ++++++
+ 2 files changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/projects/rocshmem/src/reverse_offload/backend_ro.cpp b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
-index f1be503045..b594e12091 100644
+index f2742d947fe..bfdf5468446 100644
 --- a/projects/rocshmem/src/reverse_offload/backend_ro.cpp
 +++ b/projects/rocshmem/src/reverse_offload/backend_ro.cpp
 @@ -24,8 +24,6 @@
@@ -27,20 +26,19 @@ index f1be503045..b594e12091 100644
  
  #include <cassert>
 diff --git a/projects/rocshmem/src/reverse_offload/queue.cpp b/projects/rocshmem/src/reverse_offload/queue.cpp
-index bca71162c8..63fc248028 100644
+index bca71162c85..98aeea29708 100644
 --- a/projects/rocshmem/src/reverse_offload/queue.cpp
 +++ b/projects/rocshmem/src/reverse_offload/queue.cpp
 @@ -85,7 +85,13 @@ void Queue::flush_hdp() {
  
  void Queue::sfence_flush_hdp() {
    if (envvar::ro::net_cpu_queue) {
--    asm volatile("sfence" ::: "memory");
 +#if defined(__x86_64__) || defined(__i386__)
-+    asm volatile("sfence" ::: "memory"); // x86 store fence
-+#elif defined(__powerpc64__) || defined(__PPC64__)
-+    asm volatile("lwsync" ::: "memory"); // PowerPC memory barrier
+     asm volatile("sfence" ::: "memory");
++#elif defined(__powerpc__)
++    asm volatile("lwsync" ::: "memory");
 +#else
-+#error "Unsupported architecture"
++#error "Unsupported architecture: add a store fence for this platform"
 +#endif
      hdp_proxy_.get()->hdp_flush();
    }
