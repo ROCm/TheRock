@@ -34,7 +34,7 @@ by using [`build_tools/_therock_utils/s3_buckets.py`](/build_tools/_therock_util
 ```yaml
 jobs:
   build:
-    runs-on: azure-linux-scale-rocm
+    runs-on: aws-linux-scale-rocm-prod
     permissions:
       id-token: write
     # Linux containers only — mount runner baseline credentials
@@ -89,6 +89,10 @@ upload to this bucket and do not need `aws-actions/configure-aws-credentials`.
 
 Each release type (`dev`, `nightly`, `prerelease`, `release`) has a matching
 set of buckets.
+
+The `dev-bkc` and `nightly-bkc` release types currently use the existing `dev`
+and `nightly` buckets, IAM roles, and CDN indexes, respectively. A dedicated
+BKC bucket and index may be added in the future.
 
 The `dev`, `nightly`, and `prerelease` types are accessed via
 the `therock-{release_type}` IAM role while stable `release` buckets are

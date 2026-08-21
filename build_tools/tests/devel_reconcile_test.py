@@ -113,8 +113,10 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             if line.strip()
         ]
 
-    def _reconcile(self) -> int:
-        return _devel._reconcile_device_links(self.site, self.devel_dir, VERSION)
+    def _reconcile(self, expected_version: str = VERSION) -> int:
+        return _devel._reconcile_device_links(
+            self.site, self.devel_dir, expected_version
+        )
 
     # ----- tests ----------------------------------------------------------
 
@@ -184,9 +186,66 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             {".kpack/blas_lib_gfx942.kpack": "kpack data"},
             version="9.9.9",
         )
-        # Device wheel version does not match the SDK version -> skip entirely.
+        # Device wheel release does not match the SDK -> skip entirely.
         self.assertEqual(self._reconcile(), 0)
         self.assertFalse((self.devel_dir / ".kpack/blas_lib_gfx942.kpack").exists())
+
+    def test_post_release_version_reconciled(self):
+        relpath = ".kpack/blas_lib_gfx1100.kpack"
+        self._add_device_wheel(
+            "gfx1100",
+            {relpath: "kpack data"},
+            version="7.14.0",
+        )
+
+        self.assertEqual(self._reconcile("7.14.0.post1"), 1)
+        self.assertTrue((self.devel_dir / relpath).is_file())
+
+    def test_compatible_version_pairs(self):
+        compatible_versions = (
+            ("7.14.0", "7.14.0"),
+            ("7.14.0", "7.14.0.post1"),
+            ("7.14.0.post1", "7.14.0.post2"),
+            ("7.14.0rc1", "7.14.0rc1.post1"),
+        )
+
+        for device_version, sdk_version in compatible_versions:
+            with self.subTest(
+                device_version=device_version,
+                sdk_version=sdk_version,
+            ):
+                self.assertEqual(
+                    _devel._without_post_release(device_version),
+                    _devel._without_post_release(sdk_version),
+                )
+
+    def test_incompatible_version_pairs(self):
+        incompatible_versions = (
+            ("7.14.0", "7.14.1"),
+            ("7.14.0", "7.14.0rc1"),
+            ("7.14.0", "7.14.0.dev1"),
+        )
+
+        for device_version, sdk_version in incompatible_versions:
+            with self.subTest(
+                device_version=device_version,
+                sdk_version=sdk_version,
+            ):
+                self.assertNotEqual(
+                    _devel._without_post_release(device_version),
+                    _devel._without_post_release(sdk_version),
+                )
+
+    def test_patch_version_mismatch_skipped(self):
+        relpath = ".kpack/blas_lib_gfx1100.kpack"
+        self._add_device_wheel(
+            "gfx1100",
+            {relpath: "kpack data"},
+            version="7.14.1",
+        )
+
+        self.assertEqual(self._reconcile("7.14.0.post1"), 0)
+        self.assertFalse((self.devel_dir / relpath).exists())
 
     def test_prune_semantics_record_lists_links(self):
         record = self._add_device_wheel(

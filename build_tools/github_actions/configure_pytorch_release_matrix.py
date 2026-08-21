@@ -15,7 +15,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
+RELEASE_TYPES = [
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+]
 
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
@@ -64,8 +71,7 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         # gfx125x supported for PyTorch 2.13 via https://github.com/ROCm/pytorch/pull/3532.
         "release/2.13": {"gfx90c"},
         # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
-        # gfx90c excluded: blocked until CK submodule bump in pytorch nightly.
-        "nightly": {"gfx90c"},
+        "nightly": {},
     },
     "windows": {
         "release/2.11": {"gfx90c"},
@@ -169,6 +175,15 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
+                # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
+                # scikit-image==0.22.0, which has no cp314 wheel and fails to
+                # build from source. Build those wheels but skip their tests
+                # until that is fixed.
+                "test_amdgpu_families": (
+                    "none"
+                    if (platform, ref, py) == ("windows", "nightly", "3.14")
+                    else "auto"
+                ),
             }
             matrix.append(row)
     return matrix

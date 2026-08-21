@@ -26,3 +26,10 @@ if platform.system() == "Linux":
 cmake_dir = Path(PREFIX) / "lib" / "cmake" / "zlib"
 if cmake_dir.is_dir():
     shutil.rmtree(cmake_dir)
+
+# Remove zlib's auto-generated pkg-config file, which hardcodes the build-time
+# prefix. TheRock installs its own relocatable zlib.pc to the same path, so
+# leaving this one in place makes the result depend on install ordering.
+pc_file = Path(PREFIX) / "lib" / "pkgconfig" / "zlib.pc"
+if pc_file.exists():
+    pc_file.unlink()

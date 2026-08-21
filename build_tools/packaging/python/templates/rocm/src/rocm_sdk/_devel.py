@@ -36,6 +36,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import sys
 import tarfile
@@ -219,6 +220,11 @@ def _record_has_entries(record_path: Path, names: list[str]) -> bool:
     return all(n in existing for n in names)
 
 
+def _without_post_release(version: str) -> str:
+    """Remove a canonical PEP 440 post-release segment from a version."""
+    return re.sub(r"\.post\d+", "", version, count=1)
+
+
 def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
     """Find installed rocm-sdk-device-* wheels and their devel-link manifests.
 
@@ -239,15 +245,20 @@ def _discover_device_link_plans(site_lib_path: Path, expected_version: str):
             continue
         if name != "rocm-sdk-device" and not name.startswith("rocm-sdk-device-"):
             continue
-        # The device wheel and the SDK are version-locked. A mismatched wheel's
-        # link targets may not line up with this devel tree, so skip it loudly.
-        if dist.version != expected_version:
+
+        # The device wheel and the SDK are version-locked except for post-release
+        # segments. Other differences may indicate that the wheel's link targets
+        # do not line up with this devel tree, so skip it loudly.
+        if _without_post_release(dist.version) != _without_post_release(
+            expected_version
+        ):
             print(
                 f"WARNING: skipping {name} {dist.version}: does not match "
                 f"rocm-sdk {expected_version}",
                 file=sys.stderr,
             )
             continue
+
         files = dist.files
         if not files:
             continue
