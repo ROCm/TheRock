@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       package_index_url:
-        description: Base URL for the multi-arch Python package index
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index).
         required: true
         type: string
       rocm_version:
@@ -76,7 +76,7 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       package_index_url:
-        description: Base URL for the repo.amd.com aggregate whl-next Python package index
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index).
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
       rocm_version:

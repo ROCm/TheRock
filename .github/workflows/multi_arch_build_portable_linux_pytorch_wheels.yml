@@ -137,7 +137,7 @@ on:
           URL for pip --index-url to install ROCm packages (PEP 503 index).
           Set either this or rocm_package_find_links_url to override the ROCm
           package source; leave both blank to use the nightly repo.amd.com aggregate
-          index (https://nightly.repo.amd.com/rocm/whl-next/).
+          index.
         type: string
         default: ""
       release_type:
