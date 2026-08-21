@@ -116,6 +116,12 @@ if(THEROCK_ENABLE_COMPILER)
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      # Host runtimes must stay flat in lib/llvm/lib: that is what
+      # INTERFACE_LINK_DIRS and INTERFACE_INSTALL_RPATH_DIRS below point at.
+      # LLVM defaults this ON for Linux, which would move libomp.so et al into
+      # lib/llvm/lib/<host-triple>/, out of every consumer's RUNPATH.
+      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF
+      # The device runtimes, in contrast, do want the per-target layout.
       -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
       # ASAN features.
