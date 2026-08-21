@@ -12,7 +12,12 @@ option(
   OFF
 )
 
-foreach(_required_path RCCL_ROOT ROCJITSU_ROOT KPACK_PYTHON_SOURCE)
+foreach(_required_path
+    RCCL_ROOT
+    ROCJITSU_ROOT
+    ROCJITSU_HOTSWAP_ROOT
+    KPACK_PYTHON_SOURCE
+)
   if(NOT IS_ABSOLUTE "${${_required_path}}")
     message(FATAL_ERROR "${_required_path} must be an absolute path")
   endif()
@@ -33,6 +38,12 @@ find_program(ROCJITSU_PRETRANSLATE_TOOL
 find_program(ROCJITSU_PRETRANSLATE_DRIVER
   NAMES rocjitsu-pretranslate.py
   PATHS "${ROCJITSU_ROOT}/bin"
+  NO_DEFAULT_PATH
+  REQUIRED
+)
+find_library(ROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY
+  NAMES rocjitsu_gfx1250_b0_to_a0
+  PATHS "${ROCJITSU_HOTSWAP_ROOT}/lib"
   NO_DEFAULT_PATH
   REQUIRED
 )
@@ -57,7 +68,9 @@ add_custom_command(
     --gfx-arch gfx1250
     --output-dir "${_unbundled_dir}"
     "${RCCL_LIBRARY}"
-  COMMAND "${Python3_EXECUTABLE}" "${ROCJITSU_PRETRANSLATE_DRIVER}"
+  COMMAND "${CMAKE_COMMAND}" -E env
+    "LD_LIBRARY_PATH=${ROCJITSU_HOTSWAP_ROOT}/lib:${ROCJITSU_ROOT}/lib"
+    "${Python3_EXECUTABLE}" "${ROCJITSU_PRETRANSLATE_DRIVER}"
     --tool "${ROCJITSU_PRETRANSLATE_TOOL}"
     --store-root "${_cache_root}"
     --report-dir "${_report_dir}"
@@ -73,6 +86,7 @@ add_custom_command(
     "${RCCL_LIBRARY}"
     "${ROCJITSU_PRETRANSLATE_TOOL}"
     "${ROCJITSU_PRETRANSLATE_DRIVER}"
+    "${ROCJITSU_HOTSWAP_TRANSLATOR_LIBRARY}"
     "${KPACK_PYTHON_SOURCE}/rocm_kpack/binutils.py"
     "${KPACK_PYTHON_SOURCE}/rocm_kpack/ccob_parser.py"
     "${KPACK_PYTHON_SOURCE}/rocm_kpack/tools/bulk_unbundle.py"

@@ -41,6 +41,7 @@ from github_actions.manifest_utils import (
 DEFAULT_PYTORCH_GIT_REFS = [
     "release/2.12",
     "release/2.13",
+    "release/2.14",
     "nightly",
 ]
 SCHEMA_VERSION = 1

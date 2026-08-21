@@ -39,10 +39,12 @@ RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
         "release/2.12",
         "release/2.13",
+        "release/2.14",
     ],
     "windows": [
         "release/2.12",
         "release/2.13",
+        "release/2.14",
     ],
 }
 
@@ -61,16 +63,15 @@ CI_PYTORCH_REFS = {
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        # gfx125x supported for PyTorch 2.12 via https://github.com/ROCm/pytorch/pull/3421.
         "release/2.12": {},
-        # gfx125x supported for PyTorch 2.13 via https://github.com/ROCm/pytorch/pull/3532.
         "release/2.13": {"gfx90c"},
-        # gfx125x supported on upstream pytorch/pytorch nightly via pytorch#188597.
+        "release/2.14": {"gfx90c"},
         "nightly": {},
     },
     "windows": {
         "release/2.12": {"gfx90c"},
         "release/2.13": {"gfx90c"},
+        "release/2.14": {"gfx90c"},
     },
 }
 
