@@ -54,7 +54,7 @@ from github_actions.github_actions_api import *
 is_windows = platform.system() == "Windows"
 
 ROCM_INDEX_URLS_MAP = {
-    "stable": "https://repo.amd.com/rocm/whl-next/",
+    "stable": "https://stable.repo.amd.com/rocm/whl-next/",
     "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
     "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
     "dev": "https://dev.repo.amd.com/rocm/whl-next/",

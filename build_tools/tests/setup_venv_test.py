@@ -115,7 +115,7 @@ class InstallPackagesTest(unittest.TestCase):
     def test_index_names_use_repo_amd_aggregate_urls(self, mock_run, mock_find_python):
         """Passing index_name without index_url uses current repo.amd.com urls."""
         expected_urls = {
-            "stable": "https://repo.amd.com/rocm/whl-next/",
+            "stable": "https://stable.repo.amd.com/rocm/whl-next/",
             "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
             "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
             "dev": "https://dev.repo.amd.com/rocm/whl-next/",

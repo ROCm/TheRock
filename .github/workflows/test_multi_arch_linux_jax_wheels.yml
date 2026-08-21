@@ -106,7 +106,7 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       package_index_url:
-        description: URL for pip --index-url to install ROCm packages (PEP 503 index). Releases publish there; use wheel_find_links_url for CI-built wheels."
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index). Releases publish there; use wheel_find_links_url for CI-built wheels.
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
       wheel_find_links_url:

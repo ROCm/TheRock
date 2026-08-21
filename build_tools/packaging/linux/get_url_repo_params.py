@@ -385,9 +385,6 @@ def get_repo_url_multi_arch(
         HTTPS URL pointing at the apt/dnf repo root.
 
     Layout:
-        The historical child path below ``packages-multi-arch`` is preserved,
-        but the parent path is now ``rocm/core/packages``.
-
         - prerelease deb: ``{base}/rocm/core/packages/{os_profile}``
         - release deb: ``{base}/rocm/core/packages/{os_profile}``
         - nightly deb: ``{base}/rocm/core/packages/deb/{repo_sub_folder}``
