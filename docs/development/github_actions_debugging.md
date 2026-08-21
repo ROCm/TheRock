@@ -186,7 +186,7 @@ pipeline can take several hours sharded across multiple types of build and test
 machines.
 
 The [`.github/workflows/build_windows_python_packages.yml`](/.github/workflows/build_windows_python_packages.yml)
-and [`.github/workflows/build_portable_linux_python_packages.yml`](.github/workflows/build_portable_linux_python_packages.yml)
+and [`.github/workflows/build_portable_linux_python_packages.yml`](/.github/workflows/build_portable_linux_python_packages.yml)
 workflows are both runnable from personal repository forks. By default they
 download artifacts from a recent workflow run in the https://github.com/ROCm/TheRock
 repository. You can customize where artifacts are downloaded from by setting

@@ -77,7 +77,7 @@ The following benchmark tests are defined in `tests/extended_tests/benchmark/ben
 | `gfx90x`   | Linux    | MI200 (CDNA2)         | Yes                 | Not enabled          |
 | `gfx1151`  | Linux    | RDNA 3.5              | Yes                 | Not enabled          |
 
-> **Note:** All benchmarks are **architecture-agnostic** and support any ROCm-compatible GPU. The table above lists GPU families actively used in CI testing. To add support for additional GPU families, update [`amdgpu_family_matrix.py`](../amdgpu_family_matrix.py) with appropriate `benchmark-runs-on` runners.
+> **Note:** All benchmarks are **architecture-agnostic** and support any ROCm-compatible GPU. The table above lists GPU families actively used in CI testing. To add support for additional GPU families, update [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py) with appropriate `benchmark-runs-on` runners.
 
 ## Architecture
 

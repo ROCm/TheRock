@@ -42,7 +42,9 @@ MULTI_ARCH_INDEX_URLS = {
     # TODO: Move this release bucket to CDN/index URL mapping into
     # build_tools/_therock_utils/s3_buckets.py.
     "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "dev-bkc": "https://rocm.devreleases.amd.com/whl-multi-arch/",
     "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+    "nightly-bkc": "https://rocm.nightlies.amd.com/whl-multi-arch/",
     "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
 }
 
@@ -75,8 +77,8 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--release-type",
         required=True,
-        choices=["dev", "nightly", "prerelease"],
-        help="Release type (selects therock-{release_type}-python bucket)",
+        choices=["dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
+        help="Release type used to select the destination Python bucket",
     )
     parser.add_argument(
         "--structured",

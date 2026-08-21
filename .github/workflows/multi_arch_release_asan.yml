@@ -11,7 +11,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: "dev", "nightly", or "prerelease".'
+        description: 'Release type: "dev", "dev-bkc", "nightly", "nightly-bkc", or "prerelease".'
         type: string
         required: true
       prerelease_version:
@@ -46,7 +46,7 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev".'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
         options:
           - dev
@@ -72,6 +72,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 run-name: >-
   Multi-Arch Release ASAN (${{ inputs.release_type || 'dev' }})
@@ -91,6 +92,7 @@ jobs:
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+    secrets: inherit
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}

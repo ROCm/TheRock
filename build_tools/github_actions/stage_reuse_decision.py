@@ -142,6 +142,20 @@ def _target_families(
     return tuple(families)
 
 
+def _platform_target_families(
+    platform: str,
+    linux_amdgpu_families: Sequence[str],
+    windows_amdgpu_families: Sequence[str],
+) -> tuple[str, ...]:
+    """Return the target families required for one build platform."""
+
+    if platform == "linux":
+        return _target_families(linux_amdgpu_families, ())
+    if platform == "windows":
+        return _target_families((), windows_amdgpu_families)
+    raise ValueError(f"unsupported build platform: {platform}")
+
+
 def _required_artifacts_for_stages(
     topology: BuildTopology,
     stage_names: Sequence[str],
@@ -277,8 +291,6 @@ def compute_auto_stage_reuse(
     if topology is None and changed_files is not None:
         topology = get_topology()
 
-    families = _target_families(linux_amdgpu_families, windows_amdgpu_families)
-
     plan = plan_stage_reuse(
         changed_files=changed_files,
         platform=platforms[0],
@@ -327,7 +339,6 @@ def compute_auto_stage_reuse(
             )
         )
 
-    required = _required_artifacts_for_stages(topology, candidates, families)
     # Verify artifact availability independently for each platform. A single
     # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
     # a per-platform selector is built so each platform is checked against a
@@ -338,6 +349,18 @@ def compute_auto_stage_reuse(
     baseline_error: str | None = None
 
     for platform in platforms:
+        platform_families = _platform_target_families(
+            platform,
+            linux_amdgpu_families,
+            windows_amdgpu_families,
+        )
+
+        required = _required_artifacts_for_stages(
+            topology,
+            candidates,
+            platform_families,
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -364,12 +387,17 @@ def compute_auto_stage_reuse(
 
         available_filenames = _matched_filenames(baseline)
         available_here: list[str] = []
+
         if baseline is not None:
             for stage_name in candidates:
                 if _stage_artifacts_available(
-                    topology, stage_name, families, available_filenames
+                    topology,
+                    stage_name,
+                    platform_families,
+                    available_filenames,
                 ):
                     available_here.append(stage_name)
+
         per_platform_available[platform] = tuple(available_here)
 
     selected_run_ids = {
@@ -474,7 +502,11 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     extra "passing build" check is needed here.
     """
 
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    # THEROCK_REPOSITORY is set by setup_multi_arch.yml to the repository input
+    # (ROCm/TheRock for external repos, or github.repository for normal runs).
+    github_repository = os.environ.get(
+        "THEROCK_REPOSITORY", os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    )
     branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
     workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
@@ -489,10 +521,16 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     # establish ancestry. select_baseline_run only accepts a candidate whose
     # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
     # window every candidate resolves to `unknown` and is rejected, so reuse
-    # never activates. Fetch the real history here. If the SHA is set but the
-    # history fetch fails (or returns empty), disable the commit rule (pass both
-    # as None) rather than enabling it with an empty window -- recency and
-    # artifact availability still gate the selection.
+    # never activates. Fetch the real history here.
+    #
+    # For external repos (THEROCK_REPOSITORY != GITHUB_REPOSITORY), we must be
+    # strict: if commit history cannot be fetched, fail closed by returning a
+    # selector that always returns None (no baseline). This ensures we don't
+    # select incompatible baselines when building against a pinned TheRock commit.
+    #
+    # For same-repo runs, we can be lenient: disable the commit rule and let
+    # recency/artifact availability gate the selection.
+    is_external_repo = github_repository != os.environ.get("GITHUB_REPOSITORY", "")
     ordered_commit_shas = None
     effective_commit_sha = current_commit_sha
     if current_commit_sha is not None:
@@ -503,6 +541,14 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
                 max_count=history_count,
             )
         except GitHubAPIError as exc:
+            if is_external_repo:
+                logger.warning(
+                    "%s could not fetch branch history for external repo (%s); "
+                    "failing closed - no baseline will be selected.",
+                    LOG_PREFIX,
+                    exc,
+                )
+                return lambda required_artifacts: None
             logger.warning(
                 "%s could not fetch branch history (%s); "
                 "skipping commit-compatibility rule.",
@@ -511,6 +557,13 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
             )
             ordered_commit_shas = None
         if not ordered_commit_shas:
+            if is_external_repo:
+                logger.warning(
+                    "%s empty branch history for external repo; "
+                    "failing closed - no baseline will be selected.",
+                    LOG_PREFIX,
+                )
+                return lambda required_artifacts: None
             effective_commit_sha = None
             ordered_commit_shas = None
 

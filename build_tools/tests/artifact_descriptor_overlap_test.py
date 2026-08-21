@@ -12,8 +12,12 @@ both `artifact-rocprofiler-sdk.toml` and `artifact-aqlprofile-tests.toml`
 included `profiler/aqlprofile/stage`, causing concurrent extraction to race
 (and fail with "file exists" errors) on overlapping files.
 
-This test loads the real artifact-*.toml descriptors from the source tree and
-checks that each stage directory (basedir) belongs to exactly one descriptor.
+This test loads TheRock-owned artifact-*.toml descriptors and checks that each
+stage directory (basedir) belongs to exactly one descriptor. Descriptor
+discovery uses ``git ls-files`` so it does not recursively scan generated build
+trees, caches, or the contents of submodules. Both tracked files and non-ignored
+untracked files are included, so a newly created descriptor is checked before
+it is staged.
 
 Limitations (cases this test does NOT catch):
   - Two artifacts with *different* basedirs whose installed files collide
@@ -25,11 +29,40 @@ Limitations (cases this test does NOT catch):
     enforcement. Catching this requires inspecting actual build output.
 """
 
+import subprocess
 import tomllib
 import unittest
 from pathlib import Path
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def get_descriptor_paths() -> list[Path]:
+    """Find TheRock-owned descriptors without crawling the whole workspace.
+
+    Using a directory allow-list would need updating whenever descriptors move
+    into a new source area, while a deny-list could easily miss a new generated
+    or external tree. Git already knows the relevant boundary: ``--cached``
+    lists files tracked by this repository (not files inside submodules), and
+    ``--others --exclude-standard`` adds new, non-ignored files while excluding
+    ignored build outputs and caches.
+    """
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ":(glob)**/artifact-*.toml",
+        ],
+        cwd=THEROCK_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [THEROCK_DIR / relpath for relpath in result.stdout.splitlines()]
 
 
 def get_basedirs(descriptor_path: Path) -> set[str]:
@@ -67,7 +100,7 @@ class ArtifactDescriptorOverlapTest(unittest.TestCase):
         seen: dict[str, Path] = {}
         errors: list[str] = []
 
-        descriptors = sorted(THEROCK_DIR.rglob("artifact-*.toml"))
+        descriptors = sorted(get_descriptor_paths())
         self.assertGreater(
             len(descriptors),
             0,
