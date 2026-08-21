@@ -752,10 +752,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-# RCCL's gfx1250 split artifact includes an install-owned RocJitsu translation
-# cache. Keep the pretranslation toolchain as an explicit staged dependency so
-# configure_stage.py enables ROCJITSU and ROCJITSU_HOTSWAP in comm-libs builds.
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi", "rocjitsu-hotswap"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 split_databases = ["hotswap_cache"]
 disable_platforms = ["windows"]
 
