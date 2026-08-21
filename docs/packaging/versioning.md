@@ -132,22 +132,18 @@ The script produces these versions for each release type:
 
 ### Post releases
 
-Python package versions may add a PEP 440 post-release segment to an existing
-version. For example, the versions are ordered as `7.14.0 < 7.14.0.post1 < 7.14.0.post2 < 7.14.1`. See the official
-[Python packaging guidance for post releases](https://packaging.python.org/en/latest/specifications/version-specifiers/#post-releases)
-for the definition of a post release and guidance on when to use one.
+A post release is a follow-up release of an existing package version, written
+in canonical form with a `.postN` segment. PEP 440 orders it after its base
+version and before the next patch: `7.14.0 < 7.14.0.post1 < 7.14.1`. TheRock's
+scripts do not generate these versions, but we may create one manually in
+exceptional cases to patch an individual Python package. See the official
+[Python packaging guidance](https://packaging.python.org/en/latest/specifications/version-specifiers/#post-releases)
+for what qualifies as a post release.
 
-TheRock's versioning and promotion scripts do not currently generate post
-release versions. We can create and publish them manually as needed in
-exceptional cases, giving us the option to patch an individual Python package
-without creating a new ROCm patch version or republishing unrelated packages.
-
-To preserve that option, TheRock scripts and published packages should tolerate
-post-release segments when comparing versions that are otherwise identical.
-For example, `7.14.0` and `7.14.0.post1` should be compatible, while `7.14.0`
-and `7.14.1` should remain incompatible. Exact dependency pins and runtime
-string comparisons must account for this distinction so a post release of one
-package does not require a coordinated post release of the entire package set.
+Version comparisons in TheRock scripts and published packages should tolerate
+versions that differ only by a post-release segment. For example, `7.14.0` and
+`7.14.0.post1` should be compatible, while `7.14.0` and `7.14.1` should not.
+This lets us patch one package without republishing the entire package set.
 
 ### BKC versions
 
@@ -277,43 +273,24 @@ When working with versions please use these tools and avoid custom parsing
   '1.2.0'
   ```
 
-- The `packaging.specifiers.SpecifierSet` utility:
-  https://packaging.pypa.io/en/stable/specifiers.html
-
-  Use `SpecifierSet` when code needs to apply the same compatibility rules as
-  Python package metadata. A prefix match can express compatibility across a
-  ROCm major/minor release while accepting stable patch and post releases:
+- [`packaging.specifiers.SpecifierSet`](https://packaging.pypa.io/en/stable/specifiers.html)
+  for testing constraints written as
+  [dependency specifiers](https://packaging.python.org/en/latest/specifications/dependency-specifiers/):
 
   ```python
   >>> from packaging.specifiers import SpecifierSet
   >>> from packaging.version import Version
-  >>> compatible_rocm = SpecifierSet("==7.14.*")
-  >>> Version("7.14.0") in compatible_rocm
+  >>> same_minor = SpecifierSet("==7.14.*")
+  >>> Version("7.14.0.post1") in same_minor
   True
-  >>> Version("7.14.0.post1") in compatible_rocm
+  >>> Version("7.15.0") in same_minor
+  False
+  >>> same_major_from_7_14 = SpecifierSet("~=7.14")
+  >>> Version("7.15.0") in same_major_from_7_14
   True
-  >>> Version("7.14.1") in compatible_rocm
-  True
-  >>> Version("7.15.0") in compatible_rocm
+  >>> Version("8.0.0") in same_major_from_7_14
   False
   ```
-
-  Exact equality has different semantics and excludes post releases:
-
-  ```python
-  >>> exact_release = SpecifierSet("==7.14.0")
-  >>> Version("7.14.0") in exact_release
-  True
-  >>> Version("7.14.0.post1") in exact_release
-  False
-  ```
-
-  `SpecifierSet("~=7.14.0")` is another way to accept `7.14.0` or newer
-  versions in the `7.14` series. Prefer `==7.14.*` when the policy is simply
-  "the major and minor components must match"; use `~=` when its lower bound is
-  also part of the compatibility requirement. Pre-releases are excluded by
-  default unless explicitly enabled or otherwise selected according to the
-  standard Python packaging rules.
 
 - Existing Python scripts:
 
