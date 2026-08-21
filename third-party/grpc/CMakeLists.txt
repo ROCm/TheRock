@@ -13,10 +13,21 @@ therock_subproject_fetch(therock-grpc-sources
 
 set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")
 
+# Use amd-llvm on ppc64le to avoid GCC/Clang TLS ABI mismatch when
+# gRPC static libs are linked into clang-compiled RDC binaries.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
+  set(_grpc_compiler_toolchain COMPILER_TOOLCHAIN amd-llvm)
+  set(_grpc_ssl_provider package)
+else()
+  set(_grpc_compiler_toolchain)
+  set(_grpc_ssl_provider module)
+endif()
+
 therock_cmake_subproject_declare(therock-grpc
   USE_DIST_AMDGPU_TARGETS
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   BINARY_DIR "${_binary_dir}"
+  ${_grpc_compiler_toolchain}
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD
   OUTPUT_ON_FAILURE
@@ -33,7 +44,7 @@ therock_cmake_subproject_declare(therock-grpc
     -DgRPC_ABSL_PROVIDER=module
     -DgRPC_CARES_PROVIDER=module
     -DgRPC_RE2_PROVIDER=module
-    -DgRPC_SSL_PROVIDER=module
+    -DgRPC_SSL_PROVIDER=${_grpc_ssl_provider}
     -DgRPC_PROTOBUF_PROVIDER=module
 
     # Disable tests and unnecessary language plugins
