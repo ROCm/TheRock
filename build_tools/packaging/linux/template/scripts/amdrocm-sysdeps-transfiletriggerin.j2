@@ -1,5 +1,4 @@
 {% include "template/scripts/_alternatives_lib.j2" %}
-# Fires once at the end of any transaction that installs files under the prefix,
-# i.e. after payload packages (llvm, runtime, ...) are unpacked, so every target exists.
+# Fires after payload packages are unpacked, so every target exists.
 alt_install
 exit 0

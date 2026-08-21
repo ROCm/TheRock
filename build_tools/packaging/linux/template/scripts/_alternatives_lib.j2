@@ -1,19 +1,8 @@
-{# Shared helpers for the /opt/rocm compat directory symlinks (issue ROCm/ROCm#6599).
-   Included by amdrocm-sysdeps postinst/prerm/transfiletriggerin. No mkdir: the
-   registration runs after payload is unpacked (dpkg trigger / rpm transfiletrigger)
-   and only registers slots whose target already exists, so it never turns a
-   payload-owned symlink (e.g. amdgcn -> lib/llvm/amdgcn) into a directory. #}
-alt_prefix() {
-    # The trigger watch path (%transfiletriggerin -- {{ install_prefix }}) and the
-    # deb path trigger both key on the build-time prefix, so relocation is not
-    # supported anyway; use the literal prefix rather than $RPM_INSTALL_PREFIX0,
-    # which is not guaranteed to be set in a file-trigger scriptlet.
-    printf '%s' "{{ install_prefix }}"
-}
-
-# Priority packs the version (base-14 major/minor/patch) plus a minutes-since-2020
-# tiebreaker so the highest version (else newest install) wins the /opt/rocm slot.
+{# Shared helpers for the /opt/rocm compat symlinks, included by the amdrocm-sysdeps
+   maintainer scripts. Registration runs after payload unpack and skips slots whose
+   target is absent, so it never turns a payload-owned symlink into a directory. #}
 alt_score() {
+    # base-14 version pack + minutes-since-2020 tiebreaker; highest wins the slot.
     local now s
     now=$(date -u +%s)
     s=$(( {{ version_major }} - 3 ))
@@ -25,10 +14,9 @@ alt_score() {
 alt_install() {
     command -v update-alternatives >/dev/null || return 0
     local p score
-    p="$(alt_prefix)"; [ -n "$p" ] || return 0
+    p="{{ install_prefix }}"
     score="$(alt_score)"
-    # _reg <link> <target> <name>: register only if the target exists (dir or
-    # symlink), so a slot missing at this point is simply skipped, never created.
+    # register a slot only if its target exists (dir or symlink); never create it.
     _reg() { if [ -e "$2" ]; then update-alternatives --install "$1" "$3" "$2" "$score" || true; fi; }
     _reg /opt/rocm/core                     "$p"          core
     _reg /opt/rocm/core-{{ version_major }} "$p"          core-{{ version_major }}
@@ -44,8 +32,7 @@ alt_install() {
 
 alt_remove() {
     command -v update-alternatives >/dev/null || return 0
-    local p
-    p="$(alt_prefix)"; [ -n "$p" ] || return 0
+    local p="{{ install_prefix }}"
     update-alternatives --remove core                     "$p"         || true
     update-alternatives --remove core-{{ version_major }} "$p"         || true
     update-alternatives --remove rocm-bin                 "$p/bin"     || true

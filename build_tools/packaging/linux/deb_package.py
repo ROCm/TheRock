@@ -407,8 +407,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
                 f.write(template.render(context))
             os.chmod(script_file, 0o755)
 
-    # Non-executable dpkg control files (e.g. debian/triggers). debhelper installs
-    # these into the .deb control area automatically.
+    # Non-executable dpkg control files (e.g. debian/triggers); dh_installdeb ships them.
     NONEXEC_CONTROL = {"triggers"}
     for control in NONEXEC_CONTROL:
         pattern = f"{pkg_name}-{control}.j2"
@@ -416,8 +415,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             control_file = Path(deb_dir) / control
             template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
             with control_file.open("w", encoding="utf-8") as f:
-                # dpkg requires newline-terminated directives; Jinja strips the
-                # template's trailing newline, so re-add exactly one.
+                # Jinja strips the trailing newline; dpkg needs directives newline-terminated.
                 f.write(template.render(context).rstrip("\n") + "\n")
 
 

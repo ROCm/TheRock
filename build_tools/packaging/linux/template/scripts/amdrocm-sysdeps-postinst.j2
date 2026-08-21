@@ -1,8 +1,7 @@
 #!/bin/bash
 {% include "template/scripts/_alternatives_lib.j2" %}
 {% if target == "deb" %}
-# deb: run on initial configure and whenever the dpkg path trigger fires after
-# payload packages have unpacked files under the prefix (see amdrocm-sysdeps triggers).
+# deb: register on configure and on the dpkg trigger (fires after payload unpack).
 case "$1" in
     (configure|triggered) alt_install ;;
     (abort-upgrade|abort-remove|abort-deconfigure) : ;;
