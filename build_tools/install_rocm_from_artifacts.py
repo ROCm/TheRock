@@ -72,6 +72,14 @@ Examples:
         --amdgpu-family gfx110X-all \
         --output-dir build
     ```
+- Downloads and unpacks the version `7.13.0rc2` gfx110X artifacts from the
+  multi-arch prerelease tarball index to the default output directory
+  `therock-build`:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --release 7.13.0rc2 \
+        --amdgpu-family gfx110X-all
+    ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
   gfx120X artifacts from release tag `dev-tarball` to the default output directory `therock-build`:
     ```
@@ -123,13 +131,11 @@ is passed, it will overwrite the default "therock-build" directory.
 """
 
 import argparse
-import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
-from datetime import datetime
+from datetime import datetime, timezone
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
-from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.s3_buckets import S3BucketConfig, get_release_bucket_config
+import json
 from pathlib import Path
 import platform
 import re
@@ -138,20 +144,21 @@ import subprocess
 import sys
 import tarfile
 from typing import Optional
+import urllib.error
+import urllib.request
 
 PLATFORM = platform.system().lower()
 NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
 DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
-MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
-s3_client = boto3.client(
-    "s3",
-    region_name=NIGHTLY_TARBALL_BUCKET.region,
-    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-)
+PRERELEASE_TARBALL_BUCKET = get_release_bucket_config("prerelease", "tarball")
 
 # A published tarball name has a structured version suffix, so this pattern
 # can unambiguously separate hyphenated artifact groups from their version.
-MULTIARCH_TARBALL_VERSION_PATTERN = r"\d+\.\d+\.\d+(?:(?:a|rc)\d{8}|\.dev0\+[0-9a-f]+)?"
+# The trailing suffix is a nightly ('a'/'rc' plus a date), a prerelease
+# ('rc' plus a small counter), or a dev build ('.dev0+' plus a commit hash).
+MULTIARCH_TARBALL_VERSION_PATTERN = (
+    r"\d+\.\d+\.\d+(?:(?:a|rc)\d{8}|rc\d{1,7}|\.dev0\+[0-9a-f]+)?"
+)
 MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
     r"^therock-dist-"
     r"(?P<platform>linux|windows)-"
@@ -159,6 +166,31 @@ MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
     rf"(?P<version>{MULTIARCH_TARBALL_VERSION_PATTERN})"
     r"\.tar\.gz$"
 )
+
+
+# Release kinds that publish multi-arch tarballs, each with the version form
+# it uses and the bucket (and therefore CDN) the tarballs are published to.
+# The nightly and prerelease patterns are disjoint: a nightly 'rc' is followed
+# by an 8-digit date, a prerelease 'rc' by a shorter counter.
+RELEASE_KIND_VERSION_PATTERNS = {
+    "nightly": re.compile(r"\d+\.\d+\.\d+(?:a|rc)\d{8}"),
+    "prerelease": re.compile(r"\d+\.\d+\.\d+rc\d{1,7}"),
+    "dev": re.compile(r"\d+\.\d+\.\d+\.dev0\+[0-9a-f]+"),
+}
+
+RELEASE_KIND_TARBALL_BUCKETS = {
+    "nightly": NIGHTLY_TARBALL_BUCKET,
+    "prerelease": PRERELEASE_TARBALL_BUCKET,
+    "dev": DEV_TARBALL_BUCKET,
+}
+
+
+def classify_release_version(version: str) -> Optional[str]:
+    """Return the release kind a version string belongs to, or None if unknown."""
+    for release_kind, pattern in RELEASE_KIND_VERSION_PATTERNS.items():
+        if pattern.fullmatch(version):
+            return release_kind
+    return None
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -188,40 +220,76 @@ def extract_version_from_asset_name(
     return match["version"]
 
 
-def _multiarch_tarball_s3_key(asset_name: str) -> str:
-    """Return the S3 key for a published multi-arch tarball."""
-    return f"{MULTIARCH_TARBALL_S3_PREFIX}/{asset_name}"
+def _multiarch_tarball_url(bucket: S3BucketConfig, asset_name: str) -> str:
+    """Return the CDN download URL for a published multi-arch tarball."""
+    return f"{_multiarch_tarball_index_base_url(bucket)}/{asset_name}"
 
 
-def _multiarch_tarball_asset_name(s3_key: str) -> Optional[str]:
-    """Return the asset name from a published multi-arch tarball S3 key."""
-    key_prefix = f"{MULTIARCH_TARBALL_S3_PREFIX}/"
-    if not s3_key.startswith(key_prefix):
-        return None
-    return s3_key.removeprefix(key_prefix)
+def _multiarch_tarball_index_base_url(bucket: S3BucketConfig) -> str:
+    """Return the CDN directory holding published multi-arch tarballs."""
+    if not bucket.cdn_url:
+        raise ValueError(f"Bucket {bucket.name!r} has no CDN in front of it")
+    return bucket.cdn_url.rstrip("/")
 
 
-def _list_multiarch_nightly_tarball_objects(platform_str: str):
-    """Yield nightly multi-arch tarball objects for a target platform."""
-    prefix = _multiarch_tarball_s3_key(f"therock-dist-{platform_str}-")
-    paginator = s3_client.get_paginator("list_objects_v2")
+def _read_url(url: str) -> bytes:
+    """Read a URL in full, reporting the URL on failure."""
+    try:
+        with urllib.request.urlopen(url) as response:
+            return response.read()
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to fetch {url}: {e}") from e
 
-    for page in paginator.paginate(Bucket=NIGHTLY_TARBALL_BUCKET.name, Prefix=prefix):
-        yield from page.get("Contents", [])
 
+def _fetch_multiarch_tarball_index(bucket: S3BucketConfig) -> list[dict]:
+    """Fetch the list of tarballs published to a bucket from its CDN index.
 
-def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
+    The index page generated by build_tools/index_generation_s3_tar.py embeds
+    its file list as a JSON array so that the page can filter client-side.
+    Reading that array is how a caller without S3 credentials enumerates the
+    published tarballs; the buckets behind the CDN do not all grant anonymous
+    read access, and the CDN itself does not expose the S3 listing API.
+
+    Returns:
+        List of dicts with keys: name, mtime (a POSIX timestamp).
     """
-    Query S3 to find all GPU families with multi-arch nightly releases.
-    Useful for error messages when an invalid GPU family is specified.
+    index_url = f"{_multiarch_tarball_index_base_url(bucket)}/index.html"
+    index_html = _read_url(index_url).decode("utf-8", errors="replace")
+    match = re.search(r"const files = (\[.*?\]);", index_html, re.DOTALL)
+    if match is None:
+        raise RuntimeError(
+            f"No file list found in the tarball index at {index_url}. "
+            "The index page format may have changed."
+        )
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Malformed file list in the index at {index_url}") from e
+
+
+def _list_multiarch_tarball_entries(
+    bucket: S3BucketConfig, platform_str: str
+) -> list[dict]:
+    """Return published multi-arch tarball entries for a target platform."""
+    name_prefix = f"therock-dist-{platform_str}-"
+    return [
+        entry
+        for entry in _fetch_multiarch_tarball_index(bucket)
+        if entry.get("name", "").startswith(name_prefix)
+    ]
+
+
+def list_available_nightly_gpu_families(platform_str: Optional[str] = None) -> set[str]:
     """
+    Read the nightly tarball index to find all GPU families with multi-arch
+    nightly releases. Useful for error messages when an invalid GPU family is
+    specified.
+    """
+    platform_str = platform_str or PLATFORM
     families: set[str] = set()
 
-    for obj in _list_multiarch_nightly_tarball_objects(platform_str):
-        asset_name = _multiarch_tarball_asset_name(obj["Key"])
-        if asset_name is None:
-            continue
-        match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
+    for entry in _list_multiarch_tarball_entries(NIGHTLY_TARBALL_BUCKET, platform_str):
+        match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(entry["name"])
         if (
             match
             and match["platform"] == platform_str
@@ -234,21 +302,20 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 
 def _fetch_and_sort_nightly_releases(
     artifact_group: str,
-    platform_str: str = PLATFORM,
+    platform_str: Optional[str] = None,
 ) -> list[dict]:
     """
-    Fetch and sort multi-arch nightly releases from S3.
+    Fetch and sort multi-arch nightly releases from the nightly tarball index.
 
     Returns:
-        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
+        List of dicts with keys: version, asset_name, last_modified, parsed_date
         Sorted by recency (newest first).
     """
+    platform_str = platform_str or PLATFORM
     releases: list[dict] = []
 
-    for obj in _list_multiarch_nightly_tarball_objects(platform_str):
-        asset_name = _multiarch_tarball_asset_name(obj["Key"])
-        if asset_name is None:
-            continue
+    for entry in _list_multiarch_tarball_entries(NIGHTLY_TARBALL_BUCKET, platform_str):
+        asset_name = entry["name"]
         version = extract_version_from_asset_name(
             asset_name, artifact_group, platform_str
         )
@@ -257,8 +324,9 @@ def _fetch_and_sort_nightly_releases(
                 {
                     "version": version,
                     "asset_name": asset_name,
-                    "last_modified": obj["LastModified"],
-                    "size": obj["Size"],
+                    "last_modified": datetime.fromtimestamp(
+                        entry["mtime"], tz=timezone.utc
+                    ),
                     "parsed_date": parse_nightly_version(version),
                 }
             )
@@ -275,10 +343,11 @@ def _fetch_and_sort_nightly_releases(
 
 def discover_latest_release(
     artifact_group: str,
-    platform_str: str = PLATFORM,
+    platform_str: Optional[str] = None,
 ) -> Optional[tuple[str, str]]:
     """
-    Query S3 to find the latest multi-arch nightly release for an artifact group.
+    Read the nightly tarball index to find the latest multi-arch nightly
+    release for an artifact group.
 
     Returns:
         Tuple of (version_string, full_asset_name) or None if not found.
@@ -320,17 +389,20 @@ def _create_output_directory(output_dir: Path):
 
 
 def _retrieve_multiarch_tarball(
-    release_bucket: str,
+    release_bucket: S3BucketConfig,
     asset_name: str,
     output_dir: Path,
 ) -> None:
-    """Download a multi-arch tarball from S3, then extract it."""
-    s3_key = _multiarch_tarball_s3_key(asset_name)
+    """Download a multi-arch tarball from the CDN, then extract it."""
+    url = _multiarch_tarball_url(release_bucket, asset_name)
     destination = output_dir / asset_name
-    log(f"Downloading s3://{release_bucket}/{s3_key}")
+    log(f"Downloading {url}")
 
-    with open(destination, "wb") as file:
-        s3_client.download_fileobj(release_bucket, s3_key, file)
+    try:
+        with urllib.request.urlopen(url) as response, open(destination, "wb") as file:
+            shutil.copyfileobj(response, file)
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to download {url}: {e}") from e
 
     _untar_files(output_dir, destination)
 
@@ -635,15 +707,15 @@ def retrieve_artifacts_by_release(args):
     """
     output_dir = args.output_dir
     artifact_group = args.artifact_group
-    nightly_regex_expression = r"\d+\.\d+\.\d+(?:a|rc)\d{8}"
-    dev_regex_expression = r"\d+\.\d+\.\d+\.dev0\+[0-9a-f]+"
-    nightly_release = re.fullmatch(nightly_regex_expression, args.release) is not None
-    dev_release = re.fullmatch(dev_regex_expression, args.release) is not None
-    if not nightly_release and not dev_release:
-        log("This script requires a nightly or dev release version.")
+    release_kind = classify_release_version(args.release)
+    if release_kind is None:
+        log("This script requires a nightly, prerelease or dev release version.")
         log("Please retrieve the correct release version from:")
         log(
             "\t - https://rocm.nightlies.amd.com/tarball-multi-arch/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
+        )
+        log(
+            "\t - https://rocm.prereleases.amd.com/tarball-multi-arch/ (prerelease examples: 7.13.0rc2, 10.0.0rc0)"
         )
         log(
             "\t - https://rocm.devreleases.amd.com/tarball-multi-arch/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
@@ -653,22 +725,21 @@ def retrieve_artifacts_by_release(args):
 
     release_version = args.release
     asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-    release_bucket = NIGHTLY_TARBALL_BUCKET if nightly_release else DEV_TARBALL_BUCKET
-    release_kind = "nightly" if nightly_release else "dev"
+    release_bucket = RELEASE_KIND_TARBALL_BUCKETS[release_kind]
+    url = _multiarch_tarball_url(release_bucket, asset_name)
 
     log(
         f"Retrieving {release_kind} multi-arch artifacts from "
-        f"s3://{release_bucket.name}/{MULTIARCH_TARBALL_S3_PREFIX}/"
+        f"{_multiarch_tarball_index_base_url(release_bucket)}/"
     )
     if args.dry_run:
         log(
-            f"[DRY RUN] Would download: s3://{release_bucket.name}/"
-            f"{_multiarch_tarball_s3_key(asset_name)} "
+            f"[DRY RUN] Would download: {url} "
             f"(asset {asset_name}, version {release_version})"
         )
         return
 
-    _retrieve_multiarch_tarball(release_bucket.name, asset_name, output_dir)
+    _retrieve_multiarch_tarball(release_bucket, asset_name, output_dir)
 
 
 def retrieve_artifacts_by_input_dir(args):
@@ -704,7 +775,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 def retrieve_artifacts_by_latest_release(args):
     """
-    Find and retrieve the latest multi-arch nightly release from S3.
+    Find and retrieve the latest multi-arch nightly release from the CDN.
     """
     log(f"Finding latest nightly release for {args.artifact_group}...")
 
@@ -727,7 +798,7 @@ def retrieve_artifacts_by_latest_release(args):
         return
 
     _retrieve_multiarch_tarball(
-        NIGHTLY_TARBALL_BUCKET.name,
+        NIGHTLY_TARBALL_BUCKET,
         asset_name,
         args.output_dir,
     )
@@ -781,7 +852,7 @@ def main(argv):
     group.add_argument(
         "--release",
         type=str,
-        help="Release version of TheRock to install, from the multi-arch nightly tarball index (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
+        help="Release version of TheRock to install, from the multi-arch nightly tarball index (X.Y.ZrcYYYYMMDD), prerelease tarball index (X.Y.ZrcN) or dev-tarball (X.Y.Z.dev0+{hash})",
     )
 
     group.add_argument(

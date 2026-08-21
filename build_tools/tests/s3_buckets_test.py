@@ -15,6 +15,7 @@ from _therock_utils.s3_buckets import (
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
     get_release_bucket_config,
+    s3_bucket_configs,
 )
 
 
@@ -120,6 +121,36 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
         )
         self.assertEqual(config.name, "therock-prerelease-packages")
         self.assertEqual(config.iam_role, "therock-prerelease")
+
+    def test_release_buckets_served_over_a_cdn_carry_its_url(self):
+        """Every python, tarball and package release bucket is CDN-fronted.
+
+        Downloads through the CDN need no AWS credentials, and it is the only
+        public read path for the prerelease buckets, so a missing URL would
+        silently take a caller back to requiring credentials.
+        """
+        for release_type in ("dev", "nightly", "prerelease"):
+            for bucket_type in ("python", "tarball", "packages"):
+                with self.subTest(release_type=release_type, bucket_type=bucket_type):
+                    config = get_release_bucket_config(
+                        release_type=release_type, bucket_type=bucket_type
+                    )
+                    self.assertIsNotNone(config.cdn_url)
+                    self.assertTrue(config.cdn_url.startswith("https://"))
+
+    def test_prerelease_tarball_cdn_url(self):
+        config = get_release_bucket_config(
+            release_type="prerelease", bucket_type="tarball"
+        )
+        self.assertEqual(
+            config.cdn_url, "https://rocm.prereleases.amd.com/tarball-multi-arch"
+        )
+
+    def test_artifacts_buckets_have_no_cdn(self):
+        for config in s3_bucket_configs:
+            if config.name.endswith("-artifacts"):
+                with self.subTest(bucket=config.name):
+                    self.assertIsNone(config.cdn_url)
 
     def test_bkc_release_types_use_existing_release_buckets(self):
         for release_type, bucket_name in (

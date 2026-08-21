@@ -33,6 +33,16 @@ class S3BucketConfig:
     iam_role: str | None = field(default=None)
     """IAM role name that grants write access to this bucket (e.g. 'therock-ci'), if any"""
 
+    cdn_url: str | None = field(default=None)
+    """Base URL of the CloudFront distribution in front of this bucket, if any.
+
+    Downloading through the CDN needs no AWS credentials and is the only public
+    way to read buckets that do not grant anonymous S3 read access (such as the
+    prerelease buckets). Note that the CDN path segment does not always match
+    the S3 key prefix: 'tarball-multi-arch/' on the CDN maps to 'v4/tarball/'
+    in the bucket, for example. See docs/development/s3_buckets.md.
+    """
+
     @property
     def write_access_iam_role(self) -> str | None:
         """IAM role granting write access to the bucket"""
@@ -51,24 +61,72 @@ s3_bucket_configs = [
     S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
-    S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
-    S3BucketConfig("therock-dev-python", iam_role="therock-dev"),
-    S3BucketConfig("therock-dev-tarball", iam_role="therock-dev"),
+    S3BucketConfig(
+        "therock-dev-packages",
+        iam_role="therock-dev",
+        cdn_url="https://rocm.devreleases.amd.com/packages-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-dev-python",
+        iam_role="therock-dev",
+        cdn_url="https://rocm.devreleases.amd.com/whl-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-dev-tarball",
+        iam_role="therock-dev",
+        cdn_url="https://rocm.devreleases.amd.com/tarball-multi-arch",
+    ),
     # Release type "nightly"
     S3BucketConfig("therock-nightly-artifacts", iam_role="therock-nightly"),
-    S3BucketConfig("therock-nightly-packages", iam_role="therock-nightly"),
-    S3BucketConfig("therock-nightly-python", iam_role="therock-nightly"),
-    S3BucketConfig("therock-nightly-tarball", iam_role="therock-nightly"),
+    S3BucketConfig(
+        "therock-nightly-packages",
+        iam_role="therock-nightly",
+        cdn_url="https://rocm.nightlies.amd.com/packages-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-nightly-python",
+        iam_role="therock-nightly",
+        cdn_url="https://rocm.nightlies.amd.com/whl-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-nightly-tarball",
+        iam_role="therock-nightly",
+        cdn_url="https://rocm.nightlies.amd.com/tarball-multi-arch",
+    ),
     # Release type "prerelease"
     S3BucketConfig("therock-prerelease-artifacts", iam_role="therock-prerelease"),
-    S3BucketConfig("therock-prerelease-packages", iam_role="therock-prerelease"),
-    S3BucketConfig("therock-prerelease-python", iam_role="therock-prerelease"),
-    S3BucketConfig("therock-prerelease-tarball", iam_role="therock-prerelease"),
+    S3BucketConfig(
+        "therock-prerelease-packages",
+        iam_role="therock-prerelease",
+        cdn_url="https://rocm.prereleases.amd.com/packages-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-prerelease-python",
+        iam_role="therock-prerelease",
+        cdn_url="https://rocm.prereleases.amd.com/whl-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-prerelease-tarball",
+        iam_role="therock-prerelease",
+        cdn_url="https://rocm.prereleases.amd.com/tarball-multi-arch",
+    ),
     # Release type "release" (no automated credentials for uploading)
     S3BucketConfig("therock-release-artifacts", iam_role=None),
-    S3BucketConfig("therock-release-packages", iam_role=None),
-    S3BucketConfig("therock-release-python", iam_role=None),
-    S3BucketConfig("therock-release-tarball", iam_role=None),
+    S3BucketConfig(
+        "therock-release-packages",
+        iam_role=None,
+        cdn_url="https://repo.amd.com/rocm/packages-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-release-python",
+        iam_role=None,
+        cdn_url="https://repo.amd.com/rocm/whl-multi-arch",
+    ),
+    S3BucketConfig(
+        "therock-release-tarball",
+        iam_role=None,
+        cdn_url="https://repo.amd.com/rocm/tarball-multi-arch",
+    ),
 ]
 
 
