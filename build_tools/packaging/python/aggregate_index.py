@@ -41,6 +41,7 @@ CLI subcommands:
     # Validate a local public-tree snapshot without writing outputs.
     python aggregate_index.py validate-content \
         --manifest build_tools/packaging/python/rocm_whl_next_ownership.yaml \
+        --stream nightly \
         --content-root /tmp/rocm-whl-next-content
 
     # Generate routed aggregate outputs directly from the manifest.
