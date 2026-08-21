@@ -29,6 +29,7 @@ therock_declare_flag(
     HIPDNN_ENABLE_SDPA=ON
   SUB_PROJECTS
     hipDNN
+    hipkernelprovider
 )
 
 therock_declare_flag(
@@ -72,6 +73,16 @@ therock_declare_flag(
     MIOPEN_ENABLE_HIPDNN_WRAPPER=ON
   SUB_PROJECTS
     MIOpen
+)
+
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
+  CMAKE_VARS
+    HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
+  SUB_PROJECTS
+    hipDNN
 )
 
 therock_declare_flag(
