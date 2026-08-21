@@ -8,7 +8,5 @@ include = [
 [components.dev."emulation/rocjitsu/stage"]
 [components.run."emulation/rocjitsu/stage"]
 include = [
-  "bin/rj_pretranslate",
-  "bin/rocjitsu-pretranslate.py",
   "share/rocjitsu/**",
 ]
