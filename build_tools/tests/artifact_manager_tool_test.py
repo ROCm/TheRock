@@ -26,6 +26,7 @@ def is_windows():
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
@@ -1505,6 +1506,118 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx110X-all", result)
         self.assertIn("gfx1100", result)
         self.assertIn("gfx1101", result)
+
+
+class BootstrapMarkerTest(unittest.TestCase):
+    """End-to-end tests for where bootstrapping writes ".prebuilt" markers.
+
+    Covers both BootstrappingPopulator implementations: artifact_manager.py
+    (CI fetch) and buildctl.py (local bootstrap from an artifacts dir).
+    """
+
+    def setUp(self):
+        # Import here so sys.path is already set up.
+        import artifact_manager
+        import buildctl
+
+        self.populator_factories = {
+            "artifact_manager": artifact_manager.BootstrappingPopulator,
+            "buildctl": buildctl.BootstrappingPopulator,
+        }
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="bootstrap_marker_test_"))
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _make_archive(self, tag: str, basedir: str, relfiles) -> Path:
+        """Write a minimal artifact archive declaring a single manifest basedir."""
+        content_dir = self.temp_dir / "content" / tag
+        for relfile in relfiles:
+            p = content_dir / basedir / relfile
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(relfile)
+        manifest = content_dir / "artifact_manifest.txt"
+        manifest.write_text(basedir + "\n")
+
+        archive_path = self.temp_dir / f"{tag}.tar.xz"
+        with open_archive_for_write(archive_path, "xz") as tf:
+            # artifact_manifest.txt must be the first member.
+            tf.add(str(manifest), arcname="artifact_manifest.txt")
+            for relfile in relfiles:
+                tf.add(
+                    str(content_dir / basedir / relfile),
+                    arcname=f"{basedir}/{relfile}",
+                )
+        return archive_path
+
+    def _bootstrap(self, impl: str, basedir: str, relfiles) -> Path:
+        tag = f"{impl}_lib_generic"
+        archive = self._make_archive(tag, basedir, relfiles)
+        output_dir = self.temp_dir / f"build-{impl}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.populator_factories[impl](output_path=output_dir)(archive)
+        return output_dir
+
+    def test_nested_basedir_marks_enclosing_stage_dir(self):
+        """Regression test for a basedir nested below the subproject stage dir.
+
+        `dctools/artifact-rdc.toml` declares
+        "dctools/rdc/stage/portable-rdc". Naming the marker after that basedir
+        yields "dctools/rdc/stage/portable-rdc.prebuilt", which
+        therock_subproject.cmake never checks, so rdc is rebuilt from source
+        despite its artifact having been fetched and extracted.
+        """
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl,
+                    "dctools/rdc/stage/portable-rdc",
+                    ["bin/rdcd", "lib/librdc.so"],
+                )
+                stage_dir = output_dir / "dctools" / "rdc" / "stage"
+
+                # The marker the build looks for: "${_stage_dir}.prebuilt".
+                self.assertTrue(
+                    (output_dir / "dctools" / "rdc" / "stage.prebuilt").exists(),
+                    "Bootstrap marker not created beside the subproject stage dir",
+                )
+                self.assertFalse(
+                    (stage_dir / "portable-rdc.prebuilt").exists(),
+                    "Marker written at a path the build never checks",
+                )
+                # Extraction is unaffected: content still lands in the basedir.
+                self.assertTrue((stage_dir / "portable-rdc" / "bin" / "rdcd").exists())
+                self.assertTrue(
+                    (stage_dir / "portable-rdc" / "lib" / "librdc.so").exists()
+                )
+
+    def test_stage_basedir_marker_unchanged(self):
+        """The ~100 basedirs that are stage dirs keep their existing marker."""
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl, "core/ROCR-Runtime/stage", ["lib/libhsa-runtime64.so"]
+                )
+                subproject_dir = output_dir / "core" / "ROCR-Runtime"
+
+                self.assertTrue((subproject_dir / "stage.prebuilt").exists())
+                self.assertTrue(
+                    (subproject_dir / "stage" / "lib" / "libhsa-runtime64.so").exists()
+                )
+
+    def test_basedir_without_stage_component_marker_unchanged(self):
+        """A basedir with no "stage" component is left alone."""
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl, "math-libs/hipthreads/build", ["lib/libhipthreads.so"]
+                )
+
+                self.assertTrue(
+                    (
+                        output_dir / "math-libs" / "hipthreads" / "build.prebuilt"
+                    ).exists()
+                )
 
 
 if __name__ == "__main__":

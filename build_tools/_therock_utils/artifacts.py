@@ -33,6 +33,38 @@ from .archive_util import open_archive_for_read
 from .pattern_match import PatternMatcher, MatchPredicate
 
 
+# Every subproject stage directory is named "stage": therock_subproject.cmake
+# derives it as "${BINARY_DIR}/${DIR_PREFIX}stage" and DIR_PREFIX is unset for
+# every subproject in the tree.
+STAGE_DIR_NAME = "stage"
+
+
+def prebuilt_marker_relpath(relpath: str) -> str:
+    """Maps an artifact manifest relpath to the bootstrap marker the build reads.
+
+    therock_subproject.cmake looks for the marker beside the subproject's stage
+    directory, as "${_stage_dir}.prebuilt". Almost every artifact descriptor
+    declares its basedir as the stage directory itself, so the marker is simply
+    "<relpath>.prebuilt".
+
+    A descriptor may however declare a basedir *below* its stage directory (e.g.
+    "dctools/rdc/stage/portable-rdc", which scopes the artifact to RDC's
+    INSTALL_DESTINATION). Naming the marker after that basedir yields a path the
+    build never checks, so the subproject is rebuilt from source even though its
+    artifact was fetched and extracted. Truncate at the innermost enclosing
+    "stage" component so such basedirs still mark their enclosing subproject.
+
+    Relpaths whose last component is "stage" (the overwhelming majority) and
+    relpaths with no "stage" component at all (e.g. "math-libs/hipthreads/build")
+    are returned unchanged apart from the suffix.
+    """
+    parts = PurePosixPath(relpath).parts
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] == STAGE_DIR_NAME:
+            return str(PurePosixPath(*parts[: i + 1])) + ".prebuilt"
+    return relpath + ".prebuilt"
+
+
 class ArtifactName:
     def __init__(self, name: str, component: str, target_family: str):
         self.name = name
