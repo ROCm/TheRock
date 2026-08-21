@@ -1,71 +1,15 @@
 #!/bin/bash
-
-is_debian_like() {
-    local id_like="$1"
-    case " $id_like " in
-        (*" debian "*|*" ubuntu "*)
-            return 0
-            ;;
-        (*)
-            return 1
-            ;;
-    esac
-}
-
-do_update_alternatives(){
-    # skip update if program doesn't exist
-    command -v update-alternatives >/dev/null || return 0
-    local altscore now
-    now=$(date -u +%s)
-
-    # Highest semver wins (else newest install); score must fit in 32 bits.
-    altscore=$(({{ version_major }} - 3))
-    altscore=$((altscore * 14 + {{ version_minor }})) # Allow up to 14 minor
-    altscore=$((altscore * 14 + {{ version_patch }})) # Allow up to 14 patch
-    altscore=$((altscore*1000000+(now-1600000000)/60))
-
-    {% if target == "deb" %}
-       PKG_INSTALL_PREFIX={{ install_prefix }}
-    {% else %}
-       PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
-    {% endif %}
-
-    # Guard against an empty prefix so the mkdir below never lands at /.
-    [ -n "$PKG_INSTALL_PREFIX" ] || return 0
-
-    # Seed dirs first: update-alternatives errors on a missing target, and sysdeps configures before payload ships them.
-    mkdir -p "$PKG_INSTALL_PREFIX"/bin "$PKG_INSTALL_PREFIX"/lib "$PKG_INSTALL_PREFIX"/include "$PKG_INSTALL_PREFIX"/llvm "$PKG_INSTALL_PREFIX"/amdgcn "$PKG_INSTALL_PREFIX"/libexec "$PKG_INSTALL_PREFIX"/share
-
-    # Install /opt/rocm/core soft link
-    update-alternatives --install "/opt/rocm/core" "core" "$PKG_INSTALL_PREFIX" "$altscore"
-    update-alternatives --install "/opt/rocm/core-{{ version_major }}" "core-{{ version_major }}" "$PKG_INSTALL_PREFIX" "$altscore"
-
-    # Install /opt/rocm/bin, /opt/rocm/lib, and /opt/rocm/include soft links
-    update-alternatives --install "/opt/rocm/bin" "rocm-bin" "$PKG_INSTALL_PREFIX/bin" "$altscore"
-    update-alternatives --install "/opt/rocm/lib" "rocm-lib" "$PKG_INSTALL_PREFIX/lib" "$altscore"
-    update-alternatives --install "/opt/rocm/include" "rocm-include" "$PKG_INSTALL_PREFIX/include" "$altscore"
-
-    # Install /opt/rocm/llvm, /opt/rocm/amdgcn, /opt/rocm/libexec, and /opt/rocm/share soft links
-    update-alternatives --install "/opt/rocm/llvm" "rocm-llvm" "$PKG_INSTALL_PREFIX/llvm" "$altscore"
-    update-alternatives --install "/opt/rocm/amdgcn" "rocm-amdgcn" "$PKG_INSTALL_PREFIX/amdgcn" "$altscore"
-    update-alternatives --install "/opt/rocm/libexec" "rocm-libexec" "$PKG_INSTALL_PREFIX/libexec" "$altscore"
-    update-alternatives --install "/opt/rocm/share" "rocm-share" "$PKG_INSTALL_PREFIX/share" "$altscore"
-    true
-}
-
-if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
-then
-    case "$1" in
-       (configure)
-       do_update_alternatives
-       ;;
-       (abort-upgrade|abort-remove|abort-deconfigure)
-           echo "$1"
-       ;;
-       (*)
-          exit 0
-       ;;
-    esac
-else
-    do_update_alternatives
-fi
+{% include "template/scripts/_alternatives_lib.j2" %}
+{% if target == "deb" %}
+# deb: run on initial configure and whenever the dpkg path trigger fires after
+# payload packages have unpacked files under the prefix (see amdrocm-sysdeps triggers).
+case "$1" in
+    (configure|triggered) alt_install ;;
+    (abort-upgrade|abort-remove|abort-deconfigure) : ;;
+    (*) : ;;
+esac
+{% else %}
+# rpm: registration is done by %transfiletriggerin after payload is unpacked.
+:
+{% endif %}
+exit 0
