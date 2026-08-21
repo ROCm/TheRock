@@ -29,6 +29,7 @@ therock_declare_flag(
     HIPDNN_ENABLE_SDPA=ON
   SUB_PROJECTS
     hipDNN
+    hipkernelprovider
 )
 
 therock_declare_flag(
@@ -51,6 +52,19 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+# Gates the generic kernel ingestor platform described in RFC 0017:
+# rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_KERNEL_INGESTOR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
+  CMAKE_VARS
+    HIPDNN_ENABLE_KERNEL_INGESTOR=ON
+  SUB_PROJECTS
+    hipDNN
+    hipkernelprovider
+)
+
 therock_declare_flag(
   NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
   DEFAULT_VALUE OFF
@@ -59,6 +73,16 @@ therock_declare_flag(
     MIOPEN_ENABLE_HIPDNN_WRAPPER=ON
   SUB_PROJECTS
     MIOpen
+)
+
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
+  CMAKE_VARS
+    HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
+  SUB_PROJECTS
+    hipDNN
 )
 
 therock_declare_flag(
@@ -90,6 +114,19 @@ therock_declare_flag(
     LLVM_ENABLE_ASSERTIONS=ON
   SUB_PROJECTS
     amd-llvm
+)
+
+therock_declare_flag(
+  NAME WINDOWS_DRIVER_BUILD
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  GLOBAL_PROPAGATE_FLAG
+  CMAKE_VARS
+    COMGR_DLL_NAME=amd_comgr_drivers.dll
+  SUB_PROJECTS
+    amd-comgr
+    hip-clr
+    ocl-clr
 )
 
 ###############################################################################
