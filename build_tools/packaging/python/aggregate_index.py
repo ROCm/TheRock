@@ -88,7 +88,7 @@ from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 
 
-MANIFEST_SCHEMA_VERSION = 2
+MANIFEST_SCHEMA_VERSION = 3
 ROUTES_SCHEMA_VERSION = 2
 VALIDATION_SCHEMA_VERSION = 2
 SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
@@ -156,9 +156,10 @@ class PackageOwnership:
 
 @dataclasses.dataclass(frozen=True)
 class StreamConfig:
-    """Known streams and the default package stream set."""
+    """Known streams, named groups, and the default package stream set."""
 
     known: tuple[str, ...]
+    groups: dict[str, frozenset[str]]
     default: frozenset[str]
 
 
@@ -818,21 +819,46 @@ def parse_ownership_manifest(
 
 def _parse_stream_config(data: object, context: str) -> StreamConfig:
     stream_config = _require_mapping(data, context)
-    _require_keys(stream_config, {"known", "default"}, context)
+    _require_keys(stream_config, {"known", "groups", "default"}, context)
     known = _parse_stream_list(stream_config["known"], f"{context}.known")
-    default = frozenset(
-        _parse_stream_list(stream_config["default"], f"{context}.default")
+    groups = _parse_stream_groups(
+        stream_config["groups"], frozenset(known), f"{context}.groups"
     )
-    unknown_defaults = sorted(default - set(known))
-    if unknown_defaults:
+    default_group = _require_str(stream_config["default"], f"{context}.default")
+    _validate_stream_group_name(default_group, f"{context}.default")
+    if default_group not in groups:
         raise ManifestError(
-            f"{context}.default contains unknown stream(s): "
-            f"{', '.join(unknown_defaults)}"
+            f"{context}.default contains unknown stream group {default_group!r}"
         )
     return StreamConfig(
         known=tuple(known),
-        default=default,
+        groups=groups,
+        default=groups[default_group],
     )
+
+
+def _parse_stream_groups(
+    data: object,
+    known_streams: frozenset[str],
+    context: str,
+) -> dict[str, frozenset[str]]:
+    group_items = _require_mapping(data, context)
+    if not group_items:
+        raise ManifestError(f"{context} must not be empty")
+
+    groups: dict[str, frozenset[str]] = {}
+    for raw_group_name, raw_streams in group_items.items():
+        group_name = _require_str(raw_group_name, f"{context} key")
+        _validate_stream_group_name(group_name, f"{context}.{group_name}")
+        streams = frozenset(_parse_stream_list(raw_streams, f"{context}.{group_name}"))
+        unknown_streams = sorted(streams - known_streams)
+        if unknown_streams:
+            raise ManifestError(
+                f"{context}.{group_name} contains unknown stream(s): "
+                f"{', '.join(unknown_streams)}"
+            )
+        groups[group_name] = streams
+    return groups
 
 
 def _parse_stream_list(data: object, context: str) -> list[str]:
@@ -895,7 +921,7 @@ def _parse_python_index(
             package_config,
             {"owner_path"},
             f"{context}.packages.{package_name}",
-            optional_keys={"streams"},
+            optional_keys={"stream_group", "streams"},
         )
         owner_path = _require_str(
             package_config["owner_path"],
@@ -929,7 +955,24 @@ def _parse_package_streams(
     stream_config: StreamConfig,
     context: str,
 ) -> frozenset[str]:
-    if "streams" not in package_config:
+    has_stream_group = "stream_group" in package_config
+    has_streams = "streams" in package_config
+    if has_stream_group and has_streams:
+        raise ManifestError(
+            f"{context} must not contain both 'stream_group' and 'streams'"
+        )
+    if has_stream_group:
+        group_name = _require_str(
+            package_config["stream_group"], f"{context}.stream_group"
+        )
+        _validate_stream_group_name(group_name, f"{context}.stream_group")
+        if group_name not in stream_config.groups:
+            raise ManifestError(
+                f"{context}.stream_group contains unknown stream group "
+                f"{group_name!r}"
+            )
+        return stream_config.groups[group_name]
+    if not has_streams:
         return stream_config.default
     streams = frozenset(
         _parse_stream_list(package_config["streams"], f"{context}.streams")
@@ -955,6 +998,14 @@ def _validate_manifest_stream(
 
 def _validate_stream_name(stream: str, context: str) -> None:
     if not _STREAM_RE.fullmatch(stream):
+        raise ManifestError(
+            f"{context} must start with lowercase alphanumeric and contain only "
+            "lowercase alphanumeric, '_', or '-'"
+        )
+
+
+def _validate_stream_group_name(group_name: str, context: str) -> None:
+    if not _STREAM_RE.fullmatch(group_name):
         raise ManifestError(
             f"{context} must start with lowercase alphanumeric and contain only "
             "lowercase alphanumeric, '_', or '-'"
@@ -1285,8 +1336,8 @@ def main(argv: list[str]) -> int:
     generate_parser.add_argument(
         "--stream",
         required=True,
-        help="Concrete stream to generate, such as dev, nightly, rc, stable, "
-        "or stable-staging",
+        help="Concrete stream to generate, such as dev, nightly, rc, bkc, "
+        "stable, or stable-staging",
     )
     generate_parser.add_argument(
         "--content-root",
@@ -1316,8 +1367,8 @@ def main(argv: list[str]) -> int:
     content_parser.add_argument(
         "--stream",
         required=True,
-        help="Concrete stream to validate, such as dev, nightly, rc, stable, "
-        "or stable-staging",
+        help="Concrete stream to validate, such as dev, nightly, rc, bkc, "
+        "stable, or stable-staging",
     )
     content_parser.add_argument(
         "--content-root",
