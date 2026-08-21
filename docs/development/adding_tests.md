@@ -79,14 +79,14 @@ In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_
 ## Emulated tests (mirage / rocjitsu)
 
 Some GPU targets have no test hardware in CI, and some failures are cheaper to
-catch against a simulated device than a real one. For those,
+catch against a simulated device than a real one. For those cases,
 [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py)
-can derive an **emulated variant** of a test component that runs on the CPU
-cluster, with [mirage](https://github.com/ROCm/rocm-systems/tree/develop/emulation/mirage) driving the
-[rocjitsu](https://github.com/ROCm/rocm-systems/tree/develop/emulation/rocjitsu) software GPU emulator instead
-of talking to a real device.
+can derive an **emulated variant** of a test component. The variant runs on the
+Linux CPU builder, with [mirage](https://github.com/ROCm/rocm-systems/tree/develop/emulation/mirage)
+driving the [rocjitsu](https://github.com/ROCm/rocm-systems/tree/develop/emulation/rocjitsu)
+software GPU emulator instead of talking to a real device.
 
-Opting a component in is a single field:
+Opting a component in means adding **`"emulate": "rocjitsu"`**:
 
 ```
 "rocrtst": {
@@ -99,31 +99,23 @@ Opting a component in is a single field:
 That produces a second matrix entry alongside the hardware one, named
 `rocrtst (emulated mi350x)`, which:
 
-- runs on the CPU cluster (`linux_cpu_runner`), with no GPU devices mapped into
-  the container — rocjitsu emulates the GPU in software, so an emulated job on
-  GPU hardware would hold a scarce runner for its whole timeout and use none
-  of it,
+- runs on the Linux CPU builder (`linux_cpu_runner`) with no GPU devices mapped
+  into the container,
 - additionally fetches the `mirage` and `rocjitsu` artifacts,
-- gets 10x the component's `timeout_minutes`, capped at one hour — the budget
-  an emulated component has to fit in to be worth scheduling at all, and so the
-  right point to stop waiting on a wedged emulator. There is deliberately no
-  floor at the hardware budget: the emulated variant runs a cheaper category,
-  so a component that hits the cap needs an `emulate_test_type`, not a longer
-  leash,
+- gets 10x the component's `timeout_minutes`, capped at one hour. If that is
+  not enough, choose a smaller `emulate_test_type` instead of raising the
+  timeout,
 - runs unsharded, and
-- has its whole `test_script` wrapped in `mirage run`, with `TEST_EMULATOR` and
-  `TEST_EMULATOR_PROFILE` baked in as literals — so the command reproduces a
-  run on its own, including under the component-repo copies of
-  `test_component.yml` and in the failure-reproduction output.
+- wraps the unchanged `test_script` in `mirage run`, passing `TEST_EMULATOR` and
+  `TEST_EMULATOR_PROFILE` as literal values so the command is reproducible.
 
 The `test_script` itself is unchanged, which is the point: the emulated variant
 runs the same entry point the hardware job does, so emulation does not fork the
 test definition. For components on the standardized
 [`test_runner.py`](../../build_tools/github_actions/test_executable_scripts/test_runner.py)
-that means the emulated job selects from the same component-owned
-`test_categories.yaml` — usually a cheaper category than the hardware job runs
-(see [Choosing what an emulated job runs](#choosing-what-an-emulated-job-runs)),
-but through the same mechanism.
+the emulated job selects from the same component-owned `test_categories.yaml`,
+usually with a cheaper category than the hardware job runs. See
+[Choosing what an emulated job runs](#choosing-what-an-emulated-job-runs).
 
 Everything that excludes the hardware job — `exclude_family`, test labels,
 project selection — excludes the emulated variant too. The one exception is the
@@ -131,17 +123,16 @@ multi-GPU availability check: rocjitsu emulates the device in software, so a
 component whose family has no multi-GPU pool still gets its emulated variant.
 
 > [!IMPORTANT]
-> Emulated jobs must never be routed to GPU hardware — they would hold a scarce
-> runner for their whole timeout and use none of it. `test_artifacts.yml` routes
-> them with `linux_cpu_runner`, but that clause is **4th of 5** in the
-> `test_runs_on` chain: the `workflow_dispatch` `test_runs_on` override →
-> `multi_gpu_runner` → `is_benchmark` → `linux_cpu_runner` → the
-> per-component runner. So the emulated variant must drop *every* key checked
-> ahead of it — `build_emulated_job` pops `multi_gpu`, `multi_gpu_runner`, and
-> `is_benchmark`. Anything added ahead of `linux_cpu_runner` in that chain must
-> be popped there too. A `workflow_dispatch` run that sets `test_runs_on`
-> explicitly still overrides this, as it does for every other CPU-only
-> component.
+> `build_emulated_job()` sets `linux_cpu_runner: true` on the derived job. For
+> an `emulate_only` entry, the original matrix entry is only a template: the
+> generator appends the derived CPU-routed job and does not append the base
+> hardware job.
+>
+> `test_artifacts.yml` checks `linux_cpu_runner` after the `workflow_dispatch`
+> override, `multi_gpu_runner`, and `is_benchmark`. Therefore
+> `build_emulated_job()` also drops `multi_gpu`, `multi_gpu_runner`, and
+> `is_benchmark` so the derived job cannot route to GPU hardware. Anything added
+> ahead of `linux_cpu_runner` in that chain must be dropped there too.
 
 > [!WARNING]
 > The component repositories keep their own copies of this routing chain and of
