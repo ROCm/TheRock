@@ -98,13 +98,17 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.13", "release/2.14"):
+        cases = (
+            ("release/2.13", "gfx94X-dcgpu;gfx90c"),
+            ("release/2.14", "gfx94X-dcgpu;gfx125X-dcgpu;gfx90c"),
+        )
+        for pytorch_git_ref, amdgpu_families in cases:
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
                     python_versions=["3.12"],
                     pytorch_git_refs=[pytorch_git_ref],
-                    amdgpu_families="gfx125X-dcgpu;gfx90c",
+                    amdgpu_families=amdgpu_families,
                     platform="linux",
                 )
 
@@ -114,7 +118,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                         {
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
-                            "amdgpu_families": "gfx125X-dcgpu",
+                            "amdgpu_families": "gfx94X-dcgpu",
                             "test_amdgpu_families": "auto",
                         }
                     ],
