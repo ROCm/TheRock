@@ -67,8 +67,8 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |                |           |                                               |
 | storage-libs        | [hipFile](https://github.com/ROCm/rocm-systems/tree/develop/projects/hipfile)                                            | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
-| media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
-| media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
+| media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | 🟡        | In progress (VA-API / Mesa now builds on Windows) |
+| media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | cv-libs             | [RPP](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rpp)                                                  | rocm-libraries | 🟡        | Experimental; off by default                  |
 |                     |                                                                                                                          |                |           |                                               |
@@ -235,6 +235,11 @@ If you prefer to install tools manually, you will need:
 - patch, available in Strawberry Perl or Git.
 
 - dvc: https://dvc.org/doc/install/windows
+
+- winflexbison3 (**required for the `amd-mesa` / VA-API sysdep build**):
+  `choco install winflexbison3` — provides the `flex` and `bison` tools that
+  Meson uses when building Mesa's gallium/D3D12 driver. Not needed if
+  `THEROCK_ENABLE_SYSDEPS_AMD_MESA` is `OFF`.
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 

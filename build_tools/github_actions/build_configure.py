@@ -81,7 +81,6 @@ def build_compiler_launcher(
 platform_options = {
     "windows": [
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
-        "-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON",
     ],
 }
 

@@ -45,28 +45,6 @@ if(NOT MESON_BUILD)
   message(FATAL_ERROR "Missing MESON_BUILD from super-project")
 endif()
 
-# Locate a pkg-config executable that Meson will accept. Meson rejects
-# Strawberry Perl's pkg-config.BAT wrapper, so we need a native .exe.
-# Preference order:
-#   1. PKG_CONFIG env var (set by the user to a known-good executable)
-#   2. pkg-config.exe on PATH (e.g. installed via winget/choco/scoop)
-if(DEFINED ENV{PKG_CONFIG} AND NOT "$ENV{PKG_CONFIG}" MATCHES "\\.BAT$|\\.bat$")
-  set(_meson_pkg_config "PKG_CONFIG=$ENV{PKG_CONFIG}")
-  message(STATUS "Using pkg-config from PKG_CONFIG env: $ENV{PKG_CONFIG}")
-else()
-  find_program(PKG_CONFIG_EXECUTABLE
-    NAMES pkg-config.exe pkg-config
-    NO_CMAKE_FIND_ROOT_PATH
-  )
-  if(PKG_CONFIG_EXECUTABLE AND NOT PKG_CONFIG_EXECUTABLE MATCHES "\\.BAT$|\\.bat$")
-    set(_meson_pkg_config "PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}")
-    message(STATUS "Found pkg-config for mesa: ${PKG_CONFIG_EXECUTABLE}")
-  else()
-    message(WARNING "No suitable pkg-config found. Meson may fail to resolve libva-win32. "
-                    "Set PKG_CONFIG env var to a pkg-config.exe path.")
-    set(_meson_pkg_config "")
-  endif()
-endif()
 
 # Meson detects the linker by scanning PATH for link.exe. On Windows CI, Git's
 # GNU link.exe (C:\Program Files\Git\usr\bin) shadows MSVC's linker and meson
@@ -122,7 +100,6 @@ add_custom_target(
     # in the libva subproject after extraction.
     "${CMAKE_COMMAND}" -E env
       "${_meson_path_env}"
-      ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -158,7 +135,6 @@ add_custom_target(
     # Step 3: Reconfigure meson to build from patched source.
     "${CMAKE_COMMAND}" -E env
       "${_meson_path_env}"
-      ${_meson_pkg_config}
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -210,4 +186,6 @@ add_custom_target(
       "${CMAKE_INSTALL_PREFIX}/include/composition"
       "${CMAKE_INSTALL_PREFIX}/lib/libDirectX-Guids.a"
       "${CMAKE_INSTALL_PREFIX}/lib/libd3dx12-format-properties.a"
+      "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/DirectX-Headers.pc"
+      "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig/libva.pc"
 )
