@@ -32,6 +32,9 @@
   "composable-kernel": [
     "composable_kernel"
   ],
+  "core-amdcuid": [
+    "amdcuid"
+  ],
   "core-amdsmi": [
     "amdsmi"
   ],

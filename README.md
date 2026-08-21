@@ -191,6 +191,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_AMD_DBGAPI=ON`       | Enables the ROCm debug API library                  |
 | `-DTHEROCK_ENABLE_COMPILER=ON`         | Enables the GPU+host compiler toolchain             |
 | `-DTHEROCK_ENABLE_CORE_AMDSMI=ON`      | Enables the AMD System Management Interface library |
+| `-DTHEROCK_ENABLE_CORE_AMDCUID=ON`     | Enables AMD AMD Component Unified Identifier        |
 | `-DTHEROCK_ENABLE_HIPIFY=ON`           | Enables the hipify tool                             |
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools       |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components                  |
