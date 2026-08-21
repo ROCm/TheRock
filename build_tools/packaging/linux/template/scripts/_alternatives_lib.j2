@@ -3,20 +3,12 @@
    registration runs after payload is unpacked (dpkg trigger / rpm transfiletrigger)
    and only registers slots whose target already exists, so it never turns a
    payload-owned symlink (e.g. amdgcn -> lib/llvm/amdgcn) into a directory. #}
-is_debian_like() {
-    local id_like="$1"
-    case " $id_like " in
-        (*" debian "*|*" ubuntu "*) return 0 ;;
-        (*) return 1 ;;
-    esac
-}
-
 alt_prefix() {
-    {% if target == "deb" %}
+    # The trigger watch path (%transfiletriggerin -- {{ install_prefix }}) and the
+    # deb path trigger both key on the build-time prefix, so relocation is not
+    # supported anyway; use the literal prefix rather than $RPM_INSTALL_PREFIX0,
+    # which is not guaranteed to be set in a file-trigger scriptlet.
     printf '%s' "{{ install_prefix }}"
-    {% else %}
-    printf '%s' "$RPM_INSTALL_PREFIX0"
-    {% endif %}
 }
 
 # Priority packs the version (base-14 major/minor/patch) plus a minutes-since-2020
