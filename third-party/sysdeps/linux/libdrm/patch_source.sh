@@ -5,8 +5,10 @@
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRM_MESON_BUILD="$SOURCE_DIR/meson.build"
 AMDGPU_MESON_BUILD="$SOURCE_DIR/amdgpu/meson.build"
+VERSION_LDS="$SCRIPT_DIR/version.lds"
 echo "Patching sources..."
 
 # Replace 'drm' in library() block with 'rocm_sysdeps_drm'
@@ -21,6 +23,20 @@ sed -i -E "/libdrm_amdgpu[[:space:]]*=[[:space:]]*library\(/,/\)/ s/^([[:space:]
 sed -i "/pkg\.generate\s*(/,/)/ s/\blibdrm_amdgpu,\s*//" "$AMDGPU_MESON_BUILD"
 # Add libraries tag to pkg.generate block
 sed -i "/pkg\.generate\s*(/a\  libraries : ['-L\${libdir}', '-ldrm_amdgpu']," $AMDGPU_MESON_BUILD
+
+# Apply symbol versioning to the library targets instead of to the whole project.
+# Passing -Wl,--version-script via LDFLAGS applies it to every link in the
+# project, and meson duplicates such arguments in its compiler sanity check
+# (1.12.0), which ld rejects with "duplicate version tag". Per-target link_args
+# are not duplicated and are the correct scope for a version script anyway.
+sed -i "/^libdrm = library($/,/^)$/ s|^\([[:space:]]*\)install : true,|\1link_args : ['-Wl,--version-script=$VERSION_LDS'],\n\1install : true,|" "$DRM_MESON_BUILD"
+sed -i "/^libdrm_amdgpu = library($/,/^)$/ s|^\([[:space:]]*\)install : true,|\1link_args : ['-Wl,--version-script=$VERSION_LDS'],\n\1install : true,|" "$AMDGPU_MESON_BUILD"
+for meson_build in "$DRM_MESON_BUILD" "$AMDGPU_MESON_BUILD"; do
+  if ! grep -q -- "--version-script" "$meson_build"; then
+    echo "ERROR: Failed to patch $meson_build with --version-script" >&2
+    exit 1
+  fi
+done
 
 # Append missing device IDs to amdgpu.ids
 AMDGPU_IDS="$SOURCE_DIR/data/amdgpu.ids"

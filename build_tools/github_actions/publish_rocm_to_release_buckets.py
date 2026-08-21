@@ -282,7 +282,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--release-type",
         required=True,
-        choices=["dev", "nightly", "prerelease"],
+        choices=["dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         help="Release type (determines source and destination buckets)",
     )
     # String "true"/"false" because GitHub Actions outputs are strings.

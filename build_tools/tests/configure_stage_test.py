@@ -12,7 +12,10 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
-from configure_stage import generate_cmake_args, get_project_features
+from configure_stage import (
+    generate_cmake_args,
+    get_project_features,
+)
 
 
 class ProjectResolutionTest(unittest.TestCase):
@@ -117,6 +120,10 @@ class ManifestValidationTest(unittest.TestCase):
                 f"Invalid feature '{feature}' for subproject '{subproject}'",
             )
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "manifest verification requires a Linux CMake configuration",
+    )
     def test_artifact_subprojects_matches_cmake(self):
         """Verify artifact_subprojects.json matches what CMake generates."""
         repo_root = Path(__file__).parent.parent.parent

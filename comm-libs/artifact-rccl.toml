@@ -23,3 +23,11 @@ include = [
   "bin/**",
 ]
 optional = true
+
+# rccl-translate (present only for gfx1250 hotswap builds)
+[components.lib."comm-libs/rccl-translate/stage"]
+default_patterns = false
+include = [
+  "share/rocjitsu/translations/**",
+]
+optional = true

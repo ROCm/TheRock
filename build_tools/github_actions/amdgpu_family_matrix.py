@@ -233,7 +233,7 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
@@ -292,6 +292,22 @@ amdgpu_family_info_matrix_presubmit = {
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
+    "gfx90a": {
+        "linux": {
+            "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
+            "family": "gfx90a",
+            "fetch-gfx-targets": ["gfx90a"],
+            "build_variants": ["release"],
+            # Only run tests on submodule bumps (builds always run)
+            "submodule_bump_tests_only": True,
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90a",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
@@ -369,21 +385,6 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx908",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx90a": {
-        "linux": {
-            "test-runs-on": "linux-gfx90a-gpu-rocm",
-            "family": "gfx90a",
-            "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
