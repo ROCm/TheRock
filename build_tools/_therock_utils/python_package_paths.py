@@ -214,12 +214,23 @@ def plan_key_copies(
     return plans
 
 
-# Product classification for the flat local promotion layout, where core,
-# PyTorch, and JAX artifacts are intermixed in a single directory before being
-# routed to their per-product structured buckets. Kept as an explicit
-# allowlist (rather than defaulting unmatched packages to "core") so an
-# unrecognized or renamed package fails loudly instead of silently landing in
-# the wrong product bucket.
+# Product classification for the flat local promotion layout: the local
+# directory (e.g. <output-dir>/wheels/, see how_to_do_release.md) where
+# downloaded core, PyTorch, and JAX artifacts sit side-by-side, unsorted by
+# product, before upload_release_packages.py --structured routes each one to
+# its own product bucket. Kept as an explicit allowlist (rather than
+# defaulting unmatched packages to "core") so an unrecognized or renamed
+# package fails loudly instead of silently landing in the wrong product
+# bucket.
+#
+# "rocm-bootstrap" is a real package intentionally not classified here:
+# promote_packages.py already special-cases and skips it before this
+# classification would ever run.
+#
+# PYTORCH_PACKAGE_NAMES is an exact-match set (apex/triton share no reliable
+# prefix with "torch"); the *_PREFIXES tuples below are str.startswith()
+# wildcard-style matches (e.g. "rocm_sdk_device_gfx1100" matches
+# "rocm-sdk-device" once pep503-normalized).
 PYTORCH_PACKAGE_NAMES = frozenset({"apex", "triton"})
 PYTORCH_PACKAGE_PREFIXES = ("torch", "amd-torch")
 JAX_PACKAGE_PREFIXES = ("jax", "jaxlib", "jax-rocm")
