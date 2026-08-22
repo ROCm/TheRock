@@ -61,63 +61,63 @@ Example invocations:
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile rhel8 \\
-         --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/x86_64/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
          --os-profile sles16 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/sles16/x86_64/ \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: repo install only (no verification)
  python3 native_linux_package_install_test.py --test-type install \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly
 
  # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
  # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
@@ -1455,39 +1455,39 @@ _CLI_EXAMPLES_EPILOG = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
  python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only
  python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: install + basic verification + rdhc
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: install only
@@ -1497,19 +1497,19 @@ Examples:
 
  # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Comma-separated arches in one argument (equivalent normalization)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 

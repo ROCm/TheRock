@@ -67,7 +67,12 @@ if(THEROCK_ENABLE_RCCL)
   therock_cmake_subproject_activate(rccl)
   list(APPEND _rccl_subproject_names rccl)
 
-  if(THEROCK_ENABLE_ROCJITSU_HOTSWAP AND THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
+  # rccl-translate unbundles gfx1250 device code from librccl.so. Under ASAN,
+  # GPU_TARGETS is filtered to xnack+ arches only (gfx942, gfx950), so gfx1250
+  # is never compiled into librccl.so and the unbundle step fails with
+  # "No code objects for architecture 'gfx1250'".
+  if(THEROCK_ENABLE_ROCJITSU_HOTSWAP AND THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS
+     AND NOT THEROCK_SANITIZER)
     therock_cmake_subproject_dist_dir(_rccl_dist_dir rccl)
     therock_cmake_subproject_dist_dir(_rocjitsu_dist_dir rocjitsu)
     therock_cmake_subproject_dist_dir(_rocjitsu_hotswap_dist_dir rocjitsu-hotswap)
