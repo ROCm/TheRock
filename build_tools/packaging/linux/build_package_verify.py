@@ -113,10 +113,7 @@ class BuildVerifySummary:
 
     def missing_variants(self) -> list[str]:
         return [
-            v.expected_name
-            for r in self.reports
-            for v in r.variants
-            if not v.found
+            v.expected_name for r in self.reports for v in r.variants if not v.found
         ]
 
     def version_failures(self) -> list[str]:
@@ -196,7 +193,9 @@ def verify_variant(
             try:
                 actual_version = read_package_file_version(path, config.pkg_type)
                 version_ok = versions_match(
-                    expected_version, actual_version, config.pkg_type,
+                    expected_version,
+                    actual_version,
+                    config.pkg_type,
                 )
                 if not version_ok:
                     errors.append(
@@ -232,7 +231,8 @@ def verify_package(
     package_files = checker.find_package_files(packages_dir, config.pkg_type)
 
     for label, versioned_pkg, gfx_arch in checker.iter_variant_configs(
-        pkg_name, config,
+        pkg_name,
+        config,
     ):
         expected_name = checker.resolve_installed_name(
             pkg_name,
@@ -282,9 +282,7 @@ def build_summary(
     fail_on_extra: bool,
 ) -> BuildVerifySummary:
     """Build the run summary including optional extra-file detection."""
-    expected_names = {
-        v.expected_name for r in reports for v in r.variants
-    }
+    expected_names = {v.expected_name for r in reports for v in r.variants}
     extra = collect_extra_package_files(package_files, expected_names)
     if not fail_on_extra:
         extra = []
