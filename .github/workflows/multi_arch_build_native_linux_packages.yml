@@ -166,8 +166,7 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
             --pkg-names ${{ inputs.pre_upload_build_pkg_names }} \
-            --report-dir "${{ env.PRE_UPLOAD_REPORT_DIR }}" \
-            --quiet
+            --report-dir "${{ env.PRE_UPLOAD_REPORT_DIR }}"
 
       - name: Simulated install Test
         id: test-packages
