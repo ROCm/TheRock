@@ -164,6 +164,12 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
+      - name: KFD version check
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
+        timeout-minutes: 1
+        run: |
+          python ./build_tools/print_kfd_version.py
+
       - name: Setup Additional Requirements
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         run: |
