@@ -1583,7 +1583,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm foundational profiling tools and tracing infrastructure",
-    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), and rocprof-trace-decoder (trace analysis utilities). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
+    "Description_Long": "Base profiling infrastructure for ROCm applications. Includes rocprofiler-sdk (profiling API framework), aqlprofile (low-level AQL packet profiling), roctracer (API tracing library), rocprof-trace-decoder (trace analysis utilities), and profiler-hub (rocpd profiling data storage). Provides runtime libraries, development headers, and documentation for building performance analysis tools.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1637,6 +1637,20 @@
         "Artifact_Subdir": [
           {
             "Name": "aqlprofile",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "profiler-hub",
+        "Artifact_Subdir": [
+          {
+            "Name": "profiler-hub",
             "Components": [
               "lib",
               "dev",
