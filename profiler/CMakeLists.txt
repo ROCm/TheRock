@@ -292,9 +292,6 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 
 ##############################################################################
 # profiler-hub
-# General-purpose, schema-versioned data storage library for profiling and
-# tracing tools, designed to be built and consumed standalone by any tool
-# that needs it.
 ##############################################################################
 if(THEROCK_ENABLE_PROFILER_HUB)
   set(_profiler_hub_build_deps therock-spdlog therock-fmt)
@@ -303,10 +300,7 @@ if(THEROCK_ENABLE_PROFILER_HUB)
   endif()
 
   therock_cmake_subproject_declare(profiler-hub
-    # profiler-hub is a pure host C++ library with no GPU/HIP code, so it
-    # does not require any AMDGPU targets to be selected.
     DISABLE_AMDGPU_TARGETS
-    # Host C++ lib: build with in-tree clang (amd-llvm) so its tests get ASan-linked.
     COMPILER_TOOLCHAIN amd-llvm
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
@@ -329,7 +323,6 @@ if(THEROCK_ENABLE_PROFILER_HUB)
   therock_cmake_subproject_provide_package(profiler-hub profiler-hub lib/cmake/profiler-hub)
   therock_cmake_subproject_activate(profiler-hub)
 
-  # Actually run the gtest binary built above instead of only compiling it.
   therock_cmake_subproject_build_test(profiler-hub
     COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error
   )
@@ -379,9 +372,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
-  # TheRock's provider now satisfies rocprofiler-systems' find_package(profiler-hub),
-  # so its sparse-checkout fallback no longer runs. The dep must be declared or the
-  # provider rejects the call; with profiler-hub disabled the fallback runs as before.
   set(_rocprofsys_profiler_hub_dep "")
   if(THEROCK_ENABLE_PROFILER_HUB)
     set(_rocprofsys_profiler_hub_dep profiler-hub)
