@@ -11,9 +11,13 @@ on:
         required: true
         type: string
       package_index_url:
-        description: Base URL for the multi-arch Python package index
-        required: true
+        description: "Base URL for the multi-arch Python package index. Releases publish there; use wheel_find_links_url for CI-built wheels."
         type: string
+        default: ""
+      wheel_find_links_url:
+        description: "URL for pip --find-links to install the JAX wheels this run built. Wins over package_index_url."
+        type: string
+        default: ""
       rocm_version:
         description: ROCm version
         required: true
@@ -26,6 +30,13 @@ on:
         description: "Release type"
         type: string
         required: true
+      test_size:
+        description: >-
+          How much of test_subset to run: "small" takes the PR-sized selection
+          of it, "medium" and "large" take all of it. On the multi-GPU job it
+          also picks the end-to-end scope: two workloads, or the whole set.
+        type: string
+        default: "medium"
       python_version:
         description: Python version to test
         required: true
@@ -69,6 +80,25 @@ on:
         required: false
         type: string
         default: "all"
+      test_timeout_minutes:
+        description: "Budget for the test step, from configure_jax_test_matrix.py."
+        required: false
+        type: number
+        default: 120
+      test_list:
+        description: >-
+          File of test paths to run instead of the whole subset, from
+          configure_jax_test_matrix.py. Empty runs all of it.
+        required: false
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       test_amdgpu_family:
@@ -79,6 +109,10 @@ on:
         description: Base URL for the multi-arch Python package index
         type: string
         default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+      wheel_find_links_url:
+        description: "URL for pip --find-links to install the JAX wheels this run built. Wins over package_index_url."
+        type: string
+        default: ""
       rocm_version:
         description: ROCm version
         type: string
@@ -93,6 +127,18 @@ on:
         options:
           - dev
         default: dev
+      test_size:
+        description: >-
+          How much of test_subset to run: "small" takes the PR-sized selection,
+          which exists for the "all" subset only, and "medium" and "large" take
+          all of it. On the "multi" subset it picks the end-to-end scope. A run
+          dispatched here names its selection in test_list instead.
+        type: choice
+        options:
+          - small
+          - medium
+          - large
+        default: medium
       python_version:
         description: Python version to test
         type: string
@@ -108,7 +154,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
-        default: "rocm-jaxlib-v0.11.0"
+        default: "rocm-jaxlib-v0.11.1"
       jax_version:
         description: "Built JAX version"
         type: string
@@ -136,13 +182,31 @@ on:
         type: choice
         options: ["all", "multi"]
         default: "all"
+      test_timeout_minutes:
+        description: "Budget for the test step, in minutes."
+        type: number
+        default: 120
+      test_list:
+        description: >-
+          File of test paths to run instead of the whole subset, e.g.
+          external-builds/jax/test_selection/small_tests.txt. Empty runs all of
+          it.
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 permissions:
   contents: read
   id-token: write
 
 jobs:
   test_jax_wheels:
-    name: Test JAX | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_subset }}
+    name: Test JAX | ${{ inputs.test_size }} | ${{ inputs.test_subset }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     # Room for the longest subset plus its setup, where installing the ROCm
     # packages alone has taken over an hour; the test step below holds each
@@ -176,6 +240,7 @@ jobs:
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
+      WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
@@ -271,8 +336,8 @@ jobs:
             --packages "${ROCM_PACKAGES}" \
             --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
 
-      # Package names, versions and the index arrive as env vars set above.
-      - name: Install JAX wheels from package index
+      # Package names, versions and where to get them arrive as env vars above.
+      - name: Install JAX wheels
         run: |
           python external-builds/jax/install_jax_wheels.py
 
@@ -300,16 +365,29 @@ jobs:
       # allocation and both layers of retry, so that the same command
       # reproduces this job locally. See the comments in the script.
       - name: Run JAX tests
-        # The suite runs 35-70 min across versions, so 60 left no headroom: one
-        # job reached 100% of the tests and was still killed by the timeout. The
-        # multi-accelerator subset is a fraction of that.
-        timeout-minutes: ${{ inputs.test_subset == 'multi' && 90 || 120 }}
+        # What a size selects and how long that takes is decided once, in
+        # configure_jax_test_matrix.py, and arrives here as the caller's inputs.
+        timeout-minutes: ${{ inputs.test_timeout_minutes }}
+        env:
+          JAX_TEST_LIST: ${{ inputs.test_list }}
         run: |
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
             --jax-ref "${{ inputs.jax_ref }}" \
             --amdgpu-family "${{ inputs.test_amdgpu_family }}" \
             --test-subset "${{ inputs.test_subset }}"
+
+      # The multi-GPU job is the one a nightly takes weekly, and the workloads
+      # need those GPUs, so they ride along with it instead of asking the pool
+      # for a slot of their own.
+      - name: Run end-to-end workloads
+        if: ${{ inputs.test_subset == 'multi' }}
+        env:
+          E2E_SCOPE: ${{ inputs.test_size == 'large' && 'full' || 'partial' }}
+        run: |
+          # TODO: run the ROCm/jax-lab workloads once that repository is public:
+          # llama and mixtral for partial, the whole set for full.
+          echo "::warning::End-to-end workloads (${E2E_SCOPE}) are not wired yet"
 
       - name: Upload test logs
         if: always()

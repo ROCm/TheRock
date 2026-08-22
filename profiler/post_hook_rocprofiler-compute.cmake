@@ -8,7 +8,7 @@ foreach(_test_target
         test-rocprofiler-compute-tool
         test-pc-sampling-collector
         test-compression
-        test-roctx-recordfn)
+        test-torch-trace-collector)
   if(TARGET ${_test_target})
     set_target_properties(${_test_target} PROPERTIES
       THEROCK_INSTALL_RPATH_ORIGIN libexec/rocprofiler-compute/tests

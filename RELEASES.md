@@ -427,8 +427,8 @@ Install JAX with ROCm support using the unified multi-arch index.
 > ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
-# Set the version (currently supported: 0.10.0, 0.10.1, 0.10.2, and 0.11.0)
-JAX_VERSION=0.11.0
+# Set the version (currently supported: 0.10.1, 0.10.2, 0.11.0, and 0.11.1)
+JAX_VERSION=0.11.1
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
 pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
@@ -456,12 +456,12 @@ print(jax.devices())
 ```
 
 > [!NOTE]
-> On ROCm 10, a released `jaxlib` (0.10.0 through 0.11.0) does not know the
+> On ROCm 10, a released `jaxlib` (0.10.1 through 0.11.0) does not know the
 > `jax_rocm10_plugin` name, so the GPU kernel modules resolve to `None` and no FFI
 > handlers are registered. Symptoms are `'NoneType' object has no attribute ...` and
 > `No FFI handler registered for hipsolver_*`. Those versions predate the upstream fix
-> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)); until a `jaxlib`
-> carrying it ships, teach the installed copy about the new major:
+> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)), which first shipped in
+> `jaxlib` 0.11.1. On an older `jaxlib`, teach the installed copy about the new major:
 >
 > ```bash
 > python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
