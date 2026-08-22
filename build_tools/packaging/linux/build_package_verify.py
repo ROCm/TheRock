@@ -1,57 +1,131 @@
 #!/usr/bin/env python3
+
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Pre-upload Step 1 — verify built packages match ``package.json`` expectations.
+"""Verify built native Linux packages against ``package.json``.
 
-After ``build_package.py``, confirms that generated native Linux packages exist on
-disk with the expected variant names and control-field versions. This is the
-**build verification** gate from the pre-upload milestone (Step 1); dependency
-field checks are handled separately by ``pkg_dependency_checker.py`` (Step 2).
+Runs after ``build_package.py`` and before simulated install or upload. Inspects
+already-built ``.deb``/``.rpm`` files only; it does not build or modify packages.
+For each requested entry, derives expected variant names from ``package.json`` and
+the same CLI flags used at build time, then confirms files exist in
+``--packages-dir`` and optionally checks control-field versions against
+``--rocm-version`` and ``--version-suffix``.
 
-Checks per ``package.json`` entry (and each kpack variant):
+Writes ``build_status_report.txt`` and ``build_status_report.json`` when
+``--report-dir`` is set.
 
-* **Presence** — expected ``.deb`` / ``.rpm`` file exists under ``--packages-dir``.
-* **Version** — DEB ``Version`` / RPM ``VERSION-RELEASE`` matches ``--rocm-version``
-  and ``--version-suffix`` (same rules as ``deb_package.py`` / ``rpm_package.py``).
-* **Inventory** — optional fail on unexpected extra package files in the output dir.
+```
+# Standard CI pre-upload verification (deb):
+./build_tools/packaging/linux/build_package_verify.py \\
+    --pkg-type deb \\
+    --packages-dir output/packages \\
+    --artifacts-dir output/artifacts \\
+    --dest-dir output/packages \\
+    --rocm-version 7.15.0 \\
+    --version-suffix 28484694006 \\
+    --pkg-names amdrocm-core-sdk \\
+    --report-dir output/pre_upload_reports
+```
 
-Example (CI, after build)::
+``--version-suffix``: CI run ID appended to the DEB/RPM version field
+  (e.g. ``7.15.0-28484694006`` for DEB, release ``28484694006`` for RPM).
+  Does not affect the package name or install prefix.
 
-    python3 build_package_verify.py \\
-        --pkg-type deb \\
-        --packages-dir output/packages \\
-        --artifacts-dir output/artifacts \\
-        --dest-dir output/packages \\
-        --rocm-version 7.14.0 \\
-        --version-suffix "${ARTIFACT_RUN_ID}" \\
-        --pkg-names amdrocm-core-sdk \\
-        --report-dir output/pre_upload_reports
+``--build-variant``: Build type that modifies both the package name and
+  install prefix. Currently supports ``asan``.
 """
-
-from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-BUILD_TOOLS_DIR = SCRIPT_DIR.parent.parent
-if str(BUILD_TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(BUILD_TOOLS_DIR))
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+from build_package import (
+    DEFAULT_INSTALL_PREFIX,
+    create_package_config,
+    parse_input_package_list,
+)
+from packaging_utils import (
+    GFX_HOST,
+    GFX_META,
+    PackageConfig,
+    get_package_info,
+    is_gfxarch_package,
+    is_meta_package,
+    read_package_json_file,
+    update_package_name,
+)
+from _therock_utils.log_utils import TheRockLogger, configure_logging
 
-from packaging_utils import PackageConfig, read_package_json_file  # noqa: E402
+logger = TheRockLogger(__name__)
 
-import pkg_dependency_checker as checker  # noqa: E402
+_CLI_EXAMPLES_EPILOG = """
+Examples:
+ # CI pre-upload verification (matches multi_arch_build_native_linux_packages.yml)
+ ./build_tools/packaging/linux/build_package_verify.py \\
+   --pkg-type deb \\
+   --packages-dir output/packages \\
+   --artifacts-dir output/artifacts \\
+   --dest-dir output/packages \\
+   --rocm-version 7.15.0 \\
+   --version-suffix 28484694006 \\
+   --pkg-names amdrocm-core-sdk \\
+   --report-dir output/pre_upload_reports
+
+ # Kpack multi-arch build with explicit GPU targets
+ ./build_tools/packaging/linux/build_package_verify.py \\
+   --pkg-type deb \\
+   --packages-dir output/packages \\
+   --artifacts-dir output/artifacts \\
+   --dest-dir output/packages \\
+   --rocm-version 7.15.0 \\
+   --version-suffix 28484694006 \\
+   --enable-kpack \\
+   --target gfx1100 gfx942 \\
+   --pkg-names amdrocm-core-sdk \\
+   --report-dir output/pre_upload_reports
+
+ # ASAN build variant (package name and install prefix must match build_package.py)
+ ./build_tools/packaging/linux/build_package_verify.py \\
+   --pkg-type deb \\
+   --packages-dir output/packages \\
+   --artifacts-dir output/artifacts \\
+   --dest-dir output/packages \\
+   --rocm-version 7.15.0 \\
+   --version-suffix 28484694006 \\
+   --build-variant asan \\
+   --pkg-names amdrocm-core-sdk \\
+   --report-dir output/pre_upload_reports
+
+ # RPM verification with unexpected-file detection
+ ./build_tools/packaging/linux/build_package_verify.py \\
+   --pkg-type rpm \\
+   --packages-dir output/packages \\
+   --artifacts-dir output/artifacts \\
+   --dest-dir output/packages \\
+   --rocm-version 7.15.0 \\
+   --version-suffix 28484694006 \\
+   --pkg-names amdrocm-core-sdk \\
+   --fail-on-extra \\
+   --report-dir output/pre_upload_reports
+
+ # Presence-only check (skip control-field version comparison)
+ ./build_tools/packaging/linux/build_package_verify.py \\
+   --pkg-type deb \\
+   --packages-dir output/packages \\
+   --artifacts-dir output/artifacts \\
+   --rocm-version 7.15.0 \\
+   --pkg-names amdrocm-core-sdk \\
+   --no-version-check
+"""
 
 
 @dataclass
 class VariantBuildCheck:
-    """One expected package variant and whether the built archive matches."""
+    """Verification result for one package variant."""
 
     base_package: str
     label: str
@@ -65,24 +139,26 @@ class VariantBuildCheck:
 
     @property
     def passed(self) -> bool:
+        """True when the variant file exists and version checks succeed."""
         return self.found and self.version_ok and not self.errors
 
 
 @dataclass
 class BuildVerifyReport:
-    """Aggregate build verification for one ``package.json`` base name."""
+    """Verification results for all variants of one ``package.json`` entry."""
 
     base_package: str
     variants: list[VariantBuildCheck] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
+        """True when every variant in this report passed."""
         return all(v.passed for v in self.variants)
 
 
 @dataclass
 class BuildVerifySummary:
-    """Roll-up across all packages checked in one run."""
+    """Aggregate verification outcome across all requested packages."""
 
     packages_requested: list[str]
     reports: list[BuildVerifyReport]
@@ -91,32 +167,39 @@ class BuildVerifySummary:
 
     @property
     def variants_expected(self) -> int:
+        """Total variant count across all package reports."""
         return sum(len(r.variants) for r in self.reports)
 
     @property
     def variants_found(self) -> int:
+        """Variants whose expected package file exists on disk."""
         return sum(1 for r in self.reports for v in r.variants if v.found)
 
     @property
     def variants_passed(self) -> int:
+        """Variants that passed presence and version checks."""
         return sum(1 for r in self.reports for v in r.variants if v.passed)
 
     @property
     def variants_failed(self) -> int:
+        """Variants that failed or were not found."""
         return self.variants_expected - self.variants_passed
 
     @property
     def passed(self) -> bool:
+        """True when no variant failed and no unexpected package files were flagged."""
         if self.extra_package_files:
             return False
         return self.variants_failed == 0 and all(r.passed for r in self.reports)
 
     def missing_variants(self) -> list[str]:
+        """Expected installed package names with no matching file on disk."""
         return [
             v.expected_name for r in self.reports for v in r.variants if not v.found
         ]
 
     def version_failures(self) -> list[str]:
+        """Expected installed package names whose control-field version mismatched."""
         return [
             v.expected_name
             for r in self.reports
@@ -125,8 +208,174 @@ class BuildVerifySummary:
         ]
 
 
+@dataclass(frozen=True)
+class PackageVariantSpec:
+    """One expected package variant derived from ``package.json`` and build flags.
+
+    Attributes:
+        label: Human-readable variant name (e.g. ``host``, ``meta``, ``device-gfx1100``).
+        versioned_pkg: Whether the ROCm version appears in the installed package name.
+        gfx_arch: Gfx-arch token for kpack routing (``GFX_HOST``, ``GFX_META``, or device arch).
+    """
+
+    label: str
+    versioned_pkg: bool
+    gfx_arch: str
+
+
+def iter_package_variant_specs(
+    pkg_name: str,
+    config: PackageConfig,
+) -> list[PackageVariantSpec]:
+    """Enumerate expected variants using the same routing as ``build_package_variants``.
+
+    Read-only helper for verification: mirrors how ``build_package.py`` splits a
+    ``package.json`` entry into variant names without building anything.
+
+    Parameters:
+        pkg_name: ``package.json`` base name.
+        config: Build configuration (kpack mode, gfx targets, etc.).
+
+    Returns:
+        Ordered list of variant specifications to check on disk.
+    """
+    pkg_info = get_package_info(pkg_name)
+    specs: list[PackageVariantSpec] = []
+
+    if config.enable_kpack:
+        if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
+            if not is_meta_package(pkg_info):
+                specs.append(
+                    PackageVariantSpec(
+                        label="host",
+                        versioned_pkg=True,
+                        gfx_arch=GFX_HOST,
+                    )
+                )
+            for device_arch in config.gfxarch_list:
+                specs.append(
+                    PackageVariantSpec(
+                        label=f"device-{device_arch}",
+                        versioned_pkg=True,
+                        gfx_arch=device_arch,
+                    )
+                )
+            specs.append(
+                PackageVariantSpec(
+                    label="meta",
+                    versioned_pkg=True,
+                    gfx_arch=GFX_META,
+                )
+            )
+            specs.append(
+                PackageVariantSpec(
+                    label="non-versioned",
+                    versioned_pkg=False,
+                    gfx_arch=GFX_META,
+                )
+            )
+        else:
+            specs.append(
+                PackageVariantSpec(
+                    label="versioned",
+                    versioned_pkg=True,
+                    gfx_arch="",
+                )
+            )
+            specs.append(
+                PackageVariantSpec(
+                    label="non-versioned",
+                    versioned_pkg=False,
+                    gfx_arch="",
+                )
+            )
+    else:
+        specs.append(
+            PackageVariantSpec(
+                label="versioned",
+                versioned_pkg=True,
+                gfx_arch=config.gfx_arch,
+            )
+        )
+        specs.append(
+            PackageVariantSpec(
+                label="non-versioned",
+                versioned_pkg=False,
+                gfx_arch=config.gfx_arch,
+            )
+        )
+
+    return specs
+
+
+def _run_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess and capture stdout/stderr without raising on failure."""
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+
+def resolve_installed_name(
+    pkg_name: str,
+    config: PackageConfig,
+    *,
+    versioned_pkg: bool,
+    gfx_arch: str,
+) -> str:
+    """Compute the on-disk package stem for one variant.
+
+    Applies the same ``update_package_name`` rules as ``build_package.py`` for
+    versioned vs non-versioned packages and gfx-arch suffixes.
+
+    Parameters:
+        pkg_name: Base name from ``package.json``.
+        config: Shared build configuration.
+        versioned_pkg: Whether this variant includes the ROCm version in its name.
+        gfx_arch: Gfx-arch token for kpack variants (``GFX_HOST``, ``GFX_META``, etc.).
+
+    Returns:
+        Package stem without ``.deb``/``.rpm`` extension (e.g. ``amdrocm-core-sdk7.15``).
+    """
+    local_config = replace(
+        config,
+        versioned_pkg=versioned_pkg,
+        gfx_arch=gfx_arch,
+    )
+    return update_package_name(pkg_name, local_config)
+
+
+def find_package_files(packages_dir: Path, pkg_type: str) -> dict[str, Path]:
+    """Index built package files in ``packages_dir`` by installed package stem.
+
+    Parameters:
+        packages_dir: Directory containing built ``.deb`` or ``.rpm`` files.
+        pkg_type: ``deb`` or ``rpm`` (case-insensitive).
+
+    Returns:
+        Mapping from package stem (filename without extension) to file path.
+    """
+    ext = ".deb" if pkg_type.lower() == "deb" else ".rpm"
+    package_files: dict[str, Path] = {}
+    for path in sorted(packages_dir.iterdir()):
+        if not path.is_file():
+            continue
+        if not path.name.lower().endswith(ext):
+            continue
+        # Stem matches the installed package name used by dpkg/rpm metadata.
+        package_files[path.name[: -len(ext)]] = path
+    return package_files
+
+
 def expected_control_version(config: PackageConfig) -> str:
-    """Return the version string written into DEB/RPM control metadata."""
+    """Build the version string expected in DEB/RPM control metadata.
+
+    DEB uses ``rocm_version`` plus optional ``version_suffix`` as the debian
+    revision. RPM combines ``VERSION-RELEASE`` where release defaults to ``1``.
+
+    Parameters:
+        config: Shared build configuration.
+
+    Returns:
+        Expected version string for comparison with ``dpkg-deb -f`` or ``rpm -qp``.
+    """
     if config.pkg_type.lower() == "rpm":
         release = config.version_suffix or "1"
         return f"{config.rocm_version}-{release}"
@@ -137,10 +386,21 @@ def expected_control_version(config: PackageConfig) -> str:
 
 
 def read_package_file_version(package_path: Path, pkg_type: str) -> str:
-    """Read ``Version`` (DEB) or ``VERSION-RELEASE`` (RPM) from a package archive."""
+    """Read the version field from a built package file.
+
+    Parameters:
+        package_path: Path to a ``.deb`` or ``.rpm`` file.
+        pkg_type: ``deb`` or ``rpm`` (case-insensitive).
+
+    Returns:
+        Version string from package metadata.
+
+    Raises:
+        RuntimeError: When ``dpkg-deb`` or ``rpm`` query fails.
+    """
     pkg_type = pkg_type.lower()
     if pkg_type == "deb":
-        result = checker._run_capture(
+        result = _run_capture(
             ["dpkg-deb", "-f", str(package_path), "Version"],
         )
         if result.returncode != 0:
@@ -148,7 +408,7 @@ def read_package_file_version(package_path: Path, pkg_type: str) -> str:
                 f"dpkg-deb failed for {package_path}: {result.stderr.strip()}",
             )
         return result.stdout.strip()
-    result = checker._run_capture(
+    result = _run_capture(
         ["rpm", "-qp", "--qf", r"%{VERSION}-%{RELEASE}", str(package_path)],
     )
     if result.returncode != 0:
@@ -159,10 +419,23 @@ def read_package_file_version(package_path: Path, pkg_type: str) -> str:
 
 
 def versions_match(expected: str, actual: str, pkg_type: str) -> bool:
-    """Return True when ``actual`` matches ``expected`` (DEB allows ``~`` vs ``-``)."""
+    """Compare expected and actual control-field version strings.
+
+    DEB allows ``~`` as an alternative separator to ``-`` in version revisions;
+    RPM requires an exact match.
+
+    Parameters:
+        expected: Version derived from ``--rocm-version`` and ``--version-suffix``.
+        actual: Version read from the built package file.
+        pkg_type: ``deb`` or ``rpm`` (case-insensitive).
+
+    Returns:
+        True when the versions are equivalent for the given package format.
+    """
     if expected == actual:
         return True
     if pkg_type.lower() == "deb":
+        # Debian revision may use ~ where we encoded - in the expected string.
         normalized_expected = expected.replace("-", "~")
         normalized_actual = actual.replace("-", "~")
         return normalized_expected == normalized_actual
@@ -178,7 +451,19 @@ def verify_variant(
     *,
     check_version: bool,
 ) -> VariantBuildCheck:
-    """Verify one expected variant exists and optionally matches version."""
+    """Verify one variant: file presence and optional control-field version.
+
+    Parameters:
+        base_package: ``package.json`` base name.
+        label: Human-readable variant label (e.g. ``meta``, ``device-gfx1100``).
+        expected_name: Installed package stem expected on disk.
+        package_files: Index from ``find_package_files``.
+        config: Shared build configuration.
+        check_version: When False, skip ``dpkg-deb``/``rpm`` version queries.
+
+    Returns:
+        Per-variant check result with error details on failure.
+    """
     expected_version = expected_control_version(config)
     path = package_files.get(expected_name)
     found = path is not None
@@ -188,23 +473,22 @@ def verify_variant(
 
     if not found:
         errors.append(f"package file not found for expected name {expected_name!r}")
-    else:
-        if check_version:
-            try:
-                actual_version = read_package_file_version(path, config.pkg_type)
-                version_ok = versions_match(
-                    expected_version,
-                    actual_version,
-                    config.pkg_type,
+    elif check_version:
+        try:
+            actual_version = read_package_file_version(path, config.pkg_type)
+            version_ok = versions_match(
+                expected_version,
+                actual_version,
+                config.pkg_type,
+            )
+            if not version_ok:
+                errors.append(
+                    f"version mismatch: expected {expected_version!r}, "
+                    f"got {actual_version!r}",
                 )
-                if not version_ok:
-                    errors.append(
-                        f"version mismatch: expected {expected_version!r}, "
-                        f"got {actual_version!r}",
-                    )
-            except RuntimeError as exc:
-                version_ok = False
-                errors.append(str(exc))
+        except RuntimeError as exc:
+            version_ok = False
+            errors.append(str(exc))
 
     return VariantBuildCheck(
         base_package=base_package,
@@ -226,24 +510,31 @@ def verify_package(
     *,
     check_version: bool,
 ) -> BuildVerifyReport:
-    """Verify all build variants for one ``package.json`` package entry."""
-    report = BuildVerifyReport(base_package=pkg_name)
-    package_files = checker.find_package_files(packages_dir, config.pkg_type)
+    """Verify all variants ``build_package.py`` would produce for one package.
 
-    for label, versioned_pkg, gfx_arch in checker.iter_variant_configs(
-        pkg_name,
-        config,
-    ):
-        expected_name = checker.resolve_installed_name(
+    Parameters:
+        pkg_name: ``package.json`` base name.
+        config: Shared build configuration (kpack routing, gfx targets, etc.).
+        packages_dir: Directory containing built package files.
+        check_version: When False, verify presence only.
+
+    Returns:
+        Report with one ``VariantBuildCheck`` per expected variant.
+    """
+    report = BuildVerifyReport(base_package=pkg_name)
+    package_files = find_package_files(packages_dir, config.pkg_type)
+
+    for spec in iter_package_variant_specs(pkg_name, config):
+        expected_name = resolve_installed_name(
             pkg_name,
             config,
-            versioned_pkg=versioned_pkg,
-            gfx_arch=gfx_arch,
+            versioned_pkg=spec.versioned_pkg,
+            gfx_arch=spec.gfx_arch,
         )
         report.variants.append(
             verify_variant(
                 pkg_name,
-                label,
+                spec.label,
                 expected_name,
                 package_files,
                 config,
@@ -257,7 +548,15 @@ def collect_extra_package_files(
     package_files: dict[str, Path],
     expected_names: set[str],
 ) -> list[str]:
-    """Return package stems present on disk but not expected by ``package.json``."""
+    """List package stems present on disk but not expected by any variant.
+
+    Parameters:
+        package_files: Index from ``find_package_files``.
+        expected_names: Installed package stems derived from variant enumeration.
+
+    Returns:
+        Sorted list of unexpected package stems.
+    """
     return sorted(name for name in package_files if name not in expected_names)
 
 
@@ -265,10 +564,19 @@ def resolve_pkg_names(
     args: argparse.Namespace,
     config: PackageConfig,
 ) -> list[str]:
-    """Resolve which ``package.json`` entries to verify."""
-    if args.all_eligible:
-        from build_package import parse_input_package_list
+    """Resolve the package list from CLI flags.
 
+    Parameters:
+        args: Parsed command-line arguments.
+        config: Shared build configuration (used for ``--all-eligible`` filtering).
+
+    Returns:
+        ``package.json`` base names to verify.
+
+    Raises:
+        ValueError: Propagated from ``parse_input_package_list`` on invalid input.
+    """
+    if args.all_eligible:
         pkg_list, _skipped = parse_input_package_list(None, config.artifacts_dir)
         return pkg_list
     return list(args.pkg_names)
@@ -281,7 +589,17 @@ def build_summary(
     *,
     fail_on_extra: bool,
 ) -> BuildVerifySummary:
-    """Build the run summary including optional extra-file detection."""
+    """Assemble the aggregate verification summary.
+
+    Parameters:
+        packages_requested: Base names passed on the command line.
+        reports: Per-package verification reports.
+        package_files: Full index of files in ``--packages-dir``.
+        fail_on_extra: When False, unexpected files are ignored for pass/fail.
+
+    Returns:
+        Summary used for console output and report files.
+    """
     expected_names = {v.expected_name for r in reports for v in r.variants}
     extra = collect_extra_package_files(package_files, expected_names)
     if not fail_on_extra:
@@ -294,8 +612,8 @@ def build_summary(
     )
 
 
-def _variant_to_dict(variant: VariantBuildCheck) -> dict:
-    """Serialize one variant check for JSON output."""
+def _variant_to_dict(variant: VariantBuildCheck) -> dict[str, object]:
+    """Serialize one variant check for JSON report output."""
     return {
         "base_package": variant.base_package,
         "label": variant.label,
@@ -311,7 +629,14 @@ def _variant_to_dict(variant: VariantBuildCheck) -> dict:
 
 
 def format_report_json(summary: BuildVerifySummary) -> str:
-    """Serialize the full build verification report as JSON."""
+    """Format the verification summary as indented JSON.
+
+    Parameters:
+        summary: Aggregate verification outcome.
+
+    Returns:
+        JSON string suitable for ``build_status_report.json``.
+    """
     payload = {
         "passed": summary.passed,
         "packages_requested": summary.packages_requested,
@@ -336,10 +661,17 @@ def format_report_json(summary: BuildVerifySummary) -> str:
 
 
 def format_report_text(summary: BuildVerifySummary) -> str:
-    """Build a plain-text build status report for logs or ``build_status_report.txt``."""
+    """Format the verification summary as human-readable text.
+
+    Parameters:
+        summary: Aggregate verification outcome.
+
+    Returns:
+        Multi-line report for console output and ``build_status_report.txt``.
+    """
     lines: list[str] = []
     overall = "PASS" if summary.passed else "FAIL"
-    lines.append("ROCm build package verification report (Step 1)")
+    lines.append("ROCm build package verification report")
     lines.append("=" * 72)
     lines.append(f"Overall result: {overall}")
     lines.append(f"Packages requested: {', '.join(summary.packages_requested)}")
@@ -381,29 +713,56 @@ def format_report_text(summary: BuildVerifySummary) -> str:
 
 
 def write_report_files(summary: BuildVerifySummary, report_dir: Path) -> None:
-    """Write ``build_status_report.txt`` and ``build_status_report.json``."""
+    """Write text and JSON verification reports under ``report_dir``.
+
+    Parameters:
+        summary: Aggregate verification outcome.
+        report_dir: Output directory (created if missing).
+
+    Raises:
+        FileNotFoundError: When either report file is missing after write.
+    """
     report_dir.mkdir(parents=True, exist_ok=True)
     text_path = report_dir / "build_status_report.txt"
     json_path = report_dir / "build_status_report.json"
     text_path.write_text(format_report_text(summary) + "\n", encoding="utf-8")
     json_path.write_text(format_report_json(summary) + "\n", encoding="utf-8")
-    print(f"Build report written to: {text_path}")
-    print(f"Build report written to: {json_path}")
+    if not text_path.is_file():
+        raise FileNotFoundError(f"Failed to write report: {text_path}")
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Failed to write report: {json_path}")
+    logger.info(f"Build report written to: {text_path}")
+    logger.info(f"Build report written to: {json_path}")
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments for ``build_package_verify``."""
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Parameters:
+        argv: Argument list (typically ``sys.argv[1:]``).
+
+    Returns:
+        Parsed namespace for ``run()``.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Verify built native Linux packages match package.json variant names "
-            "and control-field versions (pre-upload Step 1)."
+            "and control-field versions."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_CLI_EXAMPLES_EPILOG,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (DEBUG level logging)",
     )
     parser.add_argument(
         "--pkg-type",
         required=True,
         choices=("deb", "rpm", "DEB", "RPM"),
-        help="Package format (deb or rpm)",
+        help="Choose the package format to be verified: DEB or RPM",
     )
     parser.add_argument(
         "--packages-dir",
@@ -430,13 +789,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--version-suffix",
+        type=str,
+        nargs="?",
         default="",
-        help="Build version suffix (e.g. CI run id)",
+        help=(
+            "Release identifier appended to the package version field in DEB/RPM "
+            "metadata (e.g. a CI run ID like '28484694006'). "
+            "For DEB this becomes the debian revision (e.g. '7.15.0-28484694006'); "
+            "for RPM this sets the release field. "
+            "Does not affect the package name or install prefix."
+        ),
     )
     parser.add_argument(
         "--install-prefix",
-        default="/opt/rocm/core",
-        help="Install prefix recorded in PackageConfig",
+        default=DEFAULT_INSTALL_PREFIX,
+        help="Base directory where package will be installed",
     )
     parser.add_argument(
         "--target",
@@ -447,12 +814,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--enable-kpack",
         action="store_true",
-        help="Use kpack variant rules (auto-detected from manifest if omitted)",
+        help="Enable multi-architecture package generation",
     )
     parser.add_argument(
-        "--rpath-pkg",
+        "--runpath-pkg",
         action="store_true",
-        help="Package was built with --rpath-pkg",
+        help="Keep RUNPATH in binaries (by default, RUNPATH is converted to RPATH)",
+    )
+    parser.add_argument(
+        "--build-variant",
+        default="",
+        help=(
+            "Build variant (e.g. 'asan'). When set to 'asan', the install prefix "
+            "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
+            "(e.g. /opt/rocm/core-asan-7.15)."
+        ),
     )
     parser.add_argument(
         "--pkg-names",
@@ -481,39 +857,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="DIR",
         help="Write build_status_report.txt and .json under DIR",
     )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress verbose packaging_utils debug prints",
-    )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry: verify built packages, write report, return exit code."""
-    args = parse_args(argv)
-    checker._suppress_packaging_noise(args.quiet)
+def run(args: argparse.Namespace) -> int:
+    """Execute build package verification.
 
+    Parameters:
+        args: Parsed command-line arguments.
+
+    Returns:
+        0 on success, 1 when verification failed, 2 on usage or configuration errors.
+    """
     packages_dir = args.packages_dir.expanduser().resolve()
     if not packages_dir.is_dir():
-        print(f"Error: packages directory not found: {packages_dir}", file=sys.stderr)
+        logger.error(f"packages directory not found: {packages_dir}")
         return 2
 
     read_package_json_file()
     try:
-        config = checker.build_checker_config(args)
+        config = create_package_config(args)
     except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        logger.error(f"{exc}")
         return 2
 
     try:
         pkg_names = resolve_pkg_names(args, config)
     except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        logger.error(f"{exc}")
         return 2
 
     if not pkg_names:
-        print("Error: no packages to verify", file=sys.stderr)
+        logger.error("no packages to verify")
         return 2
 
     check_version = not args.no_version_check
@@ -521,7 +896,7 @@ def main(argv: list[str] | None = None) -> int:
         verify_package(name, config, packages_dir, check_version=check_version)
         for name in pkg_names
     ]
-    package_files = checker.find_package_files(packages_dir, config.pkg_type)
+    package_files = find_package_files(packages_dir, config.pkg_type)
     summary = build_summary(
         pkg_names,
         reports,
@@ -535,22 +910,21 @@ def main(argv: list[str] | None = None) -> int:
         write_report_files(summary, args.report_dir.expanduser())
 
     if not summary.passed:
-        print(
-            f"\nBuild verification failed: "
-            f"{summary.variants_failed} variant(s), "
-            f"{len(summary.extra_package_files)} extra file(s).",
-            file=sys.stderr,
+        logger.error(
+            f"Build verification failed: {summary.variants_failed} variant(s), "
+            f"{len(summary.extra_package_files)} extra file(s)",
         )
         return 1
-    print("\nBuild verification passed.")
+    logger.info("Build verification passed.")
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def main(argv: list[str]) -> int:
+    """Program entry point: parse arguments, configure logging, and run verification."""
+    args = parse_args(argv)
+    configure_logging(verbose=args.verbose)
+    return run(args)
 
-# Epilog
-# -----
-# Step 1 (this module): names + versions of built archives vs package.json variants.
-# Step 2 (pkg_dependency_checker.py): Depends/Requires vs package.json rules.
-# Step 3 (native_linux_package_install_test.py --test-type simulate): installability.
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
