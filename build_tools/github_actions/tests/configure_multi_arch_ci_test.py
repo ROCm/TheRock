@@ -349,6 +349,26 @@ class TestShouldSkipCI(unittest.TestCase):
         git = cm.GitContext(changed_files=None)
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
+    def test_asan_pr_with_external_repo_runs(self):
+        """ASAN PR from external repo runs without label (opted in via workflow)."""
+        inputs = self._inputs(
+            build_variant="asan",
+            pr_labels=[],
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_host_asan_pr_with_external_repo_runs(self):
+        """host-asan PR from external repo runs without label."""
+        inputs = self._inputs(
+            build_variant="host-asan",
+            pr_labels=[],
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
     def test_release_pr_without_submodule_change_runs(self):
         """Release variant PR without submodule changes still runs (not skipped)."""
         inputs = self._inputs(build_variant="release", pr_labels=[])
