@@ -198,7 +198,7 @@ jobs:
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
-          product: core
+          product: core # 'core' for the rocm-sdk, as opposed to 'pytorch', 'jax', etc.
 
       - name: Copy to release buckets
         run: |
