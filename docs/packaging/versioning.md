@@ -69,24 +69,28 @@ Most users are expected to use stable releases, but several other distribution
 channels are also available and may be of interest to project developers,
 users who want early previews of upcoming releases, and QA/test team members.
 
-| Distribution channel | Base URL                          | Source of builds                                                                                                                                                                                             |
-| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| stable releases      | https://repo.amd.com/rocm/        | Manually promoted prereleases                                                                                                                                                                                |
-| prereleases          | https://rocm.prereleases.amd.com/ | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
-| nightly releases     | https://rocm.nightlies.amd.com/   | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
-| BKC releases         | TBD                               | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
-| dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
-| dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
+| Distribution channel | Base URL                           | Source of builds                                                                                                                                                                                             |
+| -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| stable releases      | https://stable.repo.amd.com/rocm/  | Manually promoted prereleases                                                                                                                                                                                |
+| prereleases          | https://rc.repo.amd.com/rocm/      | Manually triggered workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                   |
+| nightly releases     | https://nightly.repo.amd.com/rocm/ | Scheduled workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                            |
+| BKC releases         | https://bkc.repo.amd.com/rocm/     | Workflows in [rockrel](https://github.com/ROCm/rockrel)                                                                                                                                                      |
+| dev releases         | https://dev.repo.amd.com/rocm/     | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock) and [rockrel](https://github.com/ROCm/rockrel)                                                                               |
+| dev builds           | No central index                   | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
-Each distribution channel is currently hosted on a separate release index that
-can be passed to package managers like `pip` (see
-[RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
+Each distribution channel has an aggregate Python index that can be passed to
+package managers like `pip` (see
+[RELEASES.md - Installing multi-arch Python packages](../../RELEASES.md#installing-multi-arch-python-packages)
 for details). For example:
 
 ```bash
-pip install --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/ rocm
-pip install --index-url=https://rocm.devreleases.amd.com/whl-multi-arch/ rocm
+pip install --index-url=https://nightly.repo.amd.com/rocm/whl-next/ rocm
+pip install --index-url=https://dev.repo.amd.com/rocm/whl-next/ rocm
 ```
+
+The new layout starts with ROCm 10.1 nightlies and ROCm 10.0 stable releases.
+Earlier releases remain in the
+[legacy multi-arch release locations](legacy_multi_arch_releases.md).
 
 With the exception of "dev releases", each distribution channel only contains
 release artifacts of the matching release type. The "dev releases" channel
