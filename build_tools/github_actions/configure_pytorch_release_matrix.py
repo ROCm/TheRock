@@ -37,42 +37,38 @@ CI_PYTHON_VERSIONS = {
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
 RELEASE_STABLE_PYTORCH_REFS = {
     "linux": [
-        "release/2.11",
         "release/2.12",
         "release/2.13",
         "release/2.14",
     ],
     "windows": [
-        "release/2.11",
         "release/2.12",
         "release/2.13",
         "release/2.14",
     ],
 }
 
-# Refs for the "nightly" release type: stable refs + "nightly" branch.
+# Refs for release types: stable refs + "nightly" branch.
 RELEASE_PYTORCH_REFS = {
     platform: [*refs, "nightly"]
     for platform, refs in RELEASE_STABLE_PYTORCH_REFS.items()
 }
 
 CI_PYTORCH_REFS = {
-    "linux": ["release/2.11", "release/2.12", "release/2.13"],
-    "windows": ["release/2.11"],
+    "linux": ["release/2.12", "release/2.13"],
+    "windows": ["release/2.12"],
 }
 
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        "release/2.11": {"gfx90c"},
         "release/2.12": {},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
         "nightly": {},
     },
     "windows": {
-        "release/2.11": {"gfx90c"},
         "release/2.12": {"gfx90c"},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
