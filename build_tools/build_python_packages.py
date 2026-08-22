@@ -625,9 +625,8 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
 
 
 # File-path allowlist for the rocm-profiler wheel, applied on top of
-# profiler_artifact_filter(). librocprof-sys* keeps its NEEDED entry on
-# libprofiler-hub.so.0, but the library now ships in profiler-hub's own
-# artifact, so that name must appear in the filter above as well as here.
+# profiler_artifact_filter(); profiler-hub must pass both gates or
+# libprofiler-hub.so.0 is silently dropped despite librocprof-sys* needing it.
 PROFILER_WHEEL_INCLUDES = [
     # rocprofiler-systems
     "bin/rocprof-sys-*",

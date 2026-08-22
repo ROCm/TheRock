@@ -3,7 +3,6 @@
 include = [
   "lib/libprofiler-hub.so*",
 ]
-# 'run' omitted rather than declared bare: a bare 'run' is a catch-all and would claim dev's files.
 [components.dbg."profiler/profiler-hub/stage"]
 [components.dev."profiler/profiler-hub/stage"]
 include = [
