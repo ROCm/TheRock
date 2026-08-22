@@ -215,6 +215,10 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    IGNORE_PACKAGES
+      amd_comgr
+      hip
+      HIP
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
