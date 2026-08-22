@@ -20,6 +20,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from packaging.version import Version
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_packages as ptf
 
@@ -159,6 +161,32 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         finally:
             path.unlink()
 
+    def _apply_version_rewrite(
+        self,
+        body: str,
+        package_name: str,
+        old_version: str,
+        old_rocm_version: str,
+        new_rocm_version: str,
+        *,
+        float_rocm_dependency_patch: bool,
+    ) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dist_info = root / f"{package_name}-{old_version}.dist-info"
+            dist_info.mkdir()
+            metadata = dist_info / "METADATA"
+            metadata.write_text(textwrap.dedent(body), encoding="utf-8")
+            ptf.update_metadata_rocm_requires_dist(
+                root,
+                package_name,
+                old_version,
+                old_rocm_version,
+                new_rocm_version,
+                float_rocm_dependency_patch=float_rocm_dependency_patch,
+            )
+            return metadata.read_text(encoding="utf-8")
+
     def test_drops_non_kept_extras_and_requires(self):
         # Torch body: multi-arch with no bare `extra == "device"` line — pure
         # drop, no repoint.
@@ -209,6 +237,141 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             self.assertIn("no overlap", str(cm.exception))
         finally:
             path.unlink()
+
+    def test_stable_torch_rocm_dependency_floats_patch(self):
+        body = (
+            get_multi_arch_metadata_torch_archs_body()
+            .replace(
+                "Requires-Dist: rocm-bootstrap\n",
+                "Requires-Dist: rocm-bootstrap\n"
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n",
+                1,
+            )
+            .replace(
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n",
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n"
+                'Requires-Dist: ROCm-SDK-Core == 7.13.0a20260505; extra == "core"\n',
+                1,
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "torch-2.8.0+rocm7.13.0"
+            torch_dir = root / "torch"
+            dist_info = root / "torch-2.8.0+rocm7.13.0a20260505.dist-info"
+            torch_dir.mkdir(parents=True)
+            dist_info.mkdir()
+            (torch_dir / "_rocm_init.py").write_text(
+                "check_version='7.13.0a20260505')\n", encoding="utf-8"
+            )
+            (torch_dir / "version.py").write_text(
+                "__version__ = '2.8.0+rocm7.13.0a20260505'\n",
+                encoding="utf-8",
+            )
+            (dist_info / "METADATA").write_text(body, encoding="utf-8")
+
+            ptf.wheel_change_extra_files(
+                root,
+                Version("2.8.0+rocm7.13.0a20260505"),
+                Version("2.8.0+rocm7.13.0"),
+                dest_version="release",
+            )
+
+            result = (dist_info / "METADATA").read_text(encoding="utf-8")
+            self.assertIn(
+                "check_version='7.13.*'",
+                (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "__version__ = '2.8.0+rocm7.13.0'",
+                (torch_dir / "version.py").read_text(encoding="utf-8"),
+            )
+        self.assertIn("Requires-Dist: rocm-bootstrap", result)
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.*", result)
+        self.assertIn(
+            'Requires-Dist: ROCm-SDK-Core == 7.13.*; extra == "core"',
+            result,
+        )
+        self.assertIn(
+            'Requires-Dist: amd-torch-device-gfx1010 == 2.8.0+rocm7.13.0; extra == "device-gfx1010"',
+            result,
+        )
+        self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
+
+    def test_compound_rocm_dependency_specifier_does_not_float(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: rocm-sdk-core==7.13.0a20260505,!=7.13.0.post1
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertIn(
+            "Requires-Dist: rocm-sdk-core==7.13.0,!=7.13.0.post1",
+            result,
+        )
+        self.assertNotIn("==7.13.*", result)
+
+    def test_malformed_requires_dist_raises_when_floating_enabled(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: rocm-sdk-core (==7.13.0
+"""
+        with self.assertRaises(ValueError):
+            self._apply_version_rewrite(
+                body,
+                "torch",
+                "2.8.0+rocm7.13.0",
+                "7.13.0a20260505",
+                "7.13.0",
+                float_rocm_dependency_patch=True,
+            )
+
+    def test_torch_rocm_dependency_stays_exact_for_prerelease_promotion(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0rc1
+Requires-Dist: rocm-sdk-core==7.13.0a20260505
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0rc1",
+            "7.13.0a20260505",
+            "7.13.0rc1",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.0rc1", result)
+        self.assertNotIn("==7.13.*", result)
+        self.assertEqual(
+            ptf.rewrite_rocm_init_check_version(
+                "check_version='7.13.0a20260505')\n",
+                "7.13.0a20260505",
+                "7.13.0rc1",
+            ),
+            "check_version='7.13.0rc1')\n",
+        )
+
+    def test_rocm_package_dependency_stays_exact_when_floating_disabled(self):
+        result = self._apply_version_rewrite(
+            get_multi_arch_metadata_archs_body(),
+            "rocm",
+            "7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=False,
+        )
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.0", result)
+        self.assertNotIn("==7.13.*", result)
 
 
 class ApplyKeepListToRequiresTxtTest(unittest.TestCase):
