@@ -162,8 +162,7 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
     def test_core_sdk_kpack_lists_meta_and_device_variants(self):
         cfg = _kpack_config(self.temp_dir)
         labels = [
-            spec.label
-            for spec in verify.iter_package_variant_specs(PKG_CORE_SDK, cfg)
+            spec.label for spec in verify.iter_package_variant_specs(PKG_CORE_SDK, cfg)
         ]
         self.assertIn("meta", labels)
         self.assertIn("non-versioned", labels)
@@ -174,9 +173,7 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
         cfg = _kpack_config(self.temp_dir)
         labels = [
             spec.label
-            for spec in verify.iter_package_variant_specs(
-                PKG_DEVELOPER_TOOLS, cfg
-            )
+            for spec in verify.iter_package_variant_specs(PKG_DEVELOPER_TOOLS, cfg)
         ]
         self.assertEqual(labels, ["versioned", "non-versioned"])
 
@@ -191,8 +188,7 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
             ),
         )
         labels = [
-            spec.label
-            for spec in verify.iter_package_variant_specs(PKG_FFT, cfg)
+            spec.label for spec in verify.iter_package_variant_specs(PKG_FFT, cfg)
         ]
         self.assertEqual(labels, ["versioned", "non-versioned"])
 
