@@ -2,33 +2,102 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for ``build_package_verify.py`` (pre-upload Step 1).
+"""Unit tests for ``build_package_verify.py``.
 
-Run (Python 3.10+)::
+Run::
 
-    python3 -m unittest build_tools.packaging.linux.tests.build_package_verify_test -v
+    python3.12 -m unittest build_tools.packaging.linux.tests.build_package_verify_test -v
 """
-
-from __future__ import annotations
 
 import json
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-_LINUX_DIR = Path(__file__).resolve().parent.parent
-if str(_LINUX_DIR) not in sys.path:
-    sys.path.insert(0, str(_LINUX_DIR))
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+LINUX_DIR = THIS_SCRIPT_DIR.parent
+BUILD_TOOLS_DIR = LINUX_DIR.parent.parent
 
+TEST_ROCM_VERSION = "7.14.0"
+TEST_VERSION_SUFFIX = "daily"
+TEST_INSTALL_PREFIX = "/opt/rocm/core"
+TEST_GFX_TARGET = "gfx1100"
+TEST_GFX_TARGET_ALT = "gfx942"
+TEST_PKG_TYPE_DEB = "deb"
+
+PKG_CORE_SDK = "amdrocm-core-sdk"
+PKG_DEVELOPER_TOOLS = "amdrocm-developer-tools"
+PKG_FFT = "amdrocm-fft"
+
+
+def _setup_import_path() -> None:
+    for path in (BUILD_TOOLS_DIR, LINUX_DIR):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+
+
+_setup_import_path()
+
+import build_package  # noqa: E402
 import build_package_verify as verify  # noqa: E402
-from packaging_utils import PackageConfig  # noqa: E402
+from packaging_utils import (  # noqa: E402
+    GFX_META,
+    PackageConfig,
+    get_package_info,
+    is_gfxarch_package,
+)
+
+
+def _args(tmp: Path, **overrides: object) -> Namespace:
+    artifacts = tmp / "artifacts"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    defaults: dict[str, object] = {
+        "artifacts_dir": artifacts,
+        "dest_dir": tmp / "output",
+        "target": [TEST_GFX_TARGET, TEST_GFX_TARGET_ALT],
+        "pkg_type": TEST_PKG_TYPE_DEB,
+        "rocm_version": TEST_ROCM_VERSION,
+        "version_suffix": TEST_VERSION_SUFFIX,
+        "install_prefix": TEST_INSTALL_PREFIX,
+        "runpath_pkg": False,
+        "enable_kpack": False,
+        "build_variant": "",
+    }
+    defaults.update(overrides)
+    return Namespace(**defaults)
+
+
+def _write_kpack_manifest(artifacts_dir: Path) -> None:
+    manifest_dir = artifacts_dir / "pkg"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    (manifest_dir / "therock_manifest.json").write_text(
+        json.dumps({"flags": {"KPACK_SPLIT_ARTIFACTS": True}}),
+        encoding="utf-8",
+    )
+
+
+def _kpack_config(tmp: Path, **overrides: object) -> PackageConfig:
+    root = Path(tmp)
+    _write_kpack_manifest(root / "artifacts")
+    return build_package.create_package_config(
+        _args(root, enable_kpack=True, **overrides),
+    )
+
+
+class BuildPackageVerifyTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        self._temp_context = tempfile.TemporaryDirectory()
+        self.temp_dir = Path(self._temp_context.name)
+
+    def tearDown(self) -> None:
+        self._temp_context.cleanup()
 
 
 class ExpectedControlVersionTest(unittest.TestCase):
-    """``expected_control_version`` matches deb/rpm packaging rules."""
-
     def test_deb_version_with_suffix(self):
         cfg = PackageConfig(
             artifacts_dir=Path("/tmp"),
@@ -79,8 +148,6 @@ class ExpectedControlVersionTest(unittest.TestCase):
 
 
 class VersionsMatchTest(unittest.TestCase):
-    """``versions_match`` tolerates DEB ``~`` vs ``-`` normalization."""
-
     def test_exact_match(self):
         self.assertTrue(verify.versions_match("7.14.0-1", "7.14.0-1", "deb"))
 
@@ -91,9 +158,55 @@ class VersionsMatchTest(unittest.TestCase):
         self.assertFalse(verify.versions_match("7.14.0-12345", "7.14.0~12345", "rpm"))
 
 
-class VerifyVariantTest(unittest.TestCase):
-    """``verify_variant`` presence and version checks."""
+class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
+    def test_core_sdk_kpack_lists_meta_and_device_variants(self):
+        cfg = _kpack_config(self.temp_dir)
+        labels = [
+            spec.label
+            for spec in verify.iter_package_variant_specs(PKG_CORE_SDK, cfg)
+        ]
+        self.assertIn("meta", labels)
+        self.assertIn("non-versioned", labels)
+        self.assertIn(f"device-{TEST_GFX_TARGET}", labels)
+        self.assertNotIn("host", labels)
 
+    def test_developer_tools_kpack_lists_simple_variants(self):
+        cfg = _kpack_config(self.temp_dir)
+        labels = [
+            spec.label
+            for spec in verify.iter_package_variant_specs(
+                PKG_DEVELOPER_TOOLS, cfg
+            )
+        ]
+        self.assertEqual(labels, ["versioned", "non-versioned"])
+
+    def test_fft_without_gfx_artifacts_lists_simple_variants(self):
+        cfg = _kpack_config(self.temp_dir)
+        pkg_info = get_package_info(PKG_FFT)
+        self.assertFalse(
+            is_gfxarch_package(
+                pkg_info=pkg_info,
+                enable_kpack=True,
+                artifacts_dir=cfg.artifacts_dir,
+            ),
+        )
+        labels = [
+            spec.label
+            for spec in verify.iter_package_variant_specs(PKG_FFT, cfg)
+        ]
+        self.assertEqual(labels, ["versioned", "non-versioned"])
+
+    def test_gfx_meta_variant_uses_meta_arch_suffix(self):
+        cfg = _kpack_config(self.temp_dir)
+        meta_variants = [
+            (spec.versioned_pkg, spec.gfx_arch)
+            for spec in verify.iter_package_variant_specs(PKG_CORE_SDK, cfg)
+            if spec.label == "meta"
+        ]
+        self.assertEqual(meta_variants, [(True, GFX_META)])
+
+
+class VerifyVariantTest(unittest.TestCase):
     def setUp(self):
         self.config = PackageConfig(
             artifacts_dir=Path("/tmp"),
@@ -107,7 +220,7 @@ class VerifyVariantTest(unittest.TestCase):
 
     def test_missing_package_fails(self):
         result = verify.verify_variant(
-            "amdrocm-core-sdk",
+            PKG_CORE_SDK,
             "main",
             "amdrocm-core-sdk7.14",
             {},
@@ -123,7 +236,7 @@ class VerifyVariantTest(unittest.TestCase):
         path = Path("/tmp/pkg.deb")
         files = {"amdrocm-core-sdk7.14": path}
         result = verify.verify_variant(
-            "amdrocm-core-sdk",
+            PKG_CORE_SDK,
             "main",
             "amdrocm-core-sdk7.14",
             files,
@@ -139,7 +252,7 @@ class VerifyVariantTest(unittest.TestCase):
         path = Path("/tmp/pkg.deb")
         files = {"amdrocm-core-sdk7.14": path}
         result = verify.verify_variant(
-            "amdrocm-core-sdk",
+            PKG_CORE_SDK,
             "main",
             "amdrocm-core-sdk7.14",
             files,
@@ -152,8 +265,6 @@ class VerifyVariantTest(unittest.TestCase):
 
 
 class ExtraFilesTest(unittest.TestCase):
-    """Unexpected package file detection."""
-
     def test_collect_extra_package_files(self):
         files = {
             "amdrocm-core-sdk7.14": Path("/tmp/a.deb"),
@@ -165,13 +276,11 @@ class ExtraFilesTest(unittest.TestCase):
 
 
 class BuildSummaryTest(unittest.TestCase):
-    """``BuildVerifySummary`` aggregation and pass/fail."""
-
     def _variant(
         self, name: str, *, found: bool, version_ok: bool
     ) -> verify.VariantBuildCheck:
         return verify.VariantBuildCheck(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             label="main",
             expected_name=name,
             file_path=Path("/tmp/x.deb") if found else None,
@@ -184,13 +293,13 @@ class BuildSummaryTest(unittest.TestCase):
 
     def test_all_passed(self):
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[
                 self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)
             ],
         )
         summary = verify.build_summary(
-            ["amdrocm-core-sdk"],
+            [PKG_CORE_SDK],
             [report],
             {"amdrocm-core-sdk7.14": Path("/tmp/x.deb")},
             fail_on_extra=False,
@@ -200,13 +309,13 @@ class BuildSummaryTest(unittest.TestCase):
 
     def test_missing_variant_fails(self):
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[
                 self._variant("amdrocm-core-sdk7.14", found=False, version_ok=False)
             ],
         )
         summary = verify.build_summary(
-            ["amdrocm-core-sdk"],
+            [PKG_CORE_SDK],
             [report],
             {},
             fail_on_extra=False,
@@ -216,13 +325,13 @@ class BuildSummaryTest(unittest.TestCase):
 
     def test_extra_files_fail_when_enabled(self):
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[
                 self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)
             ],
         )
         summary = verify.build_summary(
-            ["amdrocm-core-sdk"],
+            [PKG_CORE_SDK],
             [report],
             {
                 "amdrocm-core-sdk7.14": Path("/tmp/x.deb"),
@@ -235,11 +344,9 @@ class BuildSummaryTest(unittest.TestCase):
 
 
 class ReportFormatTest(unittest.TestCase):
-    """JSON and text report serialization."""
-
     def test_json_roundtrip_fields(self):
         variant = verify.VariantBuildCheck(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             label="main",
             expected_name="amdrocm-core-sdk7.14",
             file_path=Path("/tmp/x.deb"),
@@ -249,11 +356,11 @@ class ReportFormatTest(unittest.TestCase):
             version_ok=True,
         )
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[variant],
         )
         summary = verify.BuildVerifySummary(
-            packages_requested=["amdrocm-core-sdk"],
+            packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
         )
@@ -265,7 +372,7 @@ class ReportFormatTest(unittest.TestCase):
 
     def test_text_contains_pass(self):
         variant = verify.VariantBuildCheck(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             label="main",
             expected_name="amdrocm-core-sdk7.14",
             file_path=Path("/tmp/x.deb"),
@@ -275,11 +382,11 @@ class ReportFormatTest(unittest.TestCase):
             version_ok=True,
         )
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[variant],
         )
         summary = verify.BuildVerifySummary(
-            packages_requested=["amdrocm-core-sdk"],
+            packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
         )
@@ -289,11 +396,9 @@ class ReportFormatTest(unittest.TestCase):
 
 
 class WriteReportFilesTest(unittest.TestCase):
-    """``write_report_files`` creates txt and json under report dir."""
-
     def test_writes_both_reports(self):
         variant = verify.VariantBuildCheck(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             label="main",
             expected_name="amdrocm-core-sdk7.14",
             file_path=Path("/tmp/x.deb"),
@@ -303,11 +408,11 @@ class WriteReportFilesTest(unittest.TestCase):
             version_ok=True,
         )
         report = verify.BuildVerifyReport(
-            base_package="amdrocm-core-sdk",
+            base_package=PKG_CORE_SDK,
             variants=[variant],
         )
         summary = verify.BuildVerifySummary(
-            packages_requested=["amdrocm-core-sdk"],
+            packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
         )
