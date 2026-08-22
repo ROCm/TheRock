@@ -167,7 +167,9 @@ class ExtraFilesTest(unittest.TestCase):
 class BuildSummaryTest(unittest.TestCase):
     """``BuildVerifySummary`` aggregation and pass/fail."""
 
-    def _variant(self, name: str, *, found: bool, version_ok: bool) -> verify.VariantBuildCheck:
+    def _variant(
+        self, name: str, *, found: bool, version_ok: bool
+    ) -> verify.VariantBuildCheck:
         return verify.VariantBuildCheck(
             base_package="amdrocm-core-sdk",
             label="main",
@@ -183,7 +185,9 @@ class BuildSummaryTest(unittest.TestCase):
     def test_all_passed(self):
         report = verify.BuildVerifyReport(
             base_package="amdrocm-core-sdk",
-            variants=[self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)],
+            variants=[
+                self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)
+            ],
         )
         summary = verify.build_summary(
             ["amdrocm-core-sdk"],
@@ -197,7 +201,9 @@ class BuildSummaryTest(unittest.TestCase):
     def test_missing_variant_fails(self):
         report = verify.BuildVerifyReport(
             base_package="amdrocm-core-sdk",
-            variants=[self._variant("amdrocm-core-sdk7.14", found=False, version_ok=False)],
+            variants=[
+                self._variant("amdrocm-core-sdk7.14", found=False, version_ok=False)
+            ],
         )
         summary = verify.build_summary(
             ["amdrocm-core-sdk"],
@@ -211,7 +217,9 @@ class BuildSummaryTest(unittest.TestCase):
     def test_extra_files_fail_when_enabled(self):
         report = verify.BuildVerifyReport(
             base_package="amdrocm-core-sdk",
-            variants=[self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)],
+            variants=[
+                self._variant("amdrocm-core-sdk7.14", found=True, version_ok=True)
+            ],
         )
         summary = verify.build_summary(
             ["amdrocm-core-sdk"],
