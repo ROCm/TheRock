@@ -195,13 +195,26 @@ def build_environment(rocm_path, component_name):
     env["ROCM_PATH"] = str(rocm_path)
 
     # _rocisa links libamdhip64.so (in lib/), tensilelite-client links libomp.so
-    # (in lib/llvm/lib/) — both are needed or the client segfaults at load.
+    # (in lib/llvm/lib/<triple>/ due to GNUInstallDirs) and librocm_sysdeps_z.so
+    # (in lib/rocm_sysdeps/lib/).
     lib_path = rocm_path / "lib"
     llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
-    existing_ld = env.get("LD_LIBRARY_PATH", "")
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(
-        filter(None, [str(lib_path), str(llvm_lib_path), existing_ld])
+    sysdeps_lib_path = rocm_path / "lib" / "rocm_sysdeps" / "lib"
+    ld_paths = [str(lib_path), str(llvm_lib_path)]
+    # GNUInstallDirs puts libomp.so under one or more platform-specific triple
+    # subdirs (e.g. x86_64-unknown-linux-gnu/) instead of lib/llvm/lib/ directly.
+    # Add every triple dir (sorted) so the result is deterministic and does not
+    # depend on glob order or break when a new triple is added to the location.
+    llvm_platform_dirs = sorted(
+        p for p in llvm_lib_path.glob("*-linux-*") if p.is_dir()
     )
+    ld_paths.extend(str(p) for p in llvm_platform_dirs)
+    if sysdeps_lib_path.is_dir():
+        ld_paths.append(str(sysdeps_lib_path))
+    existing_ld = env.get("LD_LIBRARY_PATH", "")
+    if existing_ld:
+        ld_paths.append(existing_ld)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
     existing_path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join(
