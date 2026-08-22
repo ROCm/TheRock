@@ -31,7 +31,8 @@ def _valid_manifest() -> dict[str, object]:
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "streams": {
             "known": ["dev", "nightly", "rc", "stable", "stable-staging"],
-            "default": ["dev", "nightly", "rc", "stable", "stable-staging"],
+            "groups": {"all": ["dev", "nightly", "rc", "stable", "stable-staging"]},
+            "default": "all",
         },
         "python_indexes": [
             {
@@ -44,6 +45,14 @@ def _valid_manifest() -> dict[str, object]:
                 },
             }
         ],
+    }
+
+
+def _single_stream_config() -> dict[str, object]:
+    return {
+        "known": ["nightly"],
+        "groups": {"all": ["nightly"]},
+        "default": "all",
     }
 
 
@@ -135,6 +144,7 @@ def test_checked_in_manifest_loads() -> None:
         "dev",
         "nightly",
         "rc",
+        "bkc",
         "stable",
         "stable-staging",
     )
@@ -143,6 +153,27 @@ def test_checked_in_manifest_loads() -> None:
     assert index.packages["jax-rocm10-plugin"].owner_path == "jax/whl-next"
     assert index.packages["rocm-sdk-core"].owner_path == "core/whl-next"
     assert index.packages["torch"].owner_path == "pytorch/whl-next"
+
+
+def test_checked_in_manifest_bkc_contains_only_gfx1250_targets() -> None:
+    manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
+    manifest = load_ownership_manifest(manifest_path)
+    index = manifest.python_indexes[0]
+    target_package_marker = "-device-gfx"
+    expected_bkc_target_packages = {
+        "amd-torch-device-gfx1250",
+        "amd-torchvision-device-gfx1250",
+        "rocm-sdk-device-gfx1250",
+    }
+    expected_bkc_packages = {
+        package_name
+        for package_name in index.packages
+        if target_package_marker not in package_name
+        and not package_name.startswith("jax-")
+    } | expected_bkc_target_packages
+
+    assert set(index.active_packages("bkc")) == expected_bkc_packages
+    assert index.owner_paths("bkc") == {"core/whl-next", "pytorch/whl-next"}
 
 
 def test_checked_in_manifest_uses_known_owner_paths() -> None:
@@ -856,7 +887,7 @@ python_indexes: []
     assert exit_code == 1
     assert captured.out == ""
     assert captured.err.startswith("error: ")
-    assert "schema_version must be 2" in captured.err
+    assert "schema_version must be 3" in captured.err
     assert "Traceback" not in captured.err
 
 
@@ -914,10 +945,12 @@ def test_main_reports_index_validation_errors_without_traceback(
     manifest_path = tmp_path / "ownership.yaml"
     manifest_path.write_text(
         """
-schema_version: 2
+schema_version: 3
 streams:
   known: [nightly]
-  default: [nightly]
+  groups:
+    all: [nightly]
+  default: all
 python_indexes:
   - public_base: /rocm/whl-next
     packages:
@@ -1090,15 +1123,15 @@ def test_validate_product_indexes_rejects_empty_package_page(
         (
             {
                 "schema_version": 1,
-                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "streams": _single_stream_config(),
                 "python_indexes": [],
             },
-            "schema_version must be 2",
+            "schema_version must be 3",
         ),
         (
             {
                 "schema_version": True,
-                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "streams": _single_stream_config(),
                 "python_indexes": [],
             },
             "schema_version must be an integer",
@@ -1106,7 +1139,7 @@ def test_validate_product_indexes_rejects_empty_package_page(
         (
             {
                 "schema_version": MANIFEST_SCHEMA_VERSION,
-                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "streams": _single_stream_config(),
                 "python_indexes": [],
             },
             "exactly one /rocm/whl-next index",
@@ -1114,7 +1147,7 @@ def test_validate_product_indexes_rejects_empty_package_page(
         (
             {
                 "schema_version": MANIFEST_SCHEMA_VERSION,
-                "streams": {"known": ["nightly"], "default": ["nightly"]},
+                "streams": _single_stream_config(),
                 "python_indexes": [
                     {
                         "public_base": "/rocm/whl-next",
@@ -1134,23 +1167,57 @@ def test_rejects_malformed_top_level_data(data: object, match: str) -> None:
 @pytest.mark.parametrize(
     "streams, match",
     [
-        ({"known": [], "default": ["nightly"]}, "known must not be empty"),
-        ({"known": ["nightly"], "default": []}, "default must not be empty"),
         (
-            {"known": ["nightly", "nightly"], "default": ["nightly"]},
+            {"known": [], "groups": {"all": ["nightly"]}, "default": "all"},
+            "known must not be empty",
+        ),
+        (
+            {"known": ["nightly"], "groups": {}, "default": "all"},
+            "groups must not be empty",
+        ),
+        (
+            {"known": ["nightly"], "groups": {"all": []}, "default": "all"},
+            "groups.all must not be empty",
+        ),
+        (
+            {
+                "known": ["nightly", "nightly"],
+                "groups": {"all": ["nightly"]},
+                "default": "all",
+            },
             "duplicate stream",
         ),
         (
-            {"known": ["Nightly"], "default": ["Nightly"]},
+            {
+                "known": ["Nightly"],
+                "groups": {"all": ["Nightly"]},
+                "default": "all",
+            },
             "lowercase alphanumeric",
         ),
         (
-            {"known": ["release.1"], "default": ["release.1"]},
+            {
+                "known": ["nightly"],
+                "groups": {"release.1": ["nightly"]},
+                "default": "release.1",
+            },
             "lowercase alphanumeric",
         ),
         (
-            {"known": ["nightly"], "default": ["nightly", "rc"]},
+            {
+                "known": ["nightly"],
+                "groups": {"all": ["nightly", "rc"]},
+                "default": "all",
+            },
             "unknown stream",
+        ),
+        (
+            {
+                "known": ["nightly"],
+                "groups": {"all": ["nightly"]},
+                "default": "missing",
+            },
+            "unknown stream group",
         ),
     ],
 )
@@ -1177,7 +1244,71 @@ def test_rejects_unknown_package_stream() -> None:
         parse_ownership_manifest(data)
 
 
-def test_rejects_patterns_key_in_schema_v2() -> None:
+def test_package_stream_group_expands_to_group_streams() -> None:
+    data = _valid_manifest()
+    stream_config = data["streams"]
+    assert isinstance(stream_config, dict)
+    known_streams = stream_config["known"]
+    assert isinstance(known_streams, list)
+    known_streams.append("bkc")
+    groups = stream_config["groups"]
+    assert isinstance(groups, dict)
+    groups["all-with-bkc"] = [
+        "dev",
+        "nightly",
+        "rc",
+        "bkc",
+        "stable",
+        "stable-staging",
+    ]
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["torch"] = {
+        "owner_path": "pytorch/whl-next",
+        "stream_group": "all-with-bkc",
+    }
+
+    manifest = parse_ownership_manifest(data)
+
+    assert manifest.python_indexes[0].packages["torch"].streams == frozenset(
+        {"dev", "nightly", "rc", "bkc", "stable", "stable-staging"}
+    )
+
+
+def test_rejects_unknown_package_stream_group() -> None:
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["torch"] = {
+        "owner_path": "pytorch/whl-next",
+        "stream_group": "unknown",
+    }
+
+    with pytest.raises(ManifestError, match="unknown stream group"):
+        parse_ownership_manifest(data)
+
+
+def test_rejects_package_stream_group_with_exact_streams() -> None:
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["torch"] = {
+        "owner_path": "pytorch/whl-next",
+        "stream_group": "all",
+        "streams": ["nightly"],
+    }
+
+    with pytest.raises(ManifestError, match="must not contain both"):
+        parse_ownership_manifest(data)
+
+
+def test_rejects_patterns_key_in_schema_v3() -> None:
     data = _valid_manifest()
     index = data["python_indexes"][0]
     assert isinstance(index, dict)
