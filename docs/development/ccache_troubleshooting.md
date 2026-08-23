@@ -86,6 +86,33 @@ on Windows). The namespace isolates entries to some extent, but be aware
 of cross-repo pollution — entries from one repo may share manifests with
 another if they compile the same source files with compatible flags.
 
+### Release builds use the local cache only (no remote)
+
+Prerelease (release-candidate) and `nightly-bkc` builds use only the local
+cache. The `--release-type prerelease` and `--release-type nightly-bkc` options
+automatically select the `local` config preset. Users can select the same
+local-only behavior explicitly with `--config-preset=local`.
+
+Stable releases are a repackage of the prerelease artifacts and reading only
+from the local cache guards against cache poisoning attacks. The local cache is
+kept because some builds (notably Windows) need at least a local cache for
+performance and runner stability.
+
+Expect zero remote hits in prerelease and `nightly-bkc` "Report" steps; local
+hits are expected and fine. Nightly, `dev-bkc`, `dev`, and `ci` builds are
+unaffected and continue to use a shared remote cache.
+
+> [!TIP]
+> To confirm which cache a run actually used, look for the `Cache mode` line in
+> the "Setup ccache" step. It is read back from the generated `ccache.conf`, so
+> it reports what was written rather than only the requested options:
+>
+> ```text
+> [setup_ccache] Cache mode: release_type=prerelease preset=local remote=disabled local=/.../ccache
+> [setup_ccache] Cache mode: release_type=nightly-bkc preset=local remote=disabled local=/.../ccache
+> [setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=/.../ccache
+> ```
+
 ## Downloading and inspecting CI logs
 
 ### Finding a workflow run

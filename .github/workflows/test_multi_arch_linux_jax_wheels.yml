@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       package_index_url:
-        description: "Base URL for the multi-arch Python package index. Releases publish there; use wheel_find_links_url for CI-built wheels."
+        description: "URL for pip --index-url to install ROCm packages (PEP 503 index). Releases publish there; use wheel_find_links_url for CI-built wheels."
         type: string
         default: ""
       wheel_find_links_url:
@@ -106,9 +106,9 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       package_index_url:
-        description: Base URL for the multi-arch Python package index
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index). Releases publish there; use wheel_find_links_url for CI-built wheels.
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       wheel_find_links_url:
         description: "URL for pip --find-links to install the JAX wheels this run built. Wins over package_index_url."
         type: string
@@ -154,7 +154,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
-        default: "rocm-jaxlib-v0.11.0"
+        default: "rocm-jaxlib-v0.11.1"
       jax_version:
         description: "Built JAX version"
         type: string
