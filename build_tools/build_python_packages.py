@@ -31,6 +31,14 @@ from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_famili
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
 
 
+ROCPROFILER_RUNTIME_LIBRARY_ALIASES = {
+    "lib/librocprofiler-sdk.so",
+    "lib/librocprofiler-sdk-attach.so",
+    "lib/librocprofiler-sdk-rocattach.so",
+    "lib/rocprofiler-sdk/librocprofiler-sdk-tool.so",
+}
+
+
 def _amdgpu_families_arg(value: str) -> list[str] | None:
     """Argparse type for --linux/windows-amdgpu-families CLI flags.
 
@@ -254,6 +262,7 @@ def run(args: argparse.Namespace):
                 "share/**/rocprofiler-systems/**",
             ],
         ),
+        runtime_library_aliases=ROCPROFILER_RUNTIME_LIBRARY_ALIASES,
     )
 
     profiler_artifacts = params.filter_artifacts(

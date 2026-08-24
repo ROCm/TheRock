@@ -39,12 +39,6 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
-RUNTIME_DLOPEN_LIBRARY_ALIASES = {
-    "lib/librocprofiler-sdk.so",
-    "lib/librocprofiler-sdk-attach.so",
-    "lib/rocprofiler-sdk/librocprofiler-sdk-tool.so",
-}
-
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -353,7 +347,10 @@ class PopulatedDistPackage:
         return package_dest_dir
 
     def populate_runtime_files(
-        self, artifacts: ArtifactCatalog
+        self,
+        artifacts: ArtifactCatalog,
+        *,
+        runtime_library_aliases: set[str] | None = None,
     ) -> "PopulatedDistPackage":
         """Populates runtime files in an artifact catalog to the platform directory.
 
@@ -374,6 +371,7 @@ class PopulatedDistPackage:
             # This will be used later to restrict devel packages to only these.
             self.params.runtime_artifact_names.add(an.name)
 
+        runtime_library_aliases = runtime_library_aliases or set()
         package_dest_dir = self.platform_dir
         for relpath, dir_entry in artifacts.pm.matches():
             if self.files.has(relpath):
@@ -381,21 +379,20 @@ class PopulatedDistPackage:
             dest_path = package_dest_dir / relpath
             if dir_entry.is_symlink():
                 # Chase the symlink.
-                self._populate_runtime_symlink(relpath, dest_path, dir_entry)
+                self._populate_runtime_symlink(
+                    relpath, dest_path, dir_entry, runtime_library_aliases
+                )
             else:
                 # Copy the file.
                 file_type = get_file_type(dir_entry)
                 if file_type == "so":
                     # We only populate runtime shared libraries that correspond
-                    # with their soname (or that don't have one). A few
-                    # rocprofiler libraries are dlopened by their unversioned
-                    # names at runtime, so keep those aliases in runtime packages.
+                    # with their soname (or that don't have one). Some callers
+                    # provide explicit aliases for libraries dlopened by their
+                    # unversioned names at runtime.
                     soname = get_soname(dir_entry.path)
                     if soname:
-                        if (
-                            soname == dir_entry.name
-                            or relpath in RUNTIME_DLOPEN_LIBRARY_ALIASES
-                        ):
+                        if soname == dir_entry.name or relpath in runtime_library_aliases:
                             self._populate_file(
                                 relpath, dest_path, dir_entry, resolve_src=True
                             )
@@ -470,7 +467,11 @@ class PopulatedDistPackage:
         )
 
     def _populate_runtime_symlink(
-        self, relpath: str, dest_path: Path, src_entry: os.DirEntry[str]
+        self,
+        relpath: str,
+        dest_path: Path,
+        src_entry: os.DirEntry[str],
+        runtime_library_aliases: set[str],
     ):
         # We can't have any symlinks in a runtime tree.
         # Here is what we do based on what it points to:
@@ -485,7 +486,7 @@ class PopulatedDistPackage:
         file_type = get_file_type(link_target)
         # Case 2: Shared library.
         if file_type == "so" and (soname := get_soname(link_target)):
-            if soname == src_entry.name or relpath in RUNTIME_DLOPEN_LIBRARY_ALIASES:
+            if soname == src_entry.name or relpath in runtime_library_aliases:
                 self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
             else:
                 self.files.soname_aliases[relpath] = soname

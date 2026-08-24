@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+import _therock_utils.py_packaging as py_packaging
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
 from build_python_packages import validate_kpack_split_target_completeness
@@ -231,6 +232,65 @@ class MultiArchPackagingTest(TmpDirTestCase):
 
         self.assertEqual(len(params.populated_packages), 1)
         self.assertIs(params.populated_packages[0], lib)
+
+    def test_runtime_library_aliases_are_materialized_selectively(self):
+        """Allowlisted unversioned .so aliases stay in runtime; normal ones do not."""
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "base",
+            "lib",
+            "generic",
+            {
+                "lib/libkeep.so.1": "keep runtime library",
+                "lib/libdrop.so.1": "drop runtime library",
+            },
+        )
+        stage = artifact_dir / "base_lib_generic" / "stage"
+        (stage / "lib" / "libkeep.so").symlink_to("libkeep.so.1")
+        (stage / "lib" / "libdrop.so").symlink_to("libdrop.so.1")
+
+        params = self._make_params(artifact_dir)
+        core = PopulatedDistPackage(params, logical_name="core")
+
+        original_get_file_type = py_packaging.get_file_type
+        original_get_soname = py_packaging.get_soname
+        original_extend_rpath = PopulatedDistPackage._extend_rpath
+        original_normalize_rpath = PopulatedDistPackage._normalize_rpath
+
+        def fake_get_file_type(path_or_entry):
+            path = Path(getattr(path_or_entry, "path", path_or_entry))
+            if path.name.startswith(("libkeep.so", "libdrop.so")):
+                return "so"
+            return original_get_file_type(path_or_entry)
+
+        def fake_get_soname(path):
+            return Path(path).name
+
+        try:
+            py_packaging.get_file_type = fake_get_file_type
+            py_packaging.get_soname = fake_get_soname
+            PopulatedDistPackage._extend_rpath = lambda *args, **kwargs: None
+            PopulatedDistPackage._normalize_rpath = lambda *args, **kwargs: None
+
+            core.populate_runtime_files(
+                params.filter_artifacts(lambda an: an.name == "base"),
+                runtime_library_aliases={"lib/libkeep.so"},
+            )
+        finally:
+            py_packaging.get_file_type = original_get_file_type
+            py_packaging.get_soname = original_get_soname
+            PopulatedDistPackage._extend_rpath = original_extend_rpath
+            PopulatedDistPackage._normalize_rpath = original_normalize_rpath
+
+        self.assertTrue(core.files.has("lib/libkeep.so.1"))
+        self.assertTrue(core.files.has("lib/libkeep.so"))
+        self.assertTrue((core.platform_dir / "lib" / "libkeep.so").exists())
+
+        self.assertTrue(core.files.has("lib/libdrop.so.1"))
+        self.assertFalse(core.files.has("lib/libdrop.so"))
+        self.assertEqual(core.files.soname_aliases["lib/libdrop.so"], "libdrop.so.1")
+        self.assertFalse((core.platform_dir / "lib" / "libdrop.so").exists())
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
