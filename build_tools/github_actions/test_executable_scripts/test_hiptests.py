@@ -24,9 +24,9 @@ TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from amdgpu_family_matrix.py
+# Importing ASAN helpers from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from amdgpu_family_matrix import is_asan
+from amdgpu_family_matrix import get_asan_lib_path, is_asan_instrumented
 
 env = os.environ.copy()
 
@@ -109,20 +109,6 @@ GENERIC_TEST_TO_IGNORE = [
 ]
 
 
-def get_asan_lib_path():
-    arch = platform.machine()
-    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
-    logging.info(f"++ Exec [{CLANG_PATH}]$ {shlex.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip()
-
-
 def copy_dlls_exe_path():
     if platform.system() == "Windows":
         # hip and comgr dlls need to be copied to the same folder as exectuable
@@ -163,8 +149,8 @@ def setup_env(env):
         else:
             env["LD_LIBRARY_PATH"] = HIP_LIB_PATH
         # For ASAN mode, we preload it for test count query and test running
-        if is_asan():
-            env["LD_PRELOAD"] = get_asan_lib_path()
+        if is_asan_instrumented():
+            env["LD_PRELOAD"] = get_asan_lib_path(THEROCK_BIN_DIR)
             env["HSA_XNACK"] = "1"
             # Increase stack size of clr threads
             env["CQ_THREAD_STACK_SIZE"] = "8388608"
@@ -180,7 +166,7 @@ def setup_env(env):
 
 def execute_tests(env):
     # Allow for more time in ASAN mode to run the tests.
-    timeout = 1500 if is_asan() else 600
+    timeout = 1500 if is_asan_instrumented() else 600
     cmd = [
         "ctest",
         "--tests-information",
