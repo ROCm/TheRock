@@ -491,9 +491,6 @@ Safety Features:
 
     args = parser.parse_args(argv)
 
-    if args.use_stable_staging and not args.structured:
-        parser.error("--use-stable-staging requires --structured")
-
     if args.structured:
         args.multi_arch = True
         if args.use_stable_staging:
@@ -503,11 +500,8 @@ Safety Features:
                 "--structured requires --repo-stream to be set explicitly "
                 "(dev, nightly, rc, or stable-staging), or pass --use-stable-staging"
             )
-        if args.execute and not (args.use_release_buckets or args.use_stable_staging):
-            parser.error(
-                "--structured --execute requires --use-release-buckets or "
-                "--use-stable-staging"
-            )
+    elif args.use_stable_staging:
+        parser.error("--use-stable-staging requires --structured")
 
     # Adjust testing tarball prefix for multi-arch uploads
     if args.multi_arch and not args.structured and not args.use_release_buckets:
