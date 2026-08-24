@@ -99,3 +99,12 @@ To engage with any AMD ROCm component that is hosted on GitHub, you must abide b
 [GitHub community guidelines](https://docs.github.com/en/site-policy/github-terms/github-community-guidelines)
 and the
 [GitHub community code of conduct](https://docs.github.com/en/site-policy/github-terms/github-community-code-of-conduct).
+
+## Reporting security vulnerabilities
+
+> [!IMPORTANT]
+> Do **not** report security vulnerabilities publicly through GitHub issues. Instead, report them
+> through the [AMD Product Security website](https://www.amd.com/en/resources/product-security.html).
+
+Each repository's `SECURITY.md` describes its security reporting policy. For TheRock, see
+[SECURITY.md](SECURITY.md).

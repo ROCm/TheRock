@@ -363,6 +363,7 @@ for more details about testing.
 - [FAQ](docs/faq.md): Frequently asked questions for TheRock users.
 - [CONTRIBUTING.md](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
 - [GOVERNANCE.md](GOVERNANCE.md): The governance model, contributor roles, common contribution guidelines, and code of conduct shared across ROCm repositories.
+- [SECURITY.md](SECURITY.md): How to report a security vulnerability.
 - [TESTING.md](TESTING.md): Testing policies for TheRock itself and ROCm subprojects.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
