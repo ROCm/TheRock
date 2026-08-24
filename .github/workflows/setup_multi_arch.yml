@@ -73,6 +73,10 @@ on:
         description: "Build JAX wheels."
         type: boolean
         default: false
+      build_native_linux:
+        description: "Build native Linux packages (deb/rpm) and run their install tests."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -197,6 +201,7 @@ jobs:
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
+          BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
