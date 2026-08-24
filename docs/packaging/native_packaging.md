@@ -96,25 +96,25 @@ The following table shows the S3 bucket configuration and public repository URLs
 ### Current Multi-Arch Release Packages
 
 Final multi-arch release packages are published under the ROCm Core product
-hierarchy. The `dev`, `nightly`, and BKC streams retain each run under a
+hierarchy. This layout starts with ROCm 10.1 nightlies and ROCm 10.0 stable
+releases. Earlier releases remain in the
+[legacy multi-arch release locations](legacy_multi_arch_releases.md).
+
+The `dev`, `nightly`, and BKC streams retain each run under a
 `YYYYMMDD-<run-id>` directory. Prerelease publication updates the fixed `rc`
 repository prefix.
 
-| Release type                 | Final bucket                    | S3 prefix                                          | Public repository parent                                       |
-| ---------------------------- | ------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| **dev**                      | `therock-repo-amd-dev-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://dev.repo.amd.com/rocm/core/packages/{deb,rpm}/`       |
-| **nightly**                  | `therock-repo-amd-nightly-core` | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://nightly.repo.amd.com/rocm/core/packages/{deb,rpm}/`   |
-| **prerelease**               | `therock-repo-amd-rc-core`      | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://rc.repo.amd.com/rocm/core/packages/<os-profile>/`     |
-| **dev-bkc**, **nightly-bkc** | `therock-repo-amd-bkc-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://bkc.repo.amd.com/rocm/core/packages/{deb,rpm}/`       |
-| **release**                  | Manually promoted               | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://stable.repo.amd.com/rocm/core/packages/<os-profile>/` |
+| Release type                 | Final bucket                    | S3 prefix                                          | Public repository parent                                        |
+| ---------------------------- | ------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| **dev**                      | `therock-repo-amd-dev-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://dev.repo.amd.com/rocm/core/packages/<os-profile>/`     |
+| **nightly**                  | `therock-repo-amd-nightly-core` | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://nightly.repo.amd.com/rocm/core/packages/<os-profile>/` |
+| **prerelease**               | `therock-repo-amd-rc-core`      | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://rc.repo.amd.com/rocm/core/packages/<os-profile>/`      |
+| **dev-bkc**, **nightly-bkc** | `therock-repo-amd-bkc-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://bkc.repo.amd.com/rocm/core/packages/<os-profile>/`     |
+| **release**                  | Manually promoted               | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://stable.repo.amd.com/rocm/core/packages/<os-profile>/`  |
 
 ASAN package repositories use the parallel `packages-asan` parent. RPM
 repository URLs append `x86_64/` below the selected run directory or OS
 profile.
-
-The new layout starts with ROCm 10.1 nightlies and ROCm 10.0 stable releases.
-Earlier releases remain in the
-[legacy multi-arch release locations](legacy_multi_arch_releases.md).
 
 ### Legacy GFX-Specific Package Publication
 
