@@ -138,8 +138,11 @@ def fetch_packages(
             compressed = fetch_bytes(url)
             return decompress(compressed)
         except urllib.error.HTTPError as e:
-            if e.code == 404:
-                print(f"  Not found: {url} — trying next format")
+            # Treat 404 (not found) and 403 (forbidden/not available) as
+            # "this format is not served — try the next one". Some servers
+            # return 403 for non-existent resources instead of 404.
+            if e.code in (403, 404):
+                print(f"  Not found ({e.code}): {url} — trying next format")
                 continue
             raise
 
