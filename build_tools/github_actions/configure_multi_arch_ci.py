@@ -123,6 +123,29 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -161,6 +184,10 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
 
@@ -273,6 +300,7 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
@@ -459,6 +487,15 @@ class BuildRocmDecision(JobGroupDecision):
             if action == JobAction.RUN
         ]
 
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
+        ]
+
 
 @dataclass(frozen=True)
 class TestRocmDecision(JobGroupDecision):
@@ -529,6 +566,7 @@ class BuildConfig:
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
+    validate_artifact_structure: bool = True
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -536,6 +574,8 @@ class BuildConfig:
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
@@ -545,6 +585,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -962,6 +1003,17 @@ def decide_jobs(
         if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
             baseline_run_id = auto_stage_reuse.baseline_run_id
 
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
@@ -1219,6 +1271,10 @@ def _expand_build_config_for_platform(
         else []
     )
 
+    # Artifact validation only makes sense for full builds. When build_stages
+    # limits the build to a subset, the artifact tree is incomplete.
+    validate_artifact_structure = not ci_inputs.build_stages
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
@@ -1230,11 +1286,13 @@ def _expand_build_config_for_platform(
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
+        validate_artifact_structure=validate_artifact_structure,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
     )
