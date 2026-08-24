@@ -69,6 +69,27 @@ the guidance here.
   use different licenses; see the [ROCm licensing](https://rocm.docs.amd.com/en/latest/about/license.html)
   page.
 
+### Pull requests
+
+When you create a pull request, target the repository's default integration branch. The default
+branch differs between repositories, so check each repository's `CONTRIBUTING.md` if you are unsure.
+
+When creating a PR, use the following process. Note that each repository may include additional,
+project-specific steps. Refer to each repository's PR process for any additional steps.
+
+* Identify the issue you want to fix.
+* Target the default branch for integration.
+* Ensure your change builds successfully.
+* Run the relevant test suites and include evidence of a successful run in your PR.
+* Do not break existing test cases.
+* Merge new functionality only with accompanying tests. If your PR adds a feature, provide an
+  application or test so we can confirm the feature works and continues to be valid.
+* Aim for good test coverage.
+* Submit your PR and work with the reviewer or maintainer to get it approved.
+* Once approved, the PR is integrated through the repository's CI and merge process, as coordinated
+  by the maintainer.
+* We'll inform you once your change is committed.
+
 For the contribution process specific to a repository, refer to that repository's `CONTRIBUTING.md`.
 For TheRock, see its [contribution guidelines](CONTRIBUTING.md).
 
