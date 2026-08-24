@@ -179,8 +179,8 @@ def rocm_version_from_package_version(rocm_package_version: str) -> str | None:
     return match.group(1)
 
 
-def parse_external_repo_config(raw: str | None) -> dict | None:
-    """Parse external repo configuration used by super-repo CI."""
+def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
+    """Parse and validate external repo configuration used by super-repo CI."""
     if not raw:
         return None
 
@@ -362,7 +362,9 @@ def main():
 
     args = ap.parse_args()
 
-    external_repo_config = parse_external_repo_config(os.getenv("EXTERNAL_REPO_CONFIG"))
+    external_repo_config = parse_and_validate_external_repo_config(
+        os.getenv("EXTERNAL_REPO_CONFIG")
+    )
     repo_root = source_root()
     github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
