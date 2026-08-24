@@ -196,11 +196,12 @@ def _resolve_link_target(parent: Path, target: str) -> Path:
     os.stat and os.link fail on that string even when the collapsed path is well
     under the limit.
 
-    parent is resolved before joining because collapsing '..' lexically through a
-    symlinked ancestor would name a different file than the OS reaches by walking
-    it, and the devel tarball does extract directory symlinks as-is.
+    resolve() collapses '..' by walking the path rather than lexically, which
+    matters because _lock_and_expand extracts directory symlinks as-is: a
+    lexical collapse through a symlinked ancestor names a different file than
+    the OS reaches.
     """
-    return Path(os.path.normpath(os.path.join(os.path.realpath(parent), target)))
+    return (parent.resolve() / target).resolve()
 
 
 def _devel_link_ok(dest_path: Path, target: str) -> bool:
