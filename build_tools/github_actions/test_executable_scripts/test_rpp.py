@@ -15,9 +15,31 @@ if THEROCK_BIN_DIR_STR is None:
     )
     sys.exit(1)
 THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
+THEROCK_BASE_DIR = THEROCK_BIN_DIR.parent
+THEROCK_LIB_DIR = THEROCK_BASE_DIR / "lib"
+THEROCK_CLANG_PATH = THEROCK_LIB_DIR / "llvm" / "bin" / "amdclang"
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_TEST_DIR = Path(THEROCK_DIR) / "build"
+
+# Determine host triple
+host_triple = ""
+if THEROCK_CLANG_PATH.exists():
+    try:
+        host_triple = subprocess.run(
+            [str(THEROCK_CLANG_PATH), "--print-target-triple"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+            ).stdout.strip()
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(
+            f"'{THEROCK_CLANG_PATH} --print-target-triple' failed; "
+            "this suggests a broken toolchain."
+        ) from exc
+if host_triple:
+  THEROCK_LLVM_LIB_HOST_TRIPLE_PATH = THEROCK_LIB_DIR / "llvm" / "lib" / host_triple
 
 RPP_TEST_PATH = str(Path(THEROCK_BIN_DIR).resolve().parent / "share" / "rpp" / "test")
 if not os.path.isdir(RPP_TEST_PATH):
@@ -62,6 +84,9 @@ def setup_env(env):
             env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
         else:
             env["LD_LIBRARY_PATH"] = str(HIP_LIB_PATH)
+        if host_triple and THEROCK_LLVM_LIB_HOST_TRIPLE_PATH.exists():
+            logging.info(f"++ rpp prepending LD_LIBRARY_PATH with {THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}")
+            env["LD_LIBRARY_PATH"] = f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}:{env['LD_LIBRARY_PATH']}"
     else:
         logging.info("++ rpp tests only supported on Linux")
         sys.exit(0)
