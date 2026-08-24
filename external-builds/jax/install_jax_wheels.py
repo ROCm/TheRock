@@ -17,7 +17,7 @@ Installs are retried via build_tools/setup_venv.py.
 Example usage:
 
     python install_jax_wheels.py \\
-        --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \\
+        --index-url https://nightly.repo.amd.com/rocm/whl-next/ \\
         --plugin-package jax_rocm10_plugin --pjrt-package jax_rocm10_pjrt \\
         --plugin-version 0.11.0 --pjrt-version 0.11.0 --jax-version 0.11.0
 """
