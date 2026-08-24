@@ -9,7 +9,7 @@ and explains the authentication needed to upload to them.
 - [Authentication](#authentication)
 - [Bucket inventory](#bucket-inventory)
   - [CI buckets](#ci-buckets): `therock-ci-artifacts`, `therock-ci-artifacts-external`
-  - [Release buckets](#release-buckets): `therock-{dev,nightly,prerelease,release}-{artifacts,packages,python,tarball}`
+  - [Release buckets](#release-buckets): artifact handoff and `repo.amd.com` product buckets
   - [Build system buckets](#build-system-buckets): `rocm-third-party-deps`
   - [Cache buckets](#cache-buckets): `therock-pytorch-sccache-*`
   - [Legacy buckets](#legacy-buckets): `therock-artifacts`, `therock-artifacts-external`
@@ -51,6 +51,19 @@ jobs:
       # ... upload steps that use the credentials ...
 ```
 
+Final publication to the `repo.amd.com` product buckets uses a separate role
+in account `324352301041`. Use
+[`configure_aws_product_publication_credentials`](/.github/actions/configure_aws_product_publication_credentials/action.yml)
+with the product name. The role and bucket follow these patterns:
+
+```text
+arn:aws:iam::324352301041:role/therock-repo-<stream>-<product>
+therock-repo-amd-<stream>-<product>
+```
+
+Artifact credentials and product-publication credentials are intentionally
+separate. Do not use product credentials for intermediate artifact uploads.
+
 **Platform-specific details:**
 
 - **Linux containers** mount runner credentials via
@@ -87,18 +100,55 @@ upload to this bucket and do not need `aws-actions/configure-aws-credentials`.
 
 ### Release buckets
 
-Each release type (`dev`, `nightly`, `prerelease`, `release`) has a matching
-set of buckets.
+Release publication has two stages:
 
-The `dev`, `nightly`, and `prerelease` types are accessed via
-the `therock-{release_type}` IAM role while stable `release` buckets are
-manually promoted from prereleases via IAM user policies (see
-[`how_to_do_release.md`](/build_tools/packaging/how_to_do_release.md)).
+1. Build workflows upload intermediate outputs to an artifact bucket in
+   account `692859939525`.
+1. Release workflows copy final outputs into product buckets in account
+   `324352301041`, which are served through the stream-specific
+   `repo.amd.com` domains.
 
-Python, tarball, and native package buckets are fronted by CloudFront CDNs.
-Developer-facing documentation and manual installs should use the CDN URLs;
-CI may read the backing S3 buckets directly to avoid CloudFront data-transfer
-charges.
+Internal release types map to public streams as follows:
+
+| Internal release type    | Public stream |
+| ------------------------ | ------------- |
+| `dev`                    | `dev`         |
+| `nightly`                | `nightly`     |
+| `prerelease`             | `rc`          |
+| `dev-bkc`, `nightly-bkc` | `bkc`         |
+
+#### Product release buckets
+
+`<stream>` is one of `dev`, `nightly`, `rc`, or `bkc`.
+
+| Bucket pattern                      | Contents                                                 | Object prefixes                                                        |
+| ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `therock-repo-amd-<stream>-core`    | ROCm Core Python packages, tarballs, and native packages | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/` |
+| `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                  | `v5/rocm/pytorch/whl-next/`                                            |
+| `therock-repo-amd-<stream>-jax`     | JAX Python packages                                      | `v5/rocm/jax/whl-next/`                                                |
+
+Public downloads use the matching stream hostname and omit the internal `v5`
+prefix. For example, nightly Core tarballs are at
+https://nightly.repo.amd.com/rocm/core/tarball/ and nightly native packages
+are under https://nightly.repo.amd.com/rocm/core/packages/.
+
+Pip installs must use the aggregate index, such as
+https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
+publication and indexer inputs, not self-contained install entry points.
+
+Stable releases are manually promoted and served from
+https://stable.repo.amd.com/rocm/. The new layout begins with ROCm 10.1
+nightlies and ROCm 10.0 stable releases. Older releases remain in the
+[legacy multi-arch release locations](../packaging/legacy_multi_arch_releases.md).
+
+#### Artifact and legacy release buckets
+
+Artifact buckets remain the handoff point between build and release workflows.
+The separate `packages`, `python`, and `tarball` buckets below contain releases
+published with the legacy layout and remain available for historical releases.
+Developer-facing current-release documentation should use the
+stream-specific `repo.amd.com` URLs above. CI may read artifact S3 URLs
+directly when consuming intermediate build outputs.
 
 | Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

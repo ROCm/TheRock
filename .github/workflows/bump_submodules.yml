@@ -26,7 +26,7 @@ on:
       - rocm-systems
       - rocm-libraries
       - debug-tools/rocgdb/source
-      - third-party/sysdeps/linux/amd-mesa/mesa-fork
+      - third-party/sysdeps/common/mesa-fork
 
 permissions:
   contents: read

@@ -14,6 +14,9 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.s3_buckets import (
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
+    get_product_release_bucket_config,
+    get_release_package_index_url,
+    get_release_stream,
     get_release_bucket_config,
 )
 
@@ -63,6 +66,19 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
         )
         self.assertEqual(config.name, "therock-nightly-artifacts")
 
+    def test_bkc_release_types_use_existing_artifacts_buckets(self):
+        for release_type, bucket_name in (
+            ("dev-bkc", "therock-dev-artifacts"),
+            ("nightly-bkc", "therock-nightly-artifacts"),
+        ):
+            with self.subTest(release_type=release_type):
+                config = get_artifacts_bucket_config(
+                    release_type=release_type,
+                    repository="ROCm/TheRock",
+                    is_pr_from_fork=False,
+                )
+                self.assertEqual(config.name, bucket_name)
+
     def test_release_type_invalid_raises(self):
         with self.assertRaises(ValueError) as cm:
             get_artifacts_bucket_config(
@@ -108,6 +124,17 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
         self.assertEqual(config.name, "therock-prerelease-packages")
         self.assertEqual(config.iam_role, "therock-prerelease")
 
+    def test_bkc_release_types_use_existing_release_buckets(self):
+        for release_type, bucket_name in (
+            ("dev-bkc", "therock-dev-python"),
+            ("nightly-bkc", "therock-nightly-python"),
+        ):
+            with self.subTest(release_type=release_type):
+                config = get_release_bucket_config(
+                    release_type=release_type, bucket_type="python"
+                )
+                self.assertEqual(config.name, bucket_name)
+
     def test_all_combinations_exist(self):
         for release_type in ("dev", "nightly", "prerelease"):
             for bucket_type in ("tarball", "python", "packages"):
@@ -131,6 +158,73 @@ class TestGetReleaseBucketConfig(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             get_release_bucket_config(release_type="dev", bucket_type="wheels")
         self.assertIn("wheels", str(cm.exception))
+
+
+# ---------------------------------------------------------------------------
+# product release helpers
+# ---------------------------------------------------------------------------
+
+
+class TestProductReleaseHelpers(unittest.TestCase):
+    def test_release_type_maps_to_external_stream(self):
+        expected_streams = {
+            "dev": "dev",
+            "nightly": "nightly",
+            "prerelease": "rc",
+            "dev-bkc": "bkc",
+            "nightly-bkc": "bkc",
+        }
+        for release_type, expected_stream in expected_streams.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(get_release_stream(release_type), expected_stream)
+
+    def test_product_release_bucket_config(self):
+        for release_type, stream in (
+            ("dev", "dev"),
+            ("nightly", "nightly"),
+            ("prerelease", "rc"),
+            ("dev-bkc", "bkc"),
+            ("nightly-bkc", "bkc"),
+        ):
+            for product in ("core", "pytorch", "jax"):
+                with self.subTest(release_type=release_type, product=product):
+                    config = get_product_release_bucket_config(release_type, product)
+                    self.assertEqual(
+                        config.name, f"therock-repo-amd-{stream}-{product}"
+                    )
+                    self.assertEqual(config.region, "us-east-2")
+                    self.assertEqual(config.iam_account, "324352301041")
+                    self.assertEqual(
+                        config.iam_role, f"therock-repo-{stream}-{product}"
+                    )
+                    self.assertEqual(
+                        config.write_access_iam_role,
+                        f"arn:aws:iam::324352301041:role/therock-repo-{stream}-{product}",
+                    )
+
+    def test_release_package_index_url_is_aggregate_index(self):
+        expected_urls = {
+            "dev": "https://dev.repo.amd.com/rocm/whl-next/",
+            "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
+            "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
+            "dev-bkc": "https://bkc.repo.amd.com/rocm/whl-next/",
+            "nightly-bkc": "https://bkc.repo.amd.com/rocm/whl-next/",
+        }
+        for release_type, expected_url in expected_urls.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(
+                    get_release_package_index_url(release_type), expected_url
+                )
+
+    def test_invalid_product_release_type_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_product_release_bucket_config("weekly", "core")
+        self.assertIn("weekly", str(cm.exception))
+
+    def test_invalid_product_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            get_product_release_bucket_config("dev", "python")
+        self.assertIn("python", str(cm.exception))
 
 
 # ---------------------------------------------------------------------------

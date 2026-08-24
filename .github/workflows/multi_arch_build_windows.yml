@@ -9,8 +9,11 @@
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
 # 4. debug-tools (generic) - amd-dbgapi (rocgdb eventually).
 #
-# Stages disabled on Windows: comm-libs, dctools-core, profiler-apps, media
+# Stages disabled on Windows: comm-libs, dctools-core, profiler-apps
 # (see BUILD_TOPOLOGY.toml disable_platforms)
+#
+# media-libs runs on Windows but builds only sysdeps-amd-mesa (VA-API);
+# rocdecode/rocjpeg remain disable_platforms=["windows"].
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 
@@ -44,7 +47,7 @@ on:
       rocm_package_version:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       repository:
@@ -57,6 +60,9 @@ on:
         default: ""
       external_repo_config:
         description: "JSON config for external repo checkout (repository, ref, checkout_path, source_package)"
+        type: string
+        default: ""
+      quartz_tracking_id:
         type: string
         default: ""
 
@@ -99,6 +105,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -123,6 +130,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -157,6 +165,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -181,13 +190,41 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
+  # STAGE: media-libs (generic, parallel to math-libs)
+  # ==========================================================================
+  # On Windows this builds only sysdeps-amd-mesa (VA-API). rocdecode/rocjpeg
+  # are disable_platforms=["windows"] in BUILD_TOPOLOGY.toml and are filtered
+  # out by configure_stage.py, so they are not built here.
+  media-libs:
+    needs: compiler-runtime
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') }}
+    uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: media-libs
+      stage_display_name: "Stage - Media Libs"
+      timeout_minutes: 180  # 3 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
     permissions:
       contents: read
       id-token: write
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [compiler-runtime, runtime-tests, math-libs, debug-tools]
+    needs: [compiler-runtime, runtime-tests, math-libs, debug-tools, media-libs]
     name: "Quartz - completed - build ROCm"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
