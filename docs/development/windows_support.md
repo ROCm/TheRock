@@ -70,6 +70,8 @@ mainline, in open source, using MSVC, etc.).
 | media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
 | media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
 |                     |                                                                                                                          |                |           |                                               |
+| cv-libs             | [RPP](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rpp)                                                  | rocm-libraries | 🟡        | Experimental; off by default                  |
+|                     |                                                                                                                          |                |           |                                               |
 | math-libs           | [rocRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [hipRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiprand)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [rocPRIM](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocprim)                                          | rocm-libraries | ✅        |                                               |
@@ -439,6 +441,90 @@ located.
     ```
 - Windows paths (and commands) can have max length limitations, so avoid long file names
 - Windows paths do not allow some characters (https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
+
+#### DLL search and runtime loading
+
+Finding a library while building an application and finding its DLLs while
+running it are separate operations. `find_package()` and import libraries such
+as `amdhip64.lib` establish link-time dependencies. At process startup, the
+Windows loader still has to locate DLLs such as `amdhip64_7.dll`.
+
+For an ordinary unpackaged application using the default safe search mode, the
+[DLL search order](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)
+includes these locations in this relative order:
+
+1. The directory containing the executable.
+1. The Windows system directory, normally `System32`.
+1. The process current directory.
+1. Directories in `PATH`.
+
+Several special mechanisms, including loaded modules, Known DLLs, manifests,
+and package dependencies, are considered before those directories. Consult the
+Microsoft documentation before depending on the complete order.
+
+Important consequences for ROCm development include:
+
+- Prepending a ROCm `bin` directory to `PATH` does not override a same-named DLL
+  in `System32`.
+- Changing the process current directory is not equivalent to moving the
+  executable. The executable directory has its own earlier search position.
+- Placing the intended DLLs and their dependencies beside an executable gives
+  them precedence over same-named DLLs in `System32`.
+- Windows loads normally linked DLLs before `main()` runs. Calling
+  `LoadLibraryExW()` at the beginning of `main()` is too late to change how
+  Windows finds `amdhip64_7.dll`. The HIP compiler can also generate runtime
+  registration calls that execute during static initialization.
+
+##### Finding DLLs with `SetDllDirectoryW`
+
+One option for tests and dedicated launchers to select a trusted runtime
+directory for their child processes is to use
+[`SetDllDirectoryW`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setdlldirectoryw):
+
+```python
+import ctypes
+import subprocess
+
+rocm_bin = rocm_bin.resolve(strict=True)
+if not rocm_bin.is_dir():
+    raise NotADirectoryError(rocm_bin)
+
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+set_dll_directory = kernel32.SetDllDirectoryW
+set_dll_directory.argtypes = [ctypes.c_wchar_p]
+set_dll_directory.restype = ctypes.c_bool
+
+if not set_dll_directory(str(rocm_bin)):
+    raise ctypes.WinError(ctypes.get_last_error())
+try:
+    subprocess.run(command, check=True, env=child_env)
+finally:
+    if not set_dll_directory(None):
+        raise ctypes.WinError(ctypes.get_last_error())
+```
+
+This setting affects child processes created while it is active. It is
+process-global, changes safe-search behavior, and should only name a trusted,
+validated directory. The example assumes a dedicated, single-threaded runner
+that started with the default DLL search state and restores that state after
+launching its children.
+
+The hipthreads test executor adopted this pattern in
+[rocm-libraries PR #10478](https://github.com/ROCm/rocm-libraries/pull/10478).
+It continues to use `PATH` to find tools, but uses `SetDllDirectoryW` to ensure
+that child test processes load the runtime under test ahead of `System32`. This
+only affects the test harness: the test program still cannot run independently
+outside that executor.
+
+> [!WARNING]
+> Common patterns to avoid include:
+>
+> - Assuming `PATH` takes precedence over `System32`.
+> - Copying every DLL from a merged ROCm `bin` directory beside a test or
+>   application executable.
+> - Copying DLLs into an extracted ROCm installation while tests run.
+> - Choosing which DLLs to package based only on inspecting the executable;
+>   applications and libraries can load additional DLLs or data at runtime.
 
 #### Other platform differences
 

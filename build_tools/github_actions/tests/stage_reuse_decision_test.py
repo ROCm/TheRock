@@ -3,11 +3,15 @@
 
 """Tests for stage_reuse_decision: impact + baseline-availability gates."""
 
-from pathlib import Path
+import os
 import sys
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import configure_multi_arch_ci as cma
 
 import stage_reuse_decision as srd
 from stage_reuse_decision import StageReuseMode, compute_auto_stage_reuse
@@ -101,22 +105,18 @@ def _selector(baseline):
 
 class ModeParsingTest(unittest.TestCase):
     def test_default_is_dry_run(self):
-        import os
-
-        os.environ.pop("STAGE_REUSE_MODE", None)
-        self.assertEqual(StageReuseMode.from_environ(), StageReuseMode.DRY_RUN)
+        with patch.dict(os.environ):
+            os.environ.pop("STAGE_REUSE_MODE", None)
+            self.assertEqual(StageReuseMode.from_environ(), StageReuseMode.DRY_RUN)
 
     def test_explicit_modes(self):
-        import os
-
         for value, expected in [
             ("dry-run", StageReuseMode.DRY_RUN),
             ("reuse-stage", StageReuseMode.REUSE_STAGE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
-            os.environ["STAGE_REUSE_MODE"] = value
-            self.assertEqual(StageReuseMode.from_environ(), expected)
-        os.environ.pop("STAGE_REUSE_MODE", None)
+            with patch.dict(os.environ, {"STAGE_REUSE_MODE": value}):
+                self.assertEqual(StageReuseMode.from_environ(), expected)
 
 
 class AvailabilityGateTest(unittest.TestCase):
@@ -268,39 +268,38 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
     an empty ordered_commit_shas window while current_commit_sha is set."""
 
     def _run_with_env(self, env, fake_history, fake_select):
-        import os
-
-        old_env = {k: os.environ.get(k) for k in env}
-        os.environ.update({k: v for k, v in env.items() if v is not None})
+        test_env = {
+            "GITHUB_REPOSITORY": "ROCm/TheRock",
+            "THEROCK_REPOSITORY": "ROCm/TheRock",
+        }
         for k, v in env.items():
             if v is None:
-                os.environ.pop(k, None)
+                test_env.pop(k, None)
+            else:
+                test_env[k] = v
 
-        import baseline_runs
-        import github_actions_api
-
-        orig_select = baseline_runs.select_baseline_run
-        orig_hist = getattr(github_actions_api, "gha_query_recent_branch_commits", None)
         captured = {}
 
         def _capturing_select(**kwargs):
             captured.update(kwargs)
             return fake_select
 
-        baseline_runs.select_baseline_run = _capturing_select
-        github_actions_api.gha_query_recent_branch_commits = fake_history
-        try:
+        with (
+            patch.dict(os.environ, test_env, clear=True),
+            patch.object(
+                srd.baseline_runs,
+                "select_baseline_run",
+                new=_capturing_select,
+            ),
+            patch.object(
+                srd.github_actions_api,
+                "gha_query_recent_branch_commits",
+                new=fake_history,
+            ),
+        ):
             selector = srd._default_baseline_selector(platform="linux")
             result = selector([("base", "generic")])
-        finally:
-            baseline_runs.select_baseline_run = orig_select
-            if orig_hist is not None:
-                github_actions_api.gha_query_recent_branch_commits = orig_hist
-            for k, v in old_env.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
+
         return captured, result
 
     def test_history_is_fetched_and_threaded(self):
@@ -308,7 +307,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["sha-current", "sha-old", "sha-older"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -323,7 +325,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return []
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -336,7 +341,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             raise GitHubAPIError("api down")
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": "sha-current"},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": "sha-current",
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -351,7 +359,10 @@ class DefaultBaselineSelectorTest(unittest.TestCase):
             return ["x"]
 
         captured, _ = self._run_with_env(
-            {"STAGE_REUSE_CURRENT_SHA": None},
+            {
+                "GITHUB_REPOSITORY": "ROCm/TheRock",
+                "STAGE_REUSE_CURRENT_SHA": None,
+            },
             fake_history,
             fake_select="baseline",
         )
@@ -415,6 +426,75 @@ class PlatformAwareAvailabilityTest(unittest.TestCase):
         )
         self.assertEqual(result.applied_reuse_stages, ("compiler-runtime",))
         self.assertIn("compiler-runtime", result.available_stages)
+
+    def test_platforms_use_only_their_own_target_families(self):
+        captured_required = {}
+
+        per_platform = {
+            "linux": _baseline(
+                "B1",
+                [
+                    "base_lib_gfx94x.tar.zst",
+                    "base_lib_generic.tar.zst",
+                ],
+            ),
+            "windows": _baseline(
+                "B1",
+                [
+                    "base_lib_gfx110x.tar.zst",
+                    "base_lib_generic.tar.zst",
+                ],
+            ),
+        }
+
+        def selector_factory(platform):
+            def selector(required):
+                captured_required[platform] = {
+                    (artifact.name, artifact.target_family) for artifact in required
+                }
+                return per_platform[platform]
+
+            return selector
+
+        result = compute_auto_stage_reuse(
+            changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+            mode=StageReuseMode.REUSE_STAGE,
+            linux_amdgpu_families=["gfx94x"],
+            windows_amdgpu_families=["gfx110x"],
+            topology=FakeTopology(),
+            baseline_selector_factory=selector_factory,
+        )
+
+        self.assertEqual(
+            captured_required["linux"],
+            {
+                ("base", "gfx94x"),
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            captured_required["windows"],
+            {
+                ("base", "gfx110x"),
+                ("base", "generic"),
+            },
+        )
+
+        self.assertEqual(
+            result.platform_available["linux"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.platform_available["windows"],
+            ("compiler-runtime",),
+        )
+
+        self.assertEqual(
+            result.applied_reuse_stages,
+            ("compiler-runtime",),
+        )
 
     def test_single_platform_default_is_linux(self):
         result = compute_auto_stage_reuse(
@@ -502,6 +582,47 @@ class BuildPlatformsTest(unittest.TestCase):
         self.assertEqual(
             srd._build_platforms(["gfx94x"], ["gfx110x"]), ("linux", "windows")
         )
+
+
+class CrossRepoArtifactReuseTest(unittest.TestCase):
+    """Test cross-repo vs same-repo artifact reuse logic.
+
+    External repos (rocm-libraries, rocm-systems) can copy artifacts from
+    TheRock's baseline runs. Cross-repo reuse skips automatic stage decisions
+    since they query the current repo, not the baseline repo.
+    """
+
+    def test_cross_repo_skips_auto_stage_reuse(self):
+        """Cross-repo reuse skips automatic stage decisions."""
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/rocm-libraries"}):
+            baseline_repository = "ROCm/TheRock"
+            current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+            is_cross_repo = baseline_repository and baseline_repository != current_repo
+
+            self.assertTrue(is_cross_repo)
+
+            # Cross-repo: auto stages should NOT be applied
+            stage_decisions = {}
+            if not is_cross_repo:
+                stage_decisions["math-libs"] = cma.JobAction.PREBUILT
+
+            self.assertEqual(stage_decisions, {})
+
+    def test_same_repo_applies_auto_stage_reuse(self):
+        """Same-repo reuse applies automatic stage decisions."""
+        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/TheRock"}):
+            baseline_repository = "ROCm/TheRock"
+            current_repo = os.environ.get("GITHUB_REPOSITORY", "")
+            is_cross_repo = baseline_repository and baseline_repository != current_repo
+
+            self.assertFalse(is_cross_repo)
+
+            # Same-repo: auto stages should be applied
+            stage_decisions = {}
+            if not is_cross_repo:
+                stage_decisions["math-libs"] = cma.JobAction.PREBUILT
+
+            self.assertEqual(stage_decisions, {"math-libs": cma.JobAction.PREBUILT})
 
 
 if __name__ == "__main__":

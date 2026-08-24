@@ -141,7 +141,8 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or one of the supported release types
+    build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
@@ -158,6 +159,12 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse)
+    baseline_repository: str = ""
+
+    # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
+    # Non-empty when an external repo calls TheRock workflows
+    external_repo: str = ""
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -196,6 +203,9 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        build_python_packages = (
+            os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
+        )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
@@ -243,6 +253,7 @@ class CIInputs:
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
@@ -257,6 +268,8 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
 
 
@@ -305,6 +318,22 @@ class GitContext:
         where we don't want to diff against a prior commit.
         """
         return GitContext()
+
+    @staticmethod
+    def from_external_repo(external_repo_name: str) -> "GitContext":
+        """Create context for external repo builds (e.g., rocm-libraries).
+
+        For external repos, we treat the repo name as both a changed file and
+        a submodule path so that:
+        1. Stage reuse analysis can determine which TheRock stages are affected
+        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
+           families to run their tests
+        """
+        print(f"External repo detected: {external_repo_name}")
+        return GitContext(
+            changed_files=[external_repo_name],
+            submodule_paths=[external_repo_name],
+        )
 
     @property
     def has_submodule_changes(self) -> bool | None:
@@ -403,6 +432,10 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse).
+    # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
+    # TheRock's baseline runs instead of their own.
+    baseline_repository: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -487,6 +520,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -497,6 +531,7 @@ class BuildConfig:
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -563,28 +598,41 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+
+    For external repo builds, path filtering is skipped since the external repo
+    name is used for stage reuse analysis, not for CI skip decisions.
     """
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present or ci:asan label is set.
-    # This avoids running expensive ASAN builds on every PR while still
-    # catching ASAN issues when library code (submodules) changes.
-    # The ci:asan label allows manual triggering of ASAN CI on any PR.
+    # Skip ASAN on PRs unless an enabling label is present.
+    # This avoids running expensive ASAN builds on every PR.
+    # Labels that enable ASAN CI:
+    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    has_asan_label = (
+        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.has_submodule_changes is False
-        and "ci:asan" not in ci_inputs.pr_labels
+        and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without submodule changes (add 'ci:asan' label to force)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
 
-    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
-        print("  Running: 'ci:asan' PR label triggers ASAN CI")
+    if has_asan_label and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN CI triggered by PR label")
+
+    # External repo builds skip path filtering - they always run CI and use
+    # stage reuse to determine which stages to rebuild.
+    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
+    # CI for docs-only changes, experimental projects, etc.
+    if ci_inputs.external_repo:
+        print("  External repo build: skipping path filter checks, using stage reuse")
+        return False
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -823,10 +871,11 @@ def _determine_test_type(
         return "full", "test labels specified"
 
     # Priority 3: release builds run deeper test suites than regular CI.
-    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
+    # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
+    #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
     # * 'dev' falls through to later priorities so changes can be tested quickly
-    if ci_inputs.release_type == "nightly":
+    if ci_inputs.release_type in ("nightly", "nightly-bkc"):
         return "comprehensive", "release build (nightly)"
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"
@@ -881,10 +930,15 @@ def decide_jobs(
         windows_amdgpu_families=targets.windows_families,
     )
 
-    # Only reuse-stage mode returns non-empty applied_reuse_stages.
+    baseline_repository = ci_inputs.baseline_repository
+    baseline_run_id = ci_inputs.baseline_run_id
+
+    # Apply automatic stage reuse. For external repos (rocm-libraries, rocm-systems),
+    # we reuse stages from TheRock baselines. For same-repo runs, baseline_repository
+    # is empty or matches the current repo.
+    # reuse-stage mode returns non-empty applied_reuse_stages.
     for stage in auto_stage_reuse.applied_reuse_stages:
         stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    baseline_run_id = ci_inputs.baseline_run_id
     if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
         baseline_run_id = auto_stage_reuse.baseline_run_id
 
@@ -892,6 +946,7 @@ def decide_jobs(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
+        baseline_repository=baseline_repository,
     )
 
     # Test ROCm.
@@ -1136,9 +1191,10 @@ def _expand_build_config_for_platform(
         per_family_info=per_family_info,
         platform=platform,
     )
-    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
-    # Python package build is disabled. Then multi_arch_ci_* can also condition
-    # build_python_packages on that decision.
+    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    # The build_python_packages input allows callers to disable Python packages.
+    is_asan = suffix == "asan"
+    build_python_packages = ci_inputs.build_python_packages and not is_asan
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1147,7 +1203,8 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
+        build_native_linux=True,
+        build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
@@ -1156,6 +1213,7 @@ def _expand_build_config_for_platform(
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        baseline_repository=jobs.build_rocm.baseline_repository,
     )
 
 
@@ -1220,10 +1278,20 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
-        build_variant = "host-asan"
+    # ASAN variant selection:
+    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
+    # 2. ci:host-asan label -> host-asan (explicit)
+    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    if build_variant == "asan":
+        if "ci:asan" in ci_inputs.pr_labels:
+            print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan" in ci_inputs.pr_labels:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (ci:host-asan label)")
+        elif ci_inputs.is_push or ci_inputs.is_pull_request:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -1378,15 +1446,24 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 def main():
     ci_inputs = CIInputs.from_environ()
 
-    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
-    # The "run everything" is initial state for superrepo multi-arch CI migration.
-    # We will eventually support path filtering and component selection.
-    # TODO: Provide custom decision logic to run specific components and paths
-    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+    # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
+    if ci_inputs.external_repo:
+        # External repo: use repo name for stage reuse analysis.
+        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError(
+                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
+            ) from exc
 
-    if skip_path_filters:
-        # External repo: skip path filtering, run everything
-        git_context = GitContext.empty()
+        repo_full_name = external_repo.get("repository", "")
+        if not repo_full_name:
+            raise ValueError(
+                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
+            )
+        external_repo_name = repo_full_name.split("/")[-1]
+        git_context = GitContext.from_external_repo(external_repo_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

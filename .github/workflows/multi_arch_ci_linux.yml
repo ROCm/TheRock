@@ -29,7 +29,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease"'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       external_repo_config:
@@ -84,6 +84,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
@@ -117,6 +118,7 @@ jobs:
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
@@ -133,6 +135,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
@@ -154,10 +157,12 @@ jobs:
     name: Build DEB Packages
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_deb_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -169,10 +174,12 @@ jobs:
     name: Build RPM Packages
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
     with:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
-      rocm_version: ${{ inputs.rocm_rpm_package_version || inputs.rocm_package_version }}
+      rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -184,12 +191,14 @@ jobs:
     name: Test DEB Install - ubuntu2404
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
+    secrets: inherit
     with:
       package_install_url: ${{ needs.build_native_deb_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: ubuntu2404
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -201,12 +210,14 @@ jobs:
     name: Test RPM Install - rhel8
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
+    secrets: inherit
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: rhel8
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -218,12 +229,14 @@ jobs:
     name: Test RPM Install - rhel10
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
+    secrets: inherit
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: rhel10
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -235,12 +248,14 @@ jobs:
     name: Test RPM Install - sles16
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_native_linux == true }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
+    secrets: inherit
     with:
       package_install_url: ${{ needs.build_native_rpm_packages.outputs.package_repository_url }}
       release_type: ci
       os_profile: sles16
       artifact_group: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       test_type: sanity
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -250,8 +265,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -275,6 +291,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -327,6 +344,7 @@ jobs:
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -352,11 +370,14 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: ${{ matrix.python_version }}
       jax_repository: ${{ matrix.jax_repository }}
-      build_mode: ${{ matrix.build_mode }}
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      # One representative family, so a PR pays for the JAX tests once rather
+      # than once per family it builds. An empty value builds without testing.
+      test_amdgpu_family: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}
+      test_size: small
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
