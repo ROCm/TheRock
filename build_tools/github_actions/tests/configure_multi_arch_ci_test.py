@@ -2036,18 +2036,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
 
-    def test_select_build_runner_sanitizer_uses_ramdisk(self):
-        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+    def test_select_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer builds (asan/tsan) should use AWS large runner."""
         from amdgpu_family_matrix import select_build_runner
 
         with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
             self.assertEqual(
                 select_build_runner("linux", "tsan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
 
 
