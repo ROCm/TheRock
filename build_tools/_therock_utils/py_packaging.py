@@ -392,7 +392,10 @@ class PopulatedDistPackage:
                     # unversioned names at runtime.
                     soname = get_soname(dir_entry.path)
                     if soname:
-                        if soname == dir_entry.name or relpath in runtime_library_aliases:
+                        if (
+                            soname == dir_entry.name
+                            or relpath in runtime_library_aliases
+                        ):
                             self._populate_file(
                                 relpath, dest_path, dir_entry, resolve_src=True
                             )
