@@ -15,6 +15,7 @@ THEROCK_CLANG_PATH = THEROCK_LIB_PATH / "llvm" / "bin" / "amdclang"
 ROCPROFSYS_TEST_DIR = THEROCK_PATH / "share" / "rocprofiler-systems" / "tests"
 
 # Determine host triple
+host_triple = ""
 if THEROCK_CLANG_PATH.exists():
     try:
         host_triple = subprocess.run(
@@ -91,7 +92,7 @@ def setup_env():
     ld_paths = [
         str(THEROCK_PATH / "share" / "rocprofiler-systems" / "examples" / "lib"),
     ]
-    if host_triple:
+    if host_triple and THEROCK_LLVM_LIB_HOST_TRIPLE_PATH.exists():
         ld_paths += [f"{THEROCK_LLVM_LIB_HOST_TRIPLE_PATH}"]
     ld_paths_str = ":".join(ld_paths)
     old_ld_path = os.getenv("LD_LIBRARY_PATH", "")
