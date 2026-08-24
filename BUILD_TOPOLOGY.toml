@@ -129,7 +129,6 @@ submodules = []
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
-disable_platforms = ["windows"]
 
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
@@ -376,7 +375,6 @@ artifact_group = "media-libs"
 type = "target-neutral"
 artifact_deps = ["sysdeps"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
-disable_platforms = ["windows"]
 
 [artifacts.sysdeps-expat]
 artifact_group = "third-party-sysdeps"
