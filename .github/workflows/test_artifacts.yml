@@ -31,9 +31,6 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
-      windows_hip_rocr_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -90,9 +87,6 @@ on:
       test_labels:
         type: string
       run_extended_tests:
-        type: string
-        default: 'false'
-      windows_hip_rocr_tests:
         type: string
         default: 'false'
       changed_projects:
@@ -186,7 +180,6 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
-          WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}

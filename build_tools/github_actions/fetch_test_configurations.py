@@ -127,6 +127,20 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     return job_config
 
 
+def _family_matches(
+    family_list: list[str], amdgpu_families: str, family_gfx_targets: list[str]
+) -> bool:
+    """Returns True if the current AMDGPU family matches any entry in family_list.
+
+    CI may pass either the family group string (e.g. "gfx120X-all") via
+    AMDGPU_FAMILIES or refer to the individual gfx targets within that family
+    (e.g. "gfx1200", "gfx1201"). Both forms are checked using exact membership.
+    """
+    return amdgpu_families in family_list or any(
+        t in family_list for t in family_gfx_targets
+    )
+
+
 # Common settings applied to all jobs
 _common_settings = {}
 
@@ -157,6 +171,27 @@ _rocgdb_common = {
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# A component may also restrict which GPU families it runs on via "include_family"
+# (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
+# ("linux" and/or "windows") whose value is a list of family entries. A job runs
+# only when it matches an include (if any are listed for that platform) and
+# matches no exclude.
+#
+# The two filters are evaluated per platform and independently: a list under
+# "linux" only affects Linux runs and a list under "windows" only affects Windows
+# runs, so a platform with no list (or the empty list) is left unfiltered. This
+# means an include scoped to one platform does not gate the other. To gate both,
+# list the families under both keys, for example:
+#   "include_family": {"linux": ["gfx942"], "windows": ["gfx942"]}
+#
+# Each entry matches either the family group string passed via AMDGPU_FAMILIES
+# (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
+# that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
+# targets, so those must be matched by the group string (e.g. "gfx1150",
+# "gfx125X-dcgpu"). Examples:
+#   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
+#   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -367,6 +402,8 @@ test_matrix = {
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
     # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    # Only gfx942 has core-dump support, so include_family opts the job in to that
+    # family alone rather than enumerating every other architecture to exclude.
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
@@ -379,6 +416,9 @@ test_matrix = {
             " gdb.rocm/runtime-core.exp"
         ),
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -892,7 +932,6 @@ def run():
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
-    windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
     # Get runner config for per-component runner selection
@@ -951,11 +990,10 @@ def run():
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
 
-        # If the test is disabled for a particular platform, skip the test.
-        # Check both the family group string (e.g. "gfx120X-all") and the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201") against the
-        # exclude list, since CI may pass either form via AMDGPU_FAMILIES.
-        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        # Resolve the individual gfx targets for the current family once, so both
+        # include_family and exclude_family can match either the family group
+        # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
         _family_gfx_targets = []
         if amdgpu_families and shortened_family and shortened_family in all_families:
             _family_gfx_targets = (
@@ -963,13 +1001,24 @@ def run():
                 .get(platform, {})
                 .get("fetch-gfx-targets", [])
             )
-        _is_excluded = amdgpu_families in _exclude_list or any(
-            t in _exclude_list for t in _family_gfx_targets
-        )
-        if (
-            "exclude_family" in selected_matrix[key]
-            and platform in selected_matrix[key]["exclude_family"]
-            and _is_excluded
+
+        # include_family (opt-in) and exclude_family (opt-out) together decide
+        # whether a job runs: it runs only when it matches an include (if any are
+        # listed for this platform) and matches no exclude. Matching is exact
+        # membership.
+        _include_list = selected_matrix[key].get("include_family", {}).get(platform, [])
+        if _include_list and not _family_matches(
+            _include_list, amdgpu_families, _family_gfx_targets
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family "
+                f"{amdgpu_families}: not listed in include_family"
+            )
+            continue
+
+        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        if _exclude_list and _family_matches(
+            _exclude_list, amdgpu_families, _family_gfx_targets
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
@@ -996,8 +1045,7 @@ def run():
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
-            # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
-            # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
+            # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
@@ -1021,21 +1069,19 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-                if windows_hip_rocr_tests:
-                    rocr_entry = {
-                        **_common_settings,
-                        "job_name": "hip-tests (ROCR)",
-                        "fetch_artifact_args": base["fetch_artifact_args"],
-                        "timeout_minutes": base["timeout_minutes"],
-                        "test_script": base["test_script"],
-                        "platform": base["platform"],
-                        "total_shards": total_shards,
-                        "test_type": test_type,
-                        "shard_arr": shard_arr,
-                        "expect_failure": True,
-                        "gpu_enable_pal": "0",
-                    }
-                    all_components.append(rocr_entry)
+                rocr_entry = {
+                    **_common_settings,
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
                 continue
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
