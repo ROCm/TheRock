@@ -39,6 +39,12 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
+RUNTIME_DLOPEN_LIBRARY_ALIASES = {
+    "lib/librocprofiler-sdk.so",
+    "lib/librocprofiler-sdk-attach.so",
+    "lib/rocprofiler-sdk/librocprofiler-sdk-tool.so",
+}
+
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -381,10 +387,15 @@ class PopulatedDistPackage:
                 file_type = get_file_type(dir_entry)
                 if file_type == "so":
                     # We only populate runtime shared libraries that correspond
-                    # with their soname (or that don't have one).
+                    # with their soname (or that don't have one). A few
+                    # rocprofiler libraries are dlopened by their unversioned
+                    # names at runtime, so keep those aliases in runtime packages.
                     soname = get_soname(dir_entry.path)
                     if soname:
-                        if soname == dir_entry.name:
+                        if (
+                            soname == dir_entry.name
+                            or relpath in RUNTIME_DLOPEN_LIBRARY_ALIASES
+                        ):
                             self._populate_file(
                                 relpath, dest_path, dir_entry, resolve_src=True
                             )
@@ -474,7 +485,7 @@ class PopulatedDistPackage:
         file_type = get_file_type(link_target)
         # Case 2: Shared library.
         if file_type == "so" and (soname := get_soname(link_target)):
-            if soname == src_entry.name:
+            if soname == src_entry.name or relpath in RUNTIME_DLOPEN_LIBRARY_ALIASES:
                 self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
             else:
                 self.files.soname_aliases[relpath] = soname
