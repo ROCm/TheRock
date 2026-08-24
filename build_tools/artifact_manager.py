@@ -10,14 +10,14 @@ for performance.
 
 Usage:
     # Fetch inbound artifacts for a stage (downloads and extracts in parallel)
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --output-dir build/
 
     # Fetch and flatten artifacts into single directory structure
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
@@ -25,14 +25,14 @@ Usage:
         --flatten
 
     # Push produced artifacts after building (compresses and uploads in parallel)
-    python stage_artifact_manager.py push \
+    python artifact_manager.py push \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --build-dir build/
 
     # List what artifacts a stage needs/produces
-    python stage_artifact_manager.py info \
+    python artifact_manager.py info \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu
 
@@ -274,6 +274,7 @@ class ExtractRequest:
     output_dir: Path
     delete_archive: bool
     flatten: bool
+    extraction_cache_dir: Optional[Path] = None
     bootstrap: bool = False
     # Shared state for parallel bootstrap extraction
     cleaned_paths: Optional[set] = None
@@ -360,6 +361,36 @@ class BootstrappingPopulator(ArtifactPopulator):
             self.created_markers.append(prebuilt_path)
 
 
+def _populate_extraction_cache(archive_path: Path, cache_dir: Path) -> Path:
+    """Extract an artifact once so later flatten operations can hardlink it.
+
+    Callers must treat flattened output files as read-only while the cache is
+    in use because they share inodes with the cached files.
+    """
+    cached_artifact_dir = cache_dir / archive_path.name
+    manifest_path = cached_artifact_dir / "artifact_manifest.txt"
+    if manifest_path.exists():
+        log(f"  == Reusing extracted {archive_path.name}")
+        return cached_artifact_dir
+
+    if cached_artifact_dir.exists():
+        rmtree_with_retry(cached_artifact_dir)
+    cached_artifact_dir.mkdir(parents=True)
+
+    log(f"  ++ Caching extracted {archive_path.name}")
+    populator = ArtifactPopulator(
+        output_path=cached_artifact_dir, verbose=False, flatten=False
+    )
+    populator(archive_path)
+
+    # ArtifactPopulator expects this manifest when its input is an exploded
+    # artifact directory. Write it last so its presence also marks a complete
+    # cache entry.
+    relpaths = sorted(populator.relpaths)
+    manifest_path.write_text("\n".join(relpaths) + "\n")
+    return cached_artifact_dir
+
+
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
     """Extract a single artifact archive."""
     try:
@@ -379,11 +410,16 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             populator(archive_path)
         elif request.flatten:
             output_dir = request.output_dir
-            log(f"  ++ Flattening {archive_path.name} to {output_dir}")
+            artifact_path = archive_path
+            if request.extraction_cache_dir is not None:
+                artifact_path = _populate_extraction_cache(
+                    archive_path, request.extraction_cache_dir
+                )
+            log(f"  ++ Flattening {artifact_path.name} to {output_dir}")
             flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
-            flattener(archive_path)
+            flattener(artifact_path)
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
@@ -453,6 +489,8 @@ def do_fetch(args: argparse.Namespace):
 
     # Build download requests
     output_dir = Path(args.output_dir)
+    if args.extraction_cache_dir is not None:
+        args.extraction_cache_dir.mkdir(parents=True, exist_ok=True)
     shared_cache = args.download_cache_dir is not None
     download_dir = (
         args.download_cache_dir if shared_cache else output_dir / ".download_cache"
@@ -536,6 +574,7 @@ def do_fetch(args: argparse.Namespace):
                                 # happens after all extractions complete
                                 delete_archive=False,
                                 flatten=args.flatten,
+                                extraction_cache_dir=args.extraction_cache_dir,
                                 bootstrap=args.bootstrap,
                                 cleaned_paths=(
                                     bootstrap_cleaned_paths if args.bootstrap else None
@@ -1258,6 +1297,15 @@ def main(argv: Optional[List[str]] = None):
         "Defaults to OUTPUT_DIR/.download_cache (cleaned up after extraction).",
     )
     fetch_parser.add_argument(
+        "--extraction-cache-dir",
+        type=Path,
+        default=None,
+        help="Shared cache for extracted artifacts used with --flatten. "
+        "Files in flattened output directories are hardlinked from this cache, "
+        "avoiding repeated decompression and data copies. Flattened outputs "
+        "must remain read-only while the cache is in use.",
+    )
+    fetch_parser.add_argument(
         "--download-concurrency",
         type=int,
         default=10,
@@ -1385,6 +1433,14 @@ def main(argv: Optional[List[str]] = None):
     list_parser.set_defaults(func=do_list_stages)
 
     args = parser.parse_args(argv)
+    if (
+        args.command == "fetch"
+        and args.extraction_cache_dir is not None
+        and (not args.flatten or args.no_extract)
+    ):
+        fetch_parser.error(
+            "--extraction-cache-dir requires --flatten with extraction enabled"
+        )
 
     # Set environment variable if --local-staging-dir provided (only on fetch/push)
     local_staging_dir = getattr(args, "local_staging_dir", None)

@@ -12,6 +12,7 @@ import hashlib
 import os
 import platform
 import shutil
+import stat
 import sys
 import tempfile
 import unittest
@@ -27,6 +28,7 @@ def is_windows():
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Minimal topology TOML for testing push/fetch behavior.
@@ -1070,6 +1072,110 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
         # Exit code 2 is used by argparse for command-line syntax errors
         self.assertEqual(ctx.exception.code, 2)
+
+
+class TestFetchExtractionCache(ArtifactManagerTestBase):
+    """Tests for reusing extracted artifacts in flattened output trees."""
+
+    def _create_real_artifact(self) -> Path:
+        artifact_dir = Path(self.temp_dir) / "artifact"
+        stage_dir = artifact_dir / "component" / "stage"
+        stage_dir.mkdir(parents=True)
+        manifest_path = artifact_dir / "artifact_manifest.txt"
+        manifest_path.write_text("component/stage\n")
+
+        regular_file = stage_dir / "regular.txt"
+        regular_file.write_text("artifact contents")
+        executable_file = stage_dir / "executable"
+        executable_file.write_text("#!/bin/sh\n")
+        executable_file.chmod(0o755)
+        os.link(regular_file, stage_dir / "regular-hardlink.txt")
+        if not is_windows():
+            os.symlink("regular.txt", stage_dir / "regular-symlink.txt")
+
+        archive_path = Path(self.temp_dir) / "test-artifact_lib_generic.tar.zst"
+        with open_archive_for_write(archive_path, "zstd") as archive:
+            # ArtifactPopulator requires the manifest to be the first member.
+            archive.add(manifest_path, arcname="artifact_manifest.txt")
+            for filename in (
+                "regular.txt",
+                "regular-hardlink.txt",
+                "executable",
+                "regular-symlink.txt",
+            ):
+                path = stage_dir / filename
+                if path.exists() or path.is_symlink():
+                    archive.add(path, arcname=f"component/stage/{filename}")
+        return archive_path
+
+    def test_second_flatten_reuses_extracted_files(self):
+        import artifact_manager
+
+        archive_path = self._create_real_artifact()
+        extraction_cache_dir = Path(self.temp_dir) / "extraction-cache"
+        direct_output = Path(self.temp_dir) / "direct-output"
+        first_output = Path(self.temp_dir) / "first-output"
+        second_output = Path(self.temp_dir) / "second-output"
+
+        direct_result = artifact_manager.extract_artifact(
+            artifact_manager.ExtractRequest(
+                archive_path=archive_path,
+                output_dir=direct_output,
+                delete_archive=False,
+                flatten=True,
+            )
+        )
+        self.assertEqual(direct_result, direct_output)
+
+        first_result = artifact_manager.extract_artifact(
+            artifact_manager.ExtractRequest(
+                archive_path=archive_path,
+                output_dir=first_output,
+                delete_archive=False,
+                flatten=True,
+                extraction_cache_dir=extraction_cache_dir,
+            )
+        )
+        self.assertEqual(first_result, first_output)
+
+        # Prove the second flatten no longer needs the compressed archive.
+        archive_path.unlink()
+        second_result = artifact_manager.extract_artifact(
+            artifact_manager.ExtractRequest(
+                archive_path=archive_path,
+                output_dir=second_output,
+                delete_archive=False,
+                flatten=True,
+                extraction_cache_dir=extraction_cache_dir,
+            )
+        )
+        self.assertEqual(second_result, second_output)
+
+        cached_stage = extraction_cache_dir / archive_path.name / "component" / "stage"
+        for output_dir in (direct_output, first_output, second_output):
+            self.assertEqual(
+                (output_dir / "regular.txt").read_text(), "artifact contents"
+            )
+            if not is_windows():
+                self.assertEqual(
+                    stat.S_IMODE((output_dir / "executable").stat().st_mode), 0o755
+                )
+            self.assertTrue(
+                os.path.samefile(
+                    output_dir / "regular.txt",
+                    output_dir / "regular-hardlink.txt",
+                )
+            )
+            if output_dir != direct_output:
+                self.assertTrue(
+                    os.path.samefile(
+                        output_dir / "regular.txt", cached_stage / "regular.txt"
+                    )
+                )
+            if not is_windows():
+                self.assertEqual(
+                    os.readlink(output_dir / "regular-symlink.txt"), "regular.txt"
+                )
 
 
 class TestFetchDownloadCache(ArtifactManagerTestBase):

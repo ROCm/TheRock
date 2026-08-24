@@ -54,9 +54,12 @@ files (e.g. ``lib/hipblaslt/library/*.co``) only for the target family.
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
+import os
 import shlex
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
@@ -70,7 +73,21 @@ def log(msg: str) -> None:
 def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
     args = [str(arg) for arg in args]
     log(f"++ Exec{f' [{cwd}]' if cwd else ''}$ {shlex.join(args)}")
-    subprocess.check_call(args, cwd=str(cwd) if cwd else None, stdin=subprocess.DEVNULL)
+    start_time = time.monotonic()
+    start_cpu = os.times()
+    try:
+        subprocess.check_call(
+            args, cwd=str(cwd) if cwd else None, stdin=subprocess.DEVNULL
+        )
+    finally:
+        elapsed = time.monotonic() - start_time
+        end_cpu = os.times()
+        child_user = end_cpu.children_user - start_cpu.children_user
+        child_system = end_cpu.children_system - start_cpu.children_system
+        log(
+            f"++ Completed in {elapsed:.1f}s "
+            f"(child CPU: {child_user:.1f}s user, {child_system:.1f}s system)"
+        )
 
 
 def fetch_and_flatten(
@@ -80,6 +97,7 @@ def fetch_and_flatten(
     platform: str,
     output_dir: Path,
     download_cache_dir: Path,
+    extraction_cache_dir: Path,
     run_github_repo: str | None = None,
     exclude_components: list[str] | None = None,
     exclude_artifacts: list[str] | None = None,
@@ -106,6 +124,7 @@ def fetch_and_flatten(
         f"--output-dir={output_dir}",
         "--flatten",
         f"--download-cache-dir={download_cache_dir}",
+        f"--extraction-cache-dir={extraction_cache_dir}",
     ]
     if exclude_components:
         cmd.append(f"--exclude-components={','.join(exclude_components)}")
@@ -114,6 +133,12 @@ def fetch_and_flatten(
     if run_github_repo:
         cmd.append(f"--run-github-repo={run_github_repo}")
     run_command(cmd)
+    disk_usage = shutil.disk_usage(output_dir)
+    log(
+        "  Disk after staging: "
+        f"{disk_usage.used / (1024**3):.1f} GiB used, "
+        f"{disk_usage.free / (1024**3):.1f} GiB free"
+    )
 
 
 def is_kpack_split(flatten_dir: Path) -> bool:
@@ -192,6 +217,7 @@ def main(argv: list[str] | None = None) -> None:
 
     work_dir = args.output_dir / ".work"
     download_cache_dir = work_dir / "download-cache"
+    extraction_cache_dir = work_dir / "extraction-cache"
     download_cache_dir.mkdir(parents=True, exist_ok=True)
 
     log(f"Building tarballs for {len(families)} families: {', '.join(families)}")
@@ -213,6 +239,7 @@ def main(argv: list[str] | None = None) -> None:
             platform=args.platform,
             output_dir=flatten_dir,
             download_cache_dir=download_cache_dir,
+            extraction_cache_dir=extraction_cache_dir,
             run_github_repo=args.run_github_repo,
             exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
             exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
@@ -230,6 +257,7 @@ def main(argv: list[str] | None = None) -> None:
                 platform=args.platform,
                 output_dir=tests_dir,
                 download_cache_dir=download_cache_dir,
+                extraction_cache_dir=extraction_cache_dir,
                 run_github_repo=args.run_github_repo,
             )
             tests_tarball_name = (
@@ -252,6 +280,7 @@ def main(argv: list[str] | None = None) -> None:
             platform=args.platform,
             output_dir=multiarch_dir,
             download_cache_dir=download_cache_dir,
+            extraction_cache_dir=extraction_cache_dir,
             run_github_repo=args.run_github_repo,
             exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
             exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
@@ -268,6 +297,7 @@ def main(argv: list[str] | None = None) -> None:
                 platform=args.platform,
                 output_dir=tests_multiarch_dir,
                 download_cache_dir=download_cache_dir,
+                extraction_cache_dir=extraction_cache_dir,
                 run_github_repo=args.run_github_repo,
             )
             tests_tarball_name = (
