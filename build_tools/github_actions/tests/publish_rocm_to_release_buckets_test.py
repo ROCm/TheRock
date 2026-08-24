@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -258,35 +259,43 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         for call in mock_copy_file.call_args_list:
             self.assertEqual(call.args[1].bucket, "therock-repo-amd-dev-core")
 
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
-    def test_structured_whl_next(self, mock_list, mock_copy_file, mock_copy_dir):
-        mock_copy_dir.return_value = 2  # tarballs
-        mock_list.return_value = [
+    @mock.patch("github_actions.publish_rocm_to_release_buckets.create_storage_backend")
+    def test_structured_whl_next_sets_package_index_output(self, mock_create_backend):
+        backend = mock_create_backend.return_value
+        backend.copy_directory.return_value = 2  # tarballs
+        backend.list_files.return_value = [
             StorageLocation(
                 "therock-dev-artifacts",
                 "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
             ),
         ]
-        main(
-            [
-                "--run-id",
-                "123",
-                "--platform",
-                "linux",
-                "--release-type",
-                "dev",
-                "--kpack-split",
-                "true",
-                "--structured",
-                "--python-index",
-                "whl-next",
-                "--skip-native-packages",
-                "--dry-run",
-            ]
-        )
-        _, dest = mock_copy_file.call_args_list[0].args
+        with tempfile.TemporaryDirectory() as temp_dir:
+            github_output = Path(temp_dir) / "github-output.txt"
+            with mock.patch.dict(
+                os.environ, {"GITHUB_OUTPUT": os.fspath(github_output)}
+            ):
+                main(
+                    [
+                        "--run-id",
+                        "123",
+                        "--platform",
+                        "linux",
+                        "--release-type",
+                        "dev",
+                        "--kpack-split",
+                        "true",
+                        "--structured",
+                        "--python-index",
+                        "whl-next",
+                        "--skip-native-packages",
+                        "--dry-run",
+                    ]
+                )
+            self.assertEqual(
+                github_output.read_text(encoding="utf-8"),
+                "package_index_url=https://dev.repo.amd.com/rocm/whl-next/\n",
+            )
+        _, dest = backend.copy_file.call_args_list[0].args
         self.assertEqual(
             dest.relative_path,
             "v5/rocm/core/whl-next/rocm-sdk-core/"

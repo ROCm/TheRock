@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       package_index_url:
-        description: "URL for pip --index-url to install ROCm packages (PEP 503 index). Releases publish there; use wheel_find_links_url for CI-built wheels."
+        description: "Aggregate URL for pip --index-url to install published JAX and ROCm packages. CI uses the find-links inputs instead."
         type: string
         default: ""
       wheel_find_links_url:
@@ -23,7 +23,7 @@ on:
         required: true
         type: string
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install CI-built ROCm packages."
         type: string
         default: ""
       release_type:
@@ -118,7 +118,7 @@ on:
         type: string
         default: "7.14.0.dev0"
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install CI-built ROCm packages."
         type: string
         default: ""
       release_type:
@@ -241,6 +241,7 @@ jobs:
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
       WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
@@ -334,6 +335,7 @@ jobs:
         run: |
           python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
             --packages "${ROCM_PACKAGES}" \
+            --index-url "${ROCM_PACKAGE_INDEX_URL}" \
             --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
 
       # Package names, versions and where to get them arrive as env vars above.

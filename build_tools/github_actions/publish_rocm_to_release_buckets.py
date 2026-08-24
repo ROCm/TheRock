@@ -72,12 +72,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.s3_buckets import (
     get_product_release_bucket_config,
+    get_release_package_index_url,
     get_release_bucket_config,
 )
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.python_package_paths import plan_key_copies
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions.github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +346,10 @@ def main(argv: list[str]) -> None:
             structured=args.structured,
             index=args.python_index,
         )
+        if args.structured:
+            gha_set_output(
+                {"package_index_url": get_release_package_index_url(args.release_type)}
+            )
     else:
         logger.info("Skipping python packages for ASAN build variant")
     if artifacts_root.platform == "linux" and not args.skip_native_packages:

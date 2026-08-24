@@ -121,6 +121,8 @@ jobs:
     needs: [build_tarballs, build_python_packages]
     name: Publish to Release Buckets
     runs-on: ubuntu-24.04
+    outputs:
+      package_index_url: ${{ steps.publish.outputs.package_index_url }}
     permissions:
       id-token: write
     steps:
@@ -145,6 +147,7 @@ jobs:
           product: core
 
       - name: Copy to release buckets
+        id: publish
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
@@ -186,10 +189,8 @@ jobs:
   # The PyTorch release workflow publishes its wheels to the release index, then
   # tests from that index. Wait for the corresponding ROCm release to be published
   # before triggering the downstream release.
-  # TODO: Consider pulling ROCm packages from the published release index instead
-  #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_pytorch_wheels:
-    needs: [build_python_packages, publish_to_release_buckets]
+    needs: [publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
     if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
@@ -203,7 +204,7 @@ jobs:
           inputs: |
             { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
-              "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "rocm_package_index_url": "${{ needs.publish_to_release_buckets.outputs.package_index_url }}",
               "release_type": "${{ inputs.release_type }}",
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}",

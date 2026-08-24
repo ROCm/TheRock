@@ -43,7 +43,11 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages (PEP 503 index; use this OR rocm_package_find_links_url)."
         type: string
         default: ""
       release_type:
@@ -113,7 +117,11 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages (PEP 503 index; use this OR rocm_package_find_links_url)."
         type: string
         default: ""
       release_type:
@@ -219,14 +227,14 @@ jobs:
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
 
-      # TODO: THEROCK_INDEX_URL need to be renamed in the future to
-      # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
       - name: Build manylinux image
         working-directory: jax-source
         env:
           THEROCK_VERSION: ""
           GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          # The rocm-jax Dockerfile selects --index-url or --find-links based on
+          # whether this URL ends in .html. Prefer the release index when set.
+          ROCM_PACKAGE_URL: ${{ inputs.rocm_package_index_url || inputs.rocm_package_find_links_url }}
         run: |
           cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
             Dockerfile.jax-manylinux_2_28-therock
@@ -234,7 +242,7 @@ jobs:
           docker build \
             -t "${MANYLINUX_IMAGE_TAG}" \
             --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_URL}" \
             --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
             --build-arg=GFX_ARCH="${GFX_ARCH}" \
             --progress=plain \
