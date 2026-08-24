@@ -1596,7 +1596,7 @@ def download_prerelease_packages(
         structured_products = products or list(STRUCTURED_PRODUCTS)
         print(f"Repo stream: {repo_stream}")
         print(f"Python index: {python_index}")
-        print("Python buckets:")
+        print("S3 buckets:")
         for product in structured_products:
             print(
                 f"  {product}: s3://{repo_product_bucket(repo_stream, product)}/"

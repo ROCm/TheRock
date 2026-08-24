@@ -400,12 +400,13 @@ Safety Features:
 
     parser.add_argument(
         "--repo-stream",
-        default="rc",
+        default=None,
         choices=REPO_STREAMS,
         help=(
             "repo.amd.com release stream to publish to with --structured: "
-            "dev, nightly, or rc. Selects the "
-            "therock-repo-amd-<stream>-<product> destination buckets (default: rc)"
+            "dev, nightly, rc, or stable-staging. Selects the "
+            "therock-repo-amd-<stream>-<product> destination buckets. No default: "
+            "must be set explicitly with --structured (or pass --use-stable-staging)."
         ),
     )
 
@@ -476,12 +477,37 @@ Safety Features:
         help="Overwrite buckets to use production release buckets: therock-release-tarball:v3/rocm/tarball and therock-release-python:v3/rocm/whl",
     )
 
+    parser.add_argument(
+        "--use-stable-staging",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Overwrite --repo-stream to 'stable-staging' for structured "
+            "stable-staging release uploads. Requires --structured; independent "
+            "of --use-release-buckets, which only affects the legacy flat "
+            "bucket layout."
+        ),
+    )
+
     args = parser.parse_args(argv)
+
+    if args.use_stable_staging and not args.structured:
+        parser.error("--use-stable-staging requires --structured")
 
     if args.structured:
         args.multi_arch = True
-        if args.execute and not args.use_release_buckets:
-            parser.error("--structured --execute requires --use-release-buckets")
+        if args.use_stable_staging:
+            args.repo_stream = "stable-staging"
+        elif args.repo_stream is None:
+            parser.error(
+                "--structured requires --repo-stream to be set explicitly "
+                "(dev, nightly, rc, or stable-staging), or pass --use-stable-staging"
+            )
+        if args.execute and not (args.use_release_buckets or args.use_stable_staging):
+            parser.error(
+                "--structured --execute requires --use-release-buckets or "
+                "--use-stable-staging"
+            )
 
     # Adjust testing tarball prefix for multi-arch uploads
     if args.multi_arch and not args.structured and not args.use_release_buckets:
@@ -553,7 +579,7 @@ def upload_release_packages(
     print(f"Input directory: {input_dir.absolute()}")
     if structured:
         print(f"Repo stream: {repo_stream}")
-        print("Python buckets:")
+        print("S3 buckets:")
         for product in STRUCTURED_PRODUCTS:
             print(
                 f"  {product}: {repo_product_bucket(repo_stream, product)}/"

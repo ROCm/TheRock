@@ -378,6 +378,52 @@ class StructuredDownloadTest(unittest.TestCase):
             ],
         )
 
+    def test_version_matching_rejects_post_and_dev_suffix_collision_for_wheels(self):
+        # Same collision as the tarball case above, but for wheel filenames,
+        # where the version segment is followed by the platform/abi/python
+        # tags (e.g. "-cp310-cp310-win_amd64.whl") instead of ".tar.gz".
+        objects = {
+            (
+                "therock-repo-amd-rc-core",
+                "v5/rocm/core/whl-next/",
+            ): [
+                {
+                    "Key": "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0-cp310-cp310-win_amd64.whl",
+                    "Size": 10,
+                },
+                {
+                    "Key": "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0.post1-cp310-cp310-win_amd64.whl",
+                    "Size": 20,
+                },
+                {
+                    "Key": "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0.dev0-py3-none-manylinux_2_27_x86_64.whl",
+                    "Size": 30,
+                },
+            ],
+        }
+        client = FakeS3Client(objects)
+
+        packages = list_packages_structured(
+            client,
+            "rc",
+            ["core"],
+            "whl-next",
+            "7.13.0",
+        )
+
+        self.assertEqual(
+            packages,
+            [
+                PackageEntry(
+                    StorageLocation(
+                        "therock-repo-amd-rc-core",
+                        "v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0-cp310-cp310-win_amd64.whl",
+                    ),
+                    10,
+                ),
+            ],
+        )
+
     def test_core_tarball_prefixes_reuse_legacy_tarball_listing(self):
         objects = {
             "Contents": [

@@ -46,7 +46,7 @@ DEFAULT_INDEX = "whl-next"
 # duplicated in download_python_packages.py and upload_release_packages.py)
 # so a bucket-name typo like "pytorch" -> "python" can't be introduced in one
 # copy and missed in the other.
-REPO_STREAMS = ("dev", "nightly", "rc")
+REPO_STREAMS = ("dev", "nightly", "rc", "stable-staging")
 REPO_BUCKET_PRODUCT_NAMES = {
     "core": "core",
     "pytorch": "pytorch",
