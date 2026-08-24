@@ -37,6 +37,12 @@ class StageImpactRuleSet:
         "docs/",
         "scripts/",
     )
+    # Prefixes nested under full_ci_prefixes that are exempted from the
+    # conservative fallback because they are modeled precisely as their own
+    # source set in BUILD_TOPOLOGY.toml.
+    full_ci_prefix_exceptions: Tuple[str, ...] = (
+        "build_tools/packaging/",
+    )
     full_ci_exact_paths: Tuple[str, ...] = (
         "BUILD_TOPOLOGY.toml",
         "CMakeLists.txt",
@@ -162,7 +168,10 @@ class StageImpactAnalyzer:
     def _requires_full_ci(self, item: str) -> bool:
         if item in self.rules.full_ci_exact_paths:
             return True
-
+        
+        if any(item.startswith(exception) for exception in self.rules.full_ci_prefix_exceptions):
+            return False
+    
         return any(
             item == prefix.rstrip("/") or item.startswith(prefix)
             for prefix in self.rules.full_ci_prefixes

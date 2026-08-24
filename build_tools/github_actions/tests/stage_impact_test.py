@@ -505,6 +505,49 @@ class StageImpactTest(unittest.TestCase):
         self.assertEqual(payload["matched_source_sets"], ("rocm-libraries",))
         self.assertFalse(payload["full_rebuild_required"])
 
+    def test_packaging_change_is_narrow(self):
+        """A packaging-only change should not force a full rebuild."""
+        self.write_topology(
+            """
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [source_sets.packaging]
+            description = "Linux/Windows packaging metadata"
+            path_prefixes = ["build_tools/packaging"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-libraries"]
+
+            [artifact_groups.packaging]
+            description = "Native package and wheel packaging metadata"
+            type = "generic"
+            source_sets = ["packaging"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.prim]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["build_tools/packaging/linux/package.json"], topology=topology
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertIn("packaging", result.matched_source_sets)
+        self.assertEqual(result.rebuild_stages, ())
+        self.assertEqual(result.copy_stages, ("math-libs",))
+
 
 if __name__ == "__main__":
     unittest.main()
