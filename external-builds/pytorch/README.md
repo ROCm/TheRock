@@ -184,7 +184,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --install-rocm --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     --rocm-extras device-gfx1100 \
     --pytorch-rocm-arch gfx1100 \
     --output-dir $HOME/tmp/pyout
@@ -194,7 +194,7 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ ^
+    --install-rocm --index-url https://nightly.repo.amd.com/rocm/whl-next/ ^
     --rocm-extras device-gfx1100 ^
     --pytorch-rocm-arch gfx1100 ^
     --pytorch-dir C:/b/pytorch ^
@@ -311,8 +311,8 @@ https://rocm.nightlies.amd.com/v2/. If no runner is available, promotion is
 blocked by default. Set `bypass_tests_for_releases=true` for exceptional
 cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py).
 
-**Multi-arch releases**: Wheels are published directly to
-https://rocm.nightlies.amd.com/whl-multi-arch/ without a staging step.
+**Multi-arch releases**: Wheels are published to the product bucket and served
+through https://nightly.repo.amd.com/rocm/whl-next/ without a staging step.
 Tests run post-publish as a signal (visible on
 https://therock-hud-dev.amd.com/), not as a gate. This avoids
 pip resolution issues that would arise if shared host `torch` wheel and
@@ -333,7 +333,7 @@ use `device-all` when the environment must support every published target.
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+      --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
       --rocm-extras device-gfx942 \
       install-rocm
   ```
@@ -341,14 +341,14 @@ use `device-all` when the environment must support every published target.
 - Manually installing from a release index:
 
   ```bash
-  # From therock-nightly-python
+  # From the nightly aggregate index
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,devel,device-gfx942]"
 
-  # OR from therock-dev-python
+  # OR from the dev aggregate index
   python -m pip install \
-    --index-url https://rocm.devreleases.amd.com/whl-multi-arch/ \
+    --index-url https://dev.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,devel,device-gfx942]"
   ```
 

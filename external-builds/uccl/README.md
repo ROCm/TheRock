@@ -51,7 +51,7 @@ Example:
 python uccl_repo.py checkout
 python build_prod_wheels.py --output-dir outputs \
   --python-version 3.12 \
-  --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+  --index-url https://rc.repo.amd.com/rocm/whl-next/
 ```
 
 The build script has optional arguments for the name of the directory
@@ -64,7 +64,7 @@ The resulting wheel can then be installed like so:
 ```bash
 python3.12 -m venv venv
 . venv/bin/activate
-pip install --extra-index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu \
+pip install --extra-index-url https://rc.repo.amd.com/rocm/whl-next/ \
   uccl-0.0.1.post4-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl[rocm]
 ```
 
