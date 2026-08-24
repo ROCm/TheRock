@@ -147,6 +147,11 @@ class CIInputs:
     build_jax: bool = False
     python_versions: list[str] = field(default_factory=list)
 
+    # When set, PR 'test:*' labels do not extend the caller-supplied test
+    # labels. Callers that pin an exact test scope use this so a label cannot
+    # widen the matrix beyond what the build produced.
+    lock_test_labels: bool = False
+
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
 
@@ -208,6 +213,7 @@ class CIInputs:
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        lock_test_labels = os.environ.get("LOCK_TEST_LABELS", "false").lower() == "true"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -237,7 +243,11 @@ class CIInputs:
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
+        # lock_test_labels drops source 2 so the caller's scope is authoritative.
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        if lock_test_labels and pr_test_labels:
+            print(f"  lock_test_labels set: ignoring PR test labels {pr_test_labels}")
+            pr_test_labels = []
         linux_test_labels = (
             _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
         )
@@ -257,6 +267,7 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             python_versions=[python_version] if python_version else [],
+            lock_test_labels=lock_test_labels,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
@@ -823,6 +834,10 @@ def _has_test_labels(ci_inputs: CIInputs) -> bool:
     ]
     if linux_tests or windows_tests:
         return True
+    if ci_inputs.lock_test_labels:
+        # PR test labels were already dropped from the caller's scope; they
+        # must not escalate test_type either.
+        return False
     return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
 

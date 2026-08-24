@@ -209,6 +209,24 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
         self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
 
+    def test_lock_test_labels_ignores_pr_test_labels(self):
+        """lock_test_labels prevents PR test:* labels from extending scope."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "test:rccl", "id": 1},
+                        {"name": "test:rocprim", "id": 2},
+                    ]
+                }
+            },
+            extra_env={"LOCK_TEST_LABELS": "true"},
+        )
+        # PR test labels should be dropped when lock_test_labels is set
+        self.assertEqual(inputs.linux_test_labels, [])
+        self.assertEqual(inputs.windows_test_labels, [])
+
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
         inputs = _run_from_environ(
