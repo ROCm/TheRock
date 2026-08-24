@@ -6,7 +6,7 @@ Continuous Integration (CI) build/test workflows as well as release artifacts as
 part of Continuous Delivery (CD) nightly releases.
 
 <!-- TODO: mention other release channels, link to release notes, etc.
-       stable: https://repo.amd.com/rocm/
+       stable: https://stable.repo.amd.com/rocm/
        https://rocm.docs.amd.com/en/7.12.0-preview/index.html
        https://rocm.docs.amd.com/en/7.13.0-preview/index.html
 -->
@@ -101,12 +101,29 @@ Key differences from
 
 ## Installing multi-arch releases
 
+> [!IMPORTANT]
+> The `repo.amd.com` layout documented below starts with ROCm 10.1 nightly
+> releases and ROCm 10.0 stable releases. Earlier releases remain in the
+> [legacy multi-arch release locations](docs/packaging/legacy_multi_arch_releases.md).
+> In particular, ROCm 7.14 nightlies and the ROCm 10.0.0 release candidates
+> are only available from the legacy indexes.
+
+Current releases use these stream-specific locations:
+
+| Release channel | Python aggregate index                      | ROCm Core tarballs                              | ROCm Core native packages                        |
+| --------------- | ------------------------------------------- | ----------------------------------------------- | ------------------------------------------------ |
+| Stable          | https://stable.repo.amd.com/rocm/whl-next/  | https://stable.repo.amd.com/rocm/core/tarball/  | https://stable.repo.amd.com/rocm/core/packages/  |
+| Nightly         | https://nightly.repo.amd.com/rocm/whl-next/ | https://nightly.repo.amd.com/rocm/core/tarball/ | https://nightly.repo.amd.com/rocm/core/packages/ |
+| Prerelease      | https://rc.repo.amd.com/rocm/whl-next/      | https://rc.repo.amd.com/rocm/core/tarball/      | https://rc.repo.amd.com/rocm/core/packages/      |
+| BKC             | https://bkc.repo.amd.com/rocm/whl-next/     | https://bkc.repo.amd.com/rocm/core/tarball/     | https://bkc.repo.amd.com/rocm/core/packages/     |
+| Development     | https://dev.repo.amd.com/rocm/whl-next/     | https://dev.repo.amd.com/rocm/core/tarball/     | https://dev.repo.amd.com/rocm/core/packages/     |
+
 ### Installing multi-arch Python packages
 
 Nightly releases of ROCm and framework Python packages are published to a
-unified index at https://rocm.nightlies.amd.com/whl-multi-arch/.
-
-<!-- TODO: mention https://repo.amd.com/rocm/whl-multi-arch/ release channel too -->
+unified aggregate index at https://nightly.repo.amd.com/rocm/whl-next/. The
+aggregate index includes packages from ROCm Core, PyTorch, and JAX so
+dependencies can resolve across products.
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
@@ -149,19 +166,19 @@ and then running an install command such as:
 
 ```bash
 # Single device (replace device-gfx942 with your GPU):
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,device-gfx942]"
 
 # Also install the 'devel' package:
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,devel,device-gfx942]"
 
 # Multiple devices (e.g. for a Dockerfile used by both MI300X and MI355X):
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,device-gfx942,device-gfx950]"
 
 # All supported devices:
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,device-all]"
 ```
 
@@ -184,10 +201,10 @@ environment:
 
 ```bash
 pip freeze | grep rocm
-# rocm==7.15.0a20260630
-# rocm-sdk-core==7.15.0a20260630
-# rocm-sdk-device-gfx1100==7.15.0a20260630
-# rocm-sdk-libraries==7.15.0a20260630
+# rocm==10.1.0a20260823
+# rocm-sdk-core==10.1.0a20260823
+# rocm-sdk-device-gfx1100==10.1.0a20260823
+# rocm-sdk-libraries==10.1.0a20260823
 ```
 
 You should also see various tools on your `PATH` and in the `bin` directory:
@@ -351,17 +368,17 @@ Select your GPU target using the `[device-*]` extras from the
 
 ```bash
 # Single device (replace device-gfx942 with your GPU):
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "torch[device-gfx942]" "torchvision[device-gfx942]" torchaudio
 
 # Multiple devices (e.g. for a Dockerfile used by both MI300X and MI355X):
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "torch[device-gfx942,device-gfx950]" \
     "torchvision[device-gfx942,device-gfx950]" \
     torchaudio
 
 # All supported devices:
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "torch[device-all]" "torchvision[device-all]" torchaudio
 
 # Optional additional packages on Linux:
@@ -375,13 +392,13 @@ pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
 > install ROCm separately:
 >
 > ```bash
-> pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+> pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 >     "torch[device-gfx1100]"
 >
 > pip freeze  # with approximate download sizes:
-> # rocm-sdk-core==7.13.0a...              ~700 MB
-> # rocm-sdk-libraries==7.13.0a...         ~100 MB  (host code, shared across GPUs)
-> # rocm-sdk-device-gfx1100==7.13.0a...     ~50 MB  (only gfx1100 device code)
+> # rocm-sdk-core==10.1.0a...              ~700 MB
+> # rocm-sdk-libraries==10.1.0a...         ~100 MB  (host code, shared across GPUs)
+> # rocm-sdk-device-gfx1100==10.1.0a...     ~50 MB  (only gfx1100 device code)
 > # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
 > # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
 > # Total:                                 ~1.1 GB
@@ -427,18 +444,18 @@ Install JAX with ROCm support using the unified multi-arch index.
 > ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
-# Set the version (currently supported: 0.10.0, 0.10.1, 0.10.2, and 0.11.0)
-JAX_VERSION=0.11.0
+# Set the version (currently supported: 0.10.1, 0.10.2, 0.11.0, and 0.11.1)
+JAX_VERSION=0.11.1
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,device-gfx942]"
 
 # 2. Install JAX ROCm wheels
 # Use the ROCm major version the wheels were built against: 7 for ROCm 7.x, 10
 # for ROCm 10.x.
-ROCM_MAJOR=7
-pip install --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+ROCM_MAJOR=10
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "jax_rocm${ROCM_MAJOR}_plugin==${JAX_VERSION}" \
     "jax_rocm${ROCM_MAJOR}_pjrt==${JAX_VERSION}"
 
@@ -456,12 +473,12 @@ print(jax.devices())
 ```
 
 > [!NOTE]
-> On ROCm 10, a released `jaxlib` (0.10.0 through 0.11.0) does not know the
+> On ROCm 10, a released `jaxlib` (0.10.1 through 0.11.0) does not know the
 > `jax_rocm10_plugin` name, so the GPU kernel modules resolve to `None` and no FFI
 > handlers are registered. Symptoms are `'NoneType' object has no attribute ...` and
 > `No FFI handler registered for hipsolver_*`. Those versions predate the upstream fix
-> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)); until a `jaxlib`
-> carrying it ships, teach the installed copy about the new major:
+> ([jax-ml/jax#39634](https://github.com/jax-ml/jax/pull/39634)), which first shipped in
+> `jaxlib` 0.11.1. On an older `jaxlib`, teach the installed copy about the new major:
 >
 > ```bash
 > python external-builds/jax/patch_installed_jax_rocm_plugin_names.py \
@@ -495,25 +512,25 @@ Multi-arch native packages use a simplified package model compared to the
 > [!TIP]
 > To find the latest available release, browse the index pages:
 >
-> - **Debian packages**: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-> - **RPM packages**: https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
+> - **Debian packages**: https://nightly.repo.amd.com/rocm/core/packages/deb/
+> - **RPM packages**: https://nightly.repo.amd.com/rocm/core/packages/rpm/
 >
 > Look for directories in the format `YYYYMMDD-<action-run-id>`
-> (e.g., `20260701-28484694006`) and use the latest in the commands below.
+> (e.g., `20260823-12345678`) and use the latest in the commands below.
 
 ##### Installing on Debian-based systems (Ubuntu, Debian, etc.)
 
 ```bash
 # Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-#         Look for directories like "20260701-28484694006"
+#         https://nightly.repo.amd.com/rocm/core/packages/deb/
+#         Look for directories like "20260823-12345678"
 # Step 2: Set the variable below
-export RELEASE_ID=20260701-28484694006  # Replace with the latest date-runid
+export RELEASE_ID=20260823-12345678  # Replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo apt update
 sudo apt install -y ca-certificates
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-multi-arch/deb/${RELEASE_ID} stable main" \
+echo "deb [trusted=yes] https://nightly.repo.amd.com/rocm/core/packages/deb/${RELEASE_ID} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-multiarch-nightly.list
 sudo apt update
 
@@ -527,17 +544,17 @@ sudo apt install amdrocm-core-sdk
 
 ```bash
 # Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-multi-arch/rpm/
-#         Look for directories like "20260701-28484694006"
+#         https://nightly.repo.amd.com/rocm/core/packages/rpm/
+#         Look for directories like "20260823-12345678"
 # Step 2: Set the variable below
-export RELEASE_ID=20260701-28484694006  # Replace with the latest date-runid
+export RELEASE_ID=20260823-12345678  # Replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo dnf install -y ca-certificates
 sudo tee /etc/yum.repos.d/rocm-multiarch-nightly.repo <<EOF
 [rocm-multiarch-nightly]
 name=ROCm Multi-Arch Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/packages-multi-arch/rpm/${RELEASE_ID}/x86_64
+baseurl=https://nightly.repo.amd.com/rocm/core/packages/rpm/${RELEASE_ID}/x86_64
 enabled=1
 gpgcheck=0
 priority=50
@@ -606,13 +623,13 @@ such as setting environment variables.
 Multi-arch tarballs separate GPU-specific kernel code into a `.kpack/`
 directory. Two variants are available:
 
-- **Per-family multi-arch tarballs** (e.g. `therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz`)
+- **Per-family multi-arch tarballs** (e.g. `therock-dist-linux-gfx110X-all-10.1.0a20260823.tar.gz`)
   that include `.kpack` files only for one family.
-- **Full multi-arch tarball** (e.g. `therock-dist-linux-multiarch-7.13.0a20260430.tar.gz`)
+- **Full multi-arch tarball** (e.g. `therock-dist-linux-multiarch-10.1.0a20260823.tar.gz`)
   that include `.kpack` files for all supported targets.
 
 Browse and download tarballs from
-https://rocm.nightlies.amd.com/tarball-multi-arch/.
+https://nightly.repo.amd.com/rocm/core/tarball/.
 
 To download and extract:
 
@@ -620,10 +637,10 @@ To download and extract:
 mkdir therock-tarball && cd therock-tarball
 
 # Per-family (smaller, one GPU family):
-wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-gfx110X-all-7.13.0a20260430.tar.gz
+wget https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-gfx110X-all-10.1.0a20260823.tar.gz
 
 # Or multiarch (all GPUs):
-wget https://rocm.nightlies.amd.com/tarball-multi-arch/therock-dist-linux-multiarch-7.13.0a20260430.tar.gz
+wget https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.1.0a20260823.tar.gz
 
 mkdir install && tar -xf *.tar.gz -C install
 ```
@@ -698,37 +715,37 @@ distributions.
 
 ```bash
 # Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-asan/deb/
-#         Look for directories like "20260714-29296019987"
+#         https://nightly.repo.amd.com/rocm/core/packages-asan/deb/
+#         Look for directories like "20260823-12345678"
 # Step 2: Set the variable below
-export RELEASE_ID=20260714-29296019987  # replace with the latest date-runid
+export RELEASE_ID=20260823-12345678  # replace with the latest date-runid
 
 # Step 3: Add repository and install
-echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-asan/deb/${RELEASE_ID} stable main" \
+echo "deb [trusted=yes] https://nightly.repo.amd.com/rocm/core/packages-asan/deb/${RELEASE_ID} stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-asan-nightly.list
 sudo apt update
 
 # Install all supported GPU architectures (larger download):
 sudo apt install amdrocm
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo apt install amdrocm7.15-gfx942   # MI300X / MI300A
-sudo apt install amdrocm7.15-gfx950   # MI350X
+sudo apt install amdrocm10.1-gfx942   # MI300X / MI300A
+sudo apt install amdrocm10.1-gfx950   # MI350X
 ```
 
 ##### RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
 
 ```bash
 # Step 1: Find the latest release from
-#         https://rocm.nightlies.amd.com/packages-asan/rpm/
-#         Look for directories like "20260714-29296019987"
+#         https://nightly.repo.amd.com/rocm/core/packages-asan/rpm/
+#         Look for directories like "20260823-12345678"
 # Step 2: Set the variable below
-export RELEASE_ID=20260714-29296019987  # replace with the latest date-runid
+export RELEASE_ID=20260823-12345678  # replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo tee /etc/yum.repos.d/rocm-asan-nightly.repo <<EOF
 [rocm-asan-nightly]
 name=ROCm ASAN Nightly Repository
-baseurl=https://rocm.nightlies.amd.com/packages-asan/rpm/${RELEASE_ID}/x86_64
+baseurl=https://nightly.repo.amd.com/rocm/core/packages-asan/rpm/${RELEASE_ID}/x86_64
 enabled=1
 gpgcheck=0
 priority=50
@@ -739,18 +756,19 @@ sudo dnf clean all
 # Install all supported GPU architectures (larger download):
 sudo dnf install amdrocm
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo dnf install amdrocm7.15-gfx942   # MI300X / MI300A
-sudo dnf install amdrocm7.15-gfx950   # MI350X
+sudo dnf install amdrocm10.1-gfx942   # MI300X / MI300A
+sudo dnf install amdrocm10.1-gfx950   # MI350X
 ```
 
 #### Installing via tarball
 
-Browse https://rocm.nightlies.amd.com/tarball-asan/ for the latest available
-release and set `ROCM_VERSION` accordingly (e.g. `7.15.0a20260714`).
+Browse https://nightly.repo.amd.com/rocm/core/tarball-asan/ for the latest
+available release and set `ROCM_VERSION` accordingly (e.g.
+`10.1.0a20260823`).
 
 ```bash
-export ROCM_VERSION=7.15.0a20260714   # replace with the latest from the link above
-export ASAN_TARBALL_BASE_URL=https://rocm.nightlies.amd.com/asan/tarball/
+export ROCM_VERSION=10.1.0a20260823   # replace with the latest from the link above
+export ASAN_TARBALL_BASE_URL=https://nightly.repo.amd.com/rocm/core/tarball-asan/
 ```
 
 Download the tarball that matches your GPU family:
