@@ -424,8 +424,8 @@ Common TSAN_OPTIONS:
 
 TheRock provides test scripts for ROCgdb and ROCr Debug Agent. Both scripts
 work with locally-built ROCm trees or downloaded nightly tarballs from
-* https://nightly.repo.amd.com/rocm/core/tarball/ or
-* https://rocm.nightlies.amd.com/.
+- https://nightly.repo.amd.com/rocm/core/tarball/ or
+- https://rocm.nightlies.amd.com/.
 
 **Scripts location:** `build_tools/github_actions/test_executable_scripts/`
 
