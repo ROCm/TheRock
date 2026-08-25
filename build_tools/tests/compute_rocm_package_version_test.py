@@ -262,6 +262,7 @@ class DebPackageVersionTest(unittest.TestCase):
         versions = self._compute_versions_by_release_type()
 
         # This test is disabled since current sorting is dev > nightly!
+        # See https://github.com/ROCm/TheRock/issues/7638.
         # self.assertGreater(
         #     NativeVersion(versions["nightly"]),
         #     NativeVersion(versions["dev"]),

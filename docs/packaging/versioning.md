@@ -309,6 +309,8 @@ The script produces these versions for debian packages for each release type:
 >
 > As a result, apt may prefer a dev package over a nightly package when both
 > release indexes are configured.
+>
+> See https://github.com/ROCm/TheRock/issues/7638 for details.
 
 ### Working with Debian package versions
 
