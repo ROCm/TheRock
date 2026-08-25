@@ -873,8 +873,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
-        # Emulation-only template. build_emulated_job() emits the actual matrix
-        # job with linux_cpu_runner=True; this base entry is not appended.
+        "linux_cpu_runner": True,
         "emulate": "rocjitsu",
         "emulate_only": True,
     },
@@ -1157,7 +1156,7 @@ def run():
                 )
                 continue
         elif component.get("linux_cpu_runner", False):
-            # test_artifacts.yml maps these to the Linux CPU builder.
+            # CPU jobs route through linux_cpu_runner, not a family runner.
             component.pop("test_runner", None)
         elif "test_runner" not in component:
             # Regular components use standard runner labels.

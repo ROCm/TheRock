@@ -86,7 +86,9 @@ Linux CPU builder, with [mirage](https://github.com/ROCm/rocm-systems/tree/devel
 driving the [rocjitsu](https://github.com/ROCm/rocm-systems/tree/develop/emulation/rocjitsu)
 software GPU emulator instead of talking to a real device.
 
-Opting a component in means adding **`"emulate": "rocjitsu"`**:
+Opting a component in means adding this field:
+
+**`"emulate": "rocjitsu"`**
 
 ```
 "rocrtst": {
@@ -99,15 +101,11 @@ Opting a component in means adding **`"emulate": "rocjitsu"`**:
 That produces a second matrix entry alongside the hardware one, named
 `rocrtst (emulated mi350x)`, which:
 
-- runs on the Linux CPU builder (`linux_cpu_runner`) with no GPU devices mapped
-  into the container,
-- additionally fetches the `mirage` and `rocjitsu` artifacts,
-- gets 10x the component's `timeout_minutes`, capped at one hour. If that is
-  not enough, choose a smaller `emulate_test_type` instead of raising the
-  timeout,
-- runs unsharded, and
-- wraps the unchanged `test_script` in `mirage run`, passing `TEST_EMULATOR` and
-  `TEST_EMULATOR_PROFILE` as literal values so the command is reproducible.
+- runs on the Linux CPU builder with no GPU devices mapped into the container,
+- fetches the `mirage` and `rocjitsu` artifacts,
+- gets 10x the component's `timeout_minutes`, capped at one hour.
+- runs unsharded
+- wraps the unchanged `test_script` in `mirage run`, passing  `TEST_EMULATOR` and `TEST_EMULATOR_PROFILE` as literals for repro commands.
 
 The `test_script` itself is unchanged, which is the point: the emulated variant
 runs the same entry point the hardware job does, so emulation does not fork the
@@ -123,16 +121,10 @@ multi-GPU availability check: rocjitsu emulates the device in software, so a
 component whose family has no multi-GPU pool still gets its emulated variant.
 
 > [!IMPORTANT]
-> `build_emulated_job()` sets `linux_cpu_runner: true` on the derived job. For
-> an `emulate_only` entry, the original matrix entry is only a template: the
-> generator appends the derived CPU-routed job and does not append the base
-> hardware job.
->
-> `test_artifacts.yml` checks `linux_cpu_runner` after the `workflow_dispatch`
-> override, `multi_gpu_runner`, and `is_benchmark`. Therefore
-> `build_emulated_job()` also drops `multi_gpu`, `multi_gpu_runner`, and
-> `is_benchmark` so the derived job cannot route to GPU hardware. Anything added
-> ahead of `linux_cpu_runner` in that chain must be dropped there too.
+> `emulate_only` keeps the base entry out of the matrix. The emitted job is the
+> one returned by `build_emulated_job()`, which sets `linux_cpu_runner: true` and
+> removes `multi_gpu`, `multi_gpu_runner`, and `is_benchmark` so
+> `test_artifacts.yml` routes it to the Linux CPU builder.
 
 > [!WARNING]
 > The component repositories keep their own copies of this routing chain and of
