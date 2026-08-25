@@ -513,13 +513,15 @@ Safety Features:
             args.bucket_prefix = ""
             args.tarball_bucket = repo_product_bucket(args.repo_stream, "core")
             args.tarball_bucket_prefix = core_tarball_prefix(args.tarball_variant)
-        else:
+        elif args.multi_arch:
+            # Legacy flat multi-arch layout.
             args.bucket = "therock-release-python"
-        if args.multi_arch and not args.structured:
             args.bucket_prefix = "v4/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
             args.tarball_bucket_prefix = "v4/rocm/tarball/"
-        elif not args.structured:
+        else:
+            # Legacy flat single-arch layout.
+            args.bucket = "therock-release-python"
             args.bucket_prefix = "v3/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
             args.tarball_bucket_prefix = "v3/rocm/tarball/"
