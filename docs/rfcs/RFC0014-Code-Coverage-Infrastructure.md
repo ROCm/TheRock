@@ -1,7 +1,7 @@
 ---
 author: John Robbins (jorobbin)
 created: 2026-07-28
-modified: 2026-07-28
+modified: 2026-08-24
 status: draft
 discussion: TBD
 ---
@@ -208,6 +208,28 @@ cmake -B build -GNinja \
 
 Also supports special values `none` or `all`.
 
+**Coverage-for-all flags:**
+
+For nightly runs and comprehensive coverage testing, TheRock provides flags to enable coverage for all components in specific groups:
+
+```cmake
+# Enable coverage for all rocm-libraries components
+-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON
+
+# Enable coverage for all rocm-systems components
+-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON
+
+# Enable coverage for all components (both libraries and systems)
+-DTHEROCK_COVERAGE_ALL=ON
+```
+
+These flags are independent:
+- `THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` only instruments math-libs, ml-libs, cv-libs, etc.
+- `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL` only instruments base/rocm-systems components
+- `THEROCK_COVERAGE_ALL` is equivalent to enabling both
+
+This separation allows nightly runs to instrument all libraries without instrumenting the entire ROCm stack, reducing build time and resource usage when system-level coverage is not needed.
+
 **CI Workflow Integration Consideration:**
 
 CI workflows detect changed projects and need a simple way to pass project names to TheRock. The project names may be in various cases (hiprand, rocFFT, hipBLASLt) depending on the source. TheRock should accept project names case-insensitively and handle the conversion internally.
@@ -299,8 +321,11 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
    python build_tools/github_actions/post_stage_upload.py
    ```
 
-#### Test Phase
-Modify existing test workflows:
+#### Test Phase (PR Coverage)
+
+**Note:** This describes PR coverage testing. Nightly coverage uses a different approach - see Nightly Runs section.
+
+For PR coverage, modify existing test workflows:
 
 **`therock-ci-test-packages.yml`:**
 - Add `coverage_enabled` input parameter (boolean, default: false)
@@ -516,14 +541,60 @@ The aggregate report includes:
 
 ### Nightly Runs
 
-**Recommendation:** Achieve parity with Math CI:
-- Separate nightly build/test for each component
-- Rely on codecov.io (or chosen platform) for aggregation
-- Avoids resource stress from full-ROCm coverage builds
+**Phased Rollout Strategy:**
 
-**Multi-architecture nightly strategy (Phase 3+):**
-- Test different architectures on different nights (round-robin) OR
-- Test all architectures weekly/monthly to refresh baselines
+Nightly coverage follows a phased approach with increasing sophistication:
+
+**Phase 1: Full coverage on default architecture**
+- Build entire instrumented ROCm stack once (`-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON` or `-DTHEROCK_COVERAGE_ALL=ON`)
+- Run coverage for every component regardless of changes (sanity check + baseline)
+- Execute on single default architecture (gfx942 or gfx950)
+
+**Phase 2: Change-based selection**
+- Detect what changed on develop branch since last nightly run
+- Run coverage only for components with changes
+- Reduces nightly resource usage while maintaining coverage trends
+
+**Phase 3: Multi-architecture coverage**
+- Expand to multiple architectures for architecture-specific code
+- May use round-robin (different architectures on different nights) OR weekly/monthly full sweeps
+- Requires architecture-specific change detection (likely comes after PR multi-arch support)
+
+**Hybrid Artifact Approach (Nightly Only):**
+
+Unlike PR coverage builds (which only instrument changed projects), nightly runs instrument the entire ROCm stack but test components separately:
+
+1. **Single instrumented stack build:**
+   ```bash
+   cmake -B build -GNinja \
+     -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
+     -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON \
+     -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF \
+     -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON
+   ninja -C build
+   ```
+   
+   Produces instrumented artifacts for all components at once.
+
+2. **Separate test jobs per component:**
+   - Each component gets its own test job (hipRAND, rocFFT, rocBLAS, etc.)
+   - Test job pulls:
+     - **Instrumented artifact** for component under test (from nightly instrumented build)
+     - **Non-instrumented dependencies** from most recent regular build (pre-built artifacts)
+   - This hybrid approach isolates coverage measurement to one component at a time
+   - Maintains per-project isolation while amortizing instrumented build cost
+
+**Why this approach?**
+- **Single instrumented build**: Amortizes build cost - don't rebuild entire stack per component
+- **Separate test jobs**: Maintains per-project isolation - only one instrumented component per test run
+- **Hybrid artifacts**: Non-instrumented dependencies avoid profraw contamination from upstream code
+- **Nightly-specific**: PRs only instrument changed projects; nightlies instrument everything for comprehensive baseline
+
+**Resource implications:**
+- One large instrumented build (entire ROCm stack) per nightly run
+- N separate test jobs (one per component)
+- Each test job uses hybrid artifacts: one instrumented + rest non-instrumented
+- Relies on codecov.io (or chosen platform) for coverage aggregation across components
 
 #### Multi-GPU Coverage Strategy
 
@@ -596,3 +667,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
 - 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
+- 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components
