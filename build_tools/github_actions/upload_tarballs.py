@@ -47,6 +47,10 @@ logger = logging.getLogger(__name__)
 
 
 def _tarball_url(output_root: WorkflowOutputRoot, name: str) -> str:
+    # Emitted as a workflow output for downstream jobs to download, not as a link
+    # a human clicks, so it stays on the raw S3 URL rather than .public_url: CI
+    # reads the backing bucket directly to avoid CloudFront data-transfer charges.
+    # See docs/development/s3_buckets.md ("Public URLs and CDN").
     return output_root.tarball(quote(name, safe="")).https_url
 
 

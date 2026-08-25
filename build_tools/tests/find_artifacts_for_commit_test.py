@@ -529,7 +529,6 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
         return ArtifactRunInfo(
             git_commit_sha="abc123",
             github_repository_name="ROCm/TheRock",
-            external_repo="",
             platform="linux",
             artifact_group=artifact_group,
             workflow_file_name="multi_arch_ci.yml",
@@ -537,7 +536,12 @@ class ConcreteArtifactInspectionTest(unittest.TestCase):
             workflow_run_status="completed",
             workflow_run_conclusion="success",
             workflow_run_html_url="https://example.invalid/run/123",
-            s3_bucket="therock-ci-artifacts",
+            output_root=WorkflowOutputRoot(
+                bucket="therock-ci-artifacts",
+                external_repo="",
+                run_id="123",
+                platform="linux",
+            ),
             amdgpu_targets=amdgpu_targets,
             required_artifact_patterns=required_patterns,
         )

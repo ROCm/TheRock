@@ -13,6 +13,7 @@ and explains the authentication needed to upload to them.
   - [Build system buckets](#build-system-buckets): `rocm-third-party-deps`
   - [Cache buckets](#cache-buckets): `therock-pytorch-sccache-*`
   - [Legacy buckets](#legacy-buckets): `therock-artifacts`, `therock-artifacts-external`
+- [Extending the inventory from another repository](#extending-the-inventory-from-another-repository)
 
 ## Authentication
 
@@ -132,6 +133,18 @@ prefix. For example, nightly Core tarballs are at
 https://nightly.repo.amd.com/rocm/core/tarball/ and nightly native packages
 are under https://nightly.repo.amd.com/rocm/core/packages/.
 
+That rewrite is encoded, not just documented: each product bucket carries
+`key_prefix="v5/"` and a `CdnRule` mapping `v5/` to
+`https://<stream>.repo.amd.com/`, so `StorageLocation.public_url` derives the
+address above from the S3 key. The rule is built from one
+`f"https://{stream}.repo.amd.com/"` formula rather than a per-stream table,
+because [RFC0012](../rfcs/RFC0012-Repo-Structure.md) gives every stream the same
+hierarchy under its own subdomain — a stream that has not finished cutting over
+needs no edit here when it does.
+
+None of the product buckets are readable over raw S3 — they carry
+`anonymous_s3_read=false`, and the stream CDN is the only public way in.
+
 Pip installs must use the aggregate index, such as
 https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
 publication and indexer inputs, not self-contained install entry points.
@@ -149,6 +162,16 @@ published with the legacy layout and remain available for historical releases.
 Developer-facing current-release documentation should use the
 stream-specific `repo.amd.com` URLs above. CI may read artifact S3 URLs
 directly when consuming intermediate build outputs.
+
+The mappings in the CDN column below are also encoded as `cdn_rules` on each
+`S3BucketConfig` in
+[`build_tools/_therock_utils/s3_buckets.py`](/build_tools/_therock_utils/s3_buckets.py),
+so tooling can resolve them via `StorageLocation.public_url` instead of
+re-deriving them. A bucket or key prefix with no rule falls back to its raw S3
+URL. Not every cell below has a rule: the prerelease and release *package* CDNs
+serve a distro-partitioned apt/dnf repository rather than a prefix rewrite of
+the bucket, so no rule is emitted for them. **Keep the table and the rules in
+sync when either changes.**
 
 | Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -205,3 +228,112 @@ artifacts.
 | ------------------------------------------------------------------------------------ | ------------------------------- | ---------------------------- |
 | [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                   | `therock-ci-artifacts`          | `therock-artifacts`          |
 | [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/) | `therock-ci-artifacts-external` | `therock-artifacts-external` |
+
+## Extending the inventory from another repository
+
+Repositories that reuse TheRock's build tools against their own buckets can add
+to the inventory above with a JSON registry file, instead of patching the
+scripts. Point at it either way:
+
+- `--bucket-config-file <path>`, on `artifact_manager.py` subcommands. Prefer
+  this: it makes a single invocation self-describing, so the registry in use is
+  visible in the command line rather than inherited unnoticed from a parent
+  process.
+- `THEROCK_S3_BUCKETS_FILE=<path>` in the environment, for wrapper scripts that
+  shell out to several entry points and cannot pass a flag to each.
+
+Both are process-wide: whichever is used sets one registry for the whole
+invocation, read by every backend it builds. That is deliberate — the registry
+answers "which buckets exist and where do they map", which does not vary between
+the two ends of an `artifact_manager copy`. What does vary is the transport, and
+that is a separate per-end flag (`--source-transport`).
+
+The flag wins when both are set, and the choice is logged.
+
+```json
+{
+  "version": 1,
+  "buckets": [
+    {
+      "name": "therock-npi-artifacts",
+      "iam_role": "therock-npi",
+      "key_prefix": "v3/artifacts/",
+      "anonymous_s3_read": false,
+      "cdn_rules": [
+        {
+          "key_prefix": "v3/artifacts/",
+          "url_prefix": "https://genesis.example.com/artifacts/"
+        }
+      ]
+    }
+  ],
+  "artifacts_buckets": {
+    "ci": "therock-npi-artifacts",
+    "ci-external": "therock-npi-artifacts"
+  }
+}
+```
+
+`buckets` registers metadata. `key_prefix` is the prefix the bucket stores
+everything under, and is folded into every key the tools generate; it is
+normalized to a trailing `/` and must not begin with one. `cdn_rules` map a key
+prefix to a public URL prefix, longest match first.
+
+A rule maps a *prefix*, not a whole bucket, because the public path is usually
+not the S3 path: `v5/rocm/core/tarball/` in `therock-repo-amd-nightly-core` is
+served at `https://nightly.repo.amd.com/rocm/core/tarball/`. The rule carries
+both the prefix to strip and the URL to substitute. For a bucket whose whole
+contents map to one URL, use `"key_prefix": ""`.
+
+`anonymous_s3_read` (default `true`) says whether the bucket can be read over
+raw S3 without credentials. It selects which URL `StorageLocation.download_url`
+hands to pip, apt/dnf, or a plain download: the raw S3 URL when reads there work
+(CI avoids CloudFront data-transfer charges that way), the CDN when they do not.
+Set it `false` for a private bucket — the prerelease and release buckets are
+private in-tree, and a private bucket handed a raw S3 URL produces a link that
+answers 403. A private bucket with no `cdn_rules` covering the key raises rather
+than returning an unusable URL.
+
+`namespace_external_repos` (default `false`) makes uploads to the bucket
+additionally namespaced by `{owner}-{repo}/`. Set it on any bucket that more
+than one repository writes to — `therock-ci-artifacts-external` is the in-tree
+example. Without it, keys are namespaced only by GitHub run ID, and run IDs are
+allocated per repository rather than globally, so two repositories sharing a
+bucket will eventually collide on a run ID and overwrite each other's artifacts.
+
+`artifacts_buckets`, `release_buckets` and `product_release_buckets` override
+*selection* — which bucket the lookup functions choose. Registration alone is
+not enough, because those functions compute a bucket name from a formula
+(`therock-{release_type}-artifacts`, `therock-repo-amd-{stream}-{product}`) that
+a downstream repository does not follow.
+
+| Key                       | Slots                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `artifacts_buckets`       | `ci`, `ci-external`, `dev`, `dev-bkc`, `nightly`, `nightly-bkc`, `prerelease` |
+| `release_buckets`         | release type, then `tarball`, `python`, or `packages`                         |
+| `product_release_buckets` | release type, then `core`, `pytorch`, or `jax`                                |
+
+The BKC release types have their own `artifacts_buckets` slots even though they
+share dev's and nightly's buckets in-tree, so a downstream repository can
+redirect a BKC channel without also redirecting the channel it shares a bucket
+with.
+
+Note the two CI slots. A repository other than `ROCm/TheRock` selects
+`ci-external` for **all** of its CI, not just fork PRs, so a downstream repo
+normally sets both — to the same bucket, if fork PRs need no separate
+destination. They are separate keys deliberately: overriding only `ci` must not
+silently redirect untrusted fork uploads into a trusted bucket.
+
+Merge rules:
+
+- Additive. A bucket name that already exists in TheRock's inventory is
+  **rejected** unless the entry sets `"override": true`, in which case it fully
+  replaces the built-in entry (no field-wise merge) and the replacement is
+  logged. Silently retargeting a production bucket from an inherited environment
+  variable would be the worst failure this mechanism could have, so it is
+  opt-in and loud.
+- Unknown keys at any level are an error. A typo'd `cdn_rule` would otherwise
+  mean "this bucket has no CDN", which is exactly the silently-wrong-URL
+  outcome the registry exists to prevent.
+- Selection overrides must name a bucket registered in the same file or in-tree.
+- Every error message names the file being loaded.
