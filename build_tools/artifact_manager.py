@@ -518,8 +518,10 @@ def do_fetch(args: argparse.Namespace):
     ]
 
     if not download_requests:
-        log("No matching artifacts found to download")
-        return
+        raise RuntimeError(
+            f"ERROR: No matching artifacts found in {backend.base_uri} for "
+            f"target families: {', '.join(target_families)}"
+        )
 
     log(f"\nDownloading {len(download_requests)} artifacts...")
 

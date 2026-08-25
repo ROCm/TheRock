@@ -491,6 +491,30 @@ class TestPushStageAll(ArtifactManagerTestBase):
 class TestFetchFailureExitCode(ArtifactManagerTestBase):
     """Tests that fetch command exits with non-zero code on download failures."""
 
+    @mock.patch("artifact_manager.create_backend_from_env")
+    def test_fetch_fails_when_no_artifacts_match(self, mock_backend_factory):
+        """Test that fetch raises when the backend has no matches."""
+        import artifact_manager
+
+        mock_backend_factory.return_value = FailingBackend()
+        argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+        ]
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "No matching artifacts found in failing://test-local-linux",
+        ):
+            artifact_manager.main(argv)
+
     @mock.patch("artifact_manager._delay_for_retry")
     @mock.patch("artifact_manager.create_backend_from_env")
     def test_fetch_fails_when_download_fails(self, mock_backend_factory, mock_delay):
