@@ -62,12 +62,32 @@ import sys
 import time
 from pathlib import Path
 
+from zlib_ng import gzip_ng_threaded
+
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
+DEFAULT_COMPRESSION_BACKEND = "zlib-ng"
+DEFAULT_COMPRESSION_LEVEL = 6
+DEFAULT_COMPRESSION_THREADS = 8
 
 
 def log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def log_command_duration(*, start_time: float, start_cpu: os.times_result) -> None:
+    elapsed = time.monotonic() - start_time
+    end_cpu = os.times()
+    cpu_user = (end_cpu.user - start_cpu.user) + (
+        end_cpu.children_user - start_cpu.children_user
+    )
+    cpu_system = (end_cpu.system - start_cpu.system) + (
+        end_cpu.children_system - start_cpu.children_system
+    )
+    log(
+        f"++ Completed in {elapsed:.1f}s "
+        f"(CPU: {cpu_user:.1f}s user, {cpu_system:.1f}s system)"
+    )
 
 
 def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
@@ -80,14 +100,7 @@ def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
             args, cwd=str(cwd) if cwd else None, stdin=subprocess.DEVNULL
         )
     finally:
-        elapsed = time.monotonic() - start_time
-        end_cpu = os.times()
-        child_user = end_cpu.children_user - start_cpu.children_user
-        child_system = end_cpu.children_system - start_cpu.children_system
-        log(
-            f"++ Completed in {elapsed:.1f}s "
-            f"(child CPU: {child_user:.1f}s user, {child_system:.1f}s system)"
-        )
+        log_command_duration(start_time=start_time, start_cpu=start_cpu)
 
 
 def fetch_and_flatten(
@@ -150,22 +163,111 @@ def is_kpack_split(flatten_dir: Path) -> bool:
     return manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
 
 
-def compress_tarball(*, source_dir: Path, tarball_path: Path) -> None:
+def compress_with_zlib_ng(
+    *,
+    source_dir: Path,
+    tarball_path: Path,
+    compression_level: int,
+    compression_threads: int,
+) -> None:
+    """Stream a tar archive through zlib-ng's threaded gzip writer."""
+    command = ["tar", "cf", "-", "."]
+    log(
+        f"++ Exec [{source_dir}]$ {shlex.join(command)} | "
+        "zlib_ng.gzip_ng_threaded.open"
+        f"(level={compression_level}, threads={compression_threads}) > {tarball_path}"
+    )
+    start_time = time.monotonic()
+    start_cpu = os.times()
+    tar_process = subprocess.Popen(
+        command,
+        cwd=source_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    )
+    assert tar_process.stdout is not None
+    try:
+        with tar_process.stdout:
+            with gzip_ng_threaded.open(
+                tarball_path,
+                "wb",
+                compresslevel=compression_level,
+                threads=compression_threads,
+            ) as gzip_output:
+                shutil.copyfileobj(
+                    tar_process.stdout,
+                    gzip_output,
+                    length=1024 * 1024,
+                )
+        return_code = tar_process.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, command)
+    except BaseException:
+        if tar_process.poll() is None:
+            tar_process.terminate()
+        tar_process.wait()
+        raise
+    finally:
+        log_command_duration(start_time=start_time, start_cpu=start_cpu)
+
+
+def compress_tarball(
+    *,
+    source_dir: Path,
+    tarball_path: Path,
+    compression_backend: str = DEFAULT_COMPRESSION_BACKEND,
+    compression_level: int = DEFAULT_COMPRESSION_LEVEL,
+    compression_threads: int = DEFAULT_COMPRESSION_THREADS,
+) -> None:
     """Compress a directory into a .tar.gz tarball.
 
-    Uses subprocess ``tar cfz`` rather than Python's ``tarfile`` module
-    (tarfile was significantly slower and produced larger output with default
-    settings — its ``compresslevel`` parameter may help but was not tuned).
-
-    Uses gzip to match the existing release tarball format. Switching to
-    zstd (``tar cf - . | zstd``) would be faster with better compression,
-    but requires downstream consumers to support ``.tar.zst``.
+    The system ``tar`` builds the archive. By default its output is streamed
+    through zlib-ng so gzip compression can use multiple threads. The system
+    gzip backend is retained for direct performance comparisons.
     """
     log(f"\nCompressing {source_dir} -> {tarball_path}")
     tarball_path.parent.mkdir(parents=True, exist_ok=True)
-    run_command(["tar", "cfz", str(tarball_path), "."], cwd=source_dir)
+    try:
+        if compression_backend == "zlib-ng":
+            compress_with_zlib_ng(
+                source_dir=source_dir,
+                tarball_path=tarball_path,
+                compression_level=compression_level,
+                compression_threads=compression_threads,
+            )
+        elif compression_backend == "system-gzip":
+            run_command(["tar", "cfz", str(tarball_path), "."], cwd=source_dir)
+        else:
+            raise ValueError(f"Unknown compression backend: {compression_backend}")
+    except BaseException:
+        tarball_path.unlink(missing_ok=True)
+        raise
     size_mb = tarball_path.stat().st_size / (1024 * 1024)
     log(f"  Created {tarball_path.name} ({size_mb:.1f} MB)")
+
+
+def available_cpu_count() -> int:
+    """Return the CPUs available to this process, respecting Linux affinity."""
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
+
+
+def determine_compress_workers(
+    *,
+    task_count: int,
+    requested_workers: int | None,
+    compression_backend: str,
+    compression_threads: int,
+) -> int:
+    """Select archive concurrency without oversubscribing compression CPUs."""
+    if requested_workers is not None:
+        return min(task_count, requested_workers)
+    cpus_per_archive = (
+        compression_threads + 1 if compression_backend == "zlib-ng" else 1
+    )
+    return min(task_count, max(1, available_cpu_count() // cpus_per_archive))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -207,7 +309,36 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Also produce -tests tarballs that include test artifacts",
     )
+    parser.add_argument(
+        "--compression-backend",
+        choices=["zlib-ng", "system-gzip"],
+        default=DEFAULT_COMPRESSION_BACKEND,
+        help="Gzip implementation to use (default: zlib-ng)",
+    )
+    parser.add_argument(
+        "--compression-level",
+        type=int,
+        choices=range(10),
+        default=DEFAULT_COMPRESSION_LEVEL,
+        help="Gzip compression level for zlib-ng (default: 6)",
+    )
+    parser.add_argument(
+        "--compression-threads",
+        type=int,
+        default=DEFAULT_COMPRESSION_THREADS,
+        help="Compression threads per zlib-ng tarball (default: 8)",
+    )
+    parser.add_argument(
+        "--compress-workers",
+        type=int,
+        default=None,
+        help="Concurrent tarballs to compress (default: auto based on CPU count)",
+    )
     args = parser.parse_args(argv)
+    if args.compression_threads < 1:
+        parser.error("--compression-threads must be at least 1")
+    if args.compress_workers is not None and args.compress_workers < 1:
+        parser.error("--compress-workers must be at least 1")
     # Normalize empty string to None (workflow inputs default to "")
     args.run_github_repo = args.run_github_repo or None
 
@@ -225,6 +356,9 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  Version: {args.package_version}")
     log(f"  Output: {args.output_dir}")
     log(f"  Include test tarballs: {args.include_test_tarballs}")
+    log(f"  Compression backend: {args.compression_backend}")
+    log(f"  Compression level: {args.compression_level}")
+    log(f"  Compression threads per tarball: {args.compression_threads}")
 
     # Phase 1: Fetch and flatten sequentially.
     # Sequential so the shared download cache avoids re-downloading generic
@@ -308,14 +442,35 @@ def main(argv: list[str] | None = None) -> None:
                 (tests_multiarch_dir, args.output_dir / tests_tarball_name)
             )
 
-    # Phase 2: Compress all tarballs in parallel.
-    # Each tar cfz is single-threaded, so running N families concurrently
-    # on a multi-core runner scales well with minimal per-job slowdown.
-    # TODO: Add --compress-workers flag to cap concurrency on smaller runners.
-    log(f"\nCompressing {len(compress_tasks)} tarballs in parallel...")
-    with ProcessPoolExecutor(max_workers=len(compress_tasks)) as executor:
+    # Phase 2: Compress tarballs in parallel, with optional intra-archive
+    # parallelism from zlib-ng.
+    compress_workers = determine_compress_workers(
+        task_count=len(compress_tasks),
+        requested_workers=args.compress_workers,
+        compression_backend=args.compression_backend,
+        compression_threads=args.compression_threads,
+    )
+    if args.compression_backend == "zlib-ng":
+        compression_description = (
+            f"zlib-ng level {args.compression_level}, "
+            f"{args.compression_threads} threads per tarball"
+        )
+    else:
+        compression_description = "system gzip"
+    log(
+        f"\nCompressing {len(compress_tasks)} tarballs with {compress_workers} "
+        f"workers using {compression_description}..."
+    )
+    with ProcessPoolExecutor(max_workers=compress_workers) as executor:
         futures = {
-            executor.submit(compress_tarball, source_dir=src, tarball_path=dst): dst
+            executor.submit(
+                compress_tarball,
+                source_dir=src,
+                tarball_path=dst,
+                compression_backend=args.compression_backend,
+                compression_level=args.compression_level,
+                compression_threads=args.compression_threads,
+            ): dst
             for src, dst in compress_tasks
         }
         for future in as_completed(futures):
