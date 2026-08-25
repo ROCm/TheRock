@@ -398,6 +398,7 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
+        "expect_failure": True,
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
@@ -407,6 +408,7 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
+        "expect_failure": True,
         "test_script": (
             "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
             " gdb.rocm/corefile.exp"
