@@ -238,7 +238,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "host-asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "host-asan", "host-asan-debug", "tsan"],
         }
     },
     "gfx110x": {
@@ -326,7 +326,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
