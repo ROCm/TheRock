@@ -6,8 +6,16 @@
 """
 Packaging + repository upload tool.
 
-Builds local repository metadata (createrepo_c or dpkg-scanpackages), uploads
-packages to S3 with optional deduplication, then uploads the local metadata as-is.
+Upload flow (Issue #6540 — local metadata is authoritative):
+
+  1. ``create_deb_repo`` / ``create_rpm_repo`` — index the **complete local build tree**
+     (``dpkg-scanpackages`` or ``createrepo_c``).
+  2. ``upload_to_s3`` — upload ``.deb`` / ``.rpm`` files (optional dedupe when already on S3).
+  3. ``upload_to_s3`` — upload repository metadata (``repodata/`` or ``dists/``) in the
+     same walk; metadata is **never** deduped and **never** regenerated from S3.
+
+Previously, metadata was skipped during upload and merged from S3 using only newly
+uploaded packages. On CI re-runs where all packages dedupe, repodata stayed stale.
 
 Usage:
   python ./build_tools/packaging/linux/upload_package_repo.py \
@@ -25,7 +33,9 @@ the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
 
 import argparse
 import boto3
+import botocore.client
 import datetime
+import hashlib
 import os
 import shutil
 import subprocess
@@ -49,16 +59,21 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions_api import gha_append_step_summary
 
 
-def generate_release_file_with_checksums(release_file, job_type, dists_dir):
+def generate_release_file_with_checksums(
+    release_file: Path | str,
+    job_type: str,
+    dists_dir: Path,
+) -> None:
     """Generate a Debian Release file with MD5Sum, SHA1, and SHA256 checksums.
+
+    Called from ``create_deb_repo`` so ``Release`` is ready before S3 upload.
+    ``apt update`` requires checksum sections; a header-only Release is not enough.
 
     Args:
         release_file: Path to the Release file to create
         job_type: Job type for metadata (nightly/dev/release)
         dists_dir: Directory containing Packages files (main/binary-amd64/)
     """
-    import hashlib
-
     # Files to hash (relative paths from dists/stable/)
     files_to_hash = [
         (dists_dir / "Packages", "main/binary-amd64/Packages"),
@@ -107,7 +122,7 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: ROCm APT Repository
-Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
+Date: {datetime.datetime.now(datetime.timezone.utc):%a, %d %b %Y %H:%M:%S UTC}
 """
         )
 
@@ -132,7 +147,11 @@ Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
     print(f"✅ Release file generated with checksums: MD5, SHA1, SHA256")
 
 
-def run_command(cmd: list[str], cwd=None, stdout=None):
+def run_command(
+    cmd: list[str],
+    cwd: str | Path | None = None,
+    stdout: Path | str | None = None,
+) -> None:
     """Run a command safely without shell interpolation.
 
     Args:
@@ -151,14 +170,16 @@ def run_command(cmd: list[str], cwd=None, stdout=None):
         subprocess.run(cmd, check=True, cwd=cwd)
 
 
-def find_package_dir():
+def find_package_dir() -> Path:
+    """Return the default local package output directory for manual runs."""
     base = Path.cwd() / "output" / "packages"
     if not base.exists():
         raise RuntimeError(f"Package directory not found: {base}")
     return base
 
 
-def s3_object_exists(s3, bucket, key):
+def s3_object_exists(s3: botocore.client.BaseClient, bucket: str, key: str) -> bool:
+    """Return True when ``key`` exists in ``bucket`` (404 → False, other errors propagate)."""
     try:
         s3.head_object(Bucket=bucket, Key=key)
         return True
@@ -168,7 +189,13 @@ def s3_object_exists(s3, bucket, key):
         raise
 
 
-def create_deb_repo(package_dir, job_type):
+def create_deb_repo(package_dir: Path | str, job_type: str) -> None:
+    """Build Debian repo metadata from the complete local ``.deb`` tree.
+
+    Scans every ``.deb`` under ``package_dir`` (after moving into ``pool/main/``),
+    writes ``Packages`` / ``Packages.gz``, then a ``Release`` file with checksums.
+    All of these files are uploaded by ``upload_to_s3`` — no post-upload S3 merge.
+    """
     print("Creating APT repository...")
 
     package_path = Path(package_dir)
@@ -178,10 +205,12 @@ def create_deb_repo(package_dir, job_type):
     dists.mkdir(parents=True, exist_ok=True)
     pool.mkdir(parents=True, exist_ok=True)
 
+    # Flat .deb files from the build step → standard pool layout before scan.
     for f in package_path.iterdir():
         if f.suffix == ".deb":
             shutil.move(f, pool / f.name)
 
+    # Index every package in pool/ (full tree), not just newly built artifacts.
     run_command(
         ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
         cwd=str(package_path),
@@ -193,29 +222,62 @@ def create_deb_repo(package_dir, job_type):
         stdout=dists / "Packages.gz",
     )
 
+    # Release with checksums is upload-ready; no S3-side merge after upload.
     release = package_path / "dists" / "stable" / "Release"
     generate_release_file_with_checksums(release, job_type, dists)
 
 
-def create_rpm_repo(package_dir):
-    """Create RPM repository metadata from the complete local build tree."""
+def create_rpm_repo(package_dir: Path | str) -> None:
+    """Create RPM ``repodata/`` from the complete local build tree.
+
+    Runs ``createrepo_c`` over every ``.rpm`` in the tree so ``repodata/`` indexes
+    the full multi-arch fetch/build output, not just packages uploaded in this run.
+    ``upload_to_s3`` uploads ``repodata/`` as-is (Fixes #6540 on CI re-runs).
+    """
     print("Creating RPM repository...")
 
     package_path = Path(package_dir)
     arch_dir = package_path / "x86_64"
     arch_dir.mkdir(parents=True, exist_ok=True)
 
+    # Flat .rpm files from the build step → x86_64/ before createrepo_c.
     for f in package_path.iterdir():
         if f.suffix == ".rpm":
             shutil.move(f, arch_dir / f.name)
 
+    # repodata/ indexes all RPMs present locally; upload_to_s3 copies it verbatim.
     run_command(
         ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
         cwd=str(arch_dir),
     )
 
 
-def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
+def upload_to_s3(
+    source_dir: Path | str,
+    bucket: str,
+    prefix: str,
+    dedupe: bool = False,
+) -> botocore.client.BaseClient:
+    """Upload packages and repository metadata under ``source_dir`` to S3.
+
+    Walks the full tree produced by ``create_*_repo``. Repository metadata
+    (``repodata/`` for RPM, ``dists/`` for DEB) is uploaded like any other file —
+    it is **not** skipped and **not** deduped.
+
+    Package files (``.deb`` / ``.rpm``) may be skipped when ``dedupe`` is True and
+    the object already exists on S3. Metadata is always re-uploaded so a CI re-run
+    with all packages deduped still refreshes ``repodata`` / ``Packages`` from the
+    local tree (Issue #6540).
+
+    Args:
+        source_dir: Local package tree (``output/packages`` in CI).
+        bucket: S3 bucket name.
+        prefix: S3 key prefix for this repo (no trailing slash).
+        dedupe: When True, skip uploading package files that already exist on S3.
+
+    Returns:
+        boto3 S3 client used for the upload walk.
+    """
     s3 = boto3.client("s3")
     print(f"Uploading to s3://{bucket}/{prefix}/")
     print(f"Deduplication: {'ON' if dedupe else 'OFF'}")
@@ -238,7 +300,10 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             rel = local.relative_to(source_dir)
             key = f"{prefix}/{rel.as_posix()}"
 
-            # Dedupe applies to package files only; metadata is always re-uploaded.
+            # Issue #6540: dedupe packages only — repodata/ and dists/ always upload.
+            # Previously repodata/ was skipped here and rebuilt from S3; on re-runs
+            # where every .rpm deduped, repodata never refreshed and clients saw stale
+            # or incomplete indexes.
             if dedupe and (fname.endswith(".deb") or fname.endswith(".rpm")):
                 if s3_object_exists(s3, bucket, key):
                     print(f"Skipping existing package: {fname}")
@@ -322,6 +387,10 @@ def _resolve_upload_target(
 ) -> tuple[str, str, str, bool, str]:
     """Resolve S3 bucket, prefix, install URL, dedupe flag, and job type.
 
+    Dedupe is always enabled for CI uploads: re-runs share the same S3 prefix
+    under ``WorkflowOutputRoot``. Only ``.deb`` / ``.rpm`` objects are skipped
+    when already present; metadata is rebuilt locally and re-uploaded each run.
+
     Returns:
         Tuple of (bucket, prefix, install_url, dedupe, job_type)
     """
@@ -331,10 +400,12 @@ def _resolve_upload_target(
     loc = root.native_linux_packages(pkg_type)
     job_type = os.environ.get("RELEASE_TYPE", "ci")
     install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
+    # CI re-runs share the same S3 prefix; dedupe skips existing .deb/.rpm only.
     return loc.bucket, loc.relative_path, install_url, True, job_type
 
 
-def main():
+def main() -> None:
+    """Build local repo metadata, upload packages + metadata to S3, emit CI outputs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
 
@@ -360,12 +431,13 @@ def main():
         args, args.pkg_type
     )
 
-    # Build local repo metadata, then upload packages (dedupe OK) and metadata.
+    # Step 1: index full local tree (createrepo_c / dpkg-scanpackages + Release).
     if args.pkg_type == "deb":
         create_deb_repo(package_dir, job_type)
     else:
         create_rpm_repo(package_dir)
 
+    # Step 2+3: upload packages (dedupe OK) and local metadata (always upload).
     upload_to_s3(package_dir, bucket, prefix, dedupe=dedupe)
 
     print(f"Package repository URL: {install_url}")

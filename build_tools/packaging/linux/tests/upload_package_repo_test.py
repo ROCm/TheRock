@@ -4,22 +4,32 @@
 
 """Unit tests for ``upload_package_repo.py``.
 
-Lightweight coverage of pure-Python helpers that do not need createrepo_c,
-dpkg-scanpackages, or live S3.
+Regression guards for Issue #6540 and the simplified upload path: local repo
+metadata is built once and uploaded by ``upload_to_s3`` (no S3 merge/regen).
 
 Coverage:
 
-  - ``generate_release_file_with_checksums`` — Release includes checksum sections
-  - ``upload_to_s3`` — uploads repodata; dedupes packages only
-  - ``s3_object_exists`` — head_object success and 404 handling
+  - ``generate_release_file_with_checksums`` — DEB ``Release`` has checksum sections
+  - ``upload_to_s3`` — uploads ``repodata/``; dedupes ``.rpm`` only (not metadata)
+  - ``s3_object_exists`` — ``head_object`` success and 404 handling (dedupe helper)
   - ``_package_install_url`` — RPM baseurl includes ``x86_64/``
+
+Prerequisites:
+
+  - Python 3.10 or newer
+  - Run from TheROCK repository root (or any cwd — modules resolved via ``__file__``)
+  - Stdlib + botocore for ``ClientError`` in S3 mocks; boto3 stubbed at import
 
 Run::
 
     python3.12 build_tools/packaging/linux/tests/upload_package_repo_test.py -v
+
+    python3.12 -m unittest discover -s build_tools/packaging/linux/tests \\
+        -p 'upload_package_repo_test.py' -v
 """
 
 import gzip
+import os
 import sys
 import tempfile
 import types
@@ -34,13 +44,17 @@ LINUX_DIR = THIS_SCRIPT_DIR.parent
 BUILD_TOOLS_DIR = LINUX_DIR.parent.parent
 
 for path in (BUILD_TOOLS_DIR, LINUX_DIR):
-    path_str = str(path)
+    path_str = os.fspath(path)
     if path_str not in sys.path:
         sys.path.insert(0, path_str)
 
 
 def _import_upload_package_repo():
-    """Import upload_package_repo with a temporary boto3 stub."""
+    """Import upload_package_repo with a temporary boto3 stub.
+
+    Stub only for module import so pytest collection of other build_tools tests
+    is not affected; restore the real boto3 module afterward.
+    """
     boto3_stub = types.ModuleType("boto3")
     boto3_stub.client = MagicMock()
     saved_boto3 = sys.modules.get("boto3")
@@ -64,9 +78,10 @@ TEST_JOB_TYPE = "nightly"
 
 
 class GenerateReleaseFileTest(unittest.TestCase):
-    """Tests for ``generate_release_file_with_checksums()``."""
+    """Tests for ``generate_release_file_with_checksums()`` (DEB upload-ready Release)."""
 
     def test_release_includes_checksum_sections(self) -> None:
+        """Release must include MD5/SHA256 sections before ``upload_to_s3`` uploads it."""
         with tempfile.TemporaryDirectory() as temp_dir:
             dists_dir = Path(temp_dir) / "main" / "binary-amd64"
             dists_dir.mkdir(parents=True)
@@ -86,13 +101,14 @@ class GenerateReleaseFileTest(unittest.TestCase):
 
 
 class UploadToS3Test(unittest.TestCase):
-    """Tests for ``upload_to_s3()`` upload walk."""
+    """Tests for ``upload_to_s3()`` — Issue #6540 upload walk behavior."""
 
     @patch("upload_package_repo.boto3.client")
     @patch.object(upload_repo, "s3_object_exists", return_value=True)
     def test_uploads_repodata_and_skips_deduped_packages(
         self, _mock_exists: MagicMock, mock_boto_client: MagicMock
     ) -> None:
+        """Repodata uploads even when all RPMs dedupe (metadata must not be skipped)."""
         s3 = MagicMock()
         mock_boto_client.return_value = s3
 
@@ -113,9 +129,10 @@ class UploadToS3Test(unittest.TestCase):
 
 
 class S3ObjectExistsTest(unittest.TestCase):
-    """Tests for ``s3_object_exists()``."""
+    """Tests for ``s3_object_exists()`` used by package dedupe in ``upload_to_s3``."""
 
     def test_returns_true_when_object_exists(self) -> None:
+        """Existing S3 object → skip re-upload when dedupe is enabled."""
         s3 = MagicMock()
         s3.head_object.return_value = {"ContentLength": 1}
 
@@ -124,7 +141,9 @@ class S3ObjectExistsTest(unittest.TestCase):
         )
 
     def test_returns_false_on_404(self) -> None:
+        """Missing S3 object → upload package on first run."""
         s3 = MagicMock()
+        # Real ClientError so ``except s3.exceptions.ClientError`` matches in production.
         s3.exceptions.ClientError = ClientError
         error = ClientError(
             {"Error": {"Code": "404", "Message": "Not Found"}},
@@ -138,14 +157,16 @@ class S3ObjectExistsTest(unittest.TestCase):
 
 
 class PackageInstallUrlTest(unittest.TestCase):
-    """Tests for ``_package_install_url()``."""
+    """Tests for ``_package_install_url()`` — dnf/yum vs apt base URL layout."""
 
     def test_rpm_url_includes_x86_64_subdirectory(self) -> None:
+        """RPM baseurl must end at ``x86_64/`` where ``repodata/`` lives."""
         url = upload_repo._package_install_url(TEST_BUCKET, TEST_PREFIX, "rpm")
         self.assertTrue(url.endswith("/x86_64"))
         self.assertIn(TEST_PREFIX, url)
 
     def test_deb_url_uses_repo_root(self) -> None:
+        """DEB install URL is repo root; apt resolves ``dists/`` itself."""
         deb_prefix = "12345-linux/packages/deb/20250825-12345"
         url = upload_repo._package_install_url(TEST_BUCKET, deb_prefix, "deb")
         self.assertNotIn("/x86_64", url)
