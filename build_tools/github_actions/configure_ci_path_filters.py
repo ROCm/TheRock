@@ -227,6 +227,21 @@ _SKIPPABLE_PATH_PATTERNS = [
     # This directory contains a collection of AI skills and other developer
     # utilities. It includes some Python scripts, none of which affect CI.
     "skills/*",
+    # This module runs in the lightweight setup job before build jobs are
+    # enabled. Its behavior is covered by unit tests, while running the full
+    # ROCm build would not provide additional validation of the path filters.
+    "build_tools/github_actions/configure_ci_path_filters.py",
+    # Unit-test-only directories exercised by .github/workflows/unit_tests.yml.
+    # Keep these in sync with the pytest invocations in that workflow and the
+    # testpaths in pyproject.toml files. These are intentionally explicit
+    # directory roots: other test paths exercise built ROCm packages in CI.
+    "build_tools/tests/*",
+    "build_tools/github_actions/tests/*",
+    "build_tools/packaging/linux/tests/*",
+    "build_tools/packaging/python/tests/*",
+    "build_tools/third_party/s3_management/tests/*",
+    "build_tools/scan_tools/github_actions/tests/*",
+    "test_tools/tests/*",
 ]
 
 # GitHub workflow files that are used by CI workflows. Changes to any of
@@ -246,6 +261,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_native_linux_packages.yml",
     "multi_arch_build_portable_linux_artifacts.yml",
     "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_linux_jax_wheels_ci.yml",
     "multi_arch_build_portable_linux.yml",
     "multi_arch_build_windows_artifacts.yml",
     "multi_arch_build_windows_pytorch_wheels_ci.yml",
@@ -258,6 +274,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "test_artifacts_structure.yml",
     "test_artifacts.yml",
     "test_component.yml",
+    "test_multi_arch_linux_jax_wheels.yml",
     "test_native_linux_packages_install.yml",
     "test_rocm_wheels.yml",
 }

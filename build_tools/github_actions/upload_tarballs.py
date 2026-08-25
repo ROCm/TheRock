@@ -163,7 +163,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--release-type",
         default="ci",
-        help='Release type: "ci", "dev", "nightly", or "prerelease"',
+        help="Release type used to select the artifacts bucket.",
     )
     parser.add_argument(
         "--output-dir",
