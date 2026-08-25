@@ -145,6 +145,30 @@ needs no edit here when it does.
 None of the product buckets are readable over raw S3 — they carry
 `anonymous_s3_read=false`, and the stream CDN is the only public way in.
 
+#### Index URLs
+
+For "which URL does a user install this channel from", call these rather than
+reading `cdn_rules` or writing the URL out:
+
+```python
+from _therock_utils.s3_buckets import (
+    get_release_package_index_url,
+    get_release_tarball_index_url,
+    get_legacy_release_index_url,
+)
+
+get_release_package_index_url("nightly")  # pip --index-url
+get_release_package_index_url("nightly", "pytorch")  # product-local index
+get_release_tarball_index_url("release")  # where users browse tarballs
+get_legacy_release_index_url("nightly")  # pre-RFC0012 layout
+```
+
+They accept `release` in addition to the publishable release types. The stable
+channel is promoted by hand and has no automated upload credentials, so
+`get_release_bucket_config` and `get_release_stream` keep rejecting it — but it
+is the channel most users install from, so the read side accepts it. Keeping the
+two sets separate is what lets one widen without widening the other.
+
 Pip installs must use the aggregate index, such as
 https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
 publication and indexer inputs, not self-contained install entry points.

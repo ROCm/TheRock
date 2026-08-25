@@ -50,14 +50,20 @@ import sys
 import time
 
 from github_actions.github_actions_api import *
+from _therock_utils.s3_buckets import get_release_package_index_url
 
 is_windows = platform.system() == "Windows"
 
-ROCM_INDEX_URLS_MAP = {
-    "stable": "https://stable.repo.amd.com/rocm/whl-next/",
-    "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
-    "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
-    "dev": "https://dev.repo.amd.com/rocm/whl-next/",
+# User-facing --index-name spellings, mapped to the release types
+# get_release_package_index_url takes. Only "stable" differs: the release type
+# is spelled "release" internally, but "stable" is the name users have typed
+# since before the repo.amd.com streams existed, and it now also matches the
+# stream's own name.
+INDEX_NAME_TO_RELEASE_TYPE = {
+    "stable": "release",
+    "prerelease": "prerelease",
+    "nightly": "nightly",
+    "dev": "dev",
 }
 
 
@@ -239,8 +245,11 @@ def install_packages_into_venv(
         raise ValueError("Can't set both index_url and index_name")
 
     if index_name:
-        # Look up known index name.
-        index_url = ROCM_INDEX_URLS_MAP[index_name]
+        # Derived from the bucket inventory rather than a copy of the mapping,
+        # so this index and the ones the publish scripts announce cannot drift.
+        index_url = get_release_package_index_url(
+            INDEX_NAME_TO_RELEASE_TYPE[index_name]
+        )
 
     if index_url == "":
         pip_install_cmd.append("--no-index")
@@ -378,7 +387,7 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--index-name",
         type=str,
-        choices=["stable", "prerelease", "nightly", "dev"],
+        choices=sorted(INDEX_NAME_TO_RELEASE_TYPE),
         help="Shorthand for a named index",
     )
     install_options.add_argument(

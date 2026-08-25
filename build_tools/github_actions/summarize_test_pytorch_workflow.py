@@ -21,7 +21,11 @@ The script can be tested locally with inputs like this:
 import argparse
 import platform
 import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _therock_utils.s3_buckets import get_release_package_index_url
 from github_actions_api import *
 
 
@@ -107,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--index-url",
         type=str,
-        default="https://nightly.repo.amd.com/rocm/whl-next/",
+        default=get_release_package_index_url("nightly"),
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
     parser.add_argument(

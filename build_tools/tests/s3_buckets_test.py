@@ -20,9 +20,12 @@ from _therock_utils.s3_buckets import (
     cdn_url_for,
     get_artifacts_bucket_config,
     get_artifacts_bucket_config_for_workflow_run,
+    get_index_release_stream,
+    get_legacy_release_index_url,
     get_product_release_bucket_config,
     get_release_package_index_url,
     get_release_stream,
+    get_release_tarball_index_url,
     get_release_bucket_config,
     lookup_bucket_config,
     require_bucket_config,
@@ -32,6 +35,7 @@ from _therock_utils.s3_buckets import (
     set_bucket_config_file,
 )
 from _therock_utils.storage_location import StorageLocation
+from setup_venv import INDEX_NAME_TO_RELEASE_TYPE
 
 
 # ---------------------------------------------------------------------------
@@ -670,6 +674,122 @@ class TestProductReleaseBuckets(unittest.TestCase):
     def test_invalid_product_is_rejected(self):
         with self.assertRaises(ValueError):
             get_product_release_bucket_config("nightly", "tensorflow")
+
+
+class TestReleaseIndexUrls(unittest.TestCase):
+    """The public index URLs users install from.
+
+    Every expected value is written out in full rather than rebuilt from the
+    same streams and CdnRules the implementation reads. These URLs appear in
+    install instructions and are passed to pip, so a test that derived them
+    would agree with any rule the code happens to hold, including a wrong one.
+    """
+
+    def test_aggregate_pip_index(self):
+        expected = {
+            "dev": "https://dev.repo.amd.com/rocm/whl-next/",
+            "dev-bkc": "https://bkc.repo.amd.com/rocm/whl-next/",
+            "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
+            "nightly-bkc": "https://bkc.repo.amd.com/rocm/whl-next/",
+            "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
+            "release": "https://stable.repo.amd.com/rocm/whl-next/",
+        }
+        for release_type, url in expected.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(get_release_package_index_url(release_type), url)
+
+    def test_setup_venv_index_names_are_unchanged(self):
+        """The four --index-name values still resolve to what they did before.
+
+        setup_venv.py held these as a literal map; it now derives them. Same
+        strings either way, so no command line changes.
+        """
+        expected = {
+            "stable": "https://stable.repo.amd.com/rocm/whl-next/",
+            "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
+            "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
+            "dev": "https://dev.repo.amd.com/rocm/whl-next/",
+        }
+        for index_name, url in expected.items():
+            with self.subTest(index_name=index_name):
+                self.assertEqual(
+                    get_release_package_index_url(
+                        INDEX_NAME_TO_RELEASE_TYPE[index_name]
+                    ),
+                    url,
+                )
+
+    def test_product_local_index(self):
+        self.assertEqual(
+            get_release_package_index_url("nightly", "pytorch"),
+            "https://nightly.repo.amd.com/rocm/pytorch/whl-next/",
+        )
+        self.assertEqual(
+            get_release_package_index_url("dev", "jax"),
+            "https://dev.repo.amd.com/rocm/jax/whl-next/",
+        )
+
+    def test_tarball_index(self):
+        self.assertEqual(
+            get_release_tarball_index_url("nightly"),
+            "https://nightly.repo.amd.com/rocm/core/tarball/",
+        )
+        self.assertEqual(
+            get_release_tarball_index_url("release"),
+            "https://stable.repo.amd.com/rocm/core/tarball/",
+        )
+
+    def test_legacy_index_urls_match_the_maps_they_replaced(self):
+        """Byte-identical to the LEGACY_MULTI_ARCH_INDEX_URLS copies deleted here.
+
+        Those lived in publish_pytorch_to_release_bucket.py and
+        publish_jax_to_release_bucket.py, identical in both.
+        """
+        expected = {
+            "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+            "dev-bkc": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+            "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+            "nightly-bkc": "https://rocm.nightlies.amd.com/whl-multi-arch/",
+            "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
+        }
+        for release_type, url in expected.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(get_legacy_release_index_url(release_type), url)
+
+    def test_legacy_tarball_index(self):
+        self.assertEqual(
+            get_legacy_release_index_url("nightly", "tarball"),
+            "https://rocm.nightlies.amd.com/tarball-multi-arch/",
+        )
+        self.assertEqual(
+            get_legacy_release_index_url("release", "tarball"),
+            "https://repo.amd.com/rocm/tarball-multi-arch/",
+        )
+
+    def test_release_is_installable_from_but_not_publishable_to(self):
+        """The read set is wider than the write set, on purpose.
+
+        The stable buckets have no automated upload credentials, so the publish
+        path must keep rejecting "release" - but it is the channel most users
+        install from.
+        """
+        self.assertEqual(get_index_release_stream("release"), "stable")
+        with self.assertRaises(ValueError):
+            get_release_stream("release")
+        with self.assertRaises(ValueError):
+            get_release_bucket_config("release", "python")
+
+    def test_invalid_inputs_rejected(self):
+        with self.assertRaises(ValueError):
+            get_release_package_index_url("bogus")
+        with self.assertRaises(ValueError):
+            get_release_package_index_url("nightly", "tensorflow")
+        with self.assertRaises(ValueError):
+            get_legacy_release_index_url("bogus")
+        with self.assertRaises(ValueError):
+            # "packages" has no single index: that CDN serves a
+            # distro-partitioned apt/dnf repo, not a prefix rewrite.
+            get_legacy_release_index_url("nightly", "packages")
 
 
 class TestAnonymousS3Read(unittest.TestCase):
