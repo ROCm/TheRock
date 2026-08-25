@@ -53,6 +53,7 @@ files (e.g. ``lib/hipblaslt/library/*.co``) only for the target family.
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 import json
 import os
 import shlex
@@ -69,6 +70,21 @@ DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 DEFAULT_COMPRESSION_BACKEND = "zlib-ng"
 DEFAULT_COMPRESSION_LEVEL = 6
 DEFAULT_COMPRESSION_THREADS = 8
+
+# Higher priorities represent tarballs expected to take longer to compress.
+# Starting the slowest tasks first lets faster tasks run concurrently and
+# reduces the chance that one large archive extends the end of the job.
+FAMILY_TARBALL_PRIORITY = 0
+FAMILY_TESTS_TARBALL_PRIORITY = 1
+MULTIARCH_TARBALL_PRIORITY = 2
+MULTIARCH_TESTS_TARBALL_PRIORITY = 3
+
+
+@dataclass(frozen=True)
+class CompressionTask:
+    source_dir: Path
+    tarball_path: Path
+    priority: int
 
 
 def log(msg: str) -> None:
@@ -364,7 +380,7 @@ def main(argv: list[str] | None = None) -> None:
     # Sequential so the shared download cache avoids re-downloading generic
     # (host) artifacts for each family.
     family_dirs = []
-    compress_tasks = []
+    compress_tasks: list[CompressionTask] = []
     for family in families:
         flatten_dir = work_dir / family
         fetch_and_flatten(
@@ -382,7 +398,13 @@ def main(argv: list[str] | None = None) -> None:
         tarball_name = (
             f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
         )
-        compress_tasks.append((flatten_dir, args.output_dir / tarball_name))
+        compress_tasks.append(
+            CompressionTask(
+                source_dir=flatten_dir,
+                tarball_path=args.output_dir / tarball_name,
+                priority=FAMILY_TARBALL_PRIORITY,
+            )
+        )
         if args.include_test_tarballs:
             tests_dir = work_dir / "tests" / family
             fetch_and_flatten(
@@ -398,7 +420,13 @@ def main(argv: list[str] | None = None) -> None:
                 f"therock-dist-{args.platform}-{family}-tests-"
                 f"{args.package_version}.tar.gz"
             )
-            compress_tasks.append((tests_dir, args.output_dir / tests_tarball_name))
+            compress_tasks.append(
+                CompressionTask(
+                    source_dir=tests_dir,
+                    tarball_path=args.output_dir / tests_tarball_name,
+                    priority=FAMILY_TESTS_TARBALL_PRIORITY,
+                )
+            )
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
     # into a single combined directory. With KPACK split, device-specific
@@ -422,7 +450,13 @@ def main(argv: list[str] | None = None) -> None:
         tarball_name = (
             f"therock-dist-{args.platform}-multiarch-{args.package_version}.tar.gz"
         )
-        compress_tasks.append((multiarch_dir, args.output_dir / tarball_name))
+        compress_tasks.append(
+            CompressionTask(
+                source_dir=multiarch_dir,
+                tarball_path=args.output_dir / tarball_name,
+                priority=MULTIARCH_TARBALL_PRIORITY,
+            )
+        )
         if args.include_test_tarballs:
             tests_multiarch_dir = work_dir / "tests" / "multiarch"
             fetch_and_flatten(
@@ -439,11 +473,17 @@ def main(argv: list[str] | None = None) -> None:
                 f"{args.package_version}.tar.gz"
             )
             compress_tasks.append(
-                (tests_multiarch_dir, args.output_dir / tests_tarball_name)
+                CompressionTask(
+                    source_dir=tests_multiarch_dir,
+                    tarball_path=args.output_dir / tests_tarball_name,
+                    priority=MULTIARCH_TESTS_TARBALL_PRIORITY,
+                )
             )
 
     # Phase 2: Compress tarballs in parallel, with optional intra-archive
-    # parallelism from zlib-ng.
+    # parallelism from zlib-ng. Start the expected largest archives first to
+    # reduce the tail when there are more archives than compression workers.
+    compress_tasks.sort(key=lambda task: task.priority, reverse=True)
     compress_workers = determine_compress_workers(
         task_count=len(compress_tasks),
         requested_workers=args.compress_workers,
@@ -465,13 +505,13 @@ def main(argv: list[str] | None = None) -> None:
         futures = {
             executor.submit(
                 compress_tarball,
-                source_dir=src,
-                tarball_path=dst,
+                source_dir=task.source_dir,
+                tarball_path=task.tarball_path,
                 compression_backend=args.compression_backend,
                 compression_level=args.compression_level,
                 compression_threads=args.compression_threads,
-            ): dst
-            for src, dst in compress_tasks
+            ): task.tarball_path
+            for task in compress_tasks
         }
         for future in as_completed(futures):
             future.result()  # Raises on failure

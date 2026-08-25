@@ -216,10 +216,10 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
             ],
         )
 
@@ -251,10 +251,10 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
             ],
         )
 
@@ -287,14 +287,14 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
-                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
-                "therock-dist-linux-multiarch-7.13.0.tar.gz",
-                "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
+                "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
             ],
         )
 
