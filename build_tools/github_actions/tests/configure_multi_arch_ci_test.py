@@ -349,6 +349,18 @@ class TestShouldSkipCI(unittest.TestCase):
         git = cm.GitContext(changed_files=None)
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
+    def test_asan_presubmit_bypasses_label_requirement(self):
+        """asan_presubmit allows ASAN PRs without explicit label."""
+        inputs = self._inputs(
+            build_variant="asan",
+            pr_labels=[],
+            asan_presubmit=True,
+        )
+        git = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+        )
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
     def test_release_pr_without_submodule_change_runs(self):
         """Release variant PR without submodule changes still runs (not skipped)."""
         inputs = self._inputs(build_variant="release", pr_labels=[])
@@ -752,6 +764,26 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
+
+    def test_asan_presubmit_enables_tests_on_pr(self):
+        """asan_presubmit allows ASAN tests on PR/push triggers."""
+        git_context = cm.GitContext()
+
+        for event in ["pull_request", "push"]:
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name=event,
+                    build_variant="asan",
+                    asan_presubmit=True,
+                ),
+                git_context=git_context,
+                targets=cm.TargetSelection(),
+            )
+            self.assertEqual(
+                result.test_rocm.action,
+                cm.JobAction.RUN,
+                f"asan_presubmit should enable ASAN tests on {event}",
+            )
 
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
     def test_external_repo_stage_reuse_uses_repo_as_changed_file(self, mock_reuse):

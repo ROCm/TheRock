@@ -87,6 +87,14 @@ on:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
         default: true
+      asan_presubmit:
+        description: >-
+          Run ASAN as an automatic presubmit gate. No 'ci:asan'/'ci:host-asan'
+          label is required, and ASAN sandbox test runners are allocated on
+          push/pull_request instead of nightly triggers only. Intended for
+          callers that also narrow the build via build_stages.
+        type: boolean
+        default: false
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -212,6 +220,7 @@ jobs:
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          ASAN_PRESUBMIT: ${{ inputs.asan_presubmit }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}

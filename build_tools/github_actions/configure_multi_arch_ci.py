@@ -222,6 +222,11 @@ class CIInputs:
     build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
+    # When set, ASAN builds and tests are a first-class presubmit gate: no
+    # 'ci:asan'/'ci:host-asan' label is needed to run, and sandbox test runners
+    # are allocated on push/pull_request instead of nightly triggers only.
+    asan_presubmit: bool = False
+
     # PR labels (from event payload for pull_request events)
     pr_labels: list[str] = field(default_factory=list)
 
@@ -312,6 +317,7 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
+        asan_presubmit = os.environ.get("ASAN_PRESUBMIT", "false").lower() == "true"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -396,6 +402,7 @@ class CIInputs:
             build_jax=build_jax,
             build_native_linux=build_native_linux,
             python_versions=[python_version] if python_version else [],
+            asan_presubmit=asan_presubmit,
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
@@ -764,6 +771,8 @@ def should_skip_ci(
     # This avoids running expensive ASAN builds on every PR.
     # Labels that enable ASAN CI:
     #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # Callers that set asan_presubmit have already narrowed the build to a
+    # cost that is acceptable on every PR, so the opt-in gate does not apply.
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -771,11 +780,15 @@ def should_skip_ci(
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
         and not has_asan_label
+        and not ci_inputs.asan_presubmit
     ):
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
         return True
+
+    if ci_inputs.asan_presubmit and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN configured as an automatic presubmit gate")
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
@@ -1140,7 +1153,7 @@ def decide_jobs(
 
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
+    if ci_inputs.build_variant == "asan" and not ci_inputs.asan_presubmit:
         # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
         if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
             test_rocm = TestRocmDecision(
@@ -1241,42 +1254,29 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan":
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+        if build_variant in ("asan", "host-asan"):
+            # ASAN tests normally run on nightly triggers only, because ASAN
+            # sandbox runner capacity is limited. Callers that set
+            # asan_presubmit have narrowed the build enough to make the
+            # sandbox affordable on every push/pull_request as well.
+            nightly_trigger = ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
+            if not (nightly_trigger or ci_inputs.asan_presubmit):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif build_variant == "host-asan":
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: {build_variant} tests skipped for "
+                    f"non-nightly trigger, disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                    f"  {family_name}: using {build_variant} sandbox runner: "
+                    f"{test_runs_on}"
                 )
             else:
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: no {build_variant} sandbox runner "
+                    f"available, disabling tests"
                 )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
