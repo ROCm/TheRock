@@ -105,7 +105,7 @@ That produces a second matrix entry alongside the hardware one, named
 - fetches the `mirage` and `rocjitsu` artifacts,
 - gets 10x the component's `timeout_minutes`, capped at one hour.
 - runs unsharded
-- wraps the unchanged `test_script` in `mirage run`, passing  `TEST_EMULATOR` and `TEST_EMULATOR_PROFILE` as literals for repro commands.
+- wraps the unchanged `test_script` in `mirage run`, passing `TEST_EMULATOR` and `TEST_EMULATOR_PROFILE` as literals for repro commands.
 
 The `test_script` itself is unchanged, which is the point: the emulated variant
 runs the same entry point the hardware job does, so emulation does not fork the
