@@ -266,11 +266,16 @@ def is_successful_workflow_run(workflow_run: dict) -> bool:
 
 
 def is_successful_workflow_job(workflow_job: dict) -> bool:
-    """Return True when a workflow job completed successfully."""
-    return (
-        workflow_job.get("status") == "completed"
-        and workflow_job.get("conclusion") == "success"
-    )
+    """Return True when a workflow job completed successfully.
+
+    Some jobs like "Quartz - started" are automatically skipped and can be
+    treated as successful. Note that a CI run that skipped build stages
+    could pass this check but then fail later checks like
+    validate_required_artifacts_available().
+    """
+    return workflow_job.get("status") == "completed" and workflow_job.get(
+        "conclusion"
+    ) in ["success", "skipped"]
 
 
 def query_completed_workflow_runs(

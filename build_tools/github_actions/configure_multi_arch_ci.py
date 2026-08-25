@@ -145,6 +145,7 @@ class CIInputs:
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
+    build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
@@ -208,6 +209,9 @@ class CIInputs:
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        build_native_linux = (
+            os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -256,6 +260,7 @@ class CIInputs:
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
+            build_native_linux=build_native_linux,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -1203,7 +1208,7 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=True,
+        build_native_linux=ci_inputs.build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,

@@ -103,14 +103,14 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 # Build runner configuration for Linux builds
 # Uses weight-based distribution (0.0-1.0 probability)
-# Sanitizer builds (asan/tsan) use ramdisk variants (Azure only, no AWS yet)
+# Sanitizer builds (asan/tsan) use large runners with ramdisk support
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
     },
     "windows": {
@@ -164,6 +164,18 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+        },
+        # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
+        # Used for nightly and release ASAN builds where stack traces need source line info.
+        "asan-debug": {
+            "build_variant_label": "asan-debug",
+            "build_variant_suffix": "asan",
+            "build_variant_cmake_preset": "linux-release-asan-debug",
+        },
+        "host-asan-debug": {
+            "build_variant_label": "host-asan-debug",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan-debug",
         },
         "tsan": {
             "build_variant_label": "tsan",

@@ -465,6 +465,7 @@ def main(argv=None):
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
+            "submodule_path": config["submodule_path"],
             "fetch_sources_args": config.get("fetch_sources_args", ""),
             "extra_cmake_options": extra_cmake_options,
             "projects": projects,
