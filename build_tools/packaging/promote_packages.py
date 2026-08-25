@@ -958,6 +958,28 @@ def promote_wheel(
     return True
 
 
+def _anonymize_tarinfo(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Strip local-machine identity from a tar member before it is (re-)written.
+
+    `tarfile.TarFile.add()` otherwise stamps each member with whatever
+    uid/gid/uname/gname/mode `os.lstat()` reports for the extracted-to-disk
+    file, i.e. the account (or CI container) that happened to run the
+    promotion, plus its umask. That's not part of the package's actual
+    contents and shouldn't leak into a published release artifact.
+    """
+    if tarinfo.isdir():
+        mode = 0o755
+    elif tarinfo.issym():
+        mode = tarinfo.mode
+    else:
+        mode = 0o755 if tarinfo.mode & 0o111 else 0o644
+    # deep=False: a deep copy would try to pickle-clone whatever internal
+    # references tarfile attaches to TarInfo during traversal (e.g. a handle
+    # back to the open TarFile), which isn't copyable. We only need to
+    # override these top-level scalar fields, so a shallow copy suffices.
+    return tarinfo.replace(uid=0, gid=0, uname="", gname="", mode=mode, deep=False)
+
+
 def promote_targz_sdist(
     filename: pathlib.Path,
     src_version_type: str,
@@ -1039,7 +1061,11 @@ def promote_targz_sdist(
         print(f" {new_archive_name}", end="")
 
         with tarfile.open(f"{base_dir}/{new_archive_name}.tar.gz", "w|gz") as tar:
-            tar.add(tmp_path / f"{new_archive_name}", arcname=new_archive_name)
+            tar.add(
+                tmp_path / f"{new_archive_name}",
+                arcname=new_archive_name,
+                filter=_anonymize_tarinfo,
+            )
 
         print(" ...done")
         print(
