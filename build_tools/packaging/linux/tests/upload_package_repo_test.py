@@ -2,26 +2,26 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for ``upload_package_repo.py`` (main-line helpers).
+"""Unit tests for ``upload_package_repo.py``.
 
 Lightweight coverage of pure-Python helpers that do not need createrepo_c,
-mergerepo_c, or live S3.
+dpkg-scanpackages, or live S3.
 
 Coverage:
 
-  - ``regenerate_repo_metadata_from_s3`` — RPM/DEB dispatch and invalid type
+  - ``generate_release_file_with_checksums`` — Release includes checksum sections
+  - ``upload_to_s3`` — uploads repodata; dedupes packages only
   - ``s3_object_exists`` — head_object success and 404 handling
   - ``_package_install_url`` — RPM baseurl includes ``x86_64/``
 
 Run::
 
     python3.12 build_tools/packaging/linux/tests/upload_package_repo_test.py -v
-
-    python3.12 -m unittest discover -s build_tools/packaging/linux/tests \\
-        -p 'upload_package_repo_test.py' -v
 """
 
+import gzip
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -40,6 +40,7 @@ for path in (BUILD_TOOLS_DIR, LINUX_DIR):
 def _import_upload_package_repo():
     """Import upload_package_repo with a temporary boto3 stub."""
     boto3_stub = types.ModuleType("boto3")
+    boto3_stub.client = MagicMock()
     saved_boto3 = sys.modules.get("boto3")
     sys.modules["boto3"] = boto3_stub
     try:
@@ -56,50 +57,57 @@ def _import_upload_package_repo():
 upload_repo = _import_upload_package_repo()
 
 TEST_BUCKET = "therock-test-bucket"
-TEST_PREFIX = "run-linux/packages/rpm/20250825-12345"
+TEST_PREFIX = "12345-linux/packages/rpm/20250825-12345"
 TEST_JOB_TYPE = "nightly"
 
 
-class RegenerateRepoMetadataFromS3Test(unittest.TestCase):
-    """Tests for ``regenerate_repo_metadata_from_s3()`` dispatch."""
+class GenerateReleaseFileTest(unittest.TestCase):
+    """Tests for ``generate_release_file_with_checksums()``."""
 
-    @patch.object(upload_repo, "regenerate_deb_metadata_from_s3")
-    @patch.object(upload_repo, "regenerate_rpm_metadata_from_s3")
-    def test_dispatches_rpm_to_merge_helper(
-        self, mock_rpm: MagicMock, mock_deb: MagicMock
-    ) -> None:
-        s3 = object()
-        packages = ["/tmp/pkg.rpm"]
+    def test_release_includes_checksum_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dists_dir = Path(temp_dir) / "main" / "binary-amd64"
+            dists_dir.mkdir(parents=True)
+            (dists_dir / "Packages").write_text("Package: demo\n", encoding="utf-8")
+            with gzip.open(dists_dir / "Packages.gz", "wb") as handle:
+                handle.write(b"Package: demo\n")
 
-        upload_repo.regenerate_repo_metadata_from_s3(
-            s3, TEST_BUCKET, TEST_PREFIX, "rpm", packages, TEST_JOB_TYPE
-        )
-
-        mock_rpm.assert_called_once_with(s3, TEST_BUCKET, TEST_PREFIX, packages)
-        mock_deb.assert_not_called()
-
-    @patch.object(upload_repo, "regenerate_deb_metadata_from_s3")
-    @patch.object(upload_repo, "regenerate_rpm_metadata_from_s3")
-    def test_dispatches_deb_to_merge_helper(
-        self, mock_rpm: MagicMock, mock_deb: MagicMock
-    ) -> None:
-        s3 = object()
-        packages = ["/tmp/pkg.deb"]
-
-        upload_repo.regenerate_repo_metadata_from_s3(
-            s3, TEST_BUCKET, TEST_PREFIX, "deb", packages, TEST_JOB_TYPE
-        )
-
-        mock_deb.assert_called_once_with(
-            s3, TEST_BUCKET, TEST_PREFIX, packages, TEST_JOB_TYPE
-        )
-        mock_rpm.assert_not_called()
-
-    def test_raises_for_unsupported_package_type(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported package type"):
-            upload_repo.regenerate_repo_metadata_from_s3(
-                object(), TEST_BUCKET, TEST_PREFIX, "apk", [], TEST_JOB_TYPE
+            release_file = Path(temp_dir) / "Release"
+            upload_repo.generate_release_file_with_checksums(
+                release_file, TEST_JOB_TYPE, dists_dir
             )
+            release_text = release_file.read_text(encoding="utf-8")
+
+        self.assertIn("MD5Sum:", release_text)
+        self.assertIn("SHA256:", release_text)
+        self.assertIn("main/binary-amd64/Packages", release_text)
+
+
+class UploadToS3Test(unittest.TestCase):
+    """Tests for ``upload_to_s3()`` upload walk."""
+
+    @patch("upload_package_repo.boto3.client")
+    @patch.object(upload_repo, "s3_object_exists", return_value=True)
+    def test_uploads_repodata_and_skips_deduped_packages(
+        self, _mock_exists: MagicMock, mock_boto_client: MagicMock
+    ) -> None:
+        s3 = MagicMock()
+        mock_boto_client.return_value = s3
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_dir = Path(temp_dir)
+            repodata_dir = package_dir / "x86_64" / "repodata"
+            repodata_dir.mkdir(parents=True)
+            (repodata_dir / "repomd.xml").write_text("<repomd/>", encoding="utf-8")
+            (package_dir / "x86_64" / "pkg-a.rpm").write_bytes(b"rpm")
+
+            upload_repo.upload_to_s3(
+                str(package_dir), TEST_BUCKET, TEST_PREFIX, dedupe=True
+            )
+
+        uploaded_keys = [call.args[2] for call in s3.upload_file.call_args_list]
+        self.assertIn(f"{TEST_PREFIX}/x86_64/repodata/repomd.xml", uploaded_keys)
+        self.assertNotIn(f"{TEST_PREFIX}/x86_64/pkg-a.rpm", uploaded_keys)
 
 
 class S3ObjectExistsTest(unittest.TestCase):
@@ -111,9 +119,6 @@ class S3ObjectExistsTest(unittest.TestCase):
 
         self.assertTrue(
             upload_repo.s3_object_exists(s3, TEST_BUCKET, f"{TEST_PREFIX}/pkg.rpm")
-        )
-        s3.head_object.assert_called_once_with(
-            Bucket=TEST_BUCKET, Key=f"{TEST_PREFIX}/pkg.rpm"
         )
 
     def test_returns_false_on_404(self) -> None:
@@ -138,7 +143,7 @@ class PackageInstallUrlTest(unittest.TestCase):
         self.assertIn(TEST_PREFIX, url)
 
     def test_deb_url_uses_repo_root(self) -> None:
-        deb_prefix = "run-linux/packages/deb/20250825-12345"
+        deb_prefix = "12345-linux/packages/deb/20250825-12345"
         url = upload_repo._package_install_url(TEST_BUCKET, deb_prefix, "deb")
         self.assertNotIn("/x86_64", url)
         self.assertIn(deb_prefix, url)
