@@ -117,7 +117,7 @@ jobs:
   validate_artifact_structure:
     needs: [build_multi_arch_stages]
     name: Validate Artifact Structure
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).validate_artifact_structure == true }}
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
     secrets: inherit
     with:
