@@ -35,6 +35,20 @@ on:
         description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
         type: string
         default: "release"
+      coverage_enabled:
+        description: >-
+          Collect llvm profraw files from the test run and upload them as a
+          workflow artifact. Only meaningful against a coverage instrumented
+          build.
+        type: boolean
+        default: false
+      coverage_artifact_prefix:
+        description: >-
+          Prefix for the uploaded profraw artifact name. A coverage run tests
+          several projects in one workflow run, so the caller sets this to
+          something project-specific to keep each project's profiles apart.
+        type: string
+        default: "coverage-profraw"
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -178,6 +192,18 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      # Instrumented binaries write one profraw per process. %p (pid) and %m
+      # (binary signature) keep the files distinct so a shard that forks or
+      # loads several instrumented libraries does not overwrite itself.
+      - name: Prepare coverage profile directory
+        if: ${{ inputs.coverage_enabled }}
+        env:
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
+          echo "LLVM_PROFILE_FILE=${GITHUB_WORKSPACE}/coverage-report/profraw/${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw" >> "${GITHUB_ENV}"
+
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
       - name: Set thread limits
@@ -218,6 +244,18 @@ jobs:
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
+
+      # Uploaded even when the test step failed: partial coverage from a failing
+      # shard is still useful, and the aggregation job tolerates missing shards.
+      - name: Upload coverage profraw files
+        if: ${{ always() && inputs.coverage_enabled }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: >-
+            ${{ inputs.coverage_artifact_prefix }}-${{ fromJSON(inputs.component).job_name }}-shard${{ matrix.shard }}
+          path: ${{ github.workspace }}/coverage-report/profraw/*.profraw
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}

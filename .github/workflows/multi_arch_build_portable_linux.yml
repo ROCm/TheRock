@@ -41,6 +41,24 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      build_stages:
+        type: string
+        default: ""
+        description: >-
+          Comma-separated allowlist of build stages to run. Empty runs every
+          stage. Variant pipelines such as coverage use this to build only the
+          stages they need.
+      stage_projects:
+        type: string
+        default: ""
+        description: >-
+          Space-separated project names to narrow per-arch stages down to
+          (e.g. "hiprand"). Empty builds every project in the stage.
+      extra_cmake_options:
+        type: string
+        default: ""
+        description: >-
+          Extra -D options appended to each stage's configure command.
       build_runs_on:
         type: string
         default: "aws-linux-scale-rocm-prod"
@@ -90,7 +108,13 @@ jobs:
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
   compiler-runtime:
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'compiler-runtime') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',compiler-runtime,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -100,6 +124,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -115,7 +141,13 @@ jobs:
   # ==========================================================================
   runtime-tests:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',runtime-tests,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -125,6 +157,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -140,7 +174,13 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',wsl-rocdxg,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -164,7 +204,13 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'math-libs') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',math-libs,'))
+      }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -184,6 +230,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -202,7 +250,13 @@ jobs:
   # ==========================================================================
   comm-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',comm-libs,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -213,6 +267,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -229,7 +285,13 @@ jobs:
   # ==========================================================================
   storage-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',storage-libs,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -240,6 +302,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -255,7 +319,13 @@ jobs:
   # ==========================================================================
   debug-tools:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',debug-tools,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -265,6 +335,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -280,7 +352,13 @@ jobs:
   # ==========================================================================
   dctools-core:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',dctools-core,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -290,6 +368,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -305,7 +385,13 @@ jobs:
   # ==========================================================================
   profiler-apps:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',profiler-apps,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -315,6 +401,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -330,7 +418,13 @@ jobs:
   # ==========================================================================
   cv-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'cv-libs') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',cv-libs,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -340,6 +434,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
@@ -355,7 +451,13 @@ jobs:
   # ==========================================================================
   media-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') }}
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(inputs.prebuilt_stages, 'media-libs') &&
+        (inputs.build_stages == '' ||
+          contains(format(',{0},', inputs.build_stages), ',media-libs,'))
+      }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -365,6 +467,8 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      stage_projects: ${{ inputs.stage_projects }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
       build_runs_on: ${{ inputs.build_runs_on }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
