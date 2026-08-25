@@ -596,6 +596,68 @@ Unlike PR coverage builds (which only instrument changed projects), nightly runs
 - Each test job uses hybrid artifacts: one instrumented + rest non-instrumented
 - Relies on codecov.io (or chosen platform) for coverage aggregation across components
 
+**Artifact Management for Hybrid Approach:**
+
+Nightly coverage uses specialized artifact naming and fetching to support hybrid instrumented/non-instrumented artifacts.
+
+**Publishing instrumented artifacts:**
+
+The nightly instrumented build uses `-coverage` suffix in the target family name:
+
+```bash
+# Nightly coverage build publishes with -coverage suffix
+python build_tools/artifact_manager.py push \
+  --stage math-libs \
+  --amdgpu-families gfx942-coverage \
+  --run-id ${COVERAGE_RUN_ID} \
+  --build-dir build/
+```
+
+This produces artifacts like:
+- `rocblas_lib_gfx942-coverage.tar.zst`
+- `rocfft_lib_gfx942-coverage.tar.zst`
+- `hiprand_lib_gfx942-coverage.tar.zst`
+
+**Fetching hybrid artifacts for testing:**
+
+Each component's test job fetches:
+1. **Instrumented component** (from coverage build run)
+2. **Non-instrumented dependencies** (from regular nightly build run)
+
+Example for testing rocBLAS coverage:
+
+```bash
+# 1. Fetch instrumented rocBLAS (component under test)
+python build_tools/artifact_manager.py fetch \
+  --stage math-libs \
+  --amdgpu-families gfx942-coverage \
+  --artifact-names rocblas \
+  --run-id ${COVERAGE_RUN_ID} \
+  --output-dir build/
+
+# 2. Fetch non-instrumented dependencies
+python build_tools/artifact_manager.py fetch \
+  --stage compiler-runtime,math-libs \
+  --amdgpu-families gfx942 \
+  --exclude-artifact-names rocblas \
+  --run-id ${REGULAR_NIGHTLY_RUN_ID} \
+  --output-dir build/
+```
+
+The `-coverage` suffix ensures coverage artifacts are isolated from regular builds:
+- Prevents accidental download of instrumented artifacts
+- Allows parallel storage of coverage and regular builds
+- Enables hybrid fetch strategy (coverage + regular in same test job)
+
+**artifact_manager.py enhancements:**
+
+To support nightly hybrid fetching, `artifact_manager.py` needs:
+- `--artifact-names` parameter: include only specified artifacts (e.g., `rocblas`)
+- `--exclude-artifact-names` parameter: exclude specified artifacts from fetch
+- Target family matching already supports base-arch variants (e.g., `gfx942` matches `gfx942-coverage`)
+
+**Note:** PR coverage does not need this hybrid approach. PR builds only instrument changed projects, and dependencies come from regular prebuilt artifacts (already non-instrumented).
+
 #### Multi-GPU Coverage Strategy
 
 **Problem:**
@@ -667,4 +729,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-07-28: jorobbin: Initial version
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
 - 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
-- 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components
+- 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components; documented nightly hybrid artifact management strategy using -coverage suffix and selective artifact fetching via artifact_manager.py
