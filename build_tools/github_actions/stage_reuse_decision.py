@@ -275,6 +275,15 @@ def compute_auto_stage_reuse(
     Windows. The report lines are logged before returning.
     """
     platforms = _build_platforms(linux_amdgpu_families, windows_amdgpu_families)
+
+    logger.info(
+        "%s requested platforms=%s linux_families=%s windows_families=%s",
+        LOG_PREFIX,
+        list(platforms),
+        list(linux_amdgpu_families),
+        list(windows_amdgpu_families),
+    )
+
     if not platforms:
         return _log_and_return(
             _empty_result(
@@ -361,6 +370,16 @@ def compute_auto_stage_reuse(
             platform_families,
         )
 
+        logger.info(
+            "%s baseline lookup start: platform=%s required_families=%s "
+            "candidate_stages=%s required_artifact_pairs=%d",
+            LOG_PREFIX,
+            platform,
+            list(platform_families),
+            list(candidates),
+            len(required),
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -377,6 +396,13 @@ def compute_auto_stage_reuse(
         except GitHubAPIError as exc:
             baseline_error = str(exc)
             baseline = None
+
+        logger.info(
+            "%s baseline lookup result: platform=%s run_id=%s",
+            LOG_PREFIX,
+            platform,
+            baseline.run_id if baseline is not None else "none",
+        )
 
         platform_baseline_run_ids[platform] = (
             baseline.run_id if baseline is not None else None
