@@ -15,8 +15,7 @@ if THEROCK_BIN_DIR_STR is None:
     )
     sys.exit(1)
 THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
-THEROCK_BASE_DIR = THEROCK_BIN_DIR.parent
-THEROCK_LIB_DIR = THEROCK_BASE_DIR / "lib"
+THEROCK_LIB_DIR = THEROCK_BIN_DIR.resolve().parent / "lib"
 THEROCK_CLANG_PATH = THEROCK_LIB_DIR / "llvm" / "bin" / "amdclang"
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
