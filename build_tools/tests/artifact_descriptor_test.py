@@ -1,32 +1,36 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests validating that artifact descriptors don't have overlapping basedirs.
+"""Whole-tree invariant tests over the artifact-*.toml descriptors.
 
-When two artifact descriptors claim the same stage directory for any component
-type, extracting both artifacts into the same output directory causes file
-collisions.
+These tests are checks on the descriptors themselves rather than on any one
+tool. Each loads every TheRock-owned `artifact-*.toml`, collects the basedirs
+it declares, and asserts a property that must hold across the whole tree.
+Descriptor discovery uses ``git ls-files`` so it does not recursively scan
+generated build trees, caches, or the contents of submodules. Both tracked
+files and non-ignored untracked files are included, so a newly created
+descriptor is checked before it is staged.
 
-This was the root cause of https://github.com/ROCm/TheRock/issues/3758, where
-both `artifact-rocprofiler-sdk.toml` and `artifact-aqlprofile-tests.toml`
-included `profiler/aqlprofile/stage`, causing concurrent extraction to race
-(and fail with "file exists" errors) on overlapping files.
+`ArtifactDescriptorOverlapTest` — each basedir belongs to exactly one
+descriptor. When two descriptors claim the same stage directory for any
+component type, extracting both artifacts into the same output directory
+causes file collisions. This was the root cause of
+https://github.com/ROCm/TheRock/issues/3758, where both
+`artifact-rocprofiler-sdk.toml` and `artifact-aqlprofile-tests.toml` included
+`profiler/aqlprofile/stage`, causing concurrent extraction to race (and fail
+with "file exists" errors) on overlapping files.
 
-This test loads TheRock-owned artifact-*.toml descriptors and checks that each
-stage directory (basedir) belongs to exactly one descriptor. Descriptor
-discovery uses ``git ls-files`` so it does not recursively scan generated build
-trees, caches, or the contents of submodules. Both tracked files and non-ignored
-untracked files are included, so a newly created descriptor is checked before
-it is staged.
+Cases the overlap test does NOT catch: two artifacts with *different* basedirs
+whose installed files collide after flattening (basedir prefix stripped). If
+two subprojects both install a file to the same relative path (e.g.,
+"lib/libfoo.so" or "bin/sequence.yaml") in their respective stage dirs,
+flattening produces duplicate paths even though the basedirs are distinct.
+Current projects avoid this by using unique file names, but it's convention
+rather than enforcement. Catching this requires inspecting actual build output.
 
-Limitations (cases this test does NOT catch):
-  - Two artifacts with *different* basedirs whose installed files collide
-    after flattening (basedir prefix stripped). If two subprojects both
-    install a file to the same relative path (e.g., "lib/libfoo.so" or
-    "bin/sequence.yaml") in their respective stage dirs, flattening produces
-    duplicate paths even though the basedirs are distinct. Current projects
-    avoid this by using unique file names, but it's convention rather than
-    enforcement. Catching this requires inspecting actual build output.
+`BootstrapMarkerBasedirTest` — the bootstrap ".prebuilt" marker derived from
+each basedir names a directory the build actually checks. See
+https://github.com/ROCm/TheRock/issues/7549.
 """
 
 import subprocess
