@@ -27,6 +27,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from botocore.exceptions import ClientError
+
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 LINUX_DIR = THIS_SCRIPT_DIR.parent
 BUILD_TOOLS_DIR = LINUX_DIR.parent.parent
@@ -123,7 +125,8 @@ class S3ObjectExistsTest(unittest.TestCase):
 
     def test_returns_false_on_404(self) -> None:
         s3 = MagicMock()
-        error = s3.exceptions.ClientError(
+        s3.exceptions.ClientError = ClientError
+        error = ClientError(
             {"Error": {"Code": "404", "Message": "Not Found"}},
             "HeadObject",
         )
