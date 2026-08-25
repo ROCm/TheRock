@@ -11,6 +11,11 @@ Required environment variables:
   - BUILD_DIR
 
 Optional environment variables:
+  - dist_amdgpu_families: Semicolon- or comma-separated dist family union for
+                          THEROCK_DIST_AMDGPU_FAMILIES (TARGET_NEUTRAL device-code
+                          libs such as rpp). If unset, gfx94X/gfx950 classic CI
+                          shards expand to that pair so they produce the same
+                          rpp_lib_generic (ROCm/rocm-libraries#11219).
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
   - EXTRA_C_COMPILER_LAUNCHER: Compiler launcher for C (e.g., resource_info.py for build
@@ -24,6 +29,7 @@ import logging
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import subprocess
 
@@ -37,11 +43,79 @@ PLATFORM = platform.system().lower()
 
 cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
+dist_amdgpu_families = os.getenv("dist_amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
+
+# Classic TheRock CI Nightly (rocm-libraries therock-ci-nightly.yml) builds
+# these families as separate jobs that share a run-id and last-writer-wins
+# TARGET_NEUTRAL artifacts. Dist-target device libs (rpp) must compile the
+# union or gfx942 testers can receive a gfx950-only librpp.so (#11219).
+_CLASSIC_CI_GENERIC_DIST_FAMILIES: tuple[str, ...] = (
+    "gfx94X-dcgpu",
+    "gfx950-dcgpu",
+)
+_CLASSIC_CI_GENERIC_DIST_FAMILY_ALIASES: dict[str, str] = {
+    "gfx94x": "gfx94X-dcgpu",
+    "gfx94x-dcgpu": "gfx94X-dcgpu",
+    "gfx950": "gfx950-dcgpu",
+    "gfx950-dcgpu": "gfx950-dcgpu",
+    "gfx950-all": "gfx950-dcgpu",
+}
+
+
+def _split_amdgpu_families(value: str) -> list[str]:
+    """Split a comma/semicolon/whitespace family list into non-empty tokens."""
+    return [token for token in re.split(r"[,;\s]+", value.strip()) if token]
+
+
+def canonicalize_classic_ci_family(family: str) -> str:
+    """Map a classic-CI family token to its CMake family name when known."""
+    stripped = family.strip()
+    if not stripped:
+        return stripped
+    alias = _CLASSIC_CI_GENERIC_DIST_FAMILY_ALIASES.get(stripped.lower())
+    return alias if alias is not None else stripped
+
+
+def resolve_dist_amdgpu_families(
+    shard_families: str | None,
+    dist_families: str | None = None,
+) -> str | None:
+    """Return a CMake THEROCK_DIST_AMDGPU_FAMILIES list, or None for the default.
+
+    An explicit dist_families value always wins. Otherwise, if this shard is one
+    of the classic-CI families that upload the same _generic artifacts, expand
+    DIST to that union so TARGET_NEUTRAL HIP libraries contain every co-built
+    arch. Other shards keep CMake's default (DIST = AMDGPU_FAMILIES).
+    """
+    if dist_families and dist_families.strip():
+        families = [
+            canonicalize_classic_ci_family(token)
+            for token in _split_amdgpu_families(dist_families)
+        ]
+        return ";".join(families)
+
+    if not shard_families or not shard_families.strip():
+        return None
+
+    shards = [
+        canonicalize_classic_ci_family(token)
+        for token in _split_amdgpu_families(shard_families)
+    ]
+    pair = set(_CLASSIC_CI_GENERIC_DIST_FAMILIES)
+    if not any(shard in pair for shard in shards):
+        return None
+
+    ordered = list(_CLASSIC_CI_GENERIC_DIST_FAMILIES)
+    for shard in shards:
+        if shard not in ordered:
+            ordered.append(shard)
+    return ";".join(ordered)
+
 
 # Normalize paths to use forward slashes for CMake compatibility on Windows
 if extra_c_compiler_launcher:
@@ -85,7 +159,7 @@ platform_options = {
 }
 
 
-def build_configure(build_dir, manylinux=False):
+def build_configure(build_dir: str, manylinux: bool = False) -> None:
     logging.info(f"Building package {package_version}")
 
     cmd = [
@@ -110,6 +184,14 @@ def build_configure(build_dir, manylinux=False):
             "-DBUILD_TESTING=ON",
         ]
     )
+    resolved_dist = resolve_dist_amdgpu_families(amdgpu_families, dist_amdgpu_families)
+    if resolved_dist:
+        logging.info(
+            "Setting THEROCK_DIST_AMDGPU_FAMILIES=%s (shard=%s)",
+            resolved_dist,
+            amdgpu_families,
+        )
+        cmd.append(f"-DTHEROCK_DIST_AMDGPU_FAMILIES={resolved_dist}")
 
     # Adding platform specific options
     cmd += platform_options.get(PLATFORM, [])

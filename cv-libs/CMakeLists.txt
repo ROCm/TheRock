@@ -6,10 +6,14 @@ if(THEROCK_ENABLE_RPP)
   # rpp (ROCm Performance Primitives) library
   ##############################################################################
   therock_cmake_subproject_declare(rpp
-    # rpp has no arch-specialized code; build all arches into one target-neutral
-    # (_generic) artifact so the per-arch CI upload race is harmless.
+    # rpp is TARGET_NEUTRAL but embeds HIP device code, so GPU_TARGETS must be
+    # the dist family union (USE_DIST), not every registered gfx* (USE_TEST).
+    # Multi-arch cv-libs already passes THEROCK_DIST_AMDGPU_FAMILIES. Classic
+    # per-family CI (rocm-libraries TheRock CI Nightly) expands DIST in
+    # build_configure.py so gfx94X and gfx950 jobs compile the same fat
+    # binary and the rpp_lib_generic upload race is harmless.
     # (ROCm/rocm-libraries#11219)
-    USE_TEST_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
     EXCLUDE_FROM_ALL
     NO_MERGE_COMPILE_COMMANDS
