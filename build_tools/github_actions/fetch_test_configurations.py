@@ -1179,6 +1179,9 @@ def run():
     gha_set_output(
         {
             "sanity_component": json.dumps(sanity_component),
+            "run_gpu_sanity_check": str(
+                bool(sanity_component and sanity_component.get("test_runner"))
+            ).lower(),
             "components": json.dumps(output_matrix),
             "platform": platform,
         }

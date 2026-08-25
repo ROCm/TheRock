@@ -8,21 +8,43 @@ Sanity check script for CI runners.
 On Linux:
   - run "amd-smi static"
   - run "rocminfo"
+  - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
 On Windows:
   - run "hipInfo.exe"
 
-This script prints only raw command output.
+This script always exits 0; the KFD version check is informational only.
 """
 
+import fcntl
 import os
 from pathlib import Path
 import platform
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+
+# AMDKFD_IOC_GET_VERSION = _IOR('K', 0x01, struct { u32 major; u32 minor; })
+# _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
+_AMDKFD_IOC_GET_VERSION = 0x80084B01
+_KFD_DEVICE = "/dev/kfd"
+_KFD_VERSION_MIN = (1, 13)
+_KFD_VERSION_MAX = (2, 0)  # exclusive
+
+
+def _get_kfd_version() -> Tuple[int, int]:
+    fd = os.open(_KFD_DEVICE, os.O_RDWR)
+    try:
+        buf = bytearray(8)
+        fcntl.ioctl(fd, _AMDKFD_IOC_GET_VERSION, buf)
+        major, minor = struct.unpack("II", buf)
+        return major, minor
+    finally:
+        os.close(fd)
 
 
 def log(*args, **kwargs):
@@ -124,6 +146,23 @@ def run_sanity(os_name: str) -> None:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
+
+        log("\n=== KFD IOCTL version ===")
+        if not os.path.exists(_KFD_DEVICE):
+            log(f"warning: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
+        else:
+            try:
+                major, minor = _get_kfd_version()
+                in_range = _KFD_VERSION_MIN <= (major, minor) < _KFD_VERSION_MAX
+                status = "supported" if in_range else "WARNING: NOT supported"
+                log(f"KFD IOCTL version: {major}.{minor} ({status})")
+                log(
+                    f"Required range for rocdbgapi: "
+                    f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
+                    f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
+                )
+            except OSError as e:
+                log(f"warning: failed to query KFD version: {e}")
 
     log("\n=== End of sanity check ===")
 
