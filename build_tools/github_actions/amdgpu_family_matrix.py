@@ -244,7 +244,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "asan-debug",
                 "host-asan",
                 "host-asan-debug",
-                "tsan"
+                "tsan",
             ],
         }
     },
