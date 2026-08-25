@@ -6,7 +6,10 @@ if(THEROCK_ENABLE_RPP)
   # rpp (ROCm Performance Primitives) library
   ##############################################################################
   therock_cmake_subproject_declare(rpp
-    USE_DIST_AMDGPU_TARGETS
+    # rpp has no arch-specialized code; build all arches into one target-neutral
+    # (_generic) artifact so the per-arch CI upload race is harmless.
+    # (ROCm/rocm-libraries#11219)
+    USE_TEST_AMDGPU_TARGETS
     BACKGROUND_BUILD
     EXCLUDE_FROM_ALL
     NO_MERGE_COMPILE_COMMANDS
