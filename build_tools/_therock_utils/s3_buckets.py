@@ -159,6 +159,15 @@ _RELEASE_STREAM_BY_TYPE = {
     "prerelease": "rc",
 }
 
+# Channels a user can install *from*, deliberately wider than
+# _RELEASE_STREAM_BY_TYPE, which is the set a workflow can publish *to*. The
+# stable channel has no automated upload credentials - it is promoted by hand -
+# so the publish path must keep rejecting it, but it is the channel most users
+# install from, and setup_venv.py's "stable" index already pointed at it.
+# Keeping the read set and the write set separate is what lets one widen
+# without widening the other.
+_INDEX_STREAM_BY_RELEASE_TYPE = {**_RELEASE_STREAM_BY_TYPE, "release": "stable"}
+
 # The key prefix every product bucket stores under, stripped from the public URL:
 # s3://therock-repo-amd-nightly-core/v5/rocm/core/tarball/X is served at
 # https://nightly.repo.amd.com/rocm/core/tarball/X.
@@ -222,12 +231,26 @@ _RELEASE_CDN = "https://repo.amd.com/rocm/"
 #   * The artifacts buckets - no CDN, matching the '-' column in s3_buckets.md.
 # A bucket with no matching rule falls back to its raw S3 URL, which is the
 # behavior every caller had before CDN rules existed.
+# The key prefix under which each legacy bucket type publishes the index users
+# point tools at, keyed by the bucket_type get_legacy_release_index_url takes.
+# The rule helpers below build their CdnRule from this, so the prefix a rule
+# matches and the prefix an index URL is derived from cannot drift apart.
+# "packages" has no entry: those CDNs serve a distro-partitioned apt/dnf repo
+# rather than a rewrite of the bucket layout, so there is no single index URL.
+_LEGACY_INDEX_KEY_PREFIXES = {
+    "python": "v4/whl/",
+    "tarball": "v4/tarball/",
+}
+
+
 def _whl_cdn_rules(cdn: str) -> tuple[CdnRule, ...]:
-    return (CdnRule("v4/whl/", cdn + "whl-multi-arch/"),)
+    return (CdnRule(_LEGACY_INDEX_KEY_PREFIXES["python"], cdn + "whl-multi-arch/"),)
 
 
 def _tarball_cdn_rules(cdn: str) -> tuple[CdnRule, ...]:
-    return (CdnRule("v4/tarball/", cdn + "tarball-multi-arch/"),)
+    return (
+        CdnRule(_LEGACY_INDEX_KEY_PREFIXES["tarball"], cdn + "tarball-multi-arch/"),
+    )
 
 
 def _package_cdn_rules(cdn: str) -> tuple[CdnRule, ...]:
@@ -341,6 +364,8 @@ _ALLOWED_RELEASE_TYPES = {
 }
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
+
+_ALLOWED_INDEX_RELEASE_TYPES = set(_INDEX_STREAM_BY_RELEASE_TYPE)
 
 # _ALLOWED_RELEASE_PRODUCTS and _RELEASE_STREAM_BY_TYPE are defined above the
 # bucket inventory, which is generated from them.
@@ -647,7 +672,13 @@ def load_bucket_registry_file(path: str) -> _BucketRegistry:
     raw_release = data.get("release_buckets", {})
     if not isinstance(raw_release, dict):
         raise BucketRegistryError(f"{path}: 'release_buckets' must be an object")
-    _reject_unknown_keys(raw_release, _ALLOWED_RELEASE_TYPES, "release_buckets", path)
+    # Validated against the wider install-from set, not the publish-to set: a
+    # downstream repo redirecting its "release" channel needs the slot to exist
+    # here, and get_legacy_release_index_url reads it. Rejecting "release" would
+    # make that lookup a branch nothing could ever reach.
+    _reject_unknown_keys(
+        raw_release, _ALLOWED_INDEX_RELEASE_TYPES, "release_buckets", path
+    )
     release_buckets = {
         release_type: _parse_selection_map(
             inner,
@@ -759,6 +790,11 @@ def cdn_url_for(bucket: str, relative_path: str) -> str | None:
     config = lookup_bucket_config(bucket)
     if config is None:
         return None
+    return _cdn_url_for_config(config, relative_path)
+
+
+def _cdn_url_for_config(config: S3BucketConfig, relative_path: str) -> str | None:
+    """CDN URL for a key under a config already in hand, or None if no rule applies."""
     for rule in sorted(config.cdn_rules, key=lambda r: len(r.key_prefix), reverse=True):
         if relative_path.startswith(rule.key_prefix):
             return rule.url_prefix + relative_path[len(rule.key_prefix) :]
@@ -853,6 +889,18 @@ def get_release_bucket_config(
             f"bucket_type={bucket_type!r} is invalid, "
             f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
         )
+    return _select_legacy_release_bucket(release_type, bucket_type)
+
+
+def _select_legacy_release_bucket(
+    release_type: str, bucket_type: str
+) -> S3BucketConfig:
+    """Resolve a (release_type, bucket_type) slot to a legacy release bucket.
+
+    Split out so get_legacy_release_index_url shares the registry-override path
+    without inheriting get_release_bucket_config's narrower release_type
+    validation - "release" is installable from but not publishable to.
+    """
     if release_type == "dev-bkc":
         bucket_name = f"therock-dev-{bucket_type}"
     elif release_type == "nightly-bkc":
@@ -884,6 +932,24 @@ def get_release_stream(release_type: str) -> str:
         raise ValueError(
             f"release_type={release_type!r} is invalid, "
             f"expected one of {_ALLOWED_RELEASE_TYPES}"
+        ) from e
+
+
+def get_index_release_stream(release_type: str) -> str:
+    """Stream a user installs a channel from.
+
+    Like ``get_release_stream`` but also accepts ``"release"`` (the manually
+    promoted stable channel), which can be installed from but not published to.
+
+    Raises:
+        ValueError: If release_type is invalid.
+    """
+    try:
+        return _INDEX_STREAM_BY_RELEASE_TYPE[release_type]
+    except KeyError as e:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {sorted(_ALLOWED_INDEX_RELEASE_TYPES)}"
         ) from e
 
 
@@ -925,10 +991,72 @@ def get_product_release_bucket_config(
     return require_bucket_config(bucket_name)
 
 
-def get_release_package_index_url(release_type: str) -> str:
-    """Return the aggregate pip index URL for a final release stream."""
-    stream = get_release_stream(release_type)
-    return f"https://{stream}.repo.amd.com/rocm/whl-next/"
+def get_release_package_index_url(release_type: str, product: str | None = None) -> str:
+    """Public pip index URL for a release channel.
+
+    Args:
+        release_type: A publishable release type, or ``"release"`` for the
+            stable channel.
+        product: ``None`` for the aggregate index users install from, or
+            ``"core"``/``"pytorch"``/``"jax"`` for a product-local index.
+            Product-local indexes are publication and indexer inputs; a user
+            installing ROCm wants the aggregate one.
+
+    Raises:
+        ValueError: If release_type or product is invalid.
+    """
+    stream = get_index_release_stream(release_type)
+    if product is None:
+        return f"{release_stream_url(stream)}rocm/whl-next/"
+    if product not in _ALLOWED_RELEASE_PRODUCTS:
+        raise ValueError(
+            f"product={product!r} is invalid, "
+            f"expected one of {sorted(_ALLOWED_RELEASE_PRODUCTS)}"
+        )
+    return f"{release_stream_url(stream)}rocm/{product}/whl-next/"
+
+
+def get_release_tarball_index_url(release_type: str) -> str:
+    """Public directory users browse for a channel's ROCm tarballs."""
+    stream = get_index_release_stream(release_type)
+    return f"{release_stream_url(stream)}rocm/core/tarball/"
+
+
+def get_legacy_release_index_url(release_type: str, bucket_type: str = "python") -> str:
+    """Public index URL for the pre-RFC0012 release buckets.
+
+    Derived from the selected bucket's ``cdn_rules`` rather than from a copy of
+    the mapping, so the prefix a rule matches and the prefix an index URL is
+    built from cannot drift apart. Releases published before the repo.amd.com
+    rewire still live here.
+
+    Raises:
+        ValueError: If release_type or bucket_type is invalid, or the selected
+            bucket publishes no CDN rule covering the index prefix.
+    """
+    if release_type not in _ALLOWED_INDEX_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {sorted(_ALLOWED_INDEX_RELEASE_TYPES)}"
+        )
+    if bucket_type not in _LEGACY_INDEX_KEY_PREFIXES:
+        raise ValueError(
+            f"bucket_type={bucket_type!r} has no public index, "
+            f"expected one of {sorted(_LEGACY_INDEX_KEY_PREFIXES)}"
+        )
+
+    config = _select_legacy_release_bucket(release_type, bucket_type)
+    key_prefix = _LEGACY_INDEX_KEY_PREFIXES[bucket_type]
+    # Resolved against the config just selected rather than re-looked-up by name,
+    # so a registry redirect cannot be undone by a same-named in-tree entry.
+    url = _cdn_url_for_config(config, key_prefix)
+    if url is None:
+        raise ValueError(
+            f"bucket {config.name!r} (release_type={release_type!r}, "
+            f"bucket_type={bucket_type!r}) has no CDN rule covering "
+            f"{key_prefix!r}, so it has no public index URL"
+        )
+    return url
 
 
 def get_artifacts_bucket_config_for_workflow_run(

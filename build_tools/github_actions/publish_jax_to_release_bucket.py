@@ -13,6 +13,7 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.s3_buckets import (
+    get_legacy_release_index_url,
     get_product_release_bucket_config,
     get_release_bucket_config,
     get_release_package_index_url,
@@ -23,14 +24,6 @@ from _therock_utils.storage_location import StorageLocation
 from github_actions.github_actions_api import gha_set_output
 
 logger = logging.getLogger(__name__)
-
-LEGACY_MULTI_ARCH_INDEX_URLS = {
-    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
-    "dev-bkc": "https://rocm.devreleases.amd.com/whl-multi-arch/",
-    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
-    "nightly-bkc": "https://rocm.nightlies.amd.com/whl-multi-arch/",
-    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
-}
 
 
 def _publish_structured(source_dir, dest_bucket, index, backend) -> None:
@@ -100,7 +93,7 @@ def main(argv: list[str]) -> None:
         logger.info("Uploaded %d wheel files", count)
         if count == 0:
             raise FileNotFoundError(f"No wheels found at {args.source_dir}")
-        package_index_url = LEGACY_MULTI_ARCH_INDEX_URLS[args.release_type]
+        package_index_url = get_legacy_release_index_url(args.release_type)
 
     gha_set_output({"package_index_url": package_index_url})
 
