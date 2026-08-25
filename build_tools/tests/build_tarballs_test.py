@@ -104,21 +104,27 @@ class TestMain(unittest.TestCase):
         argv: list[str],
         *,
         kpack_split: bool = False,
+        hpc_present: bool = False,
     ) -> MainMocks:
+        # fetch_and_flatten is mocked and creates no files, so the real
+        # has_contents() probe would always be False. Patch it to simulate
+        # whether the build contains HPC artifacts (controls superset emission).
         patches = [
             mock.patch("build_tarballs.fetch_and_flatten"),
             mock.patch("build_tarballs.compress_tarball"),
             mock.patch("build_tarballs.is_kpack_split", return_value=kpack_split),
             mock.patch("build_tarballs.ProcessPoolExecutor", InlineProcessPoolExecutor),
+            mock.patch("build_tarballs.has_contents", return_value=hpc_present),
         ]
         with patches[0] as fetch_mock:
             with patches[1] as compress_mock:
                 with patches[2] as kpack_mock:
                     with patches[3]:
-                        main(argv)
+                        with patches[4]:
+                            main(argv)
         return MainMocks(fetch_mock, compress_mock, kpack_mock)
 
-    def test_default_builds_tarballs_without_tests_only(self) -> None:
+    def test_default_builds_core_and_superset_when_hpc_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -128,26 +134,59 @@ class TestMain(unittest.TestCase):
                     "--platform=linux",
                     "--package-version=7.13.0",
                     f"--output-dir={output_dir}",
-                ]
+                ],
+                hpc_present=True,
             )
 
-        # Two fetches: the default tarball and the opt-in HPC expansion tarball.
-        self.assertEqual(fetch_mock.call_count, 2)
-        # First call = default tarball fetch (excludes tests, fftw3, and HPC libs).
-        default_call = fetch_mock.call_args_list[0]
-        self.assertEqual(default_call.kwargs["exclude_components"], ["test"])
+        # Three fetches: Core tarball, HPC presence probe, core+hpc superset.
+        self.assertEqual(fetch_mock.call_count, 3)
+        # Call 0 = Core tarball fetch (excludes tests, fftw3, and HPC libs).
+        core_call = fetch_mock.call_args_list[0]
+        self.assertEqual(core_call.kwargs["exclude_components"], ["test"])
         self.assertEqual(
-            default_call.kwargs["exclude_artifacts"],
+            core_call.kwargs["exclude_artifacts"],
             ["fftw3", "hiptensor", "rocalution"],
         )
-        # Second call = HPC tarball fetch (includes only the HPC libs).
-        hpc_call = fetch_mock.call_args_list[1]
+        # Call 1 = HPC presence probe (includes only the HPC libs).
+        probe_call = fetch_mock.call_args_list[1]
         self.assertEqual(
-            hpc_call.kwargs["include_artifacts"], ["hiptensor", "rocalution"]
+            probe_call.kwargs["include_artifacts"], ["hiptensor", "rocalution"]
+        )
+        # Call 2 = superset fetch: full Core set with HPC libs kept (only fftw3
+        # dropped), no include filter.
+        superset_call = fetch_mock.call_args_list[2]
+        self.assertEqual(superset_call.kwargs["exclude_components"], ["test"])
+        self.assertEqual(superset_call.kwargs["exclude_artifacts"], ["fftw3"])
+        self.assertNotIn("include_artifacts", superset_call.kwargs)
+
+        compressed_names = [
+            call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
+        ]
+        self.assertEqual(
+            sorted(compressed_names),
+            [
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+            ],
         )
 
-        # fetch_and_flatten is mocked and creates no files, so the HPC output
-        # dir is empty and only the default tarball is compressed.
+    def test_default_builds_only_core_when_no_hpc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "tarballs"
+            fetch_mock, compress_mock, _ = self._run_main_with_mocks(
+                [
+                    "--run-id=123",
+                    "--dist-amdgpu-families=gfx94X-dcgpu",
+                    "--platform=linux",
+                    "--package-version=7.13.0",
+                    f"--output-dir={output_dir}",
+                ],
+                hpc_present=False,
+            )
+
+        # Two fetches: the Core tarball and the HPC presence probe (which finds
+        # nothing, so no superset fetch and no superset tarball).
+        self.assertEqual(fetch_mock.call_count, 2)
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
@@ -168,20 +207,50 @@ class TestMain(unittest.TestCase):
                     f"--output-dir={output_dir}",
                 ],
                 kpack_split=True,
+                hpc_present=False,
             )
 
-        # Four fetches: default per-family, HPC per-family, default multiarch,
-        # HPC multiarch.
+        # No HPC present: per-family Core + probe, multiarch Core + probe = 4.
         self.assertEqual(fetch_mock.call_count, 4)
 
-        # fetch_and_flatten is mocked (creates no files), so HPC output dirs are
-        # empty and only the default tarballs are compressed.
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
             sorted(compressed_names),
             [
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-7.13.0.tar.gz",
+            ],
+        )
+
+    def test_kpack_builds_core_and_superset_when_hpc_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "tarballs"
+            fetch_mock, compress_mock, _ = self._run_main_with_mocks(
+                [
+                    "--run-id=123",
+                    "--dist-amdgpu-families=gfx94X-dcgpu",
+                    "--platform=linux",
+                    "--package-version=7.13.0",
+                    f"--output-dir={output_dir}",
+                ],
+                kpack_split=True,
+                hpc_present=True,
+            )
+
+        # Per-family: Core + probe + superset = 3. Multiarch: Core + probe +
+        # superset = 3. Total 6.
+        self.assertEqual(fetch_mock.call_count, 6)
+
+        compressed_names = [
+            call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
+        ]
+        self.assertEqual(
+            sorted(compressed_names),
+            [
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-multiarch-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-7.13.0.tar.gz",
             ],
@@ -198,12 +267,13 @@ class TestMain(unittest.TestCase):
                     "--package-version=7.13.0",
                     f"--output-dir={output_dir}",
                     "--include-test-tarballs",
-                ]
+                ],
+                hpc_present=True,
             )
 
-        # Four fetches per family: default, tests, HPC, HPC-tests.
-        self.assertEqual(fetch_mock.call_count, 4)
-        # Call 0 = default tarball (excludes tests, fftw3, HPC libs).
+        # Five fetches: Core, Core-tests, HPC probe, superset, superset-tests.
+        self.assertEqual(fetch_mock.call_count, 5)
+        # Call 0 = Core tarball (excludes tests, fftw3, HPC libs).
         self.assertEqual(
             fetch_mock.call_args_list[0].kwargs["exclude_components"], ["test"]
         )
@@ -211,10 +281,10 @@ class TestMain(unittest.TestCase):
             fetch_mock.call_args_list[0].kwargs["exclude_artifacts"],
             ["fftw3", "hiptensor", "rocalution"],
         )
-        # Call 1 = default tests tarball (no exclusions).
+        # Call 1 = Core tests tarball (no exclusions).
         self.assertNotIn("exclude_components", fetch_mock.call_args_list[1].kwargs)
         self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[1].kwargs)
-        # Call 2 = HPC tarball (includes only HPC libs, excludes test component).
+        # Call 2 = HPC presence probe (includes only HPC libs, excludes test).
         self.assertEqual(
             fetch_mock.call_args_list[2].kwargs["include_artifacts"],
             ["hiptensor", "rocalution"],
@@ -222,21 +292,29 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             fetch_mock.call_args_list[2].kwargs["exclude_components"], ["test"]
         )
-        # Call 3 = HPC tests tarball (includes only HPC libs, keeps test component).
+        # Call 3 = superset (full Core + HPC libs, only fftw3 dropped, no tests).
         self.assertEqual(
-            fetch_mock.call_args_list[3].kwargs["include_artifacts"],
-            ["hiptensor", "rocalution"],
+            fetch_mock.call_args_list[3].kwargs["exclude_components"], ["test"]
         )
-        self.assertNotIn("exclude_components", fetch_mock.call_args_list[3].kwargs)
+        self.assertEqual(
+            fetch_mock.call_args_list[3].kwargs["exclude_artifacts"], ["fftw3"]
+        )
+        self.assertNotIn("include_artifacts", fetch_mock.call_args_list[3].kwargs)
+        # Call 4 = superset-tests (keeps test component, only fftw3 dropped).
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[4].kwargs)
+        self.assertEqual(
+            fetch_mock.call_args_list[4].kwargs["exclude_artifacts"], ["fftw3"]
+        )
+        self.assertNotIn("include_artifacts", fetch_mock.call_args_list[4].kwargs)
 
-        # fetch_and_flatten is mocked (creates no files), so HPC output dirs are
-        # empty and only the default tarballs are compressed.
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
             sorted(compressed_names),
             [
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
             ],
@@ -255,31 +333,38 @@ class TestMain(unittest.TestCase):
                     "--include-test-tarballs",
                 ],
                 kpack_split=True,
+                hpc_present=True,
             )
 
-        # 2 families x 4 (default, tests, HPC, HPC-tests) = 8, plus multiarch x 4
-        # (default, tests, HPC, HPC-tests) = 12 total.
-        self.assertEqual(fetch_mock.call_count, 12)
-        # The multiarch block runs last: default, tests, HPC, HPC-tests. So the
-        # multiarch default tarball fetch is [-4] and multiarch tests is [-3].
+        # 2 families x 5 (Core, Core-tests, probe, superset, superset-tests) = 10,
+        # plus multiarch x 5 = 15 total.
+        self.assertEqual(fetch_mock.call_count, 15)
+        # The multiarch block runs last in order: Core, Core-tests, probe,
+        # superset, superset-tests -> [-5], [-4], [-3], [-2], [-1].
         self.assertEqual(
-            fetch_mock.call_args_list[-4].kwargs["exclude_components"], ["test"]
+            fetch_mock.call_args_list[-5].kwargs["exclude_components"], ["test"]
         )
         self.assertEqual(
-            fetch_mock.call_args_list[-4].kwargs["exclude_artifacts"],
+            fetch_mock.call_args_list[-5].kwargs["exclude_artifacts"],
             ["fftw3", "hiptensor", "rocalution"],
         )
-        self.assertNotIn("exclude_components", fetch_mock.call_args_list[-3].kwargs)
-        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[-3].kwargs)
-        # [-2] = multiarch HPC, [-1] = multiarch HPC-tests.
+        # [-4] = multiarch Core-tests (no exclusions).
+        self.assertNotIn("exclude_components", fetch_mock.call_args_list[-4].kwargs)
+        self.assertNotIn("exclude_artifacts", fetch_mock.call_args_list[-4].kwargs)
+        # [-3] = multiarch HPC presence probe.
         self.assertEqual(
-            fetch_mock.call_args_list[-2].kwargs["include_artifacts"],
+            fetch_mock.call_args_list[-3].kwargs["include_artifacts"],
             ["hiptensor", "rocalution"],
         )
+        # [-2] = multiarch superset, [-1] = multiarch superset-tests.
         self.assertEqual(
-            fetch_mock.call_args_list[-1].kwargs["include_artifacts"],
-            ["hiptensor", "rocalution"],
+            fetch_mock.call_args_list[-2].kwargs["exclude_artifacts"], ["fftw3"]
         )
+        self.assertNotIn("include_artifacts", fetch_mock.call_args_list[-2].kwargs)
+        self.assertEqual(
+            fetch_mock.call_args_list[-1].kwargs["exclude_artifacts"], ["fftw3"]
+        )
+        self.assertNotIn("include_artifacts", fetch_mock.call_args_list[-1].kwargs)
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -287,6 +372,12 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             sorted(compressed_names),
             [
+                "therock-dist-core+hpc-linux-gfx110X-all-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-gfx110X-all-tests-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-multiarch-7.13.0.tar.gz",
+                "therock-dist-core+hpc-linux-multiarch-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",

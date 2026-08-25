@@ -55,8 +55,12 @@ def _is_test_tarball(name: str) -> bool:
 
 
 def _is_hpc_tarball(name: str) -> bool:
-    """True for the opt-in HPC SDK expansion tarballs (e.g. ...-multiarch-hpc-*)."""
-    return "-hpc-" in name
+    """True for the Core+HPC superset tarballs (therock-dist-core+hpc-*).
+
+    The superset uses a ``core+hpc`` prefix (matched via ``+hpc-``) per RFC0014,
+    so a default multiarch tarball is never mistaken for it.
+    """
+    return "+hpc-" in name
 
 
 def _select_multiarch_tarball_url(
@@ -71,8 +75,9 @@ def _select_multiarch_tarball_url(
     file name, at which point the file will just be therock-dist-{platform}.
     """
 
-    # Skip over "test" and opt-in "hpc" tarballs, only look at "base" tarballs.
-    # Both -tests- and -hpc- share the therock-dist-{platform}-multiarch- prefix.
+    # Skip over "test" and Core+HPC superset tarballs, only look at "base"
+    # tarballs. -tests- shares the therock-dist-{platform}-multiarch- prefix;
+    # the superset uses a therock-dist-core+hpc- prefix.
     base_tarball_files = [
         f
         for f in tarball_files
