@@ -19,18 +19,18 @@ when processing multiple families.
 
 By default, generated tarballs exclude test artifacts, fftw3, and the HPC SDK
 libraries. The HPC SDK is instead published as a separate self-contained
-``core+hpc`` superset tarball: a full ROCm Core install *plus* the HPC SDK
-libraries (per RFC0014). The Core tarball and the ``core+hpc`` tarball are
-alternatives, not companions — a user downloads one or the other. This
-mirrors the native-package model where the HPC libraries live in the opt-in
-``amdrocm-hpc`` metapackage. The superset tarball is produced only when the
+``core+hpc`` tarball: a full ROCm Core install *plus* the HPC SDK libraries
+(per RFC0014). The Core tarball and the ``core+hpc`` tarball are alternatives,
+not companions — a user downloads one or the other. This mirrors the
+native-package model where the HPC libraries live in the opt-in
+``amdrocm-hpc`` metapackage. The ``core+hpc`` tarball is produced only when the
 build actually contains HPC artifacts.
 Pass ``--include-test-tarballs`` to also generate full tarballs, named with
 a ``-tests`` suffix, that include test artifacts (for both the Core and the
 core+hpc tarballs).
 
 Tarball naming follows the existing release convention, with a ``core+hpc``
-discriminator placed right after ``therock-dist-`` for the superset:
+discriminator placed right after ``therock-dist-``:
     therock-dist-{platform}-{family}-{version}.tar.gz
     therock-dist-core+hpc-{platform}-{family}-{version}.tar.gz
     therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
@@ -71,17 +71,18 @@ import sys
 from pathlib import Path
 
 # HPC SDK libraries. These are excluded from the default ROCm Core tarball and
-# instead ship in a separate self-contained ``core+hpc`` superset tarball (a
-# full Core install plus these libraries), matching the native-package model
-# where they live in the opt-in amdrocm-hpc metapackage and not in the default
-# amdrocm metapackage. composable-kernel is intentionally NOT listed here: it is
-# a shared dependency (e.g. of MIOpen) and stays in core.
+# instead ship in a separate self-contained ``core+hpc`` tarball (a full Core
+# install plus these libraries), matching the native-package model where they
+# live in the opt-in amdrocm-hpc metapackage and not in the default amdrocm
+# metapackage. composable-kernel is intentionally NOT listed here: it is a
+# shared dependency (e.g. of MIOpen) and stays in core.
 HPC_ARTIFACTS: list[str] = ["hiptensor", "rocalution"]
 
-DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"] + HPC_ARTIFACTS
-# The superset (core+hpc) tarball keeps the HPC libraries; it only drops the
-# same non-shippable artifacts the Core tarball drops (currently fftw3).
-SUPERSET_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+# Artifacts dropped from the core+hpc tarball; the HPC libraries themselves are
+# kept, so only the same non-shippable artifacts the Core tarball drops (fftw3).
+HPC_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+# The default Core tarball additionally drops the HPC libraries.
+DEFAULT_EXCLUDED_ARTIFACTS: list[str] = HPC_EXCLUDED_ARTIFACTS + HPC_ARTIFACTS
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 
 
@@ -90,16 +91,15 @@ def tarball_name(
     family: str,
     version: str,
     *,
-    superset: bool = False,
+    hpc: bool = False,
     tests: bool = False,
 ) -> str:
     """Build a release tarball filename.
 
-    The ``core+hpc`` superset discriminator is placed right after
-    ``therock-dist-`` (per RFC0014); the ``-tests`` discriminator is a suffix
-    before the version.
+    The ``core+hpc`` discriminator is placed right after ``therock-dist-`` (per
+    RFC0014); the ``-tests`` discriminator is a suffix before the version.
     """
-    prefix = "therock-dist-core+hpc-" if superset else "therock-dist-"
+    prefix = "therock-dist-core+hpc-" if hpc else "therock-dist-"
     tests_part = "tests-" if tests else ""
     return f"{prefix}{platform}-{family}-{tests_part}{version}.tar.gz"
 
@@ -172,7 +172,7 @@ def has_contents(directory: Path) -> bool:
     return directory.exists() and any(directory.iterdir())
 
 
-def add_superset_tarball_tasks(
+def add_hpc_tarball_tasks(
     *,
     run_id: str,
     family: str,
@@ -187,15 +187,15 @@ def add_superset_tarball_tasks(
     include_test_tarballs: bool,
     compress_tasks: list[tuple[Path, Path]],
 ) -> None:
-    """Fetch and queue the self-contained core+hpc superset tarball(s).
+    """Fetch and queue the self-contained core+hpc tarball(s).
 
-    The superset is a full Core install *plus* the HPC SDK libraries. It is
-    produced only when the build actually contains HPC artifacts, detected via a
-    cheap HPC-only probe fetch (the full superset fetch reuses the shared
+    The core+hpc tarball is a full Core install *plus* the HPC SDK libraries. It
+    is produced only when the build actually contains HPC artifacts, detected via
+    a cheap HPC-only probe fetch (the full core+hpc fetch reuses the shared
     download cache, so Core artifacts are not re-downloaded).
     """
     # Probe: fetch only the HPC libraries. If none exist for this build, there is
-    # no HPC SDK to ship and we emit no superset tarball.
+    # no HPC SDK to ship and we emit no core+hpc tarball.
     probe_dir = work_dir / "hpc-probe" / work_subdir
     fetch_and_flatten(
         run_id=run_id,
@@ -210,43 +210,41 @@ def add_superset_tarball_tasks(
     if not has_contents(probe_dir):
         return
 
-    # Superset: full Core set with the HPC libraries kept (only fftw3 dropped).
-    superset_dir = work_dir / "core+hpc" / work_subdir
+    # core+hpc: full Core set with the HPC libraries kept (only fftw3 dropped).
+    hpc_dir = work_dir / "core+hpc" / work_subdir
     fetch_and_flatten(
         run_id=run_id,
         amdgpu_families=families,
         platform=platform,
-        output_dir=superset_dir,
+        output_dir=hpc_dir,
         download_cache_dir=download_cache_dir,
         run_github_repo=run_github_repo,
         exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
-        exclude_artifacts=SUPERSET_EXCLUDED_ARTIFACTS,
+        exclude_artifacts=HPC_EXCLUDED_ARTIFACTS,
     )
     compress_tasks.append(
         (
-            superset_dir,
-            output_dir / tarball_name(platform, family, package_version, superset=True),
+            hpc_dir,
+            output_dir / tarball_name(platform, family, package_version, hpc=True),
         )
     )
 
     if include_test_tarballs:
-        superset_tests_dir = work_dir / "core+hpc-tests" / work_subdir
+        hpc_tests_dir = work_dir / "core+hpc-tests" / work_subdir
         fetch_and_flatten(
             run_id=run_id,
             amdgpu_families=families,
             platform=platform,
-            output_dir=superset_tests_dir,
+            output_dir=hpc_tests_dir,
             download_cache_dir=download_cache_dir,
             run_github_repo=run_github_repo,
-            exclude_artifacts=SUPERSET_EXCLUDED_ARTIFACTS,
+            exclude_artifacts=HPC_EXCLUDED_ARTIFACTS,
         )
         compress_tasks.append(
             (
-                superset_tests_dir,
+                hpc_tests_dir,
                 output_dir
-                / tarball_name(
-                    platform, family, package_version, superset=True, tests=True
-                ),
+                / tarball_name(platform, family, package_version, hpc=True, tests=True),
             )
         )
 
@@ -380,10 +378,10 @@ def main(argv: list[str] | None = None) -> None:
                 )
             )
 
-        # Self-contained core+hpc superset tarball (full Core install plus the
-        # HPC SDK libraries). Produced only when the build actually contains HPC
+        # Self-contained core+hpc tarball (full Core install plus the HPC SDK
+        # libraries). Produced only when the build actually contains HPC
         # artifacts for this family, detected via a cheap HPC-only probe fetch.
-        add_superset_tarball_tasks(
+        add_hpc_tarball_tasks(
             run_id=args.run_id,
             family=family,
             families=[family],
@@ -443,8 +441,8 @@ def main(argv: list[str] | None = None) -> None:
                 )
             )
 
-        # Self-contained core+hpc superset multi-arch tarball.
-        add_superset_tarball_tasks(
+        # Self-contained core+hpc multi-arch tarball.
+        add_hpc_tarball_tasks(
             run_id=args.run_id,
             family="multiarch",
             families=families,

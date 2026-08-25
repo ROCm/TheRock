@@ -166,10 +166,10 @@ MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
 def is_non_default_tarball(name: str) -> bool:
     """True for tarballs that are not part of the default ROCm distribution.
 
-    Excludes test tarballs (``-tests-``) and the opt-in Core+HPC superset
-    tarballs (``therock-dist-core+hpc-...``, per RFC0014). Both share enough of
-    the default tarball's shape that they must be skipped when discovering
-    default releases/families. Note the superset uses a ``core+hpc`` prefix
+    Excludes test tarballs (``-tests-``) and the opt-in Core+HPC tarballs
+    (``therock-dist-core+hpc-...``, per RFC0014). Both share enough of the
+    default tarball's shape that they must be skipped when discovering default
+    releases/families. Note the core+hpc tarball uses a ``core+hpc`` prefix
     (matched via ``+hpc-``), not the ``-hpc-`` infix.
     """
     return "-tests-" in name or "+hpc-" in name
@@ -192,10 +192,10 @@ def extract_version_from_asset_name(
 ) -> Optional[str]:
     """Extract a release version from a published multi-arch tarball name.
 
-    Core+HPC superset tarballs (``therock-dist-core+hpc-{platform}-...``) do not
-    match this pattern at all, since it requires ``linux``/``windows`` right
-    after ``therock-dist-``; they are therefore never treated as a default
-    release. Test tarballs are rejected explicitly below.
+    Core+HPC tarballs (``therock-dist-core+hpc-{platform}-...``) do not match
+    this pattern at all, since it requires ``linux``/``windows`` right after
+    ``therock-dist-``; they are therefore never treated as a default release.
+    Test tarballs are rejected explicitly below.
     """
     match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
     if (
@@ -344,10 +344,11 @@ def _release_asset_name(
 ) -> str:
     """Build the release tarball asset name for a family/version.
 
-    When ``hpc`` is True, returns the self-contained Core+HPC superset tarball
-    name (``therock-dist-core+hpc-{platform}-{group}-{version}.tar.gz``, per
-    RFC0014) instead of the default Core-only tarball. The two are alternatives:
-    the superset already contains the full Core tree plus the HPC SDK libraries.
+    When ``hpc`` is True, returns the self-contained Core+HPC tarball name
+    (``therock-dist-core+hpc-{platform}-{group}-{version}.tar.gz``, per RFC0014)
+    instead of the default Core-only tarball. The two are alternatives: the
+    core+hpc tarball already contains the full Core tree plus the HPC SDK
+    libraries.
     """
     prefix = "therock-dist-core+hpc-" if hpc else "therock-dist-"
     return f"{prefix}{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
@@ -382,30 +383,28 @@ def _retrieve_s3_release_assets(
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family.
 
-    The Core tarball and the Core+HPC superset tarball are alternatives (per
-    RFC0014): the superset is self-contained (full Core plus the HPC SDK
-    libraries), so only one is downloaded. When ``hpc`` is True, the superset
-    tarball is downloaded instead of the Core one. The superset is treated as
-    optional: if it does not exist for this release/family (e.g. an older
-    release predating the HPC SDK), a clear message is logged and the Core
+    The Core tarball and the Core+HPC tarball are alternatives (per RFC0014):
+    the core+hpc tarball is self-contained (full Core plus the HPC SDK
+    libraries), so only one is downloaded. When ``hpc`` is True, the core+hpc
+    tarball is downloaded instead of the Core one. The core+hpc tarball is
+    treated as optional: if it does not exist for this release/family (e.g. an
+    older release predating the HPC SDK), a clear message is logged and the Core
     tarball is downloaded instead so the install still succeeds.
     """
     if hpc:
-        superset_asset_name = _release_asset_name(
-            artifact_group, release_version, hpc=True
-        )
+        hpc_asset_name = _release_asset_name(artifact_group, release_version, hpc=True)
         try:
-            _retrieve_multiarch_tarball(release_bucket, superset_asset_name, output_dir)
+            _retrieve_multiarch_tarball(release_bucket, hpc_asset_name, output_dir)
             return
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code not in ("404", "NoSuchKey"):
                 raise
             log(
-                f"WARNING: Core+HPC superset tarball '{superset_asset_name}' "
-                f"not found in bucket '{release_bucket}'. The HPC SDK may not "
-                f"be available for this release/family; falling back to the "
-                f"default ROCm Core tarball."
+                f"WARNING: Core+HPC tarball '{hpc_asset_name}' not found in "
+                f"bucket '{release_bucket}'. The HPC SDK may not be available "
+                f"for this release/family; falling back to the default ROCm "
+                f"Core tarball."
             )
 
     _retrieve_multiarch_tarball(
@@ -740,8 +739,8 @@ def retrieve_artifacts_by_release(args):
         f"s3://{release_bucket.name}/{MULTIARCH_TARBALL_S3_PREFIX}/"
     )
     hpc = getattr(args, "hpc", False)
-    # The Core and Core+HPC superset tarballs are alternatives; --hpc selects
-    # the superset instead of Core (a single download).
+    # The Core and Core+HPC tarballs are alternatives; --hpc selects the
+    # core+hpc tarball instead of Core (a single download).
     asset_name = _release_asset_name(artifact_group, release_version, hpc=hpc)
     if args.dry_run:
         log(
@@ -807,8 +806,8 @@ def retrieve_artifacts_by_latest_release(args):
     version, asset_name = result
     log(f"Found latest release: {version}")
 
-    # The Core and Core+HPC superset tarballs are alternatives; --hpc selects
-    # the superset instead of the Core asset returned by discovery.
+    # The Core and Core+HPC tarballs are alternatives; --hpc selects the
+    # core+hpc tarball instead of the Core asset returned by discovery.
     if args.hpc:
         asset_name = _release_asset_name(args.artifact_group, version, hpc=True)
 
@@ -892,10 +891,10 @@ def main(argv):
         "--hpc",
         default=False,
         action=argparse.BooleanOptionalAction,
-        help="Install the self-contained Core+HPC superset release tarball "
+        help="Install the self-contained Core+HPC release tarball "
         "(full ROCm Core plus the HPC SDK libraries) instead of the default "
         "Core-only tarball. Only applies to --release and --latest-release "
-        "installs. If no superset tarball exists for the release/family, falls "
+        "installs. If no core+hpc tarball exists for the release/family, falls "
         "back to the Core tarball.",
     )
 

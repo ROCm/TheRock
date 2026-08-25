@@ -108,7 +108,7 @@ class TestMain(unittest.TestCase):
     ) -> MainMocks:
         # fetch_and_flatten is mocked and creates no files, so the real
         # has_contents() probe would always be False. Patch it to simulate
-        # whether the build contains HPC artifacts (controls superset emission).
+        # whether the build contains HPC artifacts (controls core+hpc emission).
         patches = [
             mock.patch("build_tarballs.fetch_and_flatten"),
             mock.patch("build_tarballs.compress_tarball"),
@@ -124,7 +124,7 @@ class TestMain(unittest.TestCase):
                             main(argv)
         return MainMocks(fetch_mock, compress_mock, kpack_mock)
 
-    def test_default_builds_core_and_superset_when_hpc_present(self) -> None:
+    def test_default_builds_core_and_hpc_when_hpc_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -138,7 +138,7 @@ class TestMain(unittest.TestCase):
                 hpc_present=True,
             )
 
-        # Three fetches: Core tarball, HPC presence probe, core+hpc superset.
+        # Three fetches: Core tarball, HPC presence probe, core+hpc.
         self.assertEqual(fetch_mock.call_count, 3)
         # Call 0 = Core tarball fetch (excludes tests, fftw3, and HPC libs).
         core_call = fetch_mock.call_args_list[0]
@@ -152,12 +152,12 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             probe_call.kwargs["include_artifacts"], ["hiptensor", "rocalution"]
         )
-        # Call 2 = superset fetch: full Core set with HPC libs kept (only fftw3
+        # Call 2 = core+hpc fetch: full Core set with HPC libs kept (only fftw3
         # dropped), no include filter.
-        superset_call = fetch_mock.call_args_list[2]
-        self.assertEqual(superset_call.kwargs["exclude_components"], ["test"])
-        self.assertEqual(superset_call.kwargs["exclude_artifacts"], ["fftw3"])
-        self.assertNotIn("include_artifacts", superset_call.kwargs)
+        hpc_call = fetch_mock.call_args_list[2]
+        self.assertEqual(hpc_call.kwargs["exclude_components"], ["test"])
+        self.assertEqual(hpc_call.kwargs["exclude_artifacts"], ["fftw3"])
+        self.assertNotIn("include_artifacts", hpc_call.kwargs)
 
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -185,7 +185,7 @@ class TestMain(unittest.TestCase):
             )
 
         # Two fetches: the Core tarball and the HPC presence probe (which finds
-        # nothing, so no superset fetch and no superset tarball).
+        # nothing, so no core+hpc fetch and no core+hpc tarball).
         self.assertEqual(fetch_mock.call_count, 2)
         compressed_names = [
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
@@ -224,7 +224,7 @@ class TestMain(unittest.TestCase):
             ],
         )
 
-    def test_kpack_builds_core_and_superset_when_hpc_present(self) -> None:
+    def test_kpack_builds_core_and_hpc_when_hpc_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "tarballs"
             fetch_mock, compress_mock, _ = self._run_main_with_mocks(
@@ -239,8 +239,8 @@ class TestMain(unittest.TestCase):
                 hpc_present=True,
             )
 
-        # Per-family: Core + probe + superset = 3. Multiarch: Core + probe +
-        # superset = 3. Total 6.
+        # Per-family: Core + probe + core+hpc = 3. Multiarch: Core + probe +
+        # core+hpc = 3. Total 6.
         self.assertEqual(fetch_mock.call_count, 6)
 
         compressed_names = [
@@ -271,7 +271,7 @@ class TestMain(unittest.TestCase):
                 hpc_present=True,
             )
 
-        # Five fetches: Core, Core-tests, HPC probe, superset, superset-tests.
+        # Five fetches: Core, Core-tests, HPC probe, core+hpc, core+hpc-tests.
         self.assertEqual(fetch_mock.call_count, 5)
         # Call 0 = Core tarball (excludes tests, fftw3, HPC libs).
         self.assertEqual(
@@ -292,7 +292,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             fetch_mock.call_args_list[2].kwargs["exclude_components"], ["test"]
         )
-        # Call 3 = superset (full Core + HPC libs, only fftw3 dropped, no tests).
+        # Call 3 = core+hpc (full Core + HPC libs, only fftw3 dropped, no tests).
         self.assertEqual(
             fetch_mock.call_args_list[3].kwargs["exclude_components"], ["test"]
         )
@@ -300,7 +300,7 @@ class TestMain(unittest.TestCase):
             fetch_mock.call_args_list[3].kwargs["exclude_artifacts"], ["fftw3"]
         )
         self.assertNotIn("include_artifacts", fetch_mock.call_args_list[3].kwargs)
-        # Call 4 = superset-tests (keeps test component, only fftw3 dropped).
+        # Call 4 = core+hpc-tests (keeps test component, only fftw3 dropped).
         self.assertNotIn("exclude_components", fetch_mock.call_args_list[4].kwargs)
         self.assertEqual(
             fetch_mock.call_args_list[4].kwargs["exclude_artifacts"], ["fftw3"]
@@ -336,11 +336,11 @@ class TestMain(unittest.TestCase):
                 hpc_present=True,
             )
 
-        # 2 families x 5 (Core, Core-tests, probe, superset, superset-tests) = 10,
+        # 2 families x 5 (Core, Core-tests, probe, core+hpc, core+hpc-tests) = 10,
         # plus multiarch x 5 = 15 total.
         self.assertEqual(fetch_mock.call_count, 15)
         # The multiarch block runs last in order: Core, Core-tests, probe,
-        # superset, superset-tests -> [-5], [-4], [-3], [-2], [-1].
+        # core+hpc, core+hpc-tests -> [-5], [-4], [-3], [-2], [-1].
         self.assertEqual(
             fetch_mock.call_args_list[-5].kwargs["exclude_components"], ["test"]
         )
@@ -356,7 +356,7 @@ class TestMain(unittest.TestCase):
             fetch_mock.call_args_list[-3].kwargs["include_artifacts"],
             ["hiptensor", "rocalution"],
         )
-        # [-2] = multiarch superset, [-1] = multiarch superset-tests.
+        # [-2] = multiarch core+hpc, [-1] = multiarch core+hpc-tests.
         self.assertEqual(
             fetch_mock.call_args_list[-2].kwargs["exclude_artifacts"], ["fftw3"]
         )

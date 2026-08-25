@@ -360,7 +360,7 @@ class TestReleaseDiscovery(unittest.TestCase):
         )
         self.assertEqual(releases[0]["last_modified"], datetime(2026, 7, 23))
 
-    def test_extract_version_ignores_superset_tarball(self) -> None:
+    def test_extract_version_ignores_core_hpc_tarball(self) -> None:
         self.assertIsNone(
             mod.extract_version_from_asset_name(
                 "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
@@ -369,7 +369,7 @@ class TestReleaseDiscovery(unittest.TestCase):
             )
         )
 
-    def test_fetch_and_sort_nightly_releases_ignores_superset_tarballs(self) -> None:
+    def test_fetch_and_sort_nightly_releases_ignores_core_hpc_tarballs(self) -> None:
         paginator = mock.Mock()
         paginator.paginate.return_value = [
             {
@@ -398,14 +398,14 @@ class TestReleaseDiscovery(unittest.TestCase):
         with mock.patch.object(mod, "s3_client", s3_client):
             releases = mod._fetch_and_sort_nightly_releases("gfx94X-dcgpu", "linux")
 
-        # Only the Core tarball is returned; the superset tarball (which is
+        # Only the Core tarball is returned; the core+hpc tarball (which is
         # newer) must not be selected as a default release.
         self.assertEqual(
             [release["asset_name"] for release in releases],
             ["therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz"],
         )
 
-    def test_list_available_nightly_gpu_families_ignores_superset_tarballs(
+    def test_list_available_nightly_gpu_families_ignores_core_hpc_tarballs(
         self,
     ) -> None:
         paginator = mock.Mock()
@@ -435,7 +435,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
 
 class TestHpcReleaseInstall(unittest.TestCase):
-    """Exercises the --hpc release install path (Core+HPC superset tarball)."""
+    """Exercises the --hpc release install path (Core+HPC tarball)."""
 
     def test_release_asset_name_default(self) -> None:
         self.assertEqual(
@@ -449,7 +449,7 @@ class TestHpcReleaseInstall(unittest.TestCase):
             f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz",
         )
 
-    def test_is_non_default_tarball_skips_superset(self) -> None:
+    def test_is_non_default_tarball_skips_core_hpc(self) -> None:
         self.assertTrue(
             mod.is_non_default_tarball(
                 f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
@@ -488,7 +488,7 @@ class TestHpcReleaseInstall(unittest.TestCase):
             ],
         )
 
-    def test_retrieve_release_assets_with_hpc_downloads_superset_only(self) -> None:
+    def test_retrieve_release_assets_with_hpc_downloads_core_hpc_only(self) -> None:
         s3_client = mock.Mock()
         downloaded: list[str] = []
         s3_client.download_fileobj.side_effect = (
@@ -506,7 +506,8 @@ class TestHpcReleaseInstall(unittest.TestCase):
                     Path(tmpdir),
                     hpc=True,
                 )
-        # The superset is self-contained, so only it is downloaded (no Core).
+        # The core+hpc tarball is self-contained, so only it is downloaded
+        # (no Core).
         self.assertEqual(
             downloaded,
             [
@@ -516,7 +517,7 @@ class TestHpcReleaseInstall(unittest.TestCase):
             ],
         )
 
-    def test_release_dry_run_with_hpc_lists_superset_only(self) -> None:
+    def test_release_dry_run_with_hpc_lists_core_hpc_only(self) -> None:
         args = argparse.Namespace(
             output_dir=Path("/tmp/out"),
             artifact_group="gfx94X-dcgpu",
@@ -531,22 +532,20 @@ class TestHpcReleaseInstall(unittest.TestCase):
         self.assertEqual(len(would_download), 1)
         self.assertIn("core+hpc", would_download[0])
 
-    def test_retrieve_release_assets_missing_superset_falls_back_to_core(self) -> None:
-        """A missing superset tarball must fall back to the Core tarball."""
+    def test_retrieve_release_assets_missing_core_hpc_falls_back_to_core(self) -> None:
+        """A missing core+hpc tarball must fall back to the Core tarball."""
         from botocore.exceptions import ClientError
 
         core_name = f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
-        superset_name = (
-            f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
-        )
+        hpc_name = f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
         core_key = mod._multiarch_tarball_s3_key(core_name)
-        superset_key = mod._multiarch_tarball_s3_key(superset_name)
+        hpc_key = mod._multiarch_tarball_s3_key(hpc_name)
 
         downloaded: list[str] = []
 
         def fake_download(bucket, key, fileobj):
             downloaded.append(key)
-            if key == superset_key:
+            if key == hpc_key:
                 raise ClientError(
                     {"Error": {"Code": "404", "Message": "Not Found"}},
                     "GetObject",
@@ -562,7 +561,7 @@ class TestHpcReleaseInstall(unittest.TestCase):
                 mock.patch.object(mod, "_untar_files"),
                 mock.patch.object(mod, "log", lambda m: logs.append(m)),
             ):
-                # Should not raise even though the superset object is missing.
+                # Should not raise even though the core+hpc object is missing.
                 mod._retrieve_s3_release_assets(
                     "therock-nightly-tarball",
                     "gfx94X-dcgpu",
@@ -570,28 +569,26 @@ class TestHpcReleaseInstall(unittest.TestCase):
                     Path(tmpdir),
                     hpc=True,
                 )
-            # The empty superset partial file was cleaned up.
-            self.assertFalse((Path(tmpdir) / superset_name).exists())
+            # The empty core+hpc partial file was cleaned up.
+            self.assertFalse((Path(tmpdir) / hpc_name).exists())
 
-        # Superset attempted first, then Core downloaded as the fallback.
-        self.assertEqual(downloaded, [superset_key, core_key])
-        # A clear warning was emitted for the missing superset tarball.
+        # core+hpc attempted first, then Core downloaded as the fallback.
+        self.assertEqual(downloaded, [hpc_key, core_key])
+        # A clear warning was emitted for the missing core+hpc tarball.
         self.assertTrue(
             any("not found" in m and "HPC" in m for m in logs),
-            f"expected a missing-superset warning, got: {logs}",
+            f"expected a missing-core+hpc warning, got: {logs}",
         )
 
-    def test_retrieve_release_assets_superset_non_404_error_propagates(self) -> None:
-        """Non-missing S3 errors on the superset tarball must not be swallowed."""
+    def test_retrieve_release_assets_core_hpc_non_404_error_propagates(self) -> None:
+        """Non-missing S3 errors on the core+hpc tarball must not be swallowed."""
         from botocore.exceptions import ClientError
 
-        superset_name = (
-            f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
-        )
-        superset_key = mod._multiarch_tarball_s3_key(superset_name)
+        hpc_name = f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+        hpc_key = mod._multiarch_tarball_s3_key(hpc_name)
 
         def fake_download(bucket, key, fileobj):
-            if key == superset_key:
+            if key == hpc_key:
                 raise ClientError(
                     {"Error": {"Code": "AccessDenied", "Message": "Denied"}},
                     "GetObject",
