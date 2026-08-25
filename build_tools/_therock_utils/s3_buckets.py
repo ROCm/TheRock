@@ -97,6 +97,22 @@ class S3BucketConfig:
     namespace_external_repos: bool = field(default=False)
     """Whether uploads are namespaced by '{owner}-{repo}/' (shared external bucket)."""
 
+    anonymous_s3_read: bool = field(default=True)
+    """Whether the bucket can be read over raw S3 without credentials.
+
+    Machine-consumed URLs (a pip index, an apt/dnf base URL, a tarball download)
+    prefer the raw S3 URL when this is True, because CI reads there avoid
+    CloudFront data-transfer charges - see docs/development/s3_buckets.md. When
+    it is False the CDN is the only public way in, so those URLs must go through
+    ``cdn_rules`` instead; falling back to raw S3 would hand out a URL that
+    answers 403.
+
+    This is a fact about the bucket rather than a policy about the caller, which
+    is why it lives here. The prerelease buckets grant no anonymous read
+    (ROCm/TheRock#2139), and downstream repositories whose buckets are entirely
+    private set it via a registry file.
+    """
+
     def __post_init__(self):
         # Same contract as CdnRule.key_prefix, enforced in the same place: the
         # trailing slash is what keeps prefix concatenation from joining two path
@@ -124,15 +140,77 @@ class S3BucketConfig:
         return f"arn:aws:iam::{self.iam_account}:role/{self.iam_role}"
 
 
-# CloudFront distribution roots fronting the release buckets. These same URLs are
-# already user-facing elsewhere in the tree (e.g. setup_venv.py's package index map).
+# ---------------------------------------------------------------------------
+# repo.amd.com streams and products (RFC0012)
+#
+# Every stream is served from its own subdomain, and the folder hierarchy under
+# each one is identical. Both facts come straight from
+# docs/rfcs/RFC0012-Repo-Structure.md, so the URL is derived from a formula
+# rather than transcribed per stream: a stream that has not finished cutting
+# over yet needs no follow-up edit here when it does.
+# ---------------------------------------------------------------------------
+_ALLOWED_RELEASE_PRODUCTS = {"core", "pytorch", "jax"}
+
+_RELEASE_STREAM_BY_TYPE = {
+    "dev": "dev",
+    "dev-bkc": "bkc",
+    "nightly": "nightly",
+    "nightly-bkc": "bkc",
+    "prerelease": "rc",
+}
+
+# The key prefix every product bucket stores under, stripped from the public URL:
+# s3://therock-repo-amd-nightly-core/v5/rocm/core/tarball/X is served at
+# https://nightly.repo.amd.com/rocm/core/tarball/X.
+_PRODUCT_KEY_PREFIX = "v5/"
+
+
+def release_stream_url(stream: str) -> str:
+    """Public root for a repo.amd.com stream, e.g. 'https://nightly.repo.amd.com/'."""
+    return f"https://{stream}.repo.amd.com/"
+
+
+def _product_cdn_rules(stream: str) -> tuple[CdnRule, ...]:
+    return (CdnRule(_PRODUCT_KEY_PREFIX, release_stream_url(stream)),)
+
+
+def _product_release_bucket_configs() -> list[S3BucketConfig]:
+    """Final publication buckets, one per (stream, product).
+
+    Cross-account (324352301041) and reachable only through the stream CDN;
+    anonymous S3 reads are refused, verified 2026-08-25.
+    """
+    return [
+        S3BucketConfig(
+            f"therock-repo-amd-{stream}-{product}",
+            iam_account="324352301041",
+            iam_role=f"therock-repo-{stream}-{product}",
+            key_prefix=_PRODUCT_KEY_PREFIX,
+            cdn_rules=_product_cdn_rules(stream),
+            anonymous_s3_read=False,
+        )
+        # Sorted for a stable inventory order; the set is small and fixed.
+        for stream in sorted(set(_RELEASE_STREAM_BY_TYPE.values()))
+        for product in sorted(_ALLOWED_RELEASE_PRODUCTS)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Legacy release CDNs (pre-RFC0012 layout)
+#
+# These distributions front the therock-{release_type}-{python,tarball,packages}
+# buckets. Those buckets are no longer publication targets - since the
+# repo.amd.com rewire, publish_rocm_to_release_buckets.py writes to the product
+# buckets below - but they still serve every release made under the old layout,
+# so the mappings stay. See docs/development/s3_buckets.md.
+# ---------------------------------------------------------------------------
 _DEV_CDN = "https://rocm.devreleases.amd.com/"
 _NIGHTLY_CDN = "https://rocm.nightlies.amd.com/"
 _PRERELEASE_CDN = "https://rocm.prereleases.amd.com/"
 _RELEASE_CDN = "https://repo.amd.com/rocm/"
 
 
-# The key prefixes below come from publish_rocm_to_release_buckets.py, which writes
+# The key prefixes below come from publish_rocm_to_release_buckets.py, which wrote
 # python packages to "v4/whl" and tarballs to "v4/tarball" for every release type,
 # and native packages to "v4/{deb,rpm}/{date}-{run_id}" for dev and nightly.
 #
@@ -144,9 +222,6 @@ _RELEASE_CDN = "https://repo.amd.com/rocm/"
 #   * The artifacts buckets - no CDN, matching the '-' column in s3_buckets.md.
 # A bucket with no matching rule falls back to its raw S3 URL, which is the
 # behavior every caller had before CDN rules existed.
-#
-# All 12 rules below were checked against the live CloudFront distributions on
-# 2026-08-03; see the pull request for what was and was not proven.
 def _whl_cdn_rules(cdn: str) -> tuple[CdnRule, ...]:
     return (CdnRule("v4/whl/", cdn + "whl-multi-arch/"),)
 
@@ -176,6 +251,7 @@ s3_bucket_configs = [
         "therock-dev-packages",
         iam_role="therock-dev",
         cdn_rules=_package_cdn_rules(_DEV_CDN),
+        anonymous_s3_read=False,
     ),
     S3BucketConfig(
         "therock-dev-python",
@@ -193,6 +269,7 @@ s3_bucket_configs = [
         "therock-nightly-packages",
         iam_role="therock-nightly",
         cdn_rules=_package_cdn_rules(_NIGHTLY_CDN),
+        anonymous_s3_read=False,
     ),
     S3BucketConfig(
         "therock-nightly-python",
@@ -208,31 +285,41 @@ s3_bucket_configs = [
     S3BucketConfig("therock-prerelease-artifacts", iam_role="therock-prerelease"),
     # TODO: therock-prerelease-packages has a CDN, but it serves a distro-partitioned
     # repo rather than a rewrite of this bucket's v4/packages/{deb,rpm}/ layout.
-    S3BucketConfig("therock-prerelease-packages", iam_role="therock-prerelease"),
+    S3BucketConfig(
+        "therock-prerelease-packages",
+        iam_role="therock-prerelease",
+        anonymous_s3_read=False,
+    ),
     S3BucketConfig(
         "therock-prerelease-python",
         iam_role="therock-prerelease",
         cdn_rules=_whl_cdn_rules(_PRERELEASE_CDN),
+        anonymous_s3_read=False,
     ),
     S3BucketConfig(
         "therock-prerelease-tarball",
         iam_role="therock-prerelease",
         cdn_rules=_tarball_cdn_rules(_PRERELEASE_CDN),
+        anonymous_s3_read=False,
     ),
     # Release type "release" (no automated credentials for uploading)
     S3BucketConfig("therock-release-artifacts", iam_role=None),
     # TODO: see the therock-prerelease-packages note above.
-    S3BucketConfig("therock-release-packages", iam_role=None),
+    S3BucketConfig("therock-release-packages", iam_role=None, anonymous_s3_read=False),
     S3BucketConfig(
         "therock-release-python",
         iam_role=None,
         cdn_rules=_whl_cdn_rules(_RELEASE_CDN),
+        anonymous_s3_read=False,
     ),
     S3BucketConfig(
         "therock-release-tarball",
         iam_role=None,
         cdn_rules=_tarball_cdn_rules(_RELEASE_CDN),
+        anonymous_s3_read=False,
     ),
+    # Final publication buckets for the repo.amd.com product layout.
+    *_product_release_bucket_configs(),
 ]
 
 
@@ -254,14 +341,9 @@ _ALLOWED_RELEASE_TYPES = {
 }
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
-_ALLOWED_RELEASE_PRODUCTS = {"core", "pytorch", "jax"}
-_RELEASE_STREAM_BY_TYPE = {
-    "dev": "dev",
-    "dev-bkc": "bkc",
-    "nightly": "nightly",
-    "nightly-bkc": "bkc",
-    "prerelease": "rc",
-}
+
+# _ALLOWED_RELEASE_PRODUCTS and _RELEASE_STREAM_BY_TYPE are defined above the
+# bucket inventory, which is generated from them.
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +361,7 @@ _REGISTRY_TOP_LEVEL_KEYS = {
     "buckets",
     "artifacts_buckets",
     "release_buckets",
+    "product_release_buckets",
 }
 _REGISTRY_BUCKET_KEYS = {
     "name",
@@ -288,6 +371,7 @@ _REGISTRY_BUCKET_KEYS = {
     "key_prefix",
     "cdn_rules",
     "namespace_external_repos",
+    "anonymous_s3_read",
     "override",
 }
 _REGISTRY_CDN_RULE_KEYS = {"key_prefix", "url_prefix"}
@@ -310,6 +394,7 @@ class _BucketRegistry:
     buckets: dict[str, S3BucketConfig]
     artifacts_buckets: dict[str, str]
     release_buckets: dict[str, dict[str, str]]
+    product_release_buckets: dict[str, dict[str, str]]
 
 
 _registry_cache: _BucketRegistry | None = None
@@ -406,6 +491,12 @@ def _parse_bucket(entry, path: str) -> tuple[S3BucketConfig, bool]:
             f"{path}: bucket {name!r} 'namespace_external_repos' must be a boolean"
         )
 
+    anonymous_s3_read = entry.get("anonymous_s3_read", True)
+    if not isinstance(anonymous_s3_read, bool):
+        raise BucketRegistryError(
+            f"{path}: bucket {name!r} 'anonymous_s3_read' must be a boolean"
+        )
+
     # S3BucketConfig.__post_init__ validates and normalizes key_prefix; wrap its
     # ValueError with the file path, the same way _parse_cdn_rules does for CdnRule.
     try:
@@ -417,6 +508,7 @@ def _parse_bucket(entry, path: str) -> tuple[S3BucketConfig, bool]:
             key_prefix=key_prefix,
             cdn_rules=_parse_cdn_rules(entry.get("cdn_rules", []), name, path),
             namespace_external_repos=namespace_external_repos,
+            anonymous_s3_read=anonymous_s3_read,
         )
     except ValueError as e:
         raise BucketRegistryError(f"{path}: bucket {name!r}: {e}") from e
@@ -567,8 +659,29 @@ def load_bucket_registry_file(path: str) -> _BucketRegistry:
         for release_type, inner in raw_release.items()
     }
 
+    raw_products = data.get("product_release_buckets", {})
+    if not isinstance(raw_products, dict):
+        raise BucketRegistryError(
+            f"{path}: 'product_release_buckets' must be an object"
+        )
+    _reject_unknown_keys(
+        raw_products, _ALLOWED_RELEASE_TYPES, "product_release_buckets", path
+    )
+    product_release_buckets = {
+        release_type: _parse_selection_map(
+            inner,
+            _ALLOWED_RELEASE_PRODUCTS,
+            buckets,
+            f"product_release_buckets[{release_type!r}]",
+            path,
+        )
+        for release_type, inner in raw_products.items()
+    }
+
     _log(f"[INFO] Bucket registry: loaded {len(seen_in_file)} bucket(s) from {path}")
-    return _BucketRegistry(buckets, artifacts_buckets, release_buckets)
+    return _BucketRegistry(
+        buckets, artifacts_buckets, release_buckets, product_release_buckets
+    )
 
 
 def _registry() -> _BucketRegistry:
@@ -585,7 +698,7 @@ def _registry() -> _BucketRegistry:
             _registry_cache = load_bucket_registry_file(path)
         else:
             _registry_cache = _BucketRegistry(
-                {c.name: c for c in s3_bucket_configs}, {}, {}
+                {c.name: c for c in s3_bucket_configs}, {}, {}, {}
             )
     return _registry_cache
 
@@ -628,25 +741,43 @@ def all_bucket_configs() -> tuple[S3BucketConfig, ...]:
     return tuple(_bucket_registry().values())
 
 
+def cdn_url_for(bucket: str, relative_path: str) -> str | None:
+    """CDN URL for an object, or None when no rule covers it.
+
+    The longest matching ``CdnRule.key_prefix`` wins, so a bucket-wide rule can
+    coexist with prefix-specific ones.
+
+    This is the ``str | None`` form, for callers that must not fall back to a raw
+    S3 URL: a value handed to pip, or an object in a bucket that refuses
+    anonymous reads. Callers that do have a sensible fallback want
+    ``resolve_public_url``.
+
+    Args:
+        bucket: S3 bucket name.
+        relative_path: Full S3 key, including any bucket ``key_prefix``.
+    """
+    config = lookup_bucket_config(bucket)
+    if config is None:
+        return None
+    for rule in sorted(config.cdn_rules, key=lambda r: len(r.key_prefix), reverse=True):
+        if relative_path.startswith(rule.key_prefix):
+            return rule.url_prefix + relative_path[len(rule.key_prefix) :]
+    return None
+
+
 def resolve_public_url(bucket: str, relative_path: str, *, default: str) -> str:
     """Resolve the public (CDN) URL for an object, falling back to ``default``.
 
-    The longest matching ``CdnRule.key_prefix`` wins, so a bucket-wide rule can
-    coexist with prefix-specific ones. Buckets that are unknown or have no
-    matching rule resolve to ``default`` (normally the raw S3 URL).
+    Buckets that are unknown or have no matching rule resolve to ``default``
+    (normally the raw S3 URL).
 
     Args:
         bucket: S3 bucket name.
         relative_path: Full S3 key, including any bucket ``key_prefix``.
         default: URL to return when no CDN rule applies.
     """
-    config = lookup_bucket_config(bucket)
-    if config is None:
-        return default
-    for rule in sorted(config.cdn_rules, key=lambda r: len(r.key_prefix), reverse=True):
-        if relative_path.startswith(rule.key_prefix):
-            return rule.url_prefix + relative_path[len(rule.key_prefix) :]
-    return default
+    url = cdn_url_for(bucket, relative_path)
+    return default if url is None else url
 
 
 def get_artifacts_bucket_config(
@@ -780,11 +911,18 @@ def get_product_release_bucket_config(
             f"product={product!r} is invalid, "
             f"expected one of {_ALLOWED_RELEASE_PRODUCTS}"
         )
-    return S3BucketConfig(
-        name=f"therock-repo-amd-{stream}-{product}",
-        iam_account="324352301041",
-        iam_role=f"therock-repo-{stream}-{product}",
+    # Looked up rather than constructed here, so these buckets carry the same
+    # key_prefix and cdn_rules as every other entry and StorageLocation can
+    # derive their public URLs. The config is otherwise identical to the one
+    # this function used to build inline.
+    bucket_name = f"therock-repo-amd-{stream}-{product}"
+    # See the note in get_artifacts_bucket_config: selection, not registration.
+    bucket_name = (
+        _registry()
+        .product_release_buckets.get(release_type, {})
+        .get(product, bucket_name)
     )
+    return require_bucket_config(bucket_name)
 
 
 def get_release_package_index_url(release_type: str) -> str:

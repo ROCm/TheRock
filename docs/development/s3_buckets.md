@@ -133,6 +133,18 @@ prefix. For example, nightly Core tarballs are at
 https://nightly.repo.amd.com/rocm/core/tarball/ and nightly native packages
 are under https://nightly.repo.amd.com/rocm/core/packages/.
 
+That rewrite is encoded, not just documented: each product bucket carries
+`key_prefix="v5/"` and a `CdnRule` mapping `v5/` to
+`https://<stream>.repo.amd.com/`, so `StorageLocation.public_url` derives the
+address above from the S3 key. The rule is built from one
+`f"https://{stream}.repo.amd.com/"` formula rather than a per-stream table,
+because [RFC0012](../rfcs/RFC0012-Repo-Structure.md) gives every stream the same
+hierarchy under its own subdomain — a stream that has not finished cutting over
+needs no edit here when it does.
+
+None of the product buckets are readable over raw S3 — they carry
+`anonymous_s3_read=false`, and the stream CDN is the only public way in.
+
 Pip installs must use the aggregate index, such as
 https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
 publication and indexer inputs, not self-contained install entry points.
@@ -246,6 +258,7 @@ The flag wins when both are set, and the choice is logged.
       "name": "therock-npi-artifacts",
       "iam_role": "therock-npi",
       "key_prefix": "v3/artifacts/",
+      "anonymous_s3_read": false,
       "cdn_rules": [
         {
           "key_prefix": "v3/artifacts/",
@@ -266,6 +279,21 @@ everything under, and is folded into every key the tools generate; it is
 normalized to a trailing `/` and must not begin with one. `cdn_rules` map a key
 prefix to a public URL prefix, longest match first.
 
+A rule maps a *prefix*, not a whole bucket, because the public path is usually
+not the S3 path: `v5/rocm/core/tarball/` in `therock-repo-amd-nightly-core` is
+served at `https://nightly.repo.amd.com/rocm/core/tarball/`. The rule carries
+both the prefix to strip and the URL to substitute. For a bucket whose whole
+contents map to one URL, use `"key_prefix": ""`.
+
+`anonymous_s3_read` (default `true`) says whether the bucket can be read over
+raw S3 without credentials. It selects which URL `StorageLocation.download_url`
+hands to pip, apt/dnf, or a plain download: the raw S3 URL when reads there work
+(CI avoids CloudFront data-transfer charges that way), the CDN when they do not.
+Set it `false` for a private bucket — the prerelease and release buckets are
+private in-tree, and a private bucket handed a raw S3 URL produces a link that
+answers 403. A private bucket with no `cdn_rules` covering the key raises rather
+than returning an unusable URL.
+
 `namespace_external_repos` (default `false`) makes uploads to the bucket
 additionally namespaced by `{owner}-{repo}/`. Set it on any bucket that more
 than one repository writes to — `therock-ci-artifacts-external` is the in-tree
@@ -273,12 +301,22 @@ example. Without it, keys are namespaced only by GitHub run ID, and run IDs are
 allocated per repository rather than globally, so two repositories sharing a
 bucket will eventually collide on a run ID and overwrite each other's artifacts.
 
-`artifacts_buckets` and `release_buckets` override *selection* — which bucket
-the lookup functions choose. Registration alone is not enough, because those
-functions compute a bucket name from a formula (`therock-{release_type}-artifacts`)
-that a downstream repository does not follow. Valid `artifacts_buckets` slots
-are `ci`, `ci-external`, `dev`, `nightly`, and `prerelease`; `release_buckets`
-is keyed by release type and then by `tarball`, `python`, or `packages`.
+`artifacts_buckets`, `release_buckets` and `product_release_buckets` override
+*selection* — which bucket the lookup functions choose. Registration alone is
+not enough, because those functions compute a bucket name from a formula
+(`therock-{release_type}-artifacts`, `therock-repo-amd-{stream}-{product}`) that
+a downstream repository does not follow.
+
+| Key                       | Slots                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `artifacts_buckets`       | `ci`, `ci-external`, `dev`, `dev-bkc`, `nightly`, `nightly-bkc`, `prerelease` |
+| `release_buckets`         | release type, then `tarball`, `python`, or `packages`                         |
+| `product_release_buckets` | release type, then `core`, `pytorch`, or `jax`                                |
+
+The BKC release types have their own `artifacts_buckets` slots even though they
+share dev's and nightly's buckets in-tree, so a downstream repository can
+redirect a BKC channel without also redirecting the channel it shares a bucket
+with.
 
 Note the two CI slots. A repository other than `ROCm/TheRock` selects
 `ci-external` for **all** of its CI, not just fork PRs, so a downstream repo
