@@ -31,8 +31,9 @@ which
 1. Uploads the built packages to a release index
 1. Runs tests on the packages
 
-This should be performed using a "dev" release using the `therock-dev-python` S3
-bucket and the package index https://rocm.devreleases.amd.com/.
+This should be performed using a "dev" release. Intermediate artifacts use the
+`therock-dev-artifacts` S3 bucket and published packages use the aggregate
+index https://dev.repo.amd.com/rocm/whl-next/.
 
 Follow these steps:
 

@@ -93,6 +93,8 @@ TEST_TO_IGNORE = {
             # ROCM-29275: SDMA COPY_SWAP hangs the GPU on gfx1250 (rocm-systems#9923).
             "Unit_hipMemcpyBatchAsync_Swap",
             "Unit_hipMemcpyBatchAsync_P2P_Swap",
+            # TODO(#7499): Re-enable test once crash issue is resolved.
+            "Unit_hipVoteSync_All",
         ]
     },
 }

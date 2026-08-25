@@ -10,6 +10,7 @@ prettytable==3.12.0
 requests==2.33.0
 jsonschema==4.23.0
 packaging==25.0
+python-debian==1.1.1
 setuptools>=80.9.0,<82.0.0
 python-magic==0.4.27; sys_platform != "win32"
 

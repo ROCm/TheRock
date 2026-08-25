@@ -893,14 +893,7 @@ def main(argv):
         "--media-libs-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "amd-mesa",
-            ]
-        ),
+        default=["amd-mesa"],
     )
     parser.add_argument(
         # projects that use DVC to manage large files
