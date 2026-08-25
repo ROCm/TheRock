@@ -574,7 +574,9 @@ Unlike PR coverage builds (which only instrument changed projects), nightly runs
    ninja -C build
    ```
    
-   Produces instrumented artifacts for all components at once.
+   Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLASLt, hipRAND, rocRAND, rocPRIM, etc.), not grouped components (BLAS, PRIM).
+   
+   **Critical constraint:** Coverage builds MUST operate at per-project granularity (projects/rocblas/, projects/hipblaslt/, projects/hiprand/, etc.), NOT at TheRock's component-group level (BLAS, PRIM). This maintains per-project isolation - each project's coverage is measured independently.
 
 2. **Separate test jobs per component:**
    - Each component gets its own test job (hipRAND, rocFFT, rocBLAS, etc.)
@@ -711,18 +713,20 @@ Error handling code for upstream dependency failures cannot be covered without e
 
 ## Open Questions
 
-1. **Codecov.io vs. alternatives**: Should we standardize on codecov.io or evaluate other platforms? Must support tag-based architecture aggregation for Phase 4+.
-2. **Nightly run frequency**: Per-component nightly or consolidated runs?
-3. **Coverage thresholds**: Should we enforce 80% coverage gates at the TheRock level or per-component?
-4. **Test naming standardization**: Should we enforce `test_*` naming convention across all projects?
-5. **Artifact retention**: How long should coverage artifacts be retained?
-6. **Report aggregation**: Should TheRock provide a unified coverage dashboard across all components?
-7. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
-8. **Multi-GPU detection**: How to identify multi-GPU specific code paths? Similar refactoring/annotation needs.
-9. **Mock coverage mandate**: Should all components provide mocks for upstream error injection? Mandatory or optional?
-10. **Baseline initialization**: Self-healing all-arch coverage vs manual initialization vs graceful degradation?
-11. **Multi-arch nightly cadence**: Round-robin architectures or weekly/monthly full sweeps?
-12. **Multi-GPU node allocation**: Dedicated pool vs shared with other multi-GPU workloads?
+1. **Artifact granularity for per-project coverage isolation**: TheRock's BUILD_TOPOLOGY.toml defines artifacts at a grouped component level (e.g., `blas` = rocBLAS + hipBLASLt, `prim` = rocPRIM + hipCUB + rocThrust + rocRAND + hipRAND). Coverage requires per-project isolation - each project must be instrumented and tested independently. This conflicts with the artifact system where `artifact_manager.py` operates on grouped artifact names. **Options:**
+   - **Option A**: Create separate per-project artifacts for coverage builds (rocblas-coverage, hipblaslt-coverage, etc.) - requires BUILD_TOPOLOGY changes and may complicate artifact management
+   - **Option B**: Use existing grouped artifacts but rely on selective component filtering (lib vs test vs dev) - won't achieve full per-project isolation
+   - **Option C**: Coverage builds use a different artifact organization entirely, bypassing BUILD_TOPOLOGY's grouped structure - creates parallel artifact system
+   - **Proposed parameters** (`--artifact-names`, `--exclude-artifact-names`) assume per-project granularity, but BUILD_TOPOLOGY only defines grouped artifacts
+   - **Impact**: Affects both nightly hybrid artifact fetching and potentially PR coverage builds
+   - **Decision needed**: How to reconcile per-project coverage requirements with grouped artifact structure?
+
+2. **Multi-architecture report aggregation**: Does codecov.io support tag-based architecture aggregation needed for Phase 4+ multi-arch coverage? If not, fallback to profraw merging approach.
+3. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
+4. **Multi-GPU detection**: How to identify multi-GPU specific code paths? Similar refactoring/annotation needs.
+5. **Mock coverage mandate**: Should all components provide mocks for upstream error injection? Mandatory or optional?
+6. **Baseline initialization (Phase 4+)**: Self-healing all-arch coverage vs manual initialization vs graceful degradation when baseline reports missing?
+7. **Multi-GPU node allocation**: Dedicated pool vs shared with other multi-GPU workloads?
 
 ## Revision History
 
