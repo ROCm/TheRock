@@ -163,7 +163,6 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DTHEROCK_BUILD_LLVM_TESTS=ON \
-            -DTHEROCK_ENABLE_LLVM_TESTS=ON \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
