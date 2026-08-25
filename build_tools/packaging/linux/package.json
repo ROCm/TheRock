@@ -643,14 +643,6 @@
               "run",
               "doc"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
           }
         ]
       },
@@ -693,7 +685,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -737,7 +729,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "hipSPARSELt",
@@ -879,12 +871,6 @@
             "Components": [
               "dev"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "dev"
-            ]
           }
         ]
       }
@@ -918,7 +904,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -930,6 +916,14 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "lib",
               "run",
@@ -964,7 +958,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -974,6 +968,12 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "dev"
             ]
@@ -1010,7 +1010,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -1057,7 +1057,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -3328,7 +3328,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile",
     "Version": "",
