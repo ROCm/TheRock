@@ -66,18 +66,16 @@ class TestGetArtifactsBucketConfig(unittest.TestCase):
         )
         self.assertEqual(config.name, "therock-nightly-artifacts")
 
-    def test_bkc_release_types_use_existing_artifacts_buckets(self):
-        for release_type, bucket_name in (
-            ("dev-bkc", "therock-dev-artifacts"),
-            ("nightly-bkc", "therock-nightly-artifacts"),
-        ):
+    def test_bkc_release_types_use_bkc_artifacts_bucket(self):
+        for release_type in ("dev-bkc", "nightly-bkc"):
             with self.subTest(release_type=release_type):
                 config = get_artifacts_bucket_config(
                     release_type=release_type,
                     repository="ROCm/TheRock",
                     is_pr_from_fork=False,
                 )
-                self.assertEqual(config.name, bucket_name)
+                self.assertEqual(config.name, "therock-bkc-artifacts")
+                self.assertEqual(config.iam_role, "therock-bkc")
 
     def test_release_type_invalid_raises(self):
         with self.assertRaises(ValueError) as cm:
