@@ -84,7 +84,7 @@ therock_declare_flag(
 therock_declare_flag(
   NAME LLVM_ENABLE_ASSERTIONS
   DEFAULT_VALUE OFF
-  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. Surfaces compiler bugs during CI, costing roughly 20% more build time overall and up to 35% on device-heavy stages; does not affect generated code."
+  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. In CI costs roughly 20% more build time overall and up to 35% on device-heavy stages."
   ISSUE "https://github.com/ROCm/TheRock/pull/6102"
   CMAKE_VARS
     LLVM_ENABLE_ASSERTIONS=ON
