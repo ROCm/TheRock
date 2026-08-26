@@ -1,96 +1,264 @@
-From 049a864757dd9e9336e8c7f8a80f1f7ad45e326a Mon Sep 17 00:00:00 2001
+From bcc91a88b06ae70cd39f84e616d07e1f624c54d4 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Thu, 11 Jun 2026 18:51:15 +0000
-Subject: [PATCH] gallium/auxiliary: guard TGSI calls with HAVE_GFX_COMPUTE
+Date: Tue, 25 Aug 2026 16:32:56 +0000
+Subject: [PATCH] gallium/ddebug: exclude ddebug from non-gfx builds
 
-dd_draw.c and u_dump_state.c call tgsi_scan_shader(), tgsi_free_tokens(),
-tgsi_dup_tokens(), and tgsi_dump_to_file() which are only compiled when
-with_gfx_compute is true (i.e. when OpenGL, Vulkan, or encode-capable VA
-is enabled). dd_draw.c itself must remain unconditionally compiled because
-si_debug.c calls dd_get_debug_file() and dd_write_header() directly.
+Move functions declared in dd_util.h from dd_draw.c into a new
+dd_util.c. This allows dd_draw.c to move entirely into the
+with_gfx_compute block alongside dd_context.c and dd_screen.c.
 
-On x86, --gc-sections prunes the dead TGSI-calling functions before the
-linker sees the undefined symbols. On ppc64le, the TOC (Table of Contents)
-aggregates all external symbol references from dd_draw.c into a single
-.toc section; when any live symbol references the TOC the entire section
-is kept, pulling in undefined TGSI references and causing a link failure.
-
-Guard the four TGSI call sites with #if HAVE_GFX_COMPUTE to fix the
-ppc64le link failure when building with decode-only VA (no gfx/compute).
+Fixes a link failure on ppc64le when building with decode-only VA.
 ---
- src/gallium/auxiliary/driver_ddebug/dd_draw.c | 12 ++++++++++++
- src/gallium/auxiliary/util/u_dump_state.c     |  2 ++
- 2 files changed, 14 insertions(+)
+ src/gallium/auxiliary/driver_ddebug/dd_draw.c |  77 ------------
+ src/gallium/auxiliary/driver_ddebug/dd_util.c | 116 ++++++++++++++++++
+ src/gallium/auxiliary/driver_ddebug/dd_util.h |   1 +
+ src/gallium/auxiliary/meson.build             |   3 +-
+ 4 files changed, 119 insertions(+), 78 deletions(-)
+ create mode 100644 src/gallium/auxiliary/driver_ddebug/dd_util.c
 
 diff --git a/src/gallium/auxiliary/driver_ddebug/dd_draw.c b/src/gallium/auxiliary/driver_ddebug/dd_draw.c
-index 36bf5b03da0..4ff53be270c 100644
+index 36bf5b03da0..2709fb69402 100644
 --- a/src/gallium/auxiliary/driver_ddebug/dd_draw.c
 +++ b/src/gallium/auxiliary/driver_ddebug/dd_draw.c
-@@ -150,6 +150,7 @@ dd_dump_dmesg(FILE *f)
- #endif
- }
+@@ -42,83 +42,6 @@
+ #include "util/detect.h"
+ #include "c99_alloca.h"
  
-+#if HAVE_GFX_COMPUTE
- static unsigned
- dd_num_active_viewports(struct dd_draw_state *dstate)
+-void
+-dd_get_debug_filename_and_mkdir(char *buf, size_t buflen, bool verbose)
+-{
+-   static unsigned index;
+-   char dir[256];
+-   const char *proc_name = util_get_process_name();
+-
+-   if (!proc_name) {
+-      fprintf(stderr, "dd: can't get the process name\n");
+-      proc_name = "unknown";
+-   }
+-
+-   snprintf(dir, sizeof(dir), "%s/"DD_DIR, debug_get_option("HOME", "."));
+-
+-   if (os_mkdir(dir, 0774) && errno != EEXIST)
+-      fprintf(stderr, "dd: can't create a directory (%i)\n", errno);
+-
+-   snprintf(buf, buflen, "%s/%s_%u_%08u", dir, proc_name, (unsigned int)getpid(),
+-            (unsigned int)p_atomic_inc_return(&index) - 1);
+-
+-   if (verbose)
+-      fprintf(stderr, "dd: dumping to file %s\n", buf);
+-}
+-
+-FILE *
+-dd_get_debug_file(bool verbose)
+-{
+-   char name[512];
+-   FILE *f;
+-
+-   dd_get_debug_filename_and_mkdir(name, sizeof(name), verbose);
+-   f = fopen(name, "w");
+-   if (!f) {
+-      fprintf(stderr, "dd: can't open file %s\n", name);
+-      return NULL;
+-   }
+-
+-   return f;
+-}
+-
+-void
+-dd_parse_apitrace_marker(const char *string, int len, unsigned *call_number)
+-{
+-   unsigned num;
+-   char *s;
+-
+-   if (len <= 0)
+-      return;
+-
+-   /* Make it zero-terminated. */
+-   s = alloca(len + 1);
+-   memcpy(s, string, len);
+-   s[len] = 0;
+-
+-   /* Parse the number. */
+-   errno = 0;
+-   num = strtol(s, NULL, 10);
+-   if (errno)
+-      return;
+-
+-   *call_number = num;
+-}
+-
+-void
+-dd_write_header(FILE *f, struct pipe_screen *screen, unsigned apitrace_call_number)
+-{
+-   char cmd_line[4096];
+-   if (util_get_command_line(cmd_line, sizeof(cmd_line)))
+-      fprintf(f, "Command: %s\n", cmd_line);
+-   fprintf(f, "Driver vendor: %s\n", screen->get_vendor(screen));
+-   fprintf(f, "Device vendor: %s\n", screen->get_device_vendor(screen));
+-   fprintf(f, "Device name: %s\n\n", screen->get_name(screen));
+-
+-   if (apitrace_call_number)
+-      fprintf(f, "Last apitrace call: %u\n\n", apitrace_call_number);
+-}
+-
+ FILE *
+ dd_get_file_stream(struct dd_screen *dscreen, unsigned apitrace_call_number)
  {
-@@ -173,6 +174,7 @@ dd_num_active_viewports(struct dd_draw_state *dstate)
+diff --git a/src/gallium/auxiliary/driver_ddebug/dd_util.c b/src/gallium/auxiliary/driver_ddebug/dd_util.c
+new file mode 100644
+index 00000000000..a074aba466b
+--- /dev/null
++++ b/src/gallium/auxiliary/driver_ddebug/dd_util.c
+@@ -0,0 +1,116 @@
++/**************************************************************************
++ *
++ * Copyright 2015 Advanced Micro Devices, Inc.
++ * Copyright 2008 VMware, Inc.
++ * All Rights Reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * on the rights to use, copy, modify, merge, publish, distribute, sub
++ * license, and/or sell copies of the Software, and to permit persons to whom
++ * the Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice (including the next
++ * paragraph) shall be included in all copies or substantial portions of the
++ * Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL
++ * THE AUTHOR(S) AND/OR THEIR SUPPLIERS BE LIABLE FOR ANY CLAIM,
++ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
++ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
++ * USE OR OTHER DEALINGS IN THE SOFTWARE.
++ *
++ **************************************************************************/
++
++#include "dd_util.h"
++
++#include "pipe/p_screen.h"
++#include "util/os_file.h"
++#include "util/u_atomic.h"
++#include "util/u_process.h"
++#include "c99_alloca.h"
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++void
++dd_get_debug_filename_and_mkdir(char *buf, size_t buflen, bool verbose)
++{
++   static unsigned index;
++   char dir[256];
++   const char *proc_name = util_get_process_name();
++
++   if (!proc_name) {
++      fprintf(stderr, "dd: can't get the process name\n");
++      proc_name = "unknown";
++   }
++
++   snprintf(dir, sizeof(dir), "%s/"DD_DIR, debug_get_option("HOME", "."));
++
++   if (os_mkdir(dir, 0774) && errno != EEXIST)
++      fprintf(stderr, "dd: can't create a directory (%i)\n", errno);
++
++   snprintf(buf, buflen, "%s/%s_%u_%08u", dir, proc_name, (unsigned int)getpid(),
++            (unsigned int)p_atomic_inc_return(&index) - 1);
++
++   if (verbose)
++      fprintf(stderr, "dd: dumping to file %s\n", buf);
++}
++
++FILE *
++dd_get_debug_file(bool verbose)
++{
++   char name[512];
++   FILE *f;
++
++   dd_get_debug_filename_and_mkdir(name, sizeof(name), verbose);
++   f = fopen(name, "w");
++   if (!f) {
++      fprintf(stderr, "dd: can't open file %s\n", name);
++      return NULL;
++   }
++
++   return f;
++}
++
++void
++dd_parse_apitrace_marker(const char *string, int len, unsigned *call_number)
++{
++   unsigned num;
++   char *s;
++
++   if (len <= 0)
++      return;
++
++   /* Make it zero-terminated. */
++   s = alloca(len + 1);
++   memcpy(s, string, len);
++   s[len] = 0;
++
++   /* Parse the number. */
++   errno = 0;
++   num = strtol(s, NULL, 10);
++   if (errno)
++      return;
++
++   *call_number = num;
++}
++
++void
++dd_write_header(FILE *f, struct pipe_screen *screen, unsigned apitrace_call_number)
++{
++   char cmd_line[4096];
++   if (util_get_command_line(cmd_line, sizeof(cmd_line)))
++      fprintf(f, "Command: %s\n", cmd_line);
++   fprintf(f, "Driver vendor: %s\n", screen->get_vendor(screen));
++   fprintf(f, "Device vendor: %s\n", screen->get_device_vendor(screen));
++   fprintf(f, "Device name: %s\n\n", screen->get_name(screen));
++
++   if (apitrace_call_number)
++      fprintf(f, "Last apitrace call: %u\n\n", apitrace_call_number);
++}
+diff --git a/src/gallium/auxiliary/driver_ddebug/dd_util.h b/src/gallium/auxiliary/driver_ddebug/dd_util.h
+index d7b98cbf442..82e84028b07 100644
+--- a/src/gallium/auxiliary/driver_ddebug/dd_util.h
++++ b/src/gallium/auxiliary/driver_ddebug/dd_util.h
+@@ -28,6 +28,7 @@
+ #ifndef DD_UTIL_H
+ #define DD_UTIL_H
  
-    return 1;
- }
-+#endif /* HAVE_GFX_COMPUTE */
++#include <stdbool.h>
+ #include <stdio.h>
  
- #define COLOR_RESET	"\033[0m"
- #define COLOR_SHADER	"\033[1;32m"
-@@ -288,7 +290,11 @@ dd_dump_shader(struct dd_draw_state *dstate, mesa_shader_stage sh, FILE *f)
+ struct pipe_screen;
+diff --git a/src/gallium/auxiliary/meson.build b/src/gallium/auxiliary/meson.build
+index e4815f8ae07..0565598f444 100644
+--- a/src/gallium/auxiliary/meson.build
++++ b/src/gallium/auxiliary/meson.build
+@@ -2,7 +2,7 @@
+ # SPDX-License-Identifier: MIT
  
-    if (sh == MESA_SHADER_FRAGMENT)
-       if (dstate->rs) {
-+#if HAVE_GFX_COMPUTE
-          unsigned num_viewports = dd_num_active_viewports(dstate);
-+#else
-+         unsigned num_viewports = 1;
-+#endif
- 
-          if (dstate->rs->state.rs.clip_plane_enable)
-             DUMP(clip_state, &dstate->clip_state);
-@@ -871,7 +877,9 @@ dd_unreference_copy_of_draw_state(struct dd_draw_state_copy *state)
- 
-    for (i = 0; i < MESA_SHADER_MESH_STAGES; i++) {
-       if (dst->shaders[i])
-+#if HAVE_GFX_COMPUTE
-          tgsi_free_tokens(dst->shaders[i]->state.shader.tokens);
-+#endif
- 
-       for (j = 0; j < PIPE_MAX_CONSTANT_BUFFERS; j++)
-          pipe_resource_reference(&dst->constant_buffers[i][j].buffer, NULL);
-@@ -918,8 +926,12 @@ dd_copy_draw_state(struct dd_draw_state *dst, struct dd_draw_state *src)
-       if (src->shaders[i]) {
-          dst->shaders[i]->state.shader = src->shaders[i]->state.shader;
-          if (src->shaders[i]->state.shader.tokens) {
-+#if HAVE_GFX_COMPUTE
-             dst->shaders[i]->state.shader.tokens =
-                tgsi_dup_tokens(src->shaders[i]->state.shader.tokens);
-+#else
-+            dst->shaders[i]->state.shader.tokens = NULL;
-+#endif
-          } else {
-             dst->shaders[i]->state.shader.ir.nir = NULL;
-          }
-diff --git a/src/gallium/auxiliary/util/u_dump_state.c b/src/gallium/auxiliary/util/u_dump_state.c
-index 5a966830f63..000c707b688 100644
---- a/src/gallium/auxiliary/util/u_dump_state.c
-+++ b/src/gallium/auxiliary/util/u_dump_state.c
-@@ -517,7 +517,9 @@ util_dump_shader_state(FILE *stream, const struct pipe_shader_state *state)
-    if (state->type == PIPE_SHADER_IR_TGSI) {
-       util_dump_member_begin(stream, "tokens");
-       fprintf(stream, "\"\n");
-+#if HAVE_GFX_COMPUTE
-       tgsi_dump_to_file(state->tokens, 0, stream);
-+#endif
-       fprintf(stream, "\"");
-       util_dump_member_end(stream);
-    }
+ files_libgallium = files(
+-  'driver_ddebug/dd_draw.c',
++  'driver_ddebug/dd_util.c',
+   'driver_ddebug/dd_util.h',
+   'pipebuffer/pb_buffer_fenced.c',
+   'pipebuffer/pb_buffer_fenced.h',
+@@ -178,6 +178,7 @@ if with_gfx_compute
+     'draw/draw_vs.h',
+     'draw/draw_vs_variant.c',
+     'driver_ddebug/dd_context.c',
++    'driver_ddebug/dd_draw.c',
+     'driver_ddebug/dd_pipe.h',
+     'driver_ddebug/dd_public.h',
+     'driver_ddebug/dd_screen.c',
 -- 
 2.52.0
 
