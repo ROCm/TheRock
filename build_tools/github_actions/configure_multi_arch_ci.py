@@ -127,13 +127,8 @@ def _compute_artifacts_from_changed_projects(
 ) -> tuple[list[str], list[str]]:
     """Compute rebuild/reusable artifacts from external repo changed_projects.
 
-    Maps project paths (e.g., "projects/rocprim", "shared/rocroller") to artifact
-    names (e.g., "prim", "blas") using BUILD_TOPOLOGY.toml component mappings.
-
-    Shared directories (like shared/rocroller, shared/origami) are handled the same
-    way as project directories - the last path component is extracted and looked up
-    in the alias map. This works because BUILD_TOPOLOGY.toml explicitly lists shared
-    components in their artifact's components array (e.g., blas includes rocroller).
+    Maps project paths (e.g., "projects/rocprim") to artifact names (e.g., "prim")
+    using BUILD_TOPOLOGY.toml mappings.
 
     Returns:
         (rebuild_artifacts, reusable_artifacts) tuple
@@ -154,24 +149,16 @@ def _compute_artifacts_from_changed_projects(
                         all_stage_artifacts.add(artifact.name)
 
     # Map changed projects to artifacts
-    directly_changed: set[str] = set()
+    rebuild_artifacts: set[str] = set()
     alias_map = topology.get_alias_to_artifact_map()
     for project in changed_projects:
         normalized = project.split("/")[-1].lower()
         if normalized in alias_map:
-            directly_changed.add(alias_map[normalized])
+            rebuild_artifacts.add(alias_map[normalized])
         else:
             print(
                 f"  WARNING: unknown project '{project}' - not mapped to any artifact"
             )
-
-    # Expand rebuild set to include downstream dependents
-    # If prim changes, sparse/solver/rocalution (which depend on prim) must also rebuild
-    downstream_dependents = topology.get_reverse_artifact_deps(directly_changed)
-    rebuild_artifacts = directly_changed | downstream_dependents
-
-    if downstream_dependents:
-        print(f"  downstream dependents: {sorted(downstream_dependents)}")
 
     # Artifacts not in rebuild set are reusable
     reusable_artifacts = all_stage_artifacts - rebuild_artifacts
