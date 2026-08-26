@@ -32,7 +32,7 @@ option(THEROCK_ENABLE_ROCWMMA "Whether rocwmma is available" ON)
 option(THEROCK_ENABLE_ROCALUTION "Whether rocalution is available" ON)
 option(THEROCK_ENABLE_LIBHIPCXX "Whether libhipcxx is available" ON)
 option(THEROCK_ENABLE_SOLVER "Whether rocsolver/hipsolver are available" ON)
-option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse/hipsparselt are available" ON)
+option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse/hipsparselt are available (hipsparselt is Linux-only)" ON)
 option(ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" OFF)
 
 set(TEST_PATH)
