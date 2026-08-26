@@ -61,6 +61,11 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(), reason="rocminfo test fails with ASAN build, see TheRock#3312"
     )
+    # TODO(#7659): re-enable MI455 rocminfo test once kernel bug is fixed
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="rocminfo fails on gfx125X-dcgpu due to kernel bug, see #7659",
+    )
     @pytest.mark.parametrize(
         "to_search",
         [

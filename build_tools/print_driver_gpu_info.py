@@ -112,12 +112,18 @@ def run_sanity(os_name: str) -> None:
             args=["static"],
             extra_command_search_paths=[bin_dir],
         )
-        run_command_with_search(
-            label="rocminfo",
-            command="rocminfo",
-            args=[],
-            extra_command_search_paths=[bin_dir],
-        )
+        # TODO(#7659): re-enable MI455 rocminfo test once kernel bug is fixed
+        amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        if "gfx125X-dcgpu" in amdgpu_families:
+            log("\n=== rocminfo ===")
+            log("Skipping rocminfo: gfx125X-dcgpu has a kernel bug, see #7659")
+        else:
+            run_command_with_search(
+                label="rocminfo",
+                command="rocminfo",
+                args=[],
+                extra_command_search_paths=[bin_dir],
+            )
         run_command_with_search(
             label="Kernel version",
             command="uname",
