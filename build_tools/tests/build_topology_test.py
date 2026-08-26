@@ -1068,6 +1068,124 @@ class BuildTopologyTest(unittest.TestCase):
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
 
+    def test_parse_disable_processors(self):
+        """Test parsing disable_processors from TOML."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["profiler"]
+
+        self.assertEqual(artifact.disable_processors, ["aarch64"])
+
+    def test_is_artifact_disabled_on_processor(self):
+        """Test is_artifact_disabled_on_processor method."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["profiler"]
+
+        self.assertTrue(topology.is_artifact_disabled_on_processor(artifact, "aarch64"))
+        self.assertFalse(topology.is_artifact_disabled_on_processor(artifact, "x86_64"))
+        self.assertFalse(topology.is_artifact_disabled_on_processor(artifact, ""))
+
+    def test_validate_invalid_disable_processor(self):
+        """Test validation catches invalid processor names."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["invalid_arch"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(
+            any("invalid disable_processor" in e for e in errors),
+            f"Expected processor validation error, got: {errors}",
+        )
+
+    def test_stage_features_skip_processor_disabled_artifacts(self):
+        """Test get_stage_features excludes artifacts disabled on a processor."""
+        self.write_topology(
+            """
+            [build_stages.profiler]
+            description = "Profiler"
+            artifact_groups = ["profiler"]
+
+            [artifact_groups.profiler]
+            description = "Profiler"
+            type = "generic"
+
+            [artifacts.profiler-sdk]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "PROFILER_SDK"
+            feature_group = "PROFILER"
+
+            [artifacts.rocprofiler-systems]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "ROCPROFSYS"
+            feature_group = "PROFILER"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        features = get_stage_features(topology, "profiler", processor_name="aarch64")
+        self.assertNotIn("ROCPROFSYS", features)
+        self.assertIn("PROFILER_SDK", features)
+
+        features = get_stage_features(topology, "profiler", processor_name="x86_64")
+        self.assertIn("ROCPROFSYS", features)
+        self.assertIn("PROFILER_SDK", features)
+
+    def test_generates_disable_processors_feature(self):
+        """Test generated CMake includes DISABLE_PROCESSORS."""
+        self.write_topology(
+            """
+            [build_stages.profiler]
+            description = "Profiler"
+            artifact_groups = ["profiler"]
+
+            [artifact_groups.profiler]
+            description = "Profiler"
+            type = "generic"
+
+            [artifacts.rocprofiler-systems]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "ROCPROFSYS"
+            feature_group = "PROFILER"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("DISABLE_PROCESSORS aarch64", cmake)
+
 
 class RealTopologyTest(unittest.TestCase):
     """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""

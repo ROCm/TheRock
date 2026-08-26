@@ -11,8 +11,9 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "ci", "dev", "nightly", or "prerelease"; controls
-          artifact bucket selection, IAM role, and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
         default: ci
       prerelease_version:
@@ -72,6 +73,10 @@ on:
         description: "Build JAX wheels."
         type: boolean
         default: false
+      build_native_linux:
+        description: "Build native Linux packages (deb/rpm) and run their install tests."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -90,6 +95,11 @@ on:
         default: ""
       changed_projects:
         description: "Comma-separated list of changed projects from external repos (e.g., 'projects/rocprim'). Used for granular artifact-level reuse."
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
     outputs:
@@ -193,6 +203,7 @@ jobs:
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
+          BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}

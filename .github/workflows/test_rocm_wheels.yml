@@ -18,9 +18,9 @@ on:
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
         description: >-
-          Full Python package index URL for use with --index-url.
+          Full repo.amd.com aggregate Python package index URL for use with --index-url.
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       package_find_links_url:
         description: Full Python package index URL for use with --find-links (usually instead of package_index_url)
         type: string

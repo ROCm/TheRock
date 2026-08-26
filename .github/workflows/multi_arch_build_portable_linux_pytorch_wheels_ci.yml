@@ -106,6 +106,14 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: >-
+          Build runner label. On workflow_dispatch, default to the self-hosted
+          ROCm Linux pool so runs land on a runner with sccache/mirror access;
+          otherwise the runs-on expression falls back to 'ubuntu-24.04', which
+          cannot complete a full PyTorch build.
+        type: string
+        default: "aws-linux-scale-rocm-prod"
 
 permissions:
   contents: read
@@ -120,7 +128,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       RELEASE_TYPE: ci

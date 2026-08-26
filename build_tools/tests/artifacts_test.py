@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifacts import ArtifactName
+from _therock_utils.artifacts import ArtifactName, prebuilt_marker_relpath
 import _therock_utils.artifact_builder as builder
 
 
@@ -626,6 +626,53 @@ class ComponentScannerTest(TmpDirTestCase):
             builder.ArtifactDescriptor.load_toml_file(
                 self.temp_dir / "descriptor.toml", artifact_name=""
             )
+
+
+class PrebuiltMarkerRelpathTest(unittest.TestCase):
+    """Tests for prebuilt_marker_relpath.
+
+    therock_subproject.cmake looks for the bootstrap marker at
+    "${_stage_dir}.prebuilt", so the marker must be named after the subproject
+    stage directory, not after the artifact basedir (which may be nested below
+    it).
+    """
+
+    def testStageBasedirUnchanged(self):
+        # The common case: the basedir is the stage dir itself.
+        self.assertEqual(
+            prebuilt_marker_relpath("core/ROCR-Runtime/stage"),
+            "core/ROCR-Runtime/stage.prebuilt",
+        )
+        self.assertEqual(
+            prebuilt_marker_relpath("math-libs/BLAS/hipBLASLt/stage"),
+            "math-libs/BLAS/hipBLASLt/stage.prebuilt",
+        )
+        # A stage dir may itself be nested below a build dir.
+        self.assertEqual(
+            prebuilt_marker_relpath("third-party/openmpi/build/stage"),
+            "third-party/openmpi/build/stage.prebuilt",
+        )
+
+    def testBasedirWithoutStageComponentUnchanged(self):
+        # Some descriptors declare a build dir as a basedir. There is no stage
+        # dir to attribute it to, so the behavior must be unchanged.
+        self.assertEqual(
+            prebuilt_marker_relpath("math-libs/hipthreads/build"),
+            "math-libs/hipthreads/build.prebuilt",
+        )
+
+    def testBasedirNestedBelowStageTruncates(self):
+        # A basedir below the stage dir must still mark the enclosing stage dir.
+        self.assertEqual(
+            prebuilt_marker_relpath("dctools/rdc/stage/portable-rdc"),
+            "dctools/rdc/stage.prebuilt",
+        )
+
+    def testInnermostStageComponentWins(self):
+        self.assertEqual(
+            prebuilt_marker_relpath("a/stage/b/stage/c/d"),
+            "a/stage/b/stage.prebuilt",
+        )
 
 
 if __name__ == "__main__":

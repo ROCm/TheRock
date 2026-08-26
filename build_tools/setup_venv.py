@@ -27,7 +27,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel,device-all] --index-url=https://rocm.nightlies.amd.com/whl-multi-arch/
+    python -m pip install rocm[libraries,devel,device-all] --index-url=https://nightly.repo.amd.com/rocm/whl-next/
     deactivate
     ```
 
@@ -54,10 +54,10 @@ from github_actions.github_actions_api import *
 is_windows = platform.system() == "Windows"
 
 ROCM_INDEX_URLS_MAP = {
-    "stable": "https://repo.amd.com/rocm/whl-multi-arch/",
-    "prerelease": "https://rocm.prereleases.amd.com/whl-multi-arch/",
-    "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
-    "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
+    "stable": "https://stable.repo.amd.com/rocm/whl-next/",
+    "prerelease": "https://rc.repo.amd.com/rocm/whl-next/",
+    "nightly": "https://nightly.repo.amd.com/rocm/whl-next/",
+    "dev": "https://dev.repo.amd.com/rocm/whl-next/",
 }
 
 

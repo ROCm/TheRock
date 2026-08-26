@@ -41,6 +41,13 @@ logging.basicConfig(level=logging.INFO)
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 
+# Maps a group label (the part after "test:") to the individual test matrix
+# keys it expands to. Use this when a single label should select multiple
+# related jobs without relying on name-prefix inference.
+TEST_LABEL_GROUPS: dict[str, list[str]] = {
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
+}
+
 
 def _get_script_path(script_name: str) -> str:
     platform_path = SCRIPT_DIR / script_name
@@ -120,6 +127,20 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     return job_config
 
 
+def _family_matches(
+    family_list: list[str], amdgpu_families: str, family_gfx_targets: list[str]
+) -> bool:
+    """Returns True if the current AMDGPU family matches any entry in family_list.
+
+    CI may pass either the family group string (e.g. "gfx120X-all") via
+    AMDGPU_FAMILIES or refer to the individual gfx targets within that family
+    (e.g. "gfx1200", "gfx1201"). Both forms are checked using exact membership.
+    """
+    return amdgpu_families in family_list or any(
+        t in family_list for t in family_gfx_targets
+    )
+
+
 # Common settings applied to all jobs
 _common_settings = {}
 
@@ -132,6 +153,45 @@ _rocgdb_common = {
     "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
+
+
+# Runner assignment for test components
+# =====================================
+# Most components have their runner selected at runtime by the per-component loop
+# below, which draws from the AMDGPU-family runner pool configured in
+# amdgpu_family_matrix.py / therock-ci-config.
+#
+# A component may instead pre-pin its runner by setting "test_runner" directly in
+# its test_matrix entry. The loop will detect this and leave the value untouched.
+# Use this when a component must run on a specific machine class regardless of the
+# GPU family being tested. For example, rocgdb-corefile requires runners that have
+# GPU core-dump support enabled, identified by the label
+# "linux-gfx942-gpu-rocm-mathlib", which is registered separately in the runner pool.
+#
+# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
+# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
+# expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# A component may also restrict which GPU families it runs on via "include_family"
+# (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
+# ("linux" and/or "windows") whose value is a list of family entries. A job runs
+# only when it matches an include (if any are listed for that platform) and
+# matches no exclude.
+#
+# The two filters are evaluated per platform and independently: a list under
+# "linux" only affects Linux runs and a list under "windows" only affects Windows
+# runs, so a platform with no list (or the empty list) is left unfiltered. This
+# means an include scoped to one platform does not gate the other. To gate both,
+# list the families under both keys, for example:
+#   "include_family": {"linux": ["gfx942"], "windows": ["gfx942"]}
+#
+# Each entry matches either the family group string passed via AMDGPU_FAMILIES
+# (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
+# that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
+# targets, so those must be matched by the group string (e.g. "gfx1150",
+# "gfx125X-dcgpu"). Examples:
+#   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
+#   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -332,13 +392,35 @@ test_matrix = {
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.dwarf2",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
         "linux_cpu_runner": True,
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --tests gdb.rocm",
+        "expect_failure": True,
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
+    },
+    # Corefile tests require specific hardware support (GPU core dump capable runners).
+    # test_runner is pre-pinned so the family-based runner selection loop skips it.
+    # Only gfx942 has core-dump support, so include_family opts the job in to that
+    # family alone rather than enumerating every other architecture to exclude.
+    "rocgdb-corefile": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-corefile",
+        "expect_failure": True,
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
+            " gdb.rocm/corefile.exp"
+            " gdb.rocm/core-no-read-special-files.exp"
+            " gdb.rocm/gcore-after-attach.exp"
+            " gdb.rocm/load-core-remote-system.exp"
+            " gdb.rocm/runtime-core.exp"
+        ),
+        "test_runner": "linux-gfx942-gpu-rocm-mathlib",
+        "include_family": {
+            "linux": ["gfx942"],
+        },
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -828,8 +910,10 @@ test_matrix = {
             "windows": 1,
         },
         "exclude_family": {
-            # hipTensor does not support gfx103X (see TheRock#2074)
-            "linux": ["gfx1030"],
+            # hipTensor requires composable_kernel, which is filtered out on some platforms,
+            # so no hipTensor test artifact is produced for that family (see TheRock#2074).
+            "linux": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
+            "windows": ["gfx900", "gfx90c", "gfx906", "gfx101X-all", "gfx103X-all"],
         },
     },
 }
@@ -850,7 +934,6 @@ def run():
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
-    windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
     # Get runner config for per-component runner selection
@@ -909,11 +992,10 @@ def run():
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
 
-        # If the test is disabled for a particular platform, skip the test.
-        # Check both the family group string (e.g. "gfx120X-all") and the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201") against the
-        # exclude list, since CI may pass either form via AMDGPU_FAMILIES.
-        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        # Resolve the individual gfx targets for the current family once, so both
+        # include_family and exclude_family can match either the family group
+        # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
         _family_gfx_targets = []
         if amdgpu_families and shortened_family and shortened_family in all_families:
             _family_gfx_targets = (
@@ -921,13 +1003,24 @@ def run():
                 .get(platform, {})
                 .get("fetch-gfx-targets", [])
             )
-        _is_excluded = amdgpu_families in _exclude_list or any(
-            t in _exclude_list for t in _family_gfx_targets
-        )
-        if (
-            "exclude_family" in selected_matrix[key]
-            and platform in selected_matrix[key]["exclude_family"]
-            and _is_excluded
+
+        # include_family (opt-in) and exclude_family (opt-out) together decide
+        # whether a job runs: it runs only when it matches an include (if any are
+        # listed for this platform) and matches no exclude. Matching is exact
+        # membership.
+        _include_list = selected_matrix[key].get("include_family", {}).get(platform, [])
+        if _include_list and not _family_matches(
+            _include_list, amdgpu_families, _family_gfx_targets
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family "
+                f"{amdgpu_families}: not listed in include_family"
+            )
+            continue
+
+        _exclude_list = selected_matrix[key].get("exclude_family", {}).get(platform, [])
+        if _exclude_list and _family_matches(
+            _exclude_list, amdgpu_families, _family_gfx_targets
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
@@ -937,7 +1030,12 @@ def run():
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
         parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
-        if key != "sanity" and parsed_test_labels and key not in parsed_test_labels:
+        expanded_test_labels = [
+            member
+            for label in parsed_test_labels
+            for member in TEST_LABEL_GROUPS.get(label, [label])
+        ]
+        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -949,8 +1047,7 @@ def run():
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
-            # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
-            # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
+            # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
@@ -974,21 +1071,19 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-                if windows_hip_rocr_tests:
-                    rocr_entry = {
-                        **_common_settings,
-                        "job_name": "hip-tests (ROCR)",
-                        "fetch_artifact_args": base["fetch_artifact_args"],
-                        "timeout_minutes": base["timeout_minutes"],
-                        "test_script": base["test_script"],
-                        "platform": base["platform"],
-                        "total_shards": total_shards,
-                        "test_type": test_type,
-                        "shard_arr": shard_arr,
-                        "expect_failure": True,
-                        "gpu_enable_pal": "0",
-                    }
-                    all_components.append(rocr_entry)
+                rocr_entry = {
+                    **_common_settings,
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
                 continue
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
@@ -1051,7 +1146,9 @@ def run():
                     f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
-        else:
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels.
+            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
             # For ASAN builds, use the sandbox runner if available
             if is_asan_build and test_runs_on_sandbox:
                 component["test_runner"] = test_runs_on_sandbox

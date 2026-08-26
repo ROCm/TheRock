@@ -87,6 +87,15 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
+# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
+# The compile flag is spelled per compiler; the link flag goes through CMake's
+# LINKER: prefix, which handles the driver difference.
+# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
+# defaults to the latter.
+set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
+set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
+set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
+
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -781,6 +790,8 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+  string(APPEND _init_contents
+    "set(ROCM_BUILD_FLAGS_STATE_FILE \"@ROCM_BUILD_FLAGS_STATE_FILE@\")\n")
 
   # Support generator expressions in install CODE
   # We rely on this for debug symbol separation and some of our very old projects
@@ -868,6 +879,16 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
+  # Link half of the driver build options. This cannot go through
+  # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
+  # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
+  # has populated it from *_INIT, which shadows the cache value and drops
+  # whatever the toolchain set.
+  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    string(APPEND _init_contents
+      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -894,6 +915,7 @@ function(therock_cmake_subproject_activate target_name)
 
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
+  list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
   # on the stage.stamp file). These are a dependency for configure.
@@ -1030,6 +1052,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
         "${_global_post_include}"
+        "${ROCM_BUILD_FLAGS_STATE_FILE}"
         ${_extra_depends}
         ${_dep_provider_file}
         ${_configure_dep_stamps}
@@ -1732,6 +1755,18 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
+  endif()
+
+  # Compile half of the driver build options. The link half is emitted as
+  # add_link_options() in the project_init file.
+  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    if(compiler_toolchain)
+      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
+    else()
+      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
+    endif()
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
   endif()
 
   # Customize debug info generation.

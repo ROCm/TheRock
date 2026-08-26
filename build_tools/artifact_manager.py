@@ -68,7 +68,11 @@ from _therock_utils.artifact_backend import (
     S3Backend,
     create_backend_from_env,
 )
-from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import (
+    ArtifactName,
+    ArtifactPopulator,
+    prebuilt_marker_relpath,
+)
 from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
@@ -353,11 +357,12 @@ class BootstrappingPopulator(ArtifactPopulator):
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
                 rmtree_with_retry(full_path)
-            # Write the ".prebuilt" marker file
-            prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+            # Write the ".prebuilt" marker file where the build looks for it.
+            prebuilt_path = self.output_path / prebuilt_marker_relpath(relpath)
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
             prebuilt_path.touch()
-            self.created_markers.append(prebuilt_path)
+            if prebuilt_path not in self.created_markers:
+                self.created_markers.append(prebuilt_path)
 
 
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
