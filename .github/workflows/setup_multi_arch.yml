@@ -46,9 +46,11 @@ on:
         default: ""
       stage_reuse_mode:
         description: >-
-          Automatic stage-reuse mode (separate from the manual prebuilt_stages
-          input): "dry-run" (default) only reports which unaffected stages could
-          be reused; "reuse-stage" actually reuses them.
+          Artifact-reuse mode: "off" disables all reuse, ignores prebuilt_stages
+          and baseline_run_id, and performs no reuse analysis or baseline lookup;
+          "dry-run" (default) reports what automatic reuse could do while still
+          honoring explicit prebuilt_stages; "reuse-stage" applies automatic
+          reuse and also honors explicit prebuilt_stages.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
