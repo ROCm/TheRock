@@ -146,6 +146,56 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
     return [stage for stage in all_stages if stage not in build_stages]
 
 
+# Maps build stages to the test labels that can run with artifacts from those
+# stages. Used to auto-filter tests when build_stages narrows the build graph.
+# Test labels not listed here require a full build.
+STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
+    "compiler-runtime": ["kfdtest"],
+    "runtime-tests": ["hip-tests", "rocrtst"],
+    "math-libs": [
+        "rocblas",
+        "hipblas",
+        "hipblaslt",
+        "rocfft",
+        "hipfft",
+        "rocrand",
+        "hiprand",
+        "rocsparse",
+        "hipsparse",
+        "rocsolver",
+        "hipsolver",
+        "rocprim",
+        "hipcub",
+        "rocthrust",
+        "rocalution",
+        "rocwmma",
+        "hiptensor",
+        "composable-kernel",
+    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
+    "comm-libs": ["rccl", "rocshmem"],
+    "storage-libs": ["hipfile"],
+    "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
+    "cv-libs": ["rpp"],
+    "media-libs": ["rocdecode", "rocjpeg"],
+    "debug-tools": ["rocgdb"],
+}
+
+
+def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | None:
+    """Return the test labels allowed for a partial build, or None for full builds.
+
+    When build_stages is empty (full build), returns None to indicate no filtering.
+    When build_stages is set, returns the union of test labels for those stages.
+    """
+    if not build_stages:
+        return None
+    allowed = set()
+    for stage in build_stages:
+        allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
+    return sorted(allowed) if allowed else []
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -1259,7 +1309,7 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix == "asan"
+    is_asan = suffix in ("asan", "host-asan")
     build_python_packages = ci_inputs.build_python_packages and not is_asan
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
@@ -1269,6 +1319,24 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
+    build_native_linux = ci_inputs.build_native_linux
+
+    # When stages are skipped (partial build), disable package builds since
+    # they require a complete artifact set. Prebuilt/reused stages are OK
+    # because their artifacts are copied from a baseline run.
+    has_skipped_stages = bool(jobs.build_rocm.skipped_stages)
+    if has_skipped_stages:
+        print(
+            f"  Disabling package builds due to skipped stages: "
+            f"{jobs.build_rocm.skipped_stages}"
+        )
+        build_python_packages = False
+        build_pytorch = False
+        build_jax = False
+        build_native_linux = False
+        pytorch_build_matrix = []
+        jax_build_matrix = []
+        test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1277,7 +1345,7 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=ci_inputs.build_native_linux,
+        build_native_linux=build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
@@ -1504,12 +1572,52 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    # Filter test labels based on build_stages when a partial build is requested.
+    # Tests that require artifacts from skipped stages cannot run.
+    linux_test_labels = ci_inputs.linux_test_labels
+    windows_test_labels = ci_inputs.windows_test_labels
+    allowed_labels = _get_allowed_test_labels_for_stages(ci_inputs.build_stages)
+    if allowed_labels is not None:
+        # Partial build: filter to only labels that can run with available stages.
+        # If caller specified labels, intersect with allowed; otherwise use allowed.
+        if linux_test_labels:
+            filtered = [
+                lbl
+                for lbl in linux_test_labels
+                if lbl.replace("test:", "") in allowed_labels
+            ]
+            if filtered != linux_test_labels:
+                print(
+                    f"  Filtered linux_test_labels for partial build: "
+                    f"{linux_test_labels} -> {filtered}"
+                )
+            linux_test_labels = filtered
+        else:
+            # No explicit labels: auto-select based on stages
+            linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+            print(
+                f"  Auto-selected linux_test_labels for partial build: {linux_test_labels}"
+            )
+
+        if windows_test_labels:
+            filtered = [
+                lbl
+                for lbl in windows_test_labels
+                if lbl.replace("test:", "") in allowed_labels
+            ]
+            if filtered != windows_test_labels:
+                print(
+                    f"  Filtered windows_test_labels for partial build: "
+                    f"{windows_test_labels} -> {filtered}"
+                )
+            windows_test_labels = filtered
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
-        linux_test_labels=ci_inputs.linux_test_labels,
-        windows_test_labels=ci_inputs.windows_test_labels,
+        linux_test_labels=linux_test_labels,
+        windows_test_labels=windows_test_labels,
     )
 
 
