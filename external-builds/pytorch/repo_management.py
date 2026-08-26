@@ -4,6 +4,7 @@
 import argparse
 from pathlib import Path, PurePosixPath
 import shlex
+import shutil
 import subprocess
 import sys
 import os
@@ -141,6 +142,116 @@ def git_config_ignore_submodules(repo_path: Path):
             pass
 
 
+def save_repo_patches(repo_path: Path, patches_path: Path):
+    """Updates the patches directory with any patches committed to the repository.
+
+    Splits commits into a `base` set (upstream..hipify^) and a `hipified` set
+    (hipify..HEAD) using the diffbase tags recorded during checkout, mirroring
+    the `uccl` and `fetch_sources` conventions.
+    """
+    if patches_path.exists():
+        shutil.rmtree(patches_path)
+    upstream_rev = rev_parse(repo_path, TAG_UPSTREAM_DIFFBASE)
+    hipify_rev = rev_parse(repo_path, TAG_HIPIFY_DIFFBASE)
+    if upstream_rev is None:
+        print(f"error: Could not find upstream diffbase tag {TAG_UPSTREAM_DIFFBASE}")
+        sys.exit(1)
+    hipified_count = 0
+    if hipify_rev:
+        hipified_revlist = f"{hipify_rev}..HEAD"
+        base_revlist = f"{upstream_rev}..{hipify_rev}^"
+        hipified_count = len(rev_list(repo_path, hipified_revlist))
+    else:
+        hipified_revlist = None
+        base_revlist = f"{upstream_rev}..HEAD"
+    base_count = len(rev_list(repo_path, base_revlist))
+    if hipified_count == 0 and base_count == 0:
+        return
+    print(
+        f"Saving {patches_path} patches: {base_count} base, {hipified_count} hipified"
+    )
+    if base_count > 0:
+        base_path = patches_path / "base"
+        base_path.mkdir(parents=True, exist_ok=True)
+        run_command(
+            ["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path
+        )
+    if hipified_count > 0:
+        hipified_path = patches_path / "hipified"
+        hipified_path.mkdir(parents=True, exist_ok=True)
+        run_command(
+            ["git", "format-patch", "-o", hipified_path, hipified_revlist],
+            cwd=repo_path,
+        )
+
+
+def apply_repo_patches(repo_path: Path, patches_path: Path):
+    """Applies patches to a single repository from the given patches directory.
+
+    Uses `git am` with the same flags as `fetch_sources.py`/`uccl`. A missing or
+    empty directory is a no-op.
+    """
+    patch_files = list(patches_path.glob("*.patch"))
+    if not patch_files:
+        return
+    patch_files.sort(key=lambda p: p.name)
+    print(f"Applying {len(patch_files)} patches to {repo_path}")
+    run_command(
+        [
+            "git",
+            "am",
+            "--whitespace=nowarn",
+            "--committer-date-is-author-date",
+            "--no-gpg-sign",
+        ]
+        + patch_files,
+        cwd=repo_path,
+    )
+
+
+def apply_all_patches(
+    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
+):
+    """Applies a patchset to the root repo and every submodule.
+
+    Patches are laid out as
+    `patches_path/<repo_name-or-submodule-relpath>/<patchset_name>/*.patch`.
+    Missing directories are a no-op, so only the refs/submodules that actually
+    need patches have to provide them (e.g. `nightly`, whose gloo is already
+    native, matches no directory and is left untouched).
+    """
+    relative_sm_paths = list_submodules(root_repo_path, relative=True)
+    # Root repo patches.
+    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
+    # Submodule patches.
+    for relative_sm_path in relative_sm_paths:
+        apply_repo_patches(
+            root_repo_path / relative_sm_path,
+            patches_path / relative_sm_path / patchset_name,
+        )
+
+
+# repo_hashtag_to_patches_dir_name('release/2.12') -> '2.12'
+# repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+def repo_hashtag_to_patches_dir_name(version_ref: str) -> str:
+    name = version_ref.removeprefix("release/")
+    pos = name.find("-")
+    if pos != -1:
+        return name[:pos]
+    return name
+
+
+def get_patches_dir_name(args: argparse.Namespace) -> str | None:
+    """Resolves the patchset directory name from --patchset or the repo hashtag."""
+    patchset_name = getattr(args, "patchset", None)
+    if patchset_name is not None:
+        return patchset_name
+    hashtag = getattr(args, "repo_hashtag", None)
+    if hashtag is not None:
+        return repo_hashtag_to_patches_dir_name(hashtag)
+    return None
+
+
 def do_hipify(args: argparse.Namespace):
     repo_dir: Path = args.checkout_dir
     print(f"Hipifying {repo_dir}")
@@ -261,11 +372,45 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         )
         git_config_ignore_submodules(repo_dir)
 
+    # Resolve carried-patch parameters. Only opted-in checkouts (currently the
+    # torch repo) define these; siblings (audio/vision/apex/triton) leave them
+    # unset and are treated as no-ops via getattr defaults.
+    patch_enabled = bool(getattr(args, "patch", False))
+    patch_dir: Path | None = getattr(args, "patch_dir", None)
+    patchset_name = get_patches_dir_name(args) if patch_enabled else None
+    repo_name = str(getattr(args, "repo_name", repo_dir.name))
+    apply_patches = patch_enabled and patch_dir is not None and bool(patchset_name)
+
+    # Base patches: applied after `submodule update` and before hipify so the
+    # hipify commit captures the patched sources. Requires submodules.
+    if apply_patches and args.submodules:
+        apply_all_patches(repo_dir, patch_dir / patchset_name, repo_name, "base")
+
     # Hipify.
     if args.hipify:
         custom_hipify(args)
         if args.commit_hipify:
             commit_hipify(args)
+
+    # Hipified patches: applied after hipify. Requires submodules.
+    if apply_patches and args.hipify and args.submodules:
+        apply_all_patches(repo_dir, patch_dir / patchset_name, repo_name, "hipified")
+
+
+def do_save_patches(args: argparse.Namespace):
+    """Saves local commits (base + hipified) of the repo and its submodules as
+    patch files under `<patch_dir>/<patchset>/...`, mirroring `uccl`."""
+    repo_dir: Path = args.checkout_dir
+    repo_name = str(getattr(args, "repo_name", repo_dir.name))
+    patch_dir: Path = args.patch_dir
+    patchset_name = get_patches_dir_name(args)
+    if not patchset_name:
+        print("error: Could not determine patchset name (pass --patchset)")
+        sys.exit(1)
+    patches_dir = patch_dir / patchset_name
+    save_repo_patches(repo_dir, patches_dir / repo_name)
+    for relative_sm_path in list_submodules(repo_dir, relative=True):
+        save_repo_patches(repo_dir / relative_sm_path, patches_dir / relative_sm_path)
 
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.

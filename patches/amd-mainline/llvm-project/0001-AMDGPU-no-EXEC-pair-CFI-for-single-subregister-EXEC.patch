@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrey Kasaurov <andrey.kasaurov@amd.com>
+Date: Sun, 9 Aug 2026 01:45:00 -0700
+Subject: [PATCH] [AMDGPU] Don't emit EXEC-pair CFI for a single-subregister
+ EXEC
+
+llvm/llvm-project#213115 replaced the `NumSubRegs == 1` guard in
+PrologEpilogSGPRSpillBuilder::copyToScratchSGPR with a check that both DWARF
+register numbers are usable. Those two conditions differ on wave32: EXEC_LO is
+a single 32-bit subregister, and findUnusedRegister can return a member of
+SReg_32_XM0_XEXEC that has no DWARF encoding (everything in that class other
+than SGPR_32 inherits the SIRegLoHi16 default of [-1, -1]). Such a save now
+falls into the EXEC branch, whose assert requires a 64-bit EXEC pair, and
+gfx1010 RCCL device code aborts the compiler on 24 objects:
+
+  SIFrameLowering.cpp:426: PrologEpilogSGPRSpillBuilder::copyToScratchSGPR:
+  Assertion `NumSubRegs == 2 && "EXEC larger than 64-bit"' failed.
+
+With assertions disabled the same path is worse but silent:
+buildCFIForRegToSGPRPairSpill asks a 32-bit register for sub0 and sub1, gets
+NoRegister for both, and emits a .cfi_llvm_register_pair naming DWARF register
+-1 twice.
+
+Restrict the EXEC branch to the 64-bit pair it was written for and give the
+single-subregister case its own arm. Note that simply adding `NumSubRegs == 2`
+is not sufficient: the remaining per-subregister loop indexes SplitParts and
+DstSplitParts, which are both empty when NumSubRegs == 1, so wave32 must not
+reach it.
+
+This is a local carry to unblock the comm-libs build with LLVM assertions
+enabled (ROCm/TheRock#6102). Drop it once an upstream fix lands.
+---
+ {a => b}/llvm/lib/Target/AMDGPU/SIFrameLowering.cpp | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/llvm/lib/Target/AMDGPU/SIFrameLowering.cpp b/llvm/lib/Target/AMDGPU/SIFrameLowering.cpp
+index c258b99..49e73a2 100644
+--- a/llvm/lib/Target/AMDGPU/SIFrameLowering.cpp
++++ b/llvm/lib/Target/AMDGPU/SIFrameLowering.cpp
+@@ -422,9 +422,16 @@ class PrologEpilogSGPRSpillBuilder {
+         TFI->buildCFI(MBB, MI, DL,
+                       MCCFIInstruction::createRegister(
+                           nullptr, DwarfCFISuperReg, DwarfDstSuperReg));
+-      } else if (isExec(CFISuperReg)) {
+-        assert(NumSubRegs == 2 && "EXEC larger than 64-bit");
++      } else if (isExec(CFISuperReg) && NumSubRegs == 2) {
+         TFI->buildCFIForRegToSGPRPairSpill(MBB, MI, DL, CFISuperReg, DstReg);
++      } else if (NumSubRegs == 1) {
++        // The copy destination has no DWARF register number. On wave32,
++        // findUnusedRegister can return a member of SReg_32_XM0_XEXEC that
++        // carries no DWARF encoding, and EXEC_LO is a single subregister, so
++        // neither the EXEC pair helper above nor the per-subregister loop
++        // below applies: SplitParts and DstSplitParts are both empty here.
++        // Describe nothing rather than naming DWARF register -1. The matching
++        // copyFromScratchSGPR emits no CFI either, so this stays balanced.
+       } else {
+         for (unsigned I = 0; I < NumSubRegs; ++I) {
+           MCRegister SrcSubReg = TRI.getSubReg(SuperReg, SplitParts[I]);
+-- 
+2.34.1
