@@ -445,7 +445,7 @@ test_matrix = {
     # SPARSE tests
     "hipsparse": {
         "job_name": "hipsparse",
-        "fetch_artifact_args": "--sparse --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -456,7 +456,7 @@ test_matrix = {
     },
     "rocsparse": {
         "job_name": "rocsparse",
-        "fetch_artifact_args": "--sparse --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
         # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
         # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
