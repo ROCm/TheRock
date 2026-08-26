@@ -22,7 +22,7 @@ on:
     inputs:
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects. Empty = all coverage-enabled projects."
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
         default: ""
       amdgpu_families:
         type: string
