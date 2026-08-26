@@ -15,7 +15,12 @@ optional pytest marker expression (``pytest_markers`` / ``exclude_markers``).
 GPU-architecture exclusions are applied via ``skip-gfxXXXX`` markers. A category
 may also supply ``pytest_args``: a list of extra pytest CLI options appended
 verbatim to the invocation (e.g. ``-k``, or component-specific conftest options).
-``{ROCM_PATH}`` tokens in those values are substituted with the install prefix.
+``{ROCM_PATH}`` tokens in those values are substituted with the install prefix,
+and ``{AMDGPU_TARGETS}`` tokens with the concrete GPU target (first entry of the
+``AMDGPU_TARGETS`` env var, e.g. ``gfx1250``; when unset, the gfx token is
+extracted from ``AMDGPU_FAMILIES`` via ``extract_gpu_arch()``).  This applies to
+``pytest_args``, ``pytest_markers``, ``exclude_markers``, and
+``execution_settings.environment``.
 
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
@@ -113,13 +118,29 @@ def extract_gpu_arch(amdgpu_families):
     return None
 
 
-def build_marker_expression(category_config, gpu_arch):
+def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
     """
     Build a pytest -m expression from a category's marker config plus the
     GPU-arch skip markers registered in pytest.ini (skip-gfxXXXX).
+
+    ``{AMDGPU_TARGETS}`` tokens in marker strings are substituted with the
+    *amdgpu_target* value (a concrete gfx target like ``gfx1250``) so
+    categories can be arch-agnostic.  When *amdgpu_target* is empty,
+    any marker containing ``{AMDGPU_TARGETS}`` is dropped entirely
+    (preventing malformed expressions like ``( and emu_fast)``).
     """
-    include = category_config.get("pytest_markers", []) or []
-    exclude = category_config.get("exclude_markers", []) or []
+    gfx_target = amdgpu_target or ""
+    include_markers = category_config.get("pytest_markers", []) or []
+    exclude_markers = category_config.get("exclude_markers", []) or []
+    if not gfx_target:
+        include_markers = [
+            m for m in include_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
+        exclude_markers = [
+            m for m in exclude_markers if "{AMDGPU_TARGETS}" not in str(m)
+        ]
+    include = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in include_markers]
+    exclude = [str(m).replace("{AMDGPU_TARGETS}", gfx_target) for m in exclude_markers]
 
     terms = []
     if include:
@@ -221,6 +242,7 @@ if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
     TEST_TYPE = os.getenv("TEST_TYPE", "quick")
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+    AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
     if not TEST_COMPONENT_NAME:
@@ -250,11 +272,23 @@ if __name__ == "__main__":
         _fail(f"Category '{TEST_TYPE}' defines no test_paths")
 
     gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
-    marker_expr = build_marker_expression(category_config, gpu_arch)
+    # Resolve a concrete gfx target for {AMDGPU_TARGETS} substitution.
+    # AMDGPU_TARGETS (set by test_component.yml from fetch-gfx-targets)
+    # carries real targets like "gfx1250". Fallback: extract_gpu_arch()
+    # parses a gfx token from AMDGPU_FAMILIES — only correct when that
+    # var holds a bare target (e.g. NPI sets "gfx1250"), not when it
+    # holds a family name (e.g. "gfx125X-dcgpu" → "gfx125X", wrong).
+    amdgpu_target = (
+        AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
+    ) or (gpu_arch or "")
+    marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
 
-    # Extra pytest CLI options for this category, with {ROCM_PATH} substitution.
+    # Extra pytest CLI options for this category.  {ROCM_PATH} and
+    # {AMDGPU_TARGETS} tokens are substituted with runtime values.
     pytest_args = [
-        str(arg).replace("{ROCM_PATH}", str(rocm_path))
+        str(arg)
+        .replace("{ROCM_PATH}", str(rocm_path))
+        .replace("{AMDGPU_TARGETS}", amdgpu_target)
         for arg in (category_config.get("pytest_args", []) or [])
     ]
 
@@ -280,7 +314,11 @@ if __name__ == "__main__":
 
     env = build_environment(rocm_path, TEST_COMPONENT_NAME)
     for key, value in (exec_settings.get("environment", {}) or {}).items():
-        value = str(value).replace("{ROCM_PATH}", str(rocm_path))
+        value = (
+            str(value)
+            .replace("{ROCM_PATH}", str(rocm_path))
+            .replace("{AMDGPU_TARGETS}", amdgpu_target)
+        )
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 

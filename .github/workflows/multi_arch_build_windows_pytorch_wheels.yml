@@ -11,7 +11,8 @@
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     other packages ship as-is (nothing to split).
-#   - Upload the result to s3://therock-{release_type}-python/v4/whl/
+#   - Upload the result to s3://therock-repo-amd-<stream>-pytorch/
+#     under v5/rocm/pytorch/whl-next/
 #     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
 #     happens server-side).
 #
@@ -83,7 +84,14 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -105,9 +113,9 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.12"
+        default: "release/2.13"
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
@@ -162,6 +170,17 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -180,7 +199,13 @@ jobs:
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: "therock-pytorch-sccache-${{ inputs.release_type }}"
+      # TODO: Move the sccache bucket and IAM role mapping into a shared script.
+      SCCACHE_BUCKET: >-
+        ${{
+          inputs.release_type == 'dev-bkc' && 'therock-pytorch-sccache-dev'
+          || inputs.release_type == 'nightly-bkc' && 'therock-pytorch-sccache-nightly'
+          || format('therock-pytorch-sccache-{0}', inputs.release_type)
+        }}
       SCCACHE_REGION: us-east-1
       SCCACHE_S3_KEY_PREFIX: "windows/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
@@ -201,7 +226,7 @@ jobs:
       - name: "Quartz - started - build PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml
@@ -234,7 +259,14 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ninja --version 1.13.1
+          # Some runner images already ship a newer ninja; choco install of the
+          # pinned version then fails with "a newer version is already
+          # installed". Only install when ninja is missing.
+          if command -v ninja >/dev/null 2>&1; then
+            printf '%s\n' "ninja already installed: $(ninja --version)"
+          else
+            choco install --no-progress -y ninja --version 1.13.1
+          fi
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
       # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
@@ -263,6 +295,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -280,6 +313,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
           git config --global core.longpaths true
           pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
@@ -314,7 +348,12 @@ jobs:
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          role-to-assume: >-
+            ${{
+              inputs.release_type == 'dev-bkc' && 'arn:aws:iam::324352301041:role/therock-dev'
+              || inputs.release_type == 'nightly-bkc' && 'arn:aws:iam::324352301041:role/therock-nightly'
+              || format('arn:aws:iam::324352301041:role/therock-{0}', inputs.release_type)
+            }}
           # Multi-package PyTorch builds can exceed the default 1h credential
           # window; the role's MaxSessionDuration must be >= this value.
           role-duration-seconds: 21600
@@ -338,7 +377,7 @@ jobs:
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       - name: Build PyTorch wheels
-        # Default to the nightly multi-arch ROCm index when neither source is
+        # Default to the nightly repo.amd.com aggregate ROCm index when neither source is
         # provided so a bare manual dispatch works; setting either input
         # overrides it. The default is applied here rather than on the input
         # because GitHub reverts an emptied input back to its declared default,
@@ -346,8 +385,8 @@ jobs:
         shell: cmd
         env:
           # Use the index if given; else the find-links page; else default to
-          # the nightly multi-arch index (both empty is the bare-dispatch case).
-          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
           ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           set "CACHE_FLAG="
@@ -405,6 +444,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
           DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
@@ -476,16 +518,18 @@ jobs:
           python build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_artifacts_credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
+          product: pytorch
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}"
+            --release-type="${{ inputs.release_type }}" \
+            --structured
 
       - name: Capture job summary
         id: summary
@@ -554,6 +598,7 @@ jobs:
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
@@ -564,7 +609,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_windows_pytorch_wheels.yml

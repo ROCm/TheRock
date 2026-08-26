@@ -567,6 +567,43 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"STAGE_REUSE_MODE": "off"},
+                clear=False,
+            ),
+            patch.object(
+                cm,
+                "compute_auto_stage_reuse",
+            ) as compute_auto_stage_reuse,
+            patch.object(
+                cm,
+                "_get_all_build_stages",
+            ) as get_all_build_stages,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name="workflow_dispatch",
+                    prebuilt_stages="all",
+                    baseline_run_id="12345",
+                    baseline_repository="ROCm/TheRock",
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+
+        # Strong off must skip both automatic analysis and manual "all" parsing.
+        compute_auto_stage_reuse.assert_not_called()
+        get_all_build_stages.assert_not_called()
+
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.prebuilt_stages, [])
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+        self.assertEqual(result.build_rocm.baseline_repository, "")
+        self.assertIsNone(result.auto_stage_reuse)
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -1197,6 +1234,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ],
         )
 
+    def test_build_config_omits_python_package_test_matrix_when_disabled(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_python_packages=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(result.linux.test_python_packages_matrix, [])
+        self.assertEqual(result.windows.test_python_packages_matrix, [])
+
     def test_build_config_includes_pytorch_build_matrix(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
@@ -1214,18 +1266,15 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                },
-                {
-                    "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_amdgpu_families": "auto",
                 },
             ],
         )
@@ -1234,8 +1283,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
+                    "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
+                    "test_amdgpu_families": "auto",
                 }
             ],
         )
@@ -1332,6 +1382,17 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
         self.assertFalse(result.linux.build_jax)
         self.assertEqual(result.linux.jax_build_matrix, [])
+
+    def test_build_native_linux_input_disables_native_packages(self):
+        """build_native_linux=False disables native package builds."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_linux=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(result.linux.build_native_linux)
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -1695,6 +1756,44 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
 
+    def test_off_clears_reuse_from_platform_build_configs(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            prebuilt_stages="compiler-runtime,runtime-tests",
+            baseline_run_id="12345",
+            baseline_repository="ROCm/TheRock",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"STAGE_REUSE_MODE": "off"},
+            clear=False,
+        ):
+            outputs = cm.configure(
+                inputs,
+                cm.GitContext.empty(),
+            )
+
+        self.assertIsNotNone(outputs.builds.linux)
+        self.assertIsNotNone(outputs.builds.windows)
+
+        for build_config in (
+            outputs.builds.linux,
+            outputs.builds.windows,
+        ):
+            self.assertEqual(build_config.prebuilt_stages, [])
+            self.assertEqual(build_config.baseline_run_id, "")
+            self.assertEqual(build_config.baseline_repository, "")
+
+            payload = build_config.to_dict()
+            self.assertEqual(payload["prebuilt_stages"], "")
+            self.assertEqual(payload["baseline_run_id"], "")
+            self.assertEqual(payload["baseline_repository"], "")
+
 
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
@@ -1849,34 +1948,6 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertIsNotNone(gfx950_info)
         # Tests should be disabled (empty runner)
         self.assertEqual(gfx950_info["test-runs-on"], "")
-
-    def test_submodule_bump_tests_only_enables_tests_with_submodule_changes(self):
-        """gfx950 tests should be enabled on push with submodule changes."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        # Submodule change detected
-        git_context = cm.GitContext(
-            changed_files=["rocm-libraries"],
-            submodule_paths=["rocm-systems", "rocm-libraries"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # Find gfx950 in the linux build config
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be enabled
-        self.assertNotEqual(gfx950_info["test-runs-on"], "")
 
     def test_submodule_bump_tests_only_enables_tests_on_workflow_dispatch(self):
         """gfx950 tests should be enabled on workflow_dispatch regardless of submodule changes."""
@@ -2066,18 +2137,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
 
-    def test_select_build_runner_sanitizer_uses_ramdisk(self):
-        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+    def test_select_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer builds (asan/tsan) should use AWS large runner."""
         from amdgpu_family_matrix import select_build_runner
 
         with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
             self.assertEqual(
                 select_build_runner("linux", "tsan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
 
 

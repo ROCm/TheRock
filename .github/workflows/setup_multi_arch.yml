@@ -11,8 +11,9 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "ci", "dev", "nightly", or "prerelease"; controls
-          artifact bucket selection, IAM role, and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
         default: ci
       prerelease_version:
@@ -45,9 +46,11 @@ on:
         default: ""
       stage_reuse_mode:
         description: >-
-          Automatic stage-reuse mode (separate from the manual prebuilt_stages
-          input): "dry-run" (default) only reports which unaffected stages could
-          be reused; "reuse-stage" actually reuses them.
+          Artifact-reuse mode: "off" disables all reuse, ignores prebuilt_stages
+          and baseline_run_id, and performs no reuse analysis or baseline lookup;
+          "dry-run" (default) reports what automatic reuse could do while still
+          honoring explicit prebuilt_stages; "reuse-stage" applies automatic
+          reuse and also honors explicit prebuilt_stages.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -72,6 +75,10 @@ on:
         description: "Build JAX wheels."
         type: boolean
         default: false
+      build_native_linux:
+        description: "Build native Linux packages (deb/rpm) and run their install tests."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -86,6 +93,13 @@ on:
         default: ""
       external_repo:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
     outputs:
@@ -152,7 +166,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -189,6 +203,7 @@ jobs:
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
+          BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
@@ -244,7 +259,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

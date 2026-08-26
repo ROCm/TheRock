@@ -21,10 +21,10 @@ on:
         type: string
         default: "linux-gfx942-8gpu-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
+        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       python_version:
         required: true
         type: string
@@ -34,7 +34,7 @@ on:
         required: true
         type: string
       pytorch_git_ref:
-        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.9")
+        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.13")
         type: string
         default: "nightly"
       pytorch_git_repo:
@@ -79,6 +79,13 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -132,6 +139,9 @@ on:
           GPUs visible at once; "auto": derive from the test config.
         type: string
         default: "auto"
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -148,7 +158,7 @@ jobs:
       - name: "Quartz - started - test PyTorch wheels (full suite)"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: test_pytorch_wheels_full.yml
@@ -252,6 +262,7 @@ jobs:
       # to run HIPIFY, apply patches, or fetch submodules, so we skip those
       # steps to save time.
       - name: Checkout PyTorch Source
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/${{ inputs.pytorch_git_repo }}.git \
@@ -442,7 +453,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - test PyTorch wheels (full suite)"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: test_pytorch_wheels_full.yml

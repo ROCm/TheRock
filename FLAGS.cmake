@@ -15,6 +15,31 @@ include(therock_flag_utils)
 # Flag declarations
 ###############################################################################
 
+# Build flag infrastructure conformance canaries. These are consumed by the
+# unconditional aux-overlay compile check. They deliberately exercise both
+# BOOL values and INTEGER serialization. Do not remove or repurpose them.
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+  TYPE BOOL
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build flag infrastructure false-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+  TYPE BOOL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build flag infrastructure true-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+  TYPE INTEGER
+  DEFAULT_VALUE -17
+  VALID_VALUES -17
+  DESCRIPTION "Build flag infrastructure integer conformance canary"
+)
+
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
   DEFAULT_VALUE ON
@@ -29,6 +54,7 @@ therock_declare_flag(
     HIPDNN_ENABLE_SDPA=ON
   SUB_PROJECTS
     hipDNN
+    hipkernelprovider
 )
 
 therock_declare_flag(
@@ -75,6 +101,16 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
+  CMAKE_VARS
+    HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
+  SUB_PROJECTS
+    hipDNN
+)
+
+therock_declare_flag(
   NAME STAMP_LIBRARY_GIT_VERSIONS
   DEFAULT_VALUE OFF
   DESCRIPTION "Stamp library git revisions into generated version metadata"
@@ -92,6 +128,30 @@ therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
+)
+
+therock_declare_flag(
+  NAME LLVM_ENABLE_ASSERTIONS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. In CI costs roughly 20% more build time overall and up to 35% on device-heavy stages."
+  ISSUE "https://github.com/ROCm/TheRock/pull/6102"
+  CMAKE_VARS
+    LLVM_ENABLE_ASSERTIONS=ON
+  SUB_PROJECTS
+    amd-llvm
+)
+
+therock_declare_flag(
+  NAME WINDOWS_DRIVER_BUILD
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  GLOBAL_PROPAGATE_FLAG
+  CMAKE_VARS
+    COMGR_DLL_NAME=amd_comgr_drivers.dll
+  SUB_PROJECTS
+    amd-comgr
+    hip-clr
+    ocl-clr
 )
 
 ###############################################################################

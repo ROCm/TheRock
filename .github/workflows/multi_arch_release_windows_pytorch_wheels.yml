@@ -52,6 +52,17 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -74,7 +85,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
         options:
           - dev
@@ -99,6 +110,17 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_runs_on:
+        description: "Build runner label"
+        type: string
+        default: "aws-windows-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -114,7 +136,7 @@ jobs:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml
@@ -152,6 +174,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -161,6 +184,8 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      build_runs_on: ${{ inputs.build_runs_on }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
@@ -171,7 +196,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@b47e20b7539b407072a0c2249ab5e8d9983fac4e # notify_quartz/v1.1.0
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_windows_pytorch_wheels.yml

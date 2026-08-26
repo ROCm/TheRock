@@ -162,6 +162,17 @@ The following CMake flags are mirrored to component projects (see `THEROCK_DEFAU
 - `THEROCK_BINARY_DIR`
 - `ROCM_SYMLINK_LIBS`
 
+#### Feature availability by platform and processor
+
+Some features are not available on all platforms or CPU architectures. Features
+may be hard-disabled on certain OS platforms (cannot be overridden) or
+soft-disabled on certain CPU processors (defaults to OFF but can be overridden
+with `-DTHEROCK_ENABLE_<feature>=ON`).
+
+See [Build Topology — Conditional Availability](./build_system.md#conditional-availability)
+for details on how `disable_platforms` and `disable_processors` work in
+`BUILD_TOPOLOGY.toml`.
+
 In addition, if a component is using the host toolchain, the following are mirrored:
 
 - `CMAKE_C_COMPILER`

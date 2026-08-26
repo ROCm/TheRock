@@ -17,6 +17,10 @@
 /build_tools/build_python_packages.py   @ScottTodd @marbre
 /external-builds/pytorch                @ScottTodd
 
+# Native Linux packages.
+/build_tools/packaging/linux                                     @nunnikri @raramakr @arvindcheru
+/.github/workflows/test_native_linux_packages_install.yml        @nunnikri @raramakr @arvindcheru
+
 # Release promotion scripts.
 /build_tools/packaging/download_python_packages.py  @HereThereBeDragons @araravik-psd @JeniferC99
 /build_tools/packaging/promote_packages.py          @HereThereBeDragons @araravik-psd @JeniferC99
