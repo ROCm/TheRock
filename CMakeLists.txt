@@ -556,6 +556,7 @@ endif()
 ################################################################################
 therock_subproject_merge_compile_commands()
 
+# CI trigger: staging-experiment-0001
 # Write artifact→subprojects manifest for Python scripts to use
 therock_write_subproject_manifest()
 
