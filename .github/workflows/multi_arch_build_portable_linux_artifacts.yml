@@ -71,6 +71,8 @@ on:
         default: ""
       rebuild_artifacts:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
