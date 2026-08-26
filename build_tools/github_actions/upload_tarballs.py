@@ -54,6 +54,15 @@ def _is_test_tarball(name: str) -> bool:
     return "-tests-" in name
 
 
+def _is_hpc_tarball(name: str) -> bool:
+    """True for the Core+HPC tarballs (therock-dist-core+hpc-*).
+
+    The core+hpc tarball uses a ``core+hpc`` prefix (matched via ``+hpc-``) per
+    RFC0014, so a default multiarch tarball is never mistaken for it.
+    """
+    return "+hpc-" in name
+
+
 def _select_multiarch_tarball_url(
     *,
     tarball_files: list[Path],
@@ -66,10 +75,16 @@ def _select_multiarch_tarball_url(
     file name, at which point the file will just be therock-dist-{platform}.
     """
 
-    # Skip over "test" tarballs, only look at "base" tarballs.
-    non_test_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
+    # Skip over "test" and Core+HPC tarballs, only look at "base" tarballs.
+    # -tests- shares the therock-dist-{platform}-multiarch- prefix; the
+    # core+hpc tarball uses a therock-dist-core+hpc- prefix.
+    base_tarball_files = [
+        f
+        for f in tarball_files
+        if not _is_test_tarball(f.name) and not _is_hpc_tarball(f.name)
+    ]
 
-    for f in non_test_tarball_files:
+    for f in base_tarball_files:
         name = f.name
         if name.startswith(f"therock-dist-{platform}-multiarch-"):
             return _tarball_url(output_root, name)

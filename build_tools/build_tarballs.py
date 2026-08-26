@@ -17,13 +17,24 @@ containing all targets in a single install prefix.
 A shared download cache avoids re-downloading generic (host) artifacts
 when processing multiple families.
 
-By default, generated tarballs exclude test artifacts and fftw3. Pass
-``--include-test-tarballs`` to also generate full tarballs, named with a
-``-tests`` suffix, that include test artifacts.
+By default, generated tarballs exclude test artifacts, fftw3, and the HPC SDK
+libraries. The HPC SDK is instead published as a separate self-contained
+``core+hpc`` tarball: a full ROCm Core install *plus* the HPC SDK libraries
+(per RFC0014). The Core tarball and the ``core+hpc`` tarball are alternatives,
+not companions — a user downloads one or the other. This mirrors the
+native-package model where the HPC libraries live in the opt-in
+``amdrocm-hpc`` metapackage. The ``core+hpc`` tarball is produced only when the
+build actually contains HPC artifacts.
+Pass ``--include-test-tarballs`` to also generate full tarballs, named with
+a ``-tests`` suffix, that include test artifacts (for both the Core and the
+core+hpc tarballs).
 
-Tarball naming follows the existing release convention:
+Tarball naming follows the existing release convention, with a ``core+hpc``
+discriminator placed right after ``therock-dist-``:
     therock-dist-{platform}-{family}-{version}.tar.gz
+    therock-dist-core+hpc-{platform}-{family}-{version}.tar.gz
     therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
+    therock-dist-core+hpc-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
 
 Example
 -------
@@ -59,8 +70,38 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+# HPC SDK libraries. These are excluded from the default ROCm Core tarball and
+# instead ship in a separate self-contained ``core+hpc`` tarball (a full Core
+# install plus these libraries), matching the native-package model where they
+# live in the opt-in amdrocm-hpc metapackage and not in the default amdrocm
+# metapackage. composable-kernel is intentionally NOT listed here: it is a
+# shared dependency (e.g. of MIOpen) and stays in core.
+HPC_ARTIFACTS: list[str] = ["hiptensor", "rocalution"]
+
+# Artifacts dropped from the core+hpc tarball; the HPC libraries themselves are
+# kept, so only the same non-shippable artifacts the Core tarball drops (fftw3).
+HPC_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
+# The default Core tarball additionally drops the HPC libraries.
+DEFAULT_EXCLUDED_ARTIFACTS: list[str] = HPC_EXCLUDED_ARTIFACTS + HPC_ARTIFACTS
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
+
+
+def tarball_name(
+    platform: str,
+    family: str,
+    version: str,
+    *,
+    hpc: bool = False,
+    tests: bool = False,
+) -> str:
+    """Build a release tarball filename.
+
+    The ``core+hpc`` discriminator is placed right after ``therock-dist-`` (per
+    RFC0014); the ``-tests`` discriminator is a suffix before the version.
+    """
+    prefix = "therock-dist-core+hpc-" if hpc else "therock-dist-"
+    tests_part = "tests-" if tests else ""
+    return f"{prefix}{platform}-{family}-{tests_part}{version}.tar.gz"
 
 
 def log(msg: str) -> None:
@@ -83,11 +124,14 @@ def fetch_and_flatten(
     run_github_repo: str | None = None,
     exclude_components: list[str] | None = None,
     exclude_artifacts: list[str] | None = None,
+    include_artifacts: list[str] | None = None,
 ) -> None:
     """Fetch artifacts for one or more families and flatten into output_dir."""
     families_str = ";".join(amdgpu_families)
     log(f"\n{'='*60}")
     log(f"Fetching artifacts for {families_str}")
+    if include_artifacts:
+        log(f"Including only artifacts: {', '.join(include_artifacts)}")
     if exclude_components:
         log(f"Excluding components: {', '.join(exclude_components)}")
     if exclude_artifacts:
@@ -107,6 +151,8 @@ def fetch_and_flatten(
         "--flatten",
         f"--download-cache-dir={download_cache_dir}",
     ]
+    if include_artifacts:
+        cmd.append(f"--include-artifacts={','.join(include_artifacts)}")
     if exclude_components:
         cmd.append(f"--exclude-components={','.join(exclude_components)}")
     if exclude_artifacts:
@@ -114,6 +160,93 @@ def fetch_and_flatten(
     if run_github_repo:
         cmd.append(f"--run-github-repo={run_github_repo}")
     run_command(cmd)
+
+
+def has_contents(directory: Path) -> bool:
+    """True if directory exists and is non-empty.
+
+    The fetch step returns early without creating the output directory when no
+    artifacts match the include filter (e.g. a build with no HPC artifacts), so
+    guard on existence before checking contents.
+    """
+    return directory.exists() and any(directory.iterdir())
+
+
+def add_hpc_tarball_tasks(
+    *,
+    run_id: str,
+    family: str,
+    families: list[str],
+    platform: str,
+    package_version: str,
+    work_subdir: str,
+    work_dir: Path,
+    output_dir: Path,
+    download_cache_dir: Path,
+    run_github_repo: str | None,
+    include_test_tarballs: bool,
+    compress_tasks: list[tuple[Path, Path]],
+) -> None:
+    """Fetch and queue the self-contained core+hpc tarball(s).
+
+    The core+hpc tarball is a full Core install *plus* the HPC SDK libraries. It
+    is produced only when the build actually contains HPC artifacts, detected via
+    a cheap HPC-only probe fetch (the full core+hpc fetch reuses the shared
+    download cache, so Core artifacts are not re-downloaded).
+    """
+    # Probe: fetch only the HPC libraries. If none exist for this build, there is
+    # no HPC SDK to ship and we emit no core+hpc tarball.
+    probe_dir = work_dir / "hpc-probe" / work_subdir
+    fetch_and_flatten(
+        run_id=run_id,
+        amdgpu_families=families,
+        platform=platform,
+        output_dir=probe_dir,
+        download_cache_dir=download_cache_dir,
+        run_github_repo=run_github_repo,
+        exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+        include_artifacts=HPC_ARTIFACTS,
+    )
+    if not has_contents(probe_dir):
+        return
+
+    # core+hpc: full Core set with the HPC libraries kept (only fftw3 dropped).
+    hpc_dir = work_dir / "core+hpc" / work_subdir
+    fetch_and_flatten(
+        run_id=run_id,
+        amdgpu_families=families,
+        platform=platform,
+        output_dir=hpc_dir,
+        download_cache_dir=download_cache_dir,
+        run_github_repo=run_github_repo,
+        exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
+        exclude_artifacts=HPC_EXCLUDED_ARTIFACTS,
+    )
+    compress_tasks.append(
+        (
+            hpc_dir,
+            output_dir / tarball_name(platform, family, package_version, hpc=True),
+        )
+    )
+
+    if include_test_tarballs:
+        hpc_tests_dir = work_dir / "core+hpc-tests" / work_subdir
+        fetch_and_flatten(
+            run_id=run_id,
+            amdgpu_families=families,
+            platform=platform,
+            output_dir=hpc_tests_dir,
+            download_cache_dir=download_cache_dir,
+            run_github_repo=run_github_repo,
+            exclude_artifacts=HPC_EXCLUDED_ARTIFACTS,
+        )
+        compress_tasks.append(
+            (
+                hpc_tests_dir,
+                output_dir
+                / tarball_name(platform, family, package_version, hpc=True, tests=True),
+            )
+        )
 
 
 def is_kpack_split(flatten_dir: Path) -> bool:
@@ -218,10 +351,13 @@ def main(argv: list[str] | None = None) -> None:
             exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
         family_dirs.append(flatten_dir)
-        tarball_name = (
-            f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
+        compress_tasks.append(
+            (
+                flatten_dir,
+                args.output_dir
+                / tarball_name(args.platform, family, args.package_version),
+            )
         )
-        compress_tasks.append((flatten_dir, args.output_dir / tarball_name))
         if args.include_test_tarballs:
             tests_dir = work_dir / "tests" / family
             fetch_and_flatten(
@@ -232,11 +368,33 @@ def main(argv: list[str] | None = None) -> None:
                 download_cache_dir=download_cache_dir,
                 run_github_repo=args.run_github_repo,
             )
-            tests_tarball_name = (
-                f"therock-dist-{args.platform}-{family}-tests-"
-                f"{args.package_version}.tar.gz"
+            compress_tasks.append(
+                (
+                    tests_dir,
+                    args.output_dir
+                    / tarball_name(
+                        args.platform, family, args.package_version, tests=True
+                    ),
+                )
             )
-            compress_tasks.append((tests_dir, args.output_dir / tests_tarball_name))
+
+        # Self-contained core+hpc tarball (full Core install plus the HPC SDK
+        # libraries). Produced only when the build actually contains HPC
+        # artifacts for this family, detected via a cheap HPC-only probe fetch.
+        add_hpc_tarball_tasks(
+            run_id=args.run_id,
+            family=family,
+            families=[family],
+            platform=args.platform,
+            package_version=args.package_version,
+            work_subdir=family,
+            work_dir=work_dir,
+            output_dir=args.output_dir,
+            download_cache_dir=download_cache_dir,
+            run_github_repo=args.run_github_repo,
+            include_test_tarballs=args.include_test_tarballs,
+            compress_tasks=compress_tasks,
+        )
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
     # into a single combined directory. With KPACK split, device-specific
@@ -256,10 +414,13 @@ def main(argv: list[str] | None = None) -> None:
             exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
             exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
-        tarball_name = (
-            f"therock-dist-{args.platform}-multiarch-{args.package_version}.tar.gz"
+        compress_tasks.append(
+            (
+                multiarch_dir,
+                args.output_dir
+                / tarball_name(args.platform, "multiarch", args.package_version),
+            )
         )
-        compress_tasks.append((multiarch_dir, args.output_dir / tarball_name))
         if args.include_test_tarballs:
             tests_multiarch_dir = work_dir / "tests" / "multiarch"
             fetch_and_flatten(
@@ -270,13 +431,31 @@ def main(argv: list[str] | None = None) -> None:
                 download_cache_dir=download_cache_dir,
                 run_github_repo=args.run_github_repo,
             )
-            tests_tarball_name = (
-                f"therock-dist-{args.platform}-multiarch-tests-"
-                f"{args.package_version}.tar.gz"
-            )
             compress_tasks.append(
-                (tests_multiarch_dir, args.output_dir / tests_tarball_name)
+                (
+                    tests_multiarch_dir,
+                    args.output_dir
+                    / tarball_name(
+                        args.platform, "multiarch", args.package_version, tests=True
+                    ),
+                )
             )
+
+        # Self-contained core+hpc multi-arch tarball.
+        add_hpc_tarball_tasks(
+            run_id=args.run_id,
+            family="multiarch",
+            families=families,
+            platform=args.platform,
+            package_version=args.package_version,
+            work_subdir="multiarch",
+            work_dir=work_dir,
+            output_dir=args.output_dir,
+            download_cache_dir=download_cache_dir,
+            run_github_repo=args.run_github_repo,
+            include_test_tarballs=args.include_test_tarballs,
+            compress_tasks=compress_tasks,
+        )
 
     # Phase 2: Compress all tarballs in parallel.
     # Each tar cfz is single-threaded, so running N families concurrently

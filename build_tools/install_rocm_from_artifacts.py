@@ -52,6 +52,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
     [--tests | --no-tests]
+    [--hpc | --no-hpc]
     [--base-only]
 
 Examples:
@@ -126,6 +127,7 @@ import argparse
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
@@ -161,6 +163,18 @@ MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
 )
 
 
+def is_non_default_tarball(name: str) -> bool:
+    """True for tarballs that are not part of the default ROCm distribution.
+
+    Excludes test tarballs (``-tests-``) and the opt-in Core+HPC tarballs
+    (``therock-dist-core+hpc-...``, per RFC0014). Both share enough of the
+    default tarball's shape that they must be skipped when discovering default
+    releases/families. Note the core+hpc tarball uses a ``core+hpc`` prefix
+    (matched via ``+hpc-``), not the ``-hpc-`` infix.
+    """
+    return "-tests-" in name or "+hpc-" in name
+
+
 def parse_nightly_version(version: str) -> Optional[datetime]:
     """
     Parse nightly version like '7.11.0a20251124' to extract date.
@@ -176,7 +190,13 @@ def parse_nightly_version(version: str) -> Optional[datetime]:
 def extract_version_from_asset_name(
     asset_name: str, artifact_group: str, platform_str: str
 ) -> Optional[str]:
-    """Extract a release version from a published multi-arch tarball name."""
+    """Extract a release version from a published multi-arch tarball name.
+
+    Core+HPC tarballs (``therock-dist-core+hpc-{platform}-...``) do not match
+    this pattern at all, since it requires ``linux``/``windows`` right after
+    ``therock-dist-``; they are therefore never treated as a default release.
+    Test tarballs are rejected explicitly below.
+    """
     match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
     if (
         match is None
@@ -219,7 +239,7 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
 
     for obj in _list_multiarch_nightly_tarball_objects(platform_str):
         asset_name = _multiarch_tarball_asset_name(obj["Key"])
-        if asset_name is None:
+        if asset_name is None or is_non_default_tarball(asset_name):
             continue
         match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
         if (
@@ -247,7 +267,7 @@ def _fetch_and_sort_nightly_releases(
 
     for obj in _list_multiarch_nightly_tarball_objects(platform_str):
         asset_name = _multiarch_tarball_asset_name(obj["Key"])
-        if asset_name is None:
+        if asset_name is None or is_non_default_tarball(asset_name):
             continue
         version = extract_version_from_asset_name(
             asset_name, artifact_group, platform_str
@@ -319,6 +339,21 @@ def _create_output_directory(output_dir: Path):
     log(f"Created output directory '{output_dir.resolve()}'")
 
 
+def _release_asset_name(
+    artifact_group: str, release_version: str, hpc: bool = False
+) -> str:
+    """Build the release tarball asset name for a family/version.
+
+    When ``hpc`` is True, returns the self-contained Core+HPC tarball name
+    (``therock-dist-core+hpc-{platform}-{group}-{version}.tar.gz``, per RFC0014)
+    instead of the default Core-only tarball. The two are alternatives: the
+    core+hpc tarball already contains the full Core tree plus the HPC SDK
+    libraries.
+    """
+    prefix = "therock-dist-core+hpc-" if hpc else "therock-dist-"
+    return f"{prefix}{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+
+
 def _retrieve_multiarch_tarball(
     release_bucket: str,
     asset_name: str,
@@ -329,10 +364,54 @@ def _retrieve_multiarch_tarball(
     destination = output_dir / asset_name
     log(f"Downloading s3://{release_bucket}/{s3_key}")
 
-    with open(destination, "wb") as file:
-        s3_client.download_fileobj(release_bucket, s3_key, file)
+    try:
+        with open(destination, "wb") as file:
+            s3_client.download_fileobj(release_bucket, s3_key, file)
+    except Exception:
+        # download_fileobj creates the destination file before the request
+        # completes; remove the partial/empty file so a failed download does
+        # not leave a stray artifact behind.
+        destination.unlink(missing_ok=True)
+        raise
 
     _untar_files(output_dir, destination)
+
+
+def _retrieve_s3_release_assets(
+    release_bucket, artifact_group, release_version, output_dir, hpc=False
+):
+    """
+    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family.
+
+    The Core tarball and the Core+HPC tarball are alternatives (per RFC0014):
+    the core+hpc tarball is self-contained (full Core plus the HPC SDK
+    libraries), so only one is downloaded. When ``hpc`` is True, the core+hpc
+    tarball is downloaded instead of the Core one. The core+hpc tarball is
+    treated as optional: if it does not exist for this release/family (e.g. an
+    older release predating the HPC SDK), a clear message is logged and the Core
+    tarball is downloaded instead so the install still succeeds.
+    """
+    if hpc:
+        hpc_asset_name = _release_asset_name(artifact_group, release_version, hpc=True)
+        try:
+            _retrieve_multiarch_tarball(release_bucket, hpc_asset_name, output_dir)
+            return
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code not in ("404", "NoSuchKey"):
+                raise
+            log(
+                f"WARNING: Core+HPC tarball '{hpc_asset_name}' not found in "
+                f"bucket '{release_bucket}'. The HPC SDK may not be available "
+                f"for this release/family; falling back to the default ROCm "
+                f"Core tarball."
+            )
+
+    _retrieve_multiarch_tarball(
+        release_bucket,
+        _release_asset_name(artifact_group, release_version),
+        output_dir,
+    )
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -652,7 +731,6 @@ def retrieve_artifacts_by_release(args):
         return
 
     release_version = args.release
-    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
     release_bucket = NIGHTLY_TARBALL_BUCKET if nightly_release else DEV_TARBALL_BUCKET
     release_kind = "nightly" if nightly_release else "dev"
 
@@ -660,6 +738,10 @@ def retrieve_artifacts_by_release(args):
         f"Retrieving {release_kind} multi-arch artifacts from "
         f"s3://{release_bucket.name}/{MULTIARCH_TARBALL_S3_PREFIX}/"
     )
+    hpc = getattr(args, "hpc", False)
+    # The Core and Core+HPC tarballs are alternatives; --hpc selects the
+    # core+hpc tarball instead of Core (a single download).
+    asset_name = _release_asset_name(artifact_group, release_version, hpc=hpc)
     if args.dry_run:
         log(
             f"[DRY RUN] Would download: s3://{release_bucket.name}/"
@@ -668,7 +750,9 @@ def retrieve_artifacts_by_release(args):
         )
         return
 
-    _retrieve_multiarch_tarball(release_bucket.name, asset_name, output_dir)
+    _retrieve_s3_release_assets(
+        release_bucket.name, artifact_group, release_version, output_dir, hpc=hpc
+    )
 
 
 def retrieve_artifacts_by_input_dir(args):
@@ -722,14 +806,21 @@ def retrieve_artifacts_by_latest_release(args):
     version, asset_name = result
     log(f"Found latest release: {version}")
 
+    # The Core and Core+HPC tarballs are alternatives; --hpc selects the
+    # core+hpc tarball instead of the Core asset returned by discovery.
+    if args.hpc:
+        asset_name = _release_asset_name(args.artifact_group, version, hpc=True)
+
     if args.dry_run:
         log(f"[DRY RUN] Would download: {asset_name} (version {version})")
         return
 
-    _retrieve_multiarch_tarball(
-        NIGHTLY_TARBALL_BUCKET.name,
-        asset_name,
-        args.output_dir,
+    _retrieve_s3_release_assets(
+        release_bucket=NIGHTLY_TARBALL_BUCKET.name,
+        artifact_group=args.artifact_group,
+        release_version=version,
+        output_dir=args.output_dir,
+        hpc=args.hpc,
     )
 
 
@@ -794,6 +885,17 @@ def main(argv):
         "--dry-run",
         action="store_true",
         help="Show what would be downloaded/copied without actually doing it",
+    )
+
+    parser.add_argument(
+        "--hpc",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Install the self-contained Core+HPC release tarball "
+        "(full ROCm Core plus the HPC SDK libraries) instead of the default "
+        "Core-only tarball. Only applies to --release and --latest-release "
+        "installs. If no core+hpc tarball exists for the release/family, falls "
+        "back to the Core tarball.",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

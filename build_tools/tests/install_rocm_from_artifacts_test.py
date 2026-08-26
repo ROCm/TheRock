@@ -360,6 +360,257 @@ class TestReleaseDiscovery(unittest.TestCase):
         )
         self.assertEqual(releases[0]["last_modified"], datetime(2026, 7, 23))
 
+    def test_extract_version_ignores_core_hpc_tarball(self) -> None:
+        self.assertIsNone(
+            mod.extract_version_from_asset_name(
+                "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz",
+                "gfx94X-dcgpu",
+                "linux",
+            )
+        )
+
+    def test_fetch_and_sort_nightly_releases_ignores_core_hpc_tarballs(self) -> None:
+        paginator = mock.Mock()
+        paginator.paginate.return_value = [
+            {
+                "Contents": [
+                    {
+                        "Key": mod._multiarch_tarball_s3_key(
+                            "therock-dist-core+hpc-linux-gfx94X-dcgpu-"
+                            "7.13.0a20260102.tar.gz"
+                        ),
+                        "LastModified": datetime(2026, 1, 2),
+                        "Size": 20,
+                    },
+                    {
+                        "Key": mod._multiarch_tarball_s3_key(
+                            "therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz"
+                        ),
+                        "LastModified": datetime(2026, 1, 1),
+                        "Size": 10,
+                    },
+                ]
+            }
+        ]
+        s3_client = mock.Mock()
+        s3_client.get_paginator.return_value = paginator
+
+        with mock.patch.object(mod, "s3_client", s3_client):
+            releases = mod._fetch_and_sort_nightly_releases("gfx94X-dcgpu", "linux")
+
+        # Only the Core tarball is returned; the core+hpc tarball (which is
+        # newer) must not be selected as a default release.
+        self.assertEqual(
+            [release["asset_name"] for release in releases],
+            ["therock-dist-linux-gfx94X-dcgpu-7.13.0a20260101.tar.gz"],
+        )
+
+    def test_list_available_nightly_gpu_families_ignores_core_hpc_tarballs(
+        self,
+    ) -> None:
+        paginator = mock.Mock()
+        paginator.paginate.return_value = [
+            {
+                "Contents": [
+                    {
+                        "Key": mod._multiarch_tarball_s3_key(
+                            "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"
+                        )
+                    },
+                    {
+                        "Key": mod._multiarch_tarball_s3_key(
+                            "therock-dist-core+hpc-linux-gfx94X-dcgpu-7.13.0.tar.gz"
+                        )
+                    },
+                ]
+            }
+        ]
+        s3_client = mock.Mock()
+        s3_client.get_paginator.return_value = paginator
+
+        with mock.patch.object(mod, "s3_client", s3_client):
+            families = mod.list_available_nightly_gpu_families("linux")
+
+        self.assertEqual(families, {"gfx94X-dcgpu"})
+
+
+class TestHpcReleaseInstall(unittest.TestCase):
+    """Exercises the --hpc release install path (Core+HPC tarball)."""
+
+    def test_release_asset_name_default(self) -> None:
+        self.assertEqual(
+            mod._release_asset_name("gfx94X-dcgpu", "7.13.0"),
+            f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz",
+        )
+
+    def test_release_asset_name_hpc(self) -> None:
+        self.assertEqual(
+            mod._release_asset_name("gfx94X-dcgpu", "7.13.0", hpc=True),
+            f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz",
+        )
+
+    def test_is_non_default_tarball_skips_core_hpc(self) -> None:
+        self.assertTrue(
+            mod.is_non_default_tarball(
+                f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+            )
+        )
+        self.assertFalse(
+            mod.is_non_default_tarball(
+                f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+            )
+        )
+
+    def test_retrieve_release_assets_without_hpc_downloads_core(self) -> None:
+        s3_client = mock.Mock()
+        downloaded: list[str] = []
+        s3_client.download_fileobj.side_effect = (
+            lambda bucket, key, fileobj: downloaded.append(key)
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                mock.patch.object(mod, "s3_client", s3_client),
+                mock.patch.object(mod, "_untar_files"),
+            ):
+                mod._retrieve_s3_release_assets(
+                    "therock-nightly-tarball",
+                    "gfx94X-dcgpu",
+                    "7.13.0",
+                    Path(tmpdir),
+                    hpc=False,
+                )
+        self.assertEqual(
+            downloaded,
+            [
+                mod._multiarch_tarball_s3_key(
+                    f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+                )
+            ],
+        )
+
+    def test_retrieve_release_assets_with_hpc_downloads_core_hpc_only(self) -> None:
+        s3_client = mock.Mock()
+        downloaded: list[str] = []
+        s3_client.download_fileobj.side_effect = (
+            lambda bucket, key, fileobj: downloaded.append(key)
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                mock.patch.object(mod, "s3_client", s3_client),
+                mock.patch.object(mod, "_untar_files"),
+            ):
+                mod._retrieve_s3_release_assets(
+                    "therock-nightly-tarball",
+                    "gfx94X-dcgpu",
+                    "7.13.0",
+                    Path(tmpdir),
+                    hpc=True,
+                )
+        # The core+hpc tarball is self-contained, so only it is downloaded
+        # (no Core).
+        self.assertEqual(
+            downloaded,
+            [
+                mod._multiarch_tarball_s3_key(
+                    f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+                ),
+            ],
+        )
+
+    def test_release_dry_run_with_hpc_lists_core_hpc_only(self) -> None:
+        args = argparse.Namespace(
+            output_dir=Path("/tmp/out"),
+            artifact_group="gfx94X-dcgpu",
+            release="7.13.0a20260101",
+            dry_run=True,
+            hpc=True,
+        )
+        logs: list[str] = []
+        with mock.patch.object(mod, "log", lambda m: logs.append(m)):
+            mod.retrieve_artifacts_by_release(args)
+        would_download = [m for m in logs if "Would download" in m]
+        self.assertEqual(len(would_download), 1)
+        self.assertIn("core+hpc", would_download[0])
+
+    def test_retrieve_release_assets_missing_core_hpc_falls_back_to_core(self) -> None:
+        """A missing core+hpc tarball must fall back to the Core tarball."""
+        from botocore.exceptions import ClientError
+
+        core_name = f"therock-dist-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+        hpc_name = f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+        core_key = mod._multiarch_tarball_s3_key(core_name)
+        hpc_key = mod._multiarch_tarball_s3_key(hpc_name)
+
+        downloaded: list[str] = []
+
+        def fake_download(bucket, key, fileobj):
+            downloaded.append(key)
+            if key == hpc_key:
+                raise ClientError(
+                    {"Error": {"Code": "404", "Message": "Not Found"}},
+                    "GetObject",
+                )
+
+        s3_client = mock.Mock()
+        s3_client.download_fileobj.side_effect = fake_download
+
+        logs: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                mock.patch.object(mod, "s3_client", s3_client),
+                mock.patch.object(mod, "_untar_files"),
+                mock.patch.object(mod, "log", lambda m: logs.append(m)),
+            ):
+                # Should not raise even though the core+hpc object is missing.
+                mod._retrieve_s3_release_assets(
+                    "therock-nightly-tarball",
+                    "gfx94X-dcgpu",
+                    "7.13.0",
+                    Path(tmpdir),
+                    hpc=True,
+                )
+            # The empty core+hpc partial file was cleaned up.
+            self.assertFalse((Path(tmpdir) / hpc_name).exists())
+
+        # core+hpc attempted first, then Core downloaded as the fallback.
+        self.assertEqual(downloaded, [hpc_key, core_key])
+        # A clear warning was emitted for the missing core+hpc tarball.
+        self.assertTrue(
+            any("not found" in m and "HPC" in m for m in logs),
+            f"expected a missing-core+hpc warning, got: {logs}",
+        )
+
+    def test_retrieve_release_assets_core_hpc_non_404_error_propagates(self) -> None:
+        """Non-missing S3 errors on the core+hpc tarball must not be swallowed."""
+        from botocore.exceptions import ClientError
+
+        hpc_name = f"therock-dist-core+hpc-{mod.PLATFORM}-gfx94X-dcgpu-7.13.0.tar.gz"
+        hpc_key = mod._multiarch_tarball_s3_key(hpc_name)
+
+        def fake_download(bucket, key, fileobj):
+            if key == hpc_key:
+                raise ClientError(
+                    {"Error": {"Code": "AccessDenied", "Message": "Denied"}},
+                    "GetObject",
+                )
+
+        s3_client = mock.Mock()
+        s3_client.download_fileobj.side_effect = fake_download
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                mock.patch.object(mod, "s3_client", s3_client),
+                mock.patch.object(mod, "_untar_files"),
+            ):
+                with self.assertRaises(ClientError):
+                    mod._retrieve_s3_release_assets(
+                        "therock-nightly-tarball",
+                        "gfx94X-dcgpu",
+                        "7.13.0",
+                        Path(tmpdir),
+                        hpc=True,
+                    )
+
 
 def _make_run_id_args(**overrides) -> argparse.Namespace:
     """Return a minimal args namespace suitable for retrieve_artifacts_by_run_id."""
