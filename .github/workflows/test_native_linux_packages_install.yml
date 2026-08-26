@@ -196,7 +196,15 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
+      # GPU device passthrough — on OSSCI GPU runners. Required for rocminfo (and RDHC GPU checks) inside container.
       options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0
     env:
       REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
