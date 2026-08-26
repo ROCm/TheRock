@@ -350,6 +350,57 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
+  if(THEROCK_ENABLE_CORE_HRR)
+    ##############################################################################
+    # hrr
+    ##############################################################################
+
+    set(HRR_BUILD_DEPS rocm-cmake)
+    if(THEROCK_BUILD_TESTING)
+      list(APPEND HRR_BUILD_DEPS therock-catch2)
+    endif()
+
+    therock_cmake_subproject_declare(hrr
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        "-DHRR_BUILD_PLAYBACK=ON"
+        "-DHRR_BUILD_TESTS=${THEROCK_BUILD_TESTING}"
+        "-DHIP_PLATFORM=amd"
+      BUILD_DEPS
+        ${HRR_BUILD_DEPS}
+      RUNTIME_DEPS
+        hip-clr
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(hrr SUBDIRS .)
+    therock_cmake_subproject_activate(hrr)
+
+    therock_provide_artifact(core-hrr
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hrr.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        hrr
+    )
+  endif()
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
@@ -574,6 +625,10 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
   set(HIP_TESTS_CMAKE_ARGS)
+  set(HIP_TESTS_RUNTIME_DEPS)
+  if(THEROCK_ENABLE_CORE_HRR)
+    list(APPEND HIP_TESTS_RUNTIME_DEPS hrr)
+  endif()
   set(_hip_tests_subproject_names)
   therock_cmake_subproject_declare(hip-tests
     USE_TEST_AMDGPU_TARGETS
@@ -590,6 +645,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       therock-catch2
     RUNTIME_DEPS
       hip-clr
+      ${HIP_TESTS_RUNTIME_DEPS}
       ${THEROCK_BUNDLED_NUMACTL}
     INTERFACE_LINK_DIRS
       lib

@@ -577,6 +577,12 @@ feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
 source_paths = ["clr", "hip"]
 
+[artifacts.core-hrr]
+artifact_group = "hip-runtime"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+feature_group = "CORE"  # Part of core, enabled by default
+
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
 type = "target-neutral"
@@ -618,7 +624,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.core-hiptests]
 artifact_group = "runtime-tests"
 type = "target-neutral"
-artifact_deps = ["core-hip"]
+artifact_deps = ["core-hip", "core-hrr"]
 feature_group = "CORE"  # Part of core, enabled by default
 source_paths = ["hip-tests"]
 
