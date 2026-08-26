@@ -338,6 +338,18 @@ amdgpu_family_info_matrix_postsubmit = {
             "submodule_bump_tests_only": True,
         }
     },
+    # amdgcnspirv: architecture-independent portable SPIR-V target (family
+    # "gpugeneric"/target "amdgcnspirv" in cmake/therock_amdgpu_targets.cmake).
+    # Build-only here: there is no physical SPIR-V GPU to test on, so
+    # test-runs-on is empty (build validates it compiles; no GPU test job).
+    "amdgcnspirv": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "amdgcnspirv",
+            "fetch-gfx-targets": ["amdgcnspirv"],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 # The 'nightly' matrix runs on 'schedule' triggers.

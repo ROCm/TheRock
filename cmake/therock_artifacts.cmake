@@ -64,6 +64,39 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # If every one of this shard's AMDGPU targets is excluded (via
+  # EXCLUDE_TARGET_PROJECTS in therock_amdgpu_targets.cmake) for ALL of the
+  # artifact's subprojects, then the artifact carries no device code for this
+  # shard's arch: the subprojects only built for a DEFAULT_GPU_TARGETS fallback.
+  # Splitting with --gpu-targets=<shard arch> would then fail in
+  # split_artifacts.py with "no device code objects matched --gpu-targets ...
+  # Refusing to emit an untransformed generic artifact." Fall back to the
+  # non-split path so the (fallback) artifact is still produced without trying
+  # to peel out arch-specific device code that does not exist for this shard.
+  # A target counts as supported if at least one subproject does not exclude it.
+  # This must run before any consumer of _should_split below.
+  if(_should_split AND ARG_SUBPROJECT_DEPS AND THEROCK_AMDGPU_TARGETS
+     AND NOT "${THEROCK_AMDGPU_TARGETS}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+    set(_artifact_supported_targets)
+    foreach(_tgt ${THEROCK_AMDGPU_TARGETS})
+      foreach(_subproj ${ARG_SUBPROJECT_DEPS})
+        get_property(_subproj_excludes GLOBAL PROPERTY
+          "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${_subproj}")
+        if(NOT "${_tgt}" IN_LIST _subproj_excludes)
+          list(APPEND _artifact_supported_targets "${_tgt}")
+          break()
+        endif()
+      endforeach()
+    endforeach()
+    if(NOT _artifact_supported_targets)
+      message(STATUS
+        "Artifact '${slice_name}': all AMDGPU targets (${THEROCK_AMDGPU_TARGETS}) "
+        "are excluded for every subproject (${ARG_SUBPROJECT_DEPS}); disabling "
+        "kpack split (no arch-specific device code for this shard).")
+      set(_should_split FALSE)
+    endif()
+  endif()
+
   # Record artifact→subprojects mapping for manifest generation.
   # This allows Python scripts to dynamically discover which subprojects
   # belong to each artifact without hardcoding in BUILD_TOPOLOGY.toml.
