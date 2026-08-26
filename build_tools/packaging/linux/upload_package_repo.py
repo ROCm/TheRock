@@ -51,9 +51,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions_api import gha_append_step_summary
 
 
-def s3_object_exists(
-    s3: botocore.client.BaseClient, bucket: str, key: str
-) -> bool:
+def s3_object_exists(s3: botocore.client.BaseClient, bucket: str, key: str) -> bool:
     """Return whether an S3 object exists at ``bucket``/``key``.
 
     Used by package dedupe in :func:`upload_to_s3`. A 404 response means the
