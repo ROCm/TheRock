@@ -24,7 +24,7 @@ import argparse
 import boto3
 import os
 from pathlib import Path
-
+from urllib.parse import quote
 
 SVG_DEFS = """<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
 <defs>
@@ -259,7 +259,12 @@ def generate_index_from_s3(
 
         # Add files
         for filename in sorted(files):
-            rows.append(f'<tr><td><a href="{filename}">{filename}</a></td></tr>')
+            # Percent-encode the filename for use in the href. In particular, '+' must
+            # be encoded as '%2B' so S3 does not interpret it as a space.
+            encoded_filename = quote(filename, safe="")
+            rows.append(
+                f'<tr><td><a href="{encoded_filename}">{filename}</a></td></tr>'
+            )
 
         index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
 
