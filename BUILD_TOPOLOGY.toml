@@ -601,6 +601,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "amd-llvm", "sysdeps"]
 feature_name = "CORE_KFDTESTS"
 feature_group = "CORE"
+disable_platforms = ["windows"]
 
 [artifacts.opencl-cts]
 artifact_group = "opencl-cts"
