@@ -488,8 +488,8 @@ class TestPushStageAll(ArtifactManagerTestBase):
             )
 
 
-class TestFetchFailureExitCode(ArtifactManagerTestBase):
-    """Tests that fetch command exits with non-zero code on download failures."""
+class TestFetchFailures(ArtifactManagerTestBase):
+    """Tests that fetch fails when required artifacts cannot be retrieved."""
 
     @mock.patch("artifact_manager.create_backend_from_env")
     def test_fetch_fails_when_no_artifacts_match(self, mock_backend_factory):
@@ -1200,6 +1200,42 @@ class TestFetchExtractionCache(ArtifactManagerTestBase):
                 self.assertEqual(
                     os.readlink(output_dir / "regular-symlink.txt"), "regular.txt"
                 )
+
+    def test_incomplete_cache_entry_is_rebuilt(self):
+        """A cache entry without its completion manifest is replaced."""
+        import artifact_manager
+
+        archive_path = self._create_real_artifact()
+        extraction_cache_dir = Path(self.temp_dir) / "extraction-cache"
+        cached_artifact_dir = extraction_cache_dir / archive_path.name
+        cached_artifact_dir.mkdir(parents=True)
+        stale_file = cached_artifact_dir / "stale.txt"
+        stale_file.write_text("incomplete extraction")
+        output_dir = Path(self.temp_dir) / "output"
+
+        result = artifact_manager.extract_artifact(
+            artifact_manager.ExtractRequest(
+                archive_path=archive_path,
+                output_dir=output_dir,
+                delete_archive=False,
+                flatten=True,
+                extraction_cache_dir=extraction_cache_dir,
+            )
+        )
+
+        self.assertEqual(result, output_dir)
+        self.assertFalse(stale_file.exists())
+        self.assertEqual(
+            (cached_artifact_dir / "artifact_manifest.txt").read_text(),
+            "component/stage\n",
+        )
+        cached_regular_file = (
+            cached_artifact_dir / "component" / "stage" / "regular.txt"
+        )
+        self.assertEqual(cached_regular_file.read_text(), "artifact contents")
+        self.assertTrue(
+            os.path.samefile(output_dir / "regular.txt", cached_regular_file)
+        )
 
 
 class TestFetchDownloadCache(ArtifactManagerTestBase):

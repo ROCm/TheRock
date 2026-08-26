@@ -101,6 +101,9 @@ class TestCompressTarball(unittest.TestCase):
                 names = tf.getnames()
                 self.assertIn("./bin/hello", names)
                 self.assertIn("./lib/libfoo.so", names)
+                hello_file = tf.extractfile("./bin/hello")
+                self.assertIsNotNone(hello_file)
+                self.assertEqual(hello_file.read(), b"hello world")
 
     def test_creates_tarball_with_system_gzip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

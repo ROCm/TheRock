@@ -68,7 +68,11 @@ from zlib_ng import gzip_ng_threaded
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 DEFAULT_COMPRESSION_BACKEND = "zlib-ng"
+# Level 9 recovers system-gzip's archive size while still keeping tarball
+# construction well below the other release packaging jobs.
 DEFAULT_COMPRESSION_LEVEL = 9
+# Eight threads balances single-archive throughput with enough archive-level
+# concurrency to start the largest tarballs together on high-core-count runners.
 DEFAULT_COMPRESSION_THREADS = 8
 
 # Higher priorities represent tarballs expected to take longer to compress.
@@ -280,6 +284,8 @@ def determine_compress_workers(
     """Select archive concurrency without oversubscribing compression CPUs."""
     if requested_workers is not None:
         return min(task_count, requested_workers)
+    # Each zlib-ng archive also runs a tar producer alongside its compression
+    # threads, so reserve one additional CPU for that subprocess.
     cpus_per_archive = (
         compression_threads + 1 if compression_backend == "zlib-ng" else 1
     )
@@ -376,9 +382,9 @@ def main(argv: list[str] | None = None) -> None:
     log(f"  Compression level: {args.compression_level}")
     log(f"  Compression threads per tarball: {args.compression_threads}")
 
-    # Phase 1: Fetch and flatten sequentially.
-    # Sequential so the shared download cache avoids re-downloading generic
-    # (host) artifacts for each family.
+    # Phase 1: Fetch and flatten sequentially so generic (host) artifacts can
+    # reuse both their downloaded archives and extracted contents across the
+    # family and multiarch staging trees.
     family_dirs = []
     compress_tasks: list[CompressionTask] = []
     for family in families:
