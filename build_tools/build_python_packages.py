@@ -542,6 +542,8 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         an.name
         in [
             "blas",
+            "solver",
+            "sparse",
             "fft",
             "hipdnn",
             "miopen",
@@ -607,6 +609,8 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
         an.name
         in [
             "blas",
+            "solver",
+            "sparse",
             "fft",
             "hipdnn",
             "miopen",
