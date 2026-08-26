@@ -157,7 +157,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={},
             extra_env={
                 "LINUX_AMDGPU_FAMILIES": "gfx94X, gfx120X",
-                "LINUX_TEST_LABELS": "test:rocprim",
+                "LINUX_TEST_LABELS": "ci:test-rocprim",
                 "WINDOWS_AMDGPU_FAMILIES": "",
                 "WINDOWS_TEST_LABELS": "",
                 "PREBUILT_STAGES": "compiler-runtime,runtime-tests",
@@ -168,7 +168,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
-        self.assertEqual(inputs.linux_test_labels, ["test:rocprim"])
+        self.assertEqual(inputs.linux_test_labels, ["ci:test-rocprim"])
         self.assertEqual(inputs.prebuilt_stages, "compiler-runtime,runtime-tests")
         self.assertEqual(inputs.baseline_run_id, "12345")
         self.assertFalse(inputs.build_pytorch)
@@ -182,33 +182,35 @@ class TestCIInputsFromEnviron(unittest.TestCase):
             event_payload={
                 "pull_request": {
                     "labels": [
-                        {"name": "gfx950", "id": 1},
-                        {"name": "test:rocprim", "id": 2},
+                        {"name": "ci:gfx950", "id": 1},
+                        {"name": "ci:test-rocprim", "id": 2},
                     ]
                 }
             },
             commit_ref="feature-branch",
         )
-        self.assertEqual(inputs.pr_labels, ["gfx950", "test:rocprim"])
+        self.assertEqual(inputs.pr_labels, ["ci:gfx950", "ci:test-rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
-        """PR test:* labels are converted to ci:test-* and merged into linux/windows_test_labels."""
+        """PR ci:test-* labels are merged into linux/windows_test_labels."""
         inputs = _run_from_environ(
             event_name="pull_request",
             event_payload={
                 "pull_request": {
                     "labels": [
-                        {"name": "test:rccl", "id": 1},
-                        {"name": "test:rocprim", "id": 2},
-                        {"name": "gfx950", "id": 3},
+                        {"name": "ci:test-rccl", "id": 1},
+                        {"name": "ci:test-rocprim", "id": 2},
+                        {"name": "ci:gfx950", "id": 3},
                     ]
                 }
             },
         )
         # Old "test:" format is converted to "ci:test-" format
         self.assertEqual(inputs.linux_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
-        self.assertEqual(inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+        self.assertEqual(
+            inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"]
+        )
 
     def test_pull_request_ci_test_labels_extracted_to_test_labels(self):
         """PR ci:test-* labels are passed through to linux/windows_test_labels."""
@@ -225,7 +227,9 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         # New "ci:test-" format is passed through as-is
         self.assertEqual(inputs.linux_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
-        self.assertEqual(inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+        self.assertEqual(
+            inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"]
+        )
 
     def test_pull_request_multi_gpu_label_passed_through(self):
         """PR ci:multi-gpu label is passed to test_labels for multi-GPU opt-in."""
@@ -235,14 +239,13 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "pull_request": {
                     "labels": [
                         {"name": "ci:multi-gpu", "id": 1},
-                        {"name": "test:rccl", "id": 2},
+                        {"name": "ci:test-rccl", "id": 2},
                     ]
                 }
             },
         )
         self.assertIn("ci:multi-gpu", inputs.linux_test_labels)
         self.assertIn("ci:multi-gpu", inputs.windows_test_labels)
-        # Old "test:" format is converted to "ci:test-" format
         self.assertIn("ci:test-rccl", inputs.linux_test_labels)
 
     def test_push_reads_before_sha(self):
@@ -507,11 +510,11 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "full")
 
-    def test_pr_deprecated_test_label_is_full(self):
-        """PR with deprecated test:* label → full tests (backward compat)."""
+    def test_pr_ci_test_label_is_full(self):
+        """PR with ci:test-* label → full tests."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.decide_jobs(
-            self._inputs(pr_labels=["test:rocprim"]),
+            self._inputs(pr_labels=["ci:test-rocprim"]),
             git_context=git,
             targets=cm.TargetSelection(),
         )
@@ -560,12 +563,12 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_test_filter_label_overrides(self):
-        """test_filter: PR label overrides the computed test_type."""
-        # Even though schedule would set comprehensive, test_filter overrides.
+        """ci:filter-* PR label overrides the computed test_type."""
+        # Even though schedule would set comprehensive, ci:filter-* overrides.
         result = cm.decide_jobs(
             self._inputs(
                 event_name="schedule",
-                pr_labels=["test_filter:standard"],
+                pr_labels=["ci:filter-standard"],
             ),
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(),
@@ -573,29 +576,29 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "standard")
 
     def test_test_filter_invalid_raises(self):
-        """Unrecognized test_filter value raises ValueError."""
+        """Unrecognized ci:filter-* value raises ValueError."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         with self.assertRaises(ValueError, msg="Unrecognized test_filter"):
             cm.decide_jobs(
-                self._inputs(pr_labels=["test_filter:bogus"]),
+                self._inputs(pr_labels=["ci:filter-bogus"]),
                 git_context=git,
                 targets=cm.TargetSelection(),
             )
 
     def test_workflow_dispatch_test_filter_label_overrides(self):
-        """test_filter in workflow_dispatch test_labels overrides test_type."""
-        # workflow_dispatch with test_filter:comprehensive should use comprehensive,
+        """ci:filter-* in workflow_dispatch test_labels overrides test_type."""
+        # workflow_dispatch with ci:filter-comprehensive should use comprehensive,
         # not fall through to "full" because of _has_test_labels
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels=["test_filter:comprehensive"],
+                linux_test_labels=["ci:filter-comprehensive"],
             ),
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "comprehensive")
-        self.assertIn("test_filter", result.test_rocm.test_type_reason)
+        self.assertIn("ci:filter-", result.test_rocm.test_type_reason)
 
     def test_explicit_prebuilt_stages(self):
         """workflow_dispatch prebuilt_stages input → stage_decisions on BuildRocmDecision."""
@@ -854,7 +857,7 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
             # gfx906 is nightly-only, not in presubmit+postsubmit defaults
-            pr_labels=["gfx906"],
+            pr_labels=["ci:gfx906"],
         )
         result_without = cm.select_targets(inputs_without)
         result_with = cm.select_targets(inputs_with)
@@ -903,14 +906,14 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx906", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
-        """PR with an unknown gfx label fails fast."""
+        """PR with an unknown ci:gfx label fails fast."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
-            pr_labels=["gfx9999"],
+            pr_labels=["ci:gfx9999"],
         )
         with self.assertRaises(ValueError, msg="Unknown GPU families"):
             cm.select_targets(inputs)
@@ -1503,10 +1506,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(len(result.linux.per_family_info), 1)
 
     def test_test_runner_kernel_overrides_runner_label(self):
-        """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
+        """ci:runner-oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            ci_inputs=self._inputs(pr_labels=["ci:runner-oem"]),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
@@ -1516,11 +1519,11 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(entry["test-runs-on"], "")
 
     def test_test_runner_kernel_clears_unsupported_family(self):
-        """test_runner:oem label clears runner for families without kernel support."""
+        """ci:runner-oem label clears runner for families without kernel support."""
         # gfx94x has no test-runs-on-kernel entry
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         result = cm.expand_build_configs(
-            ci_inputs=self._inputs(pr_labels=["test_runner:oem"]),
+            ci_inputs=self._inputs(pr_labels=["ci:runner-oem"]),
             git_context=cm.GitContext(),
             targets=targets,
             jobs=_jobs(),
@@ -1530,7 +1533,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(entry["test-runs-on"], "")
 
     def test_no_test_runner_label_uses_default(self):
-        """Without test_runner: label, default runner labels are used."""
+        """Without ci:runner-* label, default runner labels are used."""
         targets = cm.TargetSelection(linux_families=["gfx908"])
         result = cm.expand_build_configs(
             ci_inputs=self._inputs(),

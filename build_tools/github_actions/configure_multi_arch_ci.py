@@ -242,16 +242,11 @@ class CIInputs:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR ci:test-* labels (apply to both platforms)
         # 3. ci:multi-gpu label (opt-in to multi-GPU tests)
-        # Support both "ci:test-..." (preferred) and bare "test:..." (deprecated)
-        pr_test_labels = []
-        for label in pr_labels:
-            if label.startswith("ci:test-"):
-                pr_test_labels.append(label)
-            elif label.startswith("test:"):
-                # Convert deprecated "test:X" to "ci:test-X"
-                pr_test_labels.append("ci:test-" + label.split(":", 1)[1])
-            elif label == "ci:multi-gpu":
-                pr_test_labels.append(label)
+        pr_test_labels = [
+            label
+            for label in pr_labels
+            if label.startswith("ci:test-") or label == "ci:multi-gpu"
+        ]
         linux_test_labels = (
             _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
         )
@@ -787,21 +782,11 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            # Support both "ci:gfx..." (preferred) and bare "gfx..." (deprecated)
-            # for opt-in GPU family labels.
-            gfx_target = None
+            # ci:gfx* labels opt-in to GPU families (e.g., ci:gfx942, ci:gfx950)
             if label.startswith("ci:gfx"):
-                # New format: ci:gfx942, ci:gfx950, ci:gfx120x, etc.
-                gfx_target = label[3:]  # Strip "ci:" prefix
-            elif label.startswith("gfx"):
-                # Deprecated: bare gfx labels (gfx942, gfx950, etc.)
-                gfx_target = label
-            if gfx_target:
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
+                # Strip "ci:" prefix and any suffixes (e.g., ci:gfx94x-dcgpu -> gfx94x)
                 # Note: labels are normalized to lowercase during parsing.
-                target = gfx_target.split("-")[0]
+                target = label[3:].split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -836,28 +821,18 @@ def _has_test_labels(ci_inputs: CIInputs) -> bool:
     """Check whether any test labels were specified (workflow_dispatch or PR).
 
     Note: ci:filter-* labels are not test labels - they control test_type,
-    not which tests to run. Supports both "ci:filter-*" (preferred) and
-    "test_filter:" (deprecated) formats.
+    not which tests to run.
     """
-    # Filter out test filter labels - those control test_type, not test selection
-    # Support both "ci:filter-*" (preferred) and "test_filter:" (deprecated)
+    # Filter out ci:filter-* labels - those control test_type, not test selection
     linux_tests = [
-        l
-        for l in ci_inputs.linux_test_labels
-        if not l.startswith("ci:filter-") and not l.startswith("test_filter:")
+        l for l in ci_inputs.linux_test_labels if not l.startswith("ci:filter-")
     ]
     windows_tests = [
-        l
-        for l in ci_inputs.windows_test_labels
-        if not l.startswith("ci:filter-") and not l.startswith("test_filter:")
+        l for l in ci_inputs.windows_test_labels if not l.startswith("ci:filter-")
     ]
     if linux_tests or windows_tests:
         return True
-    # Support both "ci:test-*" (preferred) and "test:" (deprecated)
-    return any(
-        label.startswith("ci:test-") or label.startswith("test:")
-        for label in ci_inputs.pr_labels
-    )
+    return any(label.startswith("ci:test-") for label in ci_inputs.pr_labels)
 
 
 def _determine_test_type(
@@ -882,21 +857,15 @@ def _determine_test_type(
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
     # Check both PR labels and workflow_dispatch test labels.
-    # Supports both "ci:filter-*" (preferred) and "test_filter:" (deprecated)
     all_labels = (
         ci_inputs.pr_labels
         + ci_inputs.linux_test_labels
         + ci_inputs.windows_test_labels
     )
     for label in all_labels:
-        filter_type = None
-        if label.startswith("ci:filter-"):
-            filter_type = label.split("-", 1)[1]
-        elif label.startswith("test_filter:"):
-            # Deprecated format
-            filter_type = label.split(":")[1]
-        if filter_type is None:
+        if not label.startswith("ci:filter-"):
             continue
+        filter_type = label.split("-", 1)[1]
         if filter_type not in _VALID_TEST_FILTER_TYPES:
             raise ValueError(
                 f"Unrecognized test filter value: {filter_type!r}. "
@@ -1057,15 +1026,10 @@ def _expand_build_config_for_platform(
 
     # Extract kernel type from ci:runner-<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
-    # Supports both "ci:runner-*" (preferred) and "test_runner:" (deprecated)
     test_runner_kernel = ""
     for label in ci_inputs.pr_labels:
         if label.startswith("ci:runner-"):
             test_runner_kernel = label.split("-", 1)[1]
-            break
-        elif label.startswith("test_runner:"):
-            # Deprecated format
-            test_runner_kernel = label.split(":")[1]
             break
 
     per_family_info: list[dict] = []

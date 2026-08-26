@@ -1029,15 +1029,13 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        # Support "ci:test-X" (preferred), "test:X" (deprecated), and bare "X" formats
+        # ci:test-X labels are parsed to extract the test name (X)
         parsed_test_labels = []
         for label in test_labels:
             if label.startswith("ci:test-"):
                 parsed_test_labels.append(label.split("ci:test-", 1)[-1])
-            elif label.startswith("test:"):
-                parsed_test_labels.append(label.split("test:", 1)[-1])
             elif not label.startswith("ci:"):
-                # Bare label without any prefix (e.g., "rocblas")
+                # Bare label without any prefix (e.g., "rocblas") from workflow_dispatch
                 parsed_test_labels.append(label)
         expanded_test_labels = [
             member
