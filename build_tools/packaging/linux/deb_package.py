@@ -434,19 +434,23 @@ def copy_package_contents(source_dir, destination_dir):
         src = item
         dst = destination_dir / item.name
 
-        if src.is_dir() and not dst.is_symlink():
-            shutil.copytree(
-                src,
-                dst,
-                dirs_exist_ok=True,
-                symlinks=True,
-                ignore_dangling_symlinks=True,
-            )
-        elif src.is_symlink():
-            # Copy the symlink itself (even if dangling)
+        # Check is_symlink() first because is_dir() follows symlinks and returns
+        # True for symlinks pointing to directories. We want to preserve symlinks.
+        if src.is_symlink():
             link_target = src.readlink()
-            dst.symlink_to(link_target)
-        else:
+            if not dst.exists() and not dst.is_symlink():
+                dst.symlink_to(link_target)
+        elif src.is_dir():
+            if not dst.is_symlink():
+                shutil.copytree(
+                    src,
+                    dst,
+                    dirs_exist_ok=True,
+                    symlinks=True,
+                    ignore_dangling_symlinks=True,
+                )
+            # else: skip - don't overwrite existing symlink with directory
+        elif src.is_file():
             shutil.copy2(src, dst)
 
 
