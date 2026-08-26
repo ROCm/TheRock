@@ -193,7 +193,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             compress_mock.call_args.kwargs["compression_backend"], "zlib-ng"
         )
-        self.assertEqual(compress_mock.call_args.kwargs["compression_level"], 6)
+        self.assertEqual(compress_mock.call_args.kwargs["compression_level"], 9)
         self.assertEqual(compress_mock.call_args.kwargs["compression_threads"], 8)
 
     def test_kpack_builds_common_tarball_with_one_family(self) -> None:

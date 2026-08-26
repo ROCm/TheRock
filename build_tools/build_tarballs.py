@@ -68,7 +68,7 @@ from zlib_ng import gzip_ng_threaded
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
 DEFAULT_COMPRESSION_BACKEND = "zlib-ng"
-DEFAULT_COMPRESSION_LEVEL = 6
+DEFAULT_COMPRESSION_LEVEL = 9
 DEFAULT_COMPRESSION_THREADS = 8
 
 # Higher priorities represent tarballs expected to take longer to compress.
@@ -336,7 +336,7 @@ def main(argv: list[str] | None = None) -> None:
         type=int,
         choices=range(10),
         default=DEFAULT_COMPRESSION_LEVEL,
-        help="Gzip compression level for zlib-ng (default: 6)",
+        help="Gzip compression level for zlib-ng (default: 9)",
     )
     parser.add_argument(
         "--compression-threads",
