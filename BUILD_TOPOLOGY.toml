@@ -794,6 +794,13 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
 
+[artifacts.rocshmem4py]
+artifact_group = "comm-libs"
+type = "target-neutral"
+artifact_deps = ["rocshmem", "core-runtime", "core-hip", "sysdeps"]
+disable_platforms = ["windows"]
+python_requires = ["installer==0.7.0", "packaging==25.0", "wheel==0.46.2"]
+
 # --- Storage Libraries ---
 
 [artifacts.hipfile]

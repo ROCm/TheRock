@@ -126,6 +126,7 @@ jobs:
       # See https://github.com/ROCm/TheRock/issues/7075.
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
+      ROCSHMEM4PY_VENV_DIR: ${{ github.workspace }}/.venv-rocshmem4py
 
     steps:
       - name: Checkout
@@ -173,6 +174,26 @@ jobs:
         timeout-minutes: 5
         run: |
           rocm-sdk test
+
+      - name: Install rocshmem4py from packages
+        id: install_rocshmem4py
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.install_libraries.outcome == 'success' }}
+        run: |
+          python build_tools/setup_venv.py "${ROCSHMEM4PY_VENV_DIR}" \
+            --packages rocshmem4py \
+            --pre \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }}
+
+      - name: Test installed rocshmem4py wheel
+        if: ${{ !cancelled() && steps.install_rocshmem4py.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          ROCSHMEM_HEAP_SIZE: 268435456
+        run: |
+          "${ROCSHMEM4PY_VENV_DIR}/bin/python" \
+            build_tools/packaging/python/rocshmem4py_install_test.py \
+            --expected-rocm-version "${{ inputs.rocm_version }}"
 
       - name: Install rocm[libraries,devel]
         id: install_devel
