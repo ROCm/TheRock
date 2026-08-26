@@ -35,12 +35,18 @@ def test_filter_args():
     """CTest filter for the requested category, per docs/development/test_filtering.md.
 
     The two `test_type_1` entries are RPP's performance suites and take ~58% of
-    the total runtime, so they are reserved for comprehensive/full.
+    the total runtime, so they are reserved for native comprehensive/full. The
+    FFM (Full Function Model emulator) tiers mirror their native counterparts but
+    exclude the perf suites at every level: perf numbers off a software emulator
+    are meaningless and the runs are prohibitively slow.
     """
-    if TEST_TYPE == "quick":
+    if TEST_TYPE in ("quick", "ffm-quick"):
         return ["-R", "rpp_sanity_test"]
-    if TEST_TYPE == "standard":
+    if TEST_TYPE in ("standard", "ffm-standard"):
         return ["-E", "test_type_1"]
+    if TEST_TYPE in ("ffm-comprehensive", "ffm-full"):
+        return ["-E", "test_type_1"]
+    # Native comprehensive/full: run everything, including the perf suites.
     return []
 
 
