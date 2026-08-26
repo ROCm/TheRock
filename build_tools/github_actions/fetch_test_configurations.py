@@ -1029,7 +1029,16 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
+        # Support "ci:test-X" (preferred), "test:X" (deprecated), and bare "X" formats
+        parsed_test_labels = []
+        for label in test_labels:
+            if label.startswith("ci:test-"):
+                parsed_test_labels.append(label.split("ci:test-", 1)[-1])
+            elif label.startswith("test:"):
+                parsed_test_labels.append(label.split("test:", 1)[-1])
+            elif not label.startswith("ci:"):
+                # Bare label without any prefix (e.g., "rocblas")
+                parsed_test_labels.append(label)
         expanded_test_labels = [
             member
             for label in parsed_test_labels
@@ -1105,17 +1114,25 @@ def run():
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
+            # The ci:multi-gpu label opts-in to multi-GPU tests for any family with a multi-GPU runner
+            multi_gpu_opt_in = "ci:multi-gpu" in test_labels
             if "multi_gpu" in selected_matrix[key]:
-                if (
+                family_has_multi_gpu = (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
-                ):
+                )
+                if family_has_multi_gpu or multi_gpu_opt_in:
                     # Mark this component as needing a multi-GPU runner.
                     # The actual runner selection is done in the per-component loop below.
                     job_config_data["multi_gpu_runner"] = True
-                    logging.info(
-                        f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
-                    )
+                    if multi_gpu_opt_in and not family_has_multi_gpu:
+                        logging.info(
+                            f"Including job {job_name} for multi GPU testing via ci:multi-gpu-test opt-in"
+                        )
+                    else:
+                        logging.info(
+                            f"Including job {job_name} for multi GPU testing with family {amdgpu_families}"
+                        )
                 else:
                     # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
                     logging.info(

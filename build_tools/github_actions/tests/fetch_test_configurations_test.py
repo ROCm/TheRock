@@ -438,6 +438,27 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
 
+    def test_multi_gpu_opt_in_label_enables_multi_gpu_tests(self):
+        """ci:multi-gpu label enables multi-GPU tests even for non-default families."""
+        os.environ["AMDGPU_FAMILIES"] = "gfx90a"  # Not in rccl's multi_gpu list
+        os.environ["TEST_LABELS"] = json.dumps(["ci:multi-gpu", "ci:test-rccl"])
+
+        def fake_get_all_families(_):
+            # gfx90a has a multi-GPU runner but is not in rccl's multi_gpu list
+            return {"gfx90a": {"linux": {"test-runs-on-multi-gpu": "linux-mi200-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        # rccl should be included via the ci:multi-gpu opt-in
+        rccl = next((j for j in components if j["job_name"] == "rccl"), None)
+        self.assertIsNotNone(rccl, "rccl should be included via ci:multi-gpu opt-in")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi200-mgpu")
+
     # -----------------------
     # Output contract
     # -----------------------
@@ -631,8 +652,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # TEST_LABEL_GROUPS expansion
     # -----------------------
 
+    def test_ci_test_label_selects_job(self):
+        """ci:test-rocblas (new format) should select the rocblas job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["ci:test-rocblas"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocblas", names)
+        self.assertNotIn("hipblas", names)
+
     def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
-        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
+        """test:rocgdb (deprecated) should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
         with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
             fetch_test_configurations.run()
             components = self._get_components()

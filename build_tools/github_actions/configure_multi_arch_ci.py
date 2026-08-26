@@ -240,8 +240,18 @@ class CIInputs:
 
         # Test labels come from two sources:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
-        # 2. PR test:* labels (apply to both platforms)
-        pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        # 2. PR ci:test-* labels (apply to both platforms)
+        # 3. ci:multi-gpu label (opt-in to multi-GPU tests)
+        # Support both "ci:test-..." (preferred) and bare "test:..." (deprecated)
+        pr_test_labels = []
+        for label in pr_labels:
+            if label.startswith("ci:test-"):
+                pr_test_labels.append(label)
+            elif label.startswith("test:"):
+                # Convert deprecated "test:X" to "ci:test-X"
+                pr_test_labels.append("ci:test-" + label.split(":", 1)[1])
+            elif label == "ci:multi-gpu":
+                pr_test_labels.append(label)
         linux_test_labels = (
             _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
         )
@@ -465,9 +475,9 @@ class TestRocmDecision(JobGroupDecision):
 
     test_type levels (from least to most testing):
     - "quick"         — default for PRs and push
-    - "standard"      — via test_filter:standard PR label
+    - "standard"      — via ci:filter-standard PR label
     - "comprehensive" — schedule/nightly
-    - "full"          — submodule changes, test:* labels, or test_filter:full
+    - "full"          — submodule changes, ci:test-* labels, or ci:filter-full
     """
 
     test_type: str = "quick"
@@ -578,7 +588,7 @@ class CIOutputs:
     builds: BuildConfigs = field(default_factory=BuildConfigs)
     jobs: JobDecisions | None = None
     # Test labels for downstream workflows. Merged from workflow_dispatch inputs
-    # and PR test:* labels.
+    # and PR ci:test-* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
 
@@ -777,12 +787,21 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            # Support both "ci:gfx..." (preferred) and bare "gfx..." (deprecated)
+            # for opt-in GPU family labels.
+            gfx_target = None
+            if label.startswith("ci:gfx"):
+                # New format: ci:gfx942, ci:gfx950, ci:gfx120x, etc.
+                gfx_target = label[3:]  # Strip "ci:" prefix
+            elif label.startswith("gfx"):
+                # Deprecated: bare gfx labels (gfx942, gfx950, etc.)
+                gfx_target = label
+            if gfx_target:
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
                 # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
+                target = gfx_target.split("-")[0]
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -816,19 +835,29 @@ _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
 def _has_test_labels(ci_inputs: CIInputs) -> bool:
     """Check whether any test labels were specified (workflow_dispatch or PR).
 
-    Note: test_filter: labels are not test labels - they control test_type,
-    not which tests to run.
+    Note: ci:filter-* labels are not test labels - they control test_type,
+    not which tests to run. Supports both "ci:filter-*" (preferred) and
+    "test_filter:" (deprecated) formats.
     """
-    # Filter out test_filter: labels - those control test_type, not test selection
+    # Filter out test filter labels - those control test_type, not test selection
+    # Support both "ci:filter-*" (preferred) and "test_filter:" (deprecated)
     linux_tests = [
-        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+        l
+        for l in ci_inputs.linux_test_labels
+        if not l.startswith("ci:filter-") and not l.startswith("test_filter:")
     ]
     windows_tests = [
-        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+        l
+        for l in ci_inputs.windows_test_labels
+        if not l.startswith("ci:filter-") and not l.startswith("test_filter:")
     ]
     if linux_tests or windows_tests:
         return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
+    # Support both "ci:test-*" (preferred) and "test:" (deprecated)
+    return any(
+        label.startswith("ci:test-") or label.startswith("test:")
+        for label in ci_inputs.pr_labels
+    )
 
 
 def _determine_test_type(
@@ -842,35 +871,41 @@ def _determine_test_type(
 
     * Available filter types: ["quick", "standard", "comprehensive", "full"]
     * Workflow runs choose a filter type automatically but PRs can override
-      with labels like `test_filter:comprehensive`
+      with labels like `ci:filter-comprehensive`
 
     Returns (test_type, reason).
     """
 
     # Check in priority order - highest priority returns early.
 
-    # Priority 1: test_filter: label is an explicit manual override.
+    # Priority 1: ci:filter-* label is an explicit manual override.
     # This is the escape hatch: run comprehensive on a PR before merge,
     # or downgrade to quick if you know the change is safe.
     # Check both PR labels and workflow_dispatch test labels.
+    # Supports both "ci:filter-*" (preferred) and "test_filter:" (deprecated)
     all_labels = (
         ci_inputs.pr_labels
         + ci_inputs.linux_test_labels
         + ci_inputs.windows_test_labels
     )
     for label in all_labels:
-        if not label.startswith("test_filter:"):
+        filter_type = None
+        if label.startswith("ci:filter-"):
+            filter_type = label.split("-", 1)[1]
+        elif label.startswith("test_filter:"):
+            # Deprecated format
+            filter_type = label.split(":")[1]
+        if filter_type is None:
             continue
-        filter_type = label.split(":")[1]
         if filter_type not in _VALID_TEST_FILTER_TYPES:
             raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
+                f"Unrecognized test filter value: {filter_type!r}. "
                 f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
             )
-        return filter_type, f"test_filter label: {label}"
+        return filter_type, f"test filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
+    # Priority 2: ci:test-* labels request specific component tests (e.g.
+    # ci:test-rocprim). When someone explicitly asks for tests, run the full
     # suite — they're investigating something specific.
     if _has_test_labels(ci_inputs):
         return "full", "test labels specified"
@@ -1020,11 +1055,16 @@ def _expand_build_config_for_platform(
     """
     build_variant = variant_config["build_variant_label"]
 
-    # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
+    # Extract kernel type from ci:runner-<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
+    # Supports both "ci:runner-*" (preferred) and "test_runner:" (deprecated)
     test_runner_kernel = ""
     for label in ci_inputs.pr_labels:
-        if label.startswith("test_runner:"):
+        if label.startswith("ci:runner-"):
+            test_runner_kernel = label.split("-", 1)[1]
+            break
+        elif label.startswith("test_runner:"):
+            # Deprecated format
             test_runner_kernel = label.split(":")[1]
             break
 
@@ -1049,7 +1089,7 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
-        # When a test_runner:<kernel> label is set, use the
+        # When a ci:runner-<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
         if test_runner_kernel:

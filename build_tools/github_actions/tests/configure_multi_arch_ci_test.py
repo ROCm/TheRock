@@ -193,7 +193,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.base_ref, "HEAD^")
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
-        """PR test:* labels are merged into linux/windows_test_labels."""
+        """PR test:* labels are converted to ci:test-* and merged into linux/windows_test_labels."""
         inputs = _run_from_environ(
             event_name="pull_request",
             event_payload={
@@ -206,8 +206,44 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 }
             },
         )
-        self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
-        self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
+        # Old "test:" format is converted to "ci:test-" format
+        self.assertEqual(inputs.linux_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+        self.assertEqual(inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+
+    def test_pull_request_ci_test_labels_extracted_to_test_labels(self):
+        """PR ci:test-* labels are passed through to linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:test-rccl", "id": 1},
+                        {"name": "ci:test-rocprim", "id": 2},
+                    ]
+                }
+            },
+        )
+        # New "ci:test-" format is passed through as-is
+        self.assertEqual(inputs.linux_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+        self.assertEqual(inputs.windows_test_labels, ["ci:test-rccl", "ci:test-rocprim"])
+
+    def test_pull_request_multi_gpu_label_passed_through(self):
+        """PR ci:multi-gpu label is passed to test_labels for multi-GPU opt-in."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:multi-gpu", "id": 1},
+                        {"name": "test:rccl", "id": 2},
+                    ]
+                }
+            },
+        )
+        self.assertIn("ci:multi-gpu", inputs.linux_test_labels)
+        self.assertIn("ci:multi-gpu", inputs.windows_test_labels)
+        # Old "test:" format is converted to "ci:test-" format
+        self.assertIn("ci:test-rccl", inputs.linux_test_labels)
 
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
@@ -462,7 +498,17 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_pr_test_label_is_full(self):
-        """PR with test:* label → full tests."""
+        """PR with ci:test-* label → full tests."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["ci:test-rocprim"]),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+
+    def test_pr_deprecated_test_label_is_full(self):
+        """PR with deprecated test:* label → full tests (backward compat)."""
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         result = cm.decide_jobs(
             self._inputs(pr_labels=["test:rocprim"]),
@@ -476,7 +522,7 @@ class TestDecideJobs(unittest.TestCase):
         result = cm.decide_jobs(
             self._inputs(
                 event_name="workflow_dispatch",
-                linux_test_labels=["test:rocprim"],
+                linux_test_labels=["ci:test-rocprim"],
             ),
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(),
@@ -814,6 +860,33 @@ class TestSelectTargets(unittest.TestCase):
         result_with = cm.select_targets(inputs_with)
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
+
+    def test_pull_request_ci_gfx_label(self):
+        """PR with ci:gfx... label (new format) adds family to targets."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # ci:gfx906 uses the new ci: prefix format
+            pr_labels=["ci:gfx906"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx906", result.linux_families)
+
+    def test_pull_request_ci_gfx_label_with_suffix(self):
+        """PR with ci:gfx...-suffix label strips the suffix correctly."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:gfx94x-dcgpu"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx94x", result.linux_families)
 
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""
@@ -1640,12 +1713,12 @@ class TestConfigurePipeline(unittest.TestCase):
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
-            linux_test_labels=["test:rccl"],
-            windows_test_labels=["test:rccl"],
+            linux_test_labels=["ci:test-rccl"],
+            windows_test_labels=["ci:test-rccl"],
         )
         outputs = cm.configure(inputs, cm.GitContext.empty())
-        self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
-        self.assertEqual(outputs.windows_test_labels, ["test:rccl"])
+        self.assertEqual(outputs.linux_test_labels, ["ci:test-rccl"])
+        self.assertEqual(outputs.windows_test_labels, ["ci:test-rccl"])
 
     def test_no_test_labels_has_empty_outputs(self):
         """Without test labels, outputs are empty lists."""

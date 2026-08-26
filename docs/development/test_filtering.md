@@ -37,7 +37,7 @@
   - Runs on: prerelease builds, submodule updates, on-demand
   - Characteristics: exhaustive scenarios, extreme edge cases, aim to eliminate unknown risks
   - Execution time: 2+ hours
-  - Target: pre-release testing, submodule bumps, on-demand PR label (`test_filter:full`)
+  - Target: pre-release testing, submodule bumps, on-demand PR label (`ci:filter-full`)
 
 ## Test filter implementation
 
