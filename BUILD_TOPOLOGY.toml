@@ -66,6 +66,8 @@
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   disable_platforms_if_flags_not_set = { windows = "FOO" }  # Optional: conditional platform disables
+#   disable_processors = ["aarch64"]     # Optional: CPU processors where disabled
+#                                           #   Canonical names: x86_64, aarch64, ppc64le
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
@@ -127,7 +129,6 @@ submodules = []
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
-disable_platforms = ["windows"]
 
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
@@ -150,6 +151,7 @@ artifact_groups = [
     "core-runtime",
     "third-party-libs",
     "hip-runtime",
+    "kfdtest",
     "opencl-runtime",
     "profiler-core",
     "rocjitsu"
@@ -227,7 +229,7 @@ source_sets = []  # No submodules - uses vendored/in-tree deps
 description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# rocm-systems provides rocm-core, rocm-smi-lib, and rocprofiler-register.
 source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-runtime]
@@ -258,7 +260,7 @@ source_sets = ["compilers"]
 description = "ROCm debug tools"
 type = "generic"
 artifact_group_deps = ["compiler", "third-party-sysdeps"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# rocm-systems provides amd-dbgapi and rocr-debug-agent.
 source_sets = ["debug-tools", "rocm-systems"]
 
 [artifact_groups.hip-runtime]
@@ -279,11 +281,17 @@ type = "generic"
 artifact_group_deps = ["hip-runtime", "opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
+[artifact_groups.kfdtest]
+description = "KFD kernel driver tests"
+type = "generic"
+artifact_group_deps = ["core-runtime"]
+source_sets = ["rocm-systems"]
+
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# rocm-systems provides shared kpack tooling used to produce kpack artifacts.
 source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
 [artifact_groups.ml-libs]
@@ -296,7 +304,7 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 description = "Communication libraries"
 type = "generic"
 artifact_group_deps = ["hip-runtime"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# rocm-systems provides RCCL, RCCL tests, ROCm SHMEM, and shared kpack tooling.
 source_sets = ["comm-libs", "rocm-systems"]
 
 [artifact_groups.storage-libs]
@@ -315,7 +323,7 @@ source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 description = "Data center management tools with minimal dependencies"
 type = "generic"
 artifact_group_deps = ["core-runtime", "core-amdsmi", "profiler-core"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# rocm-systems provides RDC.
 source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 
 # Future artifact groups
@@ -334,8 +342,7 @@ source_sets = ["rocm-systems"]
 description = "Computer Vision Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
-# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["rocm-libraries", "rocm-systems"]
+source_sets = ["rocm-libraries"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -379,7 +386,6 @@ artifact_group = "media-libs"
 type = "target-neutral"
 artifact_deps = ["sysdeps"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
-disable_platforms = ["windows"]
 
 [artifacts.sysdeps-expat]
 artifact_group = "third-party-sysdeps"
@@ -591,6 +597,14 @@ feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.kfdtest]
+artifact_group = "kfdtest"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "amd-llvm", "sysdeps"]
+feature_name = "CORE_KFDTESTS"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hipinfo]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -690,7 +704,7 @@ artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "rand"]
 
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
@@ -746,7 +760,11 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
+# RCCL's gfx1250 split artifact includes an install-owned RocJitsu translation
+# cache. Keep the pretranslation toolchain as an explicit staged dependency so
+# configure_stage.py enables ROCJITSU and ROCJITSU_HOTSWAP in comm-libs builds.
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi", "rocjitsu-hotswap"]
+split_databases = ["hotswap_cache"]
 disable_platforms = ["windows"]
 
 [artifacts.rocshmem]
@@ -797,6 +815,7 @@ artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdl
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+disable_processors = ["ppc64le"]
 
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-examples"
@@ -804,6 +823,7 @@ type = "target-neutral"
 artifact_deps = ["rocprofiler-systems", "rocjpeg"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+disable_processors = ["ppc64le"]
 
 # --- Data Center Tools ---
 

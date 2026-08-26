@@ -38,6 +38,9 @@ VALID_TEST_CATEGORIES = {
     "ffm-standard",
     "ffm-comprehensive",
     "ffm-full",
+    # emulation categories (AM/rocjitsu)
+    "emu-fast",
+    "emu-full",
 }
 # Normalize + validate TEST_TYPE once at module load so all downstream
 # consumers (apply_component_overrides at import time, main() at run
@@ -83,6 +86,7 @@ COMPONENT_DIR_MAPPING = {
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hipblasltprovider": "hipblaslt_plugin",
+    "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
     # Add more mappings as needed
 }

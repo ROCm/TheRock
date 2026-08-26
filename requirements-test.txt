@@ -10,6 +10,7 @@ prettytable==3.12.0
 requests==2.33.0
 jsonschema==4.23.0
 packaging==25.0
+python-debian==1.1.1
 setuptools>=80.9.0,<82.0.0
 python-magic==0.4.27; sys_platform != "win32"
 
@@ -30,3 +31,8 @@ sccache==0.10.0
 
 #test_artifacts_covered_by_packages requirement
 toml>=0.10.2
+
+# build_tools/packaging/linux/tests/build_package_test.py imports build_package.py,
+# which pulls this in via deb_package.py and rpm_package.py.
+# Keep the specifier in sync with requirements.txt.
+jinja2>=3.0.0

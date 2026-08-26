@@ -90,7 +90,9 @@ def _normalize_release_type(release_type: str) -> str:
     return aliases.get(rt, rt)
 
 
-_KNOWN_RELEASE_TYPES = frozenset({"prerelease", "release", "dev", "nightly", "ci"})
+_KNOWN_RELEASE_TYPES = frozenset(
+    {"prerelease", "release", "dev", "dev-bkc", "nightly", "nightly-bkc", "ci"}
+)
 
 
 def _normalize_and_validate_release_type(release_type: str) -> str:
@@ -369,10 +371,7 @@ def get_repo_url_multi_arch(
     os_profile: str,
     repo_sub_folder: str,
 ) -> str:
-    """Build a multi-arch native Linux package repo URL (``packages-multi-arch/``).
-
-    Matches ``dockerfiles/install_rocm_packages.sh`` ``build_repo_url`` when
-    ``multi_arch=1``.
+    """Build a current multi-arch native Linux package repo URL.
 
     Args:
         release_type: ``prerelease``, ``release`` / ``stable``, or unsigned
@@ -386,34 +385,35 @@ def get_repo_url_multi_arch(
         HTTPS URL pointing at the apt/dnf repo root.
 
     Layout:
-        - prerelease deb: ``{base}/packages-multi-arch/{os_profile}``
-        - release deb: ``{base}/rocm/packages-multi-arch/{os_profile}``
-        - nightly deb: ``{base}/packages-multi-arch/deb/{repo_sub_folder}``
-        - nightly rpm: ``{base}/packages-multi-arch/rpm/{repo_sub_folder}/x86_64``
+        - prerelease deb: ``{base}/rocm/core/packages/{os_profile}``
+        - release deb: ``{base}/rocm/core/packages/{os_profile}``
+        - nightly deb: ``{base}/rocm/core/packages/deb/{repo_sub_folder}``
+        - nightly rpm: ``{base}/rocm/core/packages/rpm/{repo_sub_folder}/x86_64``
 
     Raises:
         ValueError: If ``release_type`` is empty or unknown.
     """
     base = repo_base_url.rstrip("/")
     rt = _normalize_and_validate_release_type(release_type)
+    parent = f"{base}/rocm/core/packages"
 
     if rt == "prerelease":
         if native_package_type == "deb":
-            return f"{base}/packages-multi-arch/{os_profile}"
-        return f"{base}/packages-multi-arch/{os_profile}/x86_64/"
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
 
     if rt == "release":
         if native_package_type == "deb":
-            return f"{base}/rocm/packages-multi-arch/{os_profile}"
-        return f"{base}/rocm/packages-multi-arch/{os_profile}/x86_64/"
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
 
     if native_package_type == "deb":
         if repo_sub_folder:
-            return f"{base}/packages-multi-arch/deb/{repo_sub_folder}"
-        return f"{base}/packages-multi-arch/deb"
+            return f"{parent}/deb/{repo_sub_folder}"
+        return f"{parent}/deb"
     if repo_sub_folder:
-        return f"{base}/packages-multi-arch/rpm/{repo_sub_folder}/x86_64"
-    return f"{base}/packages-multi-arch/rpm/x86_64"
+        return f"{parent}/rpm/{repo_sub_folder}/x86_64"
+    return f"{parent}/rpm/x86_64"
 
 
 def get_repo_url(
@@ -742,7 +742,10 @@ def main(argv: list[str] | None = None) -> int:
     # get-container-image: get container image for an OS profile
     p_img = subparsers.add_parser(
         "get-container-image",
-        help="Get container image for a given OS profile (e.g. ubuntu2404 -> ubuntu:24.04).",
+        help=(
+            "Get container image for a given OS profile "
+            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest)."
+        ),
     )
     p_img.add_argument(
         "--os-profile",

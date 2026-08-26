@@ -79,36 +79,38 @@ def is_asan():
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
-    """Select a runner label based on weighted random selection."""
-    rand_val = random.random()
-    cumulative = 0.0
-    for config in labels_config:
-        cumulative += config["weight"]
-        if rand_val < cumulative:
-            print(
-                f"  {context_name}: selected runner (weight={config['weight']}): "
-                f"{config['label']}"
-            )
-            return config["label"]
-    # Fallback to last label if rounding errors
-    selected = labels_config[-1]
+    """Select a runner label via weighted random pick.
+
+    Supports both 'count' (preferred) and 'weight' fields for backwards compatibility.
+    Solo entries are returned as-is regardless of weight; weights are relative
+    and need not sum to 1.0.
+    """
+    if len(labels_config) == 1:
+        selected = labels_config[0]
+        print(f"  {context_name}: selected runner: {selected['label']}")
+        return selected["label"]
+
+    # Use count if available, otherwise weight
+    weight_key = "count" if "count" in labels_config[0] else "weight"
+    weights = [config[weight_key] for config in labels_config]
+    selected = random.choices(labels_config, weights=weights, k=1)[0]
     print(
-        f"  {context_name}: selected runner (weight={selected['weight']}): "
+        f"  {context_name}: selected runner ({weight_key}={selected[weight_key]}): "
         f"{selected['label']}"
     )
     return selected["label"]
 
 
 # Build runner configuration for Linux builds
-# Uses weighted distribution: 100% AWS
-# Sanitizer builds (asan/tsan) use ramdisk variants (100% Azure, no AWS yet)
+# Uses weight-based distribution (0.0-1.0 probability)
+# Sanitizer builds (asan/tsan) use large runners with ramdisk support
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
     },
     "windows": {
@@ -163,6 +165,18 @@ all_build_variants = {
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
         },
+        # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
+        # Used for nightly and release ASAN builds where stack traces need source line info.
+        "asan-debug": {
+            "build_variant_label": "asan-debug",
+            "build_variant_suffix": "asan",
+            "build_variant_cmake_preset": "linux-release-asan-debug",
+        },
+        "host-asan-debug": {
+            "build_variant_label": "host-asan-debug",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan-debug",
+        },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
@@ -182,7 +196,7 @@ all_build_variants = {
 amdgpu_family_info_matrix dictionary fields:
 - test-runs-on: (required) GitHub runner label for this architecture
 - test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
-    Each entry is a dict with "label" and "weight" (probability 0.0-1.0). Weights must sum to 1.0.
+    Each entry is a dict with "label" and "count" (number of available runners).
     When present, overrides test-runs-on for runner selection.
 - test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
@@ -206,27 +220,17 @@ amdgpu_family_info_matrix_presubmit = {
             # As we are bringing up mi325, we are using a multi-label configuration to distribute load
             "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
             "test-runs-on-labels": [
-                {
-                    "label": "linux-gfx942-1gpu-ccs-ossci-rocm",
-                    "weight": 0.1,
-                },  # ccs (5)
+                {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5},  # ccs
                 {
                     "label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
-                    "weight": 0.8,
-                },  # ccs-csp (28)
-                {
-                    "label": "linux-gfx942-1gpu-ossci-rocm",
-                    "weight": 0.1,
-                },  # vultr (5)
+                    "count": 28,
+                },  # ccs-csp
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
             "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
-                {
-                    "label": "linux-gfx942-8gpu-ossci-rocm",
-                    "weight": 1.0,
-                },  # (10)
+                {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
             ],
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-gfx942-8gpu-ossci-rocm",
@@ -234,14 +238,21 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "host-asan", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
         }
     },
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "nightly_check_only_for_family": True,
@@ -300,13 +311,29 @@ amdgpu_family_info_matrix_presubmit = {
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
+    "gfx90a": {
+        "linux": {
+            "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
+            "family": "gfx90a",
+            "fetch-gfx-targets": ["gfx90a"],
+            "build_variants": ["release"],
+            # Only run tests on submodule bumps (builds always run)
+            "submodule_bump_tests_only": True,
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90a",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
@@ -377,21 +404,6 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx908",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx90a": {
-        "linux": {
-            "test-runs-on": "linux-gfx90a-gpu-rocm",
-            "family": "gfx90a",
-            "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },

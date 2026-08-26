@@ -32,7 +32,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(jax_refs), 1)
         self.assertEqual(
             set(matrix[0]),
-            {"python_version", "jax_ref", "jax_repository", "gfx_arch"},
+            {"python_version", "jax_ref", "jax_label", "jax_repository", "gfx_arch"},
         )
 
     def test_explicit_python_version_narrows_matrix(self):
@@ -50,13 +50,14 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
 
     def test_generate_jax_matrix_uses_requested_refs_only(self):
         matrix = m.generate_jax_matrix(
-            jax_refs=["rocm-jaxlib-v0.10.0"],
+            jax_refs=["rocm-jaxlib-v0.10.1"],
             python_versions=["3.12"],
         )
 
         self.assertEqual(len(matrix), 1)
         self.assertEqual(matrix[0]["python_version"], "3.12")
-        self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.0")
+        self.assertEqual(matrix[0]["jax_ref"], "rocm-jaxlib-v0.10.1")
+        self.assertEqual(matrix[0]["jax_label"], "0.10.1")
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
 
@@ -106,10 +107,12 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         combos = {(row["python_version"], row["jax_ref"]) for row in matrix}
 
         self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.0"), combos)
+        self.assertNotIn(("3.11", "rocm-jaxlib-v0.11.1"), combos)
         # 3.11 is still valid for refs that don't exclude it.
         self.assertIn(("3.11", "rocm-jaxlib-v0.10.2"), combos)
-        # Non-excluded Python versions are still paired with 0.11.0.
+        # Non-excluded Python versions are still paired with the 0.11 refs.
         self.assertIn(("3.12", "rocm-jaxlib-v0.11.0"), combos)
+        self.assertIn(("3.12", "rocm-jaxlib-v0.11.1"), combos)
 
     def test_ci_builds_single_jax_ref(self):
         # CI keeps the runner queues short by building one ref, while still
@@ -119,7 +122,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             release_type="ci",
             platform="linux",
         )
-        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.11.0"})
+        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.11.1"})
 
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):

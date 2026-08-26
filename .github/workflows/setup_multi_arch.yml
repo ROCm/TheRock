@@ -11,8 +11,9 @@ on:
         default: "release"
       release_type:
         description: >-
-          Release type: "ci", "dev", "nightly", or "prerelease"; controls
-          artifact bucket selection, IAM role, and package versioning.
+          Release type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc",
+          or "prerelease"; controls artifact bucket selection, IAM role, and
+          package versioning.
         type: string
         default: ci
       prerelease_version:
@@ -60,6 +61,10 @@ on:
           Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
         type: string
         default: "50"
+      build_python_packages:
+        description: "Build ROCm Python packages (rocm-sdk, rocm-profiler, etc.)."
+        type: boolean
+        default: true
       build_pytorch:
         description: "Build PyTorch wheels."
         type: boolean
@@ -68,6 +73,10 @@ on:
         description: "Build JAX wheels."
         type: boolean
         default: false
+      build_native_linux:
+        description: "Build native Linux packages (deb/rpm) and run their install tests."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -82,6 +91,13 @@ on:
         default: ""
       external_repo:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
     outputs:
@@ -124,6 +140,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # Required for stage reuse feature to query workflow runs
 
 jobs:
   setup:
@@ -140,7 +157,21 @@ jobs:
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+    env:
+      QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- setup"
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
         id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -167,8 +198,10 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
+          BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
@@ -177,14 +210,17 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
+          # The checkout commit is used for commit-compatibility checking.
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
-          # For cross-repo artifact reuse, use repository input (defaults to GITHUB_REPOSITORY).
-          # External repos set repository to "ROCm/TheRock" to reuse TheRock's prebuilt artifacts.
-          THEROCK_REPOSITORY: ${{ inputs.repository }}
-          # Skip path filtering for external repos (git sha won't exist in TheRock)
-          SKIP_PATH_FILTERS: ${{ inputs.external_repo != '' && 'true' || '' }}
+          # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
+          # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          # Token for GitHub API calls (branch history, baseline workflow runs)
+          GITHUB_TOKEN: ${{ github.token }}
+          # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
@@ -217,3 +253,16 @@ jobs:
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
