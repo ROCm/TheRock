@@ -1,9 +1,9 @@
 ---
 author: John Robbins (jorobbin)
 created: 2026-07-28
-modified: 2026-08-24
+modified: 2026-08-26
 status: draft
-discussion: TBD
+discussion: in progress
 ---
 
 # Code Coverage Infrastructure for TheRock
@@ -386,11 +386,31 @@ For PR coverage, modify existing test workflows:
    Aggregation merges profraw from all shards to produce complete 100% coverage report.
 
 **Artifact naming conventions:**
-- Coverage builds require unique artifact names to avoid confusion with regular builds
-- Add `-coverage` suffix to artifact names (similar to `-asan` for ASAN builds)
-- Example: `hiprand-gfx942-coverage.tar.gz` vs `hiprand-gfx942.tar.gz`
-- Prevents developers/CI from accidentally downloading instrumented coverage artifacts when expecting regular builds
-- Artifacts downloaded via `fetch_artifact_args` mechanism with coverage-specific paths
+
+**PR Coverage:** Can follow ASAN pattern - separate workflow run provides natural isolation:
+- Coverage workflow (run_id: 12345) produces artifacts in S3 directory `12345-linux/`
+- Regular CI workflow (run_id: 12346) produces artifacts in S3 directory `12346-linux/`
+- Test jobs download from their own run_id → no naming collision
+- **No `-coverage` suffix needed** for PR coverage builds
+
+**Nightly Coverage:** Suffix requirements depend on architectural choice (see Nightly Coverage Architecture Options):
+
+**Option A (Same Run-ID - Extend Regular Nightly):**
+- Regular and coverage artifacts in **same S3 directory** (e.g., `99999-linux/`)
+- Suffix **REQUIRED** to differentiate: `hiprand_lib_gfx942.tar.zst` vs `hiprand_lib_gfx942-coverage.tar.zst`
+- Test jobs fetch from single run_id but different artifact names
+
+**Option B (Different Run-ID - Separate Workflow):**
+- Coverage artifacts in `99999-linux/`, regular in `88888-linux/` (different directories)
+- Suffix **technically optional** (artifacts in different S3 directories)
+- Suffix **recommended** for clarity and to support future Option A migration
+- Single test job fetches from two run_ids:
+  - Instrumented component from coverage build (run 99999)
+  - Non-instrumented dependencies from regular build (run 88888)
+
+**Rationale:** PR coverage follows ASAN pattern (separate workflow = natural isolation). Nightly coverage instruments entire stack but tests components separately. Option A requires suffix for same-directory differentiation; Option B uses it for clarity and future-proofing.
+
+**Other coverage artifacts:**
 - Profraw files: `${TEST_COMPONENT}-shard${matrix.shard}-%p-%m.profraw`
 - Coverage data: `coverage.profdata`
 - Coverage report: `coverage.info` (lcov format)
@@ -560,51 +580,148 @@ Nightly coverage follows a phased approach with increasing sophistication:
 - May use round-robin (different architectures on different nights) OR weekly/monthly full sweeps
 - Requires architecture-specific change detection (likely comes after PR multi-arch support)
 
-**Hybrid Artifact Approach (Nightly Only):**
+**Nightly Coverage Architecture Options:**
 
-Unlike PR coverage builds (which only instrument changed projects), nightly runs instrument the entire ROCm stack but test components separately:
+Unlike PR coverage builds (which only instrument changed projects), nightly runs instrument the entire ROCm stack but test components separately to maintain per-project isolation. Two architectural approaches are viable:
 
-1. **Single instrumented stack build:**
-   ```bash
-   cmake -B build -GNinja \
-     -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
-     -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON \
-     -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF \
-     -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON
-   ninja -C build
-   ```
-   
-   Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLASLt, hipRAND, rocRAND, rocPRIM, etc.), not grouped components (BLAS, PRIM).
-   
-   **Critical constraint:** Coverage builds MUST operate at per-project granularity (projects/rocblas/, projects/hipblaslt/, projects/hiprand/, etc.), NOT at TheRock's component-group level (BLAS, PRIM). This maintains per-project isolation - each project's coverage is measured independently.
+#### Option A: Extend Existing Regular Nightly (Same Run-ID)
 
-2. **Separate test jobs per component:**
-   - Each component gets its own test job (hipRAND, rocFFT, rocBLAS, etc.)
-   - Test job pulls:
-     - **Instrumented artifact** for component under test (from nightly instrumented build)
-     - **Non-instrumented dependencies** from most recent regular build (pre-built artifacts)
-   - This hybrid approach isolates coverage measurement to one component at a time
-   - Maintains per-project isolation while amortizing instrumented build cost
+**Architecture:**
+```yaml
+# Single nightly run 99999 (extended workflow)
+jobs:
+  # EXISTING: Regular build
+  build_regular_stack:
+    # Produces: rocblas_lib_gfx942.tar.zst
+  
+  # NEW: Instrumented build (parallel to regular)
+  build_instrumented_stack:
+    # Produces: rocblas_lib_gfx942-coverage.tar.zst
+  
+  # EXISTING: Regular tests
+  test_regular:
+    # Uses: rocblas_lib_gfx942.tar.zst
+  
+  # NEW: Coverage tests
+  test_coverage:
+    # Uses: rocblas_lib_gfx942-coverage.tar.zst
+```
 
-**Why this approach?**
-- **Single instrumented build**: Amortizes build cost - don't rebuild entire stack per component
-- **Separate test jobs**: Maintains per-project isolation - only one instrumented component per test run
-- **Hybrid artifacts**: Non-instrumented dependencies avoid profraw contamination from upstream code
-- **Nightly-specific**: PRs only instrument changed projects; nightlies instrument everything for comprehensive baseline
+**Trade-offs:**
 
-**Resource implications:**
-- One large instrumented build (entire ROCm stack) per nightly run
-- N separate test jobs (one per component)
-- Each test job uses hybrid artifacts: one instrumented + rest non-instrumented
-- Relies on codecov.io (or chosen platform) for coverage aggregation across components
+**Pros:**
+- **No coordination needed**: Both regular and coverage artifacts in same S3 directory (`99999-linux/`)
+- **Guaranteed consistency**: Coverage built from exact same commit as regular nightly
+- **Simpler orchestration**: Extend `multi_arch_release.yml` instead of new workflow
+- **Aligns with TheRock patterns**: Already builds multiple variants per run (stages, architectures, ASAN)
+- **Trivial artifact fetching**: Same run_id for both regular and coverage artifacts
 
-**Artifact Management for Hybrid Approach:**
+**Cons:**
+- **Longer nightly runtime**: Builds entire stack twice (regular + instrumented)
+- **Resource contention**: More jobs competing for nodes in single run
+- **Coupled execution**: Coverage can't run independently of regular nightly
+- **All-or-nothing**: Can't skip coverage if regular nightly fails
 
-Nightly coverage uses specialized artifact naming and fetching to support hybrid instrumented/non-instrumented artifacts.
+**When to use:** Production deployment after coverage is proven valuable and runtime acceptable.
 
-**Publishing instrumented artifacts:**
+#### Option B: Separate Coverage Workflow (Different Run-ID)
 
-The nightly instrumented build uses `-coverage` suffix in the target family name:
+**Architecture:**
+```yaml
+# Coverage nightly run 99999
+build_instrumented_stack:
+  # Produces in 99999-linux/: rocblas_lib_gfx942.tar.zst
+
+test_coverage:
+  # Fetch instrumented from 99999
+  # Fetch dependencies from 88888 (regular nightly - different run)
+```
+
+**Baseline Run-ID Resolution:**
+
+**B1. Manual Input (Phase 1 PoC):**
+```yaml
+workflow_dispatch:
+  inputs:
+    baseline_run_id:
+      description: "Regular nightly run_id for dependencies"
+      required: true
+```
+
+**B2. GitHub API Query (Automated):**
+```yaml
+get_baseline:
+  steps:
+    - name: Find latest successful regular nightly
+      run: |
+        gh api /repos/ROCm/TheRock/actions/workflows/multi_arch_release.yml/runs \
+          --jq '.workflow_runs[] | select(.conclusion=="success") | .id' | head -1
+```
+
+**B3. Orchestrator-Provided (Production):**
+```yaml
+# rockrel triggers coverage after regular nightly
+uses: ROCm/TheRock/.github/workflows/coverage_nightly.yml@main
+with:
+  baseline_run_id: ${{ needs.regular_nightly.outputs.run_id }}
+```
+
+**Trade-offs:**
+
+**Pros:**
+- **Independent execution**: Coverage can run/fail without affecting regular nightly
+- **Flexible scheduling**: Run coverage less frequently than regular nightly
+- **Easier rollout**: Can test coverage workflow without modifying production nightly
+- **Isolated failures**: Coverage issues don't impact regular nightly status
+
+**Cons:**
+- **Baseline coordination**: Must track which regular nightly run_id to use
+- **Potential inconsistency**: Coverage might test different commit than latest regular (if baseline stale)
+- **More complex fetching**: Test jobs download from two different run_ids
+- **API dependency**: Automated resolution relies on GitHub API (B2) or orchestrator (B3)
+
+**When to use:** Initial rollout, experimentation, or when coverage runs less frequently than regular nightly.
+
+**Critical constraint for both options:**
+
+Coverage builds MUST operate at per-project granularity (projects/rocblas/, projects/hipblaslt/, projects/hiprand/, etc.), NOT at TheRock's component-group level (BLAS, PRIM). This maintains per-project isolation - each project's coverage is measured independently.
+
+Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLASLt, hipRAND, rocRAND, rocPRIM, etc.), not grouped components (BLAS, PRIM).
+
+**Recommended Implementation Roadmap:**
+
+1. **Phase 1 (PoC)**: Option B1 - Separate workflow, manual baseline_run_id input
+   - Proves coverage workflow works
+   - No changes to production regular nightly
+   - Manual coordination acceptable for initial validation
+
+2. **Phase 2 (Automated)**: Option B2 or B3 - Automated baseline resolution
+   - B2: GitHub API query (if coverage runs independently)
+   - B3: Orchestrator integration (if rockrel controls scheduling)
+   - Removes manual coordination
+
+3. **Phase 3 (Production)**: Option A - Merge with regular nightly
+   - After coverage proven stable and valuable
+   - If nightly runtime increase acceptable
+   - Simplest long-term maintenance
+
+**Artifact Management:**
+
+**Option A (Same Run-ID):**
+- Requires `-coverage` suffix to differentiate regular vs coverage artifacts in same S3 directory
+- Example: `rocblas_lib_gfx942.tar.zst` (regular) vs `rocblas_lib_gfx942-coverage.tar.zst` (coverage)
+- Test jobs fetch from single run_id but different artifact names
+
+**Option B (Different Run-ID):**
+- **May not need** `-coverage` suffix since artifacts in different S3 directories
+- Coverage build in `99999-linux/rocblas_lib_gfx942.tar.zst`
+- Regular build in `88888-linux/rocblas_lib_gfx942.tar.zst`
+- **However, suffix still recommended** for clarity and to support potential future Option A migration
+- Test jobs fetch from two different run_ids
+
+**Implementation for Option B (Phase 1):**
+
+Publishing instrumented artifacts:
 
 ```bash
 # Nightly coverage build publishes with -coverage suffix
@@ -658,7 +775,7 @@ To support nightly hybrid fetching, `artifact_manager.py` needs:
 - `--exclude-artifact-names` parameter: exclude specified artifacts from fetch
 - Target family matching already supports base-arch variants (e.g., `gfx942` matches `gfx942-coverage`)
 
-**Note:** PR coverage does not need this hybrid approach. PR builds only instrument changed projects, and dependencies come from regular prebuilt artifacts (already non-instrumented).
+**Note:** PR coverage does not need this hybrid approach or artifact suffix. PR builds only instrument changed projects, and dependencies come from regular prebuilt artifacts (already non-instrumented). The PR coverage workflow runs independently with its own run_id, providing natural artifact isolation like ASAN builds.
 
 #### Multi-GPU Coverage Strategy
 
@@ -734,3 +851,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
 - 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
 - 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components; documented nightly hybrid artifact management strategy using -coverage suffix and selective artifact fetching via artifact_manager.py
+- 2026-08-26: jorobbin: Clarified artifact naming strategy - PR coverage can follow ASAN pattern (separate workflow, no suffix needed); documented two nightly coverage architecture options (Option A: extend regular nightly with same run-id requiring suffix, Option B: separate workflow with different run-id where suffix is recommended but optional); added phased implementation roadmap (manual input → automated → merged); added artifact granularity as critical open question (BUILD_TOPOLOGY grouped artifacts vs per-project coverage isolation); cleaned up stale open questions
