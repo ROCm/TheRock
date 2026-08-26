@@ -8,6 +8,7 @@ These tests verify end-to-end behavior of the artifact_manager push/fetch comman
 particularly error handling and exit codes.
 """
 
+import argparse
 import hashlib
 import os
 import platform
@@ -26,8 +27,12 @@ def is_windows():
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+import artifact_manager
+import buildctl
 
 # Minimal topology TOML for testing push/fetch behavior.
 # Defines two stages: upstream-stage produces artifacts, downstream-stage consumes them.
@@ -263,8 +268,6 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
     @mock.patch("artifact_manager.create_backend_from_env")
     def test_push_fails_when_all_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when all uploads fail."""
-        import artifact_manager
-
         failing_backend = FailingBackend(fail_uploads_after=0)
         mock_backend_factory.return_value = failing_backend
 
@@ -294,8 +297,6 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
     @mock.patch("artifact_manager.create_backend_from_env")
     def test_push_fails_when_some_uploads_fail(self, mock_backend_factory, mock_delay):
         """Test that push exits with code 1 when some (but not all) uploads fail."""
-        import artifact_manager
-
         failing_backend = FailingBackend(
             fail_uploads_after=1, staging_dir=self.staging_dir
         )
@@ -326,8 +327,6 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 
     def test_push_succeeds_when_all_uploads_succeed(self):
         """Test that push exits normally (no exception) when all uploads succeed."""
-        import artifact_manager
-
         archive_path = self._create_fake_precompressed_artifact(
             "test-artifact", "lib", "generic"
         )
@@ -370,8 +369,6 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
 
     def test_push_succeeds_when_precompressed_artifact_is_missing_sha256sum(self):
         """Test that pre-compressed artifacts do not require a sha256sum sidecar."""
-        import artifact_manager
-
         archive_path = self._create_fake_precompressed_artifact(
             "test-artifact", "lib", "generic"
         )
@@ -414,8 +411,6 @@ class TestPushCompressionFailure(ArtifactManagerTestBase):
     @mock.patch("artifact_manager.compress_artifact")
     def test_push_fails_when_compression_fails(self, mock_compress):
         """Test that push exits with code 1 when compression fails."""
-        import artifact_manager
-
         mock_compress.return_value = None
 
         self._create_fake_artifact_dir("test-artifact", "lib", "generic")
@@ -446,8 +441,6 @@ class TestPushStageAll(ArtifactManagerTestBase):
 
     def test_push_all_stages_uploads_all_produced_artifacts(self):
         """Test that --stage all pushes artifacts from every stage."""
-        import artifact_manager
-
         self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
         self._create_fake_precompressed_artifact("second-artifact", "lib", "generic")
         self._create_fake_precompressed_artifact(
@@ -493,8 +486,6 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
     @mock.patch("artifact_manager.create_backend_from_env")
     def test_fetch_fails_when_download_fails(self, mock_backend_factory, mock_delay):
         """Test that fetch exits with code 1 when download fails."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         failing_backend = FailingBackend(
@@ -525,8 +516,6 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
     @mock.patch("artifact_manager.extract_artifact")
     def test_fetch_fails_when_extraction_fails(self, mock_extract):
         """Test that fetch exits with code 1 when extraction fails."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         mock_extract.return_value = None
@@ -559,8 +548,6 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_all_fetches_every_artifact(self):
         """Test that --stage all fetches artifacts from every stage."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("second-artifact", "lib", "generic")
         self._create_staged_artifact("downstream-artifact", "lib", "generic")
@@ -600,8 +587,6 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_exclude_components_skips_test_artifacts(self) -> None:
         """Test that --exclude-components filters artifact components including xnack variants."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "test", "generic")
         self._create_staged_artifact("test-artifact", "test", "gfx942")
@@ -650,8 +635,6 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_exclude_components_rejects_unknown_component(self) -> None:
         """Test that --exclude-components validates component names."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         argv = [
@@ -677,8 +660,6 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_exclude_artifacts_skips_named_artifacts(self) -> None:
         """Test that --exclude-artifacts filters whole artifacts."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("second-artifact", "lib", "generic")
 
@@ -715,8 +696,6 @@ class TestFetchStageAll(ArtifactManagerTestBase):
 
     def test_fetch_exclude_artifacts_rejects_unknown_artifact(self) -> None:
         """Test that --exclude-artifacts validates artifact names."""
-        import artifact_manager
-
         argv = [
             "fetch",
             "--stage",
@@ -857,8 +836,6 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_amdgpu_targets_finds_individual_target_archives(self):
         """Test that --amdgpu-targets matches individual-target and xnack-suffixed archives."""
-        import artifact_manager
-
         # Stage generic, per-target, and xnack-suffixed artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "lib", "gfx942")
@@ -911,8 +888,6 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_amdgpu_targets_skips_other_targets(self):
         """Test that --amdgpu-targets doesn't fetch archives for other targets."""
-        import artifact_manager
-
         # Stage artifacts for two different targets
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "lib", "gfx942")
@@ -953,8 +928,6 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_families_and_targets_is_inclusive(self):
         """Test that --amdgpu-families and --amdgpu-targets together fetch both."""
-        import artifact_manager
-
         # Stage family-named and target-named artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
@@ -1005,8 +978,6 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
 
     def test_fetch_with_semicolon_separated_families(self):
         """Test that --amdgpu-families accepts semicolon-separated values."""
-        import artifact_manager
-
         # Stage artifacts for two families plus generic
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
@@ -1059,8 +1030,6 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_fetch_flatten_merges_artifacts_into_single_directory(self):
         """Test that fetch --flatten merges all artifacts into a single directory."""
-        import artifact_manager
-
         # Create two staged artifacts
         self._create_staged_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact("test-artifact", "run", "generic")
@@ -1110,8 +1079,6 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_fetch_without_flatten_creates_artifact_subdirectories(self):
         """Test that fetch without --flatten creates separate artifact subdirectories."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         argv = [
@@ -1155,8 +1122,6 @@ class TestFetchFlatten(ArtifactManagerTestBase):
 
     def test_flatten_and_bootstrap_are_mutually_exclusive(self):
         """Test that --flatten and --bootstrap cannot be used together."""
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         argv = [
@@ -1196,8 +1161,6 @@ class TestFetchDownloadCache(ArtifactManagerTestBase):
         reached, so the failing backend won't cause errors. If the cache
         check is removed, the second fetch hits the FailingBackend and fails.
         """
-        import artifact_manager
-
         self._create_staged_artifact("test-artifact", "lib", "generic")
 
         cache_dir = Path(self.temp_dir) / "shared-cache"
@@ -1271,8 +1234,6 @@ class TestCopy(ArtifactManagerTestBase):
         self, extra_argv=None, source_run_id="source-run", dest_run_id="dest-run"
     ):
         """Run the copy command with standard arguments."""
-        import artifact_manager
-
         argv = [
             "copy",
             "--source-run-id",
@@ -1411,8 +1372,6 @@ class TestCopy(ArtifactManagerTestBase):
         self, mock_dest_factory, mock_source_factory, mock_delay
     ):
         """Test that copy exits with code 1 when artifact copy fails."""
-        import artifact_manager
-
         # Source backend has the artifact
         source_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
@@ -1453,8 +1412,6 @@ class TestCopy(ArtifactManagerTestBase):
 
     def test_copy_invalid_stage_exits_with_error(self):
         """Test that copy exits with code 1 for invalid stage name."""
-        import artifact_manager
-
         argv = [
             "copy",
             "--source-run-id",
@@ -1478,8 +1435,6 @@ class TestCopy(ArtifactManagerTestBase):
 
     def test_copy_missing_source_run_id_exits_with_error(self):
         """Test that copy exits with code 2 (argparse) when --source-run-id is missing."""
-        import artifact_manager
-
         argv = [
             "copy",
             "--stage",
@@ -1500,8 +1455,6 @@ class TestCopy(ArtifactManagerTestBase):
     @mock.patch("artifact_manager._delay_for_retry")
     def test_copy_multiple_stages(self, mock_delay):
         """Test that copy with comma-separated stages copies artifacts from all stages."""
-        import artifact_manager
-
         self._create_source_artifact("test-artifact", "lib", "generic")
         self._create_staged_artifact(
             "second-artifact", "lib", "generic", run_id="source-run"
@@ -1543,10 +1496,7 @@ class ParseTargetFamiliesTest(unittest.TestCase):
     """Unit tests for artifact_manager.parse_target_families."""
 
     def setUp(self):
-        # Import here so sys.path is already set up.
-        import artifact_manager as am
-
-        self.am = am
+        self.am = artifact_manager
 
     def _make_args(
         self,
@@ -1555,8 +1505,6 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         generic_only: bool = False,
         expand_family_to_targets: bool = False,
     ):
-        import argparse
-
         return argparse.Namespace(
             amdgpu_families=amdgpu_families,
             amdgpu_targets=amdgpu_targets,
@@ -1618,6 +1566,114 @@ class ParseTargetFamiliesTest(unittest.TestCase):
         self.assertIn("gfx110X-all", result)
         self.assertIn("gfx1100", result)
         self.assertIn("gfx1101", result)
+
+
+class BootstrapMarkerTest(unittest.TestCase):
+    """End-to-end tests for where bootstrapping writes ".prebuilt" markers.
+
+    Covers both BootstrappingPopulator implementations: artifact_manager.py
+    (CI fetch) and buildctl.py (local bootstrap from an artifacts dir).
+    """
+
+    def setUp(self):
+        self.populator_factories = {
+            "artifact_manager": artifact_manager.BootstrappingPopulator,
+            "buildctl": buildctl.BootstrappingPopulator,
+        }
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="bootstrap_marker_test_"))
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _make_archive(self, tag: str, basedir: str, relfiles) -> Path:
+        """Write a minimal artifact archive declaring a single manifest basedir."""
+        content_dir = self.temp_dir / "content" / tag
+        for relfile in relfiles:
+            p = content_dir / basedir / relfile
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(relfile)
+        manifest = content_dir / "artifact_manifest.txt"
+        manifest.write_text(basedir + "\n")
+
+        archive_path = self.temp_dir / f"{tag}.tar.xz"
+        with open_archive_for_write(archive_path, "xz") as tf:
+            # artifact_manifest.txt must be the first member.
+            tf.add(str(manifest), arcname="artifact_manifest.txt")
+            for relfile in relfiles:
+                tf.add(
+                    str(content_dir / basedir / relfile),
+                    arcname=f"{basedir}/{relfile}",
+                )
+        return archive_path
+
+    def _bootstrap(self, impl: str, basedir: str, relfiles) -> Path:
+        tag = f"{impl}_lib_generic"
+        archive = self._make_archive(tag, basedir, relfiles)
+        output_dir = self.temp_dir / f"build-{impl}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.populator_factories[impl](output_path=output_dir)(archive)
+        return output_dir
+
+    def test_nested_basedir_marks_enclosing_stage_dir(self):
+        """Regression test for a basedir nested below the subproject stage dir.
+
+        `dctools/artifact-rdc.toml` declares
+        "dctools/rdc/stage/portable-rdc". Naming the marker after that basedir
+        yields "dctools/rdc/stage/portable-rdc.prebuilt", which
+        therock_subproject.cmake never checks, so rdc is rebuilt from source
+        despite its artifact having been fetched and extracted.
+        """
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl,
+                    "dctools/rdc/stage/portable-rdc",
+                    ["bin/rdcd", "lib/librdc.so"],
+                )
+                stage_dir = output_dir / "dctools" / "rdc" / "stage"
+
+                # The marker the build looks for: "${_stage_dir}.prebuilt".
+                self.assertTrue(
+                    (output_dir / "dctools" / "rdc" / "stage.prebuilt").exists(),
+                    "Bootstrap marker not created beside the subproject stage dir",
+                )
+                self.assertFalse(
+                    (stage_dir / "portable-rdc.prebuilt").exists(),
+                    "Marker written at a path the build never checks",
+                )
+                # Extraction is unaffected: content still lands in the basedir.
+                self.assertTrue((stage_dir / "portable-rdc" / "bin" / "rdcd").exists())
+                self.assertTrue(
+                    (stage_dir / "portable-rdc" / "lib" / "librdc.so").exists()
+                )
+
+    def test_stage_basedir_marker_unchanged(self):
+        """The ~100 basedirs that are stage dirs keep their existing marker."""
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl, "core/ROCR-Runtime/stage", ["lib/libhsa-runtime64.so"]
+                )
+                subproject_dir = output_dir / "core" / "ROCR-Runtime"
+
+                self.assertTrue((subproject_dir / "stage.prebuilt").exists())
+                self.assertTrue(
+                    (subproject_dir / "stage" / "lib" / "libhsa-runtime64.so").exists()
+                )
+
+    def test_basedir_without_stage_component_marker_unchanged(self):
+        """A basedir with no "stage" component is left alone."""
+        for impl in self.populator_factories:
+            with self.subTest(impl=impl):
+                output_dir = self._bootstrap(
+                    impl, "math-libs/hipthreads/build", ["lib/libhipthreads.so"]
+                )
+
+                self.assertTrue(
+                    (
+                        output_dir / "math-libs" / "hipthreads" / "build.prebuilt"
+                    ).exists()
+                )
 
 
 if __name__ == "__main__":

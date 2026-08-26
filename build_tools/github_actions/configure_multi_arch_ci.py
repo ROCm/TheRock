@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 
 import enum
 import json
+import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -1449,6 +1450,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     ci_inputs = CIInputs.from_environ()
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
