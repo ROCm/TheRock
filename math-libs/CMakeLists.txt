@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_primlibs_build_tests ${THEROCK_BUILD_TESTING})
 set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
 set(_primlibs_benchmark_deps)
 set(_primlibs_benchmark_includes)
@@ -14,6 +15,27 @@ if(NOT WIN32)
   else()
     set(_primlibs_benchmark_deps amdsmi)
     set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
+  endif()
+endif()
+
+# ADDSPV: rocPRIM/hipCUB/rocThrust libs build fine for amdgcnspirv, but their
+# client tests/benchmarks compile device code with --offload-arch=amdgcnspirv
+# that crashes the SPIR-V backend (segfault in LLVM SPIRVEmitIntrinsics /
+# SPIRVGlobalRegistry::buildAssignPtr, e.g. rocThrust test_pair_scan.cpp).
+# EXCLUDE_TARGET_PROJECTS keeps the libs building; here we additionally drop the
+# prim-lib tests/benchmarks for a shard whose only target is amdgcnspirv, using
+# the same per-shard detection as the gates below. Non-spirv shards keep
+# tests/benchmarks. Upstream compiler bug tracked separately.
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  set(_primlibs_non_spirv_targets ${THEROCK_AMDGPU_TARGETS})
+  list(REMOVE_ITEM _primlibs_non_spirv_targets amdgcnspirv)
+  if(NOT _primlibs_non_spirv_targets)
+    message(STATUS
+      "prim-libs: shard targets '${THEROCK_AMDGPU_TARGETS}' are SPIR-V only; "
+      "disabling rocPRIM/hipCUB/rocThrust tests and benchmarks (SPIR-V backend "
+      "crashes compiling their device test code).")
+    set(_primlibs_build_tests "OFF")
+    set(_primlibs_benchmark_enable "OFF")
   endif()
 endif()
 
@@ -127,7 +149,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_BUILD_TESTING)
+  if(_primlibs_build_tests)
     ##############################################################################
     # rocPRIM tests
     ##############################################################################
@@ -174,7 +196,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=${_primlibs_build_tests}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
@@ -203,7 +225,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=${_primlibs_build_tests}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
@@ -232,7 +254,7 @@ if(THEROCK_ENABLE_PRIM)
     rocThrust
   )
 
-  if(THEROCK_BUILD_TESTING)
+  if(_primlibs_build_tests)
     list(APPEND _prim_subproject_deps rocPRIM_tests)
   endif()
 
