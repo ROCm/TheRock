@@ -312,7 +312,8 @@
   },
   "rocjpeg": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems-examples"
     ]
   },
   "rocm-cmake": {
