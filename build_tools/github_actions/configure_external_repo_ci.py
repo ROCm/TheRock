@@ -64,9 +64,10 @@ SKIPPABLE_PATH_PATTERNS = [
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
+# TODO: Re-enable workflow patterns after testing granular artifact reuse
 FULL_TEST_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
-    ".github/scripts/therock*",
+    # ".github/workflows/therock*",
+    # ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
     ".github/scripts/config_loader.py",
