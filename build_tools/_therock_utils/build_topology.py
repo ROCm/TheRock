@@ -244,7 +244,7 @@ class BuildTopology:
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
-                components=artifact_data.get("components", []),
+                components=artifact_data.get("components") or [artifact_name],
             )
 
     def get_build_stages(self) -> List[BuildStage]:

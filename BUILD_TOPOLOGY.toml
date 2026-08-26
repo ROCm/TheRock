@@ -74,7 +74,8 @@
 #       to this artifact. Used for granular CI artifact reuse: when only specific
 #       components change in an external repo (e.g., rocm-libraries), only affected
 #       artifacts rebuild while others reuse baseline. Component names are directory
-#       basenames within projects/ or shared/ subdirs.
+#       basenames within projects/ or shared/ subdirs. Defaults to [artifact_name]
+#       if omitted.
 #
 # ==============================================================================
 
@@ -661,13 +662,11 @@ components = ["rocsolver", "hipsolver"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
-components = ["rocalution"]
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
-components = ["rocwmma"]
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -679,13 +678,11 @@ components = ["composablekernel"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
-components = ["hiptensor"]
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
-components = ["libhipcxx"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
@@ -693,7 +690,6 @@ components = ["libhipcxx"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
-components = ["hipthreads"]
 
 [artifacts.support]
 artifact_group = "math-libs"
@@ -708,13 +704,11 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
 split_databases = ["miopen"]
-components = ["miopen"]
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
-components = ["hipdnn"]
 
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
@@ -756,7 +750,6 @@ type = "target-neutral"
 # half headers come from base; amd-llvm arrives transitively via core-hip.
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
 feature_group = "CV_LIBS"
-components = ["rpp"]
 # No disable_platforms: Windows is opt-in via -DTHEROCK_ENABLE_RPP=ON.
 
 # --- Media Integration ---
@@ -767,7 +760,6 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 disable_platforms = ["windows"]
-components = ["rocdecode"]
 
 [artifacts.rocjpeg]
 artifact_group = "media-libs"
@@ -775,7 +767,6 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 disable_platforms = ["windows"]
-components = ["rocjpeg"]
 
 # --- Communication Libraries (per-arch) ---
 
@@ -798,7 +789,6 @@ artifact_group = "comm-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
-components = ["rocshmem"]
 
 # --- Storage Libraries ---
 
@@ -807,7 +797,6 @@ artifact_group = "storage-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps", "sysdeps-util-linux"]
 disable_platforms = ["windows"]
-components = ["hipfile"]
 
 # --- Profiler Tools ---
 
@@ -817,7 +806,6 @@ type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
-components = ["aqlprofile"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
@@ -834,7 +822,6 @@ type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk", "openmpi"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
-components = ["rocprofiler-compute"]
 
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
@@ -844,7 +831,6 @@ feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 disable_processors = ["ppc64le"]
-components = ["rocprofiler-systems"]
 
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
@@ -862,7 +848,6 @@ type = "target-neutral"
 artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
-components = ["rdc"]
 
 # Future dctools-rocm artifacts will go here
 # [artifacts.some-future-tool]
@@ -885,7 +870,6 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-runtime", "amd-dbgapi", "sysdeps"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
-components = ["rocr-debug-agent"]
 
 [artifacts.rocr-debug-agent-tests]
 artifact_group = "debug-tools"
