@@ -306,6 +306,24 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    # amdgcnspirv: architecture-independent portable SPIR-V target (family
+    # "gpugeneric"/target "amdgcnspirv" in cmake/therock_amdgpu_targets.cmake).
+    # Build-only: there is no physical SPIR-V GPU to test on, so test-runs-on is
+    # empty (the build validates it compiles; no GPU test job). In presubmit so
+    # every PR exercises the amdgcnspirv build alongside the physical targets.
+    "amdgcnspirv": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "amdgcnspirv",
+            "fetch-gfx-targets": ["amdgcnspirv"],
+            "build_variants": ["release"],
+            # Build-only: validated by the build matrix but never shipped as a
+            # package/wheel target (no physical SPIR-V GPU). Keeps it out of
+            # fetch_package_targets output and workflow amdgpu_family choice
+            # lists (see fetch_package_targets.determine_package_targets).
+            "exclude-from-packaging": True,
+        },
+    },
 }
 
 
@@ -337,18 +355,6 @@ amdgpu_family_info_matrix_postsubmit = {
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
-    },
-    # amdgcnspirv: architecture-independent portable SPIR-V target (family
-    # "gpugeneric"/target "amdgcnspirv" in cmake/therock_amdgpu_targets.cmake).
-    # Build-only here: there is no physical SPIR-V GPU to test on, so
-    # test-runs-on is empty (build validates it compiles; no GPU test job).
-    "amdgcnspirv": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "amdgcnspirv",
-            "fetch-gfx-targets": ["amdgcnspirv"],
-            "build_variants": ["release"],
-        },
     },
 }
 
