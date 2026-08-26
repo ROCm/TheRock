@@ -1,0 +1,27 @@
+From c87626577830fb77755f5940a7338606379bb3ef Mon Sep 17 00:00:00 2001
+From: TheRock <dev@therock>
+Date: Sat, 25 Jul 2026 05:43:57 -0400
+Subject: [PATCH] Link torch_hip with --no-relax for large multi-arch fat build
+
+---
+ caffe2/CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
+index 5bb3eaf..8cce32c 100644
+--- a/caffe2/CMakeLists.txt
++++ b/caffe2/CMakeLists.txt
+@@ -946,6 +946,10 @@ if(USE_ROCM)
+   set_target_properties(torch_hip PROPERTIES
+     LINKER_LANGUAGE CXX
+     HIP_ARCHITECTURES "${PYTORCH_ROCM_ARCH}")
++  # TheRock: native-HIP torch_hip embeds per-TU multi-arch fatbins into host
++  # objects, bloating libtorch_hip.so past the +/-2GB PC32/GOTPCREL relocation
++  # range on multi-arch fat builds. Disable linker relaxation. See ROCm/TheRock#6102.
++  target_link_options(torch_hip PRIVATE "-Wl,--no-relax")
+   if(USE_FLASH_ATTENTION)
+     target_link_libraries(torch_hip PRIVATE __caffe2_aotriton)
+   endif()
+-- 
+2.34.1
+
