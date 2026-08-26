@@ -34,6 +34,55 @@ class ParseProjectsTest(unittest.TestCase):
             configure_coverage_ci.parse_projects("hiprand,not-a-project")
         self.assertIn("not-a-project", str(context.exception))
 
+    def test_all_alias_expands_to_every_project(self):
+        self.assertEqual(
+            configure_coverage_ci.parse_projects("all"),
+            sorted(configure_coverage_ci.COVERAGE_PROJECTS),
+        )
+
+    def test_rocm_libraries_all_expands_to_that_group(self):
+        self.assertEqual(
+            configure_coverage_ci.parse_projects("rocm_libraries_all"),
+            sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS),
+        )
+
+    def test_group_aliases_are_case_insensitive(self):
+        self.assertEqual(
+            configure_coverage_ci.parse_projects("  ALL  "),
+            configure_coverage_ci.parse_projects("all"),
+        )
+        self.assertEqual(
+            configure_coverage_ci.parse_projects("Rocm_Libraries_All"),
+            configure_coverage_ci.parse_projects("rocm_libraries_all"),
+        )
+
+    def test_alias_and_explicit_name_overlap_is_deduped(self):
+        self.assertEqual(
+            configure_coverage_ci.parse_projects("rocm_libraries_all,hiprand"),
+            configure_coverage_ci.parse_projects("rocm_libraries_all"),
+        )
+
+    def test_empty_group_alias_is_rejected(self):
+        # Update this test once a rocm-systems project is onboarded to coverage
+        # (the group becomes non-empty).
+        with self.assertRaises(ValueError):
+            configure_coverage_ci.parse_projects("rocm_systems_all")
+
+    def test_unknown_alias_like_token_is_rejected(self):
+        with self.assertRaises(ValueError):
+            configure_coverage_ci.parse_projects("rocm_everything_all")
+
+
+class SourceRepoPartitionTest(unittest.TestCase):
+    def test_groups_partition_all_projects(self):
+        libraries = set(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+        systems = set(configure_coverage_ci.ROCM_SYSTEMS_PROJECTS)
+        self.assertTrue(libraries.isdisjoint(systems))
+        self.assertEqual(
+            libraries | systems,
+            set(configure_coverage_ci.COVERAGE_PROJECTS),
+        )
+
 
 class ParseAmdgpuFamiliesTest(unittest.TestCase):
     def test_empty_falls_back_to_the_default_family(self):
@@ -130,6 +179,43 @@ class MainTest(unittest.TestCase):
             self.assertIn("-DHIPRAND_ENABLE_COVERAGE=ON", written)
             # compiler-runtime is always built so the profiling runtime exists.
             self.assertIn("compiler-runtime,math-libs", written)
+
+
+class EmitCmakeTest(unittest.TestCase):
+    def test_emits_group_lists_from_allowlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "therock_coverage_projects.cmake"
+            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            text = out.read_text()
+            self.assertIn("set(THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS", text)
+            self.assertIn("hipRAND", text)
+            # rocm-systems group is empty today -> an empty set().
+            self.assertRegex(text, r"set\(THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS\s*\)")
+
+    def test_emit_cmake_needs_no_env(self):
+        # Must work without PROJECTS_TO_TEST / AMDGPU_FAMILIES / GITHUB_OUTPUT set.
+        import os
+
+        saved = {
+            k: os.environ.pop(k, None)
+            for k in (
+                "PROJECTS_TO_TEST",
+                "AMDGPU_FAMILIES",
+                "COVERAGE_CONFIG_SOURCE",
+                "GITHUB_OUTPUT",
+            )
+        }
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "c.cmake"
+                self.assertEqual(
+                    configure_coverage_ci.main(["--emit-cmake", str(out)]), 0
+                )
+                self.assertTrue(out.exists())
+        finally:
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
 
 
 if __name__ == "__main__":
