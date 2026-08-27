@@ -347,7 +347,8 @@ def rewrite_metadata_rocm_line(
         tail,
         count=1,
     )
-    return requires_match.group("prefix") + requires_match.group("name") + tail
+    tail_start, tail_end = requires_match.span("tail")
+    return rewritten[:tail_start] + tail + rewritten[tail_end:]
 
 
 def rewrite_rocm_init_check_version(
@@ -369,7 +370,7 @@ def update_metadata_rocm_requires_dist(
     *,
     float_rocm_dependency_patch: bool = False,
 ) -> None:
-    """Update Requires-Dist lines in METADATA that reference rocm, leaving others unchanged."""
+    """Update ROCm references in METADATA Summary and Requires-Dist fields."""
     metadata_path = (
         new_dir_path / f"{package_name_no_version}-{old_version}.dist-info" / "METADATA"
     )
@@ -394,7 +395,7 @@ def update_metadata_rocm_requires_dist(
                         ),
                         end="",
                     )
-                elif line.startswith("Requires-Dist"):
+                elif line.startswith("Requires-Dist") and "rocm" in lower_line:
                     print(
                         rewrite_metadata_rocm_line(
                             line,
@@ -981,12 +982,13 @@ def wheel_change_extra_files(
     if JAX_ROCM_PACKAGE_PATTERN.match(package_name_no_version):
         return
 
+    files_to_float: list[pathlib.Path] = []
+
     # rocm packages needing extra handling
     if new_dir_path.name.startswith("rocm"):
         files_to_change = [
             new_dir_path / package_name_no_version / "_dist_info.py",
         ]
-        files_to_float = []
 
         if new_dir_path.name.startswith("rocm_sdk_core"):
             files_to_change.append(
@@ -1004,14 +1006,10 @@ def wheel_change_extra_files(
         files_to_float = [
             new_dir_path / package_name_no_version / "_rocm_init.py",
         ]
-        if not float_rocm_dependency_patch:
-            files_to_change.extend(files_to_float)
-            files_to_float = []
     elif "apex" in package_name_no_version:
         files_to_change = [
             new_dir_path / package_name_no_version / "git_version_info_installed.py",
         ]
-        files_to_float = []
     else:
         # we have multiple packages that have a version.py that needs updating
         need_change_version_py = ["torchaudio", "torchvision", "jaxlib"]
@@ -1019,7 +1017,6 @@ def wheel_change_extra_files(
             files_to_change = [
                 new_dir_path / package_name_no_version / "version.py",
             ]
-            files_to_float = []
         else:
             # no additional (rocm-specific) files needed to be changed that contain the version
             # currently applying to: triton
@@ -1028,12 +1025,16 @@ def wheel_change_extra_files(
     def rewrite_exact(line: str) -> str:
         return line.replace(old_rocm_version, new_rocm_version)
 
-    def rewrite_rocm_init(line: str) -> str:
+    def rewrite_float_version(line: str) -> str:
         return rewrite_rocm_init_check_version(line, old_rocm_version, new_rocm_version)
+
+    if not float_rocm_dependency_patch:
+        files_to_change.extend(files_to_float)
+        files_to_float = []
 
     rewrite_groups = [
         (files_to_change, rewrite_exact),
-        (files_to_float, rewrite_rocm_init),
+        (files_to_float, rewrite_float_version),
     ]
     for files, rewrite_line in rewrite_groups:
         if not files:

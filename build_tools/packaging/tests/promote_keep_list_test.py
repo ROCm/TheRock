@@ -20,6 +20,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from packaging.metadata import Metadata
 from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -244,6 +245,7 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             .replace(
                 "Requires-Dist: rocm-bootstrap\n",
                 "Requires-Dist: rocm-bootstrap\n"
+                "Requires-Dist: rocm[libraries]==7.13.0a20260505\n"
                 "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n",
                 1,
             )
@@ -286,7 +288,11 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
                 (torch_dir / "version.py").read_text(encoding="utf-8"),
             )
         self.assertIn("Requires-Dist: rocm-bootstrap", result)
-        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.*", result)
+        self.assertIn(
+            "Requires-Dist: rocm[libraries]==7.13.*\n"
+            "Requires-Dist: rocm-sdk-core==7.13.*\n",
+            result,
+        )
         self.assertIn(
             'Requires-Dist: ROCm-SDK-Core == 7.13.*; extra == "core"',
             result,
@@ -296,6 +302,24 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             result,
         )
         self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
+        Metadata.from_email(result, validate=True)
+
+    def test_non_rocm_dependency_is_not_rewritten(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: unrelated==7.13.0a20260505
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertEqual(result, textwrap.dedent(body))
 
     def test_compound_rocm_dependency_specifier_does_not_float(self):
         body = """\
