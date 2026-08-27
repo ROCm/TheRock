@@ -14,8 +14,9 @@ On Windows:
   - run "hipInfo.exe"
 
 Driver commands (amd-smi, rocminfo, hipInfo) are run with check=True and will
-cause this script to exit non-zero if they fail. The KFD version check is
-informational only and never causes a non-zero exit.
+cause this script to exit non-zero if they fail. The KFD version check also
+causes a non-zero exit when the version is outside the supported range or
+cannot be queried.
 """
 
 import fcntl
@@ -113,7 +114,7 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
-def run_sanity(os_name: str) -> None:
+def run_sanity(os_name: str) -> int:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
@@ -151,28 +152,31 @@ def run_sanity(os_name: str) -> None:
 
         log("\n=== KFD IOCTL version ===")
         if not os.path.exists(_KFD_DEVICE):
-            log(f"warning: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
-        else:
-            try:
-                major, minor = _get_kfd_version()
-                in_range = _KFD_VERSION_MIN <= (major, minor) < _KFD_VERSION_MAX
-                status = "supported" if in_range else "WARNING: NOT supported"
-                log(f"KFD IOCTL version: {major}.{minor} ({status})")
-                log(
-                    f"Required range for rocdbgapi: "
-                    f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
-                    f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
-                )
-            except OSError as e:
-                log(f"warning: failed to query KFD version: {e}")
+            log(f"error: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
+            return 1
+        try:
+            major, minor = _get_kfd_version()
+            in_range = _KFD_VERSION_MIN <= (major, minor) < _KFD_VERSION_MAX
+            status = "supported" if in_range else "NOT supported"
+            log(f"KFD IOCTL version: {major}.{minor} ({status})")
+            log(
+                f"Required range for rocdbgapi: "
+                f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
+                f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
+            )
+            if not in_range:
+                return 1
+        except OSError as e:
+            log(f"error: failed to query KFD version: {e}")
+            return 1
 
     log("\n=== End of sanity check ===")
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     detected = platform.system()
-    run_sanity(detected)
-    return 0
+    return run_sanity(detected)
 
 
 if __name__ == "__main__":
