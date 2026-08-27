@@ -374,6 +374,10 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       rocm_version: ${{ inputs.rocm_package_version }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      # One representative family, so a PR pays for the JAX tests once rather
+      # than once per family it builds. An empty value builds without testing.
+      test_amdgpu_family: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') && 'gfx94X-dcgpu' || '' }}
+      test_size: small
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

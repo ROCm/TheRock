@@ -29,6 +29,30 @@ else:
     logging.info(f"++ INFO: rocdecode tests found in {ROCDECODE_TEST_PATH}")
 env = os.environ.copy()
 
+# GitHub Actions passes an empty string when a workflow input is left blank.
+TEST_TYPE = (os.getenv("TEST_TYPE") or "standard").lower()
+
+
+def test_filter_args():
+    """CTest filter for the requested category, per docs/development/test_filtering.md.
+
+    rocdecode ships raw-decode tests (`video_decodeRaw-*`, no FFmpeg needed), a
+    set of FFmpeg-based extended decode tests, and one performance suite
+    (`video_decodePerf-*`). quick runs raw decode only; standard adds the rest of
+    the correctness suites but excludes perf. The FFM (Full Function Model
+    emulator) tiers mirror their native counterparts but exclude perf at every
+    level: perf numbers off a software emulator are meaningless and the runs are
+    prohibitively slow.
+    """
+    if TEST_TYPE in ("quick", "ffm-quick"):
+        return ["-R", "video_decodeRaw"]
+    if TEST_TYPE in ("standard", "ffm-standard"):
+        return ["-E", "video_decodePerf"]
+    if TEST_TYPE in ("ffm-comprehensive", "ffm-full"):
+        return ["-E", "video_decodePerf"]
+    # Native comprehensive/full: run everything, including the perf suite.
+    return []
+
 
 # set env variables required for tests
 def setup_env(env):
@@ -76,10 +100,13 @@ def execute_tests(env):
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
 
+    filter_args = test_filter_args()
+    logging.info(f"++ rocdecode test category TEST_TYPE={TEST_TYPE}")
+
     cmd = [
         "ctest",
         "-N",
-    ]
+    ] + filter_args
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
     ctest_list = subprocess.run(
         cmd,
@@ -96,13 +123,15 @@ def execute_tests(env):
             "Failed to determine CTest test count from `ctest -N` output"
         )
     if int(match.group(1)) == 0:
-        raise RuntimeError("CTest discovered zero rocdecode tests")
+        raise RuntimeError(
+            f"CTest discovered zero rocdecode tests for TEST_TYPE={TEST_TYPE}"
+        )
 
     cmd = [
         "ctest",
         "--extra-verbose",
         "--output-on-failure",
-    ]
+    ] + filter_args
     logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
 

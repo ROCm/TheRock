@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 
 import enum
 import json
+import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -145,6 +146,7 @@ class CIInputs:
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
+    build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
@@ -208,6 +210,9 @@ class CIInputs:
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        build_native_linux = (
+            os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -256,6 +261,7 @@ class CIInputs:
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
+            build_native_linux=build_native_linux,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -909,38 +915,52 @@ def decide_jobs(
     """
 
     # Build ROCm.
-    # Parse explicit prebuilt stages from workflow_dispatch input. These are
-    # the MANUAL inputs and are always honored, unchanged, in every mode.
+    stage_reuse_mode = StageReuseMode.from_environ()
 
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
+    if stage_reuse_mode is StageReuseMode.OFF:
+        # Strong off is authoritative: do not parse or honor explicit
+        # prebuilt_stages, do not retain a baseline, and do not invoke automatic
+        # stage-reuse analysis.
+        if ci_inputs.prebuilt_stages or ci_inputs.baseline_run_id:
+            logging.info(
+                "[STAGE-REUSE] mode=off: ignoring prebuilt_stages and "
+                "baseline_run_id; all in-scope stages will rebuild"
+            )
+        else:
+            logging.info(
+                "[STAGE-REUSE] mode=off: artifact reuse disabled; "
+                "all in-scope stages will rebuild"
+            )
 
-    # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
-    # which stages WOULD be reused and apply nothing; in "reuse-stage" the
-    # eligible stages are merged into stage_decisions so the orchestrator skips
-    # their builds and copies artifacts instead. The platforms and families to
-    # verify come straight from the resolved target selection.
+        stage_decisions: dict[str, JobAction] = {}
+        baseline_run_id = ""
+        baseline_repository = ""
+        auto_stage_reuse = None
 
-    auto_stage_reuse = compute_auto_stage_reuse(
-        changed_files=git_context.changed_files,
-        mode=StageReuseMode.from_environ(),
-        linux_amdgpu_families=targets.linux_families,
-        windows_amdgpu_families=targets.windows_families,
-    )
+    else:
+        # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
+        stage_decisions = {}
+        if ci_inputs.prebuilt_stages:
+            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+                stage_decisions[stage] = JobAction.PREBUILT
 
-    baseline_repository = ci_inputs.baseline_repository
-    baseline_run_id = ci_inputs.baseline_run_id
+        # In dry-run, automatic reuse is analyzed but not applied. In
+        # reuse-stage, eligible stages are added to stage_decisions.
+        auto_stage_reuse = compute_auto_stage_reuse(
+            changed_files=git_context.changed_files,
+            mode=stage_reuse_mode,
+            linux_amdgpu_families=targets.linux_families,
+            windows_amdgpu_families=targets.windows_families,
+        )
 
-    # Apply automatic stage reuse. For external repos (rocm-libraries, rocm-systems),
-    # we reuse stages from TheRock baselines. For same-repo runs, baseline_repository
-    # is empty or matches the current repo.
-    # reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-        baseline_run_id = auto_stage_reuse.baseline_run_id
+        baseline_repository = ci_inputs.baseline_repository
+        baseline_run_id = ci_inputs.baseline_run_id
+
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -948,7 +968,6 @@ def decide_jobs(
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
     )
-
     # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
         ci_inputs=ci_inputs,
@@ -1187,14 +1206,18 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    test_python_packages_matrix = build_rocm_python_test_matrix(
-        per_family_info=per_family_info,
-        platform=platform,
-    )
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
     is_asan = suffix == "asan"
     build_python_packages = ci_inputs.build_python_packages and not is_asan
+    test_python_packages_matrix = (
+        build_rocm_python_test_matrix(
+            per_family_info=per_family_info,
+            platform=platform,
+        )
+        if build_python_packages
+        else []
+    )
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1203,7 +1226,7 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=True,
+        build_native_linux=ci_inputs.build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
@@ -1444,6 +1467,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     ci_inputs = CIInputs.from_environ()
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)

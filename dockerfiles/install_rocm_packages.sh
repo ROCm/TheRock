@@ -16,8 +16,8 @@
 #   VERSION          - Full version string (e.g., 7.13.0a20260322, 7.11.0)
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110x, gfx94x, gfx110X-all)
 #                      Special value: 'multi-arch' installs the meta-package from
-#                      AMD's packages-multi-arch repository, which supports all
-#                      GPU families in a single image.
+#                      AMD's multi-arch repository, which supports all GPU
+#                      families in a single image.
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, stable
 #
 # Examples:
@@ -35,12 +35,18 @@ AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
 RELEASE_TYPE="${3:-nightlies}"
 
 # Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
-# all GPU families, sourced from AMD's packages-multi-arch repositories.
+# all GPU families, sourced from AMD's multi-arch repositories.
 if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
     MULTI_ARCH=1
 else
     MULTI_ARCH=0
 fi
+
+# Roots of the nightly package repositories.
+NIGHTLY_MULTI_ARCH_BASE_URL="https://nightly.repo.amd.com/rocm/core/packages"
+# Per-family nightlies are the legacy layout and were never migrated off the
+# retired host, which stopped publishing in 2026.
+NIGHTLY_PER_FAMILY_BASE_URL="https://rocm.nightlies.amd.com"
 
 # ---------------------------------------------------------------------------
 # Helper: extract MAJOR.MINOR from VERSION (e.g., 7.13.0a20260322 → 7.13)
@@ -149,8 +155,8 @@ resolve_nightly_build_dir() {
         exit 1
     fi
 
-    local listing_url="https://rocm.nightlies.amd.com/${repo_type}/"
-    [ "$multi_arch" = "1" ] && listing_url="https://rocm.nightlies.amd.com/packages-multi-arch/${repo_type}/"
+    local listing_url="${NIGHTLY_PER_FAMILY_BASE_URL}/${repo_type}/"
+    [ "$multi_arch" = "1" ] && listing_url="${NIGHTLY_MULTI_ARCH_BASE_URL}/${repo_type}/"
     echo "Searching for nightly build directory matching date ${date_str}..." >&2
 
     local build_dir
@@ -160,6 +166,8 @@ resolve_nightly_build_dir() {
     if [ -z "$build_dir" ]; then
         echo "Error: No nightly build found for date ${date_str}" >&2
         echo "Check available builds at: ${listing_url}" >&2
+        echo "Nightly runs are pruned after a few days, so an older date may" >&2
+        echo "simply have aged off." >&2
         exit 1
     fi
 
@@ -170,10 +178,6 @@ resolve_nightly_build_dir() {
 
 # ---------------------------------------------------------------------------
 # Helper: build the repo base URL
-#
-# Multi-arch repos live under a 'packages-multi-arch/' path segment that:
-#   - PREFIXES the deb/rpm dir for nightlies (single-family has no such prefix)
-#   - REPLACES the 'packages/' segment for prereleases and stable
 # ---------------------------------------------------------------------------
 build_repo_url() {
     local release_type="$1"
@@ -187,8 +191,8 @@ build_repo_url() {
 
     case "$release_type" in
         nightlies)
-            local nightly_root="https://rocm.nightlies.amd.com"
-            [ "$multi_arch" = "1" ] && nightly_root="${nightly_root}/${pkg_segment}"
+            local nightly_root="${NIGHTLY_PER_FAMILY_BASE_URL}"
+            [ "$multi_arch" = "1" ] && nightly_root="${NIGHTLY_MULTI_ARCH_BASE_URL}"
             if [ "$pkg_type" = "deb" ]; then
                 echo "${nightly_root}/deb/${nightly_build_dir}"
             else
