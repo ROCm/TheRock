@@ -22,7 +22,7 @@ logger = TheRockLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
+def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
 
     Builds a minimal RPM binary package whose payload is empty and whose primary
@@ -33,7 +33,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
     """
     logger.debug("create_nonversioned_rpm_package")
     # Create immutable config copy with versioned_pkg=False
@@ -43,7 +43,8 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -51,7 +52,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     return output_list
 
 
-def create_versioned_rpm_package(pkg_name, config: PackageConfig):
+def create_versioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a versioned RPM package (.rpm).
 
     This function automates the process of building a RPM package by:
@@ -64,7 +65,8 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
+               (e.g., when no artifacts exist for the target architecture)
     """
     logger.debug("create_versioned_rpm_package")
     # Explicitly ensure versioned_pkg=True
@@ -133,7 +135,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                logger.error(
+                logger.info(
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
                 )
                 return False

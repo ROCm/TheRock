@@ -115,7 +115,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
         if build_config.enable_kpack:
-            logger.error(
+            logger.info(
                 f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
             )
             return []

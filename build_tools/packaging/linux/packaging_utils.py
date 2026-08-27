@@ -629,7 +629,9 @@ def process_main_dependencies_kpack(
                 config.artifacts_dir,
             )
         ]
-        # No host fallback needed for host packages
+        # Host fallback is discarded (_) because we ARE the host package.
+        # There's nothing to fall back to - if a dependency has no host artifacts,
+        # it's a build configuration error that should fail, not silently degrade.
         dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
@@ -637,7 +639,13 @@ def process_main_dependencies_kpack(
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
-        # No host fallback for non-gfxarch packages
+        # Host fallback is discarded (_) because non-gfxarch packages are already
+        # architecture-independent. Their dependencies should either:
+        # 1. Be non-gfxarch themselves (no fallback needed), or
+        # 2. Be gfxarch packages resolved to their host variant (gfx_arch="" maps to generic)
+        # If a dependency has no artifacts at all, filter_dependencies_by_artifacts
+        # will exclude it and log a warning - this is the expected behavior for
+        # packages that weren't built in this configuration.
         dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
