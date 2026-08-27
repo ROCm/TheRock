@@ -116,6 +116,7 @@
       "rocrand",
       "rocroller",
       "rocshmem",
+      "rocshmem4py",
       "rocsolver",
       "rocsparse",
       "rocthrust",
@@ -506,6 +507,11 @@
     "consumers": []
   },
   "rocshmem": {
+    "consumers": [
+      "rocshmem4py"
+    ]
+  },
+  "rocshmem4py": {
     "consumers": []
   },
   "rocsolver": {
