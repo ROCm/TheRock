@@ -6,7 +6,9 @@ This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
   - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run.
+    prerequisite that must pass before other components are run. The
+    ``test_runner`` field within this object is non-empty only on GPU runners,
+    so callers can gate GPU-only steps on that field.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -1179,9 +1181,6 @@ def run():
     gha_set_output(
         {
             "sanity_component": json.dumps(sanity_component),
-            "run_gpu_sanity_check": str(
-                bool(sanity_component and sanity_component.get("test_runner"))
-            ).lower(),
             "components": json.dumps(output_matrix),
             "platform": platform,
         }

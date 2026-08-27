@@ -129,7 +129,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
-      run_gpu_sanity_check: ${{ steps.configure.outputs.run_gpu_sanity_check }}
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
@@ -194,7 +193,7 @@ jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
-    if: ${{ needs.configure_test_matrix.outputs.run_gpu_sanity_check == 'true' }}
+    if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit
     with:

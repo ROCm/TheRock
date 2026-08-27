@@ -13,7 +13,9 @@ On Linux:
 On Windows:
   - run "hipInfo.exe"
 
-This script always exits 0; the KFD version check is informational only.
+Driver commands (amd-smi, rocminfo, hipInfo) are run with check=True and will
+cause this script to exit non-zero if they fail. The KFD version check is
+informational only and never causes a non-zero exit.
 """
 
 import fcntl
