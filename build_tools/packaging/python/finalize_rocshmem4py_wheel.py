@@ -26,9 +26,6 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 from github_actions.determine_version import derive_version_suffix
 
 _CHANGE_WHEEL_VERSION_DIR = _BUILD_TOOLS_DIR / "third_party" / "change_wheel_version"
-sys.path.insert(0, str(_CHANGE_WHEEL_VERSION_DIR))
-
-from change_wheel_version import change_wheel_version
 
 ROCSHMEM4PY_RPATH = ":".join(
     [
@@ -98,6 +95,9 @@ def finalize_wheel(
     rocm_version: str,
     patchelf: str,
 ) -> Path:
+    sys.path.insert(0, str(_CHANGE_WHEEL_VERSION_DIR))
+    from change_wheel_version import change_wheel_version
+
     _distribution, old_version, _build, _tags = parse_wheel_filename(wheel_path.name)
     version = Version(compute_version(str(old_version), rocm_version))
 
