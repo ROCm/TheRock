@@ -232,5 +232,14 @@ class OutputsTest(unittest.TestCase):
                 self.outputs(argv)
 
 
+class SmallTestSelectionTest(unittest.TestCase):
+    def test_pr_small_selection_includes_rocprofiler_smoke(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        listed = (repo_root / matrix_script.SMALL_TEST_LIST).read_text().splitlines()
+        paths = {line.partition("#")[0].strip() for line in listed if line.strip()}
+        self.assertIn("tests/logging_test.py", paths)
+        self.assertIn("tests/profiler_test.py", paths)
+
+
 if __name__ == "__main__":
     unittest.main()
