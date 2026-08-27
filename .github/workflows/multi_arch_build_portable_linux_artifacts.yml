@@ -81,7 +81,11 @@ permissions:
   contents: read
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   build_stage:
+    needs: [resolve-images]
     name: ${{ inputs.stage_display_name }}
     runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
@@ -91,7 +95,7 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ${{ needs.resolve-images.outputs.therock_build_manylinux_x86_64 }}
     env:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_portable_linux_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"

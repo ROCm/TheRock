@@ -51,6 +51,7 @@ for _path in (_BUILD_TOOLS_DIR, _LINUX_DIR):
         sys.path.insert(0, _path_str)
 
 import get_url_repo_params  # noqa: E402
+from resolve_docker_image import get_image_ref  # noqa: E402
 
 _EXAMPLE = get_url_repo_params.EXAMPLE_CDN_BASE
 
@@ -333,15 +334,12 @@ class ExtractGfxArchTest(unittest.TestCase):
 class GetContainerImageTest(unittest.TestCase):
     """Tests for ``get_container_image()``."""
 
-    # test_native_linux_packages_install.yml feeds this value straight into its
-    # container image, so each profile is pinned to the exact string rather than
-    # compared against another call to the function under test.
     _EXPECTED_IMAGES = [
-        ("ubuntu2404", "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
-        ("debian12", "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
-        ("sles16", "registry.suse.com/bci/bci-base:16.0"),
-        ("rhel8", "registry.access.redhat.com/ubi8/ubi:8.10"),
-        ("rhel10", "registry.access.redhat.com/ubi10/ubi:10.1"),
+        ("ubuntu2404", get_image_ref("no_rocm_image_ubuntu24_04")),
+        ("debian12", get_image_ref("no_rocm_image_ubuntu24_04")),
+        ("sles16", get_image_ref("bci_base_sles")),
+        ("rhel8", get_image_ref("ubi8")),
+        ("rhel10", get_image_ref("ubi10")),
     ]
 
     def test_profile_mapping(self):
@@ -416,7 +414,7 @@ class MainSubcommandsTest(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "container_image=ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest", output
+            f"container_image={get_image_ref('no_rocm_image_ubuntu24_04')}", output
         )
 
 

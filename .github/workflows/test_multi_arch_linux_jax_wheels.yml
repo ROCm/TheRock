@@ -205,7 +205,11 @@ permissions:
   id-token: write
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   test_jax_wheels:
+    needs: [resolve-images]
     name: Test JAX | ${{ inputs.test_size }} | ${{ inputs.test_subset }} | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     # Room for the longest subset plus its setup, where installing the ROCm
@@ -216,7 +220,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
 
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      image: ${{ needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 }}
       options: >-
         --shm-size=128g
         --device /dev/kfd

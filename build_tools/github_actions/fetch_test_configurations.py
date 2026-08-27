@@ -27,8 +27,10 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-# Add tests directory to path for extended_tests imports
+# Add tests directory for extended_tests imports and build_tools/ for the image resolver.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from resolve_docker_image import get_image_ref
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
@@ -152,7 +154,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": get_image_ref("no_rocm_image_ubuntu24_04_rocgdb"),
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -627,7 +629,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": get_image_ref("no_rocm_image_ubuntu24_04_openmpi"),
     },
     # hipDNN tests
     "hipdnn": {
@@ -848,7 +850,7 @@ test_matrix = {
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
         # libavutil-dev) for test builds. These are not bundled in TheRock
         # artifacts and are provided via the specialized media image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        "container_image": get_image_ref("no_rocm_image_ubuntu24_04_media"),
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
