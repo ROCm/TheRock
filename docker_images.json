@@ -1,0 +1,108 @@
+{
+  "_comment": "Single source of truth for Docker image references used in TheRock CI workflows and Dockerfiles. See build_tools/resolve_docker_image.py for field documentation and resolution rules.",
+  "therock_build_manylinux_x86_64": {
+    "registry": "ghcr.io/rocm",
+    "image": "therock_build_manylinux_x86_64",
+    "sha": "sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb",
+    "timestamp": "2026-08-17T22:45:41Z",
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubuntu24_04": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubuntu24_04",
+    "sha": "sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26",
+    "timestamp": "2025-08-09T01:55:17Z",
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubuntu24_04_rocgdb": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubuntu24_04_rocgdb",
+    "sha": "sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",
+    "timestamp": "2026-07-22T15:21:18.527038581Z",
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubuntu24_04_ocl_rt": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubuntu24_04_ocl_rt",
+    "tag": "latest",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubuntu24_04_openmpi": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubuntu24_04_openmpi",
+    "sha": "sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+    "timestamp": "2026-07-22T15:44:00.471726385Z",
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubuntu24_04_media": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubuntu24_04_media",
+    "sha": "sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+    "timestamp": "2026-04-02T21:47:15.239168418Z",
+    "last_updated": "2026-08-27"
+  },
+  "no_rocm_image_ubi10": {
+    "registry": "ghcr.io/rocm",
+    "image": "no_rocm_image_ubi10",
+    "tag": "latest",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "rocm_runtime": {
+    "registry": "ghcr.io/rocm",
+    "image": "rocm_runtime",
+    "tag": "latest",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "manylinux_2_28_x86_64": {
+    "registry": "quay.io/pypa",
+    "image": "manylinux_2_28_x86_64",
+    "sha": "sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017",
+    "timestamp": "2025-05-10T16:29:17.280159863Z",
+    "last_updated": "2026-08-27"
+  },
+  "ubuntu_24_04": {
+    "registry": "docker.io",
+    "image": "ubuntu",
+    "tag": "24.04",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "ubi10_base": {
+    "registry": "registry.access.redhat.com",
+    "image": "ubi10/ubi",
+    "tag": "latest",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "python_slim": {
+    "registry": "docker.io",
+    "image": "python",
+    "tag": "3.12-slim",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "ubi8": {
+    "registry": "registry.access.redhat.com",
+    "image": "ubi8/ubi",
+    "tag": "8.10",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "ubi10": {
+    "registry": "registry.access.redhat.com",
+    "image": "ubi10/ubi",
+    "tag": "10.1",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  },
+  "bci_base_sles": {
+    "registry": "registry.suse.com",
+    "image": "bci/bci-base",
+    "tag": "16.0",
+    "timestamp": null,
+    "last_updated": "2026-08-27"
+  }
+}
