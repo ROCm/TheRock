@@ -1,43 +1,42 @@
-From 09c906e9065b1c7fbffa740a1fd72c2d4725b07c Mon Sep 17 00:00:00 2001
+From 47271728866d2c205311f9026e58b4e4ed7cc177 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Wed, 29 Jul 2026 15:35:41 +0000
-Subject: [PATCH] rccl: guard x86-only cpuid code for ppc64le portability
+Date: Wed, 26 Aug 2026 15:41:40 +0000
+Subject: [PATCH] rccl: guard x86-only cpuid code for portability
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Guard the cpuid.h include and __get_cpuid() call with architecture
+checks. On non-x86 platforms, set ecx=0 so the hypervisor detection
+is skipped but the IOMMU check still runs.
 ---
- projects/rccl/src/init.cc | 4 ++++
- 1 file changed, 4 insertions(+)
+ projects/rccl/src/init.cc | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index d248bc76d93..9f31fa85334 100644
+index d248bc76d93..4932370349f 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -80,7 +80,9 @@
  #include "dda_all_reduce.h"
  #include "ipc_init.h"
  #include "fabric_init.h"
-+#if defined(__x86_64__) || defined(__i386__)
++#if defined(__x86_64__) || defined(_M_X64)
  #include <cpuid.h>
 +#endif
  #include <stdio.h>
  #include <stdlib.h>
  #include "kernel_config.h"
-@@ -299,6 +301,7 @@ static ncclResult_t ncclInit() {
+@@ -299,8 +301,12 @@ static ncclResult_t ncclInit() {
    }
    INFO(NCCL_INIT, "Kernel version: %s", verStr);
    if (strstr(verStr, "cray") == NULL) {
-+#if defined(__x86_64__) || defined(__i386__)
++#if defined(__x86_64__) || defined(_M_X64)
      unsigned int eax, ebx, ecx, edx;
      if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) ecx = 0; // cpuid not supported
-     NCCLCHECK(ncclOsTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue, sizeof(strValue)));
-@@ -318,6 +321,7 @@ static ncclResult_t ncclInit() {
-       if (!ncclIommuPassthroughOk(cmdlinePtr))
-         WARN("Missing \"iommu=pt\" from kernel command line which can lead to system instablity or hang!");
-     }
++#else
++    unsigned int ecx = 0;
 +#endif
- #ifndef HIP_UNCACHED_MEMORY
-     char* env = getenv("HSA_FORCE_FINE_GRAIN_PCIE");
-     if (env == NULL || strcmp(env, "1") != 0)
+     NCCLCHECK(ncclOsTopoGetStrFromSys("/sys/devices/virtual/dmi/id", "bios_version", strValue, sizeof(strValue)));
+     // Check BIOS string and hypervisor presence on ecx bit 31
+     if (strncmp("Hyper-V UEFI Release", strValue, 20) != 0 && (ecx & (1u << 31)) == 0) {
 -- 
 2.52.0
 
