@@ -77,6 +77,9 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   # Resolve the parameters used to build and upload the amd-repo-setup package:
   # the OS-profile build matrix for this package type, each profile's container
   # image, and the repo.amd.com stream the build line configures, with its
@@ -151,9 +154,10 @@ jobs:
       contents: read
       id-token: write # Authenticate to AWS to upload package repositories.
     name: Build ${{ inputs.native_package_type }} packages
+    needs: [resolve-images]
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
+      image: ${{ needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 }}
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}

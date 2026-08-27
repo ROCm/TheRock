@@ -64,6 +64,7 @@
     "last_updated": "2026-08-27"
   },
   "ubuntu_24_04": {
+    "_comment": "Not currently consumed by any workflow or script in this repository.",
     "registry": "docker.io",
     "image": "ubuntu",
     "tag": "24.04",
@@ -71,6 +72,7 @@
     "last_updated": "2026-08-27"
   },
   "ubi10_base": {
+    "_comment": "Not currently consumed by any workflow or script in this repository.",
     "registry": "registry.access.redhat.com",
     "image": "ubi10/ubi",
     "tag": "latest",
