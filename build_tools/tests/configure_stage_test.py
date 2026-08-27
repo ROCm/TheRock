@@ -12,7 +12,10 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
-from configure_stage import generate_cmake_args, get_project_features
+from configure_stage import (
+    generate_cmake_args,
+    get_project_features,
+)
 
 
 class ProjectResolutionTest(unittest.TestCase):

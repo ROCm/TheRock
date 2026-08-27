@@ -17,27 +17,31 @@ is reported reusable:
 
 Mode switch
 -----------
-The module is wired into CI behind a two-way ``STAGE_REUSE_MODE`` switch so it
-can be observed before it changes anything:
+The module is wired into CI behind a three-way ``STAGE_REUSE_MODE`` switch:
 
+* ``off``        - Disable artifact reuse completely. Do not run impact
+                   analysis, search for baseline runs, query GitHub, or inspect
+                   artifact storage.
 * ``dry-run``    - DEFAULT. Compute the analysis and LOG, for each stage that
                    *would* be reused, a line to the console + step summary, but
-                   return NO auto stages, so ``prebuilt_stages`` is unchanged
-                   and every stage still builds exactly.
+                   return NO automatically reused stages.
 * ``reuse-stage`` - Compute the analysis and actually return the reuse stages so
                      the orchestrator copies their artifacts and skips the build.
 
-Note: this ``STAGE_REUSE_MODE`` switch drives the *automatic* detection layer.
-It is orthogonal to the ``prebuilt_stages`` workflow input, which is the
-explicit, manual list of stages to reuse and is always honored regardless of
-mode.
+``off`` is authoritative. ``configure_multi_arch_ci.py`` also ignores explicit
+``prebuilt_stages`` and ``baseline_run_id`` inputs in this mode, ensuring that
+all in-scope stages are rebuilt.
+
+In ``dry-run`` and ``reuse-stage`` modes, the explicit ``prebuilt_stages``
+workflow input remains separate from automatic stage-reuse analysis.
 
 Environment Variables
 --------------------
 ``_default_baseline_selector`` reads the following environment variables. These
 are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
 
-* ``STAGE_REUSE_MODE``           - ``dry-run`` (default) or ``reuse-stage``.
+* ``STAGE_REUSE_MODE``           - ``off``, ``dry-run`` (default), or
+                                    ``reuse-stage``.
 * ``GITHUB_REPOSITORY``          - ``owner/repo`` (default ``ROCm/TheRock``).
 * ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
 * ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
@@ -79,6 +83,7 @@ GENERIC_FAMILY = "generic"
 
 
 class StageReuseMode(enum.Enum):
+    OFF = "off"
     DRY_RUN = "dry-run"
     REUSE_STAGE = "reuse-stage"
 
@@ -266,6 +271,7 @@ def compute_auto_stage_reuse(
     baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
 ) -> AutoStageReuse:
     """Compute auto stage-reuse decisions, verified against a baseline run.
+
     A stage is only reusable when it is unaffected by the change AND its
     artifacts are present in a healthy baseline run for *every* platform being
     built. The platforms are derived from which family lists are non-empty:
@@ -274,7 +280,30 @@ def compute_auto_stage_reuse(
     case where a stage available only in the Linux baseline is skipped on
     Windows. The report lines are logged before returning.
     """
+    if mode is StageReuseMode.OFF:
+        return _log_and_return(
+            _empty_result(
+                mode,
+                full_rebuild_required=True,
+                reasons=("artifact reuse disabled by STAGE_REUSE_MODE=off",),
+                report_lines=(
+                    f"{LOG_PREFIX} mode=off; artifact reuse disabled; "
+                    "skipping impact analysis and baseline lookup; "
+                    "all in-scope stages will rebuild.",
+                ),
+            )
+        )
+
     platforms = _build_platforms(linux_amdgpu_families, windows_amdgpu_families)
+
+    logger.info(
+        "%s requested platforms=%s linux_families=%s windows_families=%s",
+        LOG_PREFIX,
+        list(platforms),
+        list(linux_amdgpu_families),
+        list(windows_amdgpu_families),
+    )
+
     if not platforms:
         return _log_and_return(
             _empty_result(
@@ -361,6 +390,16 @@ def compute_auto_stage_reuse(
             platform_families,
         )
 
+        logger.info(
+            "%s baseline lookup start: platform=%s required_families=%s "
+            "candidate_stages=%s required_artifact_pairs=%d",
+            LOG_PREFIX,
+            platform,
+            list(platform_families),
+            list(candidates),
+            len(required),
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -377,6 +416,13 @@ def compute_auto_stage_reuse(
         except GitHubAPIError as exc:
             baseline_error = str(exc)
             baseline = None
+
+        logger.info(
+            "%s baseline lookup result: platform=%s run_id=%s",
+            LOG_PREFIX,
+            platform,
+            baseline.run_id if baseline is not None else "none",
+        )
 
         platform_baseline_run_ids[platform] = (
             baseline.run_id if baseline is not None else None

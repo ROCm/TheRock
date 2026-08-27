@@ -28,7 +28,7 @@ Test modes (--test-type):
   actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
-APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
+APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 
@@ -61,63 +61,63 @@ Example invocations:
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile rhel8 \\
-         --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/x86_64/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
          --os-profile sles16 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/sles16/x86_64/ \\
          --release-type prerelease \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: repo install only (no verification)
  python3 native_linux_package_install_test.py --test-type install \\
          --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly
 
  # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
  # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
@@ -158,11 +158,16 @@ def _env(key: str, default: str) -> str:
 # ROCM_REPO_NAME: logical repo name used for APT list, Zypper/Yum repo file and section id
 # ROCM_APT_*, ROCM_ZYPP_*, ROCM_YUM_*, ROCM_RDHC_REL_PATH
 REPO_NAME = _env("ROCM_REPO_NAME", "rocm-test")
-APT_KEYRING_DIR = _env("ROCM_APT_KEYRING_DIR", "/etc/apt/keyrings")
 APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
-APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", "/etc/apt/keyrings/rocm.gpg")
+# Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
+# /etc/apt/keyrings/rocm.gpg. No package owns that path, but the current
+# documented amdgpu package manager steps set the signing key up there
+# ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
+# and point signed-by= at it. This harness writes its keyring the same way, so
+# sharing the path would overwrite the key a host is already using.
+APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
 VERIFY_KEY_COMPONENTS = [
@@ -459,9 +464,14 @@ class NativeLinuxPackageInstallTest:
         print(f"\nGPG Key URL: {self.gpg_key_url}")
 
         if self.package_type == "deb":
-            # For DEB, import GPG key using pipeline approach
-            keyring_dir = Path(APT_KEYRING_DIR)
-            keyring_file = keyring_dir / "rocm.gpg"
+            # Write to the same path the sources entry pins with signed-by=.
+            # These were separate expressions that happened to agree, so any
+            # change to one silently broke apt's ability to find the keyring.
+            # PurePosixPath, not Path: these are paths on the target Linux
+            # filesystem handed to mkdir(1), tee(1) and chmod(1). Path follows
+            # the local flavour, so on Windows it renders "\etc\apt\keyrings".
+            keyring_file = PurePosixPath(APT_KEYRING_FILE)
+            keyring_dir = keyring_file.parent
 
             try:
                 # Create keyring directory
@@ -475,20 +485,31 @@ class NativeLinuxPackageInstallTest:
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
-                # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | sudo tee keyring_file > /dev/null
+                # Download, dearmor and write the key as three list-form calls
+                # rather than one shell pipeline: the URL and the keyring path
+                # are both configurable, and interpolating them into a shell
+                # string makes them command injection vectors.
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
-                pipeline_cmd = (
-                    f"wget -q -O - {self.gpg_key_url} | "
-                    f"gpg --dearmor | "
-                    f"sudo tee {keyring_file} > /dev/null"
-                )
-
-                subprocess.run(
-                    pipeline_cmd,
-                    shell=True,
+                armored = subprocess.run(
+                    ["wget", "-q", "-O", "-", self.gpg_key_url],
                     check=True,
                     stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                dearmored = subprocess.run(
+                    ["gpg", "--dearmor"],
+                    input=armored,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                subprocess.run(
+                    ["sudo", "tee", str(keyring_file)],
+                    input=dearmored,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     timeout=GPG_KEY_TIMEOUT_SEC,
                 )
@@ -507,6 +528,13 @@ class NativeLinuxPackageInstallTest:
                 print(f"[FAIL] Failed to setup GPG key: {e}")
                 if e.stderr:
                     print(f"Error output: {e.stderr.decode()}")
+                return False
+            except subprocess.TimeoutExpired as e:
+                # TimeoutExpired is a SubprocessError, not an OSError or a
+                # CalledProcessError, so neither handler around it catches one.
+                # Without this the whole run dies on a slow mirror instead of
+                # reporting a failed key import like every other failure here.
+                print(f"[FAIL] Timed out setting up GPG key: {e}")
                 return False
             except OSError as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
@@ -541,7 +569,9 @@ class NativeLinuxPackageInstallTest:
 
         if self.gpg_key_url:
             # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
-            apt_keyring = Path(APT_KEYRING_FILE)
+            # PurePosixPath for the same reason: this lands in signed-by= inside
+            # a sources file on the target, not on the machine running the test.
+            apt_keyring = PurePosixPath(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
             # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
@@ -1425,39 +1455,39 @@ _CLI_EXAMPLES_EPILOG = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
  python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only
  python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: install + basic verification + rdhc
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type install: install only
@@ -1467,19 +1497,19 @@ Examples:
 
  # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Comma-separated arches in one argument (equivalent normalization)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
