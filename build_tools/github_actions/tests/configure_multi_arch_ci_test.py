@@ -679,8 +679,8 @@ class TestDecideJobs(unittest.TestCase):
         self.assertFalse(result.linux.build_jax)
         self.assertFalse(result.linux.build_native_linux)
 
-    def test_build_stages_filters_test_labels(self):
-        """build_stages filters test_labels to only allowed labels for those stages."""
+    def test_build_stages_rejects_incompatible_test_labels(self):
+        """build_stages raises error for test_labels requiring skipped stages."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -690,9 +690,29 @@ class TestDecideJobs(unittest.TestCase):
             build_stages=["compiler-runtime", "runtime-tests"],
             linux_test_labels=["test:hip-tests", "test:rocblas", "test:miopen"],
         )
-        outputs = cm.configure(inputs, cm.GitContext.empty())
         # rocblas/miopen require math-libs/ml-libs, not in build_stages
-        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests"])
+        # Validation happens in CIInputs.validate() (called by from_environ)
+        with self.assertRaises(ValueError) as ctx:
+            inputs.validate()
+        self.assertIn("rocblas", str(ctx.exception))
+        self.assertIn("miopen", str(ctx.exception))
+
+    def test_build_stages_allows_compatible_test_labels(self):
+        """build_stages allows test_labels that match available stages."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:kfdtest"],
+        )
+        # Validation should pass without raising
+        inputs.validate()
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        # Both labels are compatible with the stages
+        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):

@@ -251,6 +251,28 @@ class CIInputs:
         for f in fields(self):
             print(f"  {f.name}: {getattr(self, f.name)!r}")
 
+    def validate(self) -> None:
+        """Validate inputs for consistency (fail-fast behavior).
+
+        Raises ValueError if test labels require stages not in build_stages.
+        """
+        allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
+        if allowed_labels is not None:
+            for platform, labels in [
+                ("Linux", self.linux_test_labels),
+                ("Windows", self.windows_test_labels),
+            ]:
+                invalid = [
+                    lbl
+                    for lbl in labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"{platform} test labels {invalid} require stages not in "
+                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
+                    )
+
     @property
     def is_pull_request(self) -> bool:
         return self.event_name == "pull_request"
@@ -328,7 +350,7 @@ class CIInputs:
             + pr_test_labels
         )
 
-        return CIInputs(
+        inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
@@ -355,6 +377,8 @@ class CIInputs:
             baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
+        inputs.validate()
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -1572,52 +1596,12 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
-    # Filter test labels based on build_stages when a partial build is requested.
-    # Tests that require artifacts from skipped stages cannot run.
-    linux_test_labels = ci_inputs.linux_test_labels
-    windows_test_labels = ci_inputs.windows_test_labels
-    allowed_labels = _get_allowed_test_labels_for_stages(ci_inputs.build_stages)
-    if allowed_labels is not None:
-        # Partial build: filter to only labels that can run with available stages.
-        # If caller specified labels, intersect with allowed; otherwise use allowed.
-        if linux_test_labels:
-            filtered = [
-                lbl
-                for lbl in linux_test_labels
-                if lbl.replace("test:", "") in allowed_labels
-            ]
-            if filtered != linux_test_labels:
-                print(
-                    f"  Filtered linux_test_labels for partial build: "
-                    f"{linux_test_labels} -> {filtered}"
-                )
-            linux_test_labels = filtered
-        else:
-            # No explicit labels: auto-select based on stages
-            linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
-            print(
-                f"  Auto-selected linux_test_labels for partial build: {linux_test_labels}"
-            )
-
-        if windows_test_labels:
-            filtered = [
-                lbl
-                for lbl in windows_test_labels
-                if lbl.replace("test:", "") in allowed_labels
-            ]
-            if filtered != windows_test_labels:
-                print(
-                    f"  Filtered windows_test_labels for partial build: "
-                    f"{windows_test_labels} -> {filtered}"
-                )
-            windows_test_labels = filtered
-
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
-        linux_test_labels=linux_test_labels,
-        windows_test_labels=windows_test_labels,
+        linux_test_labels=ci_inputs.linux_test_labels,
+        windows_test_labels=ci_inputs.windows_test_labels,
     )
 
 
