@@ -75,7 +75,7 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--run-id {args.run_id} "
         f"--repository {args.repository} "
         f"--amdgpu-family {args.amdgpu_family} "
-        f'--test-script "{args.test_script}" '
+        f'--test-script "{args.test_script}"'
     )
     if args.amdgpu_targets:
         cmd += f" --amdgpu-targets {args.amdgpu_targets}"
@@ -87,7 +87,26 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         cmd += f" --test-type {args.test_type}"
     if args.fetch_artifact_args:
         cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
+    if args.additional_requirements_files:
+        cmd += (
+            " --additional-requirements-files="
+            f'"{args.additional_requirements_files}"'
+        )
     return cmd
+
+
+def append_additional_requirements_step(
+    steps: list[tuple[str, str]], requirements_files: str
+) -> None:
+    """Add a step that installs requirements shipped in fetched artifacts."""
+    if requirements_files:
+        steps.append(
+            (
+                "Installing component test dependencies",
+                "python build_tools/install_additional_requirements.py "
+                f'--requirements-files "{requirements_files}"',
+            )
+        )
 
 
 def run_linux(args: argparse.Namespace) -> int:
@@ -132,6 +151,8 @@ def run_linux(args: argparse.Namespace) -> int:
             ),
         ),
     ]
+
+    append_additional_requirements_step(steps, args.additional_requirements_files)
 
     if args.setup_only:
         steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
@@ -300,6 +321,8 @@ def run_windows(args: argparse.Namespace) -> int:
         ]
     )
 
+    append_additional_requirements_step(steps, args.additional_requirements_files)
+
     if args.setup_only:
         steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
     else:
@@ -364,8 +387,11 @@ def main() -> int:
         default=DEFAULT_CONTAINER_IMAGE,
         help="Docker image (Linux only)",
     )
+    parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
     parser.add_argument(
-        "--fetch-artifact-args", nargs="?", default="", help="Extra artifact args"
+        "--additional-requirements-files",
+        default="",
+        help="Comma-separated requirements files relative to the artifact root",
     )
     parser.add_argument(
         "--setup-only", action="store_true", help="Setup only, don't run test"

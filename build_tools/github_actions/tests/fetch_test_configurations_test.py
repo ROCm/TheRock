@@ -442,6 +442,24 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # Output contract
     # -----------------------
 
+    def test_additional_requirements_files_are_preserved_in_output(self):
+        requirements_files = [
+            "share/example/requirements.txt",
+            "share/example/requirements-test.txt",
+        ]
+        self._inject_job(
+            "custom-requirements",
+            additional_requirements_files=requirements_files,
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        self.assertEqual(
+            components[0]["additional_requirements_files"], requirements_files
+        )
+
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
         """On Windows, hip-tests runs with both PAL and ROCR backends."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]

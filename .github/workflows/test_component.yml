@@ -231,8 +231,9 @@ jobs:
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
-            --print-cmd \
-            ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
+            --fetch-artifact-args="${{ fromJSON(inputs.component).fetch_artifact_args }}" \
+            --additional-requirements-files="${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}" \
+            --print-cmd
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}

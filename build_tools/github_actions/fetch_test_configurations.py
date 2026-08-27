@@ -142,7 +142,9 @@ def _family_matches(
 
 
 # Common settings applied to all jobs
-_common_settings = {}
+_common_settings = {
+    "additional_requirements_files": [],
+}
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
@@ -287,6 +289,9 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
+        "additional_requirements_files": [
+            "share/hipblaslt/tensilelite/requirements-test.txt",
+        ],
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -791,6 +796,9 @@ test_matrix = {
         "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            "libhipcxx/requirements-test.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -803,6 +811,9 @@ test_matrix = {
         "job_name": "libhipcxx_hiprtc",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
+        "additional_requirements_files": [
+            "libhipcxx/requirements-test.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
