@@ -3,6 +3,8 @@
 
 """Utilities for reading and writing zstd/xz compressed tar archives."""
 
+from typing import Callable
+import os
 from pathlib import Path
 import tarfile
 
@@ -23,6 +25,36 @@ def normalize_tarinfo(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
     tarinfo.uname = "root"
     tarinfo.gname = "root"
     return tarinfo
+
+
+def add_tree(
+    tf: tarfile.TarFile,
+    source_dir: Path,
+    *,
+    relative_to: Path,
+    on_add: Callable[[str], None] | None = None,
+) -> None:
+    """Adds every file and directory under `source_dir` to `tf` reproducibly.
+
+    Member names are computed relative to `relative_to`. Entries are walked and
+    emitted in sorted order and their metadata is normalized, so the same tree
+    always produces the same archive bytes. `on_add`, if given, is called with
+    each member name as it is added.
+    """
+    for root, dirnames, filenames in sorted(
+        os.walk(source_dir), key=lambda entry: entry[0]
+    ):
+        for name in sorted(list(filenames) + list(dirnames)):
+            file_path = os.path.join(root, name)
+            arcname = os.path.relpath(file_path, relative_to)
+            if on_add is not None:
+                on_add(arcname)
+            tf.add(
+                file_path,
+                arcname=arcname,
+                recursive=False,
+                filter=normalize_tarinfo,
+            )
 
 
 def _get_pyzstd():

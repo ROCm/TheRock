@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from _therock_utils.archive_util import (
+    add_tree,
     normalize_tarinfo,
     open_archive_for_read,
     open_archive_for_write,
@@ -145,6 +146,80 @@ class NormalizeTarinfoTest(unittest.TestCase):
 
         self.assertEqual(tarinfo.type, tarfile.SYMTYPE)
         self.assertEqual(tarinfo.linkname, "README.txt")
+
+
+class AddTreeTest(unittest.TestCase):
+    """Verify reproducible tree archiving (used for the wheel devel tarball)."""
+
+    def _write_tree(self, root: Path):
+        # Deliberately created out of order so that a passing sort assertion
+        # cannot be explained by creation order.
+        (root / "pkg" / "sub").mkdir(parents=True)
+        (root / "pkg" / "z.txt").write_text("z")
+        (root / "pkg" / "a.txt").write_text("a")
+        (root / "pkg" / "sub" / "m.txt").write_text("m")
+
+    def _archive_tree(self, tmp: Path, archive: Path) -> list[str]:
+        with open_archive_for_write(archive, "xz") as tf:
+            add_tree(tf, tmp / "pkg", relative_to=tmp)
+        with open_archive_for_read(archive) as tf:
+            return tf.getnames()
+
+    def test_member_order_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write_tree(tmp)
+            names = self._archive_tree(tmp, tmp / "out.tar.xz")
+
+        # Sorted within each directory, directories visited in sorted order.
+        # The exact sequence matters less than it being pinned: creation order
+        # and filesystem iteration order must not leak into the archive.
+        self.assertEqual(names, ["pkg/a.txt", "pkg/sub", "pkg/z.txt", "pkg/sub/m.txt"])
+
+    def test_same_tree_archives_identically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write_tree(tmp)
+
+            first = tmp / "first.tar.xz"
+            with open_archive_for_write(first, "xz") as tf:
+                add_tree(tf, tmp / "pkg", relative_to=tmp)
+
+            # Simulate the same content produced by a later build.
+            for p in (tmp / "pkg").rglob("*"):
+                os.utime(p, (1700000000, 1700000000))
+
+            second = tmp / "second.tar.xz"
+            with open_archive_for_write(second, "xz") as tf:
+                add_tree(tf, tmp / "pkg", relative_to=tmp)
+
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    def test_member_metadata_is_normalized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write_tree(tmp)
+            archive = tmp / "out.tar.xz"
+            with open_archive_for_write(archive, "xz") as tf:
+                add_tree(tf, tmp / "pkg", relative_to=tmp)
+            with open_archive_for_read(archive) as tf:
+                members = tf.getmembers()
+
+        self.assertTrue(members)
+        for member in members:
+            self.assertEqual(member.mtime, 0, member.name)
+            self.assertEqual(member.uid, 0, member.name)
+            self.assertEqual(member.gid, 0, member.name)
+
+    def test_reports_added_members(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self._write_tree(tmp)
+            added = []
+            with open_archive_for_write(tmp / "out.tar.xz", "xz") as tf:
+                add_tree(tf, tmp / "pkg", relative_to=tmp, on_add=added.append)
+
+        self.assertIn("pkg/a.txt", [name.replace(os.sep, "/") for name in added])
 
 
 class ErrorHandlingTest(unittest.TestCase):
