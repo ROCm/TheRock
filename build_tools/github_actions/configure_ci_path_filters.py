@@ -618,6 +618,43 @@ def _get_pr_files_via_api(
     return None
 
 
+# GitHub workflow files that are used by CI workflows. Changes to any of
+# these trigger CI runs. This is an explicit list (not glob patterns) so that
+# unrelated workflows are never accidentally included.
+#
+# This list is maintained manually and a unit test verifies that every
+# workflow transitively called by multi_arch_ci.yml is listed here.
+#
+# TODO: Compute this set dynamically by scanning workflow files for
+# ``uses: ./.github/workflows/...`` references instead of maintaining it
+# by hand.
+_GITHUB_WORKFLOWS_CI_FILENAMES = {
+    "build_portable_linux_python_packages.yml",
+    "build_windows_python_packages.yml",
+    "manifest-diff.yml",
+    "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_portable_linux_artifacts.yml",
+    "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
+    "multi_arch_build_linux_jax_wheels_ci.yml",
+    "multi_arch_build_portable_linux.yml",
+    "multi_arch_build_windows_artifacts.yml",
+    "multi_arch_build_windows_pytorch_wheels_ci.yml",
+    "multi_arch_build_windows.yml",
+    "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "resolve-docker-images.yml",
+    "multi_arch_ci_linux.yml",
+    "multi_arch_ci_windows.yml",
+    "multi_arch_ci.yml",
+    "setup_multi_arch.yml",
+    "test_artifacts_structure.yml",
+    "test_artifacts.yml",
+    "test_component.yml",
+    "test_multi_arch_linux_jax_wheels.yml",
+    "test_native_linux_packages_install.yml",
+    "test_rocm_wheels.yml",
+}
+
+
 # ============================================================================
 # Private Helper Functions
 # ============================================================================
