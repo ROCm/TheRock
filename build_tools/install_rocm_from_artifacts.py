@@ -26,6 +26,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
+    [--hipfile | --no-hipfile]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -33,16 +34,23 @@ python build_tools/install_rocm_from_artifacts.py
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
+    [--rocshmem | --no-rocshmem]
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocjitsu | --no-rocjitsu]
+    [--mirage | --no-mirage]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocprofiler-systems-examples | --no-rocprofiler-systems-examples]
     [--rocrtst | --no-rocrtst]
+    [--rocalution | --no-rocalution]
+    [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
+    [--rpp | --no-rpp]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
+    [--hipthreads | --no-hipthreads]
     [--tests | --no-tests]
     [--base-only]
 
@@ -57,7 +65,7 @@ Examples:
         --tests
     ```
 - Downloads and unpacks the version `6.4.0rc20250416` gfx110X artifacts from
-  release tag `nightly-tarball` to the specified output directory `build`:
+  the multi-arch nightly tarball index to the specified output directory `build`:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
@@ -121,6 +129,7 @@ from botocore.config import Config
 from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
+from _therock_utils.s3_buckets import get_release_bucket_config
 from pathlib import Path
 import platform
 import re
@@ -131,17 +140,25 @@ import tarfile
 from typing import Optional
 
 PLATFORM = platform.system().lower()
+NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
+DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
+MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
 s3_client = boto3.client(
     "s3",
-    verify=False,
+    region_name=NIGHTLY_TARBALL_BUCKET.region,
     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
 )
-# S3 bucket names for TheRock releases.
-# NOTE: These buckets will be restricted to CloudFront-only access in the future.
-# When that happens, direct S3 API calls (list_objects, download_fileobj) will fail
-# and this script will need to be updated to use CloudFront URLs instead.
-NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
-DEV_BUCKET_NAME = "therock-dev-tarball"
+
+# A published tarball name has a structured version suffix, so this pattern
+# can unambiguously separate hyphenated artifact groups from their version.
+MULTIARCH_TARBALL_VERSION_PATTERN = r"\d+\.\d+\.\d+(?:(?:a|rc)\d{8}|\.dev0\+[0-9a-f]+)?"
+MULTIARCH_TARBALL_NAME_PATTERN = re.compile(
+    r"^therock-dist-"
+    r"(?P<platform>linux|windows)-"
+    r"(?P<artifact_group>.+)-"
+    rf"(?P<version>{MULTIARCH_TARBALL_VERSION_PATTERN})"
+    r"\.tar\.gz$"
+)
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -159,33 +176,58 @@ def parse_nightly_version(version: str) -> Optional[datetime]:
 def extract_version_from_asset_name(
     asset_name: str, artifact_group: str, platform_str: str
 ) -> Optional[str]:
-    """
-    Extract version string from asset name.
-    E.g., 'therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz' -> '7.11.0a20251124'
-    """
-    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
-    suffix = ".tar.gz"
-    if asset_name.startswith(prefix) and asset_name.endswith(suffix):
-        return asset_name[len(prefix) : -len(suffix)]
-    return None
+    """Extract a release version from a published multi-arch tarball name."""
+    match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
+    if (
+        match is None
+        or match["platform"] != platform_str
+        or match["artifact_group"] != artifact_group
+        or match["artifact_group"].endswith("-tests")
+    ):
+        return None
+    return match["version"]
+
+
+def _multiarch_tarball_s3_key(asset_name: str) -> str:
+    """Return the S3 key for a published multi-arch tarball."""
+    return f"{MULTIARCH_TARBALL_S3_PREFIX}/{asset_name}"
+
+
+def _multiarch_tarball_asset_name(s3_key: str) -> Optional[str]:
+    """Return the asset name from a published multi-arch tarball S3 key."""
+    key_prefix = f"{MULTIARCH_TARBALL_S3_PREFIX}/"
+    if not s3_key.startswith(key_prefix):
+        return None
+    return s3_key.removeprefix(key_prefix)
+
+
+def _list_multiarch_nightly_tarball_objects(platform_str: str):
+    """Yield nightly multi-arch tarball objects for a target platform."""
+    prefix = _multiarch_tarball_s3_key(f"therock-dist-{platform_str}-")
+    paginator = s3_client.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=NIGHTLY_TARBALL_BUCKET.name, Prefix=prefix):
+        yield from page.get("Contents", [])
 
 
 def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
     """
-    Query S3 to find all GPU families that have nightly releases.
+    Query S3 to find all GPU families with multi-arch nightly releases.
     Useful for error messages when an invalid GPU family is specified.
     """
-    prefix = f"therock-dist-{platform_str}-"
-
-    paginator = s3_client.get_paginator("list_objects_v2")
     families: set[str] = set()
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
-            match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
-            if match:
-                families.add(match.group(1))
+    for obj in _list_multiarch_nightly_tarball_objects(platform_str):
+        asset_name = _multiarch_tarball_asset_name(obj["Key"])
+        if asset_name is None:
+            continue
+        match = MULTIARCH_TARBALL_NAME_PATTERN.fullmatch(asset_name)
+        if (
+            match
+            and match["platform"] == platform_str
+            and not match["artifact_group"].endswith("-tests")
+        ):
+            families.add(match["artifact_group"])
 
     return families
 
@@ -195,35 +237,32 @@ def _fetch_and_sort_nightly_releases(
     platform_str: str = PLATFORM,
 ) -> list[dict]:
     """
-    Fetch and sort nightly releases from S3 bucket for a given artifact group.
+    Fetch and sort multi-arch nightly releases from S3.
 
     Returns:
         List of dicts with keys: version, asset_name, last_modified, size, parsed_date
         Sorted by recency (newest first).
     """
-    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
-
-    paginator = s3_client.get_paginator("list_objects_v2")
     releases: list[dict] = []
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if not key.endswith(".tar.gz"):
-                continue
-            version = extract_version_from_asset_name(key, artifact_group, platform_str)
-            if version:
-                releases.append(
-                    {
-                        "version": version,
-                        "asset_name": key,
-                        "last_modified": obj["LastModified"],
-                        "size": obj["Size"],
-                        "parsed_date": parse_nightly_version(version),
-                    }
-                )
+    for obj in _list_multiarch_nightly_tarball_objects(platform_str):
+        asset_name = _multiarch_tarball_asset_name(obj["Key"])
+        if asset_name is None:
+            continue
+        version = extract_version_from_asset_name(
+            asset_name, artifact_group, platform_str
+        )
+        if version:
+            releases.append(
+                {
+                    "version": version,
+                    "asset_name": asset_name,
+                    "last_modified": obj["LastModified"],
+                    "size": obj["Size"],
+                    "parsed_date": parse_nightly_version(version),
+                }
+            )
 
-    # Sort by parsed date (newest first), falling back to last_modified
     releases.sort(
         key=lambda x: (
             x["parsed_date"] if x["parsed_date"] else datetime.min,
@@ -231,7 +270,6 @@ def _fetch_and_sort_nightly_releases(
         ),
         reverse=True,
     )
-
     return releases
 
 
@@ -240,7 +278,7 @@ def discover_latest_release(
     platform_str: str = PLATFORM,
 ) -> Optional[tuple[str, str]]:
     """
-    Query S3 bucket to find the latest nightly release for given artifact group.
+    Query S3 to find the latest multi-arch nightly release for an artifact group.
 
     Returns:
         Tuple of (version_string, full_asset_name) or None if not found.
@@ -262,7 +300,7 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir)
+        extracted_tar_file.extractall(output_dir, filter="tar")
     destination.unlink()
 
 
@@ -281,19 +319,19 @@ def _create_output_directory(output_dir: Path):
     log(f"Created output directory '{output_dir.resolve()}'")
 
 
-def _retrieve_s3_release_assets(
-    release_bucket, artifact_group, release_version, output_dir
-):
-    """
-    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
-    """
-    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+def _retrieve_multiarch_tarball(
+    release_bucket: str,
+    asset_name: str,
+    output_dir: Path,
+) -> None:
+    """Download a multi-arch tarball from S3, then extract it."""
+    s3_key = _multiarch_tarball_s3_key(asset_name)
     destination = output_dir / asset_name
+    log(f"Downloading s3://{release_bucket}/{s3_key}")
 
-    with open(destination, "wb") as f:
-        s3_client.download_fileobj(release_bucket, asset_name, f)
+    with open(destination, "wb") as file:
+        s3_client.download_fileobj(release_bucket, s3_key, file)
 
-    # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
 
 
@@ -339,6 +377,7 @@ def retrieve_artifacts_by_run_id(args):
         "core-hipinfo_run",
         "core-runtime_run",
         "core-runtime_lib",
+        "rocjitsu-hotswap_lib",
         "sysdeps_lib",
         "base_run",
         "base_lib",
@@ -366,24 +405,32 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
+            args.hipfile,
             args.miopen,
             args.miopenprovider,
+            args.hiptensor,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
             args.mpi,
             args.rand,
             args.rccl,
+            args.rocshmem,
             args.rocdecode,
             args.rocjpeg,
             args.rocjitsu,
+            args.mirage,
             args.rocprofiler_compute,
             args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.rocalution,
+            args.kfdtest,
             args.rocwmma,
+            args.rpp,
             args.libhipcxx,
+            args.hipthreads,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -406,6 +453,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("mpfr")
             extra_artifacts.append("expat")
             extra_artifacts.append("ncurses")
+            # rocgdb tests require amd-llvm_dev for compiler headers/tools.
+            argv.append("amd-llvm_dev")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -420,8 +469,13 @@ def retrieve_artifacts_by_run_id(args):
             # --test-engine; without _run, ctest finds the entry but errors with
             # "Unable to find executable: ../hipdnn_integration_tests".
             argv.append("hipdnn-integration-tests_run")
+            # The test binaries link librocrand.
+            argv.append("rand_lib")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
+        if args.hipfile:
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -432,6 +486,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.hipkernelprovider:
             extra_artifacts.append("hipkernelprovider")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -455,6 +511,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocjitsu:
             extra_artifacts.append("rocjitsu")
             argv.append("rocjitsu_run")
+        if args.mirage:
+            extra_artifacts.append("mirage")
+            argv.append("mirage_run")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -463,6 +522,16 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocshmem:
+            extra_artifacts.append("rocshmem")
+            # The functional test binary (bin/rocshmem_functional_tests) and
+            # bin/rocshmem_info live in the _run component; the install-tree
+            # CTestTestfile.cmake references them via relative paths.
+            argv.append("rocshmem_run")
+            # rocSHMEM tests launch via mpirun and link against TheRock's
+            # vendored OpenMPI, so pull it (with its run component for mpiexec).
+            extra_artifacts.append("openmpi")
+            argv.append("openmpi_run")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
             extra_artifacts.append("aqlprofile")
@@ -487,14 +556,59 @@ def retrieve_artifacts_by_run_id(args):
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
             extra_artifacts.append("sysdeps-hwloc")
             extra_artifacts.append("sysdeps-libpciaccess")
+        if args.rocalution:
+            extra_artifacts.append("rocalution")
+            argv.append("rocalution_dev")
+        if args.kfdtest:
+            extra_artifacts.append("kfdtest")
+            # kfdtest depends on llvm-dev
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.rpp:
+            extra_artifacts.append("rpp")
+            # test_rpp.py compiles the test suite against the installed tree,
+            # so the _lib expansion below is not sufficient:
+            #   rpp_dev      - lib/cmake/rpp for find_package(rpp), plus headers.
+            #   base_dev     - include/half/half.hpp, which api/rppdefs.h
+            #                  includes to define Rpp16f.
+            #   amd-llvm_dev - lib/llvm/lib/cmake/AMDDeviceLibs. rpp-config.cmake
+            #                  calls find_dependency(HIP), and hip-config-amd.cmake
+            #                  in turn resolves AMDDeviceLibs through the
+            #                  lib/cmake/AMDDeviceLibs shim in base_lib.
+            argv.append("rpp_dev")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
+        if args.hipthreads:
+            extra_artifacts.append("hipthreads")
+            # hipthreads ships a static library (libhipthreads.a) and headers in
+            # its _dev component, and its lit suite includes the libhipcxx
+            # headers, so both _dev artifacts are required at test time.
+            argv.append("hipthreads_dev")
+            argv.append("core-hip_run")
+            extra_artifacts.append("libhipcxx")
+            argv.append("libhipcxx_dev")
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
+            argv.append("base_dev_generic")
+            if args.prim:
+                # The hipthreads example apps link roc::rocthrust and call
+                # find_package(rocthrust/rocprim CONFIG); those headers and
+                # CMake package configs live in prim's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("prim_dev")
+            if args.rand:
+                # The InOneWeekend example includes <hiprand/hiprand.hpp>; the
+                # hipRAND/rocRAND headers live in rand's _dev component (the
+                # extra_artifacts expansion below only pulls _lib/_test).
+                argv.append("rand_dev")
 
         # Fetch _lib (always) and _test (when --tests) for each artifact.
         # Some projects have self-contained _test archives (just test
@@ -521,40 +635,40 @@ def retrieve_artifacts_by_release(args):
     """
     output_dir = args.output_dir
     artifact_group = args.artifact_group
-    # Determine if version is nightly-tarball or dev-tarball
-    nightly_regex_expression = (
-        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)(a|rc)(\\d{4})(\\d{2})(\\d{2})"
-    )
-    dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
-    nightly_release = re.search(nightly_regex_expression, args.release) != None
-    dev_release = re.search(dev_regex_expression, args.release) != None
+    nightly_regex_expression = r"\d+\.\d+\.\d+(?:a|rc)\d{8}"
+    dev_regex_expression = r"\d+\.\d+\.\d+\.dev0\+[0-9a-f]+"
+    nightly_release = re.fullmatch(nightly_regex_expression, args.release) is not None
+    dev_release = re.fullmatch(dev_regex_expression, args.release) is not None
     if not nightly_release and not dev_release:
-        log("This script requires a nightly-tarball or dev-tarball version.")
+        log("This script requires a nightly or dev release version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            "\t - https://rocm.nightlies.amd.com/tarball-multi-arch/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
-            "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            "\t - https://rocm.devreleases.amd.com/tarball-multi-arch/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
         )
         log("Exiting...")
         return
 
-    release_bucket = NIGHTLY_BUCKET_NAME if nightly_release else DEV_BUCKET_NAME
     release_version = args.release
+    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+    release_bucket = NIGHTLY_TARBALL_BUCKET if nightly_release else DEV_TARBALL_BUCKET
+    release_kind = "nightly" if nightly_release else "dev"
 
-    log(f"Retrieving artifacts from release bucket {release_bucket}")
-
+    log(
+        f"Retrieving {release_kind} multi-arch artifacts from "
+        f"s3://{release_bucket.name}/{MULTIARCH_TARBALL_S3_PREFIX}/"
+    )
     if args.dry_run:
-        asset_name = (
-            f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+        log(
+            f"[DRY RUN] Would download: s3://{release_bucket.name}/"
+            f"{_multiarch_tarball_s3_key(asset_name)} "
+            f"(asset {asset_name}, version {release_version})"
         )
-        log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
         return
 
-    _retrieve_s3_release_assets(
-        release_bucket, artifact_group, release_version, output_dir
-    )
+    _retrieve_multiarch_tarball(release_bucket.name, asset_name, output_dir)
 
 
 def retrieve_artifacts_by_input_dir(args):
@@ -590,7 +704,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 def retrieve_artifacts_by_latest_release(args):
     """
-    Find and retrieve the latest nightly release from S3.
+    Find and retrieve the latest multi-arch nightly release from S3.
     """
     log(f"Finding latest nightly release for {args.artifact_group}...")
 
@@ -599,7 +713,7 @@ def retrieve_artifacts_by_latest_release(args):
     if result is None:
         log(f"ERROR: No nightly release found for '{args.artifact_group}'")
         log("")
-        log("Available GPU families in the nightly bucket:")
+        log("Available GPU families in the multi-arch nightly bucket:")
         available = list_available_nightly_gpu_families()
         for family in sorted(available):
             log(f"  - {family}")
@@ -612,12 +726,10 @@ def retrieve_artifacts_by_latest_release(args):
         log(f"[DRY RUN] Would download: {asset_name} (version {version})")
         return
 
-    # Reuse existing download logic
-    _retrieve_s3_release_assets(
-        release_bucket=NIGHTLY_BUCKET_NAME,
-        artifact_group=args.artifact_group,
-        release_version=version,
-        output_dir=args.output_dir,
+    _retrieve_multiarch_tarball(
+        NIGHTLY_TARBALL_BUCKET.name,
+        asset_name,
+        args.output_dir,
     )
 
 
@@ -669,7 +781,7 @@ def main(argv):
     group.add_argument(
         "--release",
         type=str,
-        help="Release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
+        help="Release version of TheRock to install, from the multi-arch nightly tarball index (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
     )
 
     group.add_argument(
@@ -735,6 +847,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hipfile",
+        default=False,
+        help="Include 'hipfile' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--miopen",
         default=False,
         help="Include 'miopen' artifacts",
@@ -756,6 +875,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocdecode",
         default=False,
         help="Include 'rocdecode' artifacts",
@@ -773,6 +899,13 @@ def main(argv):
         "--rocjitsu",
         default=False,
         help="Include 'rocjitsu' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mirage",
+        default=False,
+        help="Include 'mirage' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -801,6 +934,13 @@ def main(argv):
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocshmem",
+        default=False,
+        help="Include 'rocshmem' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -847,6 +987,20 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--rocalution",
+        default=False,
+        help="Include 'rocalution' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--kfdtest",
+        default=False,
+        help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
@@ -854,9 +1008,23 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--rpp",
+        default=False,
+        help="Include 'rpp' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipthreads",
+        default=False,
+        help="Include 'hipthreads' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

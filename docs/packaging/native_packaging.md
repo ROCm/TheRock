@@ -50,9 +50,9 @@ the names are updated to use -dev.
 
 ## RPATH Packages
 
-The RUNPATH in binaries and libraries will be replaced with RPATH if
-the --rpath-pkg option is enabled in the build arguments. This option creates
-only versioned packages
+By default, RUNPATH in binaries and libraries is converted to RPATH during
+packaging. This ensures proper library loading behavior. To keep RUNPATH
+instead, use the `--runpath-pkg` option.
 
 ## Fields in package.json
 
@@ -93,7 +93,34 @@ Optional Fields
 
 The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py` and `build_tools/packaging/linux/upload_package_repo.py`.
 
-### GFX Specific Packages
+### Current Multi-Arch Release Packages
+
+Final multi-arch release packages are published under the ROCm Core product
+hierarchy. This layout starts with ROCm 10.1 nightlies and ROCm 10.0 stable
+releases. Earlier releases remain in the
+[legacy multi-arch release locations](legacy_multi_arch_releases.md).
+
+The `dev`, `nightly`, and BKC streams retain each run under a
+`YYYYMMDD-<run-id>` directory. Prerelease publication updates the fixed `rc`
+repository prefix.
+
+| Release type                 | Final bucket                    | S3 prefix                                          | Public repository parent                                        |
+| ---------------------------- | ------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
+| **dev**                      | `therock-repo-amd-dev-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://dev.repo.amd.com/rocm/core/packages/<os-profile>/`     |
+| **nightly**                  | `therock-repo-amd-nightly-core` | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://nightly.repo.amd.com/rocm/core/packages/<os-profile>/` |
+| **prerelease**               | `therock-repo-amd-rc-core`      | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://rc.repo.amd.com/rocm/core/packages/<os-profile>/`      |
+| **dev-bkc**, **nightly-bkc** | `therock-repo-amd-bkc-core`     | `v5/rocm/core/packages/{deb,rpm}/<date>-<run-id>/` | `https://bkc.repo.amd.com/rocm/core/packages/<os-profile>/`     |
+| **release**                  | Manually promoted               | `v5/rocm/core/packages/{deb,rpm}/`                 | `https://stable.repo.amd.com/rocm/core/packages/<os-profile>/`  |
+
+ASAN package repositories use the parallel `packages-asan` parent. RPM
+repository URLs append `x86_64/` below the selected run directory or OS
+profile.
+
+### Legacy GFX-Specific Package Publication
+
+The table below documents the legacy per-family publication layout. These URLs
+remain valid for historical releases and must not be rewritten to the current
+product layout.
 
 | Release Type                       | S3 Bucket                       | S3 Prefix                                                                                                         | DEB Install URL                                                                                                      | RPM Install URL                                                                                                              |
 | ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -104,10 +131,12 @@ The following table shows the S3 bucket configuration and public repository URLs
 | **ci** (ROCm/TheRock)<br>*DEFAULT* | `therock-ci-artifacts`          | `{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `12345678-linux/packages/deb`                          | `https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/{artifact_id}-{platform}/packages/deb`                      | `https://therock-ci-artifacts.s3.us-east-2.amazonaws.com/{artifact_id}-{platform}/packages/rpm/x86_64/`                      |
 | **ci** (Fork/External)             | `therock-ci-artifacts-external` | `{repo_name}/{artifact_id}-{platform}/packages/{pkg_type}`<br>Example: `someone-fork/12345678-linux/packages/deb` | `https://therock-ci-artifacts-external.s3.us-east-2.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/deb` | `https://therock-ci-artifacts-external.s3.us-east-2.amazonaws.com/{repo_name}/{artifact_id}-{platform}/packages/rpm/x86_64/` |
 
-### Multi-Arch Packages
+### Multi-Arch Artifact Handoff
 
-For dev/nightly/prerelease/release builds, multi-arch packages are uploaded to a separate artifacts bucket.
-For CI builds (default, fork, external), the same bucket and prefix as GFX arch packages are used.
+Before final publication, multi-arch packages are uploaded to a separate
+artifact bucket. For CI builds (default, fork, external), the same bucket and
+prefix as GFX-specific packages are used. These artifact locations remain
+unchanged by the final `repo.amd.com` product layout.
 
 | Release Type                       | Multi-Arch S3 Bucket            | Multi-Arch S3 Prefix                                                                                              |
 | ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -236,7 +265,7 @@ Debian package with explicit target:<br>
    --pkg-type deb
 ```
 
-Debian RPATH package with auto-detected architectures:<br>
+Debian package with RUNPATH preserved (skip RPATH conversion):<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
@@ -245,18 +274,5 @@ Debian RPATH package with auto-detected architectures:<br>
    --rocm-version 7.1.0 \
    --pkg-type deb \
    --version-suffix build_type \
-   --rpath-pkg
-```
-
-Debian RPATH package with explicit target:<br>
-
-```bash
-./build_tools/packaging/linux/build_package.py \
-   --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
-   --dest-dir ./OUTPUT_PKG \
-   --rocm-version 7.1.0 \
-   --pkg-type deb \
-   --version-suffix build_type \
-   --rpath-pkg
+   --runpath-pkg
 ```

@@ -23,7 +23,7 @@ class TestComputeCacheType(unittest.TestCase):
     def _run(self, cache_type, repo="ROCm/TheRock", is_fork=False):
         with mock.patch.object(
             compute_pytorch_cache_type,
-            "_is_current_run_pr_from_fork",
+            "is_current_run_pr_from_fork",
             return_value=is_fork,
         ):
             return compute_cache_type(cache_type, repo)
@@ -47,10 +47,10 @@ class TestComputeCacheType(unittest.TestCase):
         self.assertEqual(self._run("none", is_fork=True), "none")
 
     def test_fork_check_skipped_when_not_sccache(self):
-        # _is_current_run_pr_from_fork must not even be consulted for ccache/none.
+        # is_current_run_pr_from_fork must not even be consulted for ccache/none.
         with mock.patch.object(
             compute_pytorch_cache_type,
-            "_is_current_run_pr_from_fork",
+            "is_current_run_pr_from_fork",
             side_effect=AssertionError("should not be called"),
         ):
             self.assertEqual(compute_cache_type("ccache", "ROCm/TheRock"), "ccache")
@@ -66,7 +66,7 @@ class TestMain(unittest.TestCase):
             env = {"GITHUB_REPOSITORY": repo, "GITHUB_OUTPUT": str(out)}
             with mock.patch.dict(os.environ, env), mock.patch.object(
                 compute_pytorch_cache_type,
-                "_is_current_run_pr_from_fork",
+                "is_current_run_pr_from_fork",
                 return_value=is_fork,
             ):
                 main(["--cache-type", cache_type])

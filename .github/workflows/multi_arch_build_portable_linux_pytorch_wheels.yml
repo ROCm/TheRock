@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Reusable multi-arch build variant of build_portable_linux_pytorch_wheels_ci.yml.
+# Reusable multi-arch PyTorch build workflow for Linux.
 #
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
@@ -10,9 +10,11 @@
 #     triton, and apex in a single invocation.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
-#     torchaudio, triton, and apex ship as-is.
-#   - Upload the result to s3://therock-{release_type}-python/v4/whl/
-#     (server-side indexing handles the index page).
+#     other packages ship as-is (nothing to split).
+#   - Upload the result to s3://therock-repo-amd-<stream>-pytorch/
+#     under v5/rocm/pytorch/whl-next/
+#     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
+#     happens server-side).
 #
 # For convergence with CI and testing plans see:
 # * https://github.com/ROCm/TheRock/issues/3332
@@ -45,14 +47,24 @@ on:
         description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
         type: string
         required: true
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
+        type: string
+        default: ""
       release_type:
         description: 'Release type; selects the S3 bucket.'
         type: string
@@ -69,6 +81,23 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+      run_full_pytorch_tests:
+        description: >-
+          Dispatch the full PyTorch test suite after a successful build.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
+        type: boolean
+        default: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -90,17 +119,34 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.12"
+        default: "release/2.13"
+      pytorch_gitrepo_origin:
+        description: >-
+          Optional PyTorch git origin override (for example, a fork URL for
+          pre-merge testing). Defaults to ROCm/pytorch for stable refs.
+        type: string
+        default: ""
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
       rocm_package_find_links_url:
-        description: URL for pip --find-links to install ROCm packages
+        description: >-
+          URL for pip --find-links to install ROCm packages (flat page). Set
+          either this or rocm_package_index_url to override the ROCm package
+          source; leave both blank to use the nightly repo.amd.com aggregate index.
         type: string
-        required: true
+        default: ""
+      rocm_package_index_url:
+        description: >-
+          URL for pip --index-url to install ROCm packages (PEP 503 index).
+          Set either this or rocm_package_find_links_url to override the ROCm
+          package source; leave both blank to use the nightly repo.amd.com aggregate
+          index.
+        type: string
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
@@ -108,11 +154,17 @@ on:
           - dev
         default: dev
       repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        description: >-
+          TheRock repository to check out the build scripts/workflow from (NOT
+          the PyTorch source). Leave blank to use this repository. To build a
+          different PyTorch branch, set pytorch_git_ref instead.
         type: string
         default: ""
       ref:
-        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        description: >-
+          Branch, tag, or SHA of TheRock (the repository above) to check out.
+          Leave blank to use the triggering ref. This does NOT select the
+          PyTorch source ref; use pytorch_git_ref for that.
         type: string
         default: ""
       cache_type:
@@ -123,6 +175,23 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+      run_full_pytorch_tests:
+        description: >-
+          Dispatch the full PyTorch test suite after a successful build.
+          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
+        type: boolean
+        default: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Build Multi-Arch Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -132,18 +201,22 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
     permissions:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
-      options: -v /runner/config:/home/awsconfig/
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: "therock-pytorch-sccache-${{ inputs.release_type }}"
+      # TODO: Move the sccache bucket and IAM role mapping into a shared script.
+      SCCACHE_BUCKET: >-
+        ${{
+          inputs.release_type == 'dev-bkc' && 'therock-pytorch-sccache-dev'
+          || inputs.release_type == 'nightly-bkc' && 'therock-pytorch-sccache-nightly'
+          || format('therock-pytorch-sccache-{0}', inputs.release_type)
+        }}
       SCCACHE_REGION: us-east-1
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
@@ -157,9 +230,21 @@ jobs:
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       triton_version: ${{ steps.pytorch-versions.outputs.triton_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
+      - name: "Quartz - started - build PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -189,6 +274,7 @@ jobs:
 
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        timeout-minutes: 30
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
@@ -207,9 +293,14 @@ jobs:
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        timeout-minutes: 30
         run: |
+          pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
+          if [ -z "${pytorch_origin}" ]; then
+            pytorch_origin="https://github.com/ROCm/pytorch.git"
+          fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag ${{ inputs.pytorch_git_ref }} \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
@@ -233,10 +324,15 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          role-to-assume: >-
+            ${{
+              inputs.release_type == 'dev-bkc' && 'arn:aws:iam::324352301041:role/therock-dev'
+              || inputs.release_type == 'nightly-bkc' && 'arn:aws:iam::324352301041:role/therock-nightly'
+              || format('arn:aws:iam::324352301041:role/therock-{0}', inputs.release_type)
+            }}
           # Multi-package PyTorch builds can exceed the default 1h credential
           # window; the role's MaxSessionDuration must be >= this value.
           role-duration-seconds: 21600
@@ -257,6 +353,16 @@ jobs:
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       - name: Build PyTorch wheels
+        # Default to the nightly repo.amd.com aggregate ROCm index when neither source is
+        # provided so a bare manual dispatch works; setting either input
+        # overrides it. The default is applied here rather than on the input
+        # because GitHub reverts an emptied input back to its declared default,
+        # which would make the two inputs impossible to use exclusively.
+        env:
+          # Use the index if given; else the find-links page; else default to
+          # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
+          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cache_flag=""
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
@@ -265,13 +371,20 @@ jobs:
             cache_flag="--use-ccache"
           fi
 
+          # build_prod_wheels.py forwards each of these to pip and ignores an
+          # empty value, so pass both and supply whichever source applies:
+          # --index-url for a PEP 503 index, --find-links for a flat page.
+          # --release-type lets the script tag dev builds' torch version with
+          # the torch source commit (e.g. 2.12.0a0+git1a2b3c4d.rocm7.10.0).
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --find-links "${{ inputs.rocm_package_find_links_url }}" \
+            --index-url="${ROCM_INDEX_URL}" \
+            --find-links="${ROCM_FIND_LINKS}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${cache_flag} \
+            --release-type="${{ inputs.release_type }}" \
             --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} \
             ${{ env.optional_build_prod_arguments }}
 
@@ -309,6 +422,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as
@@ -358,16 +474,23 @@ jobs:
             --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_artifacts_credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
+          product: pytorch
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}"
+            --release-type="${{ inputs.release_type }}" \
+            --structured
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests
@@ -377,20 +500,36 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Configure PyTorch test matrix
         id: configure
+        env:
+          CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
             --platform linux
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
 
   test_pytorch_wheels:
     name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
@@ -402,6 +541,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_pytorch_tests.outputs.matrix) }}
     uses: ./.github/workflows/test_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -412,6 +552,76 @@ jobs:
       # checkout_from_manifest.py --no-hipify --no-submodules so tests use the
       # exact source commit that produced the package under test.
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
-      multi_arch: true
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+
+  # Dispatch the full PyTorch test suite for this exact build. Because this
+  # workflow builds a single (python_version, pytorch_git_ref), the build job's
+  # torch_version output is unambiguous and only this build's success gates the
+  # dispatch -- a failure for one ref no longer skips testing the others (#5777).
+  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
+  dispatch_pytorch_wheels_full_test:
+    name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
+    if: >-
+      ${{
+        inputs.run_full_pytorch_tests &&
+        inputs.python_version == '3.12' &&
+        contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
+      }}
+    needs: [build_pytorch_wheels]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    env:
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+    steps:
+      - name: Check full test cadence
+        id: cadence
+        # Release branches test daily; the nightly branch tests weekly (Sunday).
+        run: |
+          if [ "${PYTORCH_GIT_REF}" != "nightly" ] || [ "$(date -u +%u)" = "7" ]; then
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch full PyTorch test workflow
+        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: test_pytorch_wheels_full.yml
+          inputs: |
+            { "amdgpu_family": "gfx94X-dcgpu",
+              "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+              "test_runs_on_multi_gpu": "linux-gfx942-8gpu-ossci-rocm",
+              "package_index_url": "${{ needs.build_pytorch_wheels.outputs.package_index_url }}",
+              "python_version": "${{ inputs.python_version }}",
+              "torch_version": "${{ needs.build_pytorch_wheels.outputs.torch_version }}",
+              "pytorch_git_ref": "${{ inputs.pytorch_git_ref }}",
+              "pytorch_git_repo": "${{ inputs.pytorch_git_ref == 'nightly' && 'pytorch/pytorch' || 'ROCm/pytorch' }}",
+              "test_configs": "default distributed inductor",
+              "tests_to_include": "",
+              "repository": "${{ inputs.repository || github.repository }}",
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
+            }
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels, dispatch_pytorch_wheels_full_test]
+    name: "Quartz - completed - build PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - build PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

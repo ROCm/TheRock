@@ -31,15 +31,12 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
-      windows_hip_rocr_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
       release_type:
-        description: 'Release type: "ci" or "dev".'
+        description: 'Release type for the artifacts being tested.'
         type: choice
         options:
           - ci
@@ -51,6 +48,20 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: choice
+        options:
+          - release
+          - asan
+        default: release
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -78,9 +89,6 @@ on:
       run_extended_tests:
         type: string
         default: 'false'
-      windows_hip_rocr_tests:
-        type: string
-        default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
@@ -94,6 +102,13 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: string
+        default: "release"
+      quartz_tracking_id:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -101,7 +116,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.test_runs_on }})
+run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 
 jobs:
   configure_test_matrix:
@@ -115,19 +130,40 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
+      - name: "Quartz - started - test ROCm artifacts"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: test_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checking out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Checkout CI config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
       - name: Setting up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.12
 
       - name: "Determine test dependencies"
         id: test_deps
+        # Reads the committed consumer graph directly (no fetch/configure); kept
+        # in sync by test_consumer_graph_drift.yml.
         shell: bash
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
@@ -144,8 +180,9 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
-          WINDOWS_HIP_ROCR_TESTS: ${{ inputs.windows_hip_rocr_tests }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          CI_CONFIG_PATH: ci-config
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ contains(inputs.test_runs_on, 'windows') && 'windows' || 'linux' }}
@@ -154,17 +191,22 @@ jobs:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
     uses: './.github/workflows/test_component.yml'
+    secrets: inherit
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      test_runs_on: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
+      # For workflow_dispatch, honor the explicit test_runs_on input if provided.
+      # Otherwise, use the runner selected by fetch_test_configurations.py.
+      test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
@@ -193,19 +235,26 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   1. Benchmark components use the dedicated benchmark runner
-      #   2. Multi-GPU components use the multi-GPU runner
-      #   3. CPU-only components use standard GitHub runners (azure-linux-scale-rocm)
-      #   4. Per-component runner (set by fetch_test_configurations.py)
+      #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
+      #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
+      #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
+      #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
+      #   3. Benchmark components use the dedicated benchmark runner
+      #   4. CPU-only components use standard GitHub runners (aws-linux-scale-rocm-prod)
+      #   5. Per-component runner (set by fetch_test_configurations.py)
       test_runs_on: >-
         ${{
+          (github.event_name == 'workflow_dispatch' &&
+            !contains(github.actor, 'github-actions') &&
+            inputs.test_runs_on != '' &&
+            inputs.test_runs_on) ||
+          (matrix.components.multi_gpu_runner != '' &&
+            matrix.components.multi_gpu_runner) ||
           (matrix.components.is_benchmark == true &&
             inputs.benchmark_runs_on != '' &&
             inputs.benchmark_runs_on) ||
-          (matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner) ||
           (matrix.components.linux_cpu_runner == true &&
-            'azure-linux-scale-rocm') ||
+            'aws-linux-scale-rocm-prod') ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
@@ -213,3 +262,23 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      build_variant: ${{ inputs.build_variant }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [configure_test_matrix, test_sanity_check, test_components]
+    name: "Quartz - completed - test ROCm artifacts"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - test ROCm artifacts"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: test_artifacts.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

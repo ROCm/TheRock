@@ -73,18 +73,78 @@ Output structure:
     *.whl
 ```
 
+### Structured repo.amd.com packages
+
+Use `--structured` when candidates live in the product-owned (core, pytorch,
+jax, ...) repo.amd.com bucket layout:
+
+```text
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/whl-next/...
+s3://therock-repo-amd-<stream>-pytorch/v5/rocm/pytorch/whl-next/...
+s3://therock-repo-amd-<stream>-jax/v5/rocm/jax/whl-next/...
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/tarball/...
+s3://therock-repo-amd-<stream>-core/v5/rocm/core/tarball-asan/...
+```
+
+The local promotion layout remains flat:
+
+```text
+<output-dir>/
+  wheels/
+    *.whl
+    rocm-*.tar.gz
+  tarball/
+    therock-dist-*.tar.gz
+  tarball-asan/
+    therock-dist-*.tar.gz
+```
+
+Download structured `whl-next` packages from the `rc` stream:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --output-dir=./promotion/download/
+```
+
+Include normal ROCm Core tarballs:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --include-tarballs \
+  --tarball-variant=release \
+  --output-dir=./promotion/download/
+```
+
+Download ASAN tarballs instead:
+
+```bash
+python build_tools/packaging/download_python_packages.py \
+  --version=7.13.0rc1 \
+  --structured \
+  --repo-stream=rc \
+  --include-tarballs \
+  --tarball-variant=asan \
+  --output-dir=./promotion/download/
+```
+
 ## 2. Promote prerelease candidates to release
 
 Need:
 
-- `build_tools/packaging/promote_from_rc_to_final.py`
+- `build_tools/packaging/promote_packages.py`
 
 ```bash
 # TODO this needs a nicer wrapper
 # For each architecture (e.g., gfx1151, gfx950-dcgpu, etc.)
 for arch in ./promotion/download/*; do
    echo "Promoting packages in $arch"
-   python build_tools/packaging/promote_from_rc_to_final.py --input-dir="$arch" --delete-old-on-success
+   python build_tools/packaging/promote_packages.py --input-dir="$arch" --delete-old-on-success
 done
 ```
 
@@ -92,11 +152,88 @@ Or run manually for each arch-subdirectory
 
 ```bash
 # For python packages (repeat for each arch)
-python build_tools/packaging/promote_from_rc_to_final.py --input-dir=./promotion/download/<arch> --delete-old-on-success
+python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/<arch> --delete-old-on-success
 
 # For tarballs
-python build_tools/packaging/promote_from_rc_to_final.py --input-dir=./promotion/download/tarball --delete-old-on-success
+python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/tarball --delete-old-on-success
 ```
+
+### Promoting nightly (`a`) builds
+
+Nightlies carry an `a<YYYYMMDD>` prerelease segment (e.g. `7.13.0a20260501`).
+The promotion source defaults to `rc`; use `--src-version-type=a` to look for
+`a<YYYYMMDD>` instead. The destination defaults to `release` (strip the
+prerelease entirely) but can be overridden with `--dest-version`.
+
+```bash
+# Nightly -> release (e.g. 7.13.0a20260501 -> 7.13.0)
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<arch> \
+   --src-version-type=a \
+   --delete-old-on-success
+
+# Nightly -> RC (e.g. 7.13.0a20260501 -> 7.13.0rc1)
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<arch> \
+   --src-version-type=a \
+   --dest-version=rc1 \
+   --delete-old-on-success
+```
+
+`--dest-version` accepts `release`, `rc<N>` (e.g. `rc1`, `rc2`), or
+`a<YYYYMMDD>` (e.g. `a20260501`). The downstream RC -> release flow above is
+unchanged.
+
+### Multi-arch packages: restricting which gfx targets to ship
+
+Multi-arch aggregator wheels (`rocm`, `torch`, `torchvision`, …) reference
+several gfx targets via `Provides-Extra` / `Requires-Dist` entries, and the
+download directory may contain per-gfx wheels (`rocm_sdk_device_gfx1010-…`,
+`amd_torch_device_gfx1010-…`) for each of those targets.
+
+**Default behavior:** if `--multi-arch-targets` is not passed, no arch filtering
+is applied — multi-arch wheels are promoted unchanged with all their gfx targets
+intact, and every per-gfx wheel in the input directory is promoted.
+
+If a release should only ship a subset of those archs, pass
+`--multi-arch-targets`. This is a positive list: list the target "gfx"
+you want to keep, including for aotriton the sub-family kernels like "gfx11":
+
+```bash
+# Promote the version AND drop per-gfx wheels / aggregator entries for
+# archs not in the keep list.
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<multiarch> \
+   --multi-arch-targets=gfx1201,gfx1010 \
+   --delete-old-on-success
+```
+
+Effects of `--multi-arch-targets`:
+
+- Per-gfx wheels for non-kept archs are skipped (and deleted with
+  `--delete-old-on-success`).
+- Multi-arch aggregator wheels lose `Provides-Extra: device-gfx<N>` /
+  `Requires-Dist: ...-gfx<N>` entries for non-kept archs.
+- Multi-arch `_dist_info.py` loses matching `AVAILABLE_TARGET_FAMILIES`
+  entries; `DEFAULT_TARGET_FAMILY` is repointed at the first kept arch if it
+  referenced a dropped one. The same repoint happens for the bare
+  `extra == "device"` line in METADATA and the `[device]` section in
+  `requires.txt`.
+- Single-arch packages are detected automatically and pass through unchanged.
+
+To run *only* the arch trim (no version rewrite — e.g. you already have
+release-versioned multi-arch wheels and just want to narrow them), use
+`--skip-version-promotion`:
+
+```bash
+python build_tools/packaging/promote_packages.py \
+   --input-dir=./promotion/download/<multiarch> \
+   --skip-version-promotion \
+   --multi-arch-targets=gfx1201,gfx1010
+```
+
+`--skip-version-promotion` is mutually exclusive with `--src-version-type` /
+`--dest-version` and requires `--multi-arch-targets`.
 
 ## 3. Upload release packages
 
@@ -143,6 +280,35 @@ python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/
 
 # Upload only tarballs (no Python packages)
 python build_tools/packaging/upload_release_packages.py --input-dir ./promotion/download/ --no-upload-python --upload-tarballs --execute --use-release-buckets
+```
+
+### Structured repo.amd.com upload
+
+After promoting the flat local `wheels/`, `tarball/`, or `tarball-asan/`
+directories, upload back to the product-owned repo.amd.com buckets:
+
+```bash
+python build_tools/packaging/upload_release_packages.py \
+  --input-dir ./promotion/download/ \
+  --structured \
+  --repo-stream=rc \
+  --upload-tarballs \
+  --tarball-variant=release \
+  --execute \
+  --use-release-buckets
+```
+
+For ASAN tarballs:
+
+```bash
+python build_tools/packaging/upload_release_packages.py \
+  --input-dir ./promotion/download/ \
+  --structured \
+  --repo-stream=rc \
+  --upload-tarballs \
+  --tarball-variant=asan \
+  --execute \
+  --use-release-buckets
 ```
 
 ## 4. Update index files for the release bucket

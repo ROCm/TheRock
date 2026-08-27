@@ -141,8 +141,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocprim",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--resource-spec-file",
     resource_spec_file,
     # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)

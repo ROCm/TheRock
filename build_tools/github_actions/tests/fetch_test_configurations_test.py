@@ -1,11 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+
 from pathlib import Path
 import os
 import sys
 import json
 import unittest
+from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -25,6 +27,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._orig_get_all_families = (
             fetch_test_configurations.get_all_families_for_trigger_types
         )
+        # Snapshot the matrix keys so tests can inject temporary jobs and have
+        # them removed in tearDown.
+        self._orig_test_matrix_keys = set(fetch_test_configurations.test_matrix.keys())
 
         os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
         os.environ["TEST_TYPE"] = "full"
@@ -52,6 +57,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.get_all_families_for_trigger_types = (
             self._orig_get_all_families
         )
+        # Remove any temporary jobs injected by a test.
+        for key in list(fetch_test_configurations.test_matrix.keys()):
+            if key not in self._orig_test_matrix_keys:
+                del fetch_test_configurations.test_matrix[key]
 
     def _get_components(self):
         self.assertIn("components", self.gha_output)
@@ -68,6 +77,20 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertGreater(len(components), 0)
         for job in components:
             self.assertIn("linux", job["platform"])
+
+    def test_windows_jobs_selected(self):
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertGreater(len(components), 0)
+        for job in components:
+            self.assertIn("windows", job["platform"])
+
+    def test_rocprofiler_sdk_submits_to_cdash(self):
+        config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
+        self.assertIn("--enable-cdash", config["test_script"])
 
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
@@ -163,6 +186,97 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocroller", names)
 
     # -----------------------
+    # include_family / exclude_family matching
+    # -----------------------
+
+    def _inject_job(self, name, **extra):
+        """Register a temporary linux job and target only it via PROJECTS_TO_TEST."""
+        os.environ["PROJECTS_TO_TEST"] = name
+        fetch_test_configurations.test_matrix[name] = {
+            "job_name": name,
+            "platform": ["linux"],
+            "total_shards_dict": {"linux": 1},
+            **extra,
+        }
+
+    def _selected_names(self):
+        fetch_test_configurations.run()
+        return {job["job_name"] for job in self._get_components()}
+
+    def test_family_matches_by_group_string(self):
+        self.assertTrue(
+            fetch_test_configurations._family_matches(
+                ["gfx94X-dcgpu"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_by_gfx_target(self):
+        self.assertTrue(
+            fetch_test_configurations._family_matches(
+                ["gfx942"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_returns_false_when_absent(self):
+        self.assertFalse(
+            fetch_test_configurations._family_matches(
+                ["gfx1100"], "gfx94X-dcgpu", ["gfx942"]
+            )
+        )
+
+    def test_family_matches_empty_list_is_false(self):
+        self.assertFalse(
+            fetch_test_configurations._family_matches([], "gfx94X-dcgpu", ["gfx942"])
+        )
+
+    def test_include_family_matches_by_gfx_target(self):
+        self._inject_job("inc-match", include_family={"linux": ["gfx942"]})
+        self.assertIn("inc-match", self._selected_names())
+
+    def test_include_family_matches_by_group_string(self):
+        self._inject_job("inc-group", include_family={"linux": ["gfx94X-dcgpu"]})
+        self.assertIn("inc-group", self._selected_names())
+
+    def test_include_family_skips_when_not_listed(self):
+        self._inject_job("inc-miss", include_family={"linux": ["gfx1100"]})
+        self.assertNotIn("inc-miss", self._selected_names())
+
+    def test_include_family_for_other_platform_does_not_gate(self):
+        # An include list scoped to a different platform must not gate this one.
+        self._inject_job("inc-otherplat", include_family={"windows": ["gfx1100"]})
+        self.assertIn("inc-otherplat", self._selected_names())
+
+    def test_no_include_or_exclude_runs(self):
+        self._inject_job("plain")
+        self.assertIn("plain", self._selected_names())
+
+    def test_include_and_exclude_both_match_excludes_wins(self):
+        self._inject_job(
+            "inc-exc",
+            include_family={"linux": ["gfx942"]},
+            exclude_family={"linux": ["gfx942"]},
+        )
+        self.assertNotIn("inc-exc", self._selected_names())
+
+    def test_include_matches_and_exclude_does_not(self):
+        self._inject_job(
+            "inc-noexc",
+            include_family={"linux": ["gfx942"]},
+            exclude_family={"linux": ["gfx1100"]},
+        )
+        self.assertIn("inc-noexc", self._selected_names())
+
+    def test_corefile_included_on_gfx942(self):
+        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        self.assertIn("rocgdb-corefile", self._selected_names())
+
+    def test_corefile_excluded_on_other_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
+        self.assertNotIn("rocgdb-corefile", self._selected_names())
+
+    # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
 
@@ -252,7 +366,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rccl = next(j for j in components if j["job_name"] == "rccl")
         self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
 
-    def test_multi_gpu_job_uses_weighted_labels_when_available(self):
+    def test_multi_gpu_job_uses_count_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
 
         def fake_get_all_families(_):
@@ -261,13 +375,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     "linux": {
                         "test-runs-on": "linux-gfx942-default",
                         "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "weight": 0.5},
-                            {"label": "linux-gfx942-b", "weight": 0.5},
+                            {"label": "linux-gfx942-a", "count": 5},
+                            {"label": "linux-gfx942-b", "count": 5},
                         ],
                         "test-runs-on-multi-gpu": "linux-mi300-mgpu-default",
                         "test-runs-on-multi-gpu-labels": [
-                            {"label": "linux-mi300-mgpu-a", "weight": 0.5},
-                            {"label": "linux-mi300-mgpu-b", "weight": 0.5},
+                            {"label": "linux-mi300-mgpu-a", "count": 5},
+                            {"label": "linux-mi300-mgpu-b", "count": 5},
                         ],
                     }
                 }
@@ -296,10 +410,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
             self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called for rccl multi-gpu
+            # Verify select_weighted_label was called for the multi-gpu jobs.
+            # With rocshmem added there is more than one multi-GPU job (rccl and
+            # rocshmem), each using a "<job_name>-multi-gpu" context.
             multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
-            self.assertEqual(len(multi_gpu_calls), 1)
-            self.assertEqual(multi_gpu_calls[0][1], "rccl-multi-gpu")
+            multi_gpu_contexts = {c[1] for c in multi_gpu_calls}
+            self.assertIn("rccl-multi-gpu", multi_gpu_contexts)
+            self.assertIn("rocshmem-multi-gpu", multi_gpu_contexts)
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
@@ -325,26 +442,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # Output contract
     # -----------------------
 
-    def test_windows_hip_tests_default_emits_pal_only(self):
-        """On Windows, hip-tests emits only PAL by default (WINDOWS_HIP_ROCR_TESTS off)."""
-        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
-        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
-        self.assertEqual(len(hip_jobs), 1, "Expected only hip-tests (PAL)")
-        self.assertEqual(hip_jobs[0]["job_name"], "hip-tests (PAL)")
-        self.assertNotIn("expect_failure", hip_jobs[0])
-        self.assertEqual(hip_jobs[0]["total_shards"], 4)
-        self.assertEqual(hip_jobs[0]["shard_arr"], [1, 2, 3, 4])
-
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
-        """On Windows with WINDOWS_HIP_ROCR_TESTS=true, hip-tests runs PAL and ROCR."""
+        """On Windows, hip-tests runs with both PAL and ROCR backends."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
-        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -362,16 +463,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(pal["shard_arr"], [1, 2, 3, 4])
 
         rocr = next(j for j in hip_jobs if j["job_name"] == "hip-tests (ROCR)")
-        self.assertTrue(rocr["expect_failure"])
         self.assertEqual(rocr["total_shards"], 4)
         self.assertEqual(rocr["shard_arr"], [1, 2, 3, 4])
 
     def test_windows_hip_tests_quick_uses_single_shard(self):
-        """On Windows with test_type=quick and ROCR enabled, PAL/ROCR each use 1 shard."""
+        """On Windows with test_type=quick, PAL/ROCR each use 1 shard."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
         os.environ["TEST_TYPE"] = "quick"
-        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -403,6 +502,241 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         out = fetch_test_configurations._build_container_options(job, "linux")
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    # -----------------------
+    # ASAN sandbox runner selection
+    # -----------------------
+
+    def test_asan_build_uses_sandbox_runner(self):
+        """ASAN builds should use test-runs-on-sandbox when available."""
+        os.environ["BUILD_VARIANT"] = "asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-a", "count": 5},
+                            {"label": "linux-gfx942-b", "count": 5},
+                        ],
+                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rocblas = next(j for j in components if j["job_name"] == "rocblas")
+        self.assertEqual(rocblas["test_runner"], "linux-mi325-gpu-rocm-cpu-sandbox")
+
+    def test_host_asan_build_uses_sandbox_runner(self):
+        """host-asan builds should also use test-runs-on-sandbox."""
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-sandbox": "linux-sandbox-runner",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblas = next(j for j in components if j["job_name"] == "hipblas")
+        self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+
+    def test_release_build_uses_count_runner(self):
+        """Release builds should use count-based runner labels, not sandbox."""
+        os.environ["BUILD_VARIANT"] = "release"
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-count-runner", "count": 10},
+                        ],
+                        "test-runs-on-sandbox": "linux-sandbox-runner",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        # Mock select_weighted_label to return a known value
+        original_select_weighted_label = fetch_test_configurations.select_weighted_label
+
+        def fake_select_weighted_label(labels_config, context_name):
+            return "linux-gfx942-count-runner"
+
+        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
+
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+            rocblas = next(j for j in components if j["job_name"] == "rocblas")
+            self.assertEqual(rocblas["test_runner"], "linux-gfx942-count-runner")
+        finally:
+            fetch_test_configurations.select_weighted_label = (
+                original_select_weighted_label
+            )
+
+    def test_asan_build_without_sandbox_uses_default_runner(self):
+        """ASAN builds without sandbox config should fall back to default runner."""
+        os.environ["BUILD_VARIANT"] = "asan"
+        os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        # No test-runs-on-sandbox defined
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        hipblas = next(j for j in components if j["job_name"] == "hipblas")
+        self.assertEqual(hipblas["test_runner"], "linux-gfx942-default")
+
+    # -----------------------
+    # TEST_LABEL_GROUPS expansion
+    # -----------------------
+
+    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
+
+    def test_all_rocgdb_label_excludes_unrelated_jobs(self):
+        """test:rocgdb should not include jobs outside the rocgdb group."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("rocblas", names)
+        self.assertNotIn("hipblas", names)
+
+    def test_group_label_and_individual_label_combine(self):
+        """A group label and a plain label together should union their jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocgdb", "test:rocblas"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
+        self.assertIn("rocblas", names)
+
+    def test_unknown_group_label_is_treated_as_literal(self):
+        """A test: label not in TEST_LABEL_GROUPS should fall through as a literal key."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocblas"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocblas", names)
+        self.assertNotIn("rocgdb-cpu", names)
+        self.assertNotIn("rocgdb-gpu", names)
+
+    def test_group_label_and_individual_member_label_do_not_duplicate(self):
+        """Passing test:rocgdb alongside an explicit member label should not produce duplicate jobs."""
+        with patch.dict(
+            os.environ,
+            {
+                "TEST_LABELS": json.dumps(
+                    [
+                        "test:rocgdb",
+                        "test:rocgdb-cpu",
+                        "test:rocgdb-gpu",
+                        "test:rocgdb-corefile",
+                    ]
+                )
+            },
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        job_names = [job["job_name"] for job in components]
+        self.assertEqual(job_names.count("rocgdb-cpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-gpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
+
+    # -----------------------
+    # mesa-fork labels
+    # -----------------------
+
+    def test_rocdecode_label_selects_rocdecode_job(self):
+        """test:rocdecode should select the rocdecode job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocdecode"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertNotIn("rocjpeg", names)
+
+    def test_rocjpeg_label_selects_rocjpeg_job(self):
+        """test:rocjpeg should select the rocjpeg job."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocjpeg"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocjpeg", names)
+        self.assertNotIn("rocdecode", names)
+
+    def test_rocdecode_and_rocjpeg_labels_together(self):
+        """test:rocdecode and test:rocjpeg together should select both jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocdecode", "test:rocjpeg"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocdecode", names)
+        self.assertIn("rocjpeg", names)
 
 
 if __name__ == "__main__":

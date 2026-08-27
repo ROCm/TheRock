@@ -1,7 +1,8 @@
 # hipfile
 [components.lib."storage-libs/hipfile/stage"]
+[components.run."storage-libs/hipfile/stage"]
 include = [
-  "share/hipfile/**",
+  "bin/**",
 ]
 [components.dbg."storage-libs/hipfile/stage"]
 [components.dev."storage-libs/hipfile/stage"]
@@ -9,4 +10,7 @@ include = [
 
 # Tests
 [components.test."storage-libs/hipfile/stage"]
+include = [
+  "share/hipfile/test/**",
+]
 optional = true
