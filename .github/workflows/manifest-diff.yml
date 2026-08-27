@@ -75,7 +75,11 @@ permissions:
   contents: read
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   generate-report:
+    needs: [resolve-images]
     name: Generate Manifest Diff Report
     runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
     # Non-blocking under CI; strict on manual dispatch so regressions surface red.
@@ -84,7 +88,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ${{ needs.resolve-images.outputs.therock_build_manylinux_x86_64 }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
