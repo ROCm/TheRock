@@ -7,8 +7,8 @@ status: draft
 
 # RFC0014: Subproject Fingerprint Coverage and Portability
 
-TheRock computes `THEROCK_FPRINT` per subproject — a digest over the files, source revisions and
-configuration values that determine what that subproject builds. No code in this repository reads
+TheRock computes `THEROCK_FPRINT` for each subproject. The digest covers the files, source
+revisions and configuration values used to build it. No code in this repository reads
 the generated `.fprint` files; the value propagates through the dependency graph and terminates in
 files nothing opens. This RFC makes the fingerprint cover the inputs it claims to cover, makes it
 comparable across machines, uses it as the key that authorizes artifact reuse, and publishes the
@@ -19,7 +19,7 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 
 ## Summary
 
-### Subproject inputs — define and publish what the fingerprint covers
+### Subproject inputs
 
 - **INPUTS-1** Emit the subproject inputs as a committed, drift-checked manifest keyed by
   platform configuration. The manifest is generated from the same list that computes the
@@ -27,7 +27,7 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 - **INPUTS-2** Emit a per-configure fingerprint dump carrying every input's label and
   digest, so a mismatch can be explained.
 
-### Narrowing — make that input set cover the right things
+### Narrowing
 
 - **FP-1** Fingerprint the git subtree a subproject consumes, and scope the dirty check to
   the same path, instead of the enclosing submodule's `HEAD`.
@@ -39,7 +39,7 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 - **SMREV-1** Keep `.smrev` precedence, unify its two writer formats, and give the
   ExternalProject writer a real identity: URL, `URL_HASH` and a patch-directory digest.
 
-### CI improvement — act on the covered set
+### CI improvement
 
 - **DRIFT-1** Extract the consumer-graph drift checker into shared machinery, convert the
   existing checker to it, and add the input set check to the job that already configures the
@@ -47,7 +47,7 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 - **CI-1** Expand changed gitlinks into submodule-relative paths, then resolve those
   through the subproject inputs file to stages.
 
-### Bootstrap prebuilt — make reuse verifiable
+### Bootstrap prebuilt
 
 - **PRE-1** Carry one `.fprint` record inside each artifact archive, listing one fingerprint per
   subproject in the slice.
@@ -60,7 +60,7 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 - **PRE-5** Accumulate component coverage in the marker across unpacks, and fail configure
   when two artifacts claim different fingerprints for one subproject.
 
-### Portable fingerprints — hardest to demonstrate, sequenced last
+### Portable fingerprints
 
 - **PORT-1** Drop compiler launchers from the toolchain contribution.
 - **PORT-2** Rebase build-tree absolute paths onto `THEROCK_BINARY_DIR`.
@@ -76,8 +76,9 @@ All line numbers cite TheRock at `9071e093` unless stated otherwise.
 
 INPUTS-1 describes the fingerprint's inputs; it does not scope them. FP-* and SMREV-1 decide what
 is fingerprinted, the manifest is generated from that decision, and DRIFT-1 keeps the published copy
-honest. Reading the dependency the other way — manifest first, fingerprint derived from it — would
-put a committed file in charge of build correctness.
+honest. Reading the dependency the other way, with the fingerprint derived from a committed file,
+would put
+that file in charge of build correctness.
 
 FP-* and SMREV-1 are independently verifiable. INPUTS and DRIFT items build on them. PRE items make
 same-machine reuse trustworthy. PORT and ABI items extend that across machines and rest on
@@ -91,17 +92,17 @@ configuration. The set of inputs feeding that fingerprint is published as
 `test_tools/therock_subproject_inputs.json`, drift-checked in CI, and consumed by `stage_impact.py`
 to resolve changed paths to stages.
 
-Same-machine reuse — a developer unpacking artifacts into a fresh build tree on the host that
-produced them, or CI reusing a baseline run's artifacts on identical runner images — needs FP-1
-through FP-4 and PRE-1 through PRE-5. Those are testable by building something and comparing an
+Same-machine reuse requires FP-1 through FP-4 and PRE-1 through PRE-5. It covers a developer
+unpacking artifacts into a fresh build tree on the producing host, and CI reusing a baseline run's
+artifacts on identical runner images. Those are testable by building something and comparing an
 observable result. Cross-machine reuse additionally needs PORT-1 through PORT-4; without them the
 recorded and computed fingerprints differ over compiler paths, build-directory paths and ccache
-configuration, so the comparison returns **mismatch** on every host that did not produce the
+configuration, so the comparison returns mismatch on every host that did not produce the
 artifact.
 
 ### Four decisions taken
 
-**Toolchain trust root.** The root is a *bootstrap closure*, not a single subproject.
+**Toolchain trust root.** The bootstrap root covers several subprojects.
 
 Everything built by `amd-llvm` inherits its identity through `amd-llvm@<fprint>`, so the host
 compiler does not reach those subprojects. `amd-llvm` itself is not a usable cut point: it declares
@@ -113,19 +114,22 @@ only `amd-llvm`'s own host closure would leave that path open; stripping the dep
 close it would let a host difference change those binaries, and the LLVM built against them, without
 moving any key.
 
-The boundary is therefore drawn around the whole bootstrap layer — `rocm-cmake`, the five bundled
-sysdeps, and `amd-llvm` — identified by one digest over a pinned toolchain or container image. That
+The bootstrap closure contains `rocm-cmake`, the five bundled sysdeps and `amd-llvm`. One digest
+identifies the pinned toolchain or container image that built it. That
 digest is the root key. Subprojects inside the closure key on it; subprojects outside it key on
 `amd-llvm@<fprint>` and never see the host toolchain. Cross-machine reuse is refused when the roots
-differ, which is what makes the refusal honest rather than a silent acceptance.
+differ, so a consumer whose root differs rejects the artifact.
 
-The graph is acyclic because the root is a declared constant rather than a computed subproject key,
+The root is a declared constant, so it introduces no dependency edge.
 and nothing inside the closure depends on a subproject outside it.
 
-What this still does not prove: that two images satisfying the same declared root produce
-interchangeable compilers. The root asserts provenance, not equivalence. It is falsifiable — build
-`amd-llvm` under two roots and compare emitted objects for a fixed input — and V-8 requires that
-comparison before cross-machine reuse is enabled.
+An equal bootstrap root does not prove identical compiler output: that two images satisfying the
+same declared root produce
+interchangeable compilers. An equal root proves the declared build environment matches. It does not
+prove identical compiler
+output. V-8 requires the comparison before cross-machine reuse is enabled: build `amd-llvm` under
+two roots
+and compare emitted objects for a fixed input.
 
 **Marker fallback quarantine.** Any decision to build from source after a marker check deletes the
 stale `stage.prebuilt` marker and removes or quarantines the imported stage directory, so a build
@@ -152,7 +156,7 @@ reach a Linux-generated manifest.
 
 - Splitting artifacts in `BUILD_TOPOLOGY.toml`. Reuse is decided at the artifact and stage
   boundary, so a noisy subproject bundled with quiet ones carries them along.
-- Bit-reproducible builds. The ABI work compares requirements, not bytes.
+- Bit-reproducible builds. The ABI work compares recorded requirements.
 - Changing what `compiler/CMakeLists.txt:46-56` does with `.amd-llvm.smrev`, or how LLVM
   version strings are produced.
 - A content-addressed artifact server. This RFC supplies a usable key; where it is looked up
@@ -174,19 +178,24 @@ reach a Linux-generated manifest.
 
 ### Fingerprint data flow
 
-`therock_cmake_subproject_activate` (`cmake/therock_subproject.cmake:637 (fingerprint body :703-1199)`) accumulates
-`_fprint_files` — pre/post hooks (`:723-734`), the generated toolchain file (`:755`), the dependency
-provider (`:772`), `fileset_tool.py` (`:946`), and glob expansions from `FPRINT_FILE_GLOBS` or a
-non-hashed `FPRINT_SOURCE_DIR` (`:714-720`) — and `_fprint_content` — `SOURCE=<rev>` (`:707-712`),
-one `DEP <target>=<fprint>` line per build and runtime dependency (`:774-785`), and four configure
-literals at `:1014-1020`. At `:1188` `_therock_subproject_fprint_files` appends `basename=sha256`
-per file; `:1191` takes `string(SHA256)` over the joined list; `:1194` stores the result as
-`THEROCK_FPRINT` when `_fprint_is_valid`, and leaves it empty otherwise.
+`therock_cmake_subproject_activate` (`cmake/therock_subproject.cmake:637`, fingerprint body at
+`:703-1199`) maintains two lists.
 
-`therock_provide_artifact` (`cmake/therock_artifacts.cmake:154-183`) builds a second digest —
-`ARTIFACT=<slice>`, `DESCRIPTOR=<sha256 of the descriptor>`, then one `<subproject>=<fprint>` line
-per `SUBPROJECT_DEPS` — and writes it at configure time to
-`build/artifacts/<slice>_<component><bundle_suffix>.fprint`, once per component, only when the
+`_fprint_files` holds pre/post hooks (`:723-734`), the generated toolchain file (`:755`), the
+dependency provider (`:772`), `fileset_tool.py` (`:946`), and glob expansions from
+`FPRINT_FILE_GLOBS` or a non-hashed `FPRINT_SOURCE_DIR` (`:714-720`).
+
+`_fprint_content` holds `SOURCE=<rev>` (`:707-712`), one `DEP <target>=<fprint>` line per build and
+runtime dependency (`:774-785`), and four configure literals (`:1014-1020`).
+
+`_therock_subproject_fprint_files` appends `basename=sha256` per file at `:1188`. `:1191` takes
+`string(SHA256)` over the joined list. `:1194` stores the result as `THEROCK_FPRINT` when
+`_fprint_is_valid` and leaves it empty otherwise.
+
+`therock_provide_artifact` (`cmake/therock_artifacts.cmake:154-183`) builds a second digest from the
+slice name, the descriptor hash, and one `<subproject>=<fprint>` line per `SUBPROJECT_DEPS`. It
+writes that digest at configure time to
+`build/artifacts/<slice>_<component><bundle_suffix>.fprint`, once per component, and only when the
 artifact is not kpack-split.
 
 Verified: `THEROCK_FPRINT` is read at exactly two `get_target_property` sites,
@@ -199,7 +208,7 @@ tree-wide, at `therock_artifacts.cmake:176`, which is the `file(WRITE)`.
 (`:1893-1895`) and, if present, reads it verbatim into `fprint` (`:1897-1900`). Execution then
 continues: `git rev-parse --git-dir` at `:1903-1915`, and inside `if(IN_GIT_REPO)` the `if(NOT
 fprint)` guard at `:1919` covers only `git rev-parse HEAD`. The whole-repo dirty check at
-`:1941-1955` runs regardless. So `.smrev` bypasses `git rev-parse HEAD` and nothing else — a
+`:1941-1955` runs regardless. `.smrev` bypasses only `git rev-parse HEAD`. A
 `.smrev` file beside a dirty git repository still yields an empty, invalid fingerprint.
 
 Two writers produce incompatible formats:
@@ -219,7 +228,7 @@ normal path for any downstream repository maintaining an active patch series.
 
 ### Marker behaviour
 
-`stage.prebuilt` carries no content. Every writer creates it with `Path.touch()` —
+`stage.prebuilt` carries no content. Every writer creates it with `Path.touch()`:
 `build_tools/buildctl.py:125` and `:272`, `build_tools/artifact_manager.py:364` — and CMake tests
 only `EXISTS` (`therock_subproject.cmake:956`, `:1223`), using the file as an up-to-date input to
 three `add_custom_command` stamps (`:959-979`). `buildctl.py:71-73` documents the contract: the
@@ -235,7 +244,8 @@ the helper and does not restate the derivation.
 Artifacts do not partition subprojects: `build_tools/artifact_subprojects.json` has 46 artifacts
 referencing 87 subproject slots over 72 distinct subprojects. `amd-comgr` is referenced by
 `amd-llvm`, `amd-dbgapi` and `rocgdb`, so `build/compiler/amd-comgr/stage.prebuilt` may be written
-during any of three unpacks, in fetch order. With an empty file that is harmless.
+during any of three unpacks, in fetch order. Empty markers are currently equivalent, so unpack order
+does not affect their contents.
 
 ### CI change-path behaviour
 
@@ -283,7 +293,8 @@ declared, not inferred, and a member that acquires a dependency outside the clos
 configure.
 
 **INV-4 — malformed metadata rebuilds safely.** A truncated, unparseable or schema-mismatched
-.fprint file or marker is treated as absent: build from source, quarantine any imported tree, report.
+.fprint file or marker is treated as absent: build from source, quarantine any imported tree,
+report.
 Marker writes are atomic so a partial write is never read as valid.
 
 **INV-5 — conflicts fail before extraction mutates the tree.** Two artifacts claiming different
@@ -326,7 +337,8 @@ via `EXTERNAL_SOURCE_DIR`: `rocm-systems/projects/rocr-runtime` (`core/CMakeList
 
 `_therock_subproject_fprint_files` (`:1964-1972`) records `basename=sha256`, so every
 `CMakeLists.txt` keys under the same name. This causes no collision: entries are appended to an
-ordered CMake list, not a map, and the digest is taken over the joined list, so exchanging the
+ordered CMake list, so entries keep their position and the digest covers the joined list; exchanging
+the
 contents of `A/CMakeLists.txt` and `B/CMakeLists.txt` turns `CMakeLists.txt=h1;CMakeLists.txt=h2`
 into `CMakeLists.txt=h2;CMakeLists.txt=h1` and the digest changes. The cost is that a mismatch
 report cannot name the file that moved, and a file relocated without a content change is
@@ -381,7 +393,8 @@ The generated toolchain file is fingerprinted at `:755`. Its contents
 (`_therock_cmake_subproject_setup_toolchain`, `:1682-1885`) mix three kinds of value:
 
 - Output-neutral: `CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` (`:1735-1736`) hold the
-  ccache path, so one developer running `eval "$(./build_tools/setup_ccache.py)"` and another not, on
+  ccache path, so one developer running `eval "$(./build_tools/setup_ccache.py)"` and another not,
+on
   the same tree, fingerprint differently for byte-identical output.
 - Build-tree absolute: `AMD_LLVM_C_COMPILER` / `AMD_LLVM_CXX_COMPILER` resolve into
   `<build>/compiler/amd-llvm/dist/...`, and `--hip-path` / `--hip-device-lib-path` likewise
@@ -437,8 +450,9 @@ comparing equal to anything.
 Keys are rooted in a declared bootstrap closure. `BOOTSTRAP_ROOT=<algorithm>:<digest>` is a record
 in every subproject's canonical input, naming the pinned builder image or toolchain that produced
 the closure. Members are `rocm-cmake`, the bundled `zlib`, `zstd`, `numactl`, `elfutils` and
-`libdrm`, and `amd-llvm` itself — the set `compiler/CMakeLists.txt:134-141` requires. Membership is
-declared rather than inferred, and a member acquiring a dependency outside the closure is rejected
+`libdrm`, and `amd-llvm` itself — the set `compiler/CMakeLists.txt:134-141` requires. The
+configuration lists every closure member, and a member acquiring a dependency outside the closure is
+rejected
 at configure. Ordinary `DEP=` records are retained inside the closure; what the root replaces is the
 host toolchain's contribution, which would otherwise reach `amd-llvm` through those dependencies.
 Membership can vary by platform, so the root is recorded per configuration.
@@ -533,7 +547,8 @@ compromise rather than a natural fit. Whatever is chosen, operator intent must o
 fingerprint state, never be compared against a producer record, and never be deleted automatically.
 This document writes `MODE=manual` where a token is needed, as a placeholder for Q6's outcome.
 
-The marker holds one subproject's fingerprint, not the `.fprint` file's dictionary. A marker carrying
+Each marker stores one subproject fingerprint. The artifact-level `.fprint` record may list
+several. A marker carrying
 artifact-scoped content would make `amd-comgr`'s marker describe `amd-llvm` and `hipcc` too, so
 `amd-comgr` would be judged stale when `hipcc` changed, with the outcome depending on which artifact
 unpacked last. Subproject scoping makes the marker artifact-independent, order-independent and
@@ -643,7 +658,8 @@ Where `_cmake_args` is finalized, scan `-D<name>=<value>` for values resolving u
 resolved path. Findings are reported by the DRIFT-1 job, not silently folded into the record.
 Declared external trees become `REF=` records hashed as subtrees. Declaration is a new
 `FPRINT_SOURCE_DEPS` argument on `therock_cmake_subproject_declare`, alongside the existing
-`FPRINT_SOURCE_DIR`, `FPRINT_FILE_GLOBS` and `FPRINT_SOURCE_HASH` (`therock_subproject.cmake:570-572`):
+`FPRINT_SOURCE_DIR`, `FPRINT_FILE_GLOBS` and `FPRINT_SOURCE_HASH`
+(`therock_subproject.cmake:570-572`):
 
 ```cmake
 therock_cmake_subproject_declare(amd-llvm
@@ -691,19 +707,22 @@ if plan.has_conflicts or plan.coverage_incomplete:
 apply(plan)
 ```
 
-Bootstrap runs in two phases. Phase one downloads and parses every selected .fprint file and
+Bootstrap runs in two phases. Phase one downloads and parses every selected `.fprint` record and
 `artifact_manifest.txt`, then validates schema versions, stage-path ownership, required component
-coverage and cross-archive identity agreement. Phase two extracts and writes markers, atomically
-(temp file plus rename). Nothing is written to a stage directory until every check has passed, which
-is what INV-4 and INV-5 require: `artifact_manager` extracts archives in parallel, so a check
-performed during extraction would run after a peer worker had already mutated the tree. Failures
-abort the fetch, not a later configure. Validity is per
-entry, not per file: one unfingerprintable subproject must not prevent verification of the others
-sharing its artifact, and under a whole-submodule dirty check that is the common case. Conflicts are
-reachable today — `buildctl` keeps one populator across the iteration and `artifact_manager` shares
-a locked cleaned-path set across workers, so which archive lands first can depend on directory
-iteration or thread scheduling. First-writer-wins is not order-independence; comparing the full
-record is.
+coverage and cross-archive identity agreement. Phase two extracts and writes markers atomically, by
+temp file plus rename. Nothing reaches a stage directory until every check has passed, as INV-4 and
+INV-5 require. `artifact_manager` extracts archives in parallel, so a check performed during
+extraction would run after a peer worker had already mutated the tree. Phase-one failures terminate
+the fetch command.
+
+Each subproject entry carries its own validity field. One unfingerprintable subproject must not
+prevent verification of the others sharing its artifact, and under a whole-submodule dirty check
+that case is common.
+
+Conflicts are reachable today. `buildctl` keeps one populator across the iteration and
+`artifact_manager` shares a locked cleaned-path set across workers, so which archive lands first can
+depend on directory iteration or thread scheduling. The bootstrapper compares full records before
+merging and rejects two different fingerprints for one subproject.
 
 ### Marker decision procedure (PRE-4)
 
@@ -711,8 +730,8 @@ record is.
 |---|---|---|---|---|---|
 | absent | any | proceed | — | — | build from source |
 | `MODE=manual` | any | proceed | keep | keep | suppress build (operator intent) |
-| **match** | valid | proceed | keep | keep | use prebuilt |
-| **mismatch** | valid | log differing records | delete | quarantine | build from source |
+| match | valid | proceed | keep | keep | use prebuilt |
+| mismatch | valid | log differing records | delete | quarantine | build from source |
 | `UNKNOWN` | any | proceed, warn | delete | quarantine | build from source |
 | empty, malformed, or unknown schema | any | proceed, warn | delete | quarantine | build from source |
 | any | invalid (dirty tree) | proceed, warn once | delete | quarantine | build from source |
@@ -732,7 +751,8 @@ exception for artifacts that predate this work; they rebuild once and then carry
 Coverage and conflict do not appear here. Both are resolved during bootstrap phase one, before
 anything is extracted — by configure time a marker is either present and complete or absent.
 
-Fail-closed means build from source, not abort. Configure never fails on marker state: conflicts and
+Except for bootstrap conflicts, a validation failure causes a source build. Configure never fails on
+marker state: conflicts and
 incomplete coverage are settled during bootstrap phase one, before any stage tree is written, so a
 marker reaching configure is already coherent.
 
@@ -749,7 +769,8 @@ worth stating. `stage_reuse_mode` is a workflow input governing CI stage reuse
 
 ### CI-1 — gitlink expansion
 
-Stage impact sees only the gitlink path for a submodule bump, so the subproject inputs file alone cannot
+Stage impact sees only the gitlink path for a submodule bump, so the subproject inputs file alone
+cannot
 give it subproject-level paths. Per changed gitlink:
 
 1. Read old and new object ids: `git diff --raw --abbrev=40 <base>..<head> -- <path>`. `--abbrev=40`
@@ -764,7 +785,8 @@ give it subproject-level paths. Per changed gitlink:
    fetched.
 4. Fetch both object ids from the validated remote, with a timeout.
 5. `git -C <repo> diff --name-only <old> <new>`; prefix each result with the submodule path.
-6. Resolve the prefixed paths through the subproject inputs file, unioned over the platforms selected in
+6. Resolve the prefixed paths through the subproject inputs file, unioned over the platforms
+selected in
    the current workflow.
 
 Any anomaly falls back to marking the whole source set affected, the pre-existing behaviour: `--raw`
@@ -777,7 +799,9 @@ network fetch to a decision that is currently pure path matching; a bump spannin
 legitimately touches many subprojects, so the expansion pays off on narrow bumps and changes nothing
 on broad ones.
 
-Downstream of the expansion the manifest **bypasses** source-set resolution rather than feeding it.
+Downstream of the expansion manifest matches resolve directly to subprojects and artifacts, without
+passing through source-set
+resolution.
 `_resolve_source_set()` returns a single `SourceSet` (`stage_impact.py:191-218`), so routing an
 expanded path through it yields `rocm-systems` again and re-marks all seventeen groups — the
 precision won by expanding the diff would be discarded one call later. Expanded paths instead
@@ -793,10 +817,11 @@ Source-set resolution is retained only for inputs the manifest does not model, s
 TheRock's own tree.
 
 The mapping is derived from `EXTERNAL_SOURCE_DIR` declarations at emission time, so it cannot drift
-the way a hand-populated `path_prefixes` would (Q4 decides whether `path_prefixes` is then removed or
+the way a hand-populated `path_prefixes` would (Q4 decides whether `path_prefixes` is then removed
+or
 kept as an override).
 
-A path that survives expansion but matches nothing in the manifest is treated as **unmatched**, and
+A path that survives expansion but matches nothing in the manifest is treated as unmatched, and
 unmatched input falls back to whole-source-set impact. Treating it as *unaffected* would be the more
 aggressive reading and would deliver a larger win, but it converts manifest incompleteness into
 silently skipped builds. A submodule may opt into the aggressive reading only after passing the
@@ -833,7 +858,8 @@ and the references are Windows-gated, so a Linux build does not reveal them.
 ### Static escape lint
 
 Scan each subproject's build files for `../` sequences resolving outside its declared input set and
-for references to the monorepo root. Runs in the DRIFT-1 job; an escape must be added to the input set
+for references to the monorepo root. Runs in the DRIFT-1 job; an escape must be added to the input
+set
 or waived with a recorded reason. Not sound — it cannot see computed paths — but it catches the wkmi
 case statically, on both platforms, which a Linux build cannot.
 
@@ -872,15 +898,17 @@ string or pin `LLVM_FORCE_VC_REVISION` for replay runs, and expect other embedde
 
 Do not narrow globally. A submodule stays submodule-granular until listed as splittable, and is
 listed only after the static lint and the sparse-build comparison pass and a replay has run clean.
-The blast radius of a wrong call is one submodule. As a further periodic audit, build under `strace`
+Opt-in confines an incorrect declaration to one submodule. As a further periodic audit, build under
+`strace`
 or fanotify, record every path opened, and diff against the declared input set — sound, catches
 computed paths, expensive.
 
-### ABI compatibility as an audit, not a key
+### ABI compatibility checks
 
 Separate build identity from ABI compatibility. "Same inputs, same output?" is answered by
 fingerprint equality; "can this artifact be used here?" is answered by ordering over recorded
-requirements. Hash equality is symmetric and ABI compatibility is not — an artifact built against
+requirements. Fingerprints compare by equality; ABI requirements compare by ordering — an artifact
+built against
 glibc 2.28 runs on 2.35 and the reverse fails. Hashing the host glibc version is too strict; hashing
 a declared floor is a claim that can produce a false match.
 
@@ -890,7 +918,8 @@ needs. This is the shape of auditwheel/manylinux, Debian `shlibs`/`symbols`, and
 `Requires`. `THEROCK_ABI_TARGET` becomes a policy assertion checked against the derived requirements
 rather than a fingerprint input.
 
-Binary inspection is an audit and does not authorize reuse on its own. Presence of `__cxx11` mangled
+Use binary inspection to reject incompatible artifacts, not to establish input equivalence. Presence
+of `__cxx11` mangled
 symbols can indicate the new libstdc++ ABI, but absence cannot prove the old one — a translation
 unit may simply use no affected type. `DT_NEEDED` entries and symbol versions identify runtime
 library requirements, not the header versions a translation unit compiled against, and say nothing
@@ -986,8 +1015,10 @@ visible staleness problem into an invisible one.
 | V-24 | existing `check_consumer_graph_drift_test.py` after DRIFT-1 | passes unchanged |
 
 V-24 is evidence of behaviour preservation, not proof.
-`build_tools/github_actions/tests/check_consumer_graph_drift_test.py:14` imports `check`, `normalize`
-and `write` by name, and DRIFT-1 keeps those bound. The test does not cover the CLI input set, argument
+`build_tools/github_actions/tests/check_consumer_graph_drift_test.py:14` imports `check`,
+`normalize`
+and `write` by name, and DRIFT-1 keeps those bound. The test does not cover the CLI input set,
+argument
 defaults, diagnostics or malformed input, so CLI-level regression tests land with it.
 
 ## Evidence appendix
@@ -1030,12 +1061,13 @@ over the rest. Actions run 26879008799:
 | fusilli-libs, debug-tools, foundation, media-libs | 24m02s combined | — |
 
 Plus packaging: DEB 33m05s, RPM 34m33s, Python 10m46s, PyTorch 1h09m13s. Total across the jobs
-listed: **21h00m27s** of build and packaging machine time, before tests, for code the build did not
+listed: 21h00m27s of build and packaging machine time, before tests, for code the build did not
 compile. The run contains further jobs not enumerated here, including rocblas and rocsolver shards
 near an hour each, six hipsparselt shards, and the Windows suite. Enabling `reuse-stage` recovers
 little: the change marks 17 of 22 groups affected, only `compiler`, `third-party-sysdeps`,
 `third-party-libs`, `cv-libs` and `ml-libs` are untouched, and `compiler` shares the
-`compiler-runtime` stage with eight affected groups, so that stage re-runs anyway. This is a precision
+`compiler-runtime` stage with eight affected groups, so that stage re-runs anyway. This is a
+precision
 failure, addressed by CI-1 plus INPUTS-1.
 
 #### Example 2 — `rocm-libraries`, where the analysis is right and is not acted on
@@ -1058,7 +1090,7 @@ and `iree-compiler` unaffected. Actions run 26879007290:
 | math-libs `gfx110X-all` (Linux) | yes | 5h47m21s | 79295502939 |
 | math-libs `gfx110X-all` (Windows) | yes | 5h25m58s | 79291255042 |
 
-**5h10m49s** of unaffected build time across both platforms. This is an enablement failure: acting
+5h10m49s of unaffected build time across both platforms. This is an enablement failure: acting
 on the analysis means trusting that a reused stage's artifacts are current, which is what PRE-1
 through PRE-5 supply.
 
@@ -1066,7 +1098,8 @@ through PRE-5 supply.
 
 Measured at the revisions `fc11b46e0` pins — `rocm-systems@14f81ac4`,
 `rocm-libraries@985d8327` — over the 300 commits ending at each pin. A path's value is the count of
-distinct `git rev-parse <commit>:<path>` tree ids across those commits; the union row is the count of
+distinct `git rev-parse <commit>:<path>` tree ids across those commits; the union row is the count
+of
 distinct tuples over all eight runtime-core paths together. Reproduce with:
 
 ```bash
@@ -1079,7 +1112,7 @@ done | sort -u | wc -l          # drop the inner loop and sha1sum for a single p
 
 | `rocm-systems` | / 300 | | `rocm-libraries` | / 300 |
 |---|---|---|---|---|
-| `emulation/rocjitsu` | **63** | | `projects/hipblaslt` | **66** |
+| `emulation/rocjitsu` | 63 | | `projects/hipblaslt` | 66 |
 | `projects/rocr-runtime` | 16 | | `projects/composablekernel` | 30 |
 | `projects/clr` | 20 | | `projects/rocsparse` | 25 |
 | `projects/rocprofiler-sdk` | 13 | | `projects/miopen` | 12 |
@@ -1089,7 +1122,7 @@ done | sort -u | wc -l          # drop the inner loop and sha1sum for a single p
 | `projects/rocminfo` | 1 | | `projects/rocblas` | 4 |
 | `projects/rocm-smi-lib` | 1 | | `shared/tensile` | 3 |
 | `projects/rocprofiler-register` | 1 | | `projects/rocprim` | 2 |
-| **runtime-core union** (8 paths) | **40** | | | |
+| runtime-core union (8 paths) | 40 | | | |
 | *whole-submodule HEAD* | *300* | | *whole-submodule HEAD* | *300* |
 
 `emulation/rocjitsu` is the noisiest path in `rocm-systems` — four times `rocr-runtime`. Only
