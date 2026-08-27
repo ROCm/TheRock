@@ -46,13 +46,13 @@ on:
         type: choice
         default: "dry-run"
         options:
+          - "off"
           - "dry-run"
           - "reuse-stage"
-        # This drives the AUTOMATIC stage-reuse detection layer, which is
-        # separate from the manual `prebuilt_stages` input above. dry-run only
-        # reports which unaffected stages could be reused; reuse-stage actually
-        # reuses them (skips the build and copies artifacts from a baseline run).
-        description: "dry-run (report only) | reuse-stage (auto-reuse unaffected stages)"
+        # off disables all artifact reuse and ignores explicit prebuilt stages and
+        # baseline inputs. dry-run reports automatic reuse opportunities without
+        # applying them. reuse-stage applies automatic reuse.
+        description: "off (disable reuse) | dry-run (report only) | reuse-stage (auto-reuse unaffected stages)"
       stage_reuse_max_age_hours:
         type: string
         default: "72"
