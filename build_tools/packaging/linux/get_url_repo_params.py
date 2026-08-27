@@ -168,8 +168,6 @@ def get_gpg_key_url(package_url: str) -> str:
             → https://sample-cdn.example/rocm/packages/gpg/rocm.gpg
         https://rc.repo.amd.com/rocm/core/packages/ubuntu2404
             → https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
-        https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-12345/
-            → https://nightly.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
         https://sample-cdn.example/packages-multi-arch/ubuntu2604
             → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
         https://sample-cdn.example/packages-multi-arch/deb/20260204-12345/

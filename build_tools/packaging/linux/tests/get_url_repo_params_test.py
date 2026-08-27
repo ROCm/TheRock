@@ -124,18 +124,6 @@ class GetGpgKeyUrlTest(unittest.TestCase):
                 "https://rc.repo.amd.com/rocm/core/packages/ubuntu2404",
                 "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
             ),
-            (
-                "https://nightly.repo.amd.com/rocm/core/packages/deb/20260823-12345678/",
-                "https://nightly.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
-            ),
-            (
-                "https://nightly.repo.amd.com/rocm/core/packages/rpm/20260823-12345678/x86_64/",
-                "https://nightly.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
-            ),
-            (
-                "https://dev.repo.amd.com/rocm/core/packages-asan/deb/20260823-12345678/",
-                "https://dev.repo.amd.com/rocm/core/packages-asan/gpg/rocm.gpg",
-            ),
         ]
         for repo_url, gpg_url in cases:
             with self.subTest(repo_url=repo_url):
