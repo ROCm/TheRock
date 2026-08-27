@@ -59,6 +59,15 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_type:
@@ -99,6 +108,15 @@ on:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
         default: ""
+      # Enable Quartz release-lineage tracking. When on, this run's id is
+      # propagated to every triggered workflow as quartz_tracking_id, formatted
+      # as "<github.run_id>;<release_type>". Tracking is currently only
+      # meaningful for rockrel-initiated runs; enabling it for a manual TheRock
+      # dispatch has no effect on Quartz tracking.
+      enable_quartz_tracking:
+        description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -139,6 +157,7 @@ jobs:
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     secrets: inherit
 
   linux_release:
@@ -160,6 +179,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows
@@ -180,6 +200,7 @@ jobs:
       ref: ${{ needs.setup.outputs.ref }}
       build_pytorch: ${{ inputs.build_pytorch }}
       python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
     permissions:
       contents: read
       actions: write  # Added permission to trigger workflows

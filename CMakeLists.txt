@@ -186,23 +186,6 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   endif()
 endblock()
 
-# Various things need to be lined up across layers to precisely match the HIP version.
-# The only source of truth for this is from the HIP/VERSION file, so we parse it the
-# same way that clr does. While this *should* generally match the ROCM version, at
-# least from a major/minor perspective, the ROCM version is a "user" version, whereas
-# the HIP version is hardcoded into various places in the code.
-block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
-  set(VERSION_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip/VERSION")
-  if(NOT EXISTS "${VERSION_PATH}")
-    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
-  endif()
-  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
-  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
-  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
-  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
-  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
-endblock()
-
 ################################################################################
 # Feature flags
 # Project wide flags for controlling the build system.
@@ -480,6 +463,15 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      # meson is only needed to build the amd-mesa/libva sysdep; gate the
+      # requirement so bundled-sysdeps builds without mesa don't need it.
+      find_program(MESON_BUILD meson)
+      if(NOT MESON_BUILD)
+        message(FATAL_ERROR "Building with THEROCK_ENABLE_SYSDEPS_AMD_MESA=ON on Windows requires `meson` (easiest: `pip install meson`)")
+      endif()
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()

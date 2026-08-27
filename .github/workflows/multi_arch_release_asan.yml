@@ -82,7 +82,7 @@ jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "asan"
+      build_variant: "asan-debug"
       release_type: ${{ inputs.release_type || 'dev' }}
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
@@ -113,7 +113,7 @@ jobs:
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
       python_version: ${{ inputs.python_version }}
-      build_variant: "asan"
+      build_variant: "asan-debug"
     permissions:
       contents: read
       actions: write

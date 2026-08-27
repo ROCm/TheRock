@@ -46,9 +46,25 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      test_runs_on:
+        description: >-
+          GitHub runner label for the test job (Linux only). The runner should
+          match the GPU pool for artifact_group (e.g.
+          linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
+          runner labels are rejected.
+        required: false
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
         description: "Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages."
         required: false
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
   workflow_dispatch:
@@ -96,8 +112,24 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
+      test_runs_on:
+        description: >-
+          GitHub runner label for the test job (Linux only). The runner should
+          match the GPU pool for artifact_group (e.g.
+          linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
+          runner labels are rejected.
+        required: false
+        type: string
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
         description: "Build variant (e.g. 'asan'). Changes expected package names."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
         type: string
         default: ""
 
@@ -116,6 +148,16 @@ jobs:
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
     steps:
+      - name: Validate test_runs_on input
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          RUNNER="${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' }}"
+          if echo "${RUNNER}" | grep -qi 'windows'; then
+            echo "::error::test_runs_on must be a Linux runner label (got: ${RUNNER})"
+            exit 1
+          fi
+          echo "Using runner label: ${RUNNER}"
+
       - name: "Quartz - started - test rpm/deb install"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
@@ -151,7 +193,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
       options: --ipc host
