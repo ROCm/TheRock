@@ -267,6 +267,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "multi_arch_build_windows_pytorch_wheels_ci.yml",
     "multi_arch_build_windows.yml",
     "multi_arch_build_wsl_rocdxg_artifacts.yml",
+    "resolve-docker-images.yml",
     "multi_arch_ci_linux.yml",
     "multi_arch_ci_windows.yml",
     "multi_arch_ci.yml",
