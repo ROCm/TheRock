@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 import logging
 from pathlib import Path
 import sys
+import time
 from urllib.parse import urlencode, quote
 
 logger = logging.getLogger(__name__)
@@ -771,6 +772,16 @@ def select_baseline_run(
 
     for workflow_run in candidates[:max_runs]:
         run_id = str(workflow_run["id"])
+        candidate_start = time.monotonic()
+
+        logger.info(
+            "[BASELINE] checking candidate: platform=%s run_id=%s head_sha=%s branch=%s",
+            platform,
+            run_id,
+            workflow_run.get("head_sha"),
+            workflow_run.get("head_branch"),
+        )
+
         if run_id in excluded:
             continue
         if not is_completed_workflow_run(workflow_run):
@@ -817,8 +828,23 @@ def select_baseline_run(
                 )
                 continue
 
+        job_lookup_start = time.monotonic()
+
+        workflow_jobs = workflow_jobs_fetcher(
+            workflow_run,
+            github_repository,
+        )
+
+        logger.info(
+            "[BASELINE] candidate run_id=%s platform=%s fetched %d jobs in %.2fs",
+            run_id,
+            platform,
+            len(workflow_jobs),
+            time.monotonic() - job_lookup_start,
+        )
+
         job_health = validate_required_jobs_successful(
-            workflow_jobs=workflow_jobs_fetcher(workflow_run, github_repository),
+            workflow_jobs=workflow_jobs,
             required_name_substrings=required_jobs,
         )
         if not job_health.is_valid:
@@ -831,16 +857,37 @@ def select_baseline_run(
             )
             continue
 
+        artifact_lookup_start = time.monotonic()
+
         backend = backend_factory(workflow_run, github_repository, platform)
+
         availability = validate_required_artifacts_available(
             backend=backend,
             required_artifacts=requirements,
         )
+
+        artifact_lookup_seconds = time.monotonic() - artifact_lookup_start
+
+        logger.info(
+            "[BASELINE] candidate run_id=%s platform=%s artifact_lookup=%.2fs",
+            run_id,
+            platform,
+            artifact_lookup_seconds,
+        )
+
         if not availability.is_valid:
+            missing_families = sorted(
+                {artifact.target_family for artifact in availability.missing_artifacts}
+            )
             logger.info(
-                "Skipping run %s: missing artifacts %s",
+                "[BASELINE] rejecting candidate: platform=%s run_id=%s "
+                "missing_artifact_pairs=%d/%d missing_families=%s total=%.2fs",
+                platform,
                 run_id,
-                availability.missing_artifacts,
+                len(availability.missing_artifacts),
+                len(availability.required_artifacts),
+                missing_families,
+                time.monotonic() - candidate_start,
             )
             continue
 
@@ -848,6 +895,15 @@ def select_baseline_run(
             workflow_run,
             github_repository=github_repository,
             workflow_name=workflow_name,
+        )
+
+        logger.info(
+            "[BASELINE] selected candidate: platform=%s run_id=%s "
+            "required_artifact_pairs=%d total=%.2fs",
+            platform,
+            run_id,
+            len(availability.required_artifacts),
+            time.monotonic() - candidate_start,
         )
 
         return BaselineRun(
