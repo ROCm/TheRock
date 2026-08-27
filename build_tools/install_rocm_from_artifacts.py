@@ -184,6 +184,15 @@ RELEASE_KIND_TARBALL_BUCKETS = {
     "dev": DEV_TARBALL_BUCKET,
 }
 
+# Example version strings quoted when --release cannot be classified. The index
+# URL each one is found at is derived from the bucket configs above, so the CDN
+# domains are not repeated here.
+RELEASE_KIND_VERSION_EXAMPLES = {
+    "nightly": ["6.4.0rc20250416", "7.10.0a20251024"],
+    "prerelease": ["7.13.0rc2", "10.0.0rc0"],
+    "dev": ["6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9"],
+}
+
 
 def classify_release_version(version: str) -> Optional[str]:
     """Return the release kind a version string belongs to, or None if unknown."""
@@ -230,6 +239,19 @@ def _multiarch_tarball_index_base_url(bucket: S3BucketConfig) -> str:
     if not bucket.cdn_url:
         raise ValueError(f"Bucket {bucket.name!r} has no CDN in front of it")
     return bucket.cdn_url.rstrip("/")
+
+
+def release_version_source_lines() -> list[str]:
+    """Return one line per release kind pointing at its published tarball index."""
+    lines = []
+    for release_kind, bucket in RELEASE_KIND_TARBALL_BUCKETS.items():
+        examples = RELEASE_KIND_VERSION_EXAMPLES[release_kind]
+        label = "example" if len(examples) == 1 else "examples"
+        lines.append(
+            f"\t - {_multiarch_tarball_index_base_url(bucket)}/ "
+            f"({release_kind} {label}: {', '.join(examples)})"
+        )
+    return lines
 
 
 def _read_url(url: str) -> bytes:
@@ -711,15 +733,8 @@ def retrieve_artifacts_by_release(args):
     if release_kind is None:
         log("This script requires a nightly, prerelease or dev release version.")
         log("Please retrieve the correct release version from:")
-        log(
-            "\t - https://rocm.nightlies.amd.com/tarball-multi-arch/ (nightly examples: 6.4.0rc20250416, 7.10.0a20251024)"
-        )
-        log(
-            "\t - https://rocm.prereleases.amd.com/tarball-multi-arch/ (prerelease examples: 7.13.0rc2, 10.0.0rc0)"
-        )
-        log(
-            "\t - https://rocm.devreleases.amd.com/tarball-multi-arch/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
-        )
+        for line in release_version_source_lines():
+            log(line)
         log("Exiting...")
         return
 

@@ -260,6 +260,32 @@ class TestReleaseVersionClassification(unittest.TestCase):
                 self.assertIsNone(mod.classify_release_version(version))
 
 
+class TestReleaseVersionSourceLines(unittest.TestCase):
+    """The '--release' help text derives its URLs from the bucket configs."""
+
+    def test_covers_every_release_kind_that_publishes_tarballs(self) -> None:
+        lines = mod.release_version_source_lines()
+        self.assertEqual(len(lines), len(mod.RELEASE_KIND_TARBALL_BUCKETS))
+        for release_kind in mod.RELEASE_KIND_TARBALL_BUCKETS:
+            with self.subTest(release_kind=release_kind):
+                self.assertTrue(any(f"({release_kind} example" in l for l in lines))
+
+    def test_urls_come_from_the_bucket_cdn_urls(self) -> None:
+        lines = mod.release_version_source_lines()
+        for release_kind, bucket in mod.RELEASE_KIND_TARBALL_BUCKETS.items():
+            with self.subTest(release_kind=release_kind):
+                expected = f"{bucket.cdn_url.rstrip('/')}/ "
+                self.assertTrue(any(expected in l for l in lines))
+
+    def test_quoted_examples_classify_as_the_kind_they_are_listed_under(self) -> None:
+        for release_kind, examples in mod.RELEASE_KIND_VERSION_EXAMPLES.items():
+            for version in examples:
+                with self.subTest(release_kind=release_kind, version=version):
+                    self.assertEqual(
+                        mod.classify_release_version(version), release_kind
+                    )
+
+
 class TestReleaseDiscovery(unittest.TestCase):
     @staticmethod
     def _index(*entries: dict) -> mock.Mock:
