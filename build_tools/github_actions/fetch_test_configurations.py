@@ -591,10 +591,12 @@ test_matrix = {
     "miopen-dbsync": {
         "job_name": "miopen-dbsync",
         "fetch_artifact_args": "--blas --miopen --rand --tests",
-        # Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1) under rocjitsu to dodge a
-        # 32-thread interposer stall, so give StaticFDBSync room for both gfx942
-        # CU variants (304 + 228) plus the ~40s rocjitsu build.
-        "timeout_minutes": 60,
+        # Skipped on the `quick` tier by the runner script (TEST_TYPE guard); this
+        # governs standard/comprehensive/full only. Runs serially
+        # (MIOPEN_DBSYNC_MAX_THREADS=1) under rocjitsu; full set (gfx942 304+228 or
+        # gfx950 256) + artifact fetch + rocjitsu build measures ~15 min, so 30 gives
+        # margin and fails a hung interposer faster.
+        "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
