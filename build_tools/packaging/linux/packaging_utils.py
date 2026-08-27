@@ -698,7 +698,9 @@ def process_main_dependencies_kpack(
                 config.artifacts_dir,
             )
         ]
-        # No host fallback needed for host packages
+        # Host fallback is discarded (_) because we ARE the host package.
+        # There's nothing to fall back to - if a dependency has no host artifacts,
+        # it's a build configuration error that should fail, not silently degrade.
         dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
@@ -706,7 +708,13 @@ def process_main_dependencies_kpack(
         # Non-gfxarch versioned package: use all dependencies directly
         # These packages don't have host/device split, so include everything
         dep_list = pkg_info.get(field_key, [])
-        # No host fallback for non-gfxarch packages
+        # Host fallback is discarded (_) because non-gfxarch packages are already
+        # architecture-independent. Their dependencies should either:
+        # 1. Be non-gfxarch themselves (no fallback needed), or
+        # 2. Be gfxarch packages resolved to their host variant (gfx_arch="" maps to generic)
+        # If a dependency has no artifacts at all, filter_dependencies_by_artifacts
+        # will exclude it and log a warning - this is the expected behavior for
+        # packages that weren't built in this configuration.
         dep_list, _ = filter_dependencies_by_artifacts(
             dep_list, config.artifacts_dir, config.gfx_arch
         )
@@ -739,7 +747,7 @@ def process_main_dependencies_kpack(
     # Add host fallback deps if any
     if host_fallback_deps:
         host_config = replace(config, gfx_arch=GFX_HOST)
-        host_deps = resolve_versioned_dependencies(
+        host_deps = resolve_versioned_dependency_list(
             host_fallback_deps, host_config, is_meta
         )
         if host_deps:
@@ -1210,7 +1218,11 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
         else:
             artifact_suffix = gfx_arch
 
-        # GFX_HOST uses "generic" artifacts
+        # GFX_HOST uses "generic" artifacts.
+        # This is the ONLY host-equivalent naming convention in the build system.
+        # All host/architecture-independent artifacts use the "generic" suffix
+        # (e.g., fft_lib_generic, rccl_test_generic). There are no other naming
+        # patterns for host artifacts.
         if gfx_arch == GFX_HOST:
             artifact_suffix = "generic"
 
@@ -1315,14 +1327,46 @@ def filter_dependencies_by_artifacts(
     - If no gfx artifacts but host artifacts exist, add to host fallback list
     - If no artifacts at all, exclude the dependency
 
+    Host Fallback Mechanism:
+    ------------------------
+    When building a gfx-specific package (e.g., amdrocm-blas10.2-gfx1100), its
+    dependencies may not have artifacts for that specific GPU architecture. In
+    such cases, this function implements a fallback strategy:
+
+    1. First, check if the dependency has artifacts for the target gfx arch
+       (e.g., solver_lib_gfx1100)
+    2. If not found, check if host (generic) artifacts exist
+       (e.g., solver_lib_generic)
+    3. If host artifacts exist, add to host_fallback list so the package
+       depends on the host version (e.g., amdrocm-solver-host10.2) instead
+
+    This ensures that gfx-specific packages can still be built and installed
+    even when some dependencies only have host/generic artifacts available.
+
+    Artifact Naming Convention:
+    ---------------------------
+    Artifacts follow the pattern: {prefix}_{component}_{suffix}
+    - For gfx-specific: fft_lib_gfx1100, rccl_test_gfx942
+    - For host/generic: fft_lib_generic, rccl_test_generic
+
+    The GFX_HOST constant maps to "generic" suffix. There is no other
+    host-equivalent naming convention - all host artifacts use "generic".
+
     Parameters:
     dep_list: List of dependency package names
     artifacts_dir: Directory where artifacts are stored
     gfx_arch: Target architecture to check
+    target_members: Optional tuple of gfx architectures to check (for grouped targets)
 
     Returns: Tuple of (filtered_deps, host_fallback_deps) where:
              - filtered_deps: dependencies with artifacts for target arch
              - host_fallback_deps: dependencies to use host version instead
+
+    Example:
+        Building amdrocm-blas10.2-gfx1100 with dependency on amdrocm-solver:
+        - If solver_lib_gfx1100 exists: solver goes to filtered_deps
+        - If only solver_lib_generic exists: solver goes to host_fallback_deps
+        - If neither exists: solver is excluded with warning
     """
     filtered = []
     host_fallback = []
