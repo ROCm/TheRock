@@ -4,11 +4,13 @@
 
 import os
 import platform
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 
 from _therock_utils.archive_util import (
+    normalize_tarinfo,
     open_archive_for_read,
     open_archive_for_write,
 )
@@ -98,6 +100,51 @@ class HandleLeakTest(unittest.TestCase):
 
             os.unlink(archive)
             self.assertFalse(archive.exists())
+
+
+class NormalizeTarinfoTest(unittest.TestCase):
+    """Verify the metadata normalization applied to reproducible archives."""
+
+    def test_build_specific_metadata_is_cleared(self):
+        tarinfo = tarfile.TarInfo("lib/libfoo.so.1")
+        tarinfo.mtime = 1700000000
+        tarinfo.uid = 1000
+        tarinfo.gid = 1000
+        tarinfo.uname = "builder"
+        tarinfo.gname = "builder"
+
+        normalize_tarinfo(tarinfo)
+
+        self.assertEqual(tarinfo.mtime, 0)
+        self.assertEqual(tarinfo.uid, 0)
+        self.assertEqual(tarinfo.gid, 0)
+        self.assertEqual(tarinfo.uname, "root")
+        self.assertEqual(tarinfo.gname, "root")
+
+    def test_permissions_and_identity_are_preserved(self):
+        tarinfo = tarfile.TarInfo("bin/tool")
+        tarinfo.mode = 0o755
+        tarinfo.size = 1234
+        tarinfo.type = tarfile.REGTYPE
+
+        normalize_tarinfo(tarinfo)
+
+        # Only the varying metadata is touched; anything describing the content
+        # must survive.
+        self.assertEqual(tarinfo.mode, 0o755)
+        self.assertEqual(tarinfo.size, 1234)
+        self.assertEqual(tarinfo.type, tarfile.REGTYPE)
+        self.assertEqual(tarinfo.name, "bin/tool")
+
+    def test_symlink_target_is_preserved(self):
+        tarinfo = tarfile.TarInfo("share/doc/README")
+        tarinfo.type = tarfile.SYMTYPE
+        tarinfo.linkname = "README.txt"
+
+        normalize_tarinfo(tarinfo)
+
+        self.assertEqual(tarinfo.type, tarfile.SYMTYPE)
+        self.assertEqual(tarinfo.linkname, "README.txt")
 
 
 class ErrorHandlingTest(unittest.TestCase):

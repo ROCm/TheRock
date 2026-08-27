@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from _therock_utils.archive_util import open_archive_for_write
+from _therock_utils.archive_util import normalize_tarinfo, open_archive_for_write
 from _therock_utils.artifacts import ArtifactPopulator
 import _therock_utils.artifact_builder as artifact_builder
 from _therock_utils.hash_util import calculate_hash, write_hash
@@ -91,7 +91,12 @@ def do_artifact_archive(args):
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
             relpaths = manifest_path.read_text().splitlines()
             # Important: The manifest must be stored first.
-            arc.add(manifest_path, arcname=manifest_path.name, recursive=False)
+            arc.add(
+                manifest_path,
+                arcname=manifest_path.name,
+                recursive=False,
+                filter=normalize_tarinfo,
+            )
             for relpath in relpaths:
                 if not relpath:
                     continue
@@ -100,9 +105,16 @@ def do_artifact_archive(args):
                     continue
                 pm = PatternMatcher()
                 pm.add_basedir(source_dir)
-                for subpath, dir_entry in pm.all.items():
+                # Sorted so that directory iteration order does not change the
+                # archive hash.
+                for subpath, dir_entry in sorted(pm.all.items()):
                     fullpath = f"{relpath}/{subpath}"
-                    arc.add(dir_entry.path, arcname=fullpath, recursive=False)
+                    arc.add(
+                        dir_entry.path,
+                        arcname=fullpath,
+                        recursive=False,
+                        filter=normalize_tarinfo,
+                    )
 
     if args.hash_file:
         digest = calculate_hash(output_path, args.hash_algorithm)

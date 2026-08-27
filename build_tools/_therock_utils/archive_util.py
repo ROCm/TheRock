@@ -7,6 +7,24 @@ from pathlib import Path
 import tarfile
 
 
+def normalize_tarinfo(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Normalizes TarInfo metadata so identical content yields identical archives.
+
+    Pass as the `filter` argument to `TarFile.add()`. Timestamps and the uid/gid
+    of the building user otherwise vary from build to build, giving the same
+    content a different archive hash every time.
+
+    Permissions are preserved. Extracting as a non-root user gives files owned by
+    the extracting user; extracting as root with `-p` gives root:root.
+    """
+    tarinfo.mtime = 0
+    tarinfo.uid = 0
+    tarinfo.gid = 0
+    tarinfo.uname = "root"
+    tarinfo.gname = "root"
+    return tarinfo
+
+
 def _get_pyzstd():
     """Lazy import pyzstd with helpful error message."""
     try:
