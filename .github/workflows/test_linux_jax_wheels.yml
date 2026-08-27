@@ -140,11 +140,15 @@ permissions:
   packages: read
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   test_jax_wheels:
+    needs: [resolve-images]
     name: Test JAX Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      image: ${{ needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 }}
       # DNS workaround: These --dns entries are added to resolve CloudFront/runner DNS issues
       # They should NOT be required for testing JAX and can be removed once DNS issues are resolved
       # TODO: Remove these lines when issue is fixed - https://github.com/ROCm/TheRock/issues/3014

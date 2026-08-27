@@ -108,13 +108,17 @@ permissions:
 run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+
   test_wheels:
+    needs: [resolve-images]
     name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 || null }}
       # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host

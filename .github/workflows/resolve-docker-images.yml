@@ -1,0 +1,34 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Resolve Docker image references
+
+on:
+  workflow_call:
+    outputs:
+      therock_build_manylinux_x86_64:
+        description: Full image reference for therock_build_manylinux_x86_64
+        value: ${{ jobs.resolve.outputs.therock_build_manylinux_x86_64 }}
+      no_rocm_image_ubuntu24_04:
+        description: Full image reference for no_rocm_image_ubuntu24_04
+        value: ${{ jobs.resolve.outputs.no_rocm_image_ubuntu24_04 }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve image references from docker_images.json
+    runs-on: ubuntu-24.04
+    outputs:
+      therock_build_manylinux_x86_64: ${{ steps.read.outputs.therock_build_manylinux_x86_64 }}
+      no_rocm_image_ubuntu24_04: ${{ steps.read.outputs.no_rocm_image_ubuntu24_04 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read image references
+        id: read
+        run: |
+          manylinux=$(python3 build_tools/resolve_docker_image.py get-image therock_build_manylinux_x86_64)
+          ubuntu24=$(python3 build_tools/resolve_docker_image.py get-image no_rocm_image_ubuntu24_04)
+          echo "therock_build_manylinux_x86_64=${manylinux}" >> "$GITHUB_OUTPUT"
+          echo "no_rocm_image_ubuntu24_04=${ubuntu24}" >> "$GITHUB_OUTPUT"
