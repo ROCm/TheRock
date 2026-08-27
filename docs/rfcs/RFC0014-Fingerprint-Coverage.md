@@ -80,7 +80,7 @@ honest. Reading the dependency the other way, with the fingerprint derived from 
 would put
 that file in charge of build correctness.
 
-FP-* and SMREV-1 are independently verifiable. INPUTS and DRIFT items build on them. PRE items make
+FP-* and SMREV-1 are independently verifiable. INPUTS-* and DRIFT-1 build on them. PRE items make
 same-machine reuse trustworthy. PORT and ABI items extend that across machines and rest on
 compatibility claims that are harder to demonstrate than anything above.
 
@@ -120,16 +120,11 @@ digest is the root key. Subprojects inside the closure key on it; subprojects ou
 `amd-llvm@<fprint>` and never see the host toolchain. Cross-machine reuse is refused when the roots
 differ, so a consumer whose root differs rejects the artifact.
 
-The root is a declared constant, so it introduces no dependency edge.
-and nothing inside the closure depends on a subproject outside it.
+The root is a declared constant and introduces no dependency edge. Configuration fails if a
+closure member depends on a target outside the closure.
 
-An equal bootstrap root does not prove identical compiler output: that two images satisfying the
-same declared root produce
-interchangeable compilers. An equal root proves the declared build environment matches. It does not
-prove identical compiler
-output. V-8 requires the comparison before cross-machine reuse is enabled: build `amd-llvm` under
-two roots
-and compare emitted objects for a fixed input.
+Equal `BOOTSTRAP_ROOT` values establish equal declared build environments. They do not establish
+identical compiler output. V-25 requires that comparison before cross-machine reuse is enabled.
 
 **Marker fallback quarantine.** Any decision to build from source after a marker check deletes the
 stale `stage.prebuilt` marker and removes or quarantines the imported stage directory, so a build
@@ -138,10 +133,11 @@ an unpack that may have taken minutes; the alternative is a stage directory with
 no way to tell which file came from where.
 
 **Artifact fingerprint file.** Per-subproject fingerprints travel in one `.fprint` file per slice,
-carried inside each of that slice's archives: no archive format change, no new manifest member, no
+carried inside each of that slice's archives: no new manifest entry, and no
 change to extraction. The schema carries the fingerprint algorithm and schema version, the artifact
-component and target family, the build and platform configuration identity, and enough per-input
-detail to explain a mismatch. Because artifacts are archived one component at a time (`ArtifactName`
+build and platform configuration identity, and enough per-input detail to explain a mismatch. It
+carries no component or target-family field: the unpacker reads both from the validated archive
+name. Because artifacts are archived one component at a time (`ArtifactName`
 carries a single component, `build_tools/_therock_utils/artifacts.py:36-60`), component coverage
 accumulates in the marker across successive unpacks rather than being stated once.
 
@@ -471,7 +467,7 @@ identical `CMAKE_CXX_COMPILER_ID`, `_VERSION` and `_TARGET` while generating dif
 tuple omits the linker, the resource directory, default search paths, the sysroot and the assembler.
 Until Q1 is settled, `external@` subprojects are ineligible for cross-machine reuse.
 
-### Sidecar and marker
+### Archive fingerprint record and marker
 
 The fingerprint record travels **inside** the artifact archive, as a root member named `.fprint`
 written immediately after `artifact_manifest.txt`. One archive, one object: nothing else to upload,
@@ -482,11 +478,16 @@ This is a deliberate archive-format change, and a small one at both ends:
 
 - Writer: `do_artifact_archive` (`build_tools/fileset_tool.py:81-105`) adds `artifact_manifest.txt`
   first; the record is added next, before the manifest's relpath contents.
-- Reader: `ArtifactPopulator` (`build_tools/_therock_utils/artifacts.py:187-204`) already requires
+- Reader: `ArtifactPopulator` (`build_tools/_therock_utils/artifacts.py:187-268`) requires
   `artifact_manifest.txt` as the first member, then matches each remaining member against a manifest
-  prefix. A member matching no prefix is skipped without error, so archives carrying `.fprint` are
-  readable by unmodified consumers; the populator gains an explicit check for it rather than relying
-  on that.
+  prefix. A member matching none reaches the `for ... else` at `:265` and raises
+  `IOError("encountered file not in manifest")`. **An unmodified reader therefore rejects an archive
+  carrying `.fprint`.** The reader must learn to accept the reserved root member before any producer
+  emits one, and must keep rejecting other unmatched members.
+
+This ordering is a release constraint, not a detail: land reader support, wait for it to reach every
+consumer, then begin producing the member. Producing first breaks bootstrap for anyone on an older
+`build_tools`.
 
 It replaces the per-component `<slice>_<component><suffix>.fprint` files written at
 `therock_artifacts.cmake:176`, which are build-tree artifacts nothing publishes.
@@ -518,9 +519,10 @@ beside the fingerprint avoids reconstructing it. On unpack the path must appear 
 `artifact_manifest.txt`, must be relative, must not contain `..`, and must not be claimed by two
 records.
 
-**INV-6 — every artifact basedir lives under its subproject's stage directory.** One
+**INV-7 — every artifact basedir lives under its subproject's stage directory.** One
 `stage_relpath` per record is only sufficient if a subproject's basedirs all resolve to one marker.
-Across all descriptors there are 116 distinct basedirs, and three do not end in `/stage`:
+Counting `[components.<type>."<basedir>"]` headers across the 69 artifact descriptors gives 116
+distinct basedirs. Three do not end in `/stage`:
 `dctools/rdc/stage/portable-rdc`, which is under a `stage` component and truncates correctly, and
 `math-libs/hipthreads/build` and `math-libs/libhipcxx/build`, which are not.
 
@@ -564,7 +566,7 @@ build-directory layout, reintroducing DEF-PORTABILITY in a new place.
 | file | contents | lifecycle |
 |---|---|---|
 | `test_tools/therock_subproject_inputs.json` | labels only, keyed by configuration | committed, drift-checked |
-| `build/therock_input set_fprint.json` | labels, digests, fingerprint, validity | per-configure, gitignored |
+| `build/therock_subproject_input_fprints.json` | labels, digests, fingerprint, validity | per-configure, gitignored |
 
 They are separate because digests in the committed copy would change on every edit to any input, so
 the drift check would fire on every PR and re-report what git history already says.
@@ -694,7 +696,7 @@ purpose is left open.
 plan = validate_all(selected_archives, fprint_files, manifests, existing_markers)
   for each archive A, component C, basedir r:
       rec  = fprint[A].record_for(r)          # stage_relpath -> subproject, fingerprint
-      mark = prebuilt_marker_relpath(r)       # INV-6 guarantees this is the stage marker
+      mark = prebuilt_marker_relpath(r)       # INV-7 guarantees this is the stage marker
       if existing[mark] is operator-disabled:      plan.skip(A, reason=disabled)
       elif existing[mark] absent:                  plan.write(mark, rec, [C], [A])
       elif existing[mark].FPRINT == rec.fprint != UNKNOWN:
@@ -1007,7 +1009,7 @@ visible staleness problem into an invisible one.
 | V-18 | truncate a marker mid-record | treated as absent; stage quarantined; build from source |
 | V-19 | operator disable, then configure | build is suppressed and the operator record survives (mechanism per Q6) |
 | V-25 | build `amd-llvm` under two roots with equal `BOOTSTRAP_ROOT`, fixed input | emitted objects compare equal; unequal roots refuse cross-machine reuse |
-| V-26 | descriptor declaring a basedir outside its subproject's stage dir | drift check rejects it (INV-6) |
+| V-26 | descriptor declaring a basedir outside its subproject's stage dir | drift check rejects it (INV-7) |
 | V-20 | legacy empty marker | deleted, stage quarantined, built from source; rebuilt marker carries a fingerprint |
 | V-21 | mismatch with `THEROCK_PREBUILT_FALLBACK=quarantine` | marker deleted, stage moved aside, no imported file in the rebuilt stage |
 | V-22 | narrow submodule bump through CI-1 | resolves to the bumped subproject's stages only |
@@ -1017,7 +1019,7 @@ visible staleness problem into an invisible one.
 V-24 is evidence of behaviour preservation, not proof.
 `build_tools/github_actions/tests/check_consumer_graph_drift_test.py:14` imports `check`,
 `normalize`
-and `write` by name, and DRIFT-1 keeps those bound. The test does not cover the CLI input set,
+and `write` by name, and DRIFT-1 keeps those bound. The test does not cover the CLI interface,
 argument
 defaults, diagnostics or malformed input, so CLI-level regression tests land with it.
 
@@ -1140,7 +1142,7 @@ consumer must rebuild.
 In `rocm-libraries`, hipBLASLt at 66 sits alongside rocBLAS at 4, rocPRIM at 2 and rocFFT at 9 — the
 quiet subtrees are disturbed roughly sixteen times more often than their own contents change.
 
-TheRock's own tree, last 200 `origin/main` commits, cumulative distinct inputs keys measured the
+TheRock's own tree, last 200 `origin/main` commits, distinct hashes for cumulative input sets measured the
 same way: 20 for `cmake/` + `CMakeLists.txt` + `fetch_sources.py` + `fileset_tool.py` +
 `_therock_utils/`; 26 adding `third-party/`; 32 adding `compiler/`; 36 adding `base/`, `core/` and
 `BUILD_TOPOLOGY.toml`; 200 for the whole-repo tree. `build_tools/` in full is 107/200, almost
