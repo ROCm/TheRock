@@ -482,30 +482,91 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
     return 0
 
 
-# --- public repository base URL ---
+# --- public repository stream (RFC0012) ---
 
-# Public CDN base for each release line: scheme + host + the packages-multi-arch
-# segment. The layout *beneath* the base is not uniform and is appended by the
-# caller -- release serves per-distro only (its deb/ and rpm/x86_64/ return 403),
-# nightly serves flat under a dated sub-folder only (its per-distro paths return
-# 403), and prerelease serves both. The one path that is uniform across all three
-# is gpg/rocm.gpg at the base.
-# Lines without a public repository (e.g. ci, dev) map to an empty string, which
-# callers treat as "no amdrocm-repo package for this line".
-_PUBLIC_REPO_BASE_URLS = {
-    "prerelease": "https://rocm.prereleases.amd.com/packages-multi-arch",
-    "release": "https://repo.amd.com/rocm/packages-multi-arch",
-    "nightly": "https://rocm.nightlies.amd.com/packages-multi-arch",
+# Which repo.amd.com stream a build line's amdrocm-repo package configures.
+#
+# This is deliberately NOT s3_buckets.get_release_stream(). That function answers
+# a different question -- which product bucket a build publishes into -- and its
+# answers do not transfer:
+#
+#   * it maps prerelease -> rc, and rc.repo.amd.com currently serves nothing on
+#     any distro, so a package pointing there could not refresh;
+#   * it raises on "release", because stable is promoted manually and has no
+#     artifacts bucket, yet stable is the stream users actually install from.
+#
+# So the mapping is kept separate and explicit. A line absent here yields an
+# empty base URL, which callers already treat as "no amdrocm-repo package for
+# this line" -- that is how prerelease is skipped until rc has content.
+#
+# The key is NOT under the packages base: packages live at
+# <root>/core/packages/<distro>/ and the key at <root>/gpg/packages.gpg, so the
+# two are carried separately rather than one being derived from the other. The
+# key URL is emitted whole so that where the key lives stays a fact about the
+# repository, recorded here, rather than a path assembled inside the builder.
+#
+# ``signed`` records whether the stream publishes a key at all. It is not an
+# independent choice: the streams serving a flat per-distro tree publish
+# InRelease/Release.gpg and repomd.xml.asc, and the ones serving per-build trees
+# publish none of them. nightly's gpg/packages.gpg is a 404.
+_STREAM_ROOTS = {
+    "release": {
+        "stream": "stable",
+        "root": "https://stable.repo.amd.com/rocm",
+        "signed": True,
+    },
+    "nightly": {
+        "stream": "nightly",
+        "root": "https://nightly.repo.amd.com/rocm",
+        "signed": False,
+    },
 }
 
 
+def get_public_repo_stream(release_type: str) -> str:
+    """Return the stream a build line's package configures (empty if none).
+
+    Note that the build line and the stream are not the same vocabulary and do
+    not always share a name: the ``release`` line configures the ``stable``
+    stream. Passed to the builder as ``--stream``.
+    """
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["stream"] if entry else ""
+
+
+def get_public_repo_stream_root(release_type: str) -> str:
+    """Return the stream root for a build line (empty if it has no stream)."""
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["root"] if entry else ""
+
+
 def get_public_repo_base_url(release_type: str) -> str:
-    """Return the public CDN base URL for a release line (empty if none)."""
-    return _PUBLIC_REPO_BASE_URLS.get(release_type.strip().lower(), "")
+    """Return the packages base URL for a release line (empty if none)."""
+    root = get_public_repo_stream_root(release_type)
+    return f"{root}/core/packages" if root else ""
+
+
+def get_public_repo_gpg_key_url(release_type: str) -> str:
+    """Return the full signing-key URL for a release line (empty if none).
+
+    Passed to the builder as ``--gpg-key-url`` and fetched verbatim. Only a
+    signed stream publishes a key, so an unsigned one yields an empty value here
+    even though it has a base URL.
+    """
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    if not entry or not entry["signed"]:
+        return ""
+    return f"{entry['root']}/gpg/packages.gpg"
 
 
 def cmd_public_repo_base_url(args: argparse.Namespace) -> int:
-    gha_set_output({"repo_base_url": get_public_repo_base_url(args.release_type)})
+    gha_set_output(
+        {
+            "stream": get_public_repo_stream(args.release_type),
+            "repo_base_url": get_public_repo_base_url(args.release_type),
+            "gpg_key_url": get_public_repo_gpg_key_url(args.release_type),
+        }
+    )
     return 0
 
 

@@ -442,40 +442,70 @@ class TestRepoPackagePromotion(unittest.TestCase):
         publish_native_linux_packages(root, release_type, backend)
         return staging
 
+    def _promoted_suffixes(self, release_type):
+        """Paths written outside the source prefix, relative to the destination.
+
+        The destination prefix is a literal inside the module and has already
+        moved once (v4/packages -> v5/rocm/core/packages), which silently turned
+        these tests red without anything here changing. What they exist to prove
+        is that the copy is recursive enough to carry repo/<profile>/ -- not
+        where the release lands -- so the prefix is discovered rather than
+        pinned, and only the tail is asserted.
+        """
+        staging = self._promote(release_type)
+        source = f"{self.RUN_ID}-linux/"
+        written = {
+            p.relative_to(staging).as_posix()
+            for p in staging.rglob("*")
+            if p.is_file() and not p.relative_to(staging).as_posix().startswith(source)
+        }
+        self.assertTrue(written, "promotion wrote nothing outside the source prefix")
+        return written
+
+    @staticmethod
+    def _has_suffix(written, suffix):
+        return any(p.endswith(suffix) for p in written)
+
     def test_prerelease_carries_every_profile_package(self):
-        staging = self._promote("prerelease")
+        written = self._promoted_suffixes("prerelease")
 
         for pkg_type in ("deb", "rpm"):
             for profile in self.PROFILES:
-                promoted = (
-                    staging
-                    / f"v4/packages/{pkg_type}/repo/{profile}/amdrocm-repo.{pkg_type}"
+                suffix = f"/{pkg_type}/repo/{profile}/amdrocm-repo.{pkg_type}"
+                self.assertTrue(
+                    self._has_suffix(written, suffix),
+                    f"nothing promoted ending in {suffix}; got {sorted(written)}",
                 )
-                self.assertTrue(promoted.is_file(), f"missing {promoted}")
 
     def test_prerelease_carries_the_repository_alongside(self):
         # A test that only checked the bootstrap package would still pass if the
         # copy had silently stopped carrying the repository itself.
-        staging = self._promote("prerelease")
+        written = self._promoted_suffixes("prerelease")
 
-        for rel in (
-            "v4/packages/deb/pool/main/r/rocm/rocm_7.14.0_amd64.deb",
-            "v4/packages/deb/dists/stable/Release",
-            "v4/packages/rpm/x86_64/rocm-7.14.0.x86_64.rpm",
-            "v4/packages/rpm/x86_64/repodata/repomd.xml",
+        for suffix in (
+            "/deb/pool/main/r/rocm/rocm_7.14.0_amd64.deb",
+            "/deb/dists/stable/Release",
+            "/rpm/x86_64/rocm-7.14.0.x86_64.rpm",
+            "/rpm/x86_64/repodata/repomd.xml",
         ):
-            self.assertTrue((staging / rel).is_file(), f"missing {rel}")
+            self.assertTrue(
+                self._has_suffix(written, suffix),
+                f"nothing promoted ending in {suffix}; got {sorted(written)}",
+            )
 
     def test_dated_lines_carry_the_package_too(self):
         # dev and nightly promote under {date}-{run_id} rather than a fixed
         # prefix, so the destination shape differs and is worth covering. The
         # date is computed the same way the module computes it rather than
         # hardcoded.
-        staging = self._promote("dev")
+        written = self._promoted_suffixes("dev")
 
         dated = f"{datetime.date.today().strftime('%Y%m%d')}-{self.RUN_ID}"
-        promoted = staging / f"v4/deb/{dated}/repo/ubuntu2404/amdrocm-repo.deb"
-        self.assertTrue(promoted.is_file(), f"missing {promoted}")
+        suffix = f"/deb/{dated}/repo/ubuntu2404/amdrocm-repo.deb"
+        self.assertTrue(
+            self._has_suffix(written, suffix),
+            f"nothing promoted ending in {suffix}; got {sorted(written)}",
+        )
 
 
 if __name__ == "__main__":

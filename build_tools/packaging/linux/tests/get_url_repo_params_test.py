@@ -423,25 +423,26 @@ class MainSubcommandsTest(unittest.TestCase):
 
 
 class GetPublicRepoBaseUrlTest(unittest.TestCase):
-    """Tests for get_public_repo_base_url() and its subcommand."""
+    """Tests for the RFC0012 stream mapping and its subcommand."""
 
-    def test_prerelease(self):
-        self.assertEqual(
-            get_url_repo_params.get_public_repo_base_url("prerelease"),
-            "https://rocm.prereleases.amd.com/packages-multi-arch",
-        )
-
-    def test_release(self):
+    def test_release_maps_to_the_stable_stream(self):
         self.assertEqual(
             get_url_repo_params.get_public_repo_base_url("release"),
-            "https://repo.amd.com/rocm/packages-multi-arch",
+            "https://stable.repo.amd.com/rocm/core/packages",
         )
 
-    def test_nightly(self):
+    def test_nightly_maps_to_the_nightly_stream(self):
         self.assertEqual(
             get_url_repo_params.get_public_repo_base_url("nightly"),
-            "https://rocm.nightlies.amd.com/packages-multi-arch",
+            "https://nightly.repo.amd.com/rocm/core/packages",
         )
+
+    def test_prerelease_has_no_stream_yet(self):
+        # The documented mapping is prerelease -> rc, but rc.repo.amd.com serves
+        # nothing on any distro, so a package pointing there could not refresh.
+        # Empty means "no amdrocm-repo package for this line", which is how the
+        # workflow skips it. Restoring it is one entry plus a test.
+        self.assertEqual(get_url_repo_params.get_public_repo_base_url("prerelease"), "")
 
     def test_ci_and_dev_are_empty(self):
         self.assertEqual(get_url_repo_params.get_public_repo_base_url("ci"), "")
@@ -452,19 +453,48 @@ class GetPublicRepoBaseUrlTest(unittest.TestCase):
 
     def test_case_insensitive(self):
         self.assertEqual(
-            get_url_repo_params.get_public_repo_base_url("PreRelease"),
-            "https://rocm.prereleases.amd.com/packages-multi-arch",
+            get_url_repo_params.get_public_repo_base_url("Release"),
+            "https://stable.repo.amd.com/rocm/core/packages",
         )
 
-    def test_subcommand_emits_url(self):
+    def test_key_url_is_outside_the_packages_base(self):
+        # packages live at <root>/core/packages/, the key at <root>/gpg/, so
+        # neither URL can be reached from the other by appending or trimming one
+        # segment. The builder takes the key URL whole for that reason.
+        base = get_url_repo_params.get_public_repo_base_url("release")
+        key = get_url_repo_params.get_public_repo_gpg_key_url("release")
+        self.assertEqual(key, "https://stable.repo.amd.com/rocm/gpg/packages.gpg")
+        self.assertFalse(key.startswith(base))
+        self.assertFalse(base.startswith(key))
+
+    def test_unsigned_stream_has_no_key_url(self):
+        # nightly serves no InRelease, no Release.gpg and no repomd.xml.asc, and
+        # its gpg/packages.gpg is a 404, so it must not advertise a key.
+        self.assertNotEqual(get_url_repo_params.get_public_repo_base_url("nightly"), "")
+        self.assertEqual(get_url_repo_params.get_public_repo_gpg_key_url("nightly"), "")
+
+    def test_release_line_maps_to_a_differently_named_stream(self):
+        # The vocabularies differ: the "release" build line configures the
+        # "stable" stream. Pin it so the two are not conflated.
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_stream("release"), "stable"
+        )
+        self.assertEqual(
+            get_url_repo_params.get_public_repo_stream("nightly"), "nightly"
+        )
+        self.assertEqual(get_url_repo_params.get_public_repo_stream("prerelease"), "")
+
+    def test_subcommand_emits_url_and_key(self):
         code, output = _run_main_with_output(
-            ["get-public-repo-base-url", "--release-type", "prerelease"]
+            ["get-public-repo-base-url", "--release-type", "release"]
         )
         self.assertEqual(code, 0)
         self.assertIn(
-            "repo_base_url=https://rocm.prereleases.amd.com/packages-multi-arch",
+            "repo_base_url=https://stable.repo.amd.com/rocm/core/packages",
             output,
         )
+        self.assertIn("gpg_key_url=https://stable.repo.amd.com/rocm", output)
+        self.assertIn("stream=stable", output)
 
     def test_subcommand_emits_empty_for_ci(self):
         code, output = _run_main_with_output(
