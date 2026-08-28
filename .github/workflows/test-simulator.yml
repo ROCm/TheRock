@@ -1,0 +1,223 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Build TheRock with the rocjitsu simulator enabled, then run a real ROCm
+# application (rocRAND today) end-to-end against the simulated AMD GPU.
+#
+# Phase 1 (PR-1) keeps the scope minimal:
+#   - One job, builds + tests in the same workflow run.
+#   - Targets gfx94X-dcgpu only (rocjitsu has CDNA3/CDNA4 topologies today).
+#   - Runs the rocrand `basic` preset (see simulator_runner_filters.yaml).
+#   - Soft-fail on the test step until the pass rate stabilizes.
+#
+# Note on runner choice:
+#   The plan called for `ubuntu-latest`, but a full TheRock build requires the
+#   manylinux build container and a runner with substantial CPU/disk. We use
+#   the same `azure-linux-scale-rocm` runner pool as build_portable_linux_artifacts.yml
+#   - those runners do not have AMD GPUs, so the "no physical GPU" intent of
+#   the plan is preserved (the simulator runs entirely on CPU).
+
+name: Test Simulator
+
+on:
+  pull_request:
+    paths:
+      - "compiler/amd-llvm/**"
+      - "rocm-systems/emulation/rocjitsu/**"
+      - "emulation/**"
+      - "build_tools/github_actions/test_executable_scripts/simulator_runner.py"
+      - "build_tools/github_actions/test_executable_scripts/simulator_runner_filters.yaml"
+      - "build_tools/github_actions/test_executable_scripts/test_rocrand.py"
+      - ".github/workflows/test-simulator.yml"
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
+      filter_preset:
+        description: 'simulator_runner preset (basic | quick | full)'
+        type: string
+        default: basic
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test_simulator:
+    name: Build + rocrand-sim (${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }})
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 720 # 12 hour cap, matches build_portable_linux_artifacts.yml
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:702a5133851e6d1daf1207d2c9fbb01c2667914a5b6dc5a01faeb3ce66ea6421
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      # Convention used by all per-component test drivers (test_runner.py,
+      # test_rocdecode.py, ...): THEROCK_BIN_DIR points at the `bin/` subdir of
+      # the populated ROCm install. Drivers derive the ROCm root via
+      # `Path(THEROCK_BIN_DIR).parent`, and simulator_runner.py follows the
+      # same rule when locating librocjitsu_kmd.so and the rocjitsu config /
+      # schema files.
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/dist/rocm/bin"
+      # Root of the ROCm install (for the Verify and Extract steps below).
+      THEROCK_ROCM_ROOT: "${{ github.workspace }}/build/dist/rocm"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+          # simulator_runner.py reads simulator_runner_filters.yaml.
+          pip install pyyaml
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-dev" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          package_version: ADHOCBUILD
+          extra_cmake_options: >-
+            -DTHEROCK_ENABLE_EMULATION=ON
+            -DTHEROCK_ENABLE_ROCJITSU=ON
+            -DTHEROCK_BUILD_TESTING=ON
+          BUILD_DIR: build
+        run: |
+          python3 build_tools/github_actions/build_configure.py --manylinux
+
+      - name: Build therock-artifacts and therock-dist
+        # Upstream removed the `therock-archives` cmake target in #4771 and
+        # replaced it with `therock-artifacts`, which produces per-component
+        # *directories* under build/artifacts/ (e.g. build/artifacts/rand_test/)
+        # instead of *.tar.xz files. `artifact_manager.py push` is what now
+        # tarballs them for upload, which we deliberately do not invoke here.
+        # `therock-dist` then flattens everything into build/dist/rocm/.
+        # Mirrors .github/workflows/build_portable_linux_artifacts.yml.
+        run: |
+          cmake --build build --target therock-artifacts therock-dist -- -k 0
+
+      - name: Ensure rocRAND test artifact is materialized in dist
+        # therock-dist is supposed to flatten every artifact slice's _test
+        # component into build/dist/rocm/ alongside _lib/_run/_dev/_doc/_dbg
+        # (see cmake/therock_artifacts.cmake, _flatten_command_list).
+        # Historically (Rocjitsu_002/003) the dist only contained _lib/_run
+        # and bin/rocRAND/CTestTestfile.cmake was missing, so we merge the
+        # per-component test artifact directory into the dist as a no-op
+        # safety net. If the flatten worked, this is a no-op. If it didn't,
+        # this gives us the same outcome the old tar-extract step did.
+        #
+        # We use `tar | tar` instead of rsync because the manylinux build
+        # container does not ship rsync (Rocjitsu_004: "rsync: command not
+        # found"), whereas tar is universally available.
+        run: |
+          set -ex
+          shopt -s nullglob
+          # New layout: build/artifacts/rand_test[/ or _<arch>/] is a tree
+          # rooted at the ROCm install prefix (e.g. bin/rocRAND/..., bin/test_*).
+          merged=0
+          for d in build/artifacts/rand_test build/artifacts/rand_test_*; do
+            if [ -d "$d" ] && [ "$(basename "$d")" != "rand_test.fprint" ]; then
+              echo "Merge $d/ -> $THEROCK_ROCM_ROOT/"
+              ( cd "$d" && tar --exclude=artifact_manifest.txt -cf - . ) \
+                | tar -C "$THEROCK_ROCM_ROOT" -xf -
+              merged=$((merged + 1))
+            fi
+          done
+          if [ "$merged" -eq 0 ]; then
+            echo "::warning::No rand_test artifact directory found under build/artifacts/"
+            ls -lh build/artifacts/ 2>&1 | head -60 || true
+          fi
+
+      - name: Verify rocjitsu interposer + ctest layout are present
+        run: |
+          set -ex
+          ls -lh "$THEROCK_ROCM_ROOT/lib/librocjitsu_kmd.so"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/configs/amdgpu_cdna4_kmd.json"
+          ls -lh "$THEROCK_ROCM_ROOT/share/rocjitsu/schemas/simulation_config.fbs"
+          ls -lh "$THEROCK_BIN_DIR/rocRAND/CTestTestfile.cmake"
+
+      - name: Run rocrand under rocjitsu simulator
+        id: rocrand_sim
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          # Mirrors the matrix entry in fetch_test_configurations.py.
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          TEST_COMPONENT: rocrand
+          TEST_TYPE: full
+        run: |
+          python3 build_tools/github_actions/test_executable_scripts/simulator_runner.py \
+            --component rocrand \
+            --filter-preset "${{ inputs.filter_preset || 'basic' }}"
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          echo "## Simulator test result: ${{ steps.rocrand_sim.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Preset: ${{ inputs.filter_preset || 'basic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- AMDGPU_FAMILIES: ${AMDGPU_FAMILIES}" >> $GITHUB_STEP_SUMMARY
+          if [ -d "$THEROCK_ROCM_ROOT/share/rocjitsu" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocjitsu install" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_ROCM_ROOT/share/rocjitsu" -maxdepth 3 -type f >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "$THEROCK_BIN_DIR/rocRAND" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### rocRAND test layout (first 30 entries)" >> $GITHUB_STEP_SUMMARY
+            find "$THEROCK_BIN_DIR/rocRAND" -maxdepth 2 | head -30 >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Collect ctest + rocjitsu logs
+        if: ${{ !cancelled() }}
+        # ctest runs with --test-dir <dist>/bin/rocRAND so its Testing/
+        # output lives there, not under build/. We also stash any
+        # rocjitsu_*.log files we can find - the interposer historically
+        # writes them next to the working directory of the test process.
+        run: |
+          set +e
+          mkdir -p test-logs
+          if [ -d "$THEROCK_BIN_DIR/rocRAND/Testing" ]; then
+            cp -r "$THEROCK_BIN_DIR/rocRAND/Testing" test-logs/ctest-Testing
+          fi
+          find . -maxdepth 4 -name 'rocjitsu_*.log' -exec cp {} test-logs/ \; 2>/dev/null
+          find "$THEROCK_ROCM_ROOT" -maxdepth 6 -name 'rocjitsu_*.log' \
+            -exec cp {} test-logs/ \; 2>/dev/null
+          ls -lh test-logs/ 2>&1 | head -40 || true
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-simulator-logs-${{ github.run_attempt }}
+          path: test-logs/
+          if-no-files-found: warn
+          retention-days: 7
