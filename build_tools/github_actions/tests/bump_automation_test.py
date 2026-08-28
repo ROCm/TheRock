@@ -316,7 +316,7 @@ class HandlePushTest(unittest.TestCase):
         the systems token and skip cloning the upstream repo."""
 
         def changed(before, after, path):
-            return path == "third-party/sysdeps/linux/amd-mesa/mesa-fork"
+            return path == "third-party/sysdeps/common/mesa-fork"
 
         with patch("bump_automation.submodule_changed", side_effect=changed):
             with patch(
@@ -461,7 +461,7 @@ class HandleScheduleTest(unittest.TestCase):
 
     def test_mesa_fork_maps_to_correct_submodule_and_token(self):
         """handle_schedule('mesa-fork') must call create_therock_bump with
-        'third-party/sysdeps/linux/amd-mesa/mesa-fork' and tokens['mesa-fork']."""
+        'third-party/sysdeps/common/mesa-fork' and tokens['mesa-fork']."""
         tokens = {
             "systems": "systems-token",
             "libraries": "libraries-token",
@@ -474,7 +474,7 @@ class HandleScheduleTest(unittest.TestCase):
             handle_schedule(tokens, "mesa-fork")
 
         mock_bump.assert_called_once_with(
-            "third-party/sysdeps/linux/amd-mesa/mesa-fork", "mesa-fork-token"
+            "third-party/sysdeps/common/mesa-fork", "mesa-fork-token"
         )
 
     def test_mesa_fork_does_not_invoke_other_submodules(self):

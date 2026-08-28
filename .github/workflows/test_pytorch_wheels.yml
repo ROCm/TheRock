@@ -17,10 +17,10 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
+        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       python_version:
         required: true
         type: string

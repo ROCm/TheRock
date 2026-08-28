@@ -147,6 +147,10 @@ jobs:
           # https://github.com/ninja-build/ninja/issues/2616
           choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
+          # win_flex/win_bison are required by the amd-mesa (libva/d3d12) build.
+          if [[ "${STAGE_NAME}" == "media-libs" ]]; then
+            choco install --no-progress -y winflexbison3
+          fi
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
 
       - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
@@ -237,11 +241,9 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
-      # TODO(scotttodd): enable once these tests pass
-      #     therock-examples-cpp-sdk-user can't find hipsparselt-config.cmake
-      # - name: Test Packaging
-      #   run: |
-      #     ctest --test-dir ${BUILD_DIR} --output-on-failure
+      - name: Test Packaging
+        run: |
+          ctest --test-dir ${BUILD_DIR} --output-on-failure
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}

@@ -19,6 +19,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path, PurePosixPath
 
 # Import the runtime module straight from the package template source tree.
@@ -337,6 +338,45 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         self._reconcile()
         self.assertTrue(dest.samefile(src))
         self.assertEqual(dest.read_text(), "real kpack")
+
+    def test_no_uncollapsed_parent_refs_reach_the_filesystem(self):
+        # Manifest link targets lead with one ".." per relpath component, so a
+        # verbatim join names the right file with a much longer string. Windows
+        # applies MAX_PATH before collapsing "..", so such a path fails to stat
+        # even though the file is present, and the device file is silently
+        # dropped from the devel tree. Assert on the paths themselves rather
+        # than on a length, so this holds on Linux CI too.
+        self._add_device_wheel(
+            "gfx942",
+            {
+                ".kpack/blas_lib_gfx942.kpack": "kpack data",
+                "lib/rocblas/library/Foo_gfx942.co": "kernel object",
+            },
+        )
+
+        seen: list[str] = []
+        real_stat = os.stat
+
+        def recording_stat(path, *args, **kwargs):
+            seen.append(str(path))
+            return real_stat(path, *args, **kwargs)
+
+        with unittest.mock.patch("os.stat", recording_stat):
+            # Twice: the first pass creates the links and exercises
+            # _reconcile_device_links, the second takes the steady-state route
+            # through _devel_link_ok. They resolve the target separately.
+            self._reconcile()
+            self._reconcile()
+
+        self.assertTrue(seen, "os.stat was not intercepted, so nothing was checked")
+        offenders = [p for p in seen if ".." in Path(p).parts]
+        self.assertFalse(
+            offenders,
+            msg=(
+                "link targets must be collapsed before use; these reached the "
+                f"filesystem with '..' intact: {offenders[:3]}"
+            ),
+        )
 
 
 if __name__ == "__main__":

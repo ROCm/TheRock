@@ -67,7 +67,7 @@ SUBMODULE_CONFIG = {
         #   * rocgdb tests only (no impact on other project builds/tests)
         "labels": [*COMMON_CI_LABELS, "test:rocgdb"],
     },
-    "third-party/sysdeps/linux/amd-mesa/mesa-fork": {
+    "third-party/sysdeps/common/mesa-fork": {
         "repo": "ROCm/mesa-fork",
         "files": [],
         "updater": "submodule-only",
@@ -443,9 +443,7 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
     if submodule in ("all", "rocgdb"):
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
     if submodule in ("all", "mesa-fork"):
-        create_therock_bump(
-            "third-party/sysdeps/linux/amd-mesa/mesa-fork", tokens["mesa-fork"]
-        )
+        create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:

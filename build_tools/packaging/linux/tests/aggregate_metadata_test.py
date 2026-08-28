@@ -172,6 +172,24 @@ class TestDebFetchPackages(unittest.TestCase):
             )
         self.assertEqual(result, b"Package: pkg\nVersion: 2.0\n")
 
+    def test_falls_back_to_gz_when_xz_returns_403(self):
+        # Some servers (e.g. repo.amd.com) return 403 Forbidden instead of
+        # 404 for formats they don't serve. We treat 403 the same as 404.
+        gz_data = gzip.compress(b"Package: pkg\nVersion: 3.0\n")
+
+        def side_effect(url):
+            if url.endswith(".xz"):
+                raise self._make_http_error(403)
+            if url.endswith(".bz2"):
+                raise self._make_http_error(404)
+            return gz_data
+
+        with patch.object(deb, "fetch_bytes", side_effect=side_effect):
+            result = deb.fetch_packages(
+                "https://example.com", "dists", "stable", "main", "amd64"
+            )
+        self.assertEqual(result, b"Package: pkg\nVersion: 3.0\n")
+
     def test_falls_back_through_all_to_uncompressed(self):
         raw = b"Package: pkg\nVersion: 3.0\n"
 

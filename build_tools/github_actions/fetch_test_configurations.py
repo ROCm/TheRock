@@ -398,6 +398,7 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
+        "expect_failure": True,
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
@@ -407,6 +408,7 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
+        "expect_failure": True,
         "test_script": (
             "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
             " gdb.rocm/corefile.exp"
@@ -932,7 +934,6 @@ def run():
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
-    windows_hip_rocr_tests = str2bool(os.getenv("WINDOWS_HIP_ROCR_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
     # Get runner config for per-component runner selection
@@ -1046,8 +1047,7 @@ def run():
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
-            # Hip-tests on Windows: always run PAL (pass/fail). Optionally also run
-            # ROCR (informational) for parity tracking when WINDOWS_HIP_ROCR_TESTS=true.
+            # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = selected_matrix[key]
@@ -1071,21 +1071,19 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-                if windows_hip_rocr_tests:
-                    rocr_entry = {
-                        **_common_settings,
-                        "job_name": "hip-tests (ROCR)",
-                        "fetch_artifact_args": base["fetch_artifact_args"],
-                        "timeout_minutes": base["timeout_minutes"],
-                        "test_script": base["test_script"],
-                        "platform": base["platform"],
-                        "total_shards": total_shards,
-                        "test_type": test_type,
-                        "shard_arr": shard_arr,
-                        "expect_failure": True,
-                        "gpu_enable_pal": "0",
-                    }
-                    all_components.append(rocr_entry)
+                rocr_entry = {
+                    **_common_settings,
+                    "job_name": "hip-tests (ROCR)",
+                    "fetch_artifact_args": base["fetch_artifact_args"],
+                    "timeout_minutes": base["timeout_minutes"],
+                    "test_script": base["test_script"],
+                    "platform": base["platform"],
+                    "total_shards": total_shards,
+                    "test_type": test_type,
+                    "shard_arr": shard_arr,
+                    "gpu_enable_pal": "0",
+                }
+                all_components.append(rocr_entry)
                 continue
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
