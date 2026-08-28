@@ -1,3 +1,9 @@
+# Common Python requirements for TheRock's test infrastructure and all
+# subproject test jobs. Keep this list minimal because every component test
+# environment downloads these packages. Put requirements used by an individual
+# subproject in a file distributed with its test artifact and register that file
+# with additional_requirements_files. See docs/development/adding_tests.md.
+
 boto3==1.39.15
 pytest==9.0.3 # This versions has subtests built-in.
 pytest-check==2.5.3
