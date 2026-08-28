@@ -170,7 +170,7 @@ class ResolveTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# get_image_ref (reads the real docker_images.json)
+# get_image_ref (reads the real dockerfiles/docker_images.json)
 # ---------------------------------------------------------------------------
 
 
@@ -257,7 +257,7 @@ class CLIValidateTest(unittest.TestCase):
 
     def test_bad_json_fails(self):
         # Patch load_images so cmd_validate sees invalid data without touching
-        # the real docker_images.json. _DOCKER_IMAGES_PATH can't be patched at
+        # the real dockerfiles/docker_images.json. _DOCKER_IMAGES_PATH can't be patched at
         # call time because default parameter values are bound at definition time.
         bad = {"bad": {"registry": "ok.io", "image": "img", "sha": "NOT_A_DIGEST"}}
         with patch.object(resolve_docker_image, "load_images", return_value=bad):
