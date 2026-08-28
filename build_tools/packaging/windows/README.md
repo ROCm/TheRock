@@ -17,33 +17,33 @@ deployment. All `msiexec` commands must be run from an elevated prompt.
 **Silent install (default location):**
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn
+msiexec /i amdrocm-runtime.msi /qn
 ```
 
 **Silent install with a log file:**
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn /l*v "%TEMP%\rocm-install.log"
+msiexec /i amdrocm-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 ```
 
 **Silent install to a custom directory:**
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn TARGETDIR="D:\ROCm\"
+msiexec /i amdrocm-runtime.msi /qn TARGETDIR="D:\ROCm\"
 ```
 
 **Silent install with long-path support enabled:**
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn ENABLE_LONG_PATHS=1
+msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=1
 ```
 
 ## What Gets Installed
 
 | Item | Default location |
 |---|---|
-| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtimes-<version>\bin\` |
-| Import libraries (`.lib`) | `C:\Program Files\AMD\ROCm\runtimes-<version>\lib\` |
+| Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\` |
+| Import libraries (`.lib`) | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
 | System PATH entry | `...\bin` appended to the machine-wide PATH |
 | Install-dir registry key | `HKLM\Software\AMD\ROCm\<version>\InstallDir` |
 
@@ -65,7 +65,7 @@ The key is removed on uninstall.
 Install the new MSI directly — no manual uninstall required:
 
 ```bat
-msiexec /i amdrocm-runtimes-<new-version>.msi /qn
+msiexec /i amdrocm-runtime-<new-version>.msi /qn
 ```
 
 Installing an older version over a newer one is blocked. Uninstall the current
@@ -76,7 +76,7 @@ version first if a downgrade is needed.
 **Using the MSI file:**
 
 ```bat
-msiexec /x amdrocm-runtimes.msi /qn
+msiexec /x amdrocm-runtime.msi /qn
 ```
 
 **Using the product code (when the MSI file is unavailable):**
@@ -104,14 +104,14 @@ PATH changes apply to newly opened terminals only. Open a new prompt and check:
 echo %PATH%
 ```
 
-`...\AMD\ROCm\runtimes-<version>\bin` should appear in the output.
+`...\AMD\ROCm\runtime-<version>\bin` should appear in the output.
 
 ### Installation fails
 
 Capture a verbose log and check the last error:
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn /l*v "%TEMP%\rocm-install.log"
+msiexec /i amdrocm-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 findstr /i "error" "%TEMP%\rocm-install.log"
 ```
 
@@ -120,7 +120,7 @@ findstr /i "error" "%TEMP%\rocm-install.log"
 Enable long-path support at install time:
 
 ```bat
-msiexec /i amdrocm-runtimes.msi /qn ENABLE_LONG_PATHS=1
+msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=1
 ```
 
 Or set the registry key manually and reboot:
@@ -144,7 +144,7 @@ dir C:\Windows\System32\amd_comgr_*.dll
 Delete any files found, then repair the installation:
 
 ```bat
-msiexec /fvomus amdrocm-runtimes.msi /qn
+msiexec /fvomus amdrocm-runtime.msi /qn
 ```
 
 ## See Also

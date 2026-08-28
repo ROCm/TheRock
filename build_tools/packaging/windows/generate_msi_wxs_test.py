@@ -410,11 +410,11 @@ class TestBuildWxs(unittest.TestCase):
             ref_ids = {r.get("Id") for r in root.iter(_ns("ComponentRef"))}
             self.assertTrue(ref_ids.issubset(comp_ids))
 
-    def test_runtimes_package(self):
+    def test_runtime_package(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("runtimes"), package="runtimes")
+            root = self._run(tmp, self._minimal_specs("runtime"), package="runtime")
             pkg = root.find(_ns("Package"))
-            self.assertEqual(pkg.get("UpgradeCode"), PACKAGES["runtimes"].upgrade_code)
+            self.assertEqual(pkg.get("UpgradeCode"), PACKAGES["runtime"].upgrade_code)
             names = [d.get("Name") for d in root.iter(_ns("Directory"))]
             self.assertIn("core-1.2", names)
 

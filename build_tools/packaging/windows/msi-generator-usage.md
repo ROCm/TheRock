@@ -52,7 +52,7 @@ python build_tools\packaging\windows\generate_msi_wxs.py --list
 | Package       | Output stem           | Contents                                                            |
 | ------------- | --------------------- | ------------------------------------------------------------------- |
 | `hip-runtime` | `amdrocm-hip-runtime` | HIP runtime DLLs, hipcc, hipconfig, kernel package support          |
-| `runtimes`    | `amdrocm-runtimes`    | HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs) |
+| `runtime`     | `amdrocm-runtime`     | HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs) |
 
 ## Options
 

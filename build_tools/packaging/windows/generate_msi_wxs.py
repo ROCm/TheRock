@@ -117,20 +117,20 @@ PACKAGES: dict[str, PackageDef] = {
         feature_title="ROCm HIP Runtime",
         registry_key="Software\\AMD\\ROCm\\hip-runtime\\{major}.{minor}",
     ),
-    "runtimes": PackageDef(
+    "runtime": PackageDef(
         description="ROCm runtime redistributable (HIP runtime + amd_comgr.dll)",
-        product_name="AMD ROCm Runtimes",
+        product_name="AMD ROCm Runtime",
         artifacts=[
             "core-hip",  # HIP runtime DLLs (amdhip64_7, hiprtc*) — lib component only
             "core-kpack",  # Kernel package support (rocm_kpack.dll)
             "amd-llvm",  # comgr only — see per_artifact_includes
         ],
-        output_stem="amdrocm-runtimes",
+        output_stem="amdrocm-runtime",
         install_subdir="core-{major}.{minor}",
         upgrade_code="C3D4E5F6-A7B8-9012-CDEF-123456789012",
-        feature_id="ROCmRuntimes",
-        feature_title="AMD ROCm Runtimes",
-        registry_key="Software\\AMD\\ROCm\\runtimes\\{major}.{minor}",
+        feature_id="ROCmRuntime",
+        feature_title="AMD ROCm Runtime",
+        registry_key="Software\\AMD\\ROCm\\runtime\\{major}.{minor}",
         per_artifact_includes={
             "amd-llvm": ["bin/amd_comgr.dll"],
         },
@@ -139,6 +139,7 @@ PACKAGES: dict[str, PackageDef] = {
             "amdhip64_7.dll",  # current HIP runtime
             "amd_comgr.dll",  # code object manager
             "amd_comgr_2.dll",  # comgr v2 compat (from AMD driver)
+            "rocm_kpack.dll",  # kernel package support
         ],
     ),
     "core": PackageDef(
@@ -612,9 +613,9 @@ def build_wxs(args: argparse.Namespace) -> None:
     ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Secure="yes")
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
-    # Legacy System32 install is off by default; set LEGACY_INSTALL=1 to enable.
+    # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
     ET.SubElement(
-        pkg, f"{{{ns}}}Property", Id="LEGACY_INSTALL", Value="0", Secure="yes"
+        pkg, f"{{{ns}}}Property", Id="LEGACY_INSTALL", Value="1", Secure="yes"
     )
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
@@ -807,15 +808,15 @@ def build_wxs(args: argparse.Namespace) -> None:
             f"{{{ns}}}Feature",
             Id="LegacyInstall",
             Title="Legacy System32 DLLs",
-            Level="0",
+            Level="1",
         )
-        # Turn the feature on when LEGACY_INSTALL=1. Default property value
-        # is "0", so the feature is skipped unless explicitly enabled.
+        # Turn the feature off when LEGACY_INSTALL=0. Default property value
+        # is "1", so the feature is enabled unless explicitly disabled.
         ET.SubElement(
             legacy_feature,
             f"{{{ns}}}Level",
-            Value="1",
-            Condition='LEGACY_INSTALL = "1"',
+            Value="0",
+            Condition='LEGACY_INSTALL = "0"',
         )
         for dll_name, source in legacy_dlls:
             comp_id = make_id(Path("System32") / dll_name, "c")

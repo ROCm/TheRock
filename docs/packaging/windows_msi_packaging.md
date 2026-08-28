@@ -98,7 +98,7 @@ Some packages need only a subset of a particular artifact's files. The
 `per_artifact_includes` field on `PackageDef` passes include glob patterns to
 `ArtifactCatalog` for specific artifacts, while leaving all others unrestricted.
 
-For example, the `runtimes` package includes `amd-llvm` solely for
+For example, the `runtime` package includes `amd-llvm` solely for
 `amd_comgr.dll` (the code object manager, required at runtime for GPU code
 object loading). The `amd-llvm` artifact also contains compiler binaries,
 LLVM bitcode, libclang, and clang resource headers — none of which are needed
@@ -122,7 +122,7 @@ Three packages are defined, covering different deployment scenarios:
 | Package               | Artifacts                                                                   | Intent                                                                                   |
 | --------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `amdrocm-hip-runtime` | core-hip, core-kpack, core-hipinfo                                          | Minimal HIP runtime for running pre-compiled HIP programs                                |
-| `amdrocm-runtimes`    | core-hip, core-kpack, core-hipinfo, amd-llvm (comgr only)                   | HIP runtime + code object manager for applications that load GPU code objects at runtime |
+| `amdrocm-runtime`    | core-hip, core-kpack, core-hipinfo, amd-llvm (comgr only)                   | HIP runtime + code object manager for applications that load GPU code objects at runtime |
 | `amdrocm-core`        | core-runtime, core-hip, core-kpack, core-hipinfo, core-amdsmi, core-ocl-icd | Full core runtime: HIP + OpenCL + AMD SMI + ROCR-Runtime                                 |
 
 Each package installs to a versioned subdirectory under
@@ -219,7 +219,7 @@ gaps remain and will be addressed in follow-up commits before the packages are
 publicly distributed:
 
 - **`dep:Requires` declarations** — inter-package dependencies (e.g.
-  `amdrocm-runtimes-dev` depending on `amdrocm-runtimes`) are not yet
+  `amdrocm-runtime-dev` depending on `amdrocm-runtime`) are not yet
   declared. The WixToolset.Dependency extension is already included in the WiX
   build command; this is a generator-side addition.
 - **CI workflow integration** — a GitHub Actions job to call the generator and
