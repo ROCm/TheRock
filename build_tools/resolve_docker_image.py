@@ -184,9 +184,9 @@ def resolve(entry: dict, key: str) -> str:
     tag = entry.get("tag")
     base = f"{registry}/{image}"
 
-    if sha:
+    if sha is not None:
         return f"{base}@{sha}"
-    if tag:
+    if tag is not None:
         return f"{base}:{tag}"
 
     raise ValueError(
@@ -233,6 +233,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         print(f"Error reading dockerfiles/docker_images.json: {e}", file=sys.stderr)
         return 1
 
+    if not images:
+        return 0
     width = max(len(k) for k in images)
     for key, entry in images.items():
         try:
