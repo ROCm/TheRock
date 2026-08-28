@@ -19,6 +19,7 @@ from _therock_utils.archive_util import (
     open_archive_for_read,
     open_archive_for_write,
 )
+from _therock_utils.source_date import ENV_VAR, STANDARD_ENV_VAR
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -114,45 +115,48 @@ class ArchiveTimestampTest(unittest.TestCase):
         get_archive_timestamp.cache_clear()
         self.addCleanup(get_archive_timestamp.cache_clear)
 
-    def test_source_date_epoch_is_honored(self):
-        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+    @staticmethod
+    def _env(**overrides):
+        """Environment with both timestamp vars cleared, then `overrides` applied."""
+        env = {
+            k: v for k, v in os.environ.items() if k not in (STANDARD_ENV_VAR, ENV_VAR)
+        }
+        env.update(overrides)
+        return mock.patch.dict(os.environ, env, clear=True)
+
+    def test_therock_var_is_used(self):
+        with self._env(**{ENV_VAR: "1700000000"}):
             self.assertEqual(get_archive_timestamp(), 1700000000)
 
-    def test_non_integer_source_date_epoch_is_rejected(self):
-        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "yesterday"}):
-            with self.assertRaisesRegex(ValueError, "SOURCE_DATE_EPOCH"):
+    def test_standard_var_outranks_the_therock_var(self):
+        # Nothing sets SOURCE_DATE_EPOCH unless explicitly asked to, so its
+        # presence is a deliberate decision and beats the computed default.
+        with self._env(**{STANDARD_ENV_VAR: "1600000000", ENV_VAR: "1700000000"}):
+            self.assertEqual(get_archive_timestamp(), 1600000000)
+
+    def test_non_integer_value_is_rejected(self):
+        with self._env(**{ENV_VAR: "yesterday"}):
+            with self.assertRaisesRegex(ValueError, ENV_VAR):
                 get_archive_timestamp()
 
-    def test_negative_source_date_epoch_is_rejected(self):
-        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "-1"}):
+    def test_negative_value_is_rejected(self):
+        with self._env(**{STANDARD_ENV_VAR: "-1"}):
             with self.assertRaisesRegex(ValueError, "negative"):
                 get_archive_timestamp()
 
-    def test_falls_back_to_git_commit_time(self):
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SOURCE_DATE_EPOCH", None)
-            with mock.patch.object(
-                archive_util, "_git_commit_timestamp", return_value=1234567890
-            ):
-                self.assertEqual(get_archive_timestamp(), 1234567890)
-
-    def test_falls_back_to_current_time_outside_a_git_checkout(self):
+    def test_falls_back_to_current_time_when_unset(self):
+        # A worker run directly, with no orchestrator to resolve the source
+        # timestamp. Must never be the epoch.
         before = int(time.time())
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SOURCE_DATE_EPOCH", None)
-            with mock.patch.object(
-                archive_util, "_git_commit_timestamp", return_value=None
-            ):
-                timestamp = get_archive_timestamp()
+        with self._env():
+            timestamp = get_archive_timestamp()
         self.assertGreaterEqual(timestamp, before)
 
-    def test_resolves_in_this_checkout_without_configuration(self):
-        # The real resolution path: no SOURCE_DATE_EPOCH, a git checkout. Must
-        # never be the epoch, which is the whole point of not using 0.
-        with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SOURCE_DATE_EPOCH", None)
-            timestamp = get_archive_timestamp()
-        self.assertGreater(timestamp, 0)
+    def test_does_no_git_work(self):
+        # Resolving the source timestamp costs several git calls and this runs
+        # once per archive process, so it belongs in source_date, called once by
+        # an orchestrator.
+        self.assertNotIn("subprocess", vars(archive_util))
 
 
 class NormalizeTarinfoTest(unittest.TestCase):
@@ -170,7 +174,7 @@ class NormalizeTarinfoTest(unittest.TestCase):
         tarinfo.uname = "builder"
         tarinfo.gname = "builder"
 
-        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+        with mock.patch.dict(os.environ, {STANDARD_ENV_VAR: "1700000000"}):
             normalize_tarinfo(tarinfo)
 
         self.assertEqual(tarinfo.mtime, 1700000000)
@@ -267,7 +271,7 @@ class AddTreeTest(unittest.TestCase):
             tmp = Path(tmp)
             self._write_tree(tmp)
             archive = tmp / "out.tar.xz"
-            with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+            with mock.patch.dict(os.environ, {STANDARD_ENV_VAR: "1700000000"}):
                 with open_archive_for_write(archive, "xz") as tf:
                     add_tree(tf, tmp / "pkg", relative_to=tmp)
             with open_archive_for_read(archive) as tf:

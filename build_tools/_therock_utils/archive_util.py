@@ -7,46 +7,26 @@ from typing import Callable
 import functools
 import os
 from pathlib import Path
-import subprocess
 import tarfile
 import time
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+from .source_date import ENV_VAR, STANDARD_ENV_VAR
 
 
-def _git_commit_timestamp() -> int | None:
-    """Commit time of TheRock's HEAD, or None if not a usable git checkout.
-
-    Deliberately the superproject rather than the submodule an artifact's
-    content came from. TheRock pins every submodule, so its HEAD identifies the
-    whole source state, whereas an artifact has no single source submodule to
-    ask: a merged dist tree spans a subproject and its runtime deps, and several
-    subprojects (zlib, zstd, bzip2, elfutils, ...) are tarballs downloaded from
-    S3 with no git history at all.
-
-    The tradeoff is over-invalidation: a docs-only commit here changes every
-    artifact's hash even when the content is byte-identical. That is fine for
-    detecting conflicting uploads within a run, which is what this is for, but
-    it does mean archive hashes cannot be used to dedupe across commits. Set
-    `SOURCE_DATE_EPOCH` to decide that policy somewhere better informed.
-    """
+def _read_timestamp_env(name: str) -> int | None:
+    value = os.environ.get(name)
+    if not value:
+        return None
     try:
-        result = subprocess.run(
-            ["git", "log", "-1", "--format=%ct"],
-            cwd=THEROCK_DIR,
-            capture_output=True,
-            text=True,
-            check=False,
+        timestamp = int(value)
+    except ValueError:
+        raise ValueError(
+            f"{name} must be an integer number of seconds since the Unix "
+            f"epoch, got {value!r}"
         )
-    except OSError:
-        # git is not installed.
-        return None
-    if result.returncode != 0:
-        # Not a git checkout (e.g. building from an exported source archive) or
-        # no commits yet.
-        return None
-    output = result.stdout.strip()
-    return int(output) if output else None
+    if timestamp < 0:
+        raise ValueError(f"{name} must not be negative, got {timestamp}")
+    return timestamp
 
 
 @functools.cache
@@ -61,36 +41,23 @@ def get_archive_timestamp() -> int:
 
     Resolution order:
 
-    1. `SOURCE_DATE_EPOCH`, the reproducible-builds convention. Set this to pin
-       the timestamp explicitly; it is the supported override.
-    2. The commit time of HEAD. Deterministic for a given revision, so parallel
-       CI jobs building the same commit still produce identical archives, and
-       it advances as the source advances.
-    3. The current time, if neither is available. Not reproducible, but a
-       working build beats a deterministically broken one -- set
-       `SOURCE_DATE_EPOCH` where reproducibility is required.
+    1. `SOURCE_DATE_EPOCH`. Nothing in TheRock sets this unless explicitly asked
+       to, so its presence means somebody deliberately pinned the whole build's
+       timestamp, and that intent wins.
+    2. `THEROCK_SOURCE_DATE_EPOCH`, which orchestrators set for their workers
+       from `source_date.compute_source_date_epoch()`. This is the normal path
+       for a TheRock build.
+    3. The current time, for a worker run directly with neither set. Not
+       reproducible, but a working build beats a deterministically broken one.
 
-    Note that a dirty working tree still reports its last commit time. That is
-    fine for CI, which is always clean; set `SOURCE_DATE_EPOCH` locally if a
-    dirty tree's archives need to look newer than something.
+    Deliberately does no git work of its own: resolving the source timestamp
+    costs several git invocations, and this runs once per archive process.
+    `source_date` owns that, and orchestrators call it once.
     """
-    env_value = os.environ.get("SOURCE_DATE_EPOCH")
-    if env_value:
-        try:
-            timestamp = int(env_value)
-        except ValueError:
-            raise ValueError(
-                "SOURCE_DATE_EPOCH must be an integer number of seconds since "
-                f"the Unix epoch, got {env_value!r}"
-            )
-        if timestamp < 0:
-            raise ValueError(f"SOURCE_DATE_EPOCH must not be negative, got {timestamp}")
-        return timestamp
-
-    commit_timestamp = _git_commit_timestamp()
-    if commit_timestamp is not None:
-        return commit_timestamp
-
+    for name in (STANDARD_ENV_VAR, ENV_VAR):
+        timestamp = _read_timestamp_env(name)
+        if timestamp is not None:
+            return timestamp
     return int(time.time())
 
 

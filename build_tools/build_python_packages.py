@@ -26,6 +26,7 @@ import json
 from pathlib import Path
 import sys
 
+from _therock_utils import source_date
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
@@ -188,6 +189,13 @@ def validate_required_dist_packages(
 
 
 def run(args: argparse.Namespace):
+    # Resolved once, here: the devel tarball is written in-process, and every
+    # writer must agree on the timestamp or the output is not reproducible.
+    timestamp = source_date.apply_to_environ(
+        export_standard_var=args.export_source_date_epoch
+    )
+    print(f"::: Source timestamp: {timestamp}")
+
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
     if kpack_split:
@@ -685,6 +693,7 @@ def main(argv: list[str]):
             "side of a multi-arch release. See --linux-amdgpu-families."
         ),
     )
+    source_date.add_source_date_arguments(p)
     args = p.parse_args(argv)
 
     if not args.version:
