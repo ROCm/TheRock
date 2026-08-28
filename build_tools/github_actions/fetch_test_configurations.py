@@ -826,6 +826,9 @@ test_matrix = {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            "hipthreads/test/requirements-test.txt",
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
