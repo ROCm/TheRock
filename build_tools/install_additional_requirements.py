@@ -6,7 +6,7 @@
 """Script to install additional requirements.txt files for projects that require additional files for testing.
 
 Requires a requirements-file input parameter that is a list of comma separated paths to requirements.txt files.
-This path will always be relative to the absolute path of the OUTPUT_ARTIFACTS_DIR.
+An empty value is a no-op. Each path is relative to the absolute path of the OUTPUT_ARTIFACTS_DIR.
 
 Usage:
 python install_additional_requirements.py
@@ -44,11 +44,15 @@ THEROCK_OUTPUT_DIR = str(
 
 
 def install_requirements(req_files_list: str):
+    if not req_files_list:
+        logging.info("No additional requirements files to install")
+        return
+
+    requirements_files = req_files_list.split(",")
+
     environ_vars = os.environ.copy()
     environ_vars["CC"] = "clang"
     environ_vars["CXX"] = "clang++"
-
-    requirements_files = req_files_list.split(",")
 
     for file in requirements_files:
         cmd = [
