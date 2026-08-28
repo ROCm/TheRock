@@ -182,6 +182,7 @@ class ProcessBumpTest(unittest.TestCase):
             ("fetch_commits_in_range", [{"sha": "d" * 40}]),
             ("resolve_prs_for_commits", ({10}, [])),
             ("find_existing_comment_body", None),
+            ("get_therock_event_time", "2026-07-21T00:00:00+00:00"),
         ):
             patcher = mock.patch.object(
                 post_bump_breadcrumbs, target, return_value=default_return

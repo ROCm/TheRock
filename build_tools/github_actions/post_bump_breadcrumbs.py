@@ -24,6 +24,7 @@ Example usage:
 """
 
 import argparse
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +68,12 @@ UNMAPPED_HEADER = (
 
 _COMMENT_SEARCH_MAX_PAGES = 10
 _COMMENT_SEARCH_PER_PAGE = 100
+
+# Hidden timestamp used to sort sticky history by bump time, not job-attempt
+# time. Visible date on each line is the UTC day of this value.
+_EVENT_TIME_RE = re.compile(r"<!-- event-time: (\S+) -->")
+_VISIBLE_DATE_RE = re.compile(r"^\s*- \*\*(\d{4}-\d{2}-\d{2})\*\*")
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def detect_changed_submodules(before, after):
@@ -159,13 +166,85 @@ def event_key_marker(event_key):
     return f"<!-- event-id: {event_key} -->"
 
 
+def parse_event_datetime(event_time):
+    """Parses a YYYY-MM-DD or ISO-8601 timestamp to a UTC-aware datetime."""
+    event_time = event_time.strip()
+    if _DATE_ONLY_RE.fullmatch(event_time):
+        return datetime.strptime(event_time, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    dt = datetime.fromisoformat(event_time.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def format_event_time(dt):
+    """Canonical UTC ISO-8601 used in the HTML event-time marker."""
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+
+def event_time_marker(event_time):
+    """HTML-comment marker embedding the bump's UTC timestamp on a history line."""
+    return f"<!-- event-time: {format_event_time(parse_event_datetime(event_time))} -->"
+
+
+def get_therock_event_time(therock_after_sha):
+    """Committer timestamp of the TheRock push that produced this bump event.
+
+    Used as the visible date and the sort key so a delayed retry of an older
+    bump cannot stamp today's date or sort above a newer bump that already
+    posted.
+    """
+    iso = run(["git", "log", "-1", "--format=%cI", therock_after_sha])
+    if not iso:
+        raise RuntimeError(
+            f"No committer date for TheRock commit {therock_after_sha[:7]}"
+        )
+    return format_event_time(parse_event_datetime(iso))
+
+
 def history_has_event(existing_body, event_key):
     """Whether `existing_body` already contains an entry for `event_key`."""
     return bool(existing_body) and event_key_marker(event_key) in existing_body
 
 
+def entry_sort_datetime(entry):
+    """Bump time for one history line; falls back to the visible date."""
+    time_match = _EVENT_TIME_RE.search(entry)
+    if time_match:
+        return parse_event_datetime(time_match.group(1))
+    date_match = _VISIBLE_DATE_RE.search(entry)
+    if date_match:
+        return parse_event_datetime(date_match.group(1))
+    return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def split_history_entries(prior_text):
+    """Collects bullet lines from the sticky-comment history block."""
+    return [
+        line.strip()
+        for line in prior_text.splitlines()
+        if line.strip().startswith("- ")
+    ]
+
+
+def sort_history_entries(entries):
+    """Newest-first by bump time; event text is only a stable tiebreaker."""
+    return sorted(
+        entries,
+        key=lambda entry: (entry_sort_datetime(entry), entry),
+        reverse=True,
+    )
+
+
 def build_timeline_entry(event_date, reverted, therock_pr_number, submodule, event_key):
-    """Builds a single newest-first history-list line for one bump event."""
+    """Builds a single history-list line for one bump event.
+
+    `event_date` is a YYYY-MM-DD or ISO-8601 timestamp for the TheRock bump
+    itself (not the workflow attempt). The visible date is that instant's UTC
+    day; the full timestamp is stored in an HTML comment for sorting.
+    """
+    event_dt = parse_event_datetime(event_date)
+    display_date = event_dt.strftime("%Y-%m-%d")
     if therock_pr_number is not None:
         ref = (
             f"[{THEROCK_REPO}#{therock_pr_number}]"
@@ -174,24 +253,33 @@ def build_timeline_entry(event_date, reverted, therock_pr_number, submodule, eve
     else:
         ref = f"a `{submodule}` submodule bump in {THEROCK_REPO}"
     action = "Reverted out of TheRock via" if reverted else "Included in TheRock via"
-    return f"- **{event_date}** — {action} {ref}. {event_key_marker(event_key)}"
+    return (
+        f"- **{display_date}** — {action} {ref}. "
+        f"{event_key_marker(event_key)} {event_time_marker(event_date)}"
+    )
 
 
 def build_breadcrumb_body(
     existing_body, reverted, therock_pr_number, submodule, event_date, event_key
 ):
-    """Builds the single sticky comment body posted on an upstream PR."""
+    """Builds the single sticky comment body posted on an upstream PR.
+
+    History is sorted by bump event time (newest first), not insertion order,
+    so a delayed retry of an older bump cannot climb above a newer one.
+    """
     new_entry = build_timeline_entry(
         event_date, reverted, therock_pr_number, submodule, event_key
     )
 
-    prior_entries = ""
+    prior_entries = []
     if existing_body and HISTORY_HEADER in existing_body:
-        prior_entries = existing_body.split(HISTORY_HEADER, 1)[1].strip()
+        prior_text = existing_body.split(HISTORY_HEADER, 1)[1]
+        prior_entries = split_history_entries(prior_text)
 
-    entries = f"{new_entry}\n{prior_entries}" if prior_entries else new_entry
+    entries = sort_history_entries(prior_entries + [new_entry])
+    joined = "\n".join(entries)
 
-    return f"{BREADCRUMB_MARKER}\n{HISTORY_HEADER}\n\n{entries}\n"
+    return f"{BREADCRUMB_MARKER}\n{HISTORY_HEADER}\n\n{joined}\n"
 
 
 def build_unmapped_summary_entry(reverted, repo, unmapped_shas, event_key):
@@ -300,7 +388,7 @@ def process_bump(changed, therock_after_sha, tokens, dry_run=False):
     pr_numbers, unmapped_shas = resolve_prs_for_commits(repo, commits, github_api)
 
     event_key = build_event_key(therock_after_sha, name, reverted)
-    event_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    event_date = get_therock_event_time(therock_after_sha)
     for pr_number in sorted(pr_numbers):
         existing_body = find_existing_comment_body(
             pr_number, BREADCRUMB_MARKER, repo, github_api
