@@ -291,7 +291,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         emulation_job = components[0]
         self.assertEqual(emulation_job["job_name"], "emulation (emulated mi350x)")
         self.assertTrue(emulation_job["linux_cpu_runner"])
-        self.assertNotIn("test_runner", emulation_job)
         self.assertNotIn("emulate", emulation_job)
         self.assertNotIn("emulate_only", emulation_job)
         self.assertNotIn("--device /dev/kfd", emulation_job["container_options"])

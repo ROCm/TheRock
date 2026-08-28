@@ -120,12 +120,6 @@ project selection — excludes the emulated variant too. The one exception is th
 multi-GPU availability check: rocjitsu emulates the device in software, so a
 component whose family has no multi-GPU pool still gets its emulated variant.
 
-> [!IMPORTANT]
-> `emulate_only` keeps the base entry out of the matrix. The emitted job is the
-> one returned by `build_emulated_job()`, which sets `linux_cpu_runner: true` and
-> removes `multi_gpu`, `multi_gpu_runner`, and `is_benchmark` so
-> `test_artifacts.yml` routes it to the Linux CPU builder.
-
 > [!WARNING]
 > The component repositories keep their own copies of this routing chain and of
 > `test_component.yml` (`therock-test-packages.yml` / `therock-test-component.yml`

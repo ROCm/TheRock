@@ -1201,9 +1201,6 @@ def run():
                     f"Excluding job {job_name}: multi-GPU required but no multi-GPU runner configured"
                 )
                 continue
-        elif component.get("linux_cpu_runner", False):
-            # CPU jobs route through linux_cpu_runner, not a family runner.
-            component.pop("test_runner", None)
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
