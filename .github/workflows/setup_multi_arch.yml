@@ -40,6 +40,14 @@ on:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
         default: ""
+      build_stages:
+        description: >-
+          Comma-separated allowlist of build stages to run, e.g.
+          "compiler-runtime,runtime-tests". Every other stage is skipped
+          outright, with nothing built and no artifacts copied. Empty (the
+          default) builds every stage.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
@@ -210,6 +218,7 @@ jobs:
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
