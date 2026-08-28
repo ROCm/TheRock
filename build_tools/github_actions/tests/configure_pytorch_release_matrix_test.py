@@ -35,12 +35,14 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
             ],
@@ -64,6 +66,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
             ],
@@ -85,6 +88,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.13",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "sanity",
                     "test_amdgpu_families": "auto",
                 }
             ],
@@ -109,6 +113,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
                             "amdgpu_families": "gfx125X-dcgpu",
+                            "test_level": "standard",
                             "test_amdgpu_families": "auto",
                         }
                     ],
@@ -130,6 +135,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "users/alice/gfx125x-bringup",
                     "amdgpu_families": "gfx125X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
             ],
@@ -152,6 +158,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.14",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx110X-all",
+                    "test_level": "sanity",
                     "test_amdgpu_families": "none",
                 }
             ],
@@ -176,6 +183,41 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
                 self.assertEqual(len(matrix), 1)
                 self.assertEqual(matrix[0]["test_amdgpu_families"], "auto")
+
+    def test_only_python_312_runs_standard_gpu_tests(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.10", "3.11", "3.12", "3.13", "3.14"],
+            pytorch_git_refs=["nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertEqual(
+            {row["python_version"]: row["test_level"] for row in matrix},
+            {
+                "3.10": "sanity",
+                "3.11": "sanity",
+                "3.12": "standard",
+                "3.13": "sanity",
+                "3.14": "sanity",
+            },
+        )
+
+    def test_full_tests_elevate_only_python_312(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.11", "3.12", "3.13"],
+            pytorch_git_refs=["nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+            run_full_pytorch_tests=True,
+        )
+
+        self.assertEqual(
+            {row["python_version"]: row["test_level"] for row in matrix},
+            {"3.11": "sanity", "3.12": "full", "3.13": "sanity"},
+        )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix

@@ -24,6 +24,8 @@ RELEASE_TYPES = [
     "prerelease",
 ]
 
+PYTORCH_GPU_TEST_PYTHON_VERSION = "3.12"
+
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
@@ -116,6 +118,29 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
+def _select_test_level(*, python_version: str, run_full_pytorch_tests: bool) -> str:
+    """Select test coverage for one release matrix row.
+
+    Every build runs the CPU wheel sanity check in its build workflow. Limit
+    GPU testing to the Python version used by upstream PyTorch CI, elevating
+    that row to the separately dispatched full suite when requested.
+    """
+    if python_version != PYTORCH_GPU_TEST_PYTHON_VERSION:
+        return "sanity"
+    if run_full_pytorch_tests:
+        return "full"
+    return "standard"
+
+
+def _parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise argparse.ArgumentTypeError(f"Expected 'true' or 'false', got {value!r}")
+
+
 def generate_pytorch_matrix_for_release_type(
     *,
     release_type: str,
@@ -123,6 +148,7 @@ def generate_pytorch_matrix_for_release_type(
     platform: str,
     python_versions: list[str] | None = None,
     pytorch_git_refs: list[str] | None = None,
+    run_full_pytorch_tests: bool = False,
 ) -> list[dict[str, str]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
@@ -147,13 +173,15 @@ def generate_pytorch_matrix_for_release_type(
     #   {
     #     "python_version": "3.10",
     #     "pytorch_git_ref": "release/2.12",
-    #     "amdgpu_families": "gfx94X-dcgpu"
+    #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "test_level": "sanity"
     #   },
     #   ...
     #   {
     #     "python_version": "3.14",
     #     "pytorch_git_ref": "nightly",
-    #     "amdgpu_families": "gfx94X-dcgpu"
+    #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "test_level": "sanity"
     #   }
     # ]
     matrix: list[dict[str, str]] = []
@@ -170,6 +198,10 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
+                "test_level": _select_test_level(
+                    python_version=py,
+                    run_full_pytorch_tests=run_full_pytorch_tests,
+                ),
                 # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
                 # scikit-image==0.22.0, which has no cp314 wheel and fails to
                 # build from source. Build those wheels but skip their tests
@@ -221,6 +253,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Release type selecting default PyTorch/Python matrix (default: dev)",
     )
     parser.add_argument(
+        "--run-full-pytorch-tests",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Use the full test level for eligible Python matrix rows "
+            "(default: false)"
+        ),
+    )
+    parser.add_argument(
         "--amdgpu-families",
         type=str,
         default="",
@@ -241,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         pytorch_git_refs=pytorch_git_refs,
         amdgpu_families=args.amdgpu_families,
         platform=args.platform,
+        run_full_pytorch_tests=args.run_full_pytorch_tests,
     )
     gha_set_output({"pytorch_matrix": json.dumps(matrix)})
     return 0

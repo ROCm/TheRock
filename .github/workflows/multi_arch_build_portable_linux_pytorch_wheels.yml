@@ -39,6 +39,13 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: >-
+          PyTorch test coverage: 'sanity' runs only the CPU wheel check in the
+          build job, 'standard' runs the selected GPU suite, and 'full' also
+          dispatches the full suite when the build is eligible.
+        type: string
+        default: "standard"
       python_version:
         description: Python version to build wheels for.
         type: string
@@ -85,12 +92,6 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
-      run_full_pytorch_tests:
-        description: >-
-          Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
-        type: boolean
-        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -114,6 +115,14 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: PyTorch test coverage level.
+        type: choice
+        options:
+          - sanity
+          - standard
+          - full
+        default: standard
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -179,12 +188,6 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
-      run_full_pytorch_tests:
-        description: >-
-          Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
-        type: boolean
-        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -524,6 +527,7 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
+            --test-level "${{ inputs.test_level }}" \
             --platform linux
 
       - name: Capture job summary
@@ -560,12 +564,12 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
+  # Scoped to gfx94X-dcgpu Python 3.12 builds with the full test level.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
     if: >-
       ${{
-        inputs.run_full_pytorch_tests &&
+        inputs.test_level == 'full' &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}

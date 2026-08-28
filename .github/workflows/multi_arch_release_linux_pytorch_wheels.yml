@@ -166,6 +166,7 @@ jobs:
             --python-versions="${{ inputs.python_version }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
+            --run-full-pytorch-tests="${{ inputs.run_full_pytorch_tests }}" \
             --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
@@ -188,6 +189,7 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
+      test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -198,10 +200,6 @@ jobs:
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
       build_runs_on: ${{ inputs.build_runs_on }}
-      # The reusable build workflow dispatches the full PyTorch test suite for
-      # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
-      # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
