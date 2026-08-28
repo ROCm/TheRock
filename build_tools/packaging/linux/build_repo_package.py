@@ -6,8 +6,8 @@
 r"""Build the ``amdrocm-repo`` package that configures a system package manager
 (apt/dnf/zypper) to install AMD ROCm from the public ROCm repositories.
 
-One ``amdrocm-repo`` package is generated per target OS profile and release
-line. It ships a single repository definition and, for signed lines, the AMD
+One ``amdrocm-repo`` package is generated per target OS profile and RFC0012
+stream. It ships a single repository definition and, for signed streams, the AMD
 signing key, so that after installing the package a user can install ROCm with
 their native package manager. The signing key is fetched at build time and
 embedded in the package; it is never stored in the source tree.
@@ -15,9 +15,9 @@ embedded in the package; it is never stored in the source tree.
 ```
 python build_repo_package.py \
     --os-profile ubuntu2404 \
-    --release-type prerelease \
-    --repo-base-url https://rocm.prereleases.amd.com/packages-multi-arch \
-    --rocm-version 7.14.0 \
+    --stream stable \
+    --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
+    --rocm-version 10.0.0 \
     --dest-dir ./output
 ```
 """
@@ -42,10 +42,11 @@ from jinja2 import Environment, FileSystemLoader
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# The package name and the repository identifier used for the repo file and its
-# section header. A single repository is configured per package.
+# The package name. The repository identifier used for the repo file and its
+# section header is derived per stream by ``repo_id()``. A single repository is
+# configured per package.
 PACKAGE_NAME = "amdrocm-repo"
-REPO_ID = "amdrocm"
+REPO_ID_PREFIX = "amdrocm"
 REPO_NAME = "AMD ROCm"
 
 # The deb suite the repositories publish under (``dists/<suite>/``). Used to
@@ -68,8 +69,8 @@ MAINTAINER = "ROCm Dev Support <rocm-dev.support@amd.com>"
 # a collision we have observed. The overlap that does exist with that package
 # is the repository definition, and Conflicts handles it -- see
 # LEGACY_INSTALLER_PACKAGE.
-# These are installed names only; the key is still fetched from the upstream
-# gpg/rocm.gpg (see gpg_key_url).
+# These are installed names only; the key itself is fetched from the URL
+# given by --gpg-key-url.
 #
 # /etc/pki/rpm-gpg is the RHEL-family convention. SUSE has no filesystem
 # convention for third-party repo keys -- its trust store is the rpm database,
@@ -142,10 +143,31 @@ EXPECTED_KEY_FINGERPRINT = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
 _VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+~]*\Z")
 _SUB_FOLDER_RE = re.compile(r"^[0-9]{8}-[0-9A-Za-z._]+\Z")
 
-# Release lines whose public repositories are signed. The nightly line is
-# unsigned, so it ships no key and disables signature checking.
-SIGNED_RELEASE_TYPES = ("prerelease", "release")
-RELEASE_TYPES = ("prerelease", "release", "nightly")
+# The RFC0012 streams, each served from <stream>.repo.amd.com.
+#
+# A stream has one of two shapes, and everything else follows from the shape:
+#
+#   flat      one repository per distro, holding every retained version.
+#             Signed, so the package ships the key and enables gpgcheck.
+#   build_id  the same tree with a <YYYYMMDD-runid> segment naming a single
+#             build. Unsigned, so the package ships no key and trusts the repo.
+#
+# Signedness is not an independent axis: the flat streams are the ones that
+# publish InRelease/Release.gpg and repomd.xml.asc, and the build_id streams
+# publish none of them. Branch on the shape, never on the stream name.
+_FLAT = "flat"
+_BUILD_ID = "build_id"
+
+STREAM_SHAPES = {
+    "stable": _FLAT,
+    "nightly": _BUILD_ID,
+}
+STREAMS = tuple(STREAM_SHAPES)
+
+# Streams that resolve but serve nothing yet are deliberately absent above:
+# rc (flat, every distro empty) and weekly (no tree at all). dev is served but
+# is explicitly not for end users, so no bootstrap package is built for it.
+# Adding one back is a single entry here plus its golden test.
 
 OS_PROFILES = {
     "ubuntu2404": {
@@ -176,56 +198,97 @@ OS_PROFILES = {
 
 # --- URL / signing derivation ------------------------------------------------
 #
-# The public ROCm repositories do not share a single layout, so the repository
-# URL is derived per release line:
+# Every stream is served per distro under a common base:
 #
-#   prerelease, release   one repository per distro:
-#                           <base>/<os_profile>/             (deb)
-#                           <base>/<os_profile>/x86_64/      (rpm)
-#   nightly               one repository per package type, under a dated
-#                         sub-folder:
-#                           <base>/deb/<YYYYMMDD-id>/        (deb)
-#                           <base>/rpm/<YYYYMMDD-id>/x86_64/ (rpm)
+#   flat      <base>/<os_profile>/                     (deb)
+#             <base>/<os_profile>/x86_64/              (rpm)
+#   build_id  <base>/<os_profile>/<YYYYMMDD-id>/       (deb)
+#             <base>/<os_profile>/<YYYYMMDD-id>/x86_64/ (rpm)
 #
-# The signing key is at <base>/gpg/rocm.gpg on every signed line.
+# where <base> is https://<stream>.repo.amd.com/rocm/core/packages.
+#
+# The per-format trees (<base>/deb/, <base>/rpm/) are also served, and hold the
+# same builds, so a package pointing at either one works today. They are not
+# used here: the published install instructions configure the per-distro tree,
+# and a stream that ever drops the per-format alias would break silently in the
+# field rather than in CI. A dual-served layout cannot tell a right mapping from
+# a wrong one, which is how an earlier GA-line break got through.
+#
+# The signing key is not under <base> at all -- it sits beside core/, two
+# levels up -- so its URL is passed in whole rather than derived here. That
+# also keeps the key's location a property of the publisher rather than an
+# assumption baked into this tool.
 
 
-def is_signed(release_type: str) -> bool:
-    """Whether this release line's public repository is signed."""
-    return release_type in SIGNED_RELEASE_TYPES
+def repo_id(stream: str) -> str:
+    """Return the repo-file stem and section id for a stream.
+
+    ``amdrocm-stable`` etc. The stem drives the installed filename in both
+    families -- ``debian/install`` maps ``{repo_id}.sources`` and the spec
+    ``%files`` lists ``{repo_id}.repo`` -- so naming the stream here is what
+    keeps two streams' repo files from overwriting one another on disk.
+    """
+    stream_shape(stream)  # reject unknown streams before they reach a filename
+    return f"{REPO_ID_PREFIX}-{stream}"
+
+
+def stream_shape(stream: str) -> str:
+    """Return the layout shape for a stream.
+
+    Raises:
+        ValueError: If the stream is unknown.
+    """
+    try:
+        return STREAM_SHAPES[stream]
+    except KeyError as e:
+        raise ValueError(
+            f"stream={stream!r} is invalid, expected one of {STREAMS}"
+        ) from e
+
+
+def is_signed(stream: str) -> bool:
+    """Whether this stream's public repository is signed.
+
+    Signedness follows the shape: flat streams publish ``InRelease`` /
+    ``Release.gpg`` (deb) and ``repomd.xml.asc`` (rpm); build_id streams publish
+    none of them and are consumed with ``trusted=yes`` / ``gpgcheck=0``.
+    """
+    return stream_shape(stream) == _FLAT
 
 
 def repo_baseurl(
     repo_base_url: str,
     pkg_type: str,
     os_profile: str,
-    release_type: str,
-    repo_sub_folder: str = "",
+    stream: str,
+    repo_sub_folder: str,
 ) -> str:
     """Return the repository baseurl baked into the repo file.
 
-    The layout differs per release line (see the section comment above), so both
-    the target distro and the release line are required. deb returns the repo
-    root, beneath which apt resolves ``dists/stable/main/``; rpm returns the
-    directory containing ``repodata/``. ``repo_sub_folder`` is the dated segment
-    used by the nightly line.
+    deb returns the repo root, beneath which apt resolves ``dists/stable/main/``;
+    rpm returns the directory containing ``repodata/``. ``repo_sub_folder`` is
+    the ``YYYYMMDD-runid`` segment naming a single build, required by the
+    build_id shape and rejected for the flat one.
+
+    Raises:
+        ValueError: If the stream is unknown, or the sub-folder does not match
+            the stream's shape.
     """
     base = repo_base_url.rstrip("/")
-    # The layout is a property of the release line, not of whether it is signed;
-    # the two happen to correlate today but are independent.
-    if release_type == "nightly":
-        sub = f"{repo_sub_folder}/" if repo_sub_folder else ""
-        if pkg_type == "deb":
-            return f"{base}/deb/{sub}"
-        return f"{base}/rpm/{sub}x86_64/"
-    if pkg_type == "deb":
-        return f"{base}/{os_profile}/"
-    return f"{base}/{os_profile}/x86_64/"
-
-
-def gpg_key_url(repo_base_url: str) -> str:
-    """Return the signing-key URL for a repo base url."""
-    return f"{repo_base_url.rstrip('/')}/gpg/rocm.gpg"
+    shape = stream_shape(stream)
+    # Silently dropping a missing sub-folder would emit a flat URL for a
+    # build_id stream -- indistinguishable from a correct stable URL, and
+    # serving nothing, so the package would install and fail on first refresh.
+    if shape == _BUILD_ID and not repo_sub_folder:
+        raise ValueError(f"stream={stream!r} requires a build sub-folder")
+    if shape != _BUILD_ID and repo_sub_folder:
+        raise ValueError(f"stream={stream!r} takes no build sub-folder")
+    parts = [base, os_profile]
+    if shape == _BUILD_ID:
+        parts.append(repo_sub_folder)
+    if pkg_type != "deb":
+        parts.append("x86_64")
+    return "/".join(parts) + "/"
 
 
 def repo_metadata_url(baseurl: str, pkg_type: str) -> str:
@@ -307,24 +370,29 @@ def _valid_repo_base_url(url: str) -> bool:
 
 
 def rpm_version_release(
-    release_type: str, rocm_version: str, repo_sub_folder: str
+    stream: str, rocm_version: str, repo_sub_folder: str
 ) -> tuple[str, str]:
     """Return (Version, Release) for the rpm package.
 
-    Prerelease/release track the (rolling) ROCm version. Nightly is date-pinned
-    from the ``YYYYMMDD-<id>`` sub-folder; an rpm Version cannot contain ``-``,
-    so the date becomes the Version and the id becomes the Release.
+    Flat streams track the (rolling) ROCm version. A build_id stream is pinned
+    to its build: an rpm Version cannot contain ``-``, so the date becomes the
+    Version and the id becomes the Release.
 
-    The release line is part of the Release field so that two lines can never
-    produce an identically named package. Without it, installing the release
-    package over the prerelease one at the same ROCm version is a silent no-op:
-    the package manager reports success and leaves the old repository
-    configured.
+    The stream is part of the Release field so that two streams can never
+    produce an identically named package. Without it, installing one stream's
+    package over another at the same ROCm version is a silent no-op: the package
+    manager reports success and leaves the old repository configured.
+
+    Note that Version is compared before Release, and a build_id Version is a
+    date (``20260827``) while a flat one is a semantic version (``10.0.0``), so
+    a build_id package always outranks a flat one. Switching from nightly to
+    stable is therefore a downgrade rather than an upgrade. That predates the
+    streams and resolves itself if the streams ever become separate packages.
     """
-    if release_type == "nightly":
+    if stream_shape(stream) == _BUILD_ID:
         date, _, ident = repo_sub_folder.partition("-")
-        return date, f"{ident or '1'}.nightly"
-    return rocm_version, f"1.{release_type}"
+        return date, f"{ident or '1'}.{stream}"
+    return rocm_version, f"1.{stream}"
 
 
 # An rpm %changelog date has to be English whatever LC_TIME the build machine
@@ -358,18 +426,19 @@ def rpm_changelog_date(when: datetime) -> str:
     )
 
 
-def deb_version(release_type: str, rocm_version: str, repo_sub_folder: str) -> str:
-    """Return the deb package version (nightly is date-pinned, no ``-``).
+def deb_version(stream: str, rocm_version: str, repo_sub_folder: str) -> str:
+    """Return the deb package version (a build_id stream is pinned, no ``-``).
 
-    Prerelease carries a ``~prerelease`` suffix. ``~`` sorts before the plain
-    version, so the release package upgrades over the prerelease one and the two
-    lines can never share a version (see ``rpm_version_release``).
+    ``stable`` carries the plain ROCm version. Any other flat stream carries a
+    ``~<stream>`` suffix: ``~`` sorts before the plain version, so the stable
+    package upgrades over it and no two streams share a version (see
+    ``rpm_version_release``).
     """
-    if release_type == "nightly":
+    if stream_shape(stream) == _BUILD_ID:
         return repo_sub_folder.replace("-", ".")
-    if release_type == "prerelease":
-        return f"{rocm_version}~prerelease"
-    return rocm_version
+    if stream == "stable":
+        return rocm_version
+    return f"{rocm_version}~{stream}"
 
 
 # --- signing key -------------------------------------------------------------
@@ -410,15 +479,16 @@ def _fetch_signing_key(url: str) -> bytes:
 def _run_gpg(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run gpg, reporting a missing binary by name instead of a traceback.
 
-    Signed lines reach gpg in two places: the deb path always, to dearmor the
-    keyring, and either path when the key is fetched, to check its fingerprint.
+    A signed stream reaches gpg in two places: the deb path always, to dearmor
+    the keyring, and either path when the key is fetched, to check its
+    fingerprint.
     An rpm build given --gpg-key-file does neither, so it needs no gpg at all.
     """
     try:
         return subprocess.run(argv, check=True, **kwargs)
     except FileNotFoundError as e:
         raise RuntimeError(
-            "gpg is required to build a signed release line: it dearmors the deb "
+            "gpg is required to build a signed stream: it dearmors the deb "
             "keyring, and checks the fingerprint of a fetched key. Install "
             "gnupg/gnupg2. Note that --gpg-key-file skips the fetch, not the deb "
             "keyring step, so a signed deb build needs gpg either way"
@@ -452,23 +522,28 @@ def _verify_key_fingerprint(armored: bytes) -> None:
 
 
 def load_signing_key(args: argparse.Namespace) -> bytes:
-    """Return the armored signing key bytes for a signed line.
+    """Return the armored signing key bytes for a signed stream.
 
     Read from ``--gpg-key-file`` when given (offline/test builds), otherwise
-    fetched from the repo's ``gpg/rocm.gpg`` at build time. Never written into
-    the source tree.
+    fetched from ``--gpg-key-url`` at build time. Never written into the
+    source tree.
 
-    Both guards on the fetch path apply to the fetch only: the https
-    requirement (``_require_https``, including after redirects) and the pinned
-    fingerprint. They exist to detect a tampered or misconfigured repository,
-    which is a remote input. A key passed explicitly is a local file the caller
-    has already chosen, so it is embedded as provided, and no scheme check
-    applies to ``--repo-base-url`` in that case either. Callers supplying their
-    own key are responsible for it being the right one.
+    Two guards apply to the fetch only: the https requirement
+    (``_require_https``, including after redirects) and the pinned fingerprint.
+    They exist to detect a tampered or misconfigured repository, which is a
+    remote input. A key passed with ``--gpg-key-file`` is a local file the
+    caller has already chosen, so it is embedded as provided and neither guard
+    runs; callers supplying their own key are responsible for it being the
+    right one.
+
+    ``--gpg-key-url`` is still checked for http(s) shape by ``parse_args``
+    whenever it is non-empty, including alongside ``--gpg-key-file``. That is a
+    separate, earlier check -- it rejects a malformed value rather than
+    vouching for the key.
     """
     if args.gpg_key_file:
         return args.gpg_key_file.read_bytes()
-    key = _fetch_signing_key(gpg_key_url(args.repo_base_url))
+    key = _fetch_signing_key(args.gpg_key_url)
     _verify_key_fingerprint(key)
     return key
 
@@ -511,16 +586,16 @@ def _render(
 
 def build_context(args: argparse.Namespace, profile: dict) -> dict:
     """Template fields shared by the repo file, spec, and deb metadata."""
-    signed = is_signed(args.release_type)
+    signed = is_signed(args.stream)
     return {
         "pkg_name": PACKAGE_NAME,
-        "repo_id": REPO_ID,
+        "repo_id": repo_id(args.stream),
         "name": REPO_NAME,
         "baseurl": repo_baseurl(
             args.repo_base_url,
             profile["pkg_type"],
             args.os_profile,
-            args.release_type,
+            args.stream,
             args.repo_sub_folder,
         ),
         "signed": signed,
@@ -545,8 +620,8 @@ def build_context(args: argparse.Namespace, profile: dict) -> dict:
         # keep one source of truth for the name.
         "rpm_gpg_key_file": PurePosixPath(RPM_GPG_KEY_PATH).name,
         "rpm_repo_dir": profile.get("rpm_repo_dir", ""),
-        # Declared on every release line: amdgpu-install configures a ROCm
-        # repository whichever line this package points at.
+        # Declared for every stream: amdgpu-install configures a ROCm
+        # repository whichever stream this package points at.
         "legacy_installer_package": LEGACY_INSTALLER_PACKAGE,
     }
 
@@ -568,7 +643,7 @@ def build_rpm_package(
     _render(
         env,
         "template/repo/rpm/amdrocm.repo.j2",
-        sources_dir / f"{REPO_ID}.repo",
+        sources_dir / f"{context['repo_id']}.repo",
         context,
     )
 
@@ -579,7 +654,7 @@ def build_rpm_package(
         )
 
     version, release = rpm_version_release(
-        args.release_type, args.rocm_version, args.repo_sub_folder
+        args.stream, args.rocm_version, args.repo_sub_folder
     )
     spec_context = {
         **context,
@@ -622,17 +697,17 @@ def build_deb_package(
     deb_context = {
         **context,
         "deb_version": deb_version(
-            args.release_type, args.rocm_version, args.repo_sub_folder
+            args.stream, args.rocm_version, args.repo_sub_folder
         ),
         "date": format_datetime(datetime.now(timezone.utc)),
     }
 
-    # Repository definition (deb822) and, for signed lines, the dearmored key,
+    # Repository definition (deb822) and, for a signed stream, the dearmored key,
     # placed at the package root and mapped into the filesystem by debian/install.
     _render(
         env,
         "template/repo/deb/amdrocm.sources.j2",
-        package_dir / f"{REPO_ID}.sources",
+        package_dir / f"{deb_context['repo_id']}.sources",
         deb_context,
     )
     if context["signed"]:
@@ -701,10 +776,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="Target distro profile",
     )
     p.add_argument(
-        "--release-type",
+        "--stream",
         required=True,
-        choices=RELEASE_TYPES,
-        help="Release line to configure",
+        choices=STREAMS,
+        help="RFC0012 repository stream to configure",
     )
     p.add_argument(
         "--repo-base-url",
@@ -714,24 +789,24 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument(
         "--repo-sub-folder",
         default="",
-        help="Dated sub-folder for the nightly line (YYYYMMDD-<id>)",
+        help="Build sub-folder for a per-build stream (YYYYMMDD-<id>)",
     )
     p.add_argument(
         "--gpg-key-file",
         type=Path,
         default=None,
         help=(
-            "Signing key file to embed (defaults to fetching gpg/rocm.gpg from "
-            "the repo). The pinned-fingerprint check applies to the fetched key "
-            "only; a key given here is embedded as provided"
+            "Signing key file to embed (defaults to fetching --gpg-key-url). The "
+            "pinned-fingerprint check applies to the fetched key only; a key "
+            "given here is embedded as provided"
         ),
     )
     p.add_argument(
         "--rocm-version",
         required=True,
         help=(
-            "ROCm version (e.g. 7.14.0). Required on every line, but the "
-            "nightly line takes both of its version fields from "
+            "ROCm version (e.g. 10.0.0). Required for every stream, but a "
+            "per-build stream takes both of its version fields from "
             "--repo-sub-folder, so there this value reaches only the "
             "changelog entry"
         ),
@@ -743,19 +818,39 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="Output directory for built packages",
     )
     p.add_argument(
+        "--gpg-key-url",
+        default="",
+        help=(
+            "URL of the armored signing key to embed, e.g. https://"
+            "stable.repo.amd.com/rocm/gpg/packages.gpg. Given whole rather "
+            "than derived: the key is not under --repo-base-url (packages sit "
+            "at <root>/core/packages/ and the key beside core/), and where it "
+            "sits is the publisher's choice, not this tool's. The fetch is "
+            "https-only and the key must match the pinned fingerprint. "
+            "Required for a signed stream unless --gpg-key-file is given"
+        ),
+    )
+    p.add_argument(
         "--verify-repo-url",
         action="store_true",
         help=(
             "Fail the build unless the configured repository is reachable. "
-            "No-op for the nightly line, whose dated sub-folder is published by "
+            "No-op for a build_id stream, whose build folder is published by "
             "the same run that builds the package"
         ),
     )
     args = p.parse_args(argv)
-    if args.release_type == "nightly" and not args.repo_sub_folder:
-        p.error("--repo-sub-folder is required for --release-type nightly")
-    if args.repo_sub_folder and args.release_type != "nightly":
-        p.error("--repo-sub-folder is only valid for --release-type nightly")
+    if is_signed(args.stream) and not args.gpg_key_file and not args.gpg_key_url:
+        p.error(
+            f"--gpg-key-url or --gpg-key-file is required for --stream {args.stream}"
+        )
+    if args.gpg_key_url and not _valid_repo_base_url(args.gpg_key_url):
+        p.error(f"--gpg-key-url is not a valid http(s) URL: {args.gpg_key_url!r}")
+    build_id_shape = stream_shape(args.stream) == _BUILD_ID
+    if build_id_shape and not args.repo_sub_folder:
+        p.error(f"--repo-sub-folder is required for --stream {args.stream}")
+    if args.repo_sub_folder and not build_id_shape:
+        p.error(f"--repo-sub-folder is not valid for --stream {args.stream}")
     # Validate values that are rendered into repo files, version fields, and
     # maintainer metadata so they cannot alter the surrounding syntax.
     if not _VERSION_RE.match(args.rocm_version):
@@ -779,9 +874,9 @@ def main(argv=None) -> None:
     profile = OS_PROFILES[args.os_profile]
     args.dest_dir.mkdir(parents=True, exist_ok=True)
     context = build_context(args, profile)
-    # The nightly repository is published by the same run that builds this
-    # package, so its dated sub-folder does not exist yet and cannot be checked.
-    if args.verify_repo_url and args.release_type != "nightly":
+    # A build_id repository is published by the same run that builds this
+    # package, so its build folder does not exist yet and cannot be checked.
+    if args.verify_repo_url and stream_shape(args.stream) != _BUILD_ID:
         verify_repo_url(context["baseurl"], profile["pkg_type"])
     if profile["pkg_type"] == "deb":
         build_deb_package(args, profile, context, args.dest_dir)

@@ -21,9 +21,11 @@ sys.path.insert(0, str(_LINUX_DIR))
 
 import build_repo_package as brp  # noqa: E402
 
-PRERELEASE_BASE = "https://rocm.prereleases.amd.com/packages-multi-arch"
-RELEASE_BASE = "https://repo.amd.com/rocm/packages-multi-arch"
-NIGHTLY_BASE = "https://rocm.nightlies.amd.com/packages-multi-arch"
+STABLE_BASE = "https://stable.repo.amd.com/rocm/core/packages"
+NIGHTLY_BASE = "https://nightly.repo.amd.com/rocm/core/packages"
+# The signing key, supplied whole. It sits beside core/ rather than under
+# STABLE_BASE, which is why it is a separate input rather than derived from it.
+STABLE_KEY_URL = "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
 NIGHTLY_SUB = "20260716-12345"
 
 
@@ -32,12 +34,14 @@ def _args(*extra: str):
     base = [
         "--os-profile",
         "ubuntu2404",
-        "--release-type",
-        "prerelease",
+        "--stream",
+        "stable",
         "--repo-base-url",
-        PRERELEASE_BASE,
+        STABLE_BASE,
+        "--gpg-key-url",
+        STABLE_KEY_URL,
         "--rocm-version",
-        "7.14.0",
+        "10.0.0",
         "--dest-dir",
         "/tmp/out",
     ]
@@ -50,125 +54,161 @@ def _render(template: str, context: dict) -> str:
 
 # --- URL construction ---------------------------------------------------------
 #
-# The release lines do not share a layout, so each one's exact URLs are pinned
-# here: the public signed lines publish one repository per distro, and the
-# nightly line publishes one per package type under a dated sub-folder. A URL
-# that does not serve a repository only fails at the user's first metadata
-# refresh, so these are pinned rather than derived.
+# Every stream is served per distro. The two shapes differ only by a build-id
+# segment:
+#
+#   flat      <base>/<distro>/[x86_64/]
+#   build_id  <base>/<distro>/<YYYYMMDD-id>/[x86_64/]
+#
+# These are pinned rather than derived, and the values match the shapes the
+# published install instructions use (scriptgen's unit-test/test_stream_urls.py,
+# checked against the live repos). A URL that does not serve a repository only
+# fails at the user's first metadata refresh, so a derived expectation would
+# reproduce a builder bug instead of catching it.
 
-RELEASE_EXPECTED = {
-    "ubuntu2404": f"{RELEASE_BASE}/ubuntu2404/",
-    "rhel8": f"{RELEASE_BASE}/rhel8/x86_64/",
-    "rhel10": f"{RELEASE_BASE}/rhel10/x86_64/",
-    "sles16": f"{RELEASE_BASE}/sles16/x86_64/",
-}
-
-PRERELEASE_EXPECTED = {
-    "ubuntu2404": f"{PRERELEASE_BASE}/ubuntu2404/",
-    "rhel8": f"{PRERELEASE_BASE}/rhel8/x86_64/",
-    "rhel10": f"{PRERELEASE_BASE}/rhel10/x86_64/",
-    "sles16": f"{PRERELEASE_BASE}/sles16/x86_64/",
+STABLE_EXPECTED = {
+    "ubuntu2404": f"{STABLE_BASE}/ubuntu2404/",
+    "rhel8": f"{STABLE_BASE}/rhel8/x86_64/",
+    "rhel10": f"{STABLE_BASE}/rhel10/x86_64/",
+    "sles16": f"{STABLE_BASE}/sles16/x86_64/",
 }
 
 NIGHTLY_EXPECTED = {
-    "ubuntu2404": f"{NIGHTLY_BASE}/deb/{NIGHTLY_SUB}/",
-    "rhel8": f"{NIGHTLY_BASE}/rpm/{NIGHTLY_SUB}/x86_64/",
-    "rhel10": f"{NIGHTLY_BASE}/rpm/{NIGHTLY_SUB}/x86_64/",
-    "sles16": f"{NIGHTLY_BASE}/rpm/{NIGHTLY_SUB}/x86_64/",
+    "ubuntu2404": f"{NIGHTLY_BASE}/ubuntu2404/{NIGHTLY_SUB}/",
+    "rhel8": f"{NIGHTLY_BASE}/rhel8/{NIGHTLY_SUB}/x86_64/",
+    "rhel10": f"{NIGHTLY_BASE}/rhel10/{NIGHTLY_SUB}/x86_64/",
+    "sles16": f"{NIGHTLY_BASE}/sles16/{NIGHTLY_SUB}/x86_64/",
 }
 
 
-def _baseurl(profile: str, release_type: str, base: str, sub: str = "") -> str:
+def _baseurl(profile: str, stream: str, base: str, sub: str = "") -> str:
     return brp.repo_baseurl(
-        base, brp.OS_PROFILES[profile]["pkg_type"], profile, release_type, sub
+        base, brp.OS_PROFILES[profile]["pkg_type"], profile, stream, sub
     )
 
 
-@pytest.mark.parametrize("profile,expected", sorted(RELEASE_EXPECTED.items()))
-def test_release_baseurl_is_per_distro(profile, expected):
-    assert _baseurl(profile, "release", RELEASE_BASE) == expected
-
-
-@pytest.mark.parametrize("profile,expected", sorted(PRERELEASE_EXPECTED.items()))
-def test_prerelease_baseurl_is_per_distro(profile, expected):
-    assert _baseurl(profile, "prerelease", PRERELEASE_BASE) == expected
+@pytest.mark.parametrize("profile,expected", sorted(STABLE_EXPECTED.items()))
+def test_stable_baseurl_is_per_distro(profile, expected):
+    assert _baseurl(profile, "stable", STABLE_BASE) == expected
 
 
 @pytest.mark.parametrize("profile,expected", sorted(NIGHTLY_EXPECTED.items()))
-def test_nightly_baseurl_is_flat_and_dated(profile, expected):
+def test_nightly_baseurl_is_per_distro_and_carries_the_build_id(profile, expected):
     assert _baseurl(profile, "nightly", NIGHTLY_BASE, NIGHTLY_SUB) == expected
 
 
-def test_gpg_key_url_under_base():
-    assert brp.gpg_key_url(PRERELEASE_BASE) == f"{PRERELEASE_BASE}/gpg/rocm.gpg"
+def test_gpg_key_url_is_outside_the_packages_base():
+    # The key sits beside core/ while packages live under core/packages/, so it
+    # cannot be reached by appending to the base. This is the whole reason the
+    # key URL is its own argument, so pin the relationship rather than trusting
+    # the comment that says so.
+    assert not STABLE_KEY_URL.startswith(STABLE_BASE)
+    # Nor by trimming: the key is not under the base's parent either.
+    assert not STABLE_KEY_URL.startswith(STABLE_BASE.rsplit("/", 1)[0])
+
+
+def test_key_url_is_used_verbatim(monkeypatch):
+    # Taking the URL whole -- rather than appending a hardcoded gpg/packages.gpg
+    # to a root -- is what keeps the key's location a publisher decision. A
+    # builder that still derived the tail would fetch a different URL here.
+    seen = []
+    monkeypatch.setattr(brp, "_fetch_signing_key", lambda url: seen.append(url) or b"k")
+    monkeypatch.setattr(brp, "_verify_key_fingerprint", lambda key: None)
+    args = _args()
+    args.gpg_key_url = "https://example.invalid/somewhere/else/custom-key.gpg"
+    brp.load_signing_key(args)
+    assert seen == ["https://example.invalid/somewhere/else/custom-key.gpg"]
 
 
 def test_baseurl_tolerates_trailing_slash():
     assert (
-        _baseurl("ubuntu2404", "release", RELEASE_BASE + "/")
-        == RELEASE_EXPECTED["ubuntu2404"]
+        _baseurl("ubuntu2404", "stable", STABLE_BASE + "/")
+        == STABLE_EXPECTED["ubuntu2404"]
     )
 
 
-def test_signed_lines_are_per_distro_never_flat():
-    # A flat <base>/deb/ or <base>/rpm/x86_64/ is not served on the release CDN,
-    # so a signed line must always carry the distro segment.
-    for release_type, base in (
-        ("release", RELEASE_BASE),
-        ("prerelease", PRERELEASE_BASE),
+def test_every_stream_is_per_distro_never_per_format():
+    # Both the per-distro and the per-format (<base>/deb/, <base>/rpm/) trees are
+    # served on every populated stream, so a wrong choice cannot be caught by
+    # fetching one URL. Pin the per-distro shape: it is what the published
+    # install instructions configure, and a stream that ever drops the
+    # per-format alias would break in the field rather than in CI.
+    for stream, base, sub in (
+        ("stable", STABLE_BASE, ""),
+        ("nightly", NIGHTLY_BASE, NIGHTLY_SUB),
     ):
         for profile in brp.OS_PROFILES:
-            url = _baseurl(profile, release_type, base)
-            assert f"/{profile}/" in url, f"{release_type} must be per-distro"
+            url = _baseurl(profile, stream, base, sub)
+            assert f"/{profile}/" in url, f"{stream} must be per-distro"
             assert not url.endswith("/deb/")
             assert "/rpm/x86_64/" not in url
 
 
-def test_nightly_is_flat_and_carries_no_distro_segment():
-    # The nightly repository has no per-distro tree, so it must stay flat.
+def test_only_the_build_id_shape_carries_a_sub_folder():
     for profile in brp.OS_PROFILES:
-        url = _baseurl(profile, "nightly", NIGHTLY_BASE, NIGHTLY_SUB)
-        assert f"/{profile}/" not in url
-        assert NIGHTLY_SUB in url
+        assert NIGHTLY_SUB in _baseurl(profile, "nightly", NIGHTLY_BASE, NIGHTLY_SUB)
+        assert NIGHTLY_SUB not in _baseurl(profile, "stable", STABLE_BASE)
 
 
-def test_gpg_key_url_is_not_the_domain_root():
-    gpg = brp.gpg_key_url(PRERELEASE_BASE)
-    assert "/packages-multi-arch/gpg/rocm.gpg" in gpg
-    assert gpg != "https://rocm.prereleases.amd.com/gpg/rocm.gpg"
+def test_signedness_follows_the_shape():
+    # Not an independent axis: the flat streams are the ones publishing
+    # InRelease/Release.gpg and repomd.xml.asc.
+    for stream in brp.STREAMS:
+        assert brp.is_signed(stream) is (brp.stream_shape(stream) == brp._FLAT)
+    assert brp.is_signed("stable") is True
+    assert brp.is_signed("nightly") is False
+
+
+def test_unknown_stream_is_rejected_before_it_reaches_a_url():
+    with pytest.raises(ValueError):
+        brp.repo_baseurl(STABLE_BASE, "deb", "ubuntu2404", "bogus", "")
+    with pytest.raises(ValueError):
+        brp.repo_id("bogus")
+
+
+def test_a_sub_folder_mismatched_to_the_shape_is_rejected():
+    # Dropping a missing sub-folder instead of raising would emit
+    # <base>/<distro>/ for nightly -- identical in shape to a correct stable URL
+    # and serving nothing, so the package would install and fail on first
+    # refresh. parse_args blocks this today; the guard belongs here too, because
+    # the flat-looking URL is only wrong once it reaches a user.
+    with pytest.raises(ValueError):
+        brp.repo_baseurl(NIGHTLY_BASE, "deb", "ubuntu2404", "nightly", "")
+    with pytest.raises(ValueError):
+        brp.repo_baseurl(STABLE_BASE, "deb", "ubuntu2404", "stable", NIGHTLY_SUB)
 
 
 # --- repository reachability check --------------------------------------------
 
 
 def test_repo_metadata_url_targets_the_index():
-    deb = brp.repo_metadata_url(RELEASE_EXPECTED["ubuntu2404"], "deb")
-    assert deb == f"{RELEASE_EXPECTED['ubuntu2404']}dists/{brp.DEB_SUITE}/Release"
-    rpm = brp.repo_metadata_url(RELEASE_EXPECTED["rhel10"], "rpm")
-    assert rpm == f"{RELEASE_EXPECTED['rhel10']}repodata/repomd.xml"
+    deb = brp.repo_metadata_url(STABLE_EXPECTED["ubuntu2404"], "deb")
+    assert deb == f"{STABLE_EXPECTED['ubuntu2404']}dists/{brp.DEB_SUITE}/Release"
+    rpm = brp.repo_metadata_url(STABLE_EXPECTED["rhel10"], "rpm")
+    assert rpm == f"{STABLE_EXPECTED['rhel10']}repodata/repomd.xml"
 
 
 def test_verify_repo_url_accepts_a_served_repo(monkeypatch):
     monkeypatch.setattr(
         brp.urllib.request,
         "urlopen",
-        lambda *a, **k: _FakeResponse(b"", RELEASE_EXPECTED["rhel10"], status=200),
+        lambda *a, **k: _FakeResponse(b"", STABLE_EXPECTED["rhel10"], status=200),
     )
-    brp.verify_repo_url(RELEASE_EXPECTED["rhel10"], "rpm")  # must not raise
+    brp.verify_repo_url(STABLE_EXPECTED["rhel10"], "rpm")  # must not raise
 
 
 def test_verify_repo_url_rejects_an_unserved_repo(monkeypatch):
-    # The flat shape on the release line 404/403s; the guard must fail the build
+    # A base that serves no repository 404/403s; the guard must fail the build
     # rather than ship a package that cannot refresh.
     def not_found(*a, **k):
         raise brp.urllib.error.HTTPError(
-            f"{RELEASE_BASE}/rpm/x86_64/", 403, "Forbidden", {}, None
+            f"{STABLE_BASE}/rpm/x86_64/", 403, "Forbidden", {}, None
         )
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", not_found)
     monkeypatch.setattr(brp.time, "sleep", lambda s: None)
     with pytest.raises(RuntimeError):
-        brp.verify_repo_url(f"{RELEASE_BASE}/rpm/x86_64/", "rpm")
+        brp.verify_repo_url(f"{STABLE_BASE}/rpm/x86_64/", "rpm")
 
 
 def test_verify_repo_url_does_not_retry_a_missing_repo(monkeypatch):
@@ -179,13 +219,13 @@ def test_verify_repo_url_does_not_retry_a_missing_repo(monkeypatch):
     def forbidden(*a, **k):
         calls["n"] += 1
         raise brp.urllib.error.HTTPError(
-            f"{RELEASE_BASE}/rpm/x86_64/", 403, "Forbidden", {}, None
+            f"{STABLE_BASE}/rpm/x86_64/", 403, "Forbidden", {}, None
         )
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", forbidden)
     monkeypatch.setattr(brp.time, "sleep", lambda s: pytest.fail("must not back off"))
     with pytest.raises(RuntimeError):
-        brp.verify_repo_url(f"{RELEASE_BASE}/rpm/x86_64/", "rpm")
+        brp.verify_repo_url(f"{STABLE_BASE}/rpm/x86_64/", "rpm")
     assert calls["n"] == 1
 
 
@@ -198,12 +238,12 @@ def test_verify_repo_url_does_not_retry_a_non_200_response(monkeypatch):
 
     def created(*a, **k):
         calls["n"] += 1
-        return _FakeResponse(b"", RELEASE_EXPECTED["rhel10"], status=201)
+        return _FakeResponse(b"", STABLE_EXPECTED["rhel10"], status=201)
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", created)
     monkeypatch.setattr(brp.time, "sleep", lambda s: pytest.fail("must not back off"))
     with pytest.raises(RuntimeError, match="201"):
-        brp.verify_repo_url(RELEASE_EXPECTED["rhel10"], "rpm")
+        brp.verify_repo_url(STABLE_EXPECTED["rhel10"], "rpm")
     assert calls["n"] == 1
 
 
@@ -214,13 +254,13 @@ def test_verify_repo_url_retries_rate_limiting(monkeypatch):
         calls["n"] += 1
         if calls["n"] < 2:
             raise brp.urllib.error.HTTPError(
-                RELEASE_EXPECTED["rhel10"], 429, "Too Many Requests", {}, None
+                STABLE_EXPECTED["rhel10"], 429, "Too Many Requests", {}, None
             )
-        return _FakeResponse(b"", RELEASE_EXPECTED["rhel10"], status=200)
+        return _FakeResponse(b"", STABLE_EXPECTED["rhel10"], status=200)
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", throttled)
     monkeypatch.setattr(brp.time, "sleep", lambda s: None)
-    brp.verify_repo_url(RELEASE_EXPECTED["rhel10"], "rpm")
+    brp.verify_repo_url(STABLE_EXPECTED["rhel10"], "rpm")
     assert calls["n"] == 2
 
 
@@ -231,11 +271,11 @@ def test_verify_repo_url_retries_then_succeeds(monkeypatch):
         calls["n"] += 1
         if calls["n"] < 3:
             raise brp.urllib.error.URLError("transient")
-        return _FakeResponse(b"", RELEASE_EXPECTED["rhel10"], status=200)
+        return _FakeResponse(b"", STABLE_EXPECTED["rhel10"], status=200)
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", flaky)
     monkeypatch.setattr(brp.time, "sleep", lambda s: None)
-    brp.verify_repo_url(RELEASE_EXPECTED["rhel10"], "rpm")
+    brp.verify_repo_url(STABLE_EXPECTED["rhel10"], "rpm")
     assert calls["n"] == 3
 
 
@@ -249,12 +289,14 @@ def _main_argv(tmp_path, *extra: str) -> list[str]:
     return [
         "--os-profile",
         "rhel10",
-        "--release-type",
-        "release",
+        "--stream",
+        "stable",
         "--repo-base-url",
-        RELEASE_BASE,
+        STABLE_BASE,
+        "--gpg-key-url",
+        STABLE_KEY_URL,
         "--rocm-version",
-        "7.14.0",
+        "10.0.0",
         "--dest-dir",
         str(tmp_path),
         *extra,
@@ -273,7 +315,7 @@ def test_main_verifies_the_repository_when_asked(monkeypatch, tmp_path):
     monkeypatch.setattr(brp, "build_rpm_package", lambda *a, **k: None)
     brp.main(_main_argv(tmp_path, "--verify-repo-url"))
     # The URL actually built for this profile is what gets checked.
-    assert checked == [(RELEASE_EXPECTED["rhel10"], "rpm")]
+    assert checked == [(STABLE_EXPECTED["rhel10"], "rpm")]
 
 
 def test_main_skips_verification_for_nightly(monkeypatch, tmp_path):
@@ -289,14 +331,14 @@ def test_main_skips_verification_for_nightly(monkeypatch, tmp_path):
         [
             "--os-profile",
             "rhel10",
-            "--release-type",
+            "--stream",
             "nightly",
             "--repo-base-url",
             NIGHTLY_BASE,
             "--repo-sub-folder",
             NIGHTLY_SUB,
             "--rocm-version",
-            "7.14.0",
+            "10.0.0",
             "--dest-dir",
             str(tmp_path),
             "--verify-repo-url",
@@ -331,12 +373,14 @@ def test_main_dispatches_on_the_profile_package_type(
         [
             "--os-profile",
             os_profile,
-            "--release-type",
-            "release",
+            "--stream",
+            "stable",
             "--repo-base-url",
-            RELEASE_BASE,
+            STABLE_BASE,
+            "--gpg-key-url",
+            STABLE_KEY_URL,
             "--rocm-version",
-            "7.14.0",
+            "10.0.0",
             "--dest-dir",
             str(tmp_path),
         ]
@@ -347,28 +391,28 @@ def test_main_dispatches_on_the_profile_package_type(
 # --- context wiring -----------------------------------------------------------
 
 
-@pytest.mark.parametrize("profile", sorted(RELEASE_EXPECTED))
-def test_build_context_threads_profile_and_release_type(profile):
-    # The baseurl depends on both the target distro and the release line, so
+@pytest.mark.parametrize("profile", sorted(STABLE_EXPECTED))
+def test_build_context_threads_profile_and_stream(profile):
+    # The baseurl depends on both the target distro and the stream, so
     # build_context must pass both through rather than defaulting either.
     args = _args(
         "--os-profile",
         profile,
-        "--release-type",
-        "release",
+        "--stream",
+        "stable",
         "--repo-base-url",
-        RELEASE_BASE,
+        STABLE_BASE,
     )
     ctx = brp.build_context(args, brp.OS_PROFILES[profile])
-    assert ctx["baseurl"] == RELEASE_EXPECTED[profile]
+    assert ctx["baseurl"] == STABLE_EXPECTED[profile]
 
 
 # --- signing ------------------------------------------------------------------
 
 
 def test_signed_lines():
-    assert brp.is_signed("prerelease") is True
-    assert brp.is_signed("release") is True
+    assert brp.is_signed("stable") is True
+    assert brp.is_signed("stable") is True
     assert brp.is_signed("nightly") is False
 
 
@@ -416,7 +460,7 @@ def test_load_signing_key_rejects_non_https_base(monkeypatch):
         lambda *a, **k: pytest.fail("must not fetch over a non-https URL"),
     )
     args = _args()
-    args.repo_base_url = "http://rocm.example.com/packages-multi-arch"
+    args.gpg_key_url = "http://rocm.example.com/rocm/gpg/packages.gpg"
     with pytest.raises(ValueError):
         brp.load_signing_key(args)
 
@@ -437,7 +481,7 @@ def test_load_signing_key_rejects_oversize_key(monkeypatch):
     monkeypatch.setattr(
         brp.urllib.request,
         "urlopen",
-        lambda *a, **k: _FakeResponse(big, f"{PRERELEASE_BASE}/gpg/rocm.gpg"),
+        lambda *a, **k: _FakeResponse(big, f"{STABLE_BASE}/gpg/rocm.gpg"),
     )
     with pytest.raises(ValueError):
         brp.load_signing_key(_args())
@@ -447,9 +491,7 @@ def test_load_signing_key_returns_fetched_key(monkeypatch):
     monkeypatch.setattr(
         brp.urllib.request,
         "urlopen",
-        lambda *a, **k: _FakeResponse(
-            b"ARMORED KEY", f"{PRERELEASE_BASE}/gpg/rocm.gpg"
-        ),
+        lambda *a, **k: _FakeResponse(b"ARMORED KEY", f"{STABLE_BASE}/gpg/rocm.gpg"),
     )
     # Fingerprint verification runs gpg on real key bytes; stub it here.
     monkeypatch.setattr(brp, "_verify_key_fingerprint", lambda key: None)
@@ -473,7 +515,7 @@ def test_load_signing_key_rejects_wrong_fingerprint(monkeypatch):
     monkeypatch.setattr(
         brp.urllib.request,
         "urlopen",
-        lambda *a, **k: _FakeResponse(b"KEY", f"{PRERELEASE_BASE}/gpg/rocm.gpg"),
+        lambda *a, **k: _FakeResponse(b"KEY", f"{STABLE_BASE}/gpg/rocm.gpg"),
     )
     monkeypatch.setattr(brp, "_key_fingerprint", lambda armored: "0" * 40)
     with pytest.raises(ValueError):
@@ -494,11 +536,11 @@ def test_fetch_signing_key_retries_then_succeeds(monkeypatch):
         calls["n"] += 1
         if calls["n"] < 3:
             raise brp.urllib.error.URLError("transient")
-        return _FakeResponse(b"KEY", f"{PRERELEASE_BASE}/gpg/rocm.gpg")
+        return _FakeResponse(b"KEY", f"{STABLE_BASE}/gpg/rocm.gpg")
 
     monkeypatch.setattr(brp.urllib.request, "urlopen", flaky)
     monkeypatch.setattr(brp.time, "sleep", lambda s: None)  # no real backoff
-    assert brp._fetch_signing_key(f"{PRERELEASE_BASE}/gpg/rocm.gpg") == b"KEY"
+    assert brp._fetch_signing_key(f"{STABLE_BASE}/gpg/rocm.gpg") == b"KEY"
     assert calls["n"] == 3
 
 
@@ -509,61 +551,65 @@ def test_fetch_signing_key_gives_up_after_attempts(monkeypatch):
     monkeypatch.setattr(brp.urllib.request, "urlopen", always_fail)
     monkeypatch.setattr(brp.time, "sleep", lambda s: None)
     with pytest.raises(RuntimeError):
-        brp._fetch_signing_key(f"{PRERELEASE_BASE}/gpg/rocm.gpg")
+        brp._fetch_signing_key(f"{STABLE_BASE}/gpg/rocm.gpg")
 
 
 # --- versioning ---------------------------------------------------------------
 
 
-def test_rpm_version_rolling_for_prerelease():
-    assert brp.rpm_version_release("prerelease", "7.14.0", "") == (
-        "7.14.0",
-        "1.prerelease",
-    )
+def test_rpm_version_rolling_for_a_flat_stream():
+    assert brp.rpm_version_release("stable", "10.0.0", "") == ("10.0.0", "1.stable")
 
 
 def test_streams_never_share_a_package_version():
-    # Two lines at the same ROCm version must not produce the same package:
+    # Two streams at the same ROCm version must not produce the same package:
     # installing one over the other would otherwise report success and silently
     # leave the original repository configured.
-    version = "7.14.0"
-    rpm_pre = brp.rpm_version_release("prerelease", version, "")
-    rpm_rel = brp.rpm_version_release("release", version, "")
-    assert rpm_pre != rpm_rel
-    assert brp.deb_version("prerelease", version, "") != brp.deb_version(
-        "release", version, ""
-    )
+    version = "10.0.0"
+    seen_rpm = set()
+    seen_deb = set()
+    for stream in brp.STREAMS:
+        sub = NIGHTLY_SUB if brp.stream_shape(stream) == brp._BUILD_ID else ""
+        seen_rpm.add(brp.rpm_version_release(stream, version, sub))
+        seen_deb.add(brp.deb_version(stream, version, sub))
+    assert len(seen_rpm) == len(brp.STREAMS)
+    assert len(seen_deb) == len(brp.STREAMS)
 
 
-def test_prerelease_sorts_before_release():
-    # The release package must upgrade over the prerelease one, not be seen as a
-    # downgrade. deb: "~" sorts before the plain version. rpm: the release
-    # fields differ, and this asserts Python's string ordering of them, not
-    # rpm's. The two agree here because rpmvercmp compares pure-alphabetic
-    # segments with strcmp, so "1.prerelease" precedes "1.release" either way.
-    # They would diverge for a release field with a numeric segment, where
-    # "10" < "9" in Python but 10 > 9 in rpm, so revisit this if the scheme
-    # ever grows one.
-    assert brp.deb_version("prerelease", "7.14.0", "") == "7.14.0~prerelease"
-    assert brp.deb_version("release", "7.14.0", "") == "7.14.0"
-    assert brp.rpm_version_release("prerelease", "7.14.0", "")[1] < (
-        brp.rpm_version_release("release", "7.14.0", "")[1]
-    )
+def test_stable_carries_the_plain_version_and_the_stream_in_the_rpm_release():
+    # stable is the GA stream, so its deb version is the bare ROCm version; any
+    # other flat stream would carry a "~<stream>" suffix, which sorts before it.
+    assert brp.deb_version("stable", "10.0.0", "") == "10.0.0"
+    assert brp.rpm_version_release("stable", "10.0.0", "")[1] == "1.stable"
+
+
+def test_a_build_id_stream_outranks_a_flat_one():
+    # Documents a known consequence rather than asserting a fix. rpm compares
+    # Version before Release, and a build_id Version is a date (20260716) while
+    # a flat one is a semantic version (10.0.0), so nightly always sorts above
+    # stable and switching nightly -> stable is a downgrade. This predates the
+    # streams and resolves itself if the streams ever become separate packages.
+    nightly_v, _ = brp.rpm_version_release("nightly", "10.0.0", NIGHTLY_SUB)
+    stable_v, _ = brp.rpm_version_release("stable", "10.0.0", "")
+    assert nightly_v == "20260716"
+    assert stable_v == "10.0.0"
+    # Compare the way rpm does -- leading numeric segments, numerically.
+    assert int(nightly_v.split(".")[0]) > int(stable_v.split(".")[0])
 
 
 def test_rpm_version_nightly_splits_date_and_id():
-    version, release = brp.rpm_version_release("nightly", "7.14.0", NIGHTLY_SUB)
+    version, release = brp.rpm_version_release("nightly", "10.0.0", NIGHTLY_SUB)
     assert version == "20260716"
     assert release == "12345.nightly"
     assert "-" not in version  # rpm Version cannot contain a hyphen
 
 
 def test_deb_version_nightly_has_no_hyphen():
-    assert brp.deb_version("nightly", "7.14.0", NIGHTLY_SUB) == "20260716.12345"
+    assert brp.deb_version("nightly", "10.0.0", NIGHTLY_SUB) == "20260716.12345"
 
 
 def test_deb_version_rolling():
-    assert brp.deb_version("release", "7.14.0", "") == "7.14.0"
+    assert brp.deb_version("stable", "10.0.0", "") == "10.0.0"
 
 
 # The rpm %changelog date must stay English on any build machine. strftime and
@@ -606,9 +652,9 @@ def test_rpm_changelog_date_is_english_under_a_foreign_locale():
 # --- CLI validation -----------------------------------------------------------
 
 
-def test_release_type_rejects_unknown():
+def test_stream_rejects_unknown():
     with pytest.raises(SystemExit):
-        _args("--release-type", "dev")
+        _args("--stream", "dev")
 
 
 def test_repo_base_url_required():
@@ -617,10 +663,10 @@ def test_repo_base_url_required():
             [
                 "--os-profile",
                 "ubuntu2404",
-                "--release-type",
-                "prerelease",
+                "--stream",
+                "stable",
                 "--rocm-version",
-                "7.14.0",
+                "10.0.0",
                 "--dest-dir",
                 "/tmp/out",
             ]
@@ -629,12 +675,12 @@ def test_repo_base_url_required():
 
 def test_nightly_requires_sub_folder():
     with pytest.raises(SystemExit):
-        _args("--release-type", "nightly", "--repo-base-url", NIGHTLY_BASE)
+        _args("--stream", "nightly", "--repo-base-url", NIGHTLY_BASE)
 
 
 def test_nightly_with_sub_folder_ok():
     args = _args(
-        "--release-type",
+        "--stream",
         "nightly",
         "--repo-base-url",
         NIGHTLY_BASE,
@@ -646,7 +692,7 @@ def test_nightly_with_sub_folder_ok():
 
 def test_sub_folder_rejected_for_non_nightly():
     with pytest.raises(SystemExit):
-        _args("--repo-sub-folder", NIGHTLY_SUB)  # default release-type is prerelease
+        _args("--repo-sub-folder", NIGHTLY_SUB)  # default stream is stable (flat)
 
 
 # --- input validation ---------------------------------------------------------
@@ -655,18 +701,18 @@ def test_sub_folder_rejected_for_non_nightly():
 @pytest.mark.parametrize(
     "bad_version",
     [
-        '7.14.0"; rm -rf /; echo "',  # shell-injection payload
-        "7.14.0 evil",  # whitespace
-        "7.14.0$(id)",  # command substitution
-        "7.14.0\ngpgcheck=0",  # embedded newline
-        "7.14.0\n",  # trailing newline (regex must use \\Z, not $)
+        '10.0.0"; rm -rf /; echo "',  # shell-injection payload
+        "10.0.0 evil",  # whitespace
+        "10.0.0$(id)",  # command substitution
+        "10.0.0\ngpgcheck=0",  # embedded newline
+        "10.0.0\n",  # trailing newline (regex must use \\Z, not $)
         "",  # empty
-        "-7.14.0",  # must start with a digit
+        "-10.0.0",  # must start with a digit
         # An rpm Version cannot contain a hyphen: rpm reads it as the boundary
         # between version and release. rpm_version_release() passes this value
         # straight into the spec's Version: field, so accepting one here would
         # produce a spec rpmbuild rejects. "~rc1" is the form to use instead.
-        "7.14.0-rc1",
+        "10.0.0-rc1",
     ],
 )
 def test_rocm_version_rejects_bad_format(bad_version):
@@ -674,7 +720,7 @@ def test_rocm_version_rejects_bad_format(bad_version):
         _args("--rocm-version", bad_version)
 
 
-@pytest.mark.parametrize("good_version", ["7.14.0", "7.14.0~rc3", "8.0.1rc1", "7.0"])
+@pytest.mark.parametrize("good_version", ["10.0.0", "10.0.0~rc3", "8.0.1rc1", "7.0"])
 def test_rocm_version_accepts_valid(good_version):
     assert _args("--rocm-version", good_version).rocm_version == good_version
 
@@ -682,8 +728,8 @@ def test_rocm_version_accepts_valid(good_version):
 @pytest.mark.parametrize(
     "bad_url",
     [
-        f"{PRERELEASE_BASE}\ngpgcheck=0",  # newline directive injection
-        f"{PRERELEASE_BASE} extra",  # whitespace
+        f"{STABLE_BASE}\ngpgcheck=0",  # newline directive injection
+        f"{STABLE_BASE} extra",  # whitespace
         "not a url",  # no scheme/netloc
         "ftp://example.com/repo",  # unsupported scheme
     ],
@@ -694,13 +740,13 @@ def test_repo_base_url_rejects_bad(bad_url):
 
 
 def test_repo_base_url_accepts_https():
-    assert _args("--repo-base-url", PRERELEASE_BASE).repo_base_url == PRERELEASE_BASE
+    assert _args("--repo-base-url", STABLE_BASE).repo_base_url == STABLE_BASE
 
 
 def test_repo_sub_folder_rejects_bad_format():
     with pytest.raises(SystemExit):
         _args(
-            "--release-type",
+            "--stream",
             "nightly",
             "--repo-base-url",
             NIGHTLY_BASE,
@@ -718,7 +764,7 @@ def test_repo_sub_folder_rejects_a_second_hyphen(sub):
     # package on one format and a build failure on the other.
     with pytest.raises(SystemExit):
         _args(
-            "--release-type",
+            "--stream",
             "nightly",
             "--repo-base-url",
             NIGHTLY_BASE,
@@ -730,7 +776,7 @@ def test_repo_sub_folder_rejects_a_second_hyphen(sub):
 def test_rpm_release_never_contains_a_hyphen():
     # The invariant the sub-folder pattern exists to protect: anything that
     # passes validation must produce a Release rpmbuild will accept.
-    _, release = brp.rpm_version_release("nightly", "7.14.0", NIGHTLY_SUB)
+    _, release = brp.rpm_version_release("nightly", "10.0.0", NIGHTLY_SUB)
     assert "-" not in release
 
 
@@ -748,12 +794,12 @@ def test_postinst_does_not_interpolate_version():
 # --- rpm .repo rendering ------------------------------------------------------
 
 
-def _rpm_repo(release_type: str, base: str, sub: str = "") -> str:
+def _rpm_repo(stream: str, base: str, sub: str = "", profile: str = "rhel10") -> str:
     extra = [
         "--os-profile",
-        "rhel10",
-        "--release-type",
-        release_type,
+        profile,
+        "--stream",
+        stream,
         "--repo-base-url",
         base,
     ]
@@ -762,17 +808,17 @@ def _rpm_repo(release_type: str, base: str, sub: str = "") -> str:
     args = _args(*extra)
     return _render(
         "template/repo/rpm/amdrocm.repo.j2",
-        brp.build_context(args, brp.OS_PROFILES["rhel10"]),
+        brp.build_context(args, brp.OS_PROFILES[profile]),
     )
 
 
 def test_rpm_repo_signed_has_gpgcheck_and_gpgkey():
-    out = _rpm_repo("prerelease", PRERELEASE_BASE)
-    assert "[amdrocm]" in out
+    out = _rpm_repo("stable", STABLE_BASE)
+    assert "[amdrocm-stable]" in out
     assert "enabled=1" in out
     assert "gpgcheck=1" in out
     assert "gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm" in out
-    assert f"baseurl={PRERELEASE_EXPECTED['rhel10']}" in out
+    assert f"baseurl={STABLE_EXPECTED['rhel10']}" in out
 
 
 def test_rpm_repo_nightly_unsigned_no_gpgkey():
@@ -782,18 +828,18 @@ def test_rpm_repo_nightly_unsigned_no_gpgkey():
 
 
 def test_rpm_repo_ends_with_newline():
-    assert _rpm_repo("prerelease", PRERELEASE_BASE).endswith("\n")
+    assert _rpm_repo("stable", STABLE_BASE).endswith("\n")
 
 
 # --- deb .sources rendering ---------------------------------------------------
 
 
-def _deb_sources(release_type: str, base: str, sub: str = "") -> str:
+def _deb_sources(stream: str, base: str, sub: str = "") -> str:
     extra = [
         "--os-profile",
         "ubuntu2404",
-        "--release-type",
-        release_type,
+        "--stream",
+        stream,
         "--repo-base-url",
         base,
     ]
@@ -807,9 +853,10 @@ def _deb_sources(release_type: str, base: str, sub: str = "") -> str:
 
 
 def test_deb_sources_signed_fields():
-    out = _deb_sources("prerelease", PRERELEASE_BASE)
+    out = _deb_sources("stable", STABLE_BASE)
+    assert "X-Repo-Id: amdrocm-stable" in out
     assert "Types: deb" in out
-    assert f"URIs: {PRERELEASE_EXPECTED['ubuntu2404']}" in out
+    assert f"URIs: {STABLE_EXPECTED['ubuntu2404']}" in out
     # The suite is rendered from the constant the reachability check also uses,
     # so the repo file and the verified index path cannot drift apart.
     assert f"Suites: {brp.DEB_SUITE}" in out
@@ -832,12 +879,12 @@ def test_deb_sources_nightly_trusted_not_signed():
 # --- rpm spec rendering -------------------------------------------------------
 
 
-def _spec(release_type: str, base: str, sub: str = "") -> str:
+def _spec(stream: str, base: str, sub: str = "") -> str:
     extra = [
         "--os-profile",
         "rhel10",
-        "--release-type",
-        release_type,
+        "--stream",
+        stream,
         "--repo-base-url",
         base,
     ]
@@ -845,7 +892,7 @@ def _spec(release_type: str, base: str, sub: str = "") -> str:
         extra += ["--repo-sub-folder", sub]
     args = _args(*extra)
     ctx = brp.build_context(args, brp.OS_PROFILES["rhel10"])
-    version, release = brp.rpm_version_release(release_type, args.rocm_version, sub)
+    version, release = brp.rpm_version_release(stream, args.rocm_version, sub)
     return _render(
         "template/repo/rpm/amdrocm-repo.spec.j2",
         {
@@ -858,34 +905,57 @@ def _spec(release_type: str, base: str, sub: str = "") -> str:
 
 
 def test_spec_name_and_repo_install():
-    out = _spec("prerelease", PRERELEASE_BASE)
+    out = _spec("stable", STABLE_BASE)
     assert "Name: amdrocm-repo" in out
-    assert "Version: 7.14.0" in out
-    assert "/etc/yum.repos.d/amdrocm.repo" in out
+    assert "Version: 10.0.0" in out
+    assert "/etc/yum.repos.d/amdrocm-stable.repo" in out
 
 
 def test_spec_signed_installs_key_nightly_does_not():
-    signed = _spec("prerelease", PRERELEASE_BASE)
+    signed = _spec("stable", STABLE_BASE)
     assert "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm" in signed
     unsigned = _spec("nightly", NIGHTLY_BASE, NIGHTLY_SUB)
     assert "RPM-GPG-KEY-amdrocm" not in unsigned
 
 
 @pytest.mark.parametrize(
-    "release_type,sub",
-    [("prerelease", ""), ("release", ""), ("nightly", NIGHTLY_SUB)],
+    "stream,sub",
+    [("stable", ""), ("nightly", NIGHTLY_SUB)],
 )
-def test_spec_conflicts_with_the_legacy_installer_on_every_line(release_type, sub):
+def test_spec_conflicts_with_the_legacy_installer_on_every_stream(stream, sub):
     # amdgpu-install ships its own enabled ROCm repository, so the two packages
     # must not be co-installed. Their repo files are named differently from
     # ours, so nothing stops rpm accepting both -- this declaration is the only
-    # thing that makes the overlap visible. Asserted on every release line
-    # because that package configures a ROCm repository whichever line we
+    # thing that makes the overlap visible. Asserted on every stream
+    # because that package configures a ROCm repository whichever stream we
     # point at.
-    base = NIGHTLY_BASE if release_type == "nightly" else PRERELEASE_BASE
-    assert f"Conflicts: {brp.LEGACY_INSTALLER_PACKAGE}" in _spec(
-        release_type, base, sub
-    )
+    base = NIGHTLY_BASE if stream == "nightly" else STABLE_BASE
+    assert f"Conflicts: {brp.LEGACY_INSTALLER_PACKAGE}" in _spec(stream, base, sub)
+
+
+@pytest.mark.parametrize(
+    "stream,sub",
+    [("stable", ""), ("nightly", NIGHTLY_SUB)],
+)
+def test_spec_has_no_install_scriptlet(stream, sub):
+    # The package ships the key as a file and points gpgkey= at it; it must not
+    # try to import it into the rpm keyring from a scriptlet.
+    #
+    # This looks like an easy improvement -- zypper otherwise stops to ask
+    # before its first refresh, and --non-interactive answers "reject", so the
+    # repository is skipped and nothing installs. It does not work: rpm holds
+    # the database lock for the whole transaction, so "rpm --import" fails with
+    # "can't create transaction lock" from %post and from %posttrans alike.
+    # Both were tried in ubi10 and bci-base:16.0 containers, and the failure is
+    # only a scriptlet warning, so the package still installs looking healthy.
+    #
+    # The supported answer is the package manager's own flag -- "dnf -y" or
+    # "zypper --gpg-auto-import-keys" -- which is what the published ROCm
+    # install instructions use. See docs/packaging/rocm_repo_setup.md.
+    base = NIGHTLY_BASE if stream == "nightly" else STABLE_BASE
+    out = _spec(stream, base, sub)
+    assert "%post" not in out
+    assert "rpm --import" not in out
 
 
 def test_spec_files_sets_root_ownership_before_listing_anything():
@@ -893,7 +963,7 @@ def test_spec_files_sets_root_ownership_before_listing_anything():
     # and a bare "is it present" assertion would not catch a misplaced one.
     # Without it, files packaged by a non-root rpmbuild keep the builder's
     # uid/gid.
-    out = _spec("prerelease", PRERELEASE_BASE)
+    out = _spec("stable", STABLE_BASE)
     body = out.split("%files", 1)[1].split("%changelog", 1)[0]
     entries = [ln.strip() for ln in body.splitlines() if ln.strip()]
     assert entries[0] == "%defattr(-, root, root, -)"
@@ -912,17 +982,17 @@ def test_control_has_no_key_runtime_deps():
     assert "wget" not in out
 
 
-@pytest.mark.parametrize("release_type", ["prerelease", "release", "nightly"])
-def test_control_conflicts_with_the_legacy_installer_on_every_line(release_type):
+@pytest.mark.parametrize("stream", sorted(brp.STREAMS))
+def test_control_conflicts_with_the_legacy_installer_on_every_stream(stream):
     # Conflicts only, not Conflicts + Breaks. Conflicts is the stronger field --
     # it blocks unpacking, where Breaks only blocks configuration -- and adding
     # Breaks alongside it was measured to change nothing: dpkg and apt behave
     # identically with either field alone or both. Breaks would also imply some
     # version of amdgpu-install exists that is not affected, which is not the
-    # case. Declared for every release line, since that package configures a
-    # ROCm repository regardless of which line this one points at.
-    extra = ["--release-type", release_type]
-    if release_type == "nightly":
+    # case. Declared for every stream, since that package configures a
+    # ROCm repository regardless of which stream this one points at.
+    extra = ["--stream", stream]
+    if stream == "nightly":
         extra += ["--repo-base-url", NIGHTLY_BASE, "--repo-sub-folder", NIGHTLY_SUB]
     ctx = brp.build_context(_args(*extra), brp.OS_PROFILES["ubuntu2404"])
     out = _render("template/repo/deb/control.j2", ctx)
@@ -989,7 +1059,7 @@ def test_rules_forces_root_ownership_in_the_archive():
 def test_install_maps_keyring_only_when_signed():
     signed = brp.build_context(_args(), brp.OS_PROFILES["ubuntu2404"])
     out_signed = _render("template/repo/deb/install.j2", signed)
-    assert "amdrocm.sources /etc/apt/sources.list.d/" in out_signed
+    assert "amdrocm-stable.sources /etc/apt/sources.list.d/" in out_signed
     assert "amdrocm.gpg /usr/share/keyrings/" in out_signed
     # The mapped destination must be exactly where Signed-By points, or apt
     # silently treats the repository as unsigned. PurePosixPath, not Path: on
@@ -999,7 +1069,7 @@ def test_install_maps_keyring_only_when_signed():
     assert f"{keyring.name} {keyring.parent}/" in out_signed
 
     args_n = _args(
-        "--release-type",
+        "--stream",
         "nightly",
         "--repo-base-url",
         NIGHTLY_BASE,
@@ -1054,12 +1124,14 @@ def test_relative_dest_dir_is_resolved_to_absolute():
         [
             "--os-profile",
             "rhel10",
-            "--release-type",
-            "prerelease",
+            "--stream",
+            "stable",
             "--repo-base-url",
-            PRERELEASE_BASE,
+            STABLE_BASE,
+            "--gpg-key-url",
+            STABLE_KEY_URL,
             "--rocm-version",
-            "7.14.0",
+            "10.0.0",
             "--dest-dir",
             "relout",
         ]
@@ -1072,3 +1144,160 @@ def test_absolute_dest_dir_stays_absolute():
     args = _args("--dest-dir", "/tmp/somewhere")
     assert args.dest_dir.is_absolute()
     assert args.dest_dir.name == "somewhere"
+
+
+# --- installed-file naming ----------------------------------------------------
+#
+# The repo file's stem and its rpm section id both come from repo_id(), so the
+# stream name reaches disk through a single value. Two streams' packages can be
+# installed in turn, and if they wrote the same filename the second would
+# silently replace the first's configuration.
+
+
+@pytest.mark.parametrize("stream", sorted(brp.STREAMS))
+def test_installed_filenames_carry_the_stream(stream):
+    assert brp.repo_id(stream) == f"amdrocm-{stream}"
+
+
+def test_no_two_streams_share_an_installed_filename():
+    ids = {brp.repo_id(s) for s in brp.STREAMS}
+    assert len(ids) == len(brp.STREAMS)
+
+
+@pytest.mark.parametrize("stream,sub", [("stable", ""), ("nightly", NIGHTLY_SUB)])
+def test_rpm_section_id_matches_the_repo_file_stem(stream, sub):
+    # Assert the whole header, not a substring: "[amdrocm-stable]" contains
+    # "amdrocm", so a containment check would pass on the unscoped id and prove
+    # nothing. Same trap as the amdrocm.gpg / rocm.gpg keyring rename.
+    base = NIGHTLY_BASE if stream == "nightly" else STABLE_BASE
+    out = _rpm_repo(stream, base, sub)
+    assert f"[{brp.repo_id(stream)}]" in out
+    assert "[amdrocm]\n" not in out
+
+
+def test_deb_install_maps_the_stream_scoped_sources_file():
+    # debian/install maps the staged file to /etc/apt/sources.list.d, so the
+    # stem here is the name that lands on the user's disk.
+    args = _args()
+    ctx = brp.build_context(args, brp.OS_PROFILES["ubuntu2404"])
+    out = _render("template/repo/deb/install.j2", ctx)
+    assert out.startswith("amdrocm-stable.sources /etc/apt/sources.list.d/")
+
+
+# --- parity with the published install instructions ---------------------------
+#
+# These stanzas are copied verbatim from the ROCm 10.0.0 install scripts that
+# rocm-install-utils generates and ships (commit 2c40b326f, 2026-08-25), which
+# are what users are told to run. They are the closest thing to an external
+# oracle available here: a golden file we wrote ourselves only proves the
+# renderer is self-consistent, whereas these prove it agrees with the
+# configuration AMD actually publishes for the same repositories.
+#
+# Vendored rather than read from the sibling repository: rocm-install-utils is
+# not a dependency of TheRock and must not become one. Refresh them by hand when
+# that project changes shape, which is rare -- and a mismatch here is the signal
+# that it did.
+
+SCRIPTGEN_DEB_UBUNTU2404 = """\
+X-Repo-Id: amdrocm-stable
+Types: deb
+URIs: https://stable.repo.amd.com/rocm/core/packages/ubuntu2404/
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/amdrocm.gpg
+Enabled: yes
+"""
+
+# The rpm stanzas differ only by the distro slug, so one template covers all
+# three rpm profiles we build. scriptgen ships RHEL 8.x/10.x and SLES 16.0,
+# which map onto rhel8/rhel10/sles16 exactly.
+SCRIPTGEN_RPM = """\
+[amdrocm-stable]
+name=ROCm 10.0.0
+baseurl=https://stable.repo.amd.com/rocm/core/packages/{slug}/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://stable.repo.amd.com/rocm/gpg/packages.gpg
+"""
+
+# Fields where a package must diverge from an inline setup script, each with the
+# reason. Anything NOT listed here has to match, and a new entry is a decision
+# that belongs in the PR description rather than a quiet edit to this table.
+#
+#   Signed-By   scriptgen downloads the key itself to /etc/apt/keyrings; the
+#               package owns its keyring, and the amdrocm name (not rocm) is
+#               what keeps dpkg from refusing to unpack it alongside the amdgpu
+#               driver setup, which already owns .../keyrings/rocm.gpg.
+#   gpgkey      the package ships the key, so it references it locally with
+#               file:// rather than refetching it over the network at install.
+#   baseurl     trailing slash; both forms resolve, cosmetic only.
+#   name        scriptgen bakes the version ("ROCm 10.0.0") because it generates
+#               a script per release. This package configures a rolling repo
+#               that serves every retained version, so a version in the display
+#               name would be wrong the moment the next one ships.
+DEVIATIONS = {"Signed-By", "gpgkey", "baseurl", "name"}
+
+
+def _fields(text: str, sep: str) -> dict:
+    out = {}
+    for line in text.strip().splitlines():
+        if sep in line and not line.startswith("["):
+            k, _, v = line.partition(sep)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def test_deb_sources_match_the_published_install_instructions():
+    ours = _fields(_deb_sources("stable", STABLE_BASE), ":")
+    theirs = _fields(SCRIPTGEN_DEB_UBUNTU2404, ":")
+    assert set(ours) == set(theirs), "field set diverged from the published config"
+    for key in theirs:
+        if key in DEVIATIONS:
+            continue
+        assert ours[key] == theirs[key], f"{key} diverged from the published config"
+
+
+def test_deb_deviations_are_the_expected_ones():
+    # Assert the deviations too, so a silent change to one shows up here rather
+    # than being waved through by the skip list above.
+    ours = _fields(_deb_sources("stable", STABLE_BASE), ":")
+    assert ours["Signed-By"] == "/usr/share/keyrings/amdrocm.gpg"
+
+
+def test_rpm_name_is_not_version_pinned():
+    # The repo serves every retained version, so its display name must not name
+    # one. Guards the "name" deviation above against being quietly reverted to
+    # match scriptgen.
+    ours = _fields(_rpm_repo("stable", STABLE_BASE), "=")
+    assert ours["name"] == brp.REPO_NAME
+    assert "10.0.0" not in ours["name"]
+
+
+@pytest.mark.parametrize("profile", ["rhel8", "rhel10", "sles16"])
+def test_rpm_repo_matches_the_published_install_instructions(profile):
+    ours = _fields(_rpm_repo("stable", STABLE_BASE, profile=profile), "=")
+    theirs = _fields(SCRIPTGEN_RPM.format(slug=profile), "=")
+    assert set(ours) == set(theirs), "field set diverged from the published config"
+    for key in theirs:
+        if key in DEVIATIONS:
+            continue
+        assert ours[key] == theirs[key], f"{key} diverged from the published config"
+    # baseurl differs only by the trailing slash.
+    assert ours["baseurl"].rstrip("/") == theirs["baseurl"].rstrip("/")
+    # gpgkey is local because the package ships the key.
+    assert ours["gpgkey"] == f"file://{brp.RPM_GPG_KEY_PATH}"
+
+
+@pytest.mark.parametrize(
+    "profile,expected_dir",
+    [
+        ("rhel8", "/etc/yum.repos.d"),
+        ("rhel10", "/etc/yum.repos.d"),
+        ("sles16", "/etc/zypp/repos.d"),
+    ],
+)
+def test_rpm_repo_dir_matches_the_published_install_instructions(profile, expected_dir):
+    # scriptgen writes SLES to /etc/zypp/repos.d and the RHEL family to
+    # /etc/yum.repos.d. Easy to get wrong and invisible until install time.
+    assert brp.OS_PROFILES[profile]["rpm_repo_dir"] == expected_dir
