@@ -6,11 +6,15 @@ import os
 import platform
 import tarfile
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from _therock_utils import archive_util
 from _therock_utils.archive_util import (
     add_tree,
+    get_archive_timestamp,
     normalize_tarinfo,
     open_archive_for_read,
     open_archive_for_write,
@@ -103,24 +107,85 @@ class HandleLeakTest(unittest.TestCase):
             self.assertFalse(archive.exists())
 
 
+class ArchiveTimestampTest(unittest.TestCase):
+    """Verify how the archive mtime is resolved."""
+
+    def setUp(self):
+        get_archive_timestamp.cache_clear()
+        self.addCleanup(get_archive_timestamp.cache_clear)
+
+    def test_source_date_epoch_is_honored(self):
+        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+            self.assertEqual(get_archive_timestamp(), 1700000000)
+
+    def test_non_integer_source_date_epoch_is_rejected(self):
+        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "yesterday"}):
+            with self.assertRaisesRegex(ValueError, "SOURCE_DATE_EPOCH"):
+                get_archive_timestamp()
+
+    def test_negative_source_date_epoch_is_rejected(self):
+        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "-1"}):
+            with self.assertRaisesRegex(ValueError, "negative"):
+                get_archive_timestamp()
+
+    def test_falls_back_to_git_commit_time(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SOURCE_DATE_EPOCH", None)
+            with mock.patch.object(
+                archive_util, "_git_commit_timestamp", return_value=1234567890
+            ):
+                self.assertEqual(get_archive_timestamp(), 1234567890)
+
+    def test_falls_back_to_current_time_outside_a_git_checkout(self):
+        before = int(time.time())
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SOURCE_DATE_EPOCH", None)
+            with mock.patch.object(
+                archive_util, "_git_commit_timestamp", return_value=None
+            ):
+                timestamp = get_archive_timestamp()
+        self.assertGreaterEqual(timestamp, before)
+
+    def test_resolves_in_this_checkout_without_configuration(self):
+        # The real resolution path: no SOURCE_DATE_EPOCH, a git checkout. Must
+        # never be the epoch, which is the whole point of not using 0.
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SOURCE_DATE_EPOCH", None)
+            timestamp = get_archive_timestamp()
+        self.assertGreater(timestamp, 0)
+
+
 class NormalizeTarinfoTest(unittest.TestCase):
     """Verify the metadata normalization applied to reproducible archives."""
 
+    def setUp(self):
+        get_archive_timestamp.cache_clear()
+        self.addCleanup(get_archive_timestamp.cache_clear)
+
     def test_build_specific_metadata_is_cleared(self):
         tarinfo = tarfile.TarInfo("lib/libfoo.so.1")
-        tarinfo.mtime = 1700000000
+        tarinfo.mtime = 1600000000
         tarinfo.uid = 1000
         tarinfo.gid = 1000
         tarinfo.uname = "builder"
         tarinfo.gname = "builder"
 
-        normalize_tarinfo(tarinfo)
+        with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+            normalize_tarinfo(tarinfo)
 
-        self.assertEqual(tarinfo.mtime, 0)
+        self.assertEqual(tarinfo.mtime, 1700000000)
         self.assertEqual(tarinfo.uid, 0)
         self.assertEqual(tarinfo.gid, 0)
         self.assertEqual(tarinfo.uname, "root")
         self.assertEqual(tarinfo.gname, "root")
+
+    def test_mtime_is_not_the_epoch(self):
+        # Regression guard: an epoch mtime survives extraction and makes fresh
+        # SDK inputs look older than a downstream project's existing objects,
+        # suppressing rebuilds.
+        tarinfo = tarfile.TarInfo("include/foo.h")
+        normalize_tarinfo(tarinfo)
+        self.assertGreater(tarinfo.mtime, 0)
 
     def test_permissions_and_identity_are_preserved(self):
         tarinfo = tarfile.TarInfo("bin/tool")
@@ -196,18 +261,21 @@ class AddTreeTest(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
 
     def test_member_metadata_is_normalized(self):
+        get_archive_timestamp.cache_clear()
+        self.addCleanup(get_archive_timestamp.cache_clear)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             self._write_tree(tmp)
             archive = tmp / "out.tar.xz"
-            with open_archive_for_write(archive, "xz") as tf:
-                add_tree(tf, tmp / "pkg", relative_to=tmp)
+            with mock.patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "1700000000"}):
+                with open_archive_for_write(archive, "xz") as tf:
+                    add_tree(tf, tmp / "pkg", relative_to=tmp)
             with open_archive_for_read(archive) as tf:
                 members = tf.getmembers()
 
         self.assertTrue(members)
         for member in members:
-            self.assertEqual(member.mtime, 0, member.name)
+            self.assertEqual(member.mtime, 1700000000, member.name)
             self.assertEqual(member.uid, 0, member.name)
             self.assertEqual(member.gid, 0, member.name)
 

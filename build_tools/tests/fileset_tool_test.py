@@ -39,10 +39,19 @@ def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     ).decode()
 
 
-def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def run_command(
+    args: list[str | Path],
+    cwd: Path = FILESET_TOOL.parent,
+    env: dict[str, str] | None = None,
+):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+    child_env = None
+    if env is not None:
+        child_env = os.environ | env
+    return subprocess.check_call(
+        args, cwd=str(cwd), stdin=subprocess.DEVNULL, env=child_env
+    )
 
 
 def write_text(p: Path, text: str):
@@ -408,7 +417,9 @@ class FilesetToolTest(unittest.TestCase):
             ]
         )
 
-    def _archive_digest(self, artifact_dir: Path, archive: Path) -> str:
+    def _archive_digest(
+        self, artifact_dir: Path, archive: Path, env: dict[str, str] | None = None
+    ) -> str:
         run_command(
             [
                 sys.executable,
@@ -417,7 +428,8 @@ class FilesetToolTest(unittest.TestCase):
                 artifact_dir,
                 "-o",
                 archive,
-            ]
+            ],
+            env=env,
         )
         return calculate_hash(archive, "sha256").hexdigest()
 
@@ -447,13 +459,15 @@ class FilesetToolTest(unittest.TestCase):
         artifact_dir = self.temp_dir / "artifact"
         self._build_doc_artifact(artifact_dir)
         archive = self.temp_dir / "archive.tar.xz"
-        self._archive_digest(artifact_dir, archive)
+        self._archive_digest(
+            artifact_dir, archive, env={"SOURCE_DATE_EPOCH": "1700000000"}
+        )
 
         with tarfile.open(archive, mode="r:xz") as tf:
             members = tf.getmembers()
         self.assertTrue(members)
         for member in members:
-            self.assertEqual(member.mtime, 0, member.name)
+            self.assertEqual(member.mtime, 1700000000, member.name)
             self.assertEqual(member.uid, 0, member.name)
             self.assertEqual(member.gid, 0, member.name)
             self.assertEqual(member.uname, "root", member.name)
@@ -464,6 +478,25 @@ class FilesetToolTest(unittest.TestCase):
         names = [m.name for m in members]
         self.assertEqual(names[0], "artifact_manifest.txt")
         self.assertEqual(names[1:], sorted(names[1:]))
+
+    def testArchiveMtimeIsNotTheEpoch(self):
+        """Unconfigured archives still get a real timestamp.
+
+        Extraction restores mtime, so an epoch timestamp would make freshly
+        installed SDK inputs look older than a downstream project's existing
+        build outputs and suppress rebuilds.
+        """
+        artifact_dir = self.temp_dir / "artifact"
+        self._build_doc_artifact(artifact_dir)
+        archive = self.temp_dir / "archive.tar.xz"
+        # No SOURCE_DATE_EPOCH: exercises the git-commit-time path.
+        self._archive_digest(artifact_dir, archive)
+
+        with tarfile.open(archive, mode="r:xz") as tf:
+            members = tf.getmembers()
+        self.assertTrue(members)
+        for member in members:
+            self.assertGreater(member.mtime, 0, member.name)
 
 
 if __name__ == "__main__":

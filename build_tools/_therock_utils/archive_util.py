@@ -4,22 +4,109 @@
 """Utilities for reading and writing zstd/xz compressed tar archives."""
 
 from typing import Callable
+import functools
 import os
 from pathlib import Path
+import subprocess
 import tarfile
+import time
+
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def _git_commit_timestamp() -> int | None:
+    """Commit time of TheRock's HEAD, or None if not a usable git checkout.
+
+    Deliberately the superproject rather than the submodule an artifact's
+    content came from. TheRock pins every submodule, so its HEAD identifies the
+    whole source state, whereas an artifact has no single source submodule to
+    ask: a merged dist tree spans a subproject and its runtime deps, and several
+    subprojects (zlib, zstd, bzip2, elfutils, ...) are tarballs downloaded from
+    S3 with no git history at all.
+
+    The tradeoff is over-invalidation: a docs-only commit here changes every
+    artifact's hash even when the content is byte-identical. That is fine for
+    detecting conflicting uploads within a run, which is what this is for, but
+    it does mean archive hashes cannot be used to dedupe across commits. Set
+    `SOURCE_DATE_EPOCH` to decide that policy somewhere better informed.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%ct"],
+            cwd=THEROCK_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        # git is not installed.
+        return None
+    if result.returncode != 0:
+        # Not a git checkout (e.g. building from an exported source archive) or
+        # no commits yet.
+        return None
+    output = result.stdout.strip()
+    return int(output) if output else None
+
+
+@functools.cache
+def get_archive_timestamp() -> int:
+    """Resolves the mtime to stamp into reproducible archives.
+
+    Deliberately not 0: extraction restores mtime (`tarfile.extract()` and
+    `tar -x` both do, for root and non-root alike), so an epoch mtime makes
+    freshly installed SDK headers and libraries look older than the objects a
+    downstream project already built against the previous version. Timestamp
+    driven build systems then skip work that needed doing.
+
+    Resolution order:
+
+    1. `SOURCE_DATE_EPOCH`, the reproducible-builds convention. Set this to pin
+       the timestamp explicitly; it is the supported override.
+    2. The commit time of HEAD. Deterministic for a given revision, so parallel
+       CI jobs building the same commit still produce identical archives, and
+       it advances as the source advances.
+    3. The current time, if neither is available. Not reproducible, but a
+       working build beats a deterministically broken one -- set
+       `SOURCE_DATE_EPOCH` where reproducibility is required.
+
+    Note that a dirty working tree still reports its last commit time. That is
+    fine for CI, which is always clean; set `SOURCE_DATE_EPOCH` locally if a
+    dirty tree's archives need to look newer than something.
+    """
+    env_value = os.environ.get("SOURCE_DATE_EPOCH")
+    if env_value:
+        try:
+            timestamp = int(env_value)
+        except ValueError:
+            raise ValueError(
+                "SOURCE_DATE_EPOCH must be an integer number of seconds since "
+                f"the Unix epoch, got {env_value!r}"
+            )
+        if timestamp < 0:
+            raise ValueError(f"SOURCE_DATE_EPOCH must not be negative, got {timestamp}")
+        return timestamp
+
+    commit_timestamp = _git_commit_timestamp()
+    if commit_timestamp is not None:
+        return commit_timestamp
+
+    return int(time.time())
 
 
 def normalize_tarinfo(tarinfo: tarfile.TarInfo) -> tarfile.TarInfo:
     """Normalizes TarInfo metadata so identical content yields identical archives.
 
-    Pass as the `filter` argument to `TarFile.add()`. Timestamps and the uid/gid
-    of the building user otherwise vary from build to build, giving the same
-    content a different archive hash every time.
+    Pass as the `filter` argument to `TarFile.add()`. The wall-clock build time
+    and the uid/gid of the building user otherwise vary from build to build,
+    giving the same content a different archive hash every time.
 
-    Permissions are preserved. Extracting as a non-root user gives files owned by
+    Timestamps are replaced with `get_archive_timestamp()` rather than dropped,
+    for the reasons given there. Permissions, sizes, symlink targets and hardlink
+    identity are preserved. Extracting as a non-root user gives files owned by
     the extracting user; extracting as root with `-p` gives root:root.
     """
-    tarinfo.mtime = 0
+    tarinfo.mtime = get_archive_timestamp()
     tarinfo.uid = 0
     tarinfo.gid = 0
     tarinfo.uname = "root"
