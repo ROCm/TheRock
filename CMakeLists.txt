@@ -65,6 +65,42 @@ block(SCOPE_FOR VARIABLES)
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
 endblock()
 
+################################################################################
+# Source timestamp for reproducible archives
+################################################################################
+# Resolved once here rather than by each tool that writes an archive: it costs
+# several git invocations, and every writer must agree on the value or the
+# output is not reproducible. See docs/development/reproducible_archives.md.
+option(THEROCK_EXPORT_SOURCE_DATE_EPOCH
+  "Also export SOURCE_DATE_EPOCH to subproject builds. This makes compilers, \
+CPython and setuptools behave reproducibly too, at the cost of a much wider \
+blast radius: __DATE__/__TIME__ are rewritten in every translation unit and \
+.pyc invalidation changes. See docs/development/reproducible_archives.md."
+  OFF)
+
+set(THEROCK_SOURCE_DATE_EPOCH "" CACHE STRING
+  "Unix timestamp stamped into artifact archives (default: derived from the source state)")
+
+if(NOT THEROCK_SOURCE_DATE_EPOCH)
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE}
+      "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/source_date.py"
+    OUTPUT_VARIABLE _source_date_epoch
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+  )
+  set(THEROCK_SOURCE_DATE_EPOCH "${_source_date_epoch}" CACHE STRING "" FORCE)
+endif()
+message(STATUS "Source timestamp: ${THEROCK_SOURCE_DATE_EPOCH}")
+
+# Written so that tools invoked outside the build graph can read it -- notably
+# `artifact_manager.py push --build-dir`, which compresses artifacts long after
+# CMake has finished and cannot see the configure-time environment.
+file(CONFIGURE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/therock_source_date_epoch.txt"
+  CONTENT "${THEROCK_SOURCE_DATE_EPOCH}\n"
+)
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################

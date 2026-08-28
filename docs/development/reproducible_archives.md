@@ -41,10 +41,20 @@ python build_tools/_therock_utils/source_date.py --explain
 1. Plus the current time if anything is uncommitted. Archives from a dirty tree
    are not reproducible, which is inherent rather than a limitation here.
 
-Orchestrators resolve this **once** — `artifact_manager.py push` and
-`build_python_packages.py` — because it costs several git invocations and every
-writer must agree on the value. They hand it to workers in
-`THEROCK_SOURCE_DATE_EPOCH`.
+This is resolved **once**, at CMake configure time, because it costs several git
+invocations and every writer must agree on the value. See
+[`THEROCK_SOURCE_DATE_EPOCH`](build_system.md#therock_source_date_epoch) for the
+build option. It reaches tools two ways:
+
+- Exported as `THEROCK_SOURCE_DATE_EPOCH` into every subproject build
+  environment, so any tool a build invokes sees it — not only the ones that
+  write archives.
+- Written to `<build_dir>/therock_source_date_epoch.txt` for tools that run
+  outside the build graph. `artifact_manager.py push --build-dir` reads it from
+  there, since it compresses artifacts long after CMake has finished.
+
+Tools run with no configured build tree at all (a direct `fileset_tool` call)
+fall back to resolving it themselves.
 
 Consequence worth knowing: a docs-only commit advances the timestamp for every
 artifact, so archive hashes change even when content is byte-identical. That is
@@ -72,17 +82,18 @@ Those are usually what you want from a fully reproducible build, but they are a
 much wider change than stamping archive metadata, and they apply to code TheRock
 builds rather than to TheRock itself.
 
-To opt in:
+To opt in, at configure time for the build itself:
+
+```bash
+cmake -B build -DTHEROCK_EXPORT_SOURCE_DATE_EPOCH=ON ...
+```
+
+or for the archiving and packaging steps, which run outside the build graph:
 
 ```bash
 python build_tools/artifact_manager.py push --export-source-date-epoch ...
 python build_tools/build_python_packages.py --export-source-date-epoch ...
 ```
-
-That sets `SOURCE_DATE_EPOCH` for child processes in addition to
-`THEROCK_SOURCE_DATE_EPOCH`. Note this only covers the archiving and packaging
-steps; making the compile itself reproducible means setting it for the CMake
-build too, which is a separate decision.
 
 ## What this does not do
 

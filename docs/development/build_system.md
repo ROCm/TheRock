@@ -161,6 +161,45 @@ Each sub-project, by default, uses a standard directory layout for its build:
 Subprojects that opt in to source file globbing even when otherwise skipped
 (e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
+### `THEROCK_SOURCE_DATE_EPOCH`
+
+The Unix timestamp stamped into artifact archives so that identical content
+produces an identical archive hash. Resolved at configure time from the source
+state (superproject `HEAD`, plus any submodule checked out past its pin, plus
+the current time if the tree is dirty), and reported as
+`-- Source timestamp: <value>`.
+
+Set it explicitly to pin the value:
+
+```bash
+cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=1700000000 ...
+```
+
+Resolving it costs several git invocations and every tool that writes an archive
+must agree on it, so it is resolved once here rather than by each tool. It
+reaches them two ways:
+
+- Exported as `THEROCK_SOURCE_DATE_EPOCH` into every subproject build
+  environment, so any tool the build invokes sees it.
+- Written to `<build_dir>/therock_source_date_epoch.txt`, for tools that run
+  outside the build graph. `artifact_manager.py push --build-dir` compresses
+  artifacts long after CMake has finished and reads it from there.
+
+### `THEROCK_EXPORT_SOURCE_DATE_EPOCH`
+
+Off by default. When on, the same value is also exported as the standard
+`SOURCE_DATE_EPOCH`.
+
+> [!WARNING]
+> `SOURCE_DATE_EPOCH` is a cross-ecosystem convention that many tools honor
+> automatically, so this reaches much further than archive metadata: GCC and
+> Clang rewrite `__DATE__`/`__TIME__` in every translation unit, CPython
+> switches `.pyc` files to checked-hash invalidation, and setuptools uses it for
+> zip entry timestamps. That is usually what a fully reproducible build wants,
+> but it is a deliberate choice, which is why TheRock does not do it by default.
+
+See [Reproducible Archives](reproducible_archives.md) for the full picture.
+
 ## Developer Cookbook
 
 TheRock aims to not just be a CI tool but to be a daily driver for developer

@@ -1461,6 +1461,21 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
+  # The source timestamp for reproducible archives, resolved once at configure
+  # time. Exported to every subproject so that any tool a build invokes agrees
+  # on it, not just the ones that write artifact archives.
+  if(THEROCK_SOURCE_DATE_EPOCH)
+    list(APPEND _build_env_pairs
+      "THEROCK_SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
+    # Opt-in only: SOURCE_DATE_EPOCH is honored by compilers, CPython and
+    # setuptools, so exporting it changes far more than archive metadata.
+    # See docs/development/reproducible_archives.md.
+    if(THEROCK_EXPORT_SOURCE_DATE_EPOCH)
+      list(APPEND _build_env_pairs
+        "SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
+    endif()
+  endif()
+
   set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
