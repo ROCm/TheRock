@@ -6,10 +6,12 @@ pytest-timeout==2.4.0
 perfetto==0.7.0 # Newer versions of perfetto remove support for required GLIBC version.
 PyYAML==6.0.2
 pyzstd>=0.16.0
+zlib-ng>=1.0.0
 prettytable==3.12.0
 requests==2.33.0
 jsonschema==4.23.0
 packaging==25.0
+python-debian==1.1.1
 setuptools>=80.9.0,<82.0.0
 python-magic==0.4.27; sys_platform != "win32"
 

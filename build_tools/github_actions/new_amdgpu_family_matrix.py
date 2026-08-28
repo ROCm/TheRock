@@ -397,7 +397,7 @@ amdgpu_family_info_matrix_all = {
                     # No gfx1250 hardware available for testing yet.
                     "run_tests": False,
                     "runs_on": {},
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1250"],
                 },
                 "release": {
                     "push_on_success": False,

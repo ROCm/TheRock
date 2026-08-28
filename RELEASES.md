@@ -715,10 +715,10 @@ distributions.
 
 ```bash
 # Step 1: Find the latest release from
-#         https://nightly.repo.amd.com/rocm/core/packages-asan/deb/
-#         Look for directories like "20260823-12345678"
+#         https://nightly.repo.amd.com/rocm/core/packages-asan/ubuntu2604/
+#         Look for directories like "20260823-32607205251"
 # Step 2: Set the variable below
-export RELEASE_ID=20260823-12345678  # replace with the latest date-runid
+export RELEASE_ID=20260823-32607205251  # replace with the latest date-runid
 
 # Step 3: Add repository and install
 echo "deb [trusted=yes] https://nightly.repo.amd.com/rocm/core/packages-asan/deb/${RELEASE_ID} stable main" \
@@ -726,20 +726,20 @@ echo "deb [trusted=yes] https://nightly.repo.amd.com/rocm/core/packages-asan/deb
 sudo apt update
 
 # Install all supported GPU architectures (larger download):
-sudo apt install amdrocm
+sudo apt install amdrocm-asan
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo apt install amdrocm10.1-gfx942   # MI300X / MI300A
-sudo apt install amdrocm10.1-gfx950   # MI350X
+sudo apt install amdrocm-asan10.1-gfx942   # MI300X / MI300A
+sudo apt install amdrocm-asan10.1-gfx950   # MI350X
 ```
 
 ##### RPM-based systems (RHEL, SLES, AlmaLinux, etc.)
 
 ```bash
 # Step 1: Find the latest release from
-#         https://nightly.repo.amd.com/rocm/core/packages-asan/rpm/
-#         Look for directories like "20260823-12345678"
+#         https://nightly.repo.amd.com/rocm/core/packages-asan/rhel10/
+#         Look for directories like "20260823-32607205251"
 # Step 2: Set the variable below
-export RELEASE_ID=20260823-12345678  # replace with the latest date-runid
+export RELEASE_ID=20260823-32607205251  # replace with the latest date-runid
 
 # Step 3: Add repository and install
 sudo tee /etc/yum.repos.d/rocm-asan-nightly.repo <<EOF
@@ -754,10 +754,10 @@ EOF
 sudo dnf clean all
 
 # Install all supported GPU architectures (larger download):
-sudo dnf install amdrocm
+sudo dnf install amdrocm-asan
 # Or install for a specific GPU architecture only (smaller download, recommended):
-sudo dnf install amdrocm10.1-gfx942   # MI300X / MI300A
-sudo dnf install amdrocm10.1-gfx950   # MI350X
+sudo dnf install amdrocm-asan10.1-gfx942   # MI300X / MI300A
+sudo dnf install amdrocm-asan10.1-gfx950   # MI350X
 ```
 
 #### Installing via tarball
