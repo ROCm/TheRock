@@ -1,6 +1,6 @@
-From 47271728866d2c205311f9026e58b4e4ed7cc177 Mon Sep 17 00:00:00 2001
+From ab5a39f945746afe1823df9755c877728aa4a1cb Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Wed, 26 Aug 2026 15:41:40 +0000
+Date: Thu, 27 Aug 2026 14:04:35 +0000
 Subject: [PATCH] rccl: guard x86-only cpuid code for portability
 
 Guard the cpuid.h include and __get_cpuid() call with architecture
@@ -11,20 +11,20 @@ is skipped but the IOMMU check still runs.
  1 file changed, 6 insertions(+)
 
 diff --git a/projects/rccl/src/init.cc b/projects/rccl/src/init.cc
-index d248bc76d93..4932370349f 100644
+index 78df1a46a96..5fa5c45763a 100644
 --- a/projects/rccl/src/init.cc
 +++ b/projects/rccl/src/init.cc
 @@ -80,7 +80,9 @@
- #include "dda_all_reduce.h"
- #include "ipc_init.h"
- #include "fabric_init.h"
+ #include "algorithms/dda/all_reduce/dda_all_reduce.h"
+ #include "algorithms/dda/ipc/ipc_init.h"
+ #include "algorithms/dda/fabric/fabric_init.h"
 +#if defined(__x86_64__) || defined(_M_X64)
  #include <cpuid.h>
 +#endif
  #include <stdio.h>
  #include <stdlib.h>
  #include "kernel_config.h"
-@@ -299,8 +301,12 @@ static ncclResult_t ncclInit() {
+@@ -303,8 +305,12 @@ static ncclResult_t ncclInit() {
    }
    INFO(NCCL_INIT, "Kernel version: %s", verStr);
    if (strstr(verStr, "cray") == NULL) {
