@@ -79,8 +79,6 @@ therock_cmake_subproject_declare(rocm_smi_lib
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
-    # See the post_hook, which needs to advertise install interface directories
-    # in this case.
     "-DTHEROCK_HAS_BUNDLED_LIBDRM=${THEROCK_BUNDLED_LIBDRM}"
     # rocm-smi-lib is deprecated in favor of AMD SMI; skip building it. The
     # subproject honors this flag and configures to a no-op.
