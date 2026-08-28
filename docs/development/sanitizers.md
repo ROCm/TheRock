@@ -43,7 +43,7 @@ When a project is configured for sanitizers, it will have certain variables inje
 
 You are recommended to code defensively with patterns like:
 
-```
+```cmake
 if(NOT DEFINED THEROCK_SANITIZER)
   set(THEROCK_SANITIZER)
 endif()
@@ -56,7 +56,7 @@ Note that you may need to add additional environment variable special casing to 
 
 Example:
 
-```
+```cmake
 if(NOT DEFINED THEROCK_SANITIZER_LAUNCHER)
   set(THEROCK_SANITIZER_LAUNCHER)
 endif()
@@ -75,7 +75,7 @@ We may add more built-in helpers if we see a lot of common usages like this. How
 
 If needing to activate specific codepaths in ROCm libraries specifically for ASAN, CMake plumbing can be done to set ad-hoc defines, but it is highly recommended to instead use built-in compile definitions for this. For example:
 
-```
+```c
 #if defined(__has_feature)
 # if __has_feature(address_sanitizer)
     // Code that builds only when AddressSanitizer is enabled

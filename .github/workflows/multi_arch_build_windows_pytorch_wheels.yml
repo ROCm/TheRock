@@ -259,7 +259,14 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ninja --version 1.13.1
+          # Some runner images already ship a newer ninja; choco install of the
+          # pinned version then fails with "a newer version is already
+          # installed". Only install when ninja is missing.
+          if command -v ninja >/dev/null 2>&1; then
+            printf '%s\n' "ninja already installed: $(ninja --version)"
+          else
+            choco install --no-progress -y ninja --version 1.13.1
+          fi
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
       # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
