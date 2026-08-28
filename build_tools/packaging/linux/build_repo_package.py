@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from pathlib import Path, PurePosixPath
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -565,8 +565,20 @@ def dearmor_key(armored: bytes) -> bytes:
 def get_jinja_env() -> Environment:
     # keep_trailing_newline so rendered config files end with a newline (POSIX
     # text-file hygiene; Jinja strips the final newline by default).
+    #
+    # autoescape matches deb_package.py and rpm_package.py: escaping is enabled
+    # for markup extensions only. Every template here renders a package-manager
+    # config file, not markup, and escaping one would corrupt it -- an "&" in a
+    # repository URL would become "&amp;". The values interpolated into these
+    # files are constrained by the input patterns above, which is the control
+    # that actually applies to this syntax.
     return Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
+        autoescape=select_autoescape(
+            enabled_extensions=("html", "htm", "xml"),
+            default_for_string=True,
+            default=False,
+        ),
         keep_trailing_newline=True,
         trim_blocks=True,
         lstrip_blocks=True,
