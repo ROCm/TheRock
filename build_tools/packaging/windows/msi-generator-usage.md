@@ -22,25 +22,25 @@ with no separate manifest to maintain.
 ```bat
 :: Generate the WiX source from nightly artifacts
 python build_tools\packaging\windows\generate_msi_wxs.py ^
-    --package hip-runtime ^
+    --package runtime ^
     --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
 
 :: Compile to MSI (x64: SystemFolder -> C:\Windows\System32)
-wix build build_tools\packaging\windows\amdrocm-hip-runtime.wxs ^
+wix build build_tools\packaging\windows\amdrocm-runtime.wxs ^
     -arch x64 ^
-    -o build_tools\packaging\windows\amdrocm-hip-runtime.msi
+    -o build_tools\packaging\windows\amdrocm-runtime.msi
 ```
 
 ### From a local build
 
 ```bat
 :: Generate (uses build/dist/rocm and build/<component>/stage/ automatically)
-python build_tools\packaging\windows\generate_msi_wxs.py --package hip-runtime
+python build_tools\packaging\windows\generate_msi_wxs.py --package runtime
 
 :: Compile to MSI (x64: SystemFolder -> C:\Windows\System32)
-wix build build_tools\packaging\windows\amdrocm-hip-runtime.wxs ^
+wix build build_tools\packaging\windows\amdrocm-runtime.wxs ^
     -arch x64 ^
-    -o build_tools\packaging\windows\amdrocm-hip-runtime.msi
+    -o build_tools\packaging\windows\amdrocm-runtime.msi
 ```
 
 ## Available Packages
@@ -49,10 +49,10 @@ wix build build_tools\packaging\windows\amdrocm-hip-runtime.wxs ^
 python build_tools\packaging\windows\generate_msi_wxs.py --list
 ```
 
-| Package       | Output stem           | Contents                                                            |
-| ------------- | --------------------- | ------------------------------------------------------------------- |
-| `hip-runtime` | `amdrocm-hip-runtime` | HIP runtime DLLs, hipcc, hipconfig, kernel package support          |
-| `runtime`     | `amdrocm-runtime`     | HIP runtime + AMD LLVM compiler runtime (hipcc, comgr, device libs) |
+| Package    | Output stem       | Contents                                                            |
+| ---------- | ----------------- | ------------------------------------------------------------------- |
+| `runtime`  | `amdrocm-runtime` | HIP runtime + AMD LLVM compiler runtime (comgr, device libs)        |
+| `core`     | `amdrocm-core`    | HIP + OpenCL + AMD SMI + ROCR-Runtime                               |
 
 ## Options
 
@@ -86,7 +86,7 @@ The default install path is assembled as:
 [install-root] \ [product-dir] \ [version-dir] \ <package-subdir>-<version> \
 ```
 
-For example: `C:\Program Files\AMD\ROCm\hip-runtime-7.14.0\`
+For example: `C:\Program Files\AMD\ROCm\core-7.15\`
 
 | Flag                      | Default              | Description                                                                                                         |
 | ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -134,16 +134,16 @@ children of `InstallDir`, regardless of the `basedir` path in the build tree.
 
 ```bat
 :: Silent install to default location
-msiexec /i amdrocm-hip-runtime.msi /qn
+msiexec /i amdrocm-runtime.msi /qn
 
 :: Override install directory at install time
-msiexec /i amdrocm-hip-runtime.msi /qn INSTALLFOLDER="C:\MyROCm"
+msiexec /i amdrocm-runtime.msi /qn INSTALLFOLDER="C:\MyROCm"
 
 :: Enable Windows long-path support
-msiexec /i amdrocm-hip-runtime.msi /qn ENABLE_LONG_PATHS=1
+msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=1
 
 :: Silent install with a log file
-msiexec /i amdrocm-hip-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
+msiexec /i amdrocm-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 ```
 
 ## Registry Entries

@@ -121,8 +121,7 @@ Three packages are defined, covering different deployment scenarios:
 
 | Package               | Artifacts                                                                   | Intent                                                                                   |
 | --------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `amdrocm-hip-runtime` | core-hip, core-kpack, core-hipinfo                                          | Minimal HIP runtime for running pre-compiled HIP programs                                |
-| `amdrocm-runtime`    | core-hip, core-kpack, core-hipinfo, amd-llvm (comgr only)                   | HIP runtime + code object manager for applications that load GPU code objects at runtime |
+| `amdrocm-runtime`     | core-hip, core-kpack, amd-llvm (comgr only)                                 | HIP runtime + code object manager for applications that load GPU code objects at runtime |
 | `amdrocm-core`        | core-runtime, core-hip, core-kpack, core-hipinfo, core-amdsmi, core-ocl-icd | Full core runtime: HIP + OpenCL + AMD SMI + ROCR-Runtime                                 |
 
 Each package installs to a versioned subdirectory under

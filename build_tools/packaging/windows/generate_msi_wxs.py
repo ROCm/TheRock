@@ -12,11 +12,11 @@ List available packages:
     python generate_msi_wxs.py --list
 
 Generate from CI artifacts (recommended):
-    python generate_msi_wxs.py --package hip-runtime \\
+    python generate_msi_wxs.py --package runtime \\
         --artifacts-url https://therock-nightly-artifacts.s3.amazonaws.com/<run-id>-windows
 
 Generate from a local build:
-    python generate_msi_wxs.py --package hip-runtime --build build/
+    python generate_msi_wxs.py --package runtime --build build/
 
 The generated .wxs is compiled into an MSI by running:
     wix build <name>.wxs -o <name>.msi
@@ -102,21 +102,6 @@ class PackageDef:
 
 # Keys are the --package selector values.
 PACKAGES: dict[str, PackageDef] = {
-    "hip-runtime": PackageDef(
-        description="HIP runtime DLLs, hipcc, hipconfig, kernel package support",
-        product_name="AMD ROCm HIP Runtime",
-        artifacts=[
-            "core-hip",  # HIP runtime DLLs (amdhip64_7, hiprtc*) — lib component only
-            "core-kpack",  # Kernel package support (rocm_kpack.dll)
-            "core-hipinfo",  # Windows-only: bin/hipInfo*
-        ],
-        output_stem="amdrocm-hip-runtime",
-        install_subdir="core-{major}.{minor}",
-        upgrade_code="B2C3D4E5-F6A7-8901-BCDE-F12345678901",
-        feature_id="HIPRuntime",
-        feature_title="ROCm HIP Runtime",
-        registry_key="Software\\AMD\\ROCm\\hip-runtime\\{major}.{minor}",
-    ),
     "runtime": PackageDef(
         description="ROCm runtime redistributable (HIP runtime + amd_comgr.dll)",
         product_name="AMD ROCm Runtime",
@@ -356,6 +341,73 @@ def collect_files_from_catalog(
     return sorted((Path(r), s) for r, s in seen.items())
 
 
+def fetch_legacy_dlls_from_dvc(
+    dest_dir: Path,
+    repo_root: Path,
+) -> None:
+    """Download legacy DLLs tracked by DVC in rocm-systems into dest_dir.
+
+    Reads *.dvc pointer files from
+    rocm-systems/shared/amdgpu-windows-interop/legacy/ and fetches each DLL
+    from the DVC S3 remote (s3://therock-dvc/rocm-systems, anonymous) into
+    dest_dir. The S3 object key is derived from the md5 hash in the pointer
+    file: <md5[:2]>/<md5[2:]>.
+
+    dest_dir is the _legacy/bin/ path that resolve_legacy_dlls() searches as
+    its fallback. Missing DLLs are warned and skipped; a DVC fetch failure
+    does not abort the generator.
+    """
+    dvc_dir = (
+        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+    )
+    if not dvc_dir.is_dir():
+        print(
+            f"Warning: rocm-systems legacy DVC dir not found: {dvc_dir}\n"
+            "  (submodule not initialized? run: git submodule update --init rocm-systems)",
+            file=sys.stderr,
+        )
+        return
+
+    dvc_remote = "https://therock-dvc.s3.us-east-2.amazonaws.com/rocm-systems/files/md5"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        sys.exit(
+            "PyYAML is required to parse .dvc files: pip install pyyaml"
+        )
+
+    for dvc_file in sorted(dvc_dir.glob("*.dvc")):
+        dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
+        dest = dest_dir / dll_name
+        if dest.exists():
+            print(f"  Cached:    {dll_name} (legacy DVC)")
+            continue
+
+        try:
+            data = yaml.safe_load(dvc_file.read_text(encoding="utf-8"))
+            md5 = data["outs"][0]["md5"]
+        except Exception as e:
+            print(
+                f"Warning: could not parse {dvc_file.name}: {e}",
+                file=sys.stderr,
+            )
+            continue
+
+        s3_key = f"{md5[:2]}/{md5[2:]}"
+        url = f"{dvc_remote}/{s3_key}"
+        print(f"  Fetching:  {dll_name} (legacy DVC, md5={md5[:8]}...)")
+        try:
+            urllib.request.urlretrieve(url, dest)
+        except Exception as e:
+            print(
+                f"Warning: failed to fetch legacy DLL {dll_name} from {url}: {e}",
+                file=sys.stderr,
+            )
+            dest.unlink(missing_ok=True)
+
+
 def resolve_legacy_dlls(
     artifact_dir: Path,
     dll_names: list[str],
@@ -467,6 +519,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--fetch-legacy-dlls",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Fetch legacy DLLs from DVC (rocm-systems submodule) into the "
+            "_legacy/bin cache used by the legacy System32 install feature. "
+            "Defaults to True when --artifacts-url is set, False otherwise."
+        ),
+    )
+    parser.add_argument(
         "--artifacts-cache-dir",
         type=Path,
         default=None,
@@ -565,9 +627,21 @@ def build_wxs(args: argparse.Namespace) -> None:
             components=PACKAGE_COMPONENTS,
             dest_dir=args.artifacts_cache_dir,
         )
+        legacy_bin = args.artifacts_cache_dir / "_legacy" / "bin"
     else:
         # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
         artifact_dir = args.build_root / "artifacts"
+        legacy_bin = args.build_root / "_legacy" / "bin"
+
+    fetch_legacy = getattr(args, "fetch_legacy_dlls", None)
+    if fetch_legacy is None:
+        fetch_legacy = bool(getattr(args, "artifacts_url", None))
+    if fetch_legacy and pkg_def.legacy_system32_dlls:
+        print("Fetching legacy DLLs from DVC ...")
+        fetch_legacy_dlls_from_dvc(
+            dest_dir=legacy_bin,
+            repo_root=Path(__file__).parent.parent.parent.parent,
+        )
 
     files = collect_files_from_catalog(artifact_dir, pkg_def)
     legacy_dlls = resolve_legacy_dlls(artifact_dir, pkg_def.legacy_system32_dlls)

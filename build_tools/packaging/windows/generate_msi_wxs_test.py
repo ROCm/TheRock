@@ -225,7 +225,7 @@ class TestBuildWxs(unittest.TestCase):
         self,
         tmp: str,
         artifact_specs: dict,
-        package: str = "hip-runtime",
+        package: str = "runtime",
         extra_args: dict = None,
     ):
         """Set up artifact dirs and run build_wxs.
@@ -270,22 +270,22 @@ class TestBuildWxs(unittest.TestCase):
 
     def test_produces_valid_xml(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             self.assertEqual(root.tag, _ns("Wix"))
 
     def test_package_element_attributes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             pkg = root.find(_ns("Package"))
             self.assertEqual(pkg.get("Version"), "1.2.3")
             self.assertEqual(pkg.get("Manufacturer"), "Advanced Micro Devices, Inc.")
             self.assertEqual(
-                pkg.get("UpgradeCode"), PACKAGES["hip-runtime"].upgrade_code
+                pkg.get("UpgradeCode"), PACKAGES["runtime"].upgrade_code
             )
 
     def test_install_subdir_uses_version(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             names = [d.get("Name") for d in root.iter(_ns("Directory"))]
             self.assertIn("core-1.2", names)
 
@@ -340,7 +340,7 @@ class TestBuildWxs(unittest.TestCase):
             out = root_path / "out.wxs"
             buf = io.StringIO()
             args = argparse.Namespace(
-                package="hip-runtime",
+                package="runtime",
                 build_root=empty_build,
                 output=out,
                 install_root="ProgramFilesFolder",
@@ -380,13 +380,13 @@ class TestBuildWxs(unittest.TestCase):
 
     def test_long_paths_feature_always_present(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             features = [f.get("Id") for f in root.iter(_ns("Feature"))]
             self.assertIn("LongPaths", features)
 
     def test_installfolder_property_present(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             prop_ids = [p.get("Id") for p in root.iter(_ns("Property"))]
             self.assertIn("INSTALLFOLDER", prop_ids)
             set_dirs = [s.get("Id") for s in root.iter(_ns("SetDirectory"))]
@@ -394,7 +394,7 @@ class TestBuildWxs(unittest.TestCase):
 
     def test_no_legacy_system32_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self._run(tmp, self._minimal_specs("hip-runtime"))
+            root = self._run(tmp, self._minimal_specs("runtime"))
             actions = [ca.get("Id") for ca in root.iter(_ns("CustomAction"))]
             self.assertNotIn("RemoveLegacyROCmDlls", actions)
 
@@ -422,7 +422,7 @@ class TestBuildWxs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._run(
                 tmp,
-                self._minimal_specs("hip-runtime"),
+                self._minimal_specs("runtime"),
                 extra_args={"install_root": "C:\\MyROCm"},
             )
             targetdirs = [d.get("Id") for d in root.iter(_ns("Directory"))]
