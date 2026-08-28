@@ -15,10 +15,11 @@ python-debian==1.1.1
 setuptools>=80.9.0,<82.0.0
 python-magic==0.4.27; sys_platform != "win32"
 
-#test_artifacts_covered_by_packages requirement
+# build_tools/memory_monitor.py requirement
+psutil==7.1.3
+
+# test_artifacts_covered_by_packages requirement
 toml>=0.10.2
 
-# build_tools/packaging/linux/tests/build_package_test.py imports build_package.py,
-# which pulls this in via deb_package.py and rpm_package.py.
-# Keep the specifier in sync with requirements.txt.
+# build_tools/packaging/linux/tests/build_package_test.py requirement
 jinja2>=3.0.0
