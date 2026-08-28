@@ -552,8 +552,8 @@ def get_container_image(os_profile: str) -> str:
     """Return the container image for a given OS profile.
 
     Examples:
-        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
-        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>
+        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>
         sles16      -> registry.suse.com/bci/bci-base:16.0
         rhel8       -> registry.access.redhat.com/ubi8/ubi:8.10
         rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
@@ -745,7 +745,7 @@ def main(argv: list[str] | None = None) -> int:
         "get-container-image",
         help=(
             "Get container image for a given OS profile "
-            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest)."
+            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>)."
         ),
     )
     p_img.add_argument(
