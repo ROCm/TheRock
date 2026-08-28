@@ -556,11 +556,30 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
-    parser.add_argument("--systems_token", required=True)
-    parser.add_argument("--libraries_token", required=True)
-    parser.add_argument("--rocgdb_token", required=True)
-    parser.add_argument("--mesa_token", required=True)
+    # Tokens default from the environment so they are never exposed on the
+    # process command line (visible via `ps`); CLI flags remain for local runs.
+    parser.add_argument("--systems_token", default=os.environ.get("SYSTEMS_TOKEN"))
+    parser.add_argument("--libraries_token", default=os.environ.get("LIBRARIES_TOKEN"))
+    parser.add_argument("--rocgdb_token", default=os.environ.get("ROCGDB_TOKEN"))
+    parser.add_argument("--mesa_token", default=os.environ.get("MESA_TOKEN"))
     args = parser.parse_args()
+
+    missing = [
+        name
+        for name, val in (
+            ("systems_token", args.systems_token),
+            ("libraries_token", args.libraries_token),
+            ("rocgdb_token", args.rocgdb_token),
+            ("mesa_token", args.mesa_token),
+        )
+        if not val
+    ]
+    if missing:
+        parser.error(
+            "Missing token(s): "
+            + ", ".join(missing)
+            + ". Provide via env var (e.g. SYSTEMS_TOKEN) or --<name>."
+        )
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])

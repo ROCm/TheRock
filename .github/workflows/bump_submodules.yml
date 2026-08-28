@@ -70,30 +70,32 @@ jobs:
 
       - name: Install prerequisites
         run: |
-          pip install requests
+          pip install --require-hashes -r build_tools/github_actions/requirements-bump.txt
 
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
+          ROCGDB_TOKEN: ${{ steps.systems-token.outputs.token }}
+          MESA_TOKEN: ${{ steps.systems-token.outputs.token }}
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
-            --submodule "${{ github.event.inputs.submodule || 'all' }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
+            --submodule "${{ github.event.inputs.submodule || 'all' }}"
 
       - name: Run push automation
         if: github.event_name == 'push'
+        env:
+          SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
+          LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
+          ROCGDB_TOKEN: ${{ steps.systems-token.outputs.token }}
+          MESA_TOKEN: ${{ steps.systems-token.outputs.token }}
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
             --before "${{ github.event.before }}" \
-            --after "${{ github.sha }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
-            --mesa_token "${{ steps.systems-token.outputs.token }}"
+            --after "${{ github.sha }}"
 
       - name: Post bump breadcrumbs to upstream PRs
         if: github.event_name == 'push'
@@ -101,7 +103,4 @@ jobs:
         run: |
           python3 build_tools/github_actions/post_bump_breadcrumbs.py \
             --before "${{ github.event.before }}" \
-            --after "${{ github.sha }}" \
-            --systems_token "${{ steps.systems-token.outputs.token }}" \
-            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
+            --after "${{ github.sha }}"
