@@ -350,6 +350,40 @@ class CIInputs:
             + pr_test_labels
         )
 
+        # When build_stages limits the build, validate or auto-select test labels.
+        # - If labels provided: fail-fast if they require stages not in build_stages
+        # - If no labels provided: auto-select compatible labels for the stages
+        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
+        if allowed_labels is not None:
+            if linux_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in linux_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Linux test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+            if windows_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in windows_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Windows test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
         inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
