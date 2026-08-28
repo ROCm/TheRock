@@ -4,11 +4,11 @@
 
 """Resolve Docker image references from the TheRock central image registry.
 
-Reads docker_images.json at the repo root and formats full image references
+Reads dockerfiles/docker_images.json and formats full image references
 suitable for use in GitHub Actions workflow container fields, Dockerfile FROM
 lines, and environment variables.
 
-docker_images.json format
+dockerfiles/docker_images.json format
 -------------------------
 The file is a JSON object. Keys starting with "_" (e.g. "_comment") are
 ignored by this script and may be used for documentation. Every other key is a
@@ -47,7 +47,7 @@ set last_updated to today's date.
 Subcommands:
   get-image    Print the full reference for a named image key.
   list         List all known image keys and their current references.
-  validate     Check all entries in docker_images.json for errors.
+  validate     Check all entries in dockerfiles/docker_images.json for errors.
 
 Examples:
   python3 build_tools/resolve_docker_image.py get-image therock_build_manylinux_x86_64
@@ -64,7 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_DOCKER_IMAGES_PATH = _REPO_ROOT / "docker_images.json"
+_DOCKER_IMAGES_PATH = _REPO_ROOT / "dockerfiles" / "docker_images.json"
 
 # sha256: followed by exactly 64 lowercase hex digits
 _SHA_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -91,7 +91,7 @@ class ValidationError:
 
 
 def validate_entry(key: str, entry: object) -> list[ValidationError]:
-    """Return a list of validation errors for one docker_images.json entry.
+    """Return a list of validation errors for one dockerfiles/docker_images.json entry.
 
     An empty list means the entry is valid.
     """
@@ -150,10 +150,10 @@ def validate_entry(key: str, entry: object) -> list[ValidationError]:
 
 
 def load_images(path: Path = _DOCKER_IMAGES_PATH) -> dict:
-    """Load and return the docker_images.json registry, minus comment keys.
+    """Load and return the dockerfiles/docker_images.json registry, minus comment keys.
 
     Raises:
-        FileNotFoundError: If docker_images.json does not exist.
+        FileNotFoundError: If dockerfiles/docker_images.json does not exist.
         json.JSONDecodeError: If the file is not valid JSON.
     """
     with path.open() as f:
@@ -165,7 +165,7 @@ def resolve(entry: dict, key: str) -> str:
     """Return the full image reference string for a single registry entry.
 
     Args:
-        entry: One object from docker_images.json.
+        entry: One object from dockerfiles/docker_images.json.
         key: The image key, used only in error/warning messages.
 
     Returns:
@@ -190,7 +190,7 @@ def resolve(entry: dict, key: str) -> str:
         return f"{base}:{tag}"
 
     raise ValueError(
-        f"{key!r} has neither 'sha' nor 'tag' in docker_images.json; one must be set"
+        f"{key!r} has neither 'sha' nor 'tag' in dockerfiles/docker_images.json; one must be set"
     )
 
 
@@ -198,7 +198,7 @@ def get_image_ref(key: str, path: Path = _DOCKER_IMAGES_PATH) -> str:
     """Return the full image reference for the given key.
 
     Raises:
-        KeyError: If the key is not present in docker_images.json.
+        KeyError: If the key is not present in dockerfiles/docker_images.json.
         ValueError: If the entry is malformed.
     """
     images = load_images(path)
@@ -230,7 +230,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     try:
         images = load_images()
     except Exception as e:
-        print(f"Error reading docker_images.json: {e}", file=sys.stderr)
+        print(f"Error reading dockerfiles/docker_images.json: {e}", file=sys.stderr)
         return 1
 
     width = max(len(k) for k in images)
@@ -251,7 +251,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"Error: {_DOCKER_IMAGES_PATH} not found", file=sys.stderr)
         return 1
     except json.JSONDecodeError as e:
-        print(f"Error: docker_images.json is not valid JSON: {e}", file=sys.stderr)
+        print(
+            f"Error: dockerfiles/docker_images.json is not valid JSON: {e}",
+            file=sys.stderr,
+        )
         return 1
 
     errors: list[ValidationError] = []
@@ -263,16 +266,19 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
 
     if errors:
-        print(f"\n{len(errors)} error(s) found in docker_images.json.", file=sys.stderr)
+        print(
+            f"\n{len(errors)} error(s) found in dockerfiles/docker_images.json.",
+            file=sys.stderr,
+        )
         return 1
 
-    print(f"docker_images.json: all {len(images)} entries are valid.")
+    print(f"dockerfiles/docker_images.json: all {len(images)} entries are valid.")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Resolve Docker image references from docker_images.json.",
+        description="Resolve Docker image references from dockerfiles/docker_images.json.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -283,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_get.add_argument(
         "key",
-        help="Image key from docker_images.json (e.g. therock_build_manylinux_x86_64).",
+        help="Image key from dockerfiles/docker_images.json (e.g. therock_build_manylinux_x86_64).",
     )
     p_get.add_argument(
         "--output",
@@ -301,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_val = subparsers.add_parser(
         "validate",
-        help="Check all entries in docker_images.json for errors and warnings.",
+        help="Check all entries in dockerfiles/docker_images.json for errors and warnings.",
     )
     p_val.set_defaults(func=cmd_validate)
 
