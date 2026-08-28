@@ -201,6 +201,8 @@ permissions:
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   build_pytorch_wheels:
     needs: [resolve-images]

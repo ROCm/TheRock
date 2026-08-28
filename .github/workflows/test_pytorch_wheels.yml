@@ -110,6 +110,8 @@ run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}},
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_wheels:
     needs: [resolve-images]
