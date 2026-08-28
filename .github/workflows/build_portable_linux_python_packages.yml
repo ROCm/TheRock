@@ -108,6 +108,8 @@ run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   build_rocm_wheels:
     needs: [resolve-images]

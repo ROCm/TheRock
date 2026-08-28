@@ -5,6 +5,13 @@ name: Resolve Docker image references
 
 on:
   workflow_call:
+    inputs:
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
     outputs:
       therock_build_manylinux_x86_64:
         description: Full image reference for therock_build_manylinux_x86_64
