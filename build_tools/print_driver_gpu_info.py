@@ -15,8 +15,9 @@ On Windows:
 
 Driver commands (amd-smi, rocminfo, hipInfo) are run with check=True and will
 cause this script to exit non-zero if they fail. The KFD version check also
-causes a non-zero exit when the version is outside the supported range or
-cannot be queried.
+causes a non-zero exit when the version is below the supported minimum or
+cannot be queried. A version above the supported maximum produces a warning
+but does not fail.
 """
 
 import fcntl
@@ -156,15 +157,21 @@ def run_sanity(os_name: str) -> int:
             return 1
         try:
             major, minor = _get_kfd_version()
-            in_range = _KFD_VERSION_MIN <= (major, minor) < _KFD_VERSION_MAX
-            status = "supported" if in_range else "NOT supported"
+            too_old = (major, minor) < _KFD_VERSION_MIN
+            too_new = (major, minor) >= _KFD_VERSION_MAX
+            if too_old:
+                status = "NOT supported (too old)"
+            elif too_new:
+                status = "NOT supported (warning: newer than tested range)"
+            else:
+                status = "supported"
             log(f"KFD IOCTL version: {major}.{minor} ({status})")
             log(
                 f"Required range for rocdbgapi: "
                 f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
                 f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
             )
-            if not in_range:
+            if too_old:
                 return 1
         except OSError as e:
             log(f"error: failed to query KFD version: {e}")
