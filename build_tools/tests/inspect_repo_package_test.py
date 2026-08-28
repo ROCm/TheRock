@@ -23,13 +23,15 @@ sys.path.insert(0, str(_LINUX_DIR))
 
 import inspect_repo_package as irp  # noqa: E402
 
-# Captured from `dpkg-deb -c` on an unsigned ubuntu2404 build.
-DEB_UNSIGNED_LISTING = """\
+# Captured from `dpkg-deb -c` on ubuntu2404 builds. The repo filename carries
+# the stream, so the signed and unsigned listings differ in it as well as in
+# whether a keyring is present -- deriving one from the other would hide that.
+_DEB_LISTING = """\
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./etc/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./etc/apt/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./etc/apt/sources.list.d/
--rw-r--r-- root/root       150 2026-08-11 16:15 ./etc/apt/sources.list.d/amdrocm.sources
+-rw-r--r-- root/root       150 2026-08-11 16:15 ./etc/apt/sources.list.d/{stem}.sources
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/
@@ -37,9 +39,10 @@ drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/amdrocm-repo/
 -rw-r--r-- root/root       177 2026-08-11 16:15 ./usr/share/doc/amdrocm-repo/changelog.gz
 """
 
-# Captured from `dpkg-deb -c` on a signed ubuntu2404 build.
+DEB_UNSIGNED_LISTING = _DEB_LISTING.format(stem="amdrocm-nightly")
+
 DEB_SIGNED_LISTING = (
-    DEB_UNSIGNED_LISTING
+    _DEB_LISTING.format(stem="amdrocm-stable")
     + """\
 drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/keyrings/
 -rw-r--r-- root/root       651 2026-08-11 16:15 ./usr/share/keyrings/amdrocm.gpg
@@ -49,26 +52,26 @@ drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/keyrings/
 # Captured from `rpm -qp --qf` on a signed sles16 build.
 RPM_SIGNED_LISTING = """\
 /etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm|root|root
-/etc/zypp/repos.d/amdrocm.repo|root|root
+/etc/zypp/repos.d/amdrocm-stable.repo|root|root
 """
 
 
 class TestRepoFilePath:
     def test_deb_uses_sources_list_d(self):
-        assert irp.repo_file_path("ubuntu2404") == PurePosixPath(
-            "/etc/apt/sources.list.d/amdrocm.sources"
+        assert irp.repo_file_path("ubuntu2404", "stable") == PurePosixPath(
+            "/etc/apt/sources.list.d/amdrocm-stable.sources"
         )
 
     @pytest.mark.parametrize("os_profile", ["rhel8", "rhel10"])
     def test_rhel_uses_yum_repos_d(self, os_profile):
-        assert irp.repo_file_path(os_profile) == PurePosixPath(
-            "/etc/yum.repos.d/amdrocm.repo"
+        assert irp.repo_file_path(os_profile, "stable") == PurePosixPath(
+            "/etc/yum.repos.d/amdrocm-stable.repo"
         )
 
     def test_sles_uses_zypp_repos_d(self):
         """SLES keeps repository files in /etc/zypp/repos.d, not /etc/yum.repos.d."""
-        assert irp.repo_file_path("sles16") == PurePosixPath(
-            "/etc/zypp/repos.d/amdrocm.repo"
+        assert irp.repo_file_path("sles16", "stable") == PurePosixPath(
+            "/etc/zypp/repos.d/amdrocm-stable.repo"
         )
 
 
@@ -90,19 +93,20 @@ class TestKeyPath:
 
 class TestExpectedPaths:
     def test_unsigned_expects_only_the_repo_file(self):
+        # Unsigned means the per-build stream, so the filename says nightly.
         assert irp.expected_paths("ubuntu2404", signed=False) == {
-            PurePosixPath("/etc/apt/sources.list.d/amdrocm.sources")
+            PurePosixPath("/etc/apt/sources.list.d/amdrocm-nightly.sources")
         }
 
     def test_signed_expects_the_key_too(self):
         assert irp.expected_paths("ubuntu2404", signed=True) == {
-            PurePosixPath("/etc/apt/sources.list.d/amdrocm.sources"),
+            PurePosixPath("/etc/apt/sources.list.d/amdrocm-stable.sources"),
             PurePosixPath("/usr/share/keyrings/amdrocm.gpg"),
         }
 
     def test_signed_rpm_expects_the_key_too(self):
         assert irp.expected_paths("sles16", signed=True) == {
-            PurePosixPath("/etc/zypp/repos.d/amdrocm.repo"),
+            PurePosixPath("/etc/zypp/repos.d/amdrocm-stable.repo"),
             PurePosixPath("/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"),
         }
 
@@ -140,7 +144,7 @@ class TestParseDebContents:
     def test_paths_are_absolute_and_owners_captured(self):
         entries = dict(irp.parse_deb_contents(DEB_UNSIGNED_LISTING))
         assert (
-            entries[PurePosixPath("/etc/apt/sources.list.d/amdrocm.sources")]
+            entries[PurePosixPath("/etc/apt/sources.list.d/amdrocm-nightly.sources")]
             == "root/root"
         )
 
@@ -170,13 +174,15 @@ class TestParseRpmContents:
     def test_paths_and_owners(self):
         assert irp.parse_rpm_contents(RPM_SIGNED_LISTING) == [
             (PurePosixPath("/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"), "root/root"),
-            (PurePosixPath("/etc/zypp/repos.d/amdrocm.repo"), "root/root"),
+            (PurePosixPath("/etc/zypp/repos.d/amdrocm-stable.repo"), "root/root"),
         ]
 
     def test_non_root_owner_is_preserved(self):
-        entries = irp.parse_rpm_contents("/etc/zypp/repos.d/amdrocm.repo|bin|wheel\n")
+        entries = irp.parse_rpm_contents(
+            "/etc/zypp/repos.d/amdrocm-stable.repo|bin|wheel\n"
+        )
         assert entries == [
-            (PurePosixPath("/etc/zypp/repos.d/amdrocm.repo"), "bin/wheel")
+            (PurePosixPath("/etc/zypp/repos.d/amdrocm-stable.repo"), "bin/wheel")
         ]
 
     def test_malformed_lines_are_skipped(self):
@@ -207,7 +213,9 @@ class TestCheckPayload:
     def test_missing_expected_file_is_reported_by_name(self):
         listing = "drwxr-xr-x root/root 0 2026-08-11 16:15 ./etc/apt/\n"
         problems = self._check(listing, "ubuntu2404", False)
-        assert any("/etc/apt/sources.list.d/amdrocm.sources" in p for p in problems)
+        assert any(
+            "/etc/apt/sources.list.d/amdrocm-nightly.sources" in p for p in problems
+        )
         assert any(p.startswith("missing expected file") for p in problems)
 
     def test_wrong_owner_is_reported(self):

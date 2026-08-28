@@ -23,9 +23,9 @@ ones that ship and that the previous paths are gone.
 
 Neither build reaches the network:
 
-  * The unsigned line is not a signed line, so no key is loaded, and the
+  * The unsigned stream loads no key, and the
     repository URL check is skipped for it.
-  * The signed line reads its key from ``--gpg-key-file``, which returns before
+  * The signed stream reads its key from ``--gpg-key-file``, which returns before
     the build-time key fetch. The key is generated here, offline, and thrown
     away; it never signs anything and never leaves the build.
   * The repository URL check is opt-in and is not requested.
@@ -56,18 +56,19 @@ if str(_THIS_DIR) not in sys.path:
 from build_repo_package import (
     DEB_KEYRING_PATH,
     OS_PROFILES,
-    REPO_ID,
     RPM_GPG_KEY_PATH,
     list_profiles,
+    repo_id,
 )
 
 _BUILDER = _THIS_DIR / "build_repo_package.py"
 
-# The two release lines that produce the unsigned and signed payload shapes.
-# The unsigned line requires a dated sub-folder and the signed line rejects one,
-# so they are passed different arguments.
-_UNSIGNED_RELEASE_TYPE = "nightly"
-_SIGNED_RELEASE_TYPE = "prerelease"
+# The two streams that produce the unsigned and signed payload shapes. The
+# per-build stream requires a build sub-folder and the flat one rejects it, so
+# they are passed different arguments. Within this module signedness and stream
+# select each other, which is why the helpers below take only ``signed``.
+_UNSIGNED_STREAM = "nightly"
+_SIGNED_STREAM = "stable"
 
 # Everything the package installs is owned by root, whatever user builds it.
 _EXPECTED_OWNER = "root/root"
@@ -82,12 +83,17 @@ _SUPERSEDED_KEY_PATHS = (
 )
 
 
-def repo_file_path(os_profile: str) -> PurePosixPath:
-    """Return the repository configuration file this profile installs."""
+def repo_file_path(os_profile: str, stream: str) -> PurePosixPath:
+    """Return the repository configuration file this profile installs.
+
+    The filename carries the stream, so it cannot be derived from the profile
+    alone.
+    """
     profile = OS_PROFILES[os_profile]
+    stem = repo_id(stream)
     if profile["pkg_type"] == "deb":
-        return PurePosixPath(f"/etc/apt/sources.list.d/{REPO_ID}.sources")
-    return PurePosixPath(profile["rpm_repo_dir"]) / f"{REPO_ID}.repo"
+        return PurePosixPath(f"/etc/apt/sources.list.d/{stem}.sources")
+    return PurePosixPath(profile["rpm_repo_dir"]) / f"{stem}.repo"
 
 
 def key_path(os_profile: str) -> PurePosixPath:
@@ -97,9 +103,14 @@ def key_path(os_profile: str) -> PurePosixPath:
     return PurePosixPath(RPM_GPG_KEY_PATH)
 
 
+def stream_for(signed: bool) -> str:
+    """Return the stream this inspection builds for a given signedness."""
+    return _SIGNED_STREAM if signed else _UNSIGNED_STREAM
+
+
 def expected_paths(os_profile: str, signed: bool) -> set[PurePosixPath]:
     """Return the paths a build of this profile must install."""
-    paths = {repo_file_path(os_profile)}
+    paths = {repo_file_path(os_profile, stream_for(signed))}
     if signed:
         paths.add(key_path(os_profile))
     return paths
@@ -109,7 +120,7 @@ def forbidden_paths(os_profile: str, signed: bool) -> set[PurePosixPath]:
     """Return the paths a build of this profile must not install."""
     paths = set(_SUPERSEDED_KEY_PATHS)
     if not signed:
-        # An unsigned line ships no key at all: the repository it configures is
+        # An unsigned stream ships no key at all: the repository it configures is
         # unsigned, so a key here would be inert at best and misleading at worst.
         paths.add(key_path(os_profile))
     return paths
@@ -251,17 +262,17 @@ def build_package(
     ]
     if signed:
         argv += [
-            "--release-type",
-            _SIGNED_RELEASE_TYPE,
+            "--stream",
+            _SIGNED_STREAM,
             "--gpg-key-file",
             str(gpg_key_file),
         ]
     else:
-        # The dated sub-folder is required on the unsigned line and rejected on
-        # every other line, so it is passed here and nowhere else.
+        # The build sub-folder is required on a per-build stream and rejected on
+        # a flat one, so it is passed here and nowhere else.
         argv += [
-            "--release-type",
-            _UNSIGNED_RELEASE_TYPE,
+            "--stream",
+            _UNSIGNED_STREAM,
             "--repo-sub-folder",
             repo_sub_folder,
         ]

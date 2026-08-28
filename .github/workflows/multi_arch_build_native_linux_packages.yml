@@ -67,25 +67,38 @@ permissions:
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
-  # Resolve the parameters used to build and test the amdrocm-repo package:
-  # the OS-profile build matrix for this package type, each profile's container
-  # image, the public CDN base URL for this release line (empty for lines with
-  # no public repo, e.g. ci), and the dated sub-folder for the nightly line.
+  # Resolve the parameters used to build and test the amdrocm-repo package: the
+  # OS-profile build matrix for this package type, each profile's container
+  # image, and -- for a build line that maps to a repo.amd.com stream -- that
+  # stream's name, packages base URL, signing-key URL, and build sub-folder.
+  #
+  # The build line and the stream are different vocabularies: the "release" line
+  # configures the "stable" stream. release_type stays the workflow input
+  # because it also selects the artifact bucket credentials; the stream is
+  # derived from it.
   setup_repo_params:
     name: Resolve amdrocm-repo parameters
-    # Only the lines listed here have a public repository, and they are the only
-    # consumers of these outputs. On any other line -- a pull request, or a dev
-    # build -- the jobs below skip, so this one would resolve parameters nothing
-    # reads.
-    if: inputs.enable_repo_package && contains(fromJSON('["prerelease", "nightly", "release"]'), inputs.release_type)
+    # Only the lines listed here map to a stream, and they are the only
+    # consumers of these outputs. On any other line -- a pull request, a dev
+    # build, or prerelease -- the jobs below skip, so this one would resolve
+    # parameters nothing reads.
+    #
+    # prerelease is absent deliberately. Its stream is rc.repo.amd.com, which
+    # currently serves no content on any distro, so a package pointing there
+    # could not refresh. Restoring it is one entry in _STREAM_ROOTS plus this
+    # list.
+    if: inputs.enable_repo_package && contains(fromJSON('["nightly", "release"]'), inputs.release_type)
     runs-on: ubuntu-24.04
     outputs:
       os_profiles: ${{ steps.derive.outputs.os_profiles }}
       images: ${{ steps.derive.outputs.images }}
+      stream: ${{ steps.derive.outputs.stream }}
       repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
+      gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
     steps:
       - name: Checking out repository
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -224,7 +237,7 @@ jobs:
           python ./build_tools/packaging/linux/inspect_repo_package.py \
             --pkg-type "${{ inputs.native_package_type }}" \
             --rocm-version "${{ inputs.rocm_version }}" \
-            --repo-base-url https://example.com/rocm/packages-multi-arch/ \
+            --repo-base-url https://example.com/rocm/core/packages \
             --repo-sub-folder 20000101-inspect
 
       - name: Configure AWS credentials for artifact uploads
@@ -279,6 +292,7 @@ jobs:
       image: ${{ fromJSON(needs.setup_repo_params.outputs.images || '{}')[matrix.os_profile] }}
     steps:
       - name: Checkout
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
@@ -305,18 +319,23 @@ jobs:
 
       - name: Build amdrocm-repo
         run: |
-          # repo_sub_folder is empty except on the nightly line, where the builder
-          # requires the dated sub-folder; passing an empty value is accepted for
-          # the other lines.
+          # repo_sub_folder is empty except on a per-build stream, where the
+          # builder requires it; an empty value is accepted for the others.
+          #
+          # gpg_key_url is the full key URL, fetched verbatim, and is empty for
+          # an unsigned stream, which ships no key. It is a separate input
+          # because the key is not under the packages base: packages are at
+          # <root>/core/packages/ and the key beside core/.
           #
           # --verify-repo-url fails the build if the configured repository is not
           # served, so a package that installs cleanly but cannot refresh is
-          # caught here rather than by a user. It is a no-op on the nightly line,
-          # whose dated sub-folder is published by this same run.
+          # caught here rather than by a user. It is a no-op for a per-build
+          # stream, whose build folder is published by this same run.
           $PYTHON_CMD build_tools/packaging/linux/build_repo_package.py \
             --os-profile "${{ matrix.os_profile }}" \
-            --release-type "${{ inputs.release_type }}" \
+            --stream "${{ needs.setup_repo_params.outputs.stream }}" \
             --repo-base-url "${{ needs.setup_repo_params.outputs.repo_base_url }}" \
+            --gpg-key-url "${{ needs.setup_repo_params.outputs.gpg_key_url }}" \
             --repo-sub-folder "${{ needs.setup_repo_params.outputs.repo_sub_folder }}" \
             --rocm-version "${{ inputs.rocm_version }}" \
             --dest-dir repo-package-out \
@@ -374,6 +393,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
     steps:
       - name: Checkout
+        timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
