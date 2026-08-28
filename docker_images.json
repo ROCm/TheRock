@@ -10,9 +10,9 @@
   "no_rocm_image_ubuntu24_04": {
     "registry": "ghcr.io/rocm",
     "image": "no_rocm_image_ubuntu24_04",
-    "sha": "sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26",
-    "timestamp": "2025-08-09T01:55:17Z",
-    "last_updated": "2026-08-27"
+    "sha": "sha256:f6741eb54c20d3219bdcd25742dbaa2c6b14394253671bf018be89b324b31a48",
+    "timestamp": "2026-07-22T15:18:37.290644322Z",
+    "last_updated": "2026-08-28"
   },
   "no_rocm_image_ubuntu24_04_rocgdb": {
     "registry": "ghcr.io/rocm",
@@ -24,9 +24,9 @@
   "no_rocm_image_ubuntu24_04_ocl_rt": {
     "registry": "ghcr.io/rocm",
     "image": "no_rocm_image_ubuntu24_04_ocl_rt",
-    "tag": "latest",
-    "timestamp": null,
-    "last_updated": "2026-08-27"
+    "sha": "sha256:303e0f2aec93092dc5126cd181036d33177aa27e3e26ba787702a51f1df434d1",
+    "timestamp": "2026-07-22T15:24:21.411479937Z",
+    "last_updated": "2026-08-28"
   },
   "no_rocm_image_ubuntu24_04_openmpi": {
     "registry": "ghcr.io/rocm",
@@ -38,18 +38,19 @@
   "no_rocm_image_ubuntu24_04_media": {
     "registry": "ghcr.io/rocm",
     "image": "no_rocm_image_ubuntu24_04_media",
-    "sha": "sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
-    "timestamp": "2026-04-02T21:47:15.239168418Z",
-    "last_updated": "2026-08-27"
+    "sha": "sha256:789fdfd76e19c93500811995e8e99b79ce726ee15d93aeeac974484ea0ed058c",
+    "timestamp": "2026-07-22T15:25:09.860811639Z",
+    "last_updated": "2026-08-28"
   },
   "no_rocm_image_ubi10": {
     "registry": "ghcr.io/rocm",
     "image": "no_rocm_image_ubi10",
-    "tag": "latest",
-    "timestamp": null,
-    "last_updated": "2026-08-27"
+    "sha": "sha256:cadd65f1e3800df5bcbb7c9bba6c7cbebaa71f116c59e39400c10eca15341caa",
+    "timestamp": "2026-04-17T15:09:56.102502774Z",
+    "last_updated": "2026-08-28"
   },
   "rocm_runtime": {
+    "_comment": "Not currently consumed by any workflow or script in this repository.",
     "registry": "ghcr.io/rocm",
     "image": "rocm_runtime",
     "tag": "latest",
@@ -59,9 +60,9 @@
   "manylinux_2_28_x86_64": {
     "registry": "quay.io/pypa",
     "image": "manylinux_2_28_x86_64",
-    "sha": "sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017",
-    "timestamp": "2025-05-10T16:29:17.280159863Z",
-    "last_updated": "2026-08-27"
+    "sha": "sha256:4dc41da7df20400310c80d162a2fe2d2c2f3d9734d8dec20f6b9843711618deb",
+    "timestamp": "2026-08-24T06:41:22.813001531Z",
+    "last_updated": "2026-08-28"
   },
   "ubuntu_24_04": {
     "_comment": "Not currently consumed by any workflow or script in this repository.",
