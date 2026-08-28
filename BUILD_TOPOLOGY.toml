@@ -634,6 +634,7 @@ artifact_deps = ["core-runtime", "core-hip", "rand"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim"]
+split_databases = ["hipsparselt"]
 
 [artifacts.solver]
 artifact_group = "math-libs"
