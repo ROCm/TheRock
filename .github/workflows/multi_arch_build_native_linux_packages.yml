@@ -64,6 +64,8 @@ run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_vers
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   build_native_packages:
     needs: [resolve-images]
