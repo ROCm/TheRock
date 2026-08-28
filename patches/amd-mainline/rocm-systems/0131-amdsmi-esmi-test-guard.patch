@@ -1,0 +1,30 @@
+From 13618271dfb0ef39bdbb2c8d5abba90ac9c9c308 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Thu, 27 Aug 2026 15:06:11 +0000
+Subject: [PATCH] fix(amdsmi): guard ESMI test with ENABLE_ESMI_LIB
+
+amdsmi_get_esmi_err_msg is only available when ENABLE_ESMI_LIB is
+set, which is only on x86_64. Guard the test to fix the build on
+non-x86 platforms.
+---
+ .../amdsmi/tests/amd_smi_test/unit/system/status_string_test.cc | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/projects/amdsmi/tests/amd_smi_test/unit/system/status_string_test.cc b/projects/amdsmi/tests/amd_smi_test/unit/system/status_string_test.cc
+index e9116d2a461..24d06a69bb9 100644
+--- a/projects/amdsmi/tests/amd_smi_test/unit/system/status_string_test.cc
++++ b/projects/amdsmi/tests/amd_smi_test/unit/system/status_string_test.cc
+@@ -39,8 +39,10 @@ TEST(SystemUnit, StatusCodeToStringValidOutPtr) {
+   EXPECT_NE(msg, nullptr);
+ }
+ 
++#if ENABLE_ESMI_LIB
+ TEST(SystemUnit, EsmiErrMsgRejectsNullOutPtr) {
+   EXPECT_EQ(amdsmi_get_esmi_err_msg(AMDSMI_STATUS_SUCCESS, nullptr), AMDSMI_STATUS_INVAL);
+ }
++#endif
+ 
+ }  // namespace
+-- 
+2.52.0
+
