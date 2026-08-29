@@ -855,7 +855,9 @@ def do_push(args: argparse.Namespace):
     # Resolved once here rather than per archive: it costs several git calls,
     # and every worker must agree on it or the archives are not reproducible.
     archive_env = source_date.child_env(
-        export_standard_var=args.export_source_date_epoch
+        export_standard_var=args.export_source_date_epoch,
+        manifest_dir=artifacts_dir,
+        fail_on_drift=args.fail_on_source_drift,
     )
     log(f"  Source timestamp: {archive_env[source_date.ENV_VAR]}")
 

@@ -419,11 +419,16 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Concurrent tarballs to compress (default: auto based on CPU count)",
     )
+    parser.add_argument(
+        "--fail-on-source-drift",
+        action="store_true",
+        help=(
+            "Error instead of warning when the artifacts being packaged were "
+            "built from a different commit, or from a dirty tree, than this "
+            "checkout. Recommended for release builds."
+        ),
+    )
     args = parser.parse_args(argv)
-    # Resolved once here, not per tarball: it costs several git invocations, and
-    # every tarball in a release must carry the same timestamp.
-    source_date_epoch = source_date.compute_source_date_epoch()
-    log(f"Source timestamp: {source_date_epoch}")
     if args.compression_threads < 1:
         parser.error("--compression-threads must be at least 1")
     if args.compress_workers is not None and args.compress_workers < 1:
@@ -552,6 +557,25 @@ def main(argv: list[str] | None = None) -> None:
                     priority=MULTIARCH_TESTS_TARBALL_PRIORITY,
                 )
             )
+
+    # Resolved once for the whole release, and only now that a flattened tree
+    # exists to read therock_manifest.json out of. Every tarball in a release
+    # must carry the same timestamp, and it should describe the source the
+    # artifacts were built from rather than whatever this job checked out.
+    manifest_dir = next(
+        (
+            t.source_dir
+            for t in compress_tasks
+            if source_date.find_manifest(t.source_dir)
+        ),
+        None,
+    )
+    source_date_epoch = source_date.resolve_checked(
+        manifest_dir=manifest_dir,
+        fail_on_drift=args.fail_on_source_drift,
+        report=log,
+    )
+    log(f"Source timestamp: {source_date_epoch}")
 
     # Phase 2: Compress tarballs in parallel, with optional intra-archive
     # parallelism from zlib-ng. Start the expected largest archives first to

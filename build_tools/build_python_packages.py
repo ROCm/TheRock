@@ -192,7 +192,9 @@ def run(args: argparse.Namespace):
     # Resolved once, here: the devel tarball is written in-process, and every
     # writer must agree on the timestamp or the output is not reproducible.
     timestamp = source_date.apply_to_environ(
-        export_standard_var=args.export_source_date_epoch
+        export_standard_var=args.export_source_date_epoch,
+        manifest_dir=args.artifact_dir,
+        fail_on_drift=args.fail_on_source_drift,
     )
     print(f"::: Source timestamp: {timestamp}")
 

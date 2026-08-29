@@ -50,6 +50,23 @@ build, so resolving there describes the source being packaged. Resolving at
 CMake configure instead would freeze a value that goes stale as soon as anything
 is pulled, and the build writes no archives of its own.
 
+They prefer `source_date_epoch` from `therock_manifest.json`, which the build
+records and ships inside `base_lib_generic`. That is the only value that
+survives the jump between jobs: packaging runs on a different runner and may be
+pointed at another run's artifacts, so re-deriving locally would describe the
+*packaging* checkout instead. Deriving is the fallback for artifacts that carry
+no manifest, or one predating the field.
+
+Alongside it the build records `source_dirty`, because everything else in that
+manifest (`the_rock_commit`, each `pin_sha`) is read from the committed object
+graph and cannot show uncommitted work.
+
+Each packaging step reports when the artifacts disagree with its own checkout —
+a different commit, a build from a dirty tree, a dirty packaging checkout, or no
+manifest at all. It warns by default, since packaging another run's artifacts is
+supported; `--fail-on-source-drift` makes it an error, which is what a release
+build wants.
+
 The build can still be pinned, via
 [`THEROCK_SOURCE_DATE_EPOCH`](build_system.md#therock_source_date_epoch), but
 that is a separate opt-in concerned with making the *compilers* reproducible.

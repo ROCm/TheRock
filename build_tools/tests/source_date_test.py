@@ -11,6 +11,7 @@ submodule whose working tree is dirty but whose commit still matches the pin
 reports ' ', not '+'.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -198,6 +199,99 @@ class SourceDateTest(unittest.TestCase):
         self.assertEqual(entry.state, "-")
         self.assertFalse(entry.is_populated)
         self.assertEqual(entry.path, self.sub_checkout)
+
+    # -- the manifest handoff ---------------------------------------------
+
+    def _write_manifest(self, root: Path, **fields) -> Path:
+        """Writes a manifest in the flattened artifact layout."""
+        manifest = {
+            "the_rock_commit": "a" * 40,
+            "source_date_epoch": DEC_2026,
+            "source_dirty": False,
+            "submodules": [],
+        }
+        manifest.update(fields)
+        path = root / "share" / "therock" / "therock_manifest.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(manifest))
+        return path
+
+    def test_manifest_timestamp_is_preferred_over_this_checkout(self):
+        # The artifacts were built elsewhere; their recorded value is the one
+        # that describes them.
+        artifacts = Path(self.temp_context.name) / "artifacts"
+        self._write_manifest(artifacts)
+        self.assertEqual(
+            source_date.resolve(manifest_dir=artifacts, repo_dir=self.super),
+            DEC_2026,
+        )
+
+    def test_exploded_artifact_layout_is_found_too(self):
+        artifacts = Path(self.temp_context.name) / "exploded"
+        path = artifacts / source_date.MANIFEST_RELPATHS[0]
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"source_date_epoch": JUN_2026}))
+        self.assertEqual(source_date.timestamp_from_manifest(artifacts), JUN_2026)
+
+    def test_missing_manifest_falls_back_to_this_checkout(self):
+        empty = Path(self.temp_context.name) / "empty"
+        empty.mkdir()
+        self.assertIsNone(source_date.timestamp_from_manifest(empty))
+        self.assertEqual(
+            source_date.resolve(manifest_dir=empty, repo_dir=self.super), FEB_2026
+        )
+
+    def test_manifest_without_the_field_falls_back(self):
+        # Artifacts built before the field existed, or with no git metadata.
+        artifacts = Path(self.temp_context.name) / "old"
+        self._write_manifest(artifacts, source_date_epoch=None)
+        self.assertIsNone(source_date.timestamp_from_manifest(artifacts))
+        self.assertEqual(
+            source_date.resolve(manifest_dir=artifacts, repo_dir=self.super), FEB_2026
+        )
+
+    # -- drift ------------------------------------------------------------
+
+    def test_matching_commit_and_clean_trees_report_no_drift(self):
+        head = git("rev-parse", "HEAD", cwd=self.super).strip()
+        artifacts = Path(self.temp_context.name) / "matching"
+        self._write_manifest(artifacts, the_rock_commit=head)
+        self.assertEqual(source_date.describe_source_drift(artifacts, self.super), [])
+
+    def test_a_different_commit_is_reported(self):
+        artifacts = Path(self.temp_context.name) / "other_run"
+        self._write_manifest(artifacts, the_rock_commit="b" * 40)
+        reasons = source_date.describe_source_drift(artifacts, self.super)
+        self.assertTrue(any("but this checkout is at" in r for r in reasons))
+
+    def test_artifacts_built_dirty_are_reported(self):
+        head = git("rev-parse", "HEAD", cwd=self.super).strip()
+        artifacts = Path(self.temp_context.name) / "built_dirty"
+        self._write_manifest(artifacts, the_rock_commit=head, source_dirty=True)
+        reasons = source_date.describe_source_drift(artifacts, self.super)
+        self.assertTrue(any("uncommitted changes" in r for r in reasons))
+
+    def test_a_missing_manifest_is_itself_drift(self):
+        empty = Path(self.temp_context.name) / "nothing"
+        empty.mkdir()
+        reasons = source_date.describe_source_drift(empty, self.super)
+        self.assertTrue(any("no therock_manifest.json" in r for r in reasons))
+
+    def test_fail_on_drift_raises_and_otherwise_only_warns(self):
+        artifacts = Path(self.temp_context.name) / "drifted"
+        self._write_manifest(artifacts, the_rock_commit="c" * 40)
+
+        warnings = []
+        value = source_date.resolve_checked(
+            manifest_dir=artifacts, repo_dir=self.super, report=warnings.append
+        )
+        self.assertEqual(value, DEC_2026)
+        self.assertTrue(warnings)
+
+        with self.assertRaisesRegex(RuntimeError, "drift"):
+            source_date.resolve_checked(
+                manifest_dir=artifacts, repo_dir=self.super, fail_on_drift=True
+            )
 
     # -- environment plumbing ---------------------------------------------
 

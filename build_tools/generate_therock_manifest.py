@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 
+from _therock_utils import source_date
 from github_actions.manifest_utils import capture, capture_optional, log
 
 
@@ -208,6 +209,17 @@ def build_manifest_schema(
         "the_rock_commit": the_rock_commit,
     }
 
+    # Working-tree facts, unlike everything else here, which is read from the
+    # committed object graph. They are what lets a packaging step running in a
+    # later job stamp archives with the source state the artifacts were built
+    # from, rather than re-deriving from whatever it happens to have checked
+    # out. See docs/development/reproducible_archives.md.
+    manifest["source_date_epoch"] = source_date.compute_source_date_epoch(repo_root)
+    # The fields above describe `the_rock_commit`; this says whether the build
+    # actually matched it. A true value means source_date_epoch came from a file
+    # mtime and the commit-derived fields are an incomplete description.
+    manifest["source_dirty"] = source_date.is_worktree_dirty(repo_root)
+
     if github_job:
         manifest["github_job"] = github_job
 
@@ -251,6 +263,11 @@ def build_partial_manifest_schema(
     manifest = {
         "the_rock_commit": None,
     }
+
+    # No git metadata, so there is no source state to describe. Left null rather
+    # than filled with the clock, so a consumer can tell the difference.
+    manifest["source_date_epoch"] = None
+    manifest["source_dirty"] = None
 
     if github_job:
         manifest["github_job"] = github_job

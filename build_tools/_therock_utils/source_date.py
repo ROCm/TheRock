@@ -18,6 +18,7 @@ consuming side.
 
 from typing import NamedTuple
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -209,6 +210,151 @@ def newest_dirty_mtime(
     return newest
 
 
+# Where therock_manifest.json sits, relative to a directory of artifacts. The
+# build installs it to share/therock; the first form is the exploded artifact
+# layout, the second is what `artifact_manager fetch --flatten` produces.
+MANIFEST_RELPATHS = (
+    Path("base_lib_generic/base/aux-overlay/stage/share/therock/therock_manifest.json"),
+    Path("share/therock/therock_manifest.json"),
+)
+
+
+def find_manifest(search_dir: Path) -> Path | None:
+    """Locates therock_manifest.json under a directory of artifacts."""
+    for relpath in MANIFEST_RELPATHS:
+        candidate = search_dir / relpath
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def timestamp_from_manifest(search_dir: Path) -> int | None:
+    """The source timestamp recorded when the artifacts were built.
+
+    This is the only value that survives the jump between jobs. Packaging runs
+    on a different runner from the build, and may be pointed at artifacts from
+    an entirely different run, so re-deriving from the local checkout would
+    describe the packaging checkout rather than the source that was built.
+
+    Returns None when there is no manifest, or when it predates this field, or
+    when it was produced from a tree with no git metadata -- all cases where the
+    caller should fall back to deriving one.
+    """
+    manifest_path = find_manifest(search_dir)
+    if manifest_path is None:
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    timestamp = manifest.get("source_date_epoch")
+    return timestamp if isinstance(timestamp, int) else None
+
+
+def _read_manifest(search_dir: Path) -> dict | None:
+    manifest_path = find_manifest(search_dir)
+    if manifest_path is None:
+        return None
+    try:
+        return json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def describe_source_drift(
+    manifest_dir: Path,
+    repo_dir: Path = THEROCK_DIR,
+) -> list[str]:
+    """Ways the artifacts being packaged disagree with this checkout.
+
+    Packaging normally runs against artifacts from its own run, where these
+    agree. They diverge when a job is pointed at another run's artifacts, or
+    when the build came from a dirty tree -- in both cases the archives are
+    stamped with something the local checkout cannot account for. Worth saying
+    out loud rather than resolving silently.
+
+    Returns human-readable reasons; empty means no disagreement was detectable.
+    """
+    manifest = _read_manifest(manifest_dir)
+    if manifest is None:
+        return [
+            f"no therock_manifest.json under {manifest_dir}, so the source "
+            "timestamp is derived from this checkout rather than from the "
+            "artifacts being packaged"
+        ]
+
+    reasons = []
+
+    if manifest.get("source_date_epoch") is None:
+        reasons.append(
+            "the manifest records no source_date_epoch (built without git "
+            "metadata, or predates the field); deriving from this checkout"
+        )
+    if manifest.get("source_dirty"):
+        reasons.append(
+            "the artifacts were built from a tree with uncommitted changes, so "
+            "they are not reproducible from their recorded commit"
+        )
+
+    manifest_commit = manifest.get("the_rock_commit")
+    local_commit = _git("rev-parse", "HEAD", cwd=repo_dir)
+    local_commit = local_commit.strip() if local_commit else None
+    if manifest_commit and local_commit and manifest_commit != local_commit:
+        reasons.append(
+            f"the artifacts were built from {manifest_commit[:12]} but this "
+            f"checkout is at {local_commit[:12]}"
+        )
+    if local_commit and is_worktree_dirty(repo_dir):
+        reasons.append(
+            "this checkout has uncommitted changes, which the artifacts cannot "
+            "contain"
+        )
+
+    return reasons
+
+
+def resolve(
+    *,
+    manifest_dir: Path | None = None,
+    repo_dir: Path = THEROCK_DIR,
+) -> int:
+    """The timestamp to stamp into archives, preferring the built artifacts'.
+
+    Falls back to deriving one from `repo_dir` when the artifacts carry none.
+    """
+    if manifest_dir is not None:
+        from_manifest = timestamp_from_manifest(manifest_dir)
+        if from_manifest is not None:
+            return from_manifest
+    return compute_source_date_epoch(repo_dir)
+
+
+def resolve_checked(
+    *,
+    manifest_dir: Path | None = None,
+    repo_dir: Path = THEROCK_DIR,
+    fail_on_drift: bool = False,
+    report=print,
+) -> int:
+    """`resolve()`, reporting any disagreement with the local checkout.
+
+    Warns by default, because packaging another run's artifacts is a supported
+    workflow. `fail_on_drift` turns it into an error for release builds, where
+    it usually means the wrong artifacts are being packaged.
+    """
+    if manifest_dir is not None:
+        reasons = describe_source_drift(manifest_dir, repo_dir)
+        if reasons:
+            if fail_on_drift:
+                raise RuntimeError(
+                    "Source state drift between the artifacts and this "
+                    "checkout:\n  - " + "\n  - ".join(reasons)
+                )
+            for reason in reasons:
+                report(f"  Warning: {reason}")
+    return resolve(manifest_dir=manifest_dir, repo_dir=repo_dir)
+
+
 def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
     """Resolves the timestamp to stamp into archives built from `repo_dir`.
 
@@ -257,6 +403,8 @@ def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
 def child_env(
     *,
     export_standard_var: bool = False,
+    manifest_dir: Path | None = None,
+    fail_on_drift: bool = False,
     repo_dir: Path = THEROCK_DIR,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
@@ -267,7 +415,13 @@ def child_env(
     changes.
     """
     env = dict(os.environ if base_env is None else base_env)
-    timestamp = str(compute_source_date_epoch(repo_dir))
+    timestamp = str(
+        resolve_checked(
+            manifest_dir=manifest_dir,
+            repo_dir=repo_dir,
+            fail_on_drift=fail_on_drift,
+        )
+    )
     env[ENV_VAR] = timestamp
     if export_standard_var:
         env[STANDARD_ENV_VAR] = timestamp
@@ -277,6 +431,8 @@ def child_env(
 def apply_to_environ(
     *,
     export_standard_var: bool = False,
+    manifest_dir: Path | None = None,
+    fail_on_drift: bool = False,
     repo_dir: Path = THEROCK_DIR,
 ) -> int:
     """Publishes the resolved timestamp into this process's environment.
@@ -285,7 +441,11 @@ def apply_to_environ(
     workers. Returns the resolved value. Does not overwrite an existing
     `SOURCE_DATE_EPOCH`, which outranks everything (see `archive_util`).
     """
-    timestamp = compute_source_date_epoch(repo_dir)
+    timestamp = resolve_checked(
+        manifest_dir=manifest_dir,
+        repo_dir=repo_dir,
+        fail_on_drift=fail_on_drift,
+    )
     os.environ[ENV_VAR] = str(timestamp)
     if export_standard_var and STANDARD_ENV_VAR not in os.environ:
         os.environ[STANDARD_ENV_VAR] = str(timestamp)
@@ -302,6 +462,15 @@ def add_source_date_arguments(parser: argparse.ArgumentParser) -> None:
             f"{ENV_VAR}. This makes compilers, CPython and setuptools behave "
             "reproducibly too, at the cost of a much wider blast radius. See "
             "docs/development/reproducible_archives.md."
+        ),
+    )
+    parser.add_argument(
+        "--fail-on-source-drift",
+        action="store_true",
+        help=(
+            "Error instead of warning when the artifacts being packaged were "
+            "built from a different commit, or from a dirty tree, than this "
+            "checkout. Recommended for release builds."
         ),
     )
 
