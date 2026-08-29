@@ -95,6 +95,19 @@ python build_tools/artifact_manager.py push --export-source-date-epoch ...
 python build_tools/build_python_packages.py --export-source-date-epoch ...
 ```
 
+The wheel workflows expose it as an `export_source_date_epoch` input, off by
+default, on both `workflow_dispatch` and `workflow_call`:
+
+- `.github/workflows/build_portable_linux_python_packages.yml`
+- `.github/workflows/build_windows_python_packages.yml`
+
+This is the one place where opting in is doing more than hardening metadata.
+`archive_util` only writes the `_devel.tar.xz` **inside** the
+`rocm-sdk-devel` wheel; the `.whl` zip itself and the `rocm` sdist are produced
+by `setup.py bdist_wheel`/`sdist`, and setuptools only makes them reproducible
+when `SOURCE_DATE_EPOCH` is set. That path compiles nothing, so most of the
+blast radius above does not apply to it.
+
 ## What this does not do
 
 Reproducibility and timestamp-based rebuild correctness want opposite things
