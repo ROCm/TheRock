@@ -82,6 +82,21 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 logger = logging.getLogger(__name__)
 
 
+def _is_asan_variant(build_variant: str) -> bool:
+    """True if build_variant is any ASAN-family variant: "asan", "host-asan",
+    "asan-debug" (RelWithDebInfo + line-number debug info, see
+    amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
+
+    ASSUMPTION (unverified against a real host-asan publish run — nothing
+    calls this script with "host-asan" today, only "release" and "asan-debug"
+    do): every ASAN-family variant, full-device or host-only, debug or not,
+    publishes to the same "-asan" suffixed destination paths and skips python
+    packages. If any of these ever need their own separate path, give this a
+    real per-variant branch instead of a blanket substring check.
+    """
+    return "asan" in build_variant
+
+
 def publish_tarballs(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
@@ -105,7 +120,7 @@ def publish_tarballs(
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     dest_path = (
         "v5/rocm/core/tarball-asan"
-        if build_variant == "asan"
+        if _is_asan_variant(build_variant)
         else "v5/rocm/core/tarball"
     )
     dest = StorageLocation(dest_bucket.name, dest_path)
@@ -248,7 +263,7 @@ def publish_native_linux_packages(
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
-    is_asan = build_variant == "asan"
+    is_asan = _is_asan_variant(build_variant)
 
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
@@ -318,9 +333,11 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan"],
+        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
         help="Build variant (default: release). ASAN builds skip python packages "
-        "and publish native packages to separate paths.",
+        "and publish native packages to separate paths. The '-debug' variants "
+        "(RelWithDebInfo + line-number debug info) publish to the same paths "
+        "as their non-debug counterpart.",
     )
     args = parser.parse_args(argv)
 
@@ -332,7 +349,7 @@ def main(argv: list[str]) -> None:
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
     )
     backend = create_storage_backend(dry_run=args.dry_run)
-    is_asan = args.build_variant == "asan"
+    is_asan = _is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     if not is_asan:
