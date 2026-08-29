@@ -70,6 +70,13 @@ _TEST_POLICIES_NAME = "test_policies.toml"
 # them script-relative lets selection work from a clean checkout with no build/.
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
+_EXTERNAL_SUBTREE_ALIASES = {
+    "shared/rocroller": "rocroller",
+    "dnn-providers/hipblaslt-provider": "hipblasltprovider",
+    "dnn-providers/hip-kernel-provider": "hipkernelprovider",
+    "dnn-providers/miopen-provider": "miopenprovider",
+}
+
 
 def _test_tools_file(name: str, therock_dir: Path | None) -> Path:
     """Resolve a committed file under test_tools/.
@@ -214,12 +221,13 @@ def get_subprojects_to_test(
     selection works from a clean checkout with no build/ directory.
 
     Inputs and outputs are consumer-graph keys (the lowercased subproject names in
-    therock_consumer_graph.json). This function only lowercases; the CLI also
-    strips a leading `projects/`. Callers holding other identifiers must map them
-    to graph keys first — notably, subtree paths like `projects/clr` (-> `hip-clr`)
-    or `shared/rocroller`, and the hyphenated CI test-matrix keys
-    (`hipdnn-integration-tests` vs the graph's `hipdnn_integration_tests`). That
-    mapping is tracked separately.
+    therock_consumer_graph.json). This function only lowercases; the CLI handles
+    the external-repo subtree identifiers it receives from GitHub Actions by
+    stripping a leading `projects/` and mapping known non-project subtree paths
+    to graph keys. Callers holding other identifiers must map them to graph keys
+    first — notably, subtree paths like `projects/clr` (-> `hip-clr`) and the
+    hyphenated CI test-matrix keys (`hipdnn-integration-tests` vs the graph's
+    `hipdnn_integration_tests`). That mapping is tracked separately.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
@@ -378,6 +386,14 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
     return sorted(graph.keys())
 
 
+def _normalize_changed_project(project: str) -> str:
+    """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
+    project_lower = project.lower()
+    if project_lower in _EXTERNAL_SUBTREE_ALIASES:
+        return _EXTERNAL_SUBTREE_ALIASES[project_lower]
+    return project_lower.removeprefix("projects/")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compute subproject test dependencies from the consumer graph"
@@ -396,7 +412,8 @@ def main():
         nargs="*",
         metavar="PROJECT",
         help="Project(s) that changed. Accepts space- or comma-separated list. "
-        "Supports 'rocblas' or 'projects/rocblas' format.",
+        "Supports graph keys, 'projects/<name>', and known external subtree "
+        "paths such as 'shared/rocroller'.",
     )
     parser.add_argument(
         "--level",
@@ -469,7 +486,7 @@ def main():
         changed = flattened
 
     if changed:
-        changed = [p.removeprefix("projects/") for p in changed]
+        changed = [_normalize_changed_project(p) for p in changed]
 
     # No projects specified → all tests
     if not changed:
