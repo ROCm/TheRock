@@ -71,10 +71,20 @@ _TEST_POLICIES_NAME = "test_policies.toml"
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
 _EXTERNAL_SUBTREE_ALIASES = {
+    "emulation/mirage": "mirage",
+    "emulation/rocjitsu": "rocjitsu",
     "shared/rocroller": "rocroller",
+    "shared/amdgpu-windows-interop": "hip-clr",
     "dnn-providers/hipblaslt-provider": "hipblasltprovider",
     "dnn-providers/hip-kernel-provider": "hipkernelprovider",
     "dnn-providers/miopen-provider": "miopenprovider",
+    "projects/clr": "hip-clr",
+    "projects/cuid": "rdc",
+    "projects/hip": "hip-clr",
+    "projects/hipother": "hip-clr",
+    "projects/rocdbgapi": "amd-dbgapi",
+    "projects/rocm-smi-lib": "rocm_smi_lib",
+    "projects/rocprofiler": "rocprofiler-sdk",
 }
 
 

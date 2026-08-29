@@ -342,6 +342,51 @@ class TestCliInputParsing(_FixtureTestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
+    def test_rocm_systems_prefixes_mapped(self) -> None:
+        graph = {
+            "amd-dbgapi": {"consumers": []},
+            "hip-clr": {"consumers": []},
+            "mirage": {"consumers": []},
+            "rdc": {"consumers": []},
+            "rocjitsu": {"consumers": []},
+            "rocm_smi_lib": {"consumers": []},
+            "rocprofiler-sdk": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            cases = {
+                "emulation/mirage": "mirage",
+                "emulation/rocjitsu": "rocjitsu",
+                "projects/clr": "hip-clr",
+                "projects/cuid": "rdc",
+                "projects/hip": "hip-clr",
+                "projects/hipother": "hip-clr",
+                "projects/rocdbgapi": "amd-dbgapi",
+                "projects/rocm-smi-lib": "rocm_smi_lib",
+                "projects/rocprofiler": "rocprofiler-sdk",
+                "shared/amdgpu-windows-interop": "hip-clr",
+            }
+            for changed_project, expected in cases.items():
+                with self.subTest(changed_project=changed_project):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed_project,
+                            "--level",
+                            "4",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_comma_separated_input(self) -> None:
         proc = self._run("--changed-projects", "amdsmi,rocroller", "--level", "4")
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -559,9 +604,9 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         self.assertIn("amdsmi", selected)
         self.assertIn("rdc", selected)
 
-    def test_subtree_path_is_not_a_graph_key(self) -> None:
-        # The CLI strips `projects/` -> `clr`, still not the graph key `hip-clr`,
-        # so it selects only itself with a warning.
+    def test_unmapped_project_prefix_strips_to_name(self) -> None:
+        # Unknown `projects/` paths still fall back to stripping the prefix; if
+        # the result is not a graph key, selection warns and returns that name.
         proc = subprocess.run(
             [
                 sys.executable,
@@ -569,7 +614,7 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
                 "--therock-dir",
                 str(self.root),
                 "--changed-projects",
-                "projects/clr",
+                "projects/not-a-graph-key",
                 "--level",
                 "4",
             ],
@@ -578,7 +623,7 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         selected = set(json.loads(proc.stdout.strip()))
-        self.assertEqual(selected, {"clr"})
+        self.assertEqual(selected, {"not-a-graph-key"})
         self.assertIn("unrecognized", proc.stderr.lower())
 
     def test_shared_prefix_not_stripped(self) -> None:
