@@ -1461,19 +1461,21 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
-  # The source timestamp for reproducible archives, resolved once at configure
-  # time. Exported to every subproject so that any tool a build invokes agrees
-  # on it, not just the ones that write artifact archives.
-  if(THEROCK_SOURCE_DATE_EPOCH)
+  # Opt-in only, and deliberately nothing here by default.
+  #
+  # Anything added to this list lands verbatim in the `cmake -E env` prefix of
+  # every subproject's configure and build command, and ninja re-runs a command
+  # whose text changed. A timestamp here would therefore rebuild the entire tree
+  # every time it moved -- on every commit, and on every edit to a dirty tree.
+  # Nothing in the build graph needs it: archives are written by
+  # artifact_manager.py, outside the graph, which reads
+  # <build_dir>/therock_source_date_epoch.txt instead.
+  #
+  # Under the opt-in that rebuild is the honest price of asking the compilers
+  # themselves to be reproducible. See docs/development/reproducible_archives.md.
+  if(THEROCK_EXPORT_SOURCE_DATE_EPOCH AND THEROCK_SOURCE_DATE_EPOCH)
     list(APPEND _build_env_pairs
-      "THEROCK_SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
-    # Opt-in only: SOURCE_DATE_EPOCH is honored by compilers, CPython and
-    # setuptools, so exporting it changes far more than archive metadata.
-    # See docs/development/reproducible_archives.md.
-    if(THEROCK_EXPORT_SOURCE_DATE_EPOCH)
-      list(APPEND _build_env_pairs
-        "SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
-    endif()
+      "SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
   endif()
 
   set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)

@@ -15,19 +15,24 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from _therock_utils import source_date
 from _therock_utils.source_date import (
     compute_source_date_epoch,
+    dirty_paths,
     is_worktree_dirty,
+    newest_dirty_mtime,
     submodule_entries,
 )
 
 JAN_2026 = 1767225600  # 2026-01-01T00:00:00Z, the submodule's first commit.
 FEB_2026 = 1769990400  # 2026-02-02T00:00:00Z, the superproject pinning it.
 JUN_2026 = 1781481600  # 2026-06-15T00:00:00Z, later work inside the submodule.
+DEC_2026 = 1798761600  # 2026-12-31T00:00:00Z, an uncommitted edit.
+JAN_2020 = 1577836800  # 2020-01-01T00:00:00Z, deliberately stale.
 
 
 def git(*args: str, cwd: Path, when: int | None = None) -> str:
@@ -101,29 +106,79 @@ class SourceDateTest(unittest.TestCase):
         self.assertEqual([e.state for e in entries], ["+"])
         self.assertEqual(compute_source_date_epoch(self.super), JUN_2026)
 
-    def test_dirty_submodule_worktree_advances_past_every_commit(self):
-        (self.sub_checkout / "f.txt").write_text("uncommitted")
+    def test_dirty_submodule_worktree_uses_the_file_mtime(self):
+        edited = self.sub_checkout / "f.txt"
+        edited.write_text("uncommitted")
+        os.utime(edited, (DEC_2026, DEC_2026))
 
         # The commit still matches the pin, so this is invisible to
-        # `git submodule status` -- the dirty check is what catches it.
+        # `git submodule status` -- the dirty scan is what catches it.
         self.assertEqual([e.state for e in submodule_entries(self.super)], [" "])
         self.assertTrue(is_worktree_dirty(self.super))
-        self.assertGreater(compute_source_date_epoch(self.super), JUN_2026)
+        self.assertEqual(compute_source_date_epoch(self.super), DEC_2026)
 
-    def test_dirty_superproject_advances_past_every_commit(self):
-        (self.super / "README.md").write_text("edited")
+    def test_dirty_superproject_uses_the_file_mtime(self):
+        edited = self.super / "README.md"
+        edited.write_text("edited")
+        os.utime(edited, (DEC_2026, DEC_2026))
         self.assertTrue(is_worktree_dirty(self.super))
-        self.assertGreater(compute_source_date_epoch(self.super), FEB_2026)
+        self.assertEqual(compute_source_date_epoch(self.super), DEC_2026)
 
     def test_untracked_file_counts_as_dirty(self):
-        (self.super / "scratch.txt").write_text("scratch")
+        untracked = self.super / "scratch.txt"
+        untracked.write_text("scratch")
+        os.utime(untracked, (DEC_2026, DEC_2026))
         self.assertTrue(is_worktree_dirty(self.super))
+        self.assertEqual(compute_source_date_epoch(self.super), DEC_2026)
+
+    def test_newest_dirty_file_wins(self):
+        older = self.super / "older.txt"
+        older.write_text("a")
+        os.utime(older, (JUN_2026, JUN_2026))
+        newer = self.super / "newer.txt"
+        newer.write_text("b")
+        os.utime(newer, (DEC_2026, DEC_2026))
+        self.assertEqual(newest_dirty_mtime(self.super), DEC_2026)
+        self.assertEqual(compute_source_date_epoch(self.super), DEC_2026)
+
+    def test_an_old_dirty_file_cannot_drag_the_result_backwards(self):
+        # Touching a file to 2020 must not make the archive look older than the
+        # commit it sits on.
+        stale = self.super / "README.md"
+        stale.write_text("edited")
+        os.utime(stale, (JAN_2020, JAN_2020))
+        self.assertEqual(newest_dirty_mtime(self.super), JAN_2020)
+        self.assertEqual(compute_source_date_epoch(self.super), FEB_2026)
+
+    def test_repeated_calls_on_an_untouched_dirty_tree_agree(self):
+        # The whole reason this is a file mtime rather than the current time:
+        # an unchanged tree must resolve identically every time, or every
+        # reconfigure would invalidate everything downstream.
+        (self.super / "README.md").write_text("edited")
+        first = compute_source_date_epoch(self.super)
+        time.sleep(1.1)
+        self.assertEqual(compute_source_date_epoch(self.super), first)
+
+    def test_a_path_with_spaces_is_handled(self):
+        # `git status --porcelain` quotes these; the -z form does not.
+        spaced = self.super / "a file with spaces.txt"
+        spaced.write_text("x")
+        os.utime(spaced, (DEC_2026, DEC_2026))
+        self.assertIn(spaced, dirty_paths(self.super))
+        self.assertEqual(compute_source_date_epoch(self.super), DEC_2026)
+
+    def test_a_deleted_file_does_not_break_resolution(self):
+        (self.super / "README.md").unlink()
+        self.assertTrue(is_worktree_dirty(self.super))
+        # Nothing to stat, so it falls back to the commit times.
+        self.assertEqual(compute_source_date_epoch(self.super), FEB_2026)
 
     def test_outside_a_git_checkout_falls_back_to_now(self):
+        before = int(time.time())
         with tempfile.TemporaryDirectory() as plain:
             self.assertEqual(submodule_entries(Path(plain)), [])
             self.assertFalse(is_worktree_dirty(Path(plain)))
-            self.assertGreater(compute_source_date_epoch(Path(plain)), FEB_2026)
+            self.assertGreaterEqual(compute_source_date_epoch(Path(plain)), before)
 
     # -- parsing -----------------------------------------------------------
 

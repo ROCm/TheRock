@@ -38,20 +38,22 @@ python build_tools/_therock_utils/source_date.py --explain
    tarballs downloaded from S3 with no git history at all.
 1. Plus the `HEAD` time of any submodule checked out past its pin, which is
    normal when developing against subproject sources in place.
-1. Plus the current time if anything is uncommitted. Archives from a dirty tree
-   are not reproducible, which is inherent rather than a limitation here.
+1. Plus the mtime of the most recently touched uncommitted file, if the tree is
+   dirty — not the current time, so that an untouched dirty tree resolves to the
+   same value every time it is asked. Everything is combined with `max()`, so a
+   file touched to an old date cannot drag the result back before its commit.
 
 This is resolved **once**, at CMake configure time, because it costs several git
 invocations and every writer must agree on the value. See
 [`THEROCK_SOURCE_DATE_EPOCH`](build_system.md#therock_source_date_epoch) for the
-build option. It reaches tools two ways:
+build option. CMake writes it to `<build_dir>/therock_source_date_epoch.txt`,
+and tools read it from there — `artifact_manager.py push --build-dir` compresses
+artifacts long after CMake has finished.
 
-- Exported as `THEROCK_SOURCE_DATE_EPOCH` into every subproject build
-  environment, so any tool a build invokes sees it — not only the ones that
-  write archives.
-- Written to `<build_dir>/therock_source_date_epoch.txt` for tools that run
-  outside the build graph. `artifact_manager.py push --build-dir` reads it from
-  there, since it compresses artifacts long after CMake has finished.
+It is deliberately kept out of the subproject build environment: it would land
+in every subproject's ninja command line, and ninja re-runs a command whose text
+changed, so the whole tree would rebuild every time the timestamp moved. Nothing
+in the build graph writes archives.
 
 Tools run with no configured build tree at all (a direct `fileset_tool` call)
 fall back to resolving it themselves.
@@ -70,17 +72,19 @@ TheRock does **not** set it for you, and that is on purpose. It is a
 cross-ecosystem convention that many tools pick up automatically, so exporting
 it changes far more than archive metadata:
 
-| Tool              | What changes                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| GCC, Clang        | `__DATE__` and `__TIME__` are rewritten in every translation unit                                     |
-| CPython           | `.pyc` files switch from timestamp to checked-hash invalidation, changing bytes shipped inside wheels |
-| setuptools, wheel | zip entry timestamps                                                                                  |
-| `dpkg-deb`        | tar entry mtimes are clamped to it (it never raises older ones)                                       |
-| Sphinx, Doxygen   | generated copyright/date strings                                                                      |
+| Tool                      | What changes here                                                                                                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CMake `string(TIMESTAMP)` | Pinned. Mostly cosmetic copyright years, but `ROCKE_ENGINE_VERSION` embeds a build date into a shipped version string deliberately, to keep successive builds distinguishable |
+| Doxygen                   | `HTML_TIMESTAMP`/`LATEX_TIMESTAMP` pinned, including the hip docs target `clr/hipamd/packaging` runs in `ALL`                                                                 |
+| setuptools, wheel         | zip entry timestamps — see below, this is the one place opting in is load-bearing                                                                                             |
+| GCC, Clang                | `__DATE__`/`__TIME__` rewritten. Near-harmless: `rocm-systems` has no real uses; those in `rocm-libraries` and `openmp` sit behind default-off flags                          |
+| binutils                  | `ar.exp` **requires the variable to be unset** and fails if rocgdb's tests run with it exported                                                                               |
+| `dpkg-deb`                | Clamps tar mtimes downward only, so it never repairs a stale timestamp                                                                                                        |
+| CPython                   | `.pyc` invalidation switches to checked-hash. No component byte-compiles during the build, so this only matters at `pip install` time                                         |
+| `rccl` changelog          | **Not** affected — shells out to `date -R`, which ignores the variable                                                                                                        |
 
-Those are usually what you want from a fully reproducible build, but they are a
-much wider change than stamping archive metadata, and they apply to code TheRock
-builds rather than to TheRock itself.
+Also note that turning it on puts the value in every subproject's build command,
+so the tree rebuilds whenever the timestamp moves.
 
 To opt in, at configure time for the build itself:
 

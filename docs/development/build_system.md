@@ -176,27 +176,41 @@ cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=1700000000 ...
 ```
 
 Resolving it costs several git invocations and every tool that writes an archive
-must agree on it, so it is resolved once here rather than by each tool. It
-reaches them two ways:
+must agree on it, so it is resolved once here rather than by each tool. It is
+written to `<build_dir>/therock_source_date_epoch.txt`, and tools read it from
+there — `artifact_manager.py push --build-dir` compresses artifacts long after
+CMake has finished.
 
-- Exported as `THEROCK_SOURCE_DATE_EPOCH` into every subproject build
-  environment, so any tool the build invokes sees it.
-- Written to `<build_dir>/therock_source_date_epoch.txt`, for tools that run
-  outside the build graph. `artifact_manager.py push --build-dir` compresses
-  artifacts long after CMake has finished and reads it from there.
+It is deliberately **not** put into the subproject build environment. Anything
+added there lands in the `cmake -E env` prefix of every subproject's configure
+and build command, and ninja re-runs a command whose text changed — so a
+timestamp would rebuild the whole tree every time it moved. Nothing in the build
+graph needs it.
 
 ### `THEROCK_EXPORT_SOURCE_DATE_EPOCH`
 
-Off by default. When on, the same value is also exported as the standard
-`SOURCE_DATE_EPOCH`.
+Off by default. When on, the value is exported as the standard
+`SOURCE_DATE_EPOCH` into every subproject configure and build.
 
 > [!WARNING]
-> `SOURCE_DATE_EPOCH` is a cross-ecosystem convention that many tools honor
-> automatically, so this reaches much further than archive metadata: GCC and
-> Clang rewrite `__DATE__`/`__TIME__` in every translation unit, CPython
-> switches `.pyc` files to checked-hash invalidation, and setuptools uses it for
-> zip entry timestamps. That is usually what a fully reproducible build wants,
-> but it is a deliberate choice, which is why TheRock does not do it by default.
+> This rebuilds the tree whenever the timestamp changes, for the reason above,
+> and `SOURCE_DATE_EPOCH` is honored by far more than archive tooling. In this
+> repository the changes that actually land are:
+>
+> - CMake's `string(TIMESTAMP)` is pinned. Most sites are cosmetic copyright
+>   years, but `ROCKE_ENGINE_VERSION` (`rocke/platform/CMakeLists.txt`) embeds a
+>   build date into a shipped version string *on purpose*, to keep successive
+>   builds distinguishable. Pinning it is a behavior change for that component.
+> - Doxygen `HTML_TIMESTAMP`/`LATEX_TIMESTAMP` output is pinned, including the
+>   hip docs target that `clr/hipamd/packaging` runs as part of `ALL`.
+> - setuptools uses it for zip entry timestamps.
+> - GCC/Clang rewrite `__DATE__`/`__TIME__`. Near-harmless here: `rocm-systems`
+>   has no real uses, and the handful in `rocm-libraries` and `openmp` are all
+>   behind default-off flags.
+> - binutils' `ar.exp` test *requires the variable to be unset* and will fail if
+>   rocgdb's test suite runs with it exported.
+> - It does **not** help `rccl`'s Debian/RPM changelog dates, which shell out to
+>   `date -R` and ignore it.
 
 See [Reproducible Archives](reproducible_archives.md) for the full picture.
 

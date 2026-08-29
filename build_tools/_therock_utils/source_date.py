@@ -122,36 +122,94 @@ def submodule_entries(repo_dir: Path = THEROCK_DIR) -> list[SubmoduleEntry]:
     return entries
 
 
-def is_worktree_dirty(
+def _parse_porcelain_z(output: str, repo_dir: Path) -> list[Path]:
+    """Paths from `git status --porcelain -z`.
+
+    NUL-separated rather than line-based because paths may contain spaces or
+    newlines, which the line format quotes and escapes. Each record is two
+    status characters, a space, then the path; rename and copy records are
+    followed by a second record holding the original path, which is skipped.
+    """
+    paths = []
+    records = output.split("\0")
+    index = 0
+    while index < len(records):
+        record = records[index]
+        index += 1
+        if len(record) < 4:
+            continue
+        status, path = record[:2], record[3:]
+        if "R" in status or "C" in status:
+            index += 1  # the paired original path
+        if path:
+            paths.append(repo_dir / path)
+    return paths
+
+
+def dirty_paths(
     repo_dir: Path = THEROCK_DIR,
     entries: list[SubmoduleEntry] | None = None,
-) -> bool:
-    """Whether anything is uncommitted, in the superproject or any submodule.
+) -> list[Path]:
+    """Every uncommitted path, in the superproject and in each submodule.
 
     Only genuinely uncommitted content counts. A plain `git status --porcelain`
-    is not usable here: it reports ` M <path>` for a submodule that merely sits
-    at a different commit than its pin, which is committed work already handled
-    by folding that submodule's commit time in. Treating it as dirty would jump
-    straight to the current time and mask that logic entirely.
+    on the superproject is not usable here: it reports ` M <path>` for a
+    submodule that merely sits at a different commit than its pin, which is
+    committed work already accounted for by folding that submodule's commit time
+    in. Counting it here would mask that logic.
 
     So the superproject is asked with `--ignore-submodules=all`, and each
     populated submodule is asked about its own working tree separately.
     """
-    superproject = _git(
-        "status", "--porcelain", "--ignore-submodules=all", cwd=repo_dir
+    output = _git(
+        "status", "--porcelain", "-z", "--ignore-submodules=all", cwd=repo_dir
     )
-    if superproject and superproject.strip():
-        return True
+    paths = _parse_porcelain_z(output, repo_dir) if output else []
 
     if entries is None:
         entries = submodule_entries(repo_dir)
     for entry in entries:
         if not entry.is_populated:
             continue
-        output = _git("status", "--porcelain", cwd=entry.path)
-        if output and output.strip():
-            return True
-    return False
+        submodule_output = _git("status", "--porcelain", "-z", cwd=entry.path)
+        if submodule_output:
+            paths.extend(_parse_porcelain_z(submodule_output, entry.path))
+    return paths
+
+
+def is_worktree_dirty(
+    repo_dir: Path = THEROCK_DIR,
+    entries: list[SubmoduleEntry] | None = None,
+) -> bool:
+    """Whether anything is uncommitted, in the superproject or any submodule."""
+    return bool(dirty_paths(repo_dir, entries))
+
+
+def newest_dirty_mtime(
+    repo_dir: Path = THEROCK_DIR,
+    entries: list[SubmoduleEntry] | None = None,
+) -> int | None:
+    """Modification time of the most recently touched uncommitted file.
+
+    Deliberately not the current time. The value ends up in archives and, when
+    exported, in build inputs, so it must not move every time it is asked --
+    otherwise an untouched dirty tree would produce a different answer on every
+    configure and invalidate everything downstream.
+
+    An untracked *directory* is reported by git as a single entry, and only its
+    own mtime is read: that moves when entries are added or removed, but not
+    when a file inside it is edited. Walking it could mean walking something
+    very large, so this accepts the imprecision.
+    """
+    newest = None
+    for path in dirty_paths(repo_dir, entries):
+        try:
+            mtime = int(path.stat().st_mtime)
+        except OSError:
+            # Deleted, or otherwise not stat-able. It has no mtime to offer.
+            continue
+        newest = mtime if newest is None else max(newest, mtime)
+    return newest
 
 
 def read_build_dir(build_dir: Path) -> int | None:
@@ -202,9 +260,12 @@ def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
 
     * A submodule checked out past its pin (state '+') carries commits the
       superproject's date does not reflect, so its HEAD time is folded in.
-    * Uncommitted changes anywhere have no commit time at all, so the current
-      time is folded in. Archives from a dirty tree are not reproducible, which
-      is inherent rather than a limitation of this approach.
+    * Uncommitted changes have no commit time at all, so the mtime of the most
+      recently touched one is folded in -- not the current time, so that asking
+      twice without touching anything gives the same answer.
+
+    Everything is combined with max(), so a file touched to an old date cannot
+    drag the result back before the commit it sits on.
     """
     timestamps = []
 
@@ -220,8 +281,9 @@ def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
         if submodule_head is not None:
             timestamps.append(submodule_head)
 
-    if is_worktree_dirty(repo_dir, entries):
-        timestamps.append(int(time.time()))
+    dirty = newest_dirty_mtime(repo_dir, entries)
+    if dirty is not None:
+        timestamps.append(dirty)
 
     if not timestamps:
         # No git at all. Not reproducible, but a working build beats a
