@@ -199,44 +199,6 @@ class SourceDateTest(unittest.TestCase):
         self.assertFalse(entry.is_populated)
         self.assertEqual(entry.path, self.sub_checkout)
 
-    # -- the configure-time handoff ---------------------------------------
-
-    def test_build_dir_value_is_preferred_over_recomputing(self):
-        # CMake resolved this at configure time; tools running later must agree
-        # with the build rather than resolve it again.
-        build_dir = self.super / "build"
-        build_dir.mkdir()
-        (build_dir / source_date.STAMP_FILE_NAME).write_text("1700000000\n")
-        self.assertEqual(
-            source_date.resolve(build_dir=build_dir, repo_dir=self.super),
-            1700000000,
-        )
-
-    def test_a_dirty_tree_does_not_override_the_build_dir_value(self):
-        # Otherwise a developer's archives would drift from the build they came
-        # from every time they touched a file.
-        build_dir = self.super / "build"
-        build_dir.mkdir()
-        (build_dir / source_date.STAMP_FILE_NAME).write_text("1700000000\n")
-        (self.super / "README.md").write_text("edited")
-        self.assertEqual(
-            source_date.resolve(build_dir=build_dir, repo_dir=self.super),
-            1700000000,
-        )
-
-    def test_missing_build_dir_value_falls_back_to_computing(self):
-        self.assertEqual(
-            source_date.resolve(build_dir=self.super / "nope", repo_dir=self.super),
-            FEB_2026,
-        )
-
-    def test_unparseable_build_dir_value_is_rejected(self):
-        build_dir = self.super / "build"
-        build_dir.mkdir()
-        (build_dir / source_date.STAMP_FILE_NAME).write_text("not-a-timestamp")
-        with self.assertRaisesRegex(ValueError, "does not contain a timestamp"):
-            source_date.resolve(build_dir=build_dir, repo_dir=self.super)
-
     # -- environment plumbing ---------------------------------------------
 
     def test_child_env_sets_only_the_namespaced_var_by_default(self):

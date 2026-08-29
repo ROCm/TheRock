@@ -34,9 +34,6 @@ ENV_VAR = "THEROCK_SOURCE_DATE_EPOCH"
 # only ever *set* behind an explicit opt-in.
 STANDARD_ENV_VAR = "SOURCE_DATE_EPOCH"
 
-# Written into the build directory by the root CMakeLists.txt at configure time.
-STAMP_FILE_NAME = "therock_source_date_epoch.txt"
-
 EXPORT_WARNING = f"""\
 Exporting {STANDARD_ENV_VAR} affects far more than TheRock's archives. It is a
 cross-ecosystem convention that many tools honor automatically:
@@ -212,41 +209,6 @@ def newest_dirty_mtime(
     return newest
 
 
-def read_build_dir(build_dir: Path) -> int | None:
-    """Reads the value CMake resolved at configure time, if it is there.
-
-    CMake writes `therock_source_date_epoch.txt` into the build directory
-    precisely so that tools running outside the build graph -- `artifact_manager
-    push` compresses artifacts long after CMake has finished -- can agree with
-    the build instead of resolving it again and possibly differently.
-    """
-    stamp_file = build_dir / STAMP_FILE_NAME
-    try:
-        content = stamp_file.read_text().strip()
-    except OSError:
-        return None
-    try:
-        return int(content)
-    except ValueError:
-        raise ValueError(f"{stamp_file} does not contain a timestamp: {content!r}")
-
-
-def resolve(
-    *,
-    build_dir: Path | None = None,
-    repo_dir: Path = THEROCK_DIR,
-) -> int:
-    """The timestamp to use, preferring what the build already decided.
-
-    Falls back to computing it for tools run outside a configured build tree.
-    """
-    if build_dir is not None:
-        from_build = read_build_dir(build_dir)
-        if from_build is not None:
-            return from_build
-    return compute_source_date_epoch(repo_dir)
-
-
 def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
     """Resolves the timestamp to stamp into archives built from `repo_dir`.
 
@@ -295,7 +257,6 @@ def compute_source_date_epoch(repo_dir: Path = THEROCK_DIR) -> int:
 def child_env(
     *,
     export_standard_var: bool = False,
-    build_dir: Path | None = None,
     repo_dir: Path = THEROCK_DIR,
     base_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
@@ -306,7 +267,7 @@ def child_env(
     changes.
     """
     env = dict(os.environ if base_env is None else base_env)
-    timestamp = str(resolve(build_dir=build_dir, repo_dir=repo_dir))
+    timestamp = str(compute_source_date_epoch(repo_dir))
     env[ENV_VAR] = timestamp
     if export_standard_var:
         env[STANDARD_ENV_VAR] = timestamp
@@ -316,7 +277,6 @@ def child_env(
 def apply_to_environ(
     *,
     export_standard_var: bool = False,
-    build_dir: Path | None = None,
     repo_dir: Path = THEROCK_DIR,
 ) -> int:
     """Publishes the resolved timestamp into this process's environment.
@@ -325,7 +285,7 @@ def apply_to_environ(
     workers. Returns the resolved value. Does not overwrite an existing
     `SOURCE_DATE_EPOCH`, which outranks everything (see `archive_util`).
     """
-    timestamp = resolve(build_dir=build_dir, repo_dir=repo_dir)
+    timestamp = compute_source_date_epoch(repo_dir)
     os.environ[ENV_VAR] = str(timestamp)
     if export_standard_var and STANDARD_ENV_VAR not in os.environ:
         os.environ[STANDARD_ENV_VAR] = str(timestamp)

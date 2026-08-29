@@ -66,50 +66,33 @@ block(SCOPE_FOR VARIABLES)
 endblock()
 
 ################################################################################
-# Source timestamp for reproducible archives
+# Source timestamp for reproducible builds
 ################################################################################
-# Resolved once here rather than by each tool that writes an archive: it costs
-# several git invocations, and every writer must agree on the value or the
-# output is not reproducible. See docs/development/reproducible_archives.md.
-option(THEROCK_EXPORT_SOURCE_DATE_EPOCH
-  "Also export SOURCE_DATE_EPOCH to subproject builds. This makes compilers, \
-CPython and setuptools behave reproducibly too, at the cost of a much wider \
-blast radius: __DATE__/__TIME__ are rewritten in every translation unit and \
-.pyc invalidation changes. See docs/development/reproducible_archives.md."
-  OFF)
-
+# Empty by default, and deliberately not derived here. The build writes no
+# archives -- the tools that do run after it and resolve their own timestamp
+# from the source state at that moment. Resolving it at configure would freeze
+# a value that goes stale the moment anything is pulled, and CMake has no other
+# use for it.
+#
+# Setting it is therefore the whole opt-in: a value can only arrive by an
+# explicit -D, and the only thing CMake does with one is export it as
+# SOURCE_DATE_EPOCH to every subproject configure and build. That makes the
+# compilers themselves reproducible, at the cost of rebuilding the tree whenever
+# the value changes, plus a wider blast radius across the components.
+# See docs/development/reproducible_archives.md.
 set(THEROCK_SOURCE_DATE_EPOCH "" CACHE STRING
-  "Unix timestamp stamped into artifact archives (default: derived from the source state)")
+  "Unix timestamp to export as SOURCE_DATE_EPOCH to subproject builds (empty: do not export)")
 
-# Tested against the empty string rather than with if(NOT ...), which is false
-# for the string "0" and would silently discard an explicit -D...=0.
-if("${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
-  execute_process(
-    COMMAND ${Python3_EXECUTABLE}
-      "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/source_date.py"
-    OUTPUT_VARIABLE _source_date_epoch
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    COMMAND_ERROR_IS_FATAL ANY
-  )
-  set(THEROCK_SOURCE_DATE_EPOCH "${_source_date_epoch}" CACHE STRING "" FORCE)
+# Compared against the empty string rather than with if(NOT ...), which is false
+# for the string "0" and would silently ignore a deliberate -D...=0.
+if(NOT "${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
+  if(NOT THEROCK_SOURCE_DATE_EPOCH MATCHES "^[0-9]+$")
+    message(FATAL_ERROR
+      "THEROCK_SOURCE_DATE_EPOCH must be a non-negative integer number of "
+      "seconds since the Unix epoch, got '${THEROCK_SOURCE_DATE_EPOCH}'")
+  endif()
+  message(STATUS "Exporting SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH} to subprojects")
 endif()
-
-# Everything downstream assumes this is a usable timestamp. Failing here beats
-# writing a malformed value into archives, or silently exporting nothing.
-if(NOT THEROCK_SOURCE_DATE_EPOCH MATCHES "^[0-9]+$")
-  message(FATAL_ERROR
-    "THEROCK_SOURCE_DATE_EPOCH must be a non-negative integer number of seconds "
-    "since the Unix epoch, got '${THEROCK_SOURCE_DATE_EPOCH}'")
-endif()
-message(STATUS "Source timestamp: ${THEROCK_SOURCE_DATE_EPOCH}")
-
-# Written so that tools invoked outside the build graph can read it -- notably
-# `artifact_manager.py push --build-dir`, which compresses artifacts long after
-# CMake has finished and cannot see the configure-time environment.
-file(CONFIGURE
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/therock_source_date_epoch.txt"
-  CONTENT "${THEROCK_SOURCE_DATE_EPOCH}\n"
-)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 

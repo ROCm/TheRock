@@ -163,38 +163,30 @@ Subprojects that opt in to source file globbing even when otherwise skipped
 
 ### `THEROCK_SOURCE_DATE_EPOCH`
 
-The Unix timestamp stamped into artifact archives so that identical content
-produces an identical archive hash. Resolved at configure time from the source
-state (superproject `HEAD`, plus any submodule checked out past its pin, plus
-the current time if the tree is dirty), and reported as
-`-- Source timestamp: <value>`.
-
-Set it explicitly to pin the value:
+Empty by default. When set to a Unix timestamp, it is exported as
+`SOURCE_DATE_EPOCH` to every subproject configure and build:
 
 ```bash
 cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=1700000000 ...
 ```
 
-Resolving it costs several git invocations and every tool that writes an archive
-must agree on it, so it is resolved once here rather than by each tool. It is
-written to `<build_dir>/therock_source_date_epoch.txt`, and tools read it from
-there — `artifact_manager.py push --build-dir` compresses artifacts long after
-CMake has finished.
+Setting it *is* the opt-in — there is no separate switch, because exporting is
+the only thing the build does with a timestamp. The build itself writes no
+archives; the tools that do run afterwards and resolve their own value from the
+source state at that moment, so nothing is derived here. Deriving it at
+configure would only freeze a value that goes stale as soon as anything is
+pulled.
 
-It is deliberately **not** put into the subproject build environment. Anything
-added there lands in the `cmake -E env` prefix of every subproject's configure
-and build command, and ninja re-runs a command whose text changed — so a
-timestamp would rebuild the whole tree every time it moved. Nothing in the build
-graph needs it.
+To pin the build to the current source state:
 
-### `THEROCK_EXPORT_SOURCE_DATE_EPOCH`
-
-Off by default. When on, the value is exported as the standard
-`SOURCE_DATE_EPOCH` into every subproject configure and build.
+```bash
+cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=$(python build_tools/_therock_utils/source_date.py) ...
+```
 
 > [!WARNING]
-> This rebuilds the tree whenever the timestamp changes, for the reason above,
-> and `SOURCE_DATE_EPOCH` is honored by far more than archive tooling. In this
+> This rebuilds the tree whenever the value changes — it lands in every
+> subproject's build command, and ninja re-runs a command whose text changed.
+> `SOURCE_DATE_EPOCH` is also honored by far more than archive tooling. In this
 > repository the changes that actually land are:
 >
 > - CMake's `string(TIMESTAMP)` is pinned. Most sites are cosmetic copyright

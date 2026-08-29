@@ -43,20 +43,16 @@ python build_tools/_therock_utils/source_date.py --explain
    same value every time it is asked. Everything is combined with `max()`, so a
    file touched to an old date cannot drag the result back before its commit.
 
-This is resolved **once**, at CMake configure time, because it costs several git
-invocations and every writer must agree on the value. See
-[`THEROCK_SOURCE_DATE_EPOCH`](build_system.md#therock_source_date_epoch) for the
-build option. CMake writes it to `<build_dir>/therock_source_date_epoch.txt`,
-and tools read it from there — `artifact_manager.py push --build-dir` compresses
-artifacts long after CMake has finished.
+Each tool that writes archives resolves this **once at its own entry** —
+`artifact_manager.py push`, `build_python_packages.py`, `build_tarballs.py` —
+and passes it to everything it spawns. That is deliberate: these run *after* the
+build, so resolving there describes the source being packaged. Resolving at
+CMake configure instead would freeze a value that goes stale as soon as anything
+is pulled, and the build writes no archives of its own.
 
-It is deliberately kept out of the subproject build environment: it would land
-in every subproject's ninja command line, and ninja re-runs a command whose text
-changed, so the whole tree would rebuild every time the timestamp moved. Nothing
-in the build graph writes archives.
-
-Tools run with no configured build tree at all (a direct `fileset_tool` call)
-fall back to resolving it themselves.
+The build can still be pinned, via
+[`THEROCK_SOURCE_DATE_EPOCH`](build_system.md#therock_source_date_epoch), but
+that is a separate opt-in concerned with making the *compilers* reproducible.
 
 Consequence worth knowing: a docs-only commit advances the timestamp for every
 artifact, so archive hashes change even when content is byte-identical. That is
@@ -83,13 +79,13 @@ it changes far more than archive metadata:
 | CPython                   | `.pyc` invalidation switches to checked-hash. No component byte-compiles during the build, so this only matters at `pip install` time                                         |
 | `rccl` changelog          | **Not** affected — shells out to `date -R`, which ignores the variable                                                                                                        |
 
-Also note that turning it on puts the value in every subproject's build command,
-so the tree rebuilds whenever the timestamp moves.
+Also note that pinning the build puts the value in every subproject's build
+command, so the tree rebuilds whenever it changes.
 
 To opt in, at configure time for the build itself:
 
 ```bash
-cmake -B build -DTHEROCK_EXPORT_SOURCE_DATE_EPOCH=ON ...
+cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=$(python build_tools/_therock_utils/source_date.py) ...
 ```
 
 or for the archiving and packaging steps, which run outside the build graph:

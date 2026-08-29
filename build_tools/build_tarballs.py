@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     # Resolved once here, not per tarball: it costs several git invocations, and
     # every tarball in a release must carry the same timestamp.
-    source_date_epoch = source_date.resolve()
+    source_date_epoch = source_date.compute_source_date_epoch()
     log(f"Source timestamp: {source_date_epoch}")
     if args.compression_threads < 1:
         parser.error("--compression-threads must be at least 1")
