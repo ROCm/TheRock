@@ -1473,7 +1473,15 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   #
   # Under the opt-in that rebuild is the honest price of asking the compilers
   # themselves to be reproducible. See docs/development/reproducible_archives.md.
-  if(THEROCK_EXPORT_SOURCE_DATE_EPOCH AND THEROCK_SOURCE_DATE_EPOCH)
+  # The empty test rather than if(THEROCK_SOURCE_DATE_EPOCH): the latter is
+  # false for "0", which would drop a deliberate epoch-zero override.
+  if(THEROCK_EXPORT_SOURCE_DATE_EPOCH)
+    if("${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
+      message(FATAL_ERROR
+        "THEROCK_EXPORT_SOURCE_DATE_EPOCH is enabled but "
+        "THEROCK_SOURCE_DATE_EPOCH is empty, so there is nothing to export. "
+        "This is normally resolved by the top-level CMakeLists.txt.")
+    endif()
     list(APPEND _build_env_pairs
       "SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
   endif()

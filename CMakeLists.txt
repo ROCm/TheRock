@@ -81,7 +81,9 @@ blast radius: __DATE__/__TIME__ are rewritten in every translation unit and \
 set(THEROCK_SOURCE_DATE_EPOCH "" CACHE STRING
   "Unix timestamp stamped into artifact archives (default: derived from the source state)")
 
-if(NOT THEROCK_SOURCE_DATE_EPOCH)
+# Tested against the empty string rather than with if(NOT ...), which is false
+# for the string "0" and would silently discard an explicit -D...=0.
+if("${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
   execute_process(
     COMMAND ${Python3_EXECUTABLE}
       "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/source_date.py"
@@ -90,6 +92,14 @@ if(NOT THEROCK_SOURCE_DATE_EPOCH)
     COMMAND_ERROR_IS_FATAL ANY
   )
   set(THEROCK_SOURCE_DATE_EPOCH "${_source_date_epoch}" CACHE STRING "" FORCE)
+endif()
+
+# Everything downstream assumes this is a usable timestamp. Failing here beats
+# writing a malformed value into archives, or silently exporting nothing.
+if(NOT THEROCK_SOURCE_DATE_EPOCH MATCHES "^[0-9]+$")
+  message(FATAL_ERROR
+    "THEROCK_SOURCE_DATE_EPOCH must be a non-negative integer number of seconds "
+    "since the Unix epoch, got '${THEROCK_SOURCE_DATE_EPOCH}'")
 endif()
 message(STATUS "Source timestamp: ${THEROCK_SOURCE_DATE_EPOCH}")
 
