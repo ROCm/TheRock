@@ -561,6 +561,36 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         hipblas = next(j for j in components if j["job_name"] == "hipblas")
         self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
 
+    def test_asan_debug_variants_use_sandbox_runner(self):
+        """asan-debug and host-asan-debug are the same ASAN family as
+        asan/host-asan (RelWithDebInfo + line-number debug info, see
+        amdgpu_family_matrix.py's all_build_variants) and must also route to
+        test-runs-on-sandbox, not the regular runner pool."""
+        for build_variant in ("asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                os.environ["BUILD_VARIANT"] = build_variant
+                os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+                def fake_get_all_families(_):
+                    return {
+                        "gfx94x": {
+                            "linux": {
+                                "test-runs-on": "linux-gfx942-prod",
+                                "test-runs-on-sandbox": "linux-sandbox-runner",
+                            }
+                        }
+                    }
+
+                fetch_test_configurations.get_all_families_for_trigger_types = (
+                    fake_get_all_families
+                )
+
+                fetch_test_configurations.run()
+                components = self._get_components()
+
+                hipblas = next(j for j in components if j["job_name"] == "hipblas")
+                self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+
     def test_release_build_uses_count_runner(self):
         """Release builds should use count-based runner labels, not sandbox."""
         os.environ["BUILD_VARIANT"] = "release"

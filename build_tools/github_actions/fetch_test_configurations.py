@@ -1127,8 +1127,12 @@ def run():
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
-    # For ASAN builds, use the sandbox runner to isolate potentially failing tests
-    is_asan_build = build_variant in ("asan", "host-asan")
+    # For ASAN builds, use the sandbox runner to isolate potentially failing tests.
+    # Substring match (not an exact-value tuple) so it also covers the "-debug"
+    # variants (asan-debug, host-asan-debug), which are the same ASAN family
+    # with RelWithDebInfo + line-number debug info (see amdgpu_family_matrix.py's
+    # all_build_variants) and must route to the same sandbox runner.
+    is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
