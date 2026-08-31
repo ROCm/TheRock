@@ -8,7 +8,30 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-if(THEROCK_ENABLE_MIOPEN)
+# ADDSPV: MIOpen / miopenprovider / hipblasltprovider (and hipDNN_samples via
+# miopenprovider) declare rocBLAS / hipBLAS / hipBLASLt / MIOpen as deps. In the
+# amdgcnspirv shard those BLAS libs are gated out (math-libs/BLAS/CMakeLists.txt)
+# and MIOpen itself is excluded, so CMake configure fails with
+# "get_target_property() called with non-existent target 'rocBLAS'/'hipBLAS'/
+# 'hipBLASLt'". EXCLUDE_TARGET_PROJECTS only strips device archs; it does not
+# drop the subproject declaration or its deps. Gate the BLAS/MIOpen-dependent
+# blocks per-shard on the same rocBLAS target filter used in math-libs/BLAS:
+# if no gfx targets survive for rocBLAS, skip them for this shard. Non-spirv
+# shards (gfx90a, etc.) are unaffected. hipDNN / hipdnn_integration_tests /
+# hipkernelprovider have no BLAS deps and are left alone.
+set(_ml_blas_deps_available ON)
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_filter_amdgpu_targets(_ml_rocblas_targets rocBLAS ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _ml_rocblas_targets)
+    message(STATUS
+      "ml-libs: rocBLAS/hipBLAS/hipBLASLt are excluded for this shard "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping MIOpen, "
+      "miopenprovider, hipblasltprovider and hipDNN samples for this shard.")
+    set(_ml_blas_deps_available OFF)
+  endif()
+endif()
+
+if(THEROCK_ENABLE_MIOPEN AND _ml_blas_deps_available)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
@@ -194,7 +217,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _ml_blas_deps_available)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -241,7 +264,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
   )
 endif(THEROCK_ENABLE_MIOPENPROVIDER)
 
-if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
+if(THEROCK_ENABLE_HIPBLASLTPROVIDER AND _ml_blas_deps_available)
   ##############################################################################
   # hipDNN hipBLASLt provider
   ##############################################################################
@@ -337,7 +360,8 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
 
-if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _ml_blas_deps_available)
+  # hipDNN_samples RUNTIME_DEPS miopenprovider, which is gated above; skip too.
   ##############################################################################
   # hipDNN samples
   ##############################################################################

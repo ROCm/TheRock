@@ -306,6 +306,38 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    # amdgcnspirv: architecture-independent portable SPIR-V target (family
+    # "gpugeneric"/target "amdgcnspirv" in cmake/therock_amdgpu_targets.cmake).
+    # amdgcnspirv is a portable SPIR-V IR, not a physical ISA: its device code is
+    # JIT-translated to the runner's real GPU arch (comgr/SPIR-V translator) at
+    # load time. So we test it on a physical GPU runner (gfx942), where the
+    # SPIR-V kernels are lowered and executed on real hardware. In presubmit so
+    # every PR exercises the amdgcnspirv build+test alongside the physical targets.
+    "amdgcnspirv": {
+        "linux": {
+            # Physical GPU runner that JIT-executes the SPIR-V kernels (same pool
+            # as gfx94x). Locally under `act`, run-act.sh maps this label to the
+            # local gfx90a image so SPIR-V is JIT'd to gfx90a instead.
+            "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+            "test-runs-on-labels": [
+                {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5},
+                {"label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm", "count": 28},
+            ],
+            # Most device-code components are excluded for amdgcnspirv (see
+            # EXCLUDE_TARGET_PROJECTS) or have their tests gated off (prim-libs).
+            # Restrict the SPIR-V test job to what actually has runnable SPIR-V
+            # device code: rocRAND/hipRAND (sanity always runs regardless).
+            "test_labels_for_family": ["test:rocrand", "test:hiprand"],
+            "family": "amdgcnspirv",
+            "fetch-gfx-targets": ["amdgcnspirv"],
+            "build_variants": ["release"],
+            # Build-only for packaging: validated + GPU-tested here, but never
+            # shipped as a package/wheel target (no physical SPIR-V GPU). Keeps it
+            # out of fetch_package_targets output and workflow amdgpu_family choice
+            # lists (see fetch_package_targets.determine_package_targets).
+            "exclude-from-packaging": True,
+        },
+    },
 }
 
 

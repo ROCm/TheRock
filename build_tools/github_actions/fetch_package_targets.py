@@ -93,6 +93,14 @@ def determine_package_targets(args):
             # Some AMDGPU families are only supported on certain platforms.
             continue
 
+        if platform_for_key.get("exclude-from-packaging"):
+            # Build-only targets (e.g. amdgcnspirv, a portable SPIR-V target with
+            # no physical GPU) are validated by the build matrix but are not
+            # shipped as package/wheel targets, so they must not appear in
+            # produced package targets (nor in workflow amdgpu_family choice
+            # lists). Skip them here.
+            continue
+
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
 

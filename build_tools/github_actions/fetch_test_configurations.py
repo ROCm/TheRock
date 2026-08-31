@@ -524,7 +524,11 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 15,
+        # amdgcnspirv runs these via SPIR-V->ISA JIT at first kernel launch, which
+        # is much slower than a native code object (seconds per distinct kernel).
+        # The physical-target runs finish in a couple of minutes, but the JIT
+        # overhead pushes the SPIR-V run past the old 15 min cap, so raise it.
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -535,7 +539,8 @@ test_matrix = {
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 5,
+        # Raised to absorb amdgcnspirv SPIR-V->ISA JIT overhead (see rocrand).
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
