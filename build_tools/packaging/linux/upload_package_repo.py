@@ -296,11 +296,6 @@ def upload_to_s3(
                 print(f"Skipping build manifest file (local only): {fname}")
                 continue
 
-            # Skip log files - these are uploaded separately to logs/packaging/
-            if fname.lower().endswith(".log"):
-                print(f"Skipping log file (uploaded separately): {fname}")
-                continue
-
             local = Path(root) / fname
             rel = local.relative_to(source_dir)
             key = f"{prefix}/{rel.as_posix()}"
@@ -442,13 +437,9 @@ def main() -> None:
     else:
         create_rpm_repo(package_dir)
 
-    # Step 2+3: upload packages (dedupe OK) and local metadata (always upload).
-    upload_to_s3(package_dir, bucket, prefix, dedupe=dedupe)
-
-    print(f"Package repository URL: {install_url}")
-    _emit_github_output("package_repository_url", install_url)
-
-    # Upload packaging logs and write step summary
+    # Step 2: upload packaging logs to logs/packaging/, then remove the local
+    # logs/ directory entirely so upload_to_s3() can never pick it up when
+    # walking package_dir for packages/<pkg_type>.
     output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform="linux"
     )
@@ -456,6 +447,18 @@ def main() -> None:
     log_index_url = upload_packaging_logs(
         package_dir, args.pkg_type, output_root, backend
     )
+
+    log_dir = package_dir / "logs"
+    if log_dir.is_dir():
+        shutil.rmtree(log_dir)
+        print(f"Removed local log directory: {log_dir}")
+
+    # Step 3: upload packages (dedupe OK) and local metadata (always upload).
+    upload_to_s3(package_dir, bucket, prefix, dedupe=dedupe)
+
+    print(f"Package repository URL: {install_url}")
+    _emit_github_output("package_repository_url", install_url)
+
     if log_index_url:
         _emit_github_output("packaging_logs_url", log_index_url)
 
