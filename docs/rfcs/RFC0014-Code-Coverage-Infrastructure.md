@@ -820,58 +820,62 @@ Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLA
 Publishing instrumented artifacts:
 
 ```bash
-# Nightly coverage build publishes with -coverage suffix
+# Nightly coverage build publishes with standard naming (no suffix)
 python build_tools/artifact_manager.py push \
   --stage math-libs \
-  --amdgpu-families gfx942-coverage \
+  --amdgpu-families gfx942 \
   --run-id ${COVERAGE_RUN_ID} \
   --build-dir build/
 ```
 
-This produces artifacts like:
-- `rocblas_lib_gfx942-coverage.tar.zst`
-- `rocfft_lib_gfx942-coverage.tar.zst`
-- `hiprand_lib_gfx942-coverage.tar.zst`
+This produces grouped component artifacts like:
+- `blas_lib_gfx942.tar.zst` (contains instrumented rocBLAS + hipBLASLt)
+- `fft_lib_gfx942.tar.zst` (contains instrumented rocFFT)
+- `prim_lib_gfx942.tar.zst` (contains instrumented rocPRIM + hipCUB + rocThrust + rocRAND + hipRAND)
 
-**Fetching hybrid artifacts for testing:**
+**Fetching hybrid artifacts for testing (Nightly):**
 
-Each component's test job fetches:
-1. **Instrumented component** (from coverage build run)
-2. **Non-instrumented dependencies** (from regular nightly build run)
+Nightly coverage test jobs use a multi-step extraction process to isolate instrumented components:
 
-Example for testing rocBLAS coverage:
+1. **Fetch all non-instrumented artifacts** (from baseline nightly run)
+2. **Unpack into installation directories**
+3. **Fetch grouped component under test** (from coverage run) - e.g., BLAS tar containing instrumented rocBLAS + hipBLASLt
+4. **Extract only the specific project files** (lib, dev, test) from grouped tar
+5. **Overwrite non-instrumented version** with cherry-picked instrumented files
+
+Example for testing hipBLASLt coverage:
 
 ```bash
-# 1. Fetch instrumented rocBLAS (component under test)
-python build_tools/artifact_manager.py fetch \
-  --stage math-libs \
-  --amdgpu-families gfx942-coverage \
-  --artifact-names rocblas \
-  --run-id ${COVERAGE_RUN_ID} \
-  --output-dir build/
-
-# 2. Fetch non-instrumented dependencies
+# 1. Fetch all non-instrumented artifacts (including hipBLASLt placeholder)
 python build_tools/artifact_manager.py fetch \
   --stage compiler-runtime,math-libs \
   --amdgpu-families gfx942 \
-  --exclude-artifact-names rocblas \
-  --run-id ${REGULAR_NIGHTLY_RUN_ID} \
+  --run-id ${BASELINE_RUN_ID} \
   --output-dir build/
+
+# 2. Fetch instrumented BLAS component (contains rocBLAS + hipBLASLt)
+python build_tools/artifact_manager.py fetch \
+  --stage math-libs \
+  --amdgpu-families gfx942 \
+  --artifact-names blas \
+  --run-id ${COVERAGE_RUN_ID} \
+  --output-dir coverage-artifacts/
+
+# 3. Extract only hipBLASLt files from BLAS tar and overwrite
+tar -xzf coverage-artifacts/blas_lib_gfx942.tar.zst \
+  --wildcards '*/hipblaslt/*' -C build/dist/rocm/
+tar -xzf coverage-artifacts/blas_dev_gfx942.tar.zst \
+  --wildcards '*/hipblaslt/*' -C build/dist/rocm/
+tar -xzf coverage-artifacts/blas_test_gfx942.tar.zst \
+  --wildcards '*/hipblaslt/*' -C build/dist/rocm/
 ```
 
-The `-coverage` suffix ensures coverage artifacts are isolated from regular builds:
-- Prevents accidental download of instrumented artifacts
-- Allows parallel storage of coverage and regular builds
-- Enables hybrid fetch strategy (coverage + regular in same test job)
+**Why this approach:**
+- **No -coverage suffix needed**: Separate run IDs (baseline vs coverage) provide natural isolation
+- **Works with BUILD_TOPOLOGY grouped artifacts**: Extracts per-project files from grouped component tars
+- **Prevents cross-contamination**: Only the project under test is instrumented; all dependencies remain non-instrumented
 
-**artifact_manager.py enhancements:**
-
-To support nightly hybrid fetching, `artifact_manager.py` needs:
-- `--artifact-names` parameter: include only specified artifacts (e.g., `rocblas`)
-- `--exclude-artifact-names` parameter: exclude specified artifacts from fetch
-- Target family matching already supports base-arch variants (e.g., `gfx942` matches `gfx942-coverage`)
-
-**Note:** PR coverage does not need this hybrid approach or artifact suffix. PR builds only instrument changed projects, and dependencies come from regular prebuilt artifacts (already non-instrumented). The PR coverage workflow runs independently with its own run_id, providing natural artifact isolation like ASAN builds.
+**Note:** PR coverage does not need this hybrid approach. PR builds only instrument changed projects, and dependencies come from regular prebuilt artifacts (already non-instrumented). The PR coverage workflow runs independently with its own run_id, providing natural artifact isolation like ASAN builds.
 
 #### Multi-GPU Coverage Strategy
 
@@ -948,4 +952,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
 - 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components; documented nightly hybrid artifact management strategy using -coverage suffix and selective artifact fetching via artifact_manager.py
 - 2026-08-26: jorobbin: Documented three nightly coverage architecture options (Option A: extend regular nightly with same run-id requiring suffix, Option B: separate workflow with manual/automated baseline resolution, Option C: downstream trigger from regular nightly - CHOSEN APPROACH); Option C provides automatic baseline_run_id passing and adapts to nightly instability (runs even when regular nightly tests fail); added phased implementation roadmap (manual PoC → downstream trigger → potential future merge); clarified artifact naming strategy - PR coverage follows ASAN pattern (separate workflow, no suffix needed), nightly Options B/C use suffix for clarity and future-proofing; added artifact granularity as critical open question (BUILD_TOPOLOGY grouped artifacts vs per-project coverage isolation); cleaned up stale open questions
-- 2026-08-30: jorobbin: Expanded Option C documentation with detailed workflow structure, automatic baseline_run_id passing mechanism, and trade-offs explaining how downstream trigger adapts to nightly instability while maintaining automatic coordination
+- 2026-08-30: jorobbin: Expanded Option C documentation with detailed workflow structure, automatic baseline_run_id passing mechanism, and trade-offs explaining how downstream trigger adapts to nightly instability while maintaining automatic coordination; removed -coverage suffix from nightly artifacts (separate run IDs provide isolation); documented multi-step artifact extraction process for nightly (fetch all non-instrumented → fetch grouped instrumented component → extract specific project files → overwrite) to work with BUILD_TOPOLOGY grouped artifacts while achieving per-project instrumentation isolation
