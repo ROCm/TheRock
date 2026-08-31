@@ -460,7 +460,9 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
