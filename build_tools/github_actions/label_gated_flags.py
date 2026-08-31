@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Label-gated cmake flags for multi-arch CI.
 
 A label on an external repository's pull request makes that pull request's
