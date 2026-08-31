@@ -274,7 +274,9 @@ class CIInputs:
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
 
