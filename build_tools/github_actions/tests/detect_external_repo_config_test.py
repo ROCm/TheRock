@@ -278,6 +278,87 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         # After round-trip the quotes are re-escaped in the serialized JSON
         self.assertIn('"extra_cmake_options": "-DFOO=\\"bar\\""', output)
 
+    def test_extra_cmake_options_append_merges_with_caller_options(self):
+        """Label-gated flags append to, and never replace, the caller's options."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"}',
+                "--extra-cmake-options-append=-DTHEROCK_FLAG_ALPHA=ON",
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        # Appended last, which is also the winning position under cmake's
+        # last-`-D`-wins rule.
+        self.assertIn(
+            '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON'
+            ' -DTHEROCK_FLAG_ALPHA=ON"',
+            output,
+        )
+
+    def test_extra_cmake_options_append_alone(self):
+        """Append with no caller-supplied options produces no leading space."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/rocm-libraries", "ref": "abc123"}',
+                "--extra-cmake-options-append="
+                "-DTHEROCK_FLAG_ALPHA=ON -DTHEROCK_FLAG_BETA=OFF",
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn(
+            '"extra_cmake_options": "-DTHEROCK_FLAG_ALPHA=ON -DTHEROCK_FLAG_BETA=OFF"',
+            output,
+        )
+
+    def test_extra_cmake_options_append_empty_is_a_no_op(self):
+        """The empty append (the shipped case) leaves the caller's value alone."""
+        for append in ["", "   "]:
+            with self.subTest(append=append):
+                with open(self.temp_file, "w"):
+                    pass
+                rc = detect_external_repo_config_main(
+                    [
+                        "--external-repo-json",
+                        '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
+                        ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"}',
+                        f"--extra-cmake-options-append={append}",
+                    ]
+                )
+                self.assertEqual(rc, 0)
+
+                with open(self.temp_file, "r") as f:
+                    output = f.read()
+
+                self.assertIn(
+                    '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"', output
+                )
+
+    def test_extra_cmake_options_append_omitted_is_a_no_op(self):
+        """Not passing the flag at all is identical to passing it empty."""
+        rc = detect_external_repo_config_main(
+            [
+                "--external-repo-json",
+                '{"repository": "ROCm/rocm-libraries", "ref": "abc123"}',
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn('"extra_cmake_options": ""', output)
+
 
 class TestGetExternalRepoPath(unittest.TestCase):
     """Tests for get_external_repo_path function"""

@@ -361,6 +361,13 @@ def main(argv=None):
         "Alternative to --external-repo-json for direct invocation.",
     )
     parser.add_argument(
+        "--extra-cmake-options-append",
+        default="",
+        help="Additional cmake options to append to the caller-supplied "
+        "'extra_cmake_options'. Used for label-gated cmake flags (see "
+        "resolve_label_gated_flags.py).",
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="List all known repository configurations",
@@ -459,6 +466,15 @@ def main(argv=None):
                     f"Warning: failed to parse external_repo_json: {e}",
                     file=sys.stderr,
                 )
+
+        # Appended, not replaced: the caller's own extra_cmake_options must
+        # survive (ROCgdb uses it). Label flags land last, which is also the
+        # winning position since cmake takes the last -D.
+        append = (args.extra_cmake_options_append or "").strip()
+        if append:
+            extra_cmake_options = " ".join(
+                part for part in (extra_cmake_options, append) if part
+            )
 
         config_json = {
             "repository": final_source_repo,

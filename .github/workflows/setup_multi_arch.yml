@@ -183,6 +183,16 @@ jobs:
           # We need the parent commit to do a diff
           fetch-depth: 2
 
+      # Runs before both consumers ("Configuring CI options" and "Detect
+      # external repo config") so there is one decision per run. Reads the PR
+      # labels from the event payload, which for an external-repo run is that
+      # repository's pull request. See build_tools/github_actions/label_gated_flags.py.
+      - name: Resolve label-gated cmake flags
+        id: label_flags
+        env:
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
+        run: python ./build_tools/github_actions/resolve_label_gated_flags.py
+
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -227,6 +237,10 @@ jobs:
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
+          # When true, the script turns off every form of artifact reuse: no
+          # reuse mechanism is keyed on cmake flags, so artifacts from other
+          # runs were built with different ones.
+          LABEL_GATED_FLAGS_ACTIVE: ${{ steps.label_flags.outputs.flags_active }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
@@ -254,7 +268,8 @@ jobs:
         if: ${{ inputs.external_repo != '' }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json='${{ inputs.external_repo }}' \
+            --extra-cmake-options-append='${{ steps.label_flags.outputs.flags }}'
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
