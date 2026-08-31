@@ -97,7 +97,6 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
-      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -242,11 +241,9 @@ jobs:
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
-      # TODO(scotttodd): enable once these tests pass
-      #     therock-examples-cpp-sdk-user can't find hipsparselt-config.cmake
-      # - name: Test Packaging
-      #   run: |
-      #     ctest --test-dir ${BUILD_DIR} --output-on-failure
+      - name: Test Packaging
+        run: |
+          ctest --test-dir ${BUILD_DIR} --output-on-failure
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() }}

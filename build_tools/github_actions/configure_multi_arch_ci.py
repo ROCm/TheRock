@@ -47,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 
 import enum
 import json
+import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -122,6 +123,79 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
+# Maps build stages to the test labels that can run with artifacts from those
+# stages. Used to auto-filter tests when build_stages narrows the build graph.
+# Test labels not listed here require a full build.
+STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
+    "compiler-runtime": ["kfdtest"],
+    "runtime-tests": ["hip-tests", "rocrtst"],
+    "math-libs": [
+        "rocblas",
+        "hipblas",
+        "hipblaslt",
+        "rocfft",
+        "hipfft",
+        "rocrand",
+        "hiprand",
+        "rocsparse",
+        "hipsparse",
+        "rocsolver",
+        "hipsolver",
+        "rocprim",
+        "hipcub",
+        "rocthrust",
+        "rocalution",
+        "rocwmma",
+        "hiptensor",
+        "composable-kernel",
+    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
+    "comm-libs": ["rccl", "rocshmem"],
+    "storage-libs": ["hipfile"],
+    "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
+    "cv-libs": ["rpp"],
+    "media-libs": ["rocdecode", "rocjpeg"],
+    "debug-tools": ["rocgdb"],
+}
+
+
+def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | None:
+    """Return the test labels allowed for a partial build, or None for full builds.
+
+    When build_stages is empty (full build), returns None to indicate no filtering.
+    When build_stages is set, returns the union of test labels for those stages.
+    """
+    if not build_stages:
+        return None
+    allowed = set()
+    for stage in build_stages:
+        allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
+    return sorted(allowed) if allowed else []
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -160,6 +234,10 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
 
@@ -172,6 +250,28 @@ class CIInputs:
         print("CIInputs:")
         for f in fields(self):
             print(f"  {f.name}: {getattr(self, f.name)!r}")
+
+    def validate(self) -> None:
+        """Validate inputs for consistency (fail-fast behavior).
+
+        Raises ValueError if test labels require stages not in build_stages.
+        """
+        allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
+        if allowed_labels is not None:
+            for platform, labels in [
+                ("Linux", self.linux_test_labels),
+                ("Windows", self.windows_test_labels),
+            ]:
+                invalid = [
+                    lbl
+                    for lbl in labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"{platform} test labels {invalid} require stages not in "
+                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
+                    )
 
     @property
     def is_pull_request(self) -> bool:
@@ -250,7 +350,41 @@ class CIInputs:
             + pr_test_labels
         )
 
-        return CIInputs(
+        # When build_stages limits the build, validate or auto-select test labels.
+        # - If labels provided: fail-fast if they require stages not in build_stages
+        # - If no labels provided: auto-select compatible labels for the stages
+        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
+        if allowed_labels is not None:
+            if linux_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in linux_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Linux test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+            if windows_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in windows_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Windows test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+        inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
@@ -272,10 +406,15 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
+        inputs.validate()
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -458,6 +597,15 @@ class BuildRocmDecision(JobGroupDecision):
             if action == JobAction.RUN
         ]
 
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
+        ]
+
 
 @dataclass(frozen=True)
 class TestRocmDecision(JobGroupDecision):
@@ -535,6 +683,8 @@ class BuildConfig:
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
@@ -544,6 +694,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -914,38 +1065,63 @@ def decide_jobs(
     """
 
     # Build ROCm.
-    # Parse explicit prebuilt stages from workflow_dispatch input. These are
-    # the MANUAL inputs and are always honored, unchanged, in every mode.
+    stage_reuse_mode = StageReuseMode.from_environ()
 
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
+    if stage_reuse_mode is StageReuseMode.OFF:
+        # Strong off is authoritative: do not parse or honor explicit
+        # prebuilt_stages, do not retain a baseline, and do not invoke automatic
+        # stage-reuse analysis.
+        if ci_inputs.prebuilt_stages or ci_inputs.baseline_run_id:
+            logging.info(
+                "[STAGE-REUSE] mode=off: ignoring prebuilt_stages and "
+                "baseline_run_id; all in-scope stages will rebuild"
+            )
+        else:
+            logging.info(
+                "[STAGE-REUSE] mode=off: artifact reuse disabled; "
+                "all in-scope stages will rebuild"
+            )
 
-    # Automatic stage reuse, behind STAGE_REUSE_MODE: in dry-run we only report
-    # which stages WOULD be reused and apply nothing; in "reuse-stage" the
-    # eligible stages are merged into stage_decisions so the orchestrator skips
-    # their builds and copies artifacts instead. The platforms and families to
-    # verify come straight from the resolved target selection.
+        stage_decisions: dict[str, JobAction] = {}
+        baseline_run_id = ""
+        baseline_repository = ""
+        auto_stage_reuse = None
 
-    auto_stage_reuse = compute_auto_stage_reuse(
-        changed_files=git_context.changed_files,
-        mode=StageReuseMode.from_environ(),
-        linux_amdgpu_families=targets.linux_families,
-        windows_amdgpu_families=targets.windows_families,
-    )
+    else:
+        # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
+        stage_decisions = {}
+        if ci_inputs.prebuilt_stages:
+            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+                stage_decisions[stage] = JobAction.PREBUILT
 
-    baseline_repository = ci_inputs.baseline_repository
-    baseline_run_id = ci_inputs.baseline_run_id
+        # In dry-run, automatic reuse is analyzed but not applied. In
+        # reuse-stage, eligible stages are added to stage_decisions.
+        auto_stage_reuse = compute_auto_stage_reuse(
+            changed_files=git_context.changed_files,
+            mode=stage_reuse_mode,
+            linux_amdgpu_families=targets.linux_families,
+            windows_amdgpu_families=targets.windows_families,
+        )
 
-    # Apply automatic stage reuse. For external repos (rocm-libraries, rocm-systems),
-    # we reuse stages from TheRock baselines. For same-repo runs, baseline_repository
-    # is empty or matches the current repo.
-    # reuse-stage mode returns non-empty applied_reuse_stages.
-    for stage in auto_stage_reuse.applied_reuse_stages:
-        stage_decisions.setdefault(stage, JobAction.PREBUILT)
-    if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
-        baseline_run_id = auto_stage_reuse.baseline_run_id
+        baseline_repository = ci_inputs.baseline_repository
+        baseline_run_id = ci_inputs.baseline_run_id
+
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -953,7 +1129,6 @@ def decide_jobs(
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
     )
-
     # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
         ci_inputs=ci_inputs,
@@ -1192,14 +1367,36 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    test_python_packages_matrix = build_rocm_python_test_matrix(
-        per_family_info=per_family_info,
-        platform=platform,
-    )
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix == "asan"
+    is_asan = suffix in ("asan", "host-asan")
     build_python_packages = ci_inputs.build_python_packages and not is_asan
+    test_python_packages_matrix = (
+        build_rocm_python_test_matrix(
+            per_family_info=per_family_info,
+            platform=platform,
+        )
+        if build_python_packages
+        else []
+    )
+    build_native_linux = ci_inputs.build_native_linux
+
+    # When stages are skipped (partial build), disable package builds since
+    # they require a complete artifact set. Prebuilt/reused stages are OK
+    # because their artifacts are copied from a baseline run.
+    has_skipped_stages = bool(jobs.build_rocm.skipped_stages)
+    if has_skipped_stages:
+        print(
+            f"  Disabling package builds due to skipped stages: "
+            f"{jobs.build_rocm.skipped_stages}"
+        )
+        build_python_packages = False
+        build_pytorch = False
+        build_jax = False
+        build_native_linux = False
+        pytorch_build_matrix = []
+        jax_build_matrix = []
+        test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1208,7 +1405,7 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=ci_inputs.build_native_linux,
+        build_native_linux=build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
@@ -1217,6 +1414,7 @@ def _expand_build_config_for_platform(
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
     )
@@ -1449,6 +1647,10 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     ci_inputs = CIInputs.from_environ()
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)

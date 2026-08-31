@@ -15,7 +15,8 @@
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu).
 #                      Special value: 'multi-arch' downloads AMD's bundled
 #                      tarball that contains kpack files for all GPU families
-#                      (from the tarball-multi-arch/ path).
+#                      (from the tarball-multi-arch/ path, except on the nightly
+#                      host where every tarball shares one tarball/ directory).
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, devreleases, stable
 #
 # Examples:
@@ -35,10 +36,10 @@ RELEASE_TYPE="${3:-nightlies}"
 # URL-encode '+' as '%2B' in VERSION (required for devreleases)
 VERSION_ENCODED="${VERSION//+/%2B}"
 
-# AMDGPU_FAMILY=multi-arch selects AMD's bundled all-GPU tarball at the
-# tarball-multi-arch/ path. AMD's URL path uses "multi-arch" (with hyphen)
-# but the tarball filename slot uses "multiarch" (no hyphen) — handle both
-# conventions explicitly here.
+# AMDGPU_FAMILY=multi-arch selects AMD's bundled all-GPU tarball. The tarball
+# filename slot uses "multiarch" (no hyphen) while the directory name that
+# carries it uses "multi-arch" (with hyphen) — handle both conventions
+# explicitly here.
 if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
     TARBALL_DIR="tarball-multi-arch"
     FAMILY_SLOT="multiarch"
@@ -47,14 +48,22 @@ else
     FAMILY_SLOT="$AMDGPU_FAMILY"
 fi
 
-# Build tarball URL based on release type
+# Directory holding the tarballs, by release type:
+# - nightlies use: https://nightly.repo.amd.com/rocm/core/tarball/
 # - stable releases use: https://repo.amd.com/rocm/${TARBALL_DIR}/
 # - other releases use: https://rocm.{RELEASE_TYPE}.amd.com/${TARBALL_DIR}/
-if [ "$RELEASE_TYPE" = "stable" ]; then
-    TARBALL_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/therock-dist-linux-${FAMILY_SLOT}-${VERSION_ENCODED}.tar.gz"
-else
-    TARBALL_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/therock-dist-linux-${FAMILY_SLOT}-${VERSION_ENCODED}.tar.gz"
-fi
+case "$RELEASE_TYPE" in
+    nightlies)
+        LISTING_URL="https://nightly.repo.amd.com/rocm/core/tarball/"
+        ;;
+    stable)
+        LISTING_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/"
+        ;;
+    *)
+        LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/"
+        ;;
+esac
+TARBALL_URL="${LISTING_URL}therock-dist-linux-${FAMILY_SLOT}-${VERSION_ENCODED}.tar.gz"
 
 echo "=============================================="
 echo "ROCm Tarball Installation"
@@ -73,11 +82,6 @@ echo "Downloading tarball..."
 # If direct URL fails, try fuzzy match (supports simplified AMDGPU_FAMILY like gfx110x)
 if ! curl -fsSL -o "$TARBALL_FILE" "$TARBALL_URL" 2>/dev/null; then
     echo "Direct URL not found, searching for matching tarball..."
-    if [ "$RELEASE_TYPE" = "stable" ]; then
-        LISTING_URL="https://repo.amd.com/rocm/${TARBALL_DIR}/"
-    else
-        LISTING_URL="https://rocm.${RELEASE_TYPE}.amd.com/${TARBALL_DIR}/"
-    fi
     # Case-insensitive search for tarball matching FAMILY_SLOT and VERSION.
     # The HTML listing contains literal '+' (not URL-encoded), so use VERSION
     # with '+' escaped as '\+' for PCRE rather than VERSION_ENCODED.
@@ -126,7 +130,7 @@ echo "Created symlink: /opt/rocm -> $ROCM_INSTALL_DIR"
 
 # Verify bin and lib folder exists after extraction
 echo "Verifying installation..."
-for dir in bin clients include lib libexec share; do
+for dir in bin include lib libexec share; do
     if [ ! -d "$ROCM_INSTALL_DIR/$dir" ]; then
         echo "Error: ROCm $dir directory not found"
         exit 1

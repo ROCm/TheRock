@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from debian.debian_support import NativeVersion
 from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -426,6 +427,64 @@ class DebPackageVersionTest(unittest.TestCase):
             override_base_version="8.0.0",
         )
         self.assertEqual(version, "8.0.0~custom1")
+
+    def test_versions_are_valid(self):
+        # NativeVersion() rejects invalid Debian versions such as "7.10.0/rc0".
+        # See https://www.debian.org/doc/debian-policy/ch-controlfields.html#version.
+        versions = self._compute_versions_by_release_type()
+
+        for release_type, version in versions.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(str(NativeVersion(version)), version)
+
+    def test_versions_sort_by_release_type(self):
+        # apt upgrade selects the greatest available version.
+        # To match other package types, we want:
+        #     release > prerelease > nightly > dev.
+        # Debian currently sorts:
+        #     release > prerelease > dev > nightly.
+        versions = self._compute_versions_by_release_type()
+
+        # This test is disabled since current sorting is dev > nightly!
+        # See https://github.com/ROCm/TheRock/issues/7638.
+        # self.assertGreater(
+        #     NativeVersion(versions["nightly"]),
+        #     NativeVersion(versions["dev"]),
+        # )
+        self.assertGreater(
+            NativeVersion(versions["prerelease"]),
+            NativeVersion(versions["nightly"]),
+        )
+        self.assertGreater(
+            NativeVersion(versions["release"]),
+            NativeVersion(versions["prerelease"]),
+        )
+
+    @staticmethod
+    def _compute_versions_by_release_type() -> dict[str, str]:
+        common_args = {
+            "package_type": "deb",
+            "override_base_version": "7.10.0",
+        }
+        return {
+            "dev": compute_rocm_package_version.compute_version(
+                release_type="dev",
+                **common_args,
+            ),
+            "nightly": compute_rocm_package_version.compute_version(
+                release_type="nightly",
+                **common_args,
+            ),
+            "prerelease": compute_rocm_package_version.compute_version(
+                release_type="prerelease",
+                prerelease_version="0",
+                **common_args,
+            ),
+            "release": compute_rocm_package_version.compute_version(
+                release_type="release",
+                **common_args,
+            ),
+        }
 
 
 class RpmPackageVersionTest(unittest.TestCase):
