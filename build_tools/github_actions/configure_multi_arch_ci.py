@@ -172,6 +172,7 @@ def _compute_artifacts_from_changed_projects(
 
     return rebuild_list, reusable_list
 
+
 def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
     """Convert an allowlist of build stages into the complement to skip.
 
@@ -1184,8 +1185,12 @@ def decide_jobs(
     # For external repos, use changed_projects to determine artifact-level reuse.
     # This handles the case where SKIP_PATH_FILTERS=true disables the normal
     # changed-file analysis.
-    rebuild_artifacts: list[str] = list(auto_stage_reuse.rebuild_artifacts)
-    reusable_artifacts: list[str] = list(auto_stage_reuse.reusable_artifacts)
+    rebuild_artifacts: list[str] = (
+        list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
+    )
+    reusable_artifacts: list[str] = (
+        list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
+    )
     if ci_inputs.changed_projects and not rebuild_artifacts:
         rebuild_artifacts, reusable_artifacts = (
             _compute_artifacts_from_changed_projects(ci_inputs.changed_projects)
