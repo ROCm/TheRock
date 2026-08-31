@@ -206,15 +206,107 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 
 # File path patterns that don't trigger CI runs.
 # Changes matching these patterns shouldn't affect CI build/test workflows.
+#
+# These patterns are designed to be repo-agnostic and work for both TheRock
+# and external repos (rocm-libraries, rocm-systems). When external repos pass
+# changed files, the patterns should match without repo prefix.
+#
+# NOTE: fnmatch treats * as "any chars except /" and ** as "any chars including /".
+# For patterns that should match at any depth, we need BOTH:
+#   - "*.md" for root-level files (README.md)
+#   - "**/*.md" for nested files (build_tools/README.md)
 _SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
+    # -------------------------------------------------------------------------
+    # Documentation files (any location, any repo)
+    # -------------------------------------------------------------------------
     "*.md",
+    "**/*.md",
+    "*.rst",
+    "**/*.rst",
+    "*.rtf",
+    "**/*.rtf",
+    "docs/*",
+    "**/docs/*",
+    # -------------------------------------------------------------------------
+    # Git and editor config files
+    # -------------------------------------------------------------------------
+    ".gitignore",
+    "**/.gitignore",
+    ".pre-commit-config.*",
+    "**/.pre-commit-config.*",
+    "CODEOWNERS",
+    "**/CODEOWNERS",
+    "LICENSE",
+    "**/LICENSE",
+    # -------------------------------------------------------------------------
+    # AI assistant rules
+    # -------------------------------------------------------------------------
+    "*.clinerules",
+    "**/*.clinerules",
+    "*.cursorrules",
+    "**/*.cursorrules",
     "*.mdc",
-    "*.pre-commit-config.*",
+    "**/*.mdc",
+    # -------------------------------------------------------------------------
+    # Documentation tooling config
+    # -------------------------------------------------------------------------
+    ".markdownlint*.yaml",
+    "**/.markdownlint*.yaml",
+    ".readthedocs.yaml",
+    "**/.readthedocs.yaml",
+    ".spellcheck*.yaml",
+    "**/.spellcheck*.yaml",
+    ".wordlist.txt",
+    "**/.wordlist.txt",
+    # -------------------------------------------------------------------------
+    # GitHub config files (labels, dependabot, workflows, actions)
+    # External repo workflows/actions don't affect TheRock CI directly
+    # -------------------------------------------------------------------------
     ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
+    "**/.github/dependabot.yml",
+    ".github/label*.yml",
+    "**/.github/label*.yml",
+    ".github/workflows/*",
+    "**/.github/workflows/*",
+    ".github/actions/*",
+    "**/.github/actions/*",
+    # -------------------------------------------------------------------------
+    # Standalone tools/bots not part of build pipeline
+    # -------------------------------------------------------------------------
+    "tools/*_pr_bot/*",
+    "**/tools/*_pr_bot/*",
+    # -------------------------------------------------------------------------
+    # Experimental code does not run standard build/test workflows
+    # -------------------------------------------------------------------------
+    "experimental/*",
+    "**/experimental/*",
+    # -------------------------------------------------------------------------
+    # Project-specific paths that don't affect builds
+    # -------------------------------------------------------------------------
+    # composable_kernel standalone CI/examples/docs (not consumed by builds)
+    "**/composablekernel/Jenkinsfile",
+    "**/composablekernel/Docker*",
+    "**/composablekernel/client_example/*",
+    "**/composablekernel/codegen/*",
+    "**/composablekernel/dispatcher/*",
+    "**/composablekernel/example/*",
+    "**/composablekernel/profiler/*",
+    "**/composablekernel/python/*",
+    "**/composablekernel/rocm_ck/*",
+    "**/composablekernel/script/*",
+    "**/composablekernel/test/*",
+    "**/composablekernel/test_data/*",
+    "**/composablekernel/tile_engine/*",
+    "**/composablekernel/tutorial/*",
+    "**/composablekernel/vars/*",
+    "**/composablekernel/groovy/*",
+    # hipdnn standalone tools
+    "**/hipdnn/tools/*",
+    # WSL support files (excluded from CI)
+    "**/rocr-runtime/libhsakmt/src/dxg/*",
+    # -------------------------------------------------------------------------
+    # TheRock-specific paths
+    # -------------------------------------------------------------------------
     # Files used by gitleaks, no impact on CI.
     "gitleaks.toml",
     "build_tools/scan_tools/*",
@@ -222,8 +314,6 @@ _SKIPPABLE_PATH_PATTERNS = [
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
     "dockerfiles/*",
-    # Changes to experimental code do not run standard build/test workflows.
-    "experimental/*",
     # This directory contains a collection of AI skills and other developer
     # utilities. It includes some Python scripts, none of which affect CI.
     "skills/*",

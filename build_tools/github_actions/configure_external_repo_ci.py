@@ -25,7 +25,6 @@ Usage:
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
     run_all_tests: "true" if CI files changed (run full test suite)
-    skip_tests: "true" if only docs/skippable files changed
 """
 
 import argparse
@@ -54,19 +53,11 @@ logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., object])
 
-# Patterns for files that don't require tests (docs, etc.)
-SKIPPABLE_PATH_PATTERNS = [
-    "*.md",
-    "*.rst",
-    "docs/*",
-    "projects/*/docs/*",
-    "shared/*/docs/*",
-]
-
 # Patterns that trigger a full test run when changed (CI infrastructure)
 FULL_TEST_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
-    ".github/scripts/therock*",
+    # TODO: Uncomment after testing skip functionality
+    # ".github/workflows/therock*",
+    # ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
     ".github/scripts/config_loader.py",
@@ -82,7 +73,6 @@ class ConfigureResult:
 
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
-    skip_tests: bool
 
 
 @dataclass
@@ -165,16 +155,6 @@ def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
     return False
 
 
-def is_skippable(path: str) -> bool:
-    """Check if path is skippable (docs, etc.)."""
-    return any(fnmatch.fnmatch(path, p) for p in SKIPPABLE_PATH_PATTERNS)
-
-
-def has_non_skippable(paths: Iterable[str]) -> bool:
-    """Check if any path is non-skippable."""
-    return any(not is_skippable(p) for p in paths)
-
-
 def load_repo_config(config_path: str) -> List[RepoEntry]:
     """Load repository config from JSON."""
     try:
@@ -238,7 +218,7 @@ def configure(
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True
         )
 
     # Get modified paths via GitHub API
@@ -253,45 +233,36 @@ def configure(
     else:
         logger.warning("No SHAs provided - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True
         )
 
     # If API returned None (truncated results), fall back to run-all
     if modified_paths is None:
         logger.info("Truncated API response - running all tests")
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="", run_all_tests=True
         )
 
     if not modified_paths:
-        logger.info("No modified paths - skipping tests")
+        logger.info("No modified paths")
         return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+            changed_projects="", run_all_tests=False
         )
 
-    logger.info(f"Modified paths: {len(modified_paths)} files")
+    logger.info(f"Modified paths ({len(modified_paths)} files):")
+    for path in sorted(modified_paths):
+        logger.info(f"  - {path}")
 
     # Check if CI files changed (run all tests)
-    if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
+    run_all_tests = matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS)
+    if run_all_tests:
         logger.info("CI files changed - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
-
-    # Check if only skippable files changed
-    if not has_non_skippable(modified_paths):
-        logger.info("Only skippable files changed - skipping tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
-        )
 
     # Find changed projects from config
     config = load_repo_config(config_path)
     if not config:
         logger.warning("No config loaded - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        return ConfigureResult(changed_projects="", run_all_tests=True)
 
     valid_prefixes = get_valid_prefixes(config)
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
@@ -299,8 +270,7 @@ def configure(
 
     return ConfigureResult(
         changed_projects=",".join(matched),
-        run_all_tests=False,
-        skip_tests=False,
+        run_all_tests=run_all_tests,
     )
 
 
@@ -357,7 +327,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         {
             "changed_projects": result.changed_projects,
             "run_all_tests": str(result.run_all_tests).lower(),
-            "skip_tests": str(result.skip_tests).lower(),
         }
     )
 
