@@ -27,6 +27,7 @@
       "hipthreads",
       "kfdtest",
       "libhipcxx",
+      "mxdatagenerator",
       "ocl-clr",
       "rdc",
       "rocgdb",
