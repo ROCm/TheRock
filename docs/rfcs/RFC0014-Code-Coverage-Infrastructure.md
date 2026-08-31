@@ -1,7 +1,7 @@
 ---
 author: John Robbins (jorobbin)
 created: 2026-07-28
-modified: 2026-08-26
+modified: 2026-08-30
 status: draft
 discussion: in progress
 ---
@@ -400,15 +400,16 @@ For PR coverage, modify existing test workflows:
 - Suffix **REQUIRED** to differentiate: `hiprand_lib_gfx942.tar.zst` vs `hiprand_lib_gfx942-coverage.tar.zst`
 - Test jobs fetch from single run_id but different artifact names
 
-**Option B (Different Run-ID - Separate Workflow):**
+**Option B/C (Different Run-ID - Separate Workflow):**
 - Coverage artifacts in `99999-linux/`, regular in `88888-linux/` (different directories)
 - Suffix **technically optional** (artifacts in different S3 directories)
 - Suffix **recommended** for clarity and to support future Option A migration
 - Single test job fetches from two run_ids:
   - Instrumented component from coverage build (run 99999)
   - Non-instrumented dependencies from regular build (run 88888)
+- **Option C (chosen)**: Baseline run_id automatically passed from regular nightly trigger
 
-**Rationale:** PR coverage follows ASAN pattern (separate workflow = natural isolation). Nightly coverage instruments entire stack but tests components separately. Option A requires suffix for same-directory differentiation; Option B uses it for clarity and future-proofing.
+**Rationale:** PR coverage follows ASAN pattern (separate workflow = natural isolation). Nightly coverage instruments entire stack but tests components separately. Option A requires suffix for same-directory differentiation; Options B/C use it for clarity and future-proofing.
 
 **Other coverage artifacts:**
 - Profraw files: `${TEST_COMPONENT}-shard${matrix.shard}-%p-%m.profraw`
@@ -682,7 +683,100 @@ with:
 
 **When to use:** Initial rollout, experimentation, or when coverage runs less frequently than regular nightly.
 
-**Critical constraint for both options:**
+#### Option C: Downstream Trigger from Regular Nightly (CHOSEN APPROACH)
+
+**Architecture:**
+```yaml
+# Regular nightly run 88888
+jobs:
+  build_regular_stack:
+    # Produces: rocblas_lib_gfx942.tar.zst in 88888-linux/
+  
+  test_regular:
+    # May fail (nightly is unstable)
+  
+  trigger_coverage:
+    needs: build_regular_stack
+    if: always()  # Trigger even if tests fail
+    uses: ./.github/workflows/coverage_nightly.yml
+    with:
+      baseline_run_id: ${{ github.run_id }}  # Pass 88888 to coverage
+
+# Coverage nightly run 99999 (triggered by above)
+jobs:
+  build_instrumented_stack:
+    # Produces: rocblas_lib_gfx942-coverage.tar.zst in 99999-linux/
+  
+  test_coverage:
+    # Fetch instrumented from 99999
+    # Fetch dependencies from 88888 (passed via baseline_run_id)
+```
+
+**Trigger Conditions:**
+
+Regular nightly triggers coverage workflow using `if: always()` to ensure coverage runs regardless of test status, because:
+- **Nightly stability**: Regular nightly tests are unstable, rarely achieve full green pass
+- **Build stability**: Build phase is relatively stable and reliable
+- **Independence**: Coverage should run even when regular tests fail
+
+**Blocking strategy options:**
+
+1. **Block on build success only (recommended):**
+   ```yaml
+   trigger_coverage:
+     needs: build_regular_stack
+     if: ${{ success() }}  # Only if build succeeded
+   ```
+   - Ensures baseline artifacts are available
+   - Doesn't wait for unstable tests
+   
+2. **Never block (always trigger):**
+   ```yaml
+   trigger_coverage:
+     needs: build_regular_stack
+     if: ${{ always() }}  # Even if build fails
+   ```
+   - Maximum availability, but may lack dependencies
+   - Could cherry-pick successful stages/artifacts
+
+3. **Cherry-pick successful artifacts:**
+   ```yaml
+   trigger_coverage:
+     needs: [build_stage1, build_stage2, build_stage3, test_regular]
+     if: |
+       success() || 
+       (needs.build_stage1.result == 'success' && 
+        needs.build_stage2.result == 'success')
+   ```
+   - Use artifacts from stages that succeeded
+   - Coverage can proceed with partial baseline
+
+**Trade-offs:**
+
+**Pros:**
+- **Automatic coordination**: Baseline run_id automatically passed from regular nightly
+- **Guaranteed availability**: Baseline artifacts guaranteed fresh (just built)
+- **No manual intervention**: No need to lookup or input run_ids
+- **Separate execution**: Coverage has its own run_id, isolated from regular nightly status
+- **Independent failures**: Coverage failure doesn't affect regular nightly completion
+- **Adapts to stability**: Can run even when regular nightly tests fail
+
+**Cons:**
+- **Coupled scheduling**: Coverage always runs after regular nightly (can't run independently)
+- **Potential delays**: Coverage waits for regular nightly build to complete
+- **Workflow complexity**: Regular nightly must know about coverage workflow
+- **Cherry-picking complexity**: Determining which artifacts are safe to use requires careful logic
+
+**When to use:** Production deployment when regular nightly controls coverage scheduling and automatic baseline tracking is desired.
+
+**Why this is the chosen approach:**
+- **Practical**: Works with unstable regular nightly (common in real-world CI)
+- **Automatic**: No manual baseline coordination or API queries needed
+- **Reliable**: Coverage gets fresh baseline artifacts from same nightly run
+- **Flexible**: Can adapt trigger conditions to nightly stability patterns
+- **Two run-ids**: Coverage is independent workflow with own identity, but receives baseline reference
+
+**Critical constraint for all options:**
 
 Coverage builds MUST operate at per-project granularity (projects/rocblas/, projects/hipblaslt/, projects/hiprand/, etc.), NOT at TheRock's component-group level (BLAS, PRIM). This maintains per-project isolation - each project's coverage is measured independently.
 
@@ -691,19 +785,21 @@ Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLA
 **Recommended Implementation Roadmap:**
 
 1. **Phase 1 (PoC)**: Option B1 - Separate workflow, manual baseline_run_id input
-   - Proves coverage workflow works
+   - Proves coverage workflow works in isolation
    - No changes to production regular nightly
    - Manual coordination acceptable for initial validation
+   - Validates instrumented build and coverage reporting end-to-end
 
-2. **Phase 2 (Automated)**: Option B2 or B3 - Automated baseline resolution
-   - B2: GitHub API query (if coverage runs independently)
-   - B3: Orchestrator integration (if rockrel controls scheduling)
-   - Removes manual coordination
+2. **Phase 2 (Production)**: Option C - Downstream trigger from regular nightly **(CHOSEN)**
+   - Regular nightly triggers coverage workflow after build completes
+   - Automatic baseline_run_id passing
+   - Coverage adapts to nightly stability (runs even when tests fail)
+   - Two separate run-ids with automatic coordination
 
-3. **Phase 3 (Production)**: Option A - Merge with regular nightly
-   - After coverage proven stable and valuable
-   - If nightly runtime increase acceptable
-   - Simplest long-term maintenance
+3. **Phase 3 (Future optimization)**: Option A - Merge with regular nightly
+   - Only if coverage proves stable and runtime increase acceptable
+   - Simplifies to single workflow
+   - Simplest long-term maintenance but loses scheduling flexibility
 
 **Artifact Management:**
 
@@ -851,4 +947,5 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-07-30: jorobbin: Clarified downstream independence, llvm-cov wildcard limitations, added therock_configure_coverage.py design, test schema details, CI workflow integration, codecov.io integration, resource allocation, and failure handling
 - 2026-08-20: jorobbin: Added phased multi-architecture coverage strategy; distinguished multi-arch, multi-GPU, and mock-based coverage scenarios; documented coverage flag passthrough options with case-insensitive project name handling; updated post_build_upload.py to post_stage_upload.py; required unique -coverage suffix for coverage artifacts; documented profraw aggregation for sharded tests and multi-node builds
 - 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components; documented nightly hybrid artifact management strategy using -coverage suffix and selective artifact fetching via artifact_manager.py
-- 2026-08-26: jorobbin: Clarified artifact naming strategy - PR coverage can follow ASAN pattern (separate workflow, no suffix needed); documented two nightly coverage architecture options (Option A: extend regular nightly with same run-id requiring suffix, Option B: separate workflow with different run-id where suffix is recommended but optional); added phased implementation roadmap (manual input → automated → merged); added artifact granularity as critical open question (BUILD_TOPOLOGY grouped artifacts vs per-project coverage isolation); cleaned up stale open questions
+- 2026-08-26: jorobbin: Documented three nightly coverage architecture options (Option A: extend regular nightly with same run-id requiring suffix, Option B: separate workflow with manual/automated baseline resolution, Option C: downstream trigger from regular nightly - CHOSEN APPROACH); Option C provides automatic baseline_run_id passing and adapts to nightly instability (runs even when regular nightly tests fail); added phased implementation roadmap (manual PoC → downstream trigger → potential future merge); clarified artifact naming strategy - PR coverage follows ASAN pattern (separate workflow, no suffix needed), nightly Options B/C use suffix for clarity and future-proofing; added artifact granularity as critical open question (BUILD_TOPOLOGY grouped artifacts vs per-project coverage isolation); cleaned up stale open questions
+- 2026-08-30: jorobbin: Expanded Option C documentation with detailed workflow structure, automatic baseline_run_id passing mechanism, and trade-offs explaining how downstream trigger adapts to nightly instability while maintaining automatic coordination
