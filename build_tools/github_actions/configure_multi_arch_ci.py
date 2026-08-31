@@ -133,19 +133,17 @@ def _compute_artifacts_from_changed_projects(
     Returns:
         (rebuild_artifacts, reusable_artifacts) tuple
     """
-    from _therock_utils.build_topology import get_topology
-
     topology = get_topology()
 
-    # Collect artifacts with component mappings (derived from topology, not hardcoded)
-    granular_source_sets = set(topology.get_source_sets_with_components())
+    # Collect artifacts with source_paths mappings (derived from topology, not hardcoded)
+    granular_source_sets = set(topology.get_source_sets_with_source_paths())
     all_stage_artifacts: set[str] = set()
     for stage in topology.get_build_stages():
         for group_name in stage.artifact_groups:
             group = topology.artifact_groups.get(group_name)
             if group and set(group.source_sets) & granular_source_sets:
                 for artifact in topology.get_artifacts_in_group(group_name):
-                    if artifact.components:
+                    if artifact.source_paths:
                         all_stage_artifacts.add(artifact.name)
 
     # Map changed projects to artifacts

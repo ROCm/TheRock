@@ -94,7 +94,11 @@ on:
         type: string
         default: ""
       changed_projects:
-        description: "Comma-separated list of changed projects from external repos (e.g., 'projects/rocprim'). Used for granular artifact-level reuse."
+        description: >-
+          Comma-separated list of changed project paths from external repos
+          (e.g., 'projects/rocprim'). These project directory names are mapped
+          to artifact names via BUILD_TOPOLOGY.toml source_paths for granular
+          artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
         type: string
         default: ""
       quartz_tracking_id:

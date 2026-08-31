@@ -14,24 +14,24 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.build_topology import get_topology
 from configure_stage import (
     generate_cmake_args,
-    get_project_features,
+    get_artifact_features,
 )
 
 
-class ProjectResolutionTest(unittest.TestCase):
-    """Tests for --projects flag project name resolution."""
+class ArtifactResolutionTest(unittest.TestCase):
+    """Tests for --artifacts flag artifact name resolution."""
 
     @classmethod
     def setUpClass(cls):
         cls.topology = get_topology()
 
-    def _get_flags(self, projects, **kwargs):
+    def _get_flags(self, artifacts, **kwargs):
         return generate_cmake_args(
             stage_name=kwargs.get("stage_name"),
             amdgpu_families=kwargs.get("amdgpu_families", ""),
             dist_amdgpu_families=kwargs.get("dist_amdgpu_families", ""),
             topology=self.topology,
-            project_names=projects,
+            artifact_names=artifacts,
             platform_name=kwargs.get("platform_name", "linux"),
             build_dir=kwargs.get("build_dir"),
         )
@@ -47,8 +47,8 @@ class ProjectResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", self._get_flags(["hipblaslt"]))
         self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", self._get_flags(["hipsparselt"]))
 
-    def test_multiple_projects(self):
-        """Test multiple projects enable multiple flags."""
+    def test_multiple_artifacts(self):
+        """Test multiple artifacts enable multiple flags."""
         args = self._get_flags(["blas", "miopen", "rccl"])
         self.assertIn("-DTHEROCK_ENABLE_ALL=OFF", args)
         self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
@@ -57,30 +57,30 @@ class ProjectResolutionTest(unittest.TestCase):
 
 
 class FeatureOrientedResolutionTest(unittest.TestCase):
-    """Tests for feature-oriented project resolution."""
+    """Tests for feature-oriented artifact resolution."""
 
     def setUp(self):
         self.topology = get_topology()
 
     def test_hipsparse_resolves_to_sparse(self):
         """hipSPARSE is in blas artifact but gated by SPARSE."""
-        features = self.topology.resolve_projects_to_features(["hipSPARSE"])
+        features = self.topology.resolve_artifacts_to_features(["hipSPARSE"])
         self.assertIn("SPARSE", features)
         self.assertNotIn("BLAS", features)
 
     def test_hipsolver_resolves_to_solver(self):
         """hipSOLVER is gated by SOLVER."""
-        features = self.topology.resolve_projects_to_features(["hipSOLVER"])
+        features = self.topology.resolve_artifacts_to_features(["hipSOLVER"])
         self.assertIn("SOLVER", features)
 
     def test_rocblas_resolves_to_blas(self):
         """rocBLAS resolves to BLAS (no override)."""
-        features = self.topology.resolve_projects_to_features(["rocBLAS"])
+        features = self.topology.resolve_artifacts_to_features(["rocBLAS"])
         self.assertIn("BLAS", features)
 
 
 class RocmSystemsMappingTest(unittest.TestCase):
-    """Tests for rocm-systems project mappings."""
+    """Tests for rocm-systems artifact mappings."""
 
     def setUp(self):
         self.topology = get_topology()

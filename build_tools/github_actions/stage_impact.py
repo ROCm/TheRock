@@ -318,16 +318,16 @@ class StageImpactAnalyzer:
         """Check if granular artifact-level analysis is possible.
 
         Granular analysis is supported for source sets that have artifacts
-        with component mappings defined in BUILD_TOPOLOGY.toml.
+        with source_paths mappings defined in BUILD_TOPOLOGY.toml.
         """
         # Get source sets that support granular analysis
-        granular_source_sets = set(self.topology.get_source_sets_with_components())
+        granular_source_sets = set(self.topology.get_source_sets_with_source_paths())
 
         # Check if any matched source set supports granular analysis
         if not matched_source_sets.intersection(granular_source_sets):
             return False
 
-        # Check if any inputs are in source sets with components
+        # Check if any inputs are in source sets with source_paths
         for source_set in granular_source_sets:
             if any(
                 item.startswith(f"{source_set}/") or item == source_set
@@ -349,7 +349,7 @@ class StageImpactAnalyzer:
         is_conservative = False
 
         # Get source sets that support granular analysis
-        granular_source_sets = set(self.topology.get_source_sets_with_components())
+        granular_source_sets = set(self.topology.get_source_sets_with_source_paths())
 
         for path in normalized_inputs:
             submodule, subpath = self.topology.parse_changed_path(path)

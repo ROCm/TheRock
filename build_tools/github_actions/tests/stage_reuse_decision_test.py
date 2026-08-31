@@ -68,7 +68,7 @@ class FakeTopology:
     def get_source_set_for_path(self, path, platform=None):
         return None
 
-    def get_source_sets_with_components(self):
+    def get_source_sets_with_source_paths(self):
         return []
 
     def get_all_artifacts_for_source_set(self, source_set_name):

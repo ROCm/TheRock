@@ -19,8 +19,8 @@ Usage:
     python configure_stage.py --artifacts blas,fft --oneline
     # Output: -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_FFT=ON
 
-    # List available projects/subprojects
-    python configure_stage.py --list-projects
+    # List available artifacts and their subprojects
+    python configure_stage.py --list-artifacts
 
     # Then use the generated args with CMake
     cmake -B build -S . $(cat /tmp/stage_args.txt) -GNinja
@@ -55,8 +55,8 @@ def log(msg: str):
     print(msg, file=sys.stderr, flush=True)
 
 
-def normalize_project_name(name: str) -> str:
-    """Normalize a project name, handling paths like 'projects/hip' -> 'hip'.
+def normalize_artifact_name(name: str) -> str:
+    """Normalize an artifact name, handling paths like 'projects/hip' -> 'hip'.
 
     The changed_projects input from external repos may include paths like:
     - 'projects/hip' -> 'hip'
@@ -131,15 +131,15 @@ def get_stage_features(
     return features
 
 
-def get_project_features(
+def get_artifact_features(
     topology: BuildTopology,
-    project_names: List[str],
+    artifact_names: List[str],
     platform_name: str = "",
     build_dir: Path = None,
 ) -> Set[str]:
-    """Resolve project names to CMake feature names."""
-    return topology.resolve_projects_to_features(
-        project_names, platform_name, build_dir
+    """Resolve artifact names to CMake feature names."""
+    return topology.resolve_artifacts_to_features(
+        artifact_names, platform_name, build_dir
     )
 
 
@@ -151,18 +151,18 @@ def generate_cmake_args(
     include_comments: bool = False,
     platform_name: str = platform_module.system().lower(),
     manylinux: bool = False,
-    project_names: List[str] = None,
+    artifact_names: List[str] = None,
     build_dir: Path = None,
 ) -> List[str]:
-    """Generate CMake arguments for building a specific stage or projects/artifacts."""
+    """Generate CMake arguments for building a specific stage or artifacts."""
     args = []
 
-    if stage_name and project_names:
-        desc = f"stage {stage_name} + projects: {', '.join(project_names)}"
+    if stage_name and artifact_names:
+        desc = f"stage {stage_name} + artifacts: {', '.join(artifact_names)}"
     elif stage_name:
         desc = stage_name
-    elif project_names:
-        desc = f"projects: {', '.join(project_names)}"
+    elif artifact_names:
+        desc = f"artifacts: {', '.join(artifact_names)}"
     else:
         desc = "empty"
     if include_comments:
@@ -184,11 +184,11 @@ def generate_cmake_args(
         args.append("# Disable all features by default")
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
-    # --projects resolves names (artifacts, components, subprojects) to features
+    # --artifacts resolves names (artifacts, source_paths, subprojects) to features
     # --stage enables all artifacts in stage
-    if project_names:
-        features = get_project_features(
-            topology, project_names, platform_name=platform_name, build_dir=build_dir
+    if artifact_names:
+        features = get_artifact_features(
+            topology, artifact_names, platform_name=platform_name, build_dir=build_dir
         )
     elif stage_name:
         features = get_stage_features(topology, stage_name, platform_name=platform_name)
@@ -281,9 +281,9 @@ def main(argv: List[str] = None):
         "Enables building specific artifacts without requiring --stage. Empty string is ignored.",
     )
     parser.add_argument(
-        "--list-projects",
+        "--list-artifacts",
         action="store_true",
-        help="List available projects/subprojects and their artifacts",
+        help="List available artifacts and their subprojects",
     )
     parser.add_argument(
         "--build-dir",
@@ -295,8 +295,8 @@ def main(argv: List[str] = None):
     parser.add_argument(
         "--skip-stages",
         action="store_true",
-        help="Output comma-separated list of stages to skip based on --projects. "
-        "Stages not needed to build the specified projects will be listed.",
+        help="Output comma-separated list of stages to skip based on --artifacts. "
+        "Stages not needed to build the specified artifacts will be listed.",
     )
 
     args = parser.parse_args(argv)
@@ -310,17 +310,17 @@ def main(argv: List[str] = None):
 
     if (
         not args.list_stages
-        and not args.list_projects
+        and not args.list_artifacts
         and not args.skip_stages
         and args.stage is None
         and not artifact_list
     ):
         parser.error(
-            "--stage or --projects is required unless --list-stages, --list-projects, or --skip-stages is specified"
+            "--stage or --artifacts is required unless --list-stages, --list-artifacts, or --skip-stages is specified"
         )
 
     if args.skip_stages and not artifact_list:
-        parser.error("--skip-stages requires --projects")
+        parser.error("--skip-stages requires --artifacts")
 
     topology = get_topology()
 
@@ -331,8 +331,8 @@ def main(argv: List[str] = None):
             log(f"  {stage.name} ({stage.type}): {stage.description}")
         return
 
-    if args.list_projects:
-        log("Available projects (artifact: subprojects -> cmake flag):")
+    if args.list_artifacts:
+        log("Available artifacts (artifact: subprojects -> cmake flag):")
         # Load manifest (from build_dir if provided, otherwise repo root)
         if args.build_dir:
             manifest = topology.load_subproject_manifest(
@@ -354,20 +354,20 @@ def main(argv: List[str] = None):
         available = ", ".join(s.name for s in topology.get_build_stages())
         parser.error(f"Unknown stage '{args.stage}'. Available stages: {available}")
 
-    # Normalize project names (handle paths like "projects/hip" -> "hip")
+    # Normalize artifact names (handle paths like "projects/hip" -> "hip")
     if artifact_list:
-        artifact_list = [normalize_project_name(p) for p in artifact_list]
+        artifact_list = [normalize_artifact_name(a) for a in artifact_list]
 
-    # Validate projects if provided (fast-fail on unknown projects)
+    # Validate artifacts (fast-fail on unknown artifacts)
     if artifact_list:
         alias_map = topology.get_alias_to_artifact_map(args.build_dir)
-        unknown = [p for p in artifact_list if p.lower() not in alias_map]
+        unknown = [a for a in artifact_list if a.lower() not in alias_map]
         if unknown:
-            parser.error(f"Unknown project(s): {', '.join(unknown)}")
+            parser.error(f"Unknown artifact(s): {', '.join(unknown)}")
 
     # Output skip-stages if requested
     if args.skip_stages:
-        required_stages = topology.get_stages_for_projects(
+        required_stages = topology.get_stages_for_artifacts(
             artifact_list, args.build_dir
         )
         all_stages = topology.get_all_stage_names()
@@ -384,7 +384,7 @@ def main(argv: List[str] = None):
         include_comments=args.comments and not args.oneline,
         platform_name=args.platform,
         manylinux=args.manylinux,
-        project_names=artifact_list if artifact_list else None,
+        artifact_names=artifact_list if artifact_list else None,
         build_dir=args.build_dir,
     )
 
