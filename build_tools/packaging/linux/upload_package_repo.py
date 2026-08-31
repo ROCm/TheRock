@@ -296,6 +296,11 @@ def upload_to_s3(
                 print(f"Skipping build manifest file (local only): {fname}")
                 continue
 
+            # Skip log files - these are uploaded separately to logs/packaging/
+            if fname.lower().endswith(".log"):
+                print(f"Skipping log file (uploaded separately): {fname}")
+                continue
+
             local = Path(root) / fname
             rel = local.relative_to(source_dir)
             key = f"{prefix}/{rel.as_posix()}"
