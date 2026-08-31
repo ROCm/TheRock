@@ -18,8 +18,8 @@ ROCm.
 
 ## Roles
 
-* **Maintainers** are responsible for their designated component and repositories.
-* **Contributors** provide input and suggest changes to existing components.
+- **Maintainers** are responsible for their designated component and repositories.
+- **Contributors** provide input and suggest changes to existing components.
 
 ### Maintainers
 
@@ -34,13 +34,13 @@ between repositories.
 If you're not a maintainer, you're a contributor. We encourage the ROCm community to contribute in
 several ways:
 
-* Help other community members by posting questions or solutions in the GitHub discussion forum of
+- Help other community members by posting questions or solutions in the GitHub discussion forum of
   the relevant repository.
-* Notify us of a bug by filing an issue report in the GitHub issue tracker of the affected
+- Notify us of a bug by filing an issue report in the GitHub issue tracker of the affected
   repository.
-* Improve our documentation by submitting a PR to the repository that owns the affected content.
-* Improve the code base (for smaller or contained changes) by submitting a PR to the component.
-* Suggest larger features by adding to the *Ideas* category in the GitHub discussion forum of the
+- Improve our documentation by submitting a PR to the repository that owns the affected content.
+- Improve the code base (for smaller or contained changes) by submitting a PR to the component.
+- Suggest larger features by adding to the *Ideas* category in the GitHub discussion forum of the
   relevant repository.
 
 ROCm spans many repositories, and each component keeps its issues, discussions, and pull requests in
@@ -56,15 +56,15 @@ These expectations apply to all ROCm repositories governed by this document. Eac
 project-specific steps in its own `CONTRIBUTING.md`; those instructions extend, but do not replace,
 the guidance here.
 
-* **Use pull requests.** All changes land through pull requests reviewed by the maintainers of the
+- **Use pull requests.** All changes land through pull requests reviewed by the maintainers of the
   affected repository.
-* **Target the default branch.** Open pull requests against each repository's default integration
+- **Target the default branch.** Open pull requests against each repository's default integration
   branch unless its `CONTRIBUTING.md` says otherwise.
-* **Link an issue.** Associate each pull request with a GitHub issue so reviewers have context and
+- **Link an issue.** Associate each pull request with a GitHub issue so reviewers have context and
   changes are traceable.
-* **Follow the code of conduct.** All participation is subject to the [Code of conduct](#code-of-conduct)
+- **Follow the code of conduct.** All participation is subject to the [Code of conduct](#code-of-conduct)
   below.
-* **License your contribution.** By opening a pull request, you agree to license your contribution
+- **License your contribution.** By opening a pull request, you agree to license your contribution
   under the terms of the `LICENSE` file in the corresponding repository. Different repositories may
   use different licenses; see the [ROCm licensing](https://rocm.docs.amd.com/en/latest/about/license.html)
   page.
@@ -77,18 +77,18 @@ branch differs between repositories, so check each repository's `CONTRIBUTING.md
 When creating a PR, use the following process. Note that each repository may include additional,
 project-specific steps. Refer to each repository's PR process for any additional steps.
 
-* Identify the issue you want to fix.
-* Target the default branch for integration.
-* Ensure your change builds successfully.
-* Run the relevant test suites and include evidence of a successful run in your PR.
-* Do not break existing test cases.
-* Merge new functionality only with accompanying tests. If your PR adds a feature, provide an
+- Identify the issue you want to fix.
+- Target the default branch for integration.
+- Ensure your change builds successfully.
+- Run the relevant test suites and include evidence of a successful run in your PR.
+- Do not break existing test cases.
+- Merge new functionality only with accompanying tests. If your PR adds a feature, provide an
   application or test so we can confirm the feature works and continues to be valid.
-* Aim for good test coverage.
-* Submit your PR and work with the reviewer or maintainer to get it approved.
-* Once approved, the PR is integrated through the repository's CI and merge process, as coordinated
+- Aim for good test coverage.
+- Submit your PR and work with the reviewer or maintainer to get it approved.
+- Once approved, the PR is integrated through the repository's CI and merge process, as coordinated
   by the maintainer.
-* We'll inform you once your change is committed.
+- We'll inform you once your change is committed.
 
 For the contribution process specific to a repository, refer to that repository's `CONTRIBUTING.md`.
 For TheRock, see its [contribution guidelines](CONTRIBUTING.md).
