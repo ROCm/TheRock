@@ -1501,7 +1501,13 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
 
         # Now write a trampoline package config file into the prefix so that normal
         # prefix based find_package() will resolve properly.
+        # Compute a relative path from the prefix directory to the package config
+        # directory. This makes the trampoline relocatable - artifacts can be
+        # copied between build trees without breaking find_package() resolution.
         string(TOLOWER "${_package_name}" _package_name_lower)
+        cmake_path(RELATIVE_PATH _find_package_path
+          BASE_DIRECTORY "${_prefix_dir}"
+          OUTPUT_VARIABLE _find_package_relpath)
         set(_config_file "${_prefix_dir}/${_package_name}Config.cmake")
         configure_file(
           "${THEROCK_SOURCE_DIR}/cmake/templates/find_config.tmpl.cmake"
