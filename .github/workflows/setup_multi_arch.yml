@@ -40,15 +40,25 @@ on:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
         default: ""
+      build_stages:
+        description: >-
+          Comma-separated allowlist of build stages to run, e.g.
+          "compiler-runtime,runtime-tests". Every other stage is skipped
+          outright, with nothing built and no artifacts copied. Empty (the
+          default) builds every stage.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
       stage_reuse_mode:
         description: >-
-          Automatic stage-reuse mode (separate from the manual prebuilt_stages
-          input): "dry-run" (default) only reports which unaffected stages could
-          be reused; "reuse-stage" actually reuses them.
+          Artifact-reuse mode: "off" disables all reuse, ignores prebuilt_stages
+          and baseline_run_id, and performs no reuse analysis or baseline lookup;
+          "dry-run" (default) reports what automatic reuse could do while still
+          honoring explicit prebuilt_stages; "reuse-stage" applies automatic
+          reuse and also honors explicit prebuilt_stages.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -216,6 +226,7 @@ jobs:
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.

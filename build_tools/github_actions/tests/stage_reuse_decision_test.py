@@ -7,7 +7,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -123,12 +123,40 @@ class ModeParsingTest(unittest.TestCase):
 
     def test_explicit_modes(self):
         for value, expected in [
+            ("off", StageReuseMode.OFF),
             ("dry-run", StageReuseMode.DRY_RUN),
             ("reuse-stage", StageReuseMode.REUSE_STAGE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
             with patch.dict(os.environ, {"STAGE_REUSE_MODE": value}):
                 self.assertEqual(StageReuseMode.from_environ(), expected)
+
+    def test_off_short_circuits_all_analysis_and_lookup(self):
+        baseline_selector = Mock()
+
+        with (
+            patch.object(srd, "_build_platforms") as build_platforms,
+            patch.object(srd, "get_topology") as get_topology,
+            patch.object(srd, "plan_stage_reuse") as plan_stage_reuse,
+        ):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.OFF,
+                linux_amdgpu_families=["gfx94X-dcgpu"],
+                baseline_selector=baseline_selector,
+            )
+
+        build_platforms.assert_not_called()
+        get_topology.assert_not_called()
+        plan_stage_reuse.assert_not_called()
+        baseline_selector.assert_not_called()
+
+        self.assertTrue(result.full_rebuild_required)
+        self.assertIsNone(result.baseline_run_id)
+        self.assertEqual(result.candidate_stages, ())
+        self.assertEqual(result.available_stages, ())
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertIn("mode=off", "\n".join(result.report_lines))
 
 
 class AvailabilityGateTest(unittest.TestCase):
