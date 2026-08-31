@@ -105,7 +105,7 @@ def publish_tarballs(
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     dest_path = (
         "v5/rocm/core/tarball-asan"
-        if build_variant == "asan"
+        if build_variant.startswith("asan")
         else "v5/rocm/core/tarball"
     )
     dest = StorageLocation(dest_bucket.name, dest_path)
@@ -248,7 +248,7 @@ def publish_native_linux_packages(
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
-    is_asan = build_variant == "asan"
+    is_asan = build_variant.startswith("asan")
 
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
@@ -318,7 +318,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan"],
+        choices=["release", "asan", "asan-debug"],
         help="Build variant (default: release). ASAN builds skip python packages "
         "and publish native packages to separate paths.",
     )
@@ -332,7 +332,7 @@ def main(argv: list[str]) -> None:
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
     )
     backend = create_storage_backend(dry_run=args.dry_run)
-    is_asan = args.build_variant == "asan"
+    is_asan = args.build_variant.startswith("asan")
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     if not is_asan:
