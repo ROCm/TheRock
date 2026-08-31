@@ -1151,9 +1151,26 @@ def decide_jobs(
     else:
         # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
         stage_decisions = {}
+        explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
+
+        # Log explicit baseline configuration when provided.
+        if ci_inputs.baseline_run_id and explicit_prebuilt_stages:
+            baseline_repo_info = (
+                f" from {ci_inputs.baseline_repository}"
+                if ci_inputs.baseline_repository
+                else ""
+            )
+            logging.info(
+                "[STAGE-REUSE] using explicit baseline_run_id=%s%s for "
+                "prebuilt_stages: %s",
+                ci_inputs.baseline_run_id,
+                baseline_repo_info,
+                ", ".join(explicit_prebuilt_stages),
+            )
 
         # In dry-run, automatic reuse is analyzed but not applied. In
         # reuse-stage, eligible stages are added to stage_decisions.

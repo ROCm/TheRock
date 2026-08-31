@@ -135,6 +135,8 @@ class AutoStageReuse:
     reasons: tuple[str, ...]
     report_lines: tuple[str, ...] = field(default_factory=tuple)
     platform_available: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Tracks which platforms had no commit-compatible baseline (vs missing artifacts)
+    platforms_no_compatible_baseline: tuple[str, ...] = field(default_factory=tuple)
     # Granular artifact-level reuse fields
     reusable_artifacts: tuple[str, ...] = field(default_factory=tuple)
     rebuild_artifacts: tuple[str, ...] = field(default_factory=tuple)
@@ -425,6 +427,9 @@ def compute_auto_stage_reuse(
     platform_baseline_urls: dict[str, str | None] = {}
     per_platform_available: dict[str, tuple[str, ...]] = {}
     baseline_error: str | None = None
+    # Track platforms where no commit-compatible baseline was found (distinct
+    # from platforms where a baseline exists but artifacts are missing).
+    platforms_no_compatible_baseline: list[str] = []
 
     for platform in platforms:
         platform_families = _platform_target_families(
@@ -479,6 +484,11 @@ def compute_auto_stage_reuse(
         platform_baseline_urls[platform] = (
             baseline.html_url if baseline is not None else None
         )
+
+        # Track when no baseline was found (likely due to commit incompatibility
+        # when building from an older/external repo commit).
+        if baseline is None and baseline_error is None:
+            platforms_no_compatible_baseline.append(platform)
 
         available_filenames = _matched_filenames(baseline)
         available_here: list[str] = []
@@ -575,6 +585,7 @@ def compute_auto_stage_reuse(
         verified_reusable = plan.reusable_artifacts
         verified_rebuild = plan.impacted_artifacts
 
+    platforms_no_baseline_t = tuple(platforms_no_compatible_baseline)
     lines = _format_report(
         mode=mode,
         candidates=candidates,
@@ -587,6 +598,7 @@ def compute_auto_stage_reuse(
         baseline_error=baseline_error,
         platforms=platforms,
         platform_available=per_platform_available,
+        platforms_no_compatible_baseline=platforms_no_baseline_t,
         # Include artifact-level info in the report
         artifact_level_analysis=artifact_level_analysis,
         impacted_artifacts=verified_rebuild,
@@ -606,6 +618,7 @@ def compute_auto_stage_reuse(
             reasons=plan.reasons,
             report_lines=lines,
             platform_available=per_platform_available,
+            platforms_no_compatible_baseline=platforms_no_baseline_t,
             # Granular artifact-level reuse fields (verified against baseline)
             reusable_artifacts=verified_reusable,
             rebuild_artifacts=verified_rebuild,
@@ -767,6 +780,7 @@ def _format_report(
     baseline_error: str | None = None,
     platforms: Sequence[str] = (),
     platform_available: dict[str, tuple[str, ...]] | None = None,
+    platforms_no_compatible_baseline: Sequence[str] = (),
     # Granular artifact-level analysis fields
     artifact_level_analysis: bool = False,
     impacted_artifacts: Sequence[str] = (),
@@ -793,6 +807,15 @@ def _format_report(
         )
     elif baseline_run_id:
         lines.append(f"{LOG_PREFIX} baseline run for artifact check: {baseline_run_id}")
+    elif platforms_no_compatible_baseline:
+        # Clarify that the issue is commit incompatibility, not missing artifacts.
+        # This typically happens when building from an external repo pinned to an
+        # older TheRock commit - all main branch runs are newer (descendants).
+        lines.append(
+            f"{LOG_PREFIX} no commit-compatible baseline run found; "
+            f"all candidate runs are newer than current commit "
+            f"(platforms: {', '.join(platforms_no_compatible_baseline)})"
+        )
     else:
         lines.append(
             f"{LOG_PREFIX} no baseline run contains artifacts for all "
@@ -809,6 +832,7 @@ def _format_report(
     for stage in unavailable:
         # Call out WHICH platforms are missing the artifacts so the mismatch
         # (e.g. present on linux, absent on windows) is visible in the log.
+        # Also clarify whether the issue is no compatible baseline vs missing artifacts.
         if len(platforms) > 1:
             missing = [
                 platform
@@ -818,9 +842,16 @@ def _format_report(
             where = f" (missing on: {', '.join(missing)})" if missing else ""
         else:
             where = ""
+
+        # Determine why artifacts aren't available
+        if platforms_no_compatible_baseline and all(
+            p in platforms_no_compatible_baseline for p in platforms
+        ):
+            reason = "no commit-compatible baseline"
+        else:
+            reason = "artifacts not in baseline"
         lines.append(
-            f"{LOG_PREFIX} stage '{stage}' unaffected but artifacts "
-            f"NOT available -> rebuild{where}"
+            f"{LOG_PREFIX} stage '{stage}' unaffected but {reason} -> rebuild{where}"
         )
     if rebuild:
         lines.append(f"{LOG_PREFIX} stages rebuilding (impacted): {', '.join(rebuild)}")
