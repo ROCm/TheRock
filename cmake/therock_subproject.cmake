@@ -1501,16 +1501,19 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
 
         # Now write a trampoline package config file into the prefix so that normal
         # prefix based find_package() will resolve properly.
-        # Compute a relative path from the prefix directory to the package config
-        # directory. This makes the trampoline relocatable - artifacts can be
-        # copied between build trees without breaking find_package() resolution.
         string(TOLOWER "${_package_name}" _package_name_lower)
-        cmake_path(RELATIVE_PATH _find_package_path
-          BASE_DIRECTORY "${_prefix_dir}"
-          OUTPUT_VARIABLE _find_package_relpath)
         set(_config_file "${_prefix_dir}/${_package_name}Config.cmake")
+        # Use custom relocatable templates for FFTW3/FFTW3f to avoid hardcoded
+        # paths from upstream CMake configs (see ROCm/TheRock#7770).
+        if(_package_name STREQUAL "FFTW3")
+          set(_template_file "${THEROCK_SOURCE_DIR}/cmake/templates/find_config_fftw3.tmpl.cmake")
+        elseif(_package_name STREQUAL "FFTW3f")
+          set(_template_file "${THEROCK_SOURCE_DIR}/cmake/templates/find_config_fftw3f.tmpl.cmake")
+        else()
+          set(_template_file "${THEROCK_SOURCE_DIR}/cmake/templates/find_config.tmpl.cmake")
+        endif()
         configure_file(
-          "${THEROCK_SOURCE_DIR}/cmake/templates/find_config.tmpl.cmake"
+          "${_template_file}"
           "${_config_file}" @ONLY
         )
         set(_version_file "${_prefix_dir}/${_package_name}ConfigVersion.cmake")
