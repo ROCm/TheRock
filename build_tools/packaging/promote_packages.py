@@ -24,11 +24,11 @@ Common workflows:
 Other combinations are mechanically possible but not typical.
 
 When promoting torch-family wheels to a stable release, ROCm package
-dependencies in METADATA are rewritten to a patch-floating stable minor
-specifier (for example `rocm-sdk-core==7.13.*`). The torch wheel identity itself
-remains exact (for example `torch-2.8.0+rocm7.13.0-...whl`) so the artifact
-records the ROCm version it was built against, while allowing ROCm patch
-updates that do not require rebuilding torch.
+dependencies in METADATA are rewritten to a forward patch-compatible specifier
+(for example `rocm-sdk-core~=7.13.0`). The torch wheel identity itself remains
+exact (for example `torch-2.8.0+rocm7.13.0-...whl`) so the artifact records the
+ROCm version it was built against, while allowing later ROCm patch updates that
+do not require rebuilding torch.
 
 The keep-list pass (--multi-arch-targets) is independent of version promotion: it
 runs whenever --multi-arch-targets is supplied, alongside any version rewrite. To
@@ -291,6 +291,18 @@ def stable_minor_spec(version_str: str) -> str | None:
     return f"{version.release[0]}.{version.release[1]}.*"
 
 
+def stable_patch_compatible_spec(version_str: str) -> str | None:
+    """Return a forward patch-compatible specifier like `~=7.13.1`, or None."""
+    version = Version(version_str)
+    if version.is_prerelease or version.is_devrelease or version.local is not None:
+        return None
+    if len(version.release) < 3:
+        raise ValueError(
+            f"Stable version {version_str!r} must include major, minor, and patch"
+        )
+    return f"~={version}"
+
+
 _REQUIRES_DIST_NAME_RE = re.compile(
     r"^(?P<prefix>Requires-Dist:\s*)(?P<name>[A-Za-z0-9_.-]+)(?P<tail>.*)$"
 )
@@ -307,7 +319,9 @@ def rewrite_metadata_rocm_line(
 
     Summary lines and non-floating requirements use exact replacement. When
     `float_rocm_dependency_patch` is set, only existing exact `==<stable version>`
-    pins on ROCm dependency names are converted to `==X.Y.*`.
+    pins on ROCm dependency names are converted to `~=X.Y.Z`. This allows later
+    patches on the same minor line without permitting a downgrade below the
+    version against which the wheel was built.
     """
     rewritten = line.replace(old_rocm_version, new_rocm_version)
     if not float_rocm_dependency_patch or not rewritten.startswith("Requires-Dist"):
@@ -334,16 +348,17 @@ def rewrite_metadata_rocm_line(
 
     exact_version = specifier.version
     try:
-        minor_spec = stable_minor_spec(exact_version)
+        compatible_spec = stable_patch_compatible_spec(exact_version)
     except InvalidVersion:
         return rewritten
-    if minor_spec is None:
+    if compatible_spec is None:
         return rewritten
 
+    compatible_version = compatible_spec.removeprefix("~=")
     tail = requires_match.group("tail")
     tail = re.sub(
-        rf"(?P<operator>==\s*){re.escape(exact_version)}(?P<boundary>\b)",
-        rf"\g<operator>{minor_spec}\g<boundary>",
+        rf"==(?P<space>\s*){re.escape(exact_version)}(?P<boundary>\b)",
+        rf"~=\g<space>{compatible_version}\g<boundary>",
         tail,
         count=1,
     )
@@ -982,6 +997,8 @@ def wheel_change_extra_files(
     if JAX_ROCM_PACKAGE_PATTERN.match(package_name_no_version):
         return
 
+    # If more files need specialized rewrites, replace the parallel file groups
+    # below with (path, rewrite function) pairs so the dispatch stays explicit.
     files_to_float: list[pathlib.Path] = []
 
     # rocm packages needing extra handling

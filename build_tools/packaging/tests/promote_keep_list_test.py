@@ -21,6 +21,7 @@ import unittest
 from pathlib import Path
 
 from packaging.metadata import Metadata
+from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -289,12 +290,12 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             )
         self.assertIn("Requires-Dist: rocm-bootstrap", result)
         self.assertIn(
-            "Requires-Dist: rocm[libraries]==7.13.*\n"
-            "Requires-Dist: rocm-sdk-core==7.13.*\n",
+            "Requires-Dist: rocm[libraries]~=7.13.0\n"
+            "Requires-Dist: rocm-sdk-core~=7.13.0\n",
             result,
         )
         self.assertIn(
-            'Requires-Dist: ROCm-SDK-Core == 7.13.*; extra == "core"',
+            'Requires-Dist: ROCm-SDK-Core ~= 7.13.0; extra == "core"',
             result,
         )
         self.assertIn(
@@ -303,6 +304,16 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         )
         self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
         Metadata.from_email(result, validate=True)
+
+    def test_stable_patch_compatible_spec_rejects_earlier_patch(self):
+        specifier_text = ptf.stable_patch_compatible_spec("7.13.1")
+        self.assertEqual(specifier_text, "~=7.13.1")
+        assert specifier_text is not None
+        specifier = SpecifierSet(specifier_text)
+        self.assertNotIn(Version("7.13.0"), specifier)
+        self.assertIn(Version("7.13.1"), specifier)
+        self.assertIn(Version("7.13.2"), specifier)
+        self.assertNotIn(Version("7.14.0"), specifier)
 
     def test_non_rocm_dependency_is_not_rewritten(self):
         body = """\
