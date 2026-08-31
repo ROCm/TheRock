@@ -17,10 +17,10 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
+        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       python_version:
         required: true
         type: string
@@ -30,9 +30,9 @@ on:
         required: true
         type: string
       pytorch_git_ref:
-        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
+        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.13")
         type: string
-        default: "release/2.7"
+        default: "release/2.13"
       device_query:
         description: >-
           GPU candidate-set selection (--device-query, stage 1). "unique": one
@@ -52,6 +52,13 @@ on:
           - "single"
           - "all"
         default: "single"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -72,7 +79,7 @@ on:
         type: string
       pytorch_git_ref:
         type: string
-        default: "release/2.7"
+        default: "release/2.13"
       device_query:
         description: >-
           --device-query. "unique": one device per architecture; "all": every
@@ -91,6 +98,9 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -101,6 +111,8 @@ jobs:
   test_wheels:
     name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
@@ -121,6 +133,8 @@ jobs:
     # PYTORCH_TESTING_DEVICE_ONLY_FOR and TEST_CONFIG (via --test-config)
     # itself, so we only set the extras the runner does not manage.
     env:
+      QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       # Pin OpenBLAS threads to 1 for deterministic reductions; otherwise
@@ -130,6 +144,17 @@ jobs:
       PYTORCH_NUM_PYTEST_RERUNS: "2"
 
     steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -174,6 +199,7 @@ jobs:
       # related repository pins that produced the package under test.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/pytorch/pytorch.git \
@@ -183,6 +209,7 @@ jobs:
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
+        timeout-minutes: 30
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
@@ -203,6 +230,14 @@ jobs:
 
       - name: Install test requirements
         run: |
+          # Some pinned test requirements have no cp314 wheel and build from
+          # source. The container ships clang but not gcc, and setuptools
+          # defaults to the CC=gcc baked into sysconfig. Scoped to this step so
+          # it does not affect the tests.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            export CC=clang
+            export CXX=clang++
+          fi
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
@@ -254,3 +289,21 @@ jobs:
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

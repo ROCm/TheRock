@@ -17,27 +17,31 @@ is reported reusable:
 
 Mode switch
 -----------
-The module is wired into CI behind a two-way ``STAGE_REUSE_MODE`` switch so it
-can be observed before it changes anything:
+The module is wired into CI behind a three-way ``STAGE_REUSE_MODE`` switch:
 
+* ``off``        - Disable artifact reuse completely. Do not run impact
+                   analysis, search for baseline runs, query GitHub, or inspect
+                   artifact storage.
 * ``dry-run``    - DEFAULT. Compute the analysis and LOG, for each stage that
                    *would* be reused, a line to the console + step summary, but
-                   return NO auto stages, so ``prebuilt_stages`` is unchanged
-                   and every stage still builds exactly.
+                   return NO automatically reused stages.
 * ``reuse-stage`` - Compute the analysis and actually return the reuse stages so
                      the orchestrator copies their artifacts and skips the build.
 
-Note: this ``STAGE_REUSE_MODE`` switch drives the *automatic* detection layer.
-It is orthogonal to the ``prebuilt_stages`` workflow input, which is the
-explicit, manual list of stages to reuse and is always honored regardless of
-mode.
+``off`` is authoritative. ``configure_multi_arch_ci.py`` also ignores explicit
+``prebuilt_stages`` and ``baseline_run_id`` inputs in this mode, ensuring that
+all in-scope stages are rebuilt.
+
+In ``dry-run`` and ``reuse-stage`` modes, the explicit ``prebuilt_stages``
+workflow input remains separate from automatic stage-reuse analysis.
 
 Environment Variables
 --------------------
 ``_default_baseline_selector`` reads the following environment variables. These
 are set by ``setup_multi_arch.yml`` and form the stage-reuse interface:
 
-* ``STAGE_REUSE_MODE``           - ``dry-run`` (default) or ``reuse-stage``.
+* ``STAGE_REUSE_MODE``           - ``off``, ``dry-run`` (default), or
+                                    ``reuse-stage``.
 * ``GITHUB_REPOSITORY``          - ``owner/repo`` (default ``ROCm/TheRock``).
 * ``STAGE_REUSE_BASELINE_BRANCH``  - baseline branch to search (default ``main``).
 * ``STAGE_REUSE_BASELINE_WORKFLOW`` - baseline workflow file
@@ -79,6 +83,7 @@ GENERIC_FAMILY = "generic"
 
 
 class StageReuseMode(enum.Enum):
+    OFF = "off"
     DRY_RUN = "dry-run"
     REUSE_STAGE = "reuse-stage"
 
@@ -140,6 +145,20 @@ def _target_families(
     if GENERIC_FAMILY not in families:
         families.append(GENERIC_FAMILY)
     return tuple(families)
+
+
+def _platform_target_families(
+    platform: str,
+    linux_amdgpu_families: Sequence[str],
+    windows_amdgpu_families: Sequence[str],
+) -> tuple[str, ...]:
+    """Return the target families required for one build platform."""
+
+    if platform == "linux":
+        return _target_families(linux_amdgpu_families, ())
+    if platform == "windows":
+        return _target_families((), windows_amdgpu_families)
+    raise ValueError(f"unsupported build platform: {platform}")
 
 
 def _required_artifacts_for_stages(
@@ -252,6 +271,7 @@ def compute_auto_stage_reuse(
     baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
 ) -> AutoStageReuse:
     """Compute auto stage-reuse decisions, verified against a baseline run.
+
     A stage is only reusable when it is unaffected by the change AND its
     artifacts are present in a healthy baseline run for *every* platform being
     built. The platforms are derived from which family lists are non-empty:
@@ -260,7 +280,30 @@ def compute_auto_stage_reuse(
     case where a stage available only in the Linux baseline is skipped on
     Windows. The report lines are logged before returning.
     """
+    if mode is StageReuseMode.OFF:
+        return _log_and_return(
+            _empty_result(
+                mode,
+                full_rebuild_required=True,
+                reasons=("artifact reuse disabled by STAGE_REUSE_MODE=off",),
+                report_lines=(
+                    f"{LOG_PREFIX} mode=off; artifact reuse disabled; "
+                    "skipping impact analysis and baseline lookup; "
+                    "all in-scope stages will rebuild.",
+                ),
+            )
+        )
+
     platforms = _build_platforms(linux_amdgpu_families, windows_amdgpu_families)
+
+    logger.info(
+        "%s requested platforms=%s linux_families=%s windows_families=%s",
+        LOG_PREFIX,
+        list(platforms),
+        list(linux_amdgpu_families),
+        list(windows_amdgpu_families),
+    )
+
     if not platforms:
         return _log_and_return(
             _empty_result(
@@ -276,8 +319,6 @@ def compute_auto_stage_reuse(
 
     if topology is None and changed_files is not None:
         topology = get_topology()
-
-    families = _target_families(linux_amdgpu_families, windows_amdgpu_families)
 
     plan = plan_stage_reuse(
         changed_files=changed_files,
@@ -327,7 +368,6 @@ def compute_auto_stage_reuse(
             )
         )
 
-    required = _required_artifacts_for_stages(topology, candidates, families)
     # Verify artifact availability independently for each platform. A single
     # ``baseline_selector`` (used by tests) applies to all platforms; otherwise
     # a per-platform selector is built so each platform is checked against a
@@ -338,6 +378,28 @@ def compute_auto_stage_reuse(
     baseline_error: str | None = None
 
     for platform in platforms:
+        platform_families = _platform_target_families(
+            platform,
+            linux_amdgpu_families,
+            windows_amdgpu_families,
+        )
+
+        required = _required_artifacts_for_stages(
+            topology,
+            candidates,
+            platform_families,
+        )
+
+        logger.info(
+            "%s baseline lookup start: platform=%s required_families=%s "
+            "candidate_stages=%s required_artifact_pairs=%d",
+            LOG_PREFIX,
+            platform,
+            list(platform_families),
+            list(candidates),
+            len(required),
+        )
+
         if baseline_selector is not None:
             selector = baseline_selector
         elif baseline_selector_factory is not None:
@@ -355,6 +417,13 @@ def compute_auto_stage_reuse(
             baseline_error = str(exc)
             baseline = None
 
+        logger.info(
+            "%s baseline lookup result: platform=%s run_id=%s",
+            LOG_PREFIX,
+            platform,
+            baseline.run_id if baseline is not None else "none",
+        )
+
         platform_baseline_run_ids[platform] = (
             baseline.run_id if baseline is not None else None
         )
@@ -364,12 +433,17 @@ def compute_auto_stage_reuse(
 
         available_filenames = _matched_filenames(baseline)
         available_here: list[str] = []
+
         if baseline is not None:
             for stage_name in candidates:
                 if _stage_artifacts_available(
-                    topology, stage_name, families, available_filenames
+                    topology,
+                    stage_name,
+                    platform_families,
+                    available_filenames,
                 ):
                     available_here.append(stage_name)
+
         per_platform_available[platform] = tuple(available_here)
 
     selected_run_ids = {
@@ -474,7 +548,11 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     extra "passing build" check is needed here.
     """
 
-    github_repository = os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    # THEROCK_REPOSITORY is set by setup_multi_arch.yml to the repository input
+    # (ROCm/TheRock for external repos, or github.repository for normal runs).
+    github_repository = os.environ.get(
+        "THEROCK_REPOSITORY", os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock")
+    )
     branch = os.environ.get("STAGE_REUSE_BASELINE_BRANCH", "main")
     workflow_name = os.environ.get("STAGE_REUSE_BASELINE_WORKFLOW", "multi_arch_ci.yml")
     current_commit_sha = os.environ.get("STAGE_REUSE_CURRENT_SHA") or None
@@ -489,10 +567,16 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
     # establish ancestry. select_baseline_run only accepts a candidate whose
     # head_sha is `same` or `ancestor` of current_commit_sha; with an EMPTY
     # window every candidate resolves to `unknown` and is rejected, so reuse
-    # never activates. Fetch the real history here. If the SHA is set but the
-    # history fetch fails (or returns empty), disable the commit rule (pass both
-    # as None) rather than enabling it with an empty window -- recency and
-    # artifact availability still gate the selection.
+    # never activates. Fetch the real history here.
+    #
+    # For external repos (THEROCK_REPOSITORY != GITHUB_REPOSITORY), we must be
+    # strict: if commit history cannot be fetched, fail closed by returning a
+    # selector that always returns None (no baseline). This ensures we don't
+    # select incompatible baselines when building against a pinned TheRock commit.
+    #
+    # For same-repo runs, we can be lenient: disable the commit rule and let
+    # recency/artifact availability gate the selection.
+    is_external_repo = github_repository != os.environ.get("GITHUB_REPOSITORY", "")
     ordered_commit_shas = None
     effective_commit_sha = current_commit_sha
     if current_commit_sha is not None:
@@ -503,6 +587,14 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
                 max_count=history_count,
             )
         except GitHubAPIError as exc:
+            if is_external_repo:
+                logger.warning(
+                    "%s could not fetch branch history for external repo (%s); "
+                    "failing closed - no baseline will be selected.",
+                    LOG_PREFIX,
+                    exc,
+                )
+                return lambda required_artifacts: None
             logger.warning(
                 "%s could not fetch branch history (%s); "
                 "skipping commit-compatibility rule.",
@@ -511,6 +603,13 @@ def _default_baseline_selector(*, platform: str) -> BaselineSelector:
             )
             ordered_commit_shas = None
         if not ordered_commit_shas:
+            if is_external_repo:
+                logger.warning(
+                    "%s empty branch history for external repo; "
+                    "failing closed - no baseline will be selected.",
+                    LOG_PREFIX,
+                )
+                return lambda required_artifacts: None
             effective_commit_sha = None
             ordered_commit_shas = None
 

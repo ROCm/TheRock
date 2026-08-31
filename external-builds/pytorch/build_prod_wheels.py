@@ -43,29 +43,33 @@ python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 
 2. Install rocm wheels:
 
-You must have the `rocm[libraries,devel]` packages installed. The `install-rocm`
-command gives a one-stop to fetch the latest nightlies from the CI or elsewhere.
-Below we are using nightly rocm-sdk packages from the CI bucket. See `RELEASES.md`
-for further options. Specific versions can be specified via `--rocm-sdk-version`
-and `--no-pre` (to disable searching for pre-release candidates). The installed
-version will be printed and subsequently will be embedded into torch builds as
-a dependency. Such an arrangement is a head-on-head build (i.e. torch head on top
-of ROCm head). Other arrangements are possible by passing pinned versions, official
-repositories, etc.
+You must have the `rocm[libraries,devel]` packages installed to build PyTorch.
+To run or test the resulting wheels, also install the device extra matching the
+GPU target you plan to build for, or use `device-all` to install every published
+target. The `install-rocm` command gives a one-stop to fetch these packages from
+the latest nightlies or elsewhere. Below we are using nightly rocm-sdk packages
+from the CI bucket. See `RELEASES.md` for further options. Specific versions can
+be specified via `--rocm-sdk-version` and `--no-pre` (to disable searching for
+pre-release candidates). The installed version will be printed and subsequently
+will be embedded into torch builds as a dependency. Such an arrangement is a
+head-on-head build (i.e. torch head on top of ROCm head). Other arrangements are
+possible by passing pinned versions, official repositories, etc.
 
 You can also install in the same invocation as build by passing `--install-rocm`
 to the build sub-command (useful for docker invocations).
 
 ```
-# For therock-nightly-python
+# For the nightly aggregate index
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
+    --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+    --rocm-extras device-gfx942
 
-# For therock-dev-python (unstable but useful for testing outside of prod)
+# For the dev aggregate index (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
+    --index-url https://dev.repo.amd.com/rocm/whl-next/ \
+    --rocm-extras device-gfx942
 ```
 
 3. Build torch, torchaudio and torchvision for one or more gfx architectures.
@@ -130,7 +134,9 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+        --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+        --rocm-extras device-gfx942 \
+        --pytorch-rocm-arch gfx942 \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -170,11 +176,6 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amd_smi",
     "amdhip64",
-    "rocprofiler-sdk",  # Linux only: needed by torch since kineto uses rocprofiler-sdk.
-    "rocprofiler-sdk-roctx",  # Linux only for the moment.
-    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
-    "roctracer64",  # Linux only for the moment.
-    "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
     "hipfft",
@@ -182,13 +183,20 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparse",
     "hipsparselt",
     "hipsolver",
-    "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
     "rocm_smi64",
+    # Linux only.
+    "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
+    "rocprofiler-sdk-roctx",
+    # TODO: Remove roctracer64 and roctx64 once fully switched to rocprofiler-sdk.
+    "roctracer64",
+    "roctx64",
+    "rccl",
+    "hipfile",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -313,22 +321,22 @@ def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
 def compute_build_version(
     source_dir: Path, version_suffix: str, release_type: str
 ) -> str:
-    """Compute a wheel version, tagging dev builds with the source commit.
+    """Compute a wheel version, tagging dev release types with the source commit.
 
     Reads `<source_dir>/version.txt` as the base version and appends
     `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
-    builds the 8-char source commit is merged into that single local segment,
-    e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel (torch, torchaudio,
-    torchvision) records exactly which source commit produced it. PyTorch's
-    setup.py validates the version as PEP 440, which only allows a commit hash
-    in the local segment (after `+`).
+    and `dev-bkc` builds, the 8-char source commit is merged into that single
+    local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
+    (torch, torchaudio, torchvision) records exactly which source commit
+    produced it. PyTorch's setup.py validates the version as PEP 440, which only
+    allows a commit hash in the local segment (after `+`).
     TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
     upfront, manifest-based version computation lands so the built version
     always matches what the manifest records.
     """
     base_version = (source_dir / "version.txt").read_text().strip()
     build_version = base_version + version_suffix
-    if release_type == "dev":
+    if release_type in ("dev", "dev-bkc"):
         commit = get_source_commit_short(source_dir)
         if commit:
             # version_suffix is a local identifier like `+rocm7.10.0`; merge the
@@ -620,6 +628,7 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 
 def _setup_common_build_env(
     cmake_prefix: Path,
+    bin_dir: Path,
     rocm_dir: Path,
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
@@ -633,6 +642,9 @@ def _setup_common_build_env(
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
+        # Make ROCm tools discoverable on all platforms and ROCm DLLs
+        # discoverable by the Windows loader.
+        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -779,9 +791,6 @@ def do_build(args: argparse.Namespace):
     print(f"  BIN = {bin_dir}")
     print(f"  ROCM_HOME = {rocm_dir}")
 
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
     # Priority: --pytorch-rocm-arch > PYTORCH_ROCM_ARCH env > `rocm-sdk targets`
     # fallback (legacy; see TODO on get_rocm_sdk_targets()).
     pytorch_rocm_arch = args.pytorch_rocm_arch or os.environ.get("PYTORCH_ROCM_ARCH")
@@ -806,8 +815,9 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
+    print(f"  PATH = {env['PATH']}")
 
     if args.use_ccache:
         if not shutil.which("ccache"):
@@ -1581,13 +1591,16 @@ def main(argv: list[str]):
     )
     build_p.add_argument(
         "--release-type",
-        choices=["ci", "dev", "nightly", "prerelease"],
+        choices=["ci", "dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         default="nightly",
-        help="Release type of the build. For `dev` builds the torch wheel "
-        "version is tagged with the 8-char torch source commit in the local "
-        "segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). "
-        "The default is non-appending so other callers (CI, nightly, "
-        "prerelease) keep their plain `<base>+<suffix>` versions.",
+        help=(
+            "Release type of the build. For `dev` and `dev-bkc` builds the "
+            "torch wheel version is tagged with the 8-char torch source commit "
+            "in the local segment, e.g. "
+            "`2.12.0a0+git1a2b3c4d.rocm7.10.0` (torch wheel only). The default "
+            "is non-appending so other callers (CI, nightly, prerelease) keep "
+            "their plain `<base>+<suffix>` versions."
+        ),
     )
     build_p.add_argument(
         "--clean",

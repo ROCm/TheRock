@@ -16,6 +16,7 @@ on:
           - rocm-systems
           - rocm-libraries
           - rocgdb
+          - mesa-fork
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -25,6 +26,7 @@ on:
       - rocm-systems
       - rocm-libraries
       - debug-tools/rocgdb/source
+      - third-party/sysdeps/common/mesa-fork
 
 permissions:
   contents: read
@@ -32,6 +34,9 @@ permissions:
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout ROCm/TheRock
@@ -51,8 +56,8 @@ jobs:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: "ROCm"
-          # We will reuse the rocm-systems token for rocgdb for now.
-          repositories: "rocm-systems,rocgdb,TheRock"
+          # We will reuse the rocm-systems token for rocgdb and mesa-fork for now.
+          repositories: "rocm-systems,rocgdb,mesa-fork,TheRock"
 
       - name: Generate GitHub App token rocm-libraries
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -75,13 +80,26 @@ jobs:
             --submodule "${{ github.event.inputs.submodule || 'all' }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
-            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
+            --mesa_token "${{ steps.systems-token.outputs.token }}"
 
       - name: Run push automation
         if: github.event_name == 'push'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
+            --mesa_token "${{ steps.systems-token.outputs.token }}"
+
+      - name: Post bump breadcrumbs to upstream PRs
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          python3 build_tools/github_actions/post_bump_breadcrumbs.py \
             --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \

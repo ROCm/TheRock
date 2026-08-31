@@ -16,7 +16,7 @@ THEROCK_MAIN_BRANCH = "main"
 BOT_NAME = "therockbot"
 BOT_EMAIL = "therockbot@amd.com"
 
-CI_LABEL = "ci:run-all-archs"
+COMMON_CI_LABELS = ["ci:run-all-archs"]
 
 ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-ci-linux.yml",
@@ -38,12 +38,22 @@ SUBMODULE_CONFIG = {
         "files": ROCM_SYSTEMS_FILES,
         "updater": "ref",
         "token_key": "systems",
+        # Changes to rocm-systems should run the full matrix of CI jobs:
+        #   * Build for all gfx archs
+        #   * Build for all variants (asan)
+        #   * All builds and tests (including downstream rocm-libraries jobs)
+        "labels": [*COMMON_CI_LABELS, "ci:asan"],
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
         "files": ROCM_LIBRARIES_FILES,
         "updater": "ci-env",
         "token_key": "libraries",
+        # Changes to rocm-libraries should run the full matrix of CI jobs:
+        #   * Build for all gfx archs
+        #   * Build for all variants (asan)
+        #   * All rocm-libraries tests
+        "labels": [*COMMON_CI_LABELS, "ci:asan"],
     },
     "debug-tools/rocgdb/source": {
         "repo": "ROCm/rocgdb",
@@ -52,6 +62,21 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         "token_key": "systems",
         "branch": "amd-staging-rocgdb-16",
+        # Changes to rocgdb can run a limited matrix of CI jobs:
+        #   * Build for all gfx archs
+        #   * rocgdb tests only (no impact on other project builds/tests)
+        "labels": [*COMMON_CI_LABELS, "test:rocgdb"],
+    },
+    "third-party/sysdeps/common/mesa-fork": {
+        "repo": "ROCm/mesa-fork",
+        "files": [],
+        "updater": "submodule-only",
+        # We will reuse the rocm-systems token for now.
+        "token_key": "systems",
+        # Changes to mesa-fork can run a limited matrix of CI jobs:
+        #   * Build for all gfx archs
+        #   * mesa-fork tests only (no impact on other project builds/tests)
+        "labels": [*COMMON_CI_LABELS, "test:rocdecode", "test:rocjpeg"],
     },
 }
 
@@ -98,6 +123,40 @@ def gh_api(
         raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
 
     return response.json()
+
+
+def get_baseline_run_id_from_merged_pr(
+    repo: str, token: str, merge_commit_sha: str, workflow_name: str = "Multi-Arch CI"
+) -> str | None:
+    """Get the baseline run ID from the PR that was just merged."""
+    # Find the PR that produced this merge commit
+    prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
+    pr = next(
+        (
+            p
+            for p in prs
+            if p.get("merged_at") and p.get("merge_commit_sha") == merge_commit_sha
+        ),
+        None,
+    )
+    if not pr:
+        print(f"[WARN] No merged PR found for commit {merge_commit_sha[:7]}")
+        return None
+
+    # Get the completed workflow run for this PR's head commit
+    pr_head_sha = pr["head"]["sha"]
+    runs = gh_api(
+        token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
+    )
+    for run in runs.get("workflow_runs", []):
+        if run["name"] == workflow_name:
+            print(
+                f"[INFO] Found {workflow_name} run {run['id']} for PR #{pr['number']}"
+            )
+            return str(run["id"])
+
+    print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
+    return None
 
 
 def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
@@ -176,21 +235,21 @@ def update_ref_in_file(file_path: str, new_sha: str) -> None:
     print(f"[INFO] Updated {file_path}")
 
 
-def update_ci_env_file(file_path: str, new_sha: str) -> None:
-    """Update the therock-ref value in a ci-env composite action file.
-
-    Matches:
-      therock-ref:
-        description: ...
-        value: "<old_sha>" # <date> commit
-    """
+def update_ci_env_file(
+    file_path: str, new_sha: str, baseline_run_id: str | None = None
+) -> None:
+    """Update therock-ref and baseline-run-id in a ci-env composite action file."""
     with open(file_path, "r") as f:
         lines = f.readlines()
 
     updated_lines = []
     in_therock_ref = False
+    in_baseline_run_id = False
+
     for line in lines:
         stripped = line.strip()
+
+        # Handle therock-ref updates
         if stripped == "therock-ref:":
             in_therock_ref = True
             updated_lines.append(line)
@@ -199,12 +258,35 @@ def update_ci_env_file(file_path: str, new_sha: str) -> None:
         if in_therock_ref and stripped.startswith("value:"):
             indent = line[: line.find("value:")]
             date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            updated_lines.append(f'{indent}value: "{new_sha}" # {date} commit\n')
+            updated_lines.append(f'{indent}value: "{new_sha}" # {date}\n')
             in_therock_ref = False
             continue
 
         if in_therock_ref and stripped and not stripped.startswith("description:"):
             in_therock_ref = False
+
+        # Handle baseline-run-id updates
+        if stripped == "baseline-run-id:":
+            in_baseline_run_id = True
+            updated_lines.append(line)
+            continue
+
+        if in_baseline_run_id and stripped.startswith("value:"):
+            indent = line[: line.find("value:")]
+            if baseline_run_id:
+                updated_lines.append(
+                    f'{indent}value: "{baseline_run_id}" # Updated by assistant-librarian[bot] on submodule bumps\n'
+                )
+            else:
+                # Keep empty if no successful run found
+                updated_lines.append(
+                    f'{indent}value: "" # Updated by assistant-librarian[bot] on submodule bumps\n'
+                )
+            in_baseline_run_id = False
+            continue
+
+        if in_baseline_run_id and stripped and not stripped.startswith("description:"):
+            in_baseline_run_id = False
 
         updated_lines.append(line)
 
@@ -212,6 +294,8 @@ def update_ci_env_file(file_path: str, new_sha: str) -> None:
         f.writelines(updated_lines)
 
     print(f"[INFO] Updated {file_path}")
+    if baseline_run_id:
+        print(f"[INFO] Set baseline-run-id to {baseline_run_id}")
 
 
 def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
@@ -337,15 +421,15 @@ def create_therock_bump(submodule: str, token: str) -> None:
         )
 
         try:
-            # Add ci:run-all-archs label to the PR
+            # Add CI labels to the PR (run-all-archs + asan for full coverage)
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": [CI_LABEL]},
+                data={"labels": config["labels"]},
             )
         except RuntimeError as e:
-            print(f"[WARN] Failed to apply ci:run-all-archs to PR #{pr['number']}: {e}")
+            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 
@@ -358,6 +442,8 @@ def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
         create_therock_bump("rocm-libraries", tokens["libraries"])
     if submodule in ("all", "rocgdb"):
         create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
+    if submodule in ("all", "mesa-fork"):
+        create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
 
 
 def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
@@ -386,6 +472,19 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         print(f"[INFO] {changed} uses submodule-only bumping, skipping ref update")
         return
 
+    # For ci-env updater, get baseline run ID from the merged PR
+    baseline_run_id = None
+    if config.get("updater") == "ci-env":
+        baseline_run_id = get_baseline_run_id_from_merged_pr(
+            THEROCK_REPO, token, after, workflow_name="Multi-Arch CI"
+        )
+        if baseline_run_id:
+            print(f"[INFO] Using baseline run ID {baseline_run_id} from merged PR")
+        else:
+            print(
+                f"[WARN] Could not get baseline run ID from merged PR, proceeding without it"
+            )
+
     # Update workflow YAML
     repo_name = config["repo"]
     branch = f"update-therock-{changed}-{after[:7]}"
@@ -404,17 +503,26 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
 
         run(["git", "checkout", "-b", branch])
 
-        updater = (
-            update_ci_env_file
-            if config.get("updater") == "ci-env"
-            else update_ref_in_file
-        )
+        updater = config.get("updater")
         for f in config["files"]:
-            updater(f, after)
+            if updater == "ci-env":
+                update_ci_env_file(f, after, baseline_run_id)
+            else:
+                update_ref_in_file(f, after)
 
         run(["git", "add"] + config["files"])
-        _git_commit(f"Update TheRock ref to {after[:7]}")
+
+        commit_msg = f"Update TheRock ref to {after[:7]}"
+        if baseline_run_id:
+            commit_msg += f" (baseline: {baseline_run_id})"
+        _git_commit(commit_msg)
+
         run(["git", "push", "origin", branch])
+
+        pr_body = f"Updated TheRock ref to `{after[:7]}` due to submodule bump"
+        if baseline_run_id:
+            pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
+
         gh_api(
             token,
             f"repos/{repo_name}/pulls",
@@ -423,7 +531,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
                 "title": f"Update TheRock reference to ({after[:7]})",
                 "head": branch,
                 "base": "develop",
-                "body": f"Updated TheRock ref to `{after[:7]}` due to submodule bump",
+                "body": pr_body,
             },
         )
 
@@ -444,13 +552,14 @@ def main() -> None:
     parser.add_argument(
         "--submodule",
         default="all",
-        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb"],
+        choices=["all", "rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
+    parser.add_argument("--mesa_token", required=True)
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
@@ -460,6 +569,7 @@ def main() -> None:
         "systems": args.systems_token,
         "libraries": args.libraries_token,
         "rocgdb": args.rocgdb_token,
+        "mesa-fork": args.mesa_token,
     }
 
     if args.event_type == "schedule":
