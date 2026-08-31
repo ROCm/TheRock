@@ -44,7 +44,7 @@ do_update_alternatives(){
     # previous patch level is small.
     altscore=$((altscore*1000000+(now-1600000000)/60))
 
-    binaries=( rocgdb rocprofv3 rocprofv3-avail rocpd amd-smi rocm_agent_enumerator rocm-smi )
+    binaries=( rocgdb rocprofv3 rocprofv3-avail rocpd rocminfo amd-smi rocm_agent_enumerator )
 
     {% if target == "deb" %}
        PKG_INSTALL_PREFIX={{ install_prefix }}
