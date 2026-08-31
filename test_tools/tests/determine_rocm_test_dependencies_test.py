@@ -300,9 +300,7 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rdc", projects)
 
     def test_shared_rocroller_prefix_mapped(self) -> None:
-        proc = self._run(
-            "--changed-projects", "shared/rocroller", "--level", "4"
-        )
+        proc = self._run("--changed-projects", "shared/rocroller", "--level", "4")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         projects = json.loads(proc.stdout.strip())
         self.assertIn("rocroller", projects)
