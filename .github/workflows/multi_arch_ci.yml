@@ -81,6 +81,10 @@ on:
         type: boolean
         default: true
         description: "Build native Linux packages and run install tests"
+      build_stages:
+        type: string
+        default: ""
+        description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
   pull_request:
     types:
       - labeled
@@ -121,6 +125,7 @@ jobs:
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
+      build_stages: ${{ inputs.build_stages || '' }}
     secrets: inherit
 
   linux_build_and_test:
@@ -174,7 +179,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
 
   ci_summary:
     name: CI Summary
