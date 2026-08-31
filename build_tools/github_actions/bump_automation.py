@@ -198,6 +198,25 @@ def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> b
     return all(job.get("conclusion") == "success" for job in gate_jobs)
 
 
+def gh_api_paginate(token: str, endpoint: str) -> list:
+    """Fetch all pages of a GitHub list endpoint and return the combined results."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    results = []
+    url = f"https://api.github.com/{endpoint}"
+    while url:
+        response = requests.get(url, headers=headers)
+        if not response.ok:
+            raise RuntimeError(
+                f"GitHub API failed: {response.status_code} {response.text}"
+            )
+        results.extend(response.json())
+        url = response.links.get("next", {}).get("url")
+    return results
+
+
 def get_baseline_run_id_from_merged_pr(
     repo: str, token: str, merge_commit_sha: str, workflow_name: str = "Multi-Arch CI"
 ) -> str | None:
@@ -471,7 +490,7 @@ def find_therock_workflow_files(root: Path = Path(".github")) -> list[str]:
 def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
     """Close all open PRs on TheRock that originated from old submodule SHA."""
     old_short = old_sha[:7]
-    prs = gh_api(token, f"repos/{THEROCK_REPO}/pulls?state=open")
+    prs = gh_api_paginate(token, f"repos/{THEROCK_REPO}/pulls?state=open&per_page=100")
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:
@@ -493,6 +512,18 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
                 method="PATCH",
                 data={"state": "closed"},
             )
+
+            # Delete the head branch
+            branch_ref = pr["head"]["ref"]
+            try:
+                gh_api(
+                    token,
+                    f"repos/{THEROCK_REPO}/git/refs/heads/{branch_ref}",
+                    method="DELETE",
+                )
+                print(f"[INFO] Deleted branch {branch_ref}")
+            except RuntimeError as e:
+                print(f"[WARN] Could not delete branch {branch_ref}: {e}")
 
 
 def _parse_github_datetime(value: str) -> datetime:
