@@ -270,10 +270,13 @@ jobs:
             }
 
 
-  # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
-  #   bucket if the job order is not altered.
+  # The PyTorch release workflow publishes its wheels to the release index, then
+  # tests from that index. Wait for the corresponding ROCm release to be published
+  # before triggering the downstream release.
+  # TODO: Consider pulling ROCm packages from the published release index instead
+  #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_pytorch_wheels:
-    needs: [build_artifacts, build_python_packages]
+    needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
     if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
@@ -296,8 +299,13 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
+  # The JAX release workflow publishes its wheels to the release index, then tests
+  # from that index. Wait for the corresponding ROCm release to be published before
+  # triggering the downstream release.
+  # TODO: Consider pulling ROCm packages from the published release index instead
+  #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_jax_wheels:
-    needs: [build_artifacts, build_python_packages]
+    needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release JAX Wheels
     if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}
     runs-on: ubuntu-24.04

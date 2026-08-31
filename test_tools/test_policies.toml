@@ -49,14 +49,14 @@ test_include = ["rocprofiler-systems-examples"]
 [component.roctracer]
 test_include = ["hip-clr", "rocprofiler-sdk"]
 
-# rocgdb-cpu / rocgdb-gpu are ctest targets of rocgdb, not subprojects, so they
-# are named here rather than derived from the graph.
+# rocgdb-cpu / rocgdb-gpu / rocgdb-corefile are ctest targets of rocgdb, not
+# subprojects, so they are named here rather than derived from the graph.
 
 [component.amd-dbgapi]
-test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
 
 [component.rocgdb]
-test_include = ["rocgdb-cpu", "rocgdb-gpu"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
 
 # --- Math / ML library couplings ----------------------------------------------
 
