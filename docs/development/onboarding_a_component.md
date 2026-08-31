@@ -15,11 +15,12 @@ checklist:
 > [!NOTE]
 > The worked example throughout is the **RPP** computer-vision library, which
 > was onboarded in three PRs and is a faithful template for a new component:
+>
 > - build (1/3): [#7079](https://github.com/ROCm/TheRock/pull/7079)
 > - packaging (2/3): [#7080](https://github.com/ROCm/TheRock/pull/7080)
 > - inclusion/test (3/3): [#5708](https://github.com/ROCm/TheRock/pull/5708)
 
----
+______________________________________________________________________
 
 ## Mental model
 
@@ -28,9 +29,9 @@ sub-projects into a single distribution. Onboarding a component means wiring it
 into four layers:
 
 1. **Source** — the component's code, checked out via a git submodule.
-2. **Build** — a CMake sub-project declaration + an artifact definition.
-3. **Packaging** — how the built files flow into OS packages and Python wheels.
-4. **CI & tests** — how the component builds and is tested in GitHub Actions.
+1. **Build** — a CMake sub-project declaration + an artifact definition.
+1. **Packaging** — how the built files flow into OS packages and Python wheels.
+1. **CI & tests** — how the component builds and is tested in GitHub Actions.
 
 The single most important fact: **almost nothing is auto-discovered.** Every
 sub-project and artifact is explicitly declared. The build/test CI matrices are
@@ -40,13 +41,13 @@ CMake, and the artifact/test registries by hand.
 
 ### The three source-of-truth registries
 
-| Registry | File | Role |
-|---|---|---|
-| Build topology | [`BUILD_TOPOLOGY.toml`](/BUILD_TOPOLOGY.toml) | Declares the artifact, its group, deps, feature flag, platform gating. Generates the `THEROCK_ENABLE_*` flags and the CI matrix. |
-| Artifact descriptor | `<family>/artifact-<name>.toml` | Declares which staged files land in each component slice (`lib`/`dev`/`dbg`/`doc`/`run`/`test`). |
-| CMake registration | `<family>/CMakeLists.txt` (+ root [`CMakeLists.txt`](/CMakeLists.txt) for a new family) | `therock_cmake_subproject_declare` → … → `therock_provide_artifact`. |
+| Registry            | File                                                                                    | Role                                                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Build topology      | [`BUILD_TOPOLOGY.toml`](/BUILD_TOPOLOGY.toml)                                           | Declares the artifact, its group, deps, feature flag, platform gating. Generates the `THEROCK_ENABLE_*` flags and the CI matrix. |
+| Artifact descriptor | `<family>/artifact-<name>.toml`                                                         | Declares which staged files land in each component slice (`lib`/`dev`/`dbg`/`doc`/`run`/`test`).                                 |
+| CMake registration  | `<family>/CMakeLists.txt` (+ root [`CMakeLists.txt`](/CMakeLists.txt) for a new family) | `therock_cmake_subproject_declare` → … → `therock_provide_artifact`.                                                             |
 
----
+______________________________________________________________________
 
 ## Step 0 — Decide where the source lives
 
@@ -89,7 +90,7 @@ Then add the submodule name to the appropriate project list in
 [`build_tools/fetch_sources.py`](/build_tools/fetch_sources.py) and run
 `python build_tools/fetch_sources.py` to initialize it.
 
----
+______________________________________________________________________
 
 ## Step 1 — Land / point at the source
 
@@ -109,7 +110,7 @@ python build_tools/fetch_sources.py
 ls <family>/<Name>   # or rocm-libraries/projects/<name>
 ```
 
----
+______________________________________________________________________
 
 ## Step 2 — CMake sub-project wiring
 
@@ -162,13 +163,13 @@ The five core calls (all defined in
 [`cmake/therock_subproject.cmake`](/cmake/therock_subproject.cmake) and
 [`cmake/therock_artifacts.cmake`](/cmake/therock_artifacts.cmake)):
 
-| Call | Purpose |
-|---|---|
-| `therock_cmake_subproject_declare(<name> …)` | Registers the sub-project + `<name>+configure/+build/+stage/+dist` targets. Key args: `EXTERNAL_SOURCE_DIR`, `COMPILER_TOOLCHAIN` (`amd-hip`/`amd-llvm`), `BUILD_DEPS` (build+provide first, non-transitive), `RUNTIME_DEPS` (build first **and** ship in the unified tree, transitive), `CMAKE_ARGS`, `CMAKE_INCLUDES`, `IGNORE_PACKAGES` (force `find_package` to fall through to the system), `INTERFACE_LINK_DIRS`, and the `USE_DIST_AMDGPU_TARGETS`/`BACKGROUND_BUILD`/`EXCLUDE_FROM_ALL` flags. |
-| `therock_cmake_subproject_glob_c_sources(<name> SUBDIRS …)` | `CONFIGURE_DEPENDS` glob so source edits re-trigger the build phase. |
-| `therock_cmake_subproject_provide_package(<name> <Pkg> <relpath>)` | Declares a `find_package(<Pkg>)` config the sub-project installs (e.g. `lib/cmake/rpp`), so dependents resolve to the sibling build. |
-| `therock_cmake_subproject_activate(<name>)` | Finalizes the sub-project (analogous to `FetchContent_MakeAvailable`). Must come last. |
-| `therock_provide_artifact(<name> …)` | Binds the sub-project's staged output to an artifact slice. `DESCRIPTOR` = the `artifact-<name>.toml`, `COMPONENTS` = which slices, `SUBPROJECT_DEPS` = feeding sub-projects, `TARGET_NEUTRAL` = single generic bundle vs per-arch. **Fails fast if `<name>` is not in `BUILD_TOPOLOGY.toml`** (Step 4). |
+| Call                                                               | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `therock_cmake_subproject_declare(<name> …)`                       | Registers the sub-project + `<name>+configure/+build/+stage/+dist` targets. Key args: `EXTERNAL_SOURCE_DIR`, `COMPILER_TOOLCHAIN` (`amd-hip`/`amd-llvm`), `BUILD_DEPS` (build+provide first, non-transitive), `RUNTIME_DEPS` (build first **and** ship in the unified tree, transitive), `CMAKE_ARGS`, `CMAKE_INCLUDES`, `IGNORE_PACKAGES` (force `find_package` to fall through to the system), `INTERFACE_LINK_DIRS`, and the `USE_DIST_AMDGPU_TARGETS`/`BACKGROUND_BUILD`/`EXCLUDE_FROM_ALL` flags. |
+| `therock_cmake_subproject_glob_c_sources(<name> SUBDIRS …)`        | `CONFIGURE_DEPENDS` glob so source edits re-trigger the build phase.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `therock_cmake_subproject_provide_package(<name> <Pkg> <relpath>)` | Declares a `find_package(<Pkg>)` config the sub-project installs (e.g. `lib/cmake/rpp`), so dependents resolve to the sibling build.                                                                                                                                                                                                                                                                                                                                                                   |
+| `therock_cmake_subproject_activate(<name>)`                        | Finalizes the sub-project (analogous to `FetchContent_MakeAvailable`). Must come last.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `therock_provide_artifact(<name> …)`                               | Binds the sub-project's staged output to an artifact slice. `DESCRIPTOR` = the `artifact-<name>.toml`, `COMPONENTS` = which slices, `SUBPROJECT_DEPS` = feeding sub-projects, `TARGET_NEUTRAL` = single generic bundle vs per-arch. **Fails fast if `<name>` is not in `BUILD_TOPOLOGY.toml`** (Step 4).                                                                                                                                                                                               |
 
 **Source patching (optional):** drop `pre_hook_<Target>.cmake` or
 `post_hook_<Target>.cmake` in the family dir; they are auto-detected by filename
@@ -177,11 +178,12 @@ The five core calls (all defined in
 **New family only:** if you are creating a brand-new top-level directory
 (not adding to an existing family), also add it to root
 [`CMakeLists.txt`](/CMakeLists.txt):
+
 - an `add_subdirectory(<dir>)` at the correct dependency-DAG position (the
   ordered block near lines 498–522), and
 - a `THEROCK_ENABLE_<GROUP>` option in the feature-group block (lines 221–241).
 
----
+______________________________________________________________________
 
 ## Step 3 — Artifact descriptor (`artifact-<name>.toml`)
 
@@ -207,7 +209,7 @@ Slices are `lib` (runtime libs), `dev` (headers/cmake), `dbg` (debug info),
 `doc`, `run` (runtime tools), `test`. The descriptor is consumed by
 `build_tools/fileset_tool.py artifact`, invoked from `therock_provide_artifact`.
 
----
+______________________________________________________________________
 
 ## Step 4 — Register in `BUILD_TOPOLOGY.toml`
 
@@ -232,6 +234,7 @@ the group default comes from `feature_group` (`CV_LIBS` → `THEROCK_ENABLE_CV_L
 
 **Conditional availability** (see the table in
 [`build_system.md`](./build_system.md#conditional-availability)):
+
 - `disable_platforms = ["windows"]` — hard disable, cannot be overridden.
 - `disable_processors = ["ppc64le"]` — soft default-off, overridable.
 
@@ -247,7 +250,7 @@ python build_tools/topology_to_cmake.py --validate-only
 python build_tools/topology_to_cmake.py --print-graph   # dependency graph as JSON
 ```
 
----
+______________________________________________________________________
 
 ## Step 5 — Packaging
 
@@ -273,7 +276,7 @@ targeted knobs — per-artifact `python_requires` in `BUILD_TOPOLOGY.toml` or a
 test's `additional_requirements_files` — over the global
 [`requirements.txt`](/requirements.txt).
 
----
+______________________________________________________________________
 
 ## Step 6 — Tests
 
@@ -295,7 +298,7 @@ test's `additional_requirements_files` — over the global
   [`tests/test_artifact_structure.py`](/tests/test_artifact_structure.py) so the
   new artifact's expected layout is asserted.
 
----
+______________________________________________________________________
 
 ## Step 7 — CI (mostly automatated) and assisted via docs
 
@@ -316,13 +319,14 @@ test's `additional_requirements_files` — over the global
   under `docs/development/`. Grep for an analogous existing component and mirror
   its footprint.
 
----
+______________________________________________________________________
 
 ## Past Working example: the RPP three-PR footprint
 
 Exact files changed, as a concrete template:
 
 ### 1/3 — build ([#7079](https://github.com/ROCm/TheRock/pull/7079))
+
 ```
 .github/workflows/multi_arch_build_portable_linux.yml
 BUILD_TOPOLOGY.toml                       # [artifacts.rpp], group, feature
@@ -340,6 +344,7 @@ tests/test_artifact_structure.py
 ```
 
 ### 2/3 — packaging ([#7080](https://github.com/ROCm/TheRock/pull/7080))
+
 ```
 build_tools/packaging/linux/package.json          # OS packaging (bulk)
 build_tools/install_rocm_from_artifacts.py         # --rpp fetch flag
@@ -351,17 +356,19 @@ tests/test_artifact_structure.py
 ```
 
 ### 3/3 — inclusion/test ([#5708](https://github.com/ROCm/TheRock/pull/5708))
+
 ```
 build_tools/github_actions/fetch_test_configurations.py   # test matrix entry
 build_tools/github_actions/test_executable_scripts/test_rpp.py
 build_tools/install_rocm_from_artifacts.py
 ```
 
----
+______________________________________________________________________
 
 ## Onboarding checklist
 
 ### New component in an existing family
+
 - [ ] Bump the `rocm-libraries`/`rocm-systems` submodule to a commit containing `projects/<name>`.
 - [ ] `BUILD_TOPOLOGY.toml` — add `[artifacts.<name>]` (group, deps, type, feature_group).
 - [ ] `<family>/artifact-<name>.toml` — new artifact descriptor.
@@ -374,12 +381,14 @@ build_tools/install_rocm_from_artifacts.py
 - [ ] `test_tools/test_policies.toml` — optional test-coupling overrides.
 
 ### Additionally, for a new family or a new submodule
+
 - [ ] Root `CMakeLists.txt` — `add_subdirectory(<family>)` + `THEROCK_ENABLE_<GROUP>` option.
 - [ ] `BUILD_TOPOLOGY.toml` — `[build_stages.<stage>]`, `[artifact_groups.<group>]`, `[source_sets.*]`.
 - [ ] `.gitmodules` + `build_tools/fetch_sources.py` — register a standalone submodule.
 - [ ] `configure_ci_path_filters.py` `_GITHUB_WORKFLOWS_CI_FILENAMES` — only if you add a new CI workflow file.
 
 ### Validation
+
 ```bash
 python build_tools/topology_to_cmake.py --validate-only
 python build_tools/fetch_sources.py
@@ -389,7 +398,7 @@ ninja -C build <family>/<name>/all
 python -m pytest tests/test_artifact_structure.py
 ```
 
----
+______________________________________________________________________
 
 ## Reference
 
