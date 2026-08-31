@@ -86,13 +86,6 @@ def _is_asan_variant(build_variant: str) -> bool:
     """True if build_variant is any ASAN-family variant: "asan", "host-asan",
     "asan-debug" (RelWithDebInfo + line-number debug info, see
     amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
-
-    ASSUMPTION (unverified against a real host-asan publish run — nothing
-    calls this script with "host-asan" today, only "release" and "asan-debug"
-    do): every ASAN-family variant, full-device or host-only, debug or not,
-    publishes to the same "-asan" suffixed destination paths and skips python
-    packages. If any of these ever need their own separate path, give this a
-    real per-variant branch instead of a blanket substring check.
     """
     return "asan" in build_variant
 

@@ -507,66 +507,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # ASAN sandbox runner selection
     # -----------------------
 
-    def test_asan_build_uses_sandbox_runner(self):
-        """ASAN builds should use test-runs-on-sandbox when available."""
-        os.environ["BUILD_VARIANT"] = "asan"
-        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+    def test_asan_family_builds_use_sandbox_runner(self):
+        """ASAN-family builds should use test-runs-on-sandbox when available.
 
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "count": 5},
-                            {"label": "linux-gfx942-b", "count": 5},
-                        ],
-                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        rocblas = next(j for j in components if j["job_name"] == "rocblas")
-        self.assertEqual(rocblas["test_runner"], "linux-mi325-gpu-rocm-cpu-sandbox")
-
-    def test_host_asan_build_uses_sandbox_runner(self):
-        """host-asan builds should also use test-runs-on-sandbox."""
-        os.environ["BUILD_VARIANT"] = "host-asan"
-        os.environ["PROJECTS_TO_TEST"] = "hipblas"
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-sandbox": "linux-sandbox-runner",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        hipblas = next(j for j in components if j["job_name"] == "hipblas")
-        self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
-
-    def test_asan_debug_variants_use_sandbox_runner(self):
-        """asan-debug and host-asan-debug are the same ASAN family as
-        asan/host-asan (RelWithDebInfo + line-number debug info, see
-        amdgpu_family_matrix.py's all_build_variants) and must also route to
-        test-runs-on-sandbox, not the regular runner pool."""
-        for build_variant in ("asan-debug", "host-asan-debug"):
+        Covers "asan", "host-asan", and their "-debug" (RelWithDebInfo +
+        line-number debug info) counterparts — all route to the sandbox
+        runner, not the regular runner pool.
+        """
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
             with self.subTest(build_variant=build_variant):
                 os.environ["BUILD_VARIANT"] = build_variant
                 os.environ["PROJECTS_TO_TEST"] = "hipblas"
