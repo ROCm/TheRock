@@ -503,6 +503,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      test_level: ${{ steps.configure.outputs.test_level }}
       summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
@@ -527,6 +528,7 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
+            --python-version "${{ inputs.python_version }}" \
             --test-level "${{ inputs.test_level }}" \
             --platform linux
 
@@ -567,13 +569,8 @@ jobs:
   # Scoped to gfx94X-dcgpu Python 3.12 builds with the full test level.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
-    if: >-
-      ${{
-        inputs.test_level == 'full' &&
-        inputs.python_version == '3.12' &&
-        contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
-      }}
-    needs: [build_pytorch_wheels]
+    if: ${{ needs.configure_pytorch_tests.outputs.test_level == 'full' }}
+    needs: [build_pytorch_wheels, configure_pytorch_tests]
     runs-on: ubuntu-24.04
     permissions:
       actions: write

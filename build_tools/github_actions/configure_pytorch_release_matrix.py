@@ -14,6 +14,7 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
+from pytorch_test_policy import select_release_test_level
 
 RELEASE_TYPES = [
     "ci",
@@ -23,8 +24,6 @@ RELEASE_TYPES = [
     "nightly-bkc",
     "prerelease",
 ]
-
-PYTORCH_GPU_TEST_PYTHON_VERSION = "3.12"
 
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
@@ -118,20 +117,6 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
-def _select_test_level(*, python_version: str, run_full_pytorch_tests: bool) -> str:
-    """Select test coverage for one release matrix row.
-
-    Every build runs the CPU wheel sanity check in its build workflow. Limit
-    GPU testing to the Python version used by upstream PyTorch CI, elevating
-    that row to the separately dispatched full suite when requested.
-    """
-    if python_version != PYTORCH_GPU_TEST_PYTHON_VERSION:
-        return "sanity"
-    if run_full_pytorch_tests:
-        return "full"
-    return "standard"
-
-
 def _parse_bool(value: str) -> bool:
     normalized = value.strip().lower()
     if normalized == "true":
@@ -198,8 +183,10 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
-                "test_level": _select_test_level(
+                "test_level": select_release_test_level(
                     python_version=py,
+                    platform=platform,
+                    amdgpu_families=_split_families(families),
                     run_full_pytorch_tests=run_full_pytorch_tests,
                 ),
                 # TODO(#7185): PyTorch nightly's requirements-ci.txt pins

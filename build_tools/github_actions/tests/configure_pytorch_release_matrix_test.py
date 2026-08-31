@@ -219,6 +219,23 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             {"3.11": "sanity", "3.12": "full", "3.13": "sanity"},
         )
 
+    def test_full_tests_require_linux_gfx94x_build(self):
+        for platform, families in (
+            ("linux", "gfx110X-all"),
+            ("windows", "gfx94X-dcgpu"),
+        ):
+            with self.subTest(platform=platform, families=families):
+                matrix = m.generate_pytorch_matrix_for_release_type(
+                    release_type="nightly",
+                    python_versions=["3.12"],
+                    pytorch_git_refs=["nightly"],
+                    amdgpu_families=families,
+                    platform=platform,
+                    run_full_pytorch_tests=True,
+                )
+
+                self.assertEqual(matrix[0]["test_level"], "standard")
+
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
         # JSON for use in workflow files like:
