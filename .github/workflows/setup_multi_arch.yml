@@ -52,6 +52,13 @@ on:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
         default: ""
+      baseline_repository:
+        description: >-
+          Repository to query for baseline_run_id. External repos should set
+          this to github.repository when using their own baseline_run_id.
+          Defaults to THEROCK_REPOSITORY (the 'repository' input).
+        type: string
+        default: ""
       stage_reuse_mode:
         description: >-
           Artifact-reuse mode: "off" disables all reuse, ignores prebuilt_stages
@@ -220,6 +227,8 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
