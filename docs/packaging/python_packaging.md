@@ -189,6 +189,52 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
 > structure used by CI uploads.
 
+## Mirroring Third-Party Python Dependencies
+
+[`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
+resolves configured third-party wheels from PyPI and publishes them to the
+structured Core `whl-next` prefix. It is usable from CI or locally.
+
+Resolve and download an immutable snapshot without AWS access:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py resolve \
+  --output-dir /tmp/rocm-dependency-snapshot
+```
+
+After configuring normal boto3/AWS credentials with `HeadObject`, `GetObject`,
+`PutObject`, and same-key `CopyObject` access to one destination bucket,
+publish the same local snapshot:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py publish \
+  --snapshot-dir /tmp/rocm-dependency-snapshot \
+  --bucket therock-repo-amd-dev-core \
+  --refresh-existing
+```
+
+Use `mirror` for a convenient one-bucket resolve and publish. Add `--dry-run`
+to `publish` or `mirror` to inspect the required S3 operations without writing.
+Existing objects are skipped by default. `--refresh-existing` performs a
+conditional same-key copy, which updates `LastModified` so retained-stream
+lifecycle rules do not expire the current dependency version. Older versions
+are not refreshed. Run
+`python build_tools/packaging/python/mirror_python_dependencies.py --help` and
+the subcommand help for project and individual dependency selection.
+
+The tool publishes only product-local objects under
+`v5/rocm/core/whl-next/`. Adding a dependency to the aggregate
+`/rocm/whl-next/` index remains a separate ownership decision.
+
+The rockrel `Mirror Python Dependencies` workflow resolves one snapshot every
+Monday and sequentially publishes it to `dev`, `nightly`, `rc`, and
+`stable-staging`. Manual dispatch defaults to resolve-only and can target one
+stream for diagnostics. Retained streams refresh only the current snapshot's
+existing objects; stable-staging skips existing objects because it has no
+lifecycle expiration. If a stream fails, rerun the complete workflow. Each run
+is idempotent, and older versions remain subject to their normal retention
+policy.
+
 ## rocm-profiler
 
 The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
