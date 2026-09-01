@@ -450,9 +450,7 @@ def main() -> None:
     )
     backend = create_storage_backend()
     logs_dir = package_dir.parent / "logs"
-    log_index_url = upload_packaging_logs(
-        logs_dir, args.pkg_type, output_root, backend
-    )
+    log_index_url = upload_packaging_logs(logs_dir, args.pkg_type, output_root, backend)
     if log_index_url:
         _emit_github_output("packaging_logs_url", log_index_url)
 
