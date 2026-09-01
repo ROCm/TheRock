@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(THIS_DIR.parent))
 sys.path.insert(0, os.fspath(THIS_DIR.parent.parent))
 
 import configure_pytorch_test_matrix as m
+from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_choice_options,
@@ -51,15 +52,8 @@ def _fake_family_matrix(_trigger_types: list[str]) -> FamilyMatrix:
 class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
     def test_direct_build_workflows_default_to_standard_tests(self) -> None:
         expected_options = {
-            "multi_arch_build_portable_linux_pytorch_wheels.yml": [
-                "sanity",
-                "standard",
-                "full",
-            ],
-            "multi_arch_build_windows_pytorch_wheels.yml": [
-                "sanity",
-                "standard",
-            ],
+            "multi_arch_build_portable_linux_pytorch_wheels.yml": PYTORCH_TEST_LEVELS,
+            "multi_arch_build_windows_pytorch_wheels.yml": ["sanity", "standard"],
         }
 
         for workflow_filename, options in expected_options.items():
@@ -73,17 +67,17 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                 self.assertEqual(call_input["default"], "standard")
                 self.assertEqual(get_choice_options(workflow, "test_level"), options)
 
-    def test_full_dispatch_uses_resolved_test_level_only(self) -> None:
+    def test_full_dispatch_uses_requested_level_and_gfx94_guard(self) -> None:
         workflow = load_workflow(
             WORKFLOWS_DIR / "multi_arch_build_portable_linux_pytorch_wheels.yml"
         )
         dispatch_job = get_workflow_job(workflow, "dispatch_pytorch_wheels_full_test")
 
-        self.assertEqual(
-            dispatch_job["if"],
-            "${{ needs.configure_pytorch_tests.outputs.test_level == 'full' }}",
-        )
-        self.assertIn("configure_pytorch_tests", dispatch_job["needs"])
+        condition = dispatch_job["if"]
+        self.assertIn("inputs.test_level == 'full'", condition)
+        self.assertIn("contains(inputs.amdgpu_families, 'gfx94X-dcgpu')", condition)
+        self.assertNotIn("inputs.python_version", condition)
+        self.assertEqual(dispatch_job["needs"], ["build_pytorch_wheels"])
 
     def test_empty_family_list_returns_empty_matrix(self) -> None:
         matrix = m.build_test_matrix(
@@ -147,8 +141,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                     "gfxalpha-all",
                     "--test-amdgpu-families",
                     "gfxalpha-all",
-                    "--python-version",
-                    "3.12",
                     "--platform",
                     "linux",
                 ]
@@ -156,7 +148,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
 
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(outputs["enabled"], "true")
-        self.assertEqual(outputs["test_level"], "standard")
         matrix = json.loads(outputs["matrix"])
         self.assertEqual(matrix["include"][0]["amdgpu_family"], "gfxalpha-all")
 
@@ -170,8 +161,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                     "gfxalpha-all;gfxalpha-all",
                     "--test-amdgpu-families",
                     "auto",
-                    "--python-version",
-                    "3.12",
                     "--platform",
                     "linux",
                 ]
@@ -189,8 +178,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                     "gfxalpha-all",
                     "--test-amdgpu-families",
                     "auto;gfxalpha-all",
-                    "--python-version",
-                    "3.12",
                     "--platform",
                     "linux",
                 ]
@@ -204,8 +191,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                     "gfxalpha-all",
                     "--test-amdgpu-families",
                     "none",
-                    "--python-version",
-                    "3.12",
                     "--platform",
                     "linux",
                 ]
@@ -223,8 +208,6 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
                     "not-a-family",
                     "--test-level",
                     "sanity",
-                    "--python-version",
-                    "3.13",
                     "--platform",
                     "linux",
                 ]
@@ -232,39 +215,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
 
         outputs = gha_set_output.call_args.args[0]
         self.assertEqual(outputs["enabled"], "false")
-        self.assertEqual(outputs["test_level"], "sanity")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
-
-    def test_full_level_requires_existing_full_test_configuration(self) -> None:
-        self.assertEqual(
-            m.resolve_requested_test_level(
-                requested_test_level="full",
-                python_version="3.12",
-                platform="linux",
-                amdgpu_families=["gfx94X-dcgpu"],
-            ),
-            "full",
-        )
-
-        for python_version, platform, families in (
-            ("3.13", "linux", ["gfx94X-dcgpu"]),
-            ("3.12", "windows", ["gfx94X-dcgpu"]),
-            ("3.12", "linux", ["gfx110X-all"]),
-        ):
-            with self.subTest(
-                python_version=python_version,
-                platform=platform,
-                families=families,
-            ):
-                self.assertEqual(
-                    m.resolve_requested_test_level(
-                        requested_test_level="full",
-                        python_version=python_version,
-                        platform=platform,
-                        amdgpu_families=families,
-                    ),
-                    "standard",
-                )
 
     def test_full_level_includes_standard_gpu_matrix(self) -> None:
         with mock.patch.object(

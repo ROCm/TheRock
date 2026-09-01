@@ -23,7 +23,7 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
 from github_actions.github_actions_api import gha_set_output
-from pytorch_test_policy import PYTORCH_TEST_LEVELS, resolve_requested_test_level
+from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
 
 
 def split_families(value: str) -> list[str]:
@@ -81,12 +81,11 @@ def build_test_matrix(
     return {"include": include}
 
 
-def emit_outputs(matrix: dict[str, list[dict[str, str]]], *, test_level: str) -> None:
+def emit_outputs(matrix: dict[str, list[dict[str, str]]]) -> None:
     gha_set_output(
         {
             "enabled": str(bool(matrix["include"])).lower(),
             "matrix": json.dumps(matrix, separators=(",", ":")),
-            "test_level": test_level,
         }
     )
 
@@ -107,11 +106,6 @@ def main(argv: list[str]) -> None:
         ),
     )
     parser.add_argument(
-        "--python-version",
-        required=True,
-        help="Python version of the wheels being tested.",
-    )
-    parser.add_argument(
         "--test-level",
         choices=PYTORCH_TEST_LEVELS,
         default="standard",
@@ -129,12 +123,6 @@ def main(argv: list[str]) -> None:
     args = parser.parse_args(argv)
 
     built_families = split_families(args.build_amdgpu_families)
-    test_level = resolve_requested_test_level(
-        requested_test_level=args.test_level,
-        python_version=args.python_version,
-        platform=args.platform,
-        amdgpu_families=built_families,
-    )
     test_families_arg = args.test_amdgpu_families.strip().lower()
     if test_families_arg in ("", "auto", "built"):
         test_amdgpu_families = built_families
@@ -152,9 +140,9 @@ def main(argv: list[str]) -> None:
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
-        test_level=test_level,
+        test_level=args.test_level,
     )
-    emit_outputs(matrix, test_level=test_level)
+    emit_outputs(matrix)
 
 
 if __name__ == "__main__":

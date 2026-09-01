@@ -14,8 +14,8 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
-from pytorch_test_policy import select_release_test_level
 
+# Build matrix configuration.
 RELEASE_TYPES = [
     "ci",
     "dev",
@@ -76,6 +76,27 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
     },
 }
 
+# Test coverage configuration.
+#
+# PyTorch test levels are additive:
+#
+# * sanity runs only sanity_check_wheel.py in the wheel build job. This checks
+#   the wheel on a CPU runner without scheduling self-hosted GPU tests.
+# * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
+# * full also dispatches test_pytorch_wheels_full.yml, which runs the much
+#   larger upstream PyTorch test suite and can take several hours.
+PYTORCH_TEST_LEVELS = ["sanity", "standard", "full"]
+
+# Scheduled release matrices limit self-hosted GPU testing to one Python
+# version. Other Python versions still receive the build-time sanity check.
+PYTORCH_GPU_TEST_PYTHON_VERSION = "3.12"
+
+# The full upstream PyTorch suite can take several hours, so scheduled release
+# workflows run it on only one representative configuration. These constants
+# are release scheduling policy, not restrictions on direct workflow dispatch.
+PYTORCH_FULL_TEST_PLATFORM = "linux"
+PYTORCH_FULL_TEST_AMDGPU_FAMILY = "gfx94X-dcgpu"
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -115,6 +136,32 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
         for family in _split_families(families_str)
         if family.lower() not in exclude_lower
     )
+
+
+def _select_release_test_level(
+    *,
+    python_version: str,
+    platform: str,
+    amdgpu_families: list[str],
+    run_full_pytorch_tests: bool,
+) -> str:
+    """Select the shared PyTorch test level for a scheduled release row.
+
+    Use CPU-only sanity coverage outside the designated GPU-test Python
+    version. That version receives standard per-family GPU coverage, or the
+    hours-long full suite on the one representative configuration selected by
+    the release policy above.
+    """
+    if python_version != PYTORCH_GPU_TEST_PYTHON_VERSION:
+        return "sanity"
+    if (
+        run_full_pytorch_tests
+        and platform == PYTORCH_FULL_TEST_PLATFORM
+        and PYTORCH_FULL_TEST_AMDGPU_FAMILY.lower()
+        in {family.lower() for family in amdgpu_families}
+    ):
+        return "full"
+    return "standard"
 
 
 def _parse_bool(value: str) -> bool:
@@ -183,7 +230,7 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
-                "test_level": select_release_test_level(
+                "test_level": _select_release_test_level(
                     python_version=py,
                     platform=platform,
                     amdgpu_families=_split_families(families),

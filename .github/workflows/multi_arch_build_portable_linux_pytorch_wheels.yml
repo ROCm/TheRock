@@ -503,7 +503,6 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
-      test_level: ${{ steps.configure.outputs.test_level }}
       summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
@@ -528,7 +527,6 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
-            --python-version "${{ inputs.python_version }}" \
             --test-level "${{ inputs.test_level }}" \
             --platform linux
 
@@ -566,11 +564,18 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to gfx94X-dcgpu Python 3.12 builds with the full test level.
+  # Full-suite dispatch currently targets gfx94X-dcgpu because the runner
+  # inputs below are gfx942-specific. The caller controls the Python version
+  # and test level. Generalize this to a per-family runner matrix as more
+  # full-test runner configurations are enabled.
   dispatch_pytorch_wheels_full_test:
     name: Dispatch PyTorch Full Test | torch ${{ inputs.pytorch_git_ref }}
-    if: ${{ needs.configure_pytorch_tests.outputs.test_level == 'full' }}
-    needs: [build_pytorch_wheels, configure_pytorch_tests]
+    if: >-
+      ${{
+        inputs.test_level == 'full' &&
+        contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
+      }}
+    needs: [build_pytorch_wheels]
     runs-on: ubuntu-24.04
     permissions:
       actions: write

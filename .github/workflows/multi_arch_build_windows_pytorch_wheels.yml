@@ -557,7 +557,6 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
-      test_level: ${{ steps.configure.outputs.test_level }}
       summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Checkout
@@ -582,7 +581,6 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
-            --python-version "${{ inputs.python_version }}" \
             --test-level "${{ inputs.test_level }}" \
             --platform windows
 
