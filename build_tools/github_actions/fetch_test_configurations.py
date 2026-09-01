@@ -63,12 +63,15 @@ def _get_script_path(script_name: str) -> str:
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+# -v /var/lib/dkms:/var/lib/dkms:ro - Read-only host DKMS state so the driver/GPU
+#   sanity check (print_driver_gpu_info.py) can report the AMDGPU DKMS version
 _BASE_CONTAINER_OPTIONS = [
     "--ipc host",
     "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
     "--security-opt seccomp=unconfined",
+    "-v /var/lib/dkms:/var/lib/dkms:ro",
 ]
 
 # GPU-specific container options (only applied when linux_cpu_runner != True)
