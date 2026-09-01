@@ -58,3 +58,13 @@ exclude = [
 [components.dbg."compiler/hipcc/stage"]
 [components.dev."compiler/hipcc/stage"]
 [components.doc."compiler/hipcc/stage"]
+
+# aux-overlay symlinks and cmake redirects for LLVM toolchain
+[components.dev."base/aux-overlay/stage"]
+default_patterns = false
+include = [
+  "bin/**",
+  "lib/cmake/**",
+  "llvm",
+  "amdgcn",
+]
