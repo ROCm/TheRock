@@ -29,7 +29,10 @@ TODO(#2200): clarify AMD GPU family selection
 
 import copy
 import os
+import platform
 import random
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -76,6 +79,41 @@ def is_asan():
     """Determines if this is an ASAN build using BUILD_VARIANT env var."""
     BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
     return BUILD_VARIANT == "asan"
+
+
+def is_asan_instrumented():
+    """Determines if this build's host libraries carry ASAN instrumentation.
+
+    Unlike is_asan(), this covers the host-asan variant as well. Use it for
+    anything that has to cope with instrumented host libraries; use is_asan()
+    only to gate behavior specific to full (host + device) ASAN.
+    """
+    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
+    return BUILD_VARIANT in ("asan", "host-asan")
+
+
+def get_asan_lib_path(bin_dir):
+    """Resolves the ASAN runtime shared library shipped with the build's clang.
+
+    Executables that are not themselves linked against the runtime must preload
+    this, otherwise loading an instrumented ROCm library pulls the runtime in
+    too late and it aborts with "ASan runtime does not come first in initial
+    library list".
+    """
+    arch = platform.machine()
+    clang_path = str(Path(bin_dir).parent / "lib" / "llvm" / "bin" / "clang++")
+    asan_lib = f"libclang_rt.asan-{arch}.so"
+    cmd = [clang_path, f"-print-file-name={asan_lib}"]
+    _log(f"++ Exec [{clang_path}]$ {shlex.join(cmd)}")
+    result = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    # Clang echoes the bare filename back when it cannot resolve it.
+    resolved = result.stdout.strip()
+    if not resolved or resolved == asan_lib or not Path(resolved).is_file():
+        raise FileNotFoundError(
+            f"Could not locate ASan runtime '{asan_lib}' via {clang_path} "
+            f"(got: '{resolved}')"
+        )
+    return str(Path(resolved).resolve())
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
