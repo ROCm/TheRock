@@ -87,13 +87,15 @@ msiexec /x amdrocm-runtime.msi /qn
 
 ```bat
 :: Find the product code
-wmic product where "Name like 'ROCm%'" get Name,Version,IdentifyingNumber
+wmic product where "Name like '%ROCm%'" get Name,Version,IdentifyingNumber
 
 :: Uninstall by product code
 msiexec /x {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX} /qn
 ```
 
-**Using Settings:** Apps > Installed apps > ROCm Runtime > Uninstall.
+**Using Settings:** Apps > Installed apps > find the ROCm entry (e.g.
+"AMD ROCm Runtime", or "AMD ROCm Core Runtime" for the core package) >
+Uninstall.
 
 Uninstall removes all installed files, the PATH entry, and all registry keys
 written by the installer. Files created after installation are not removed.
