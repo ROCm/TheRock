@@ -10,14 +10,14 @@ for performance.
 
 Usage:
     # Fetch inbound artifacts for a stage (downloads and extracts in parallel)
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --output-dir build/
 
     # Fetch and flatten artifacts into single directory structure
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
@@ -25,14 +25,14 @@ Usage:
         --flatten
 
     # Push produced artifacts after building (compresses and uploads in parallel)
-    python stage_artifact_manager.py push \
+    python artifact_manager.py push \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --build-dir build/
 
     # List what artifacts a stage needs/produces
-    python stage_artifact_manager.py info \
+    python artifact_manager.py info \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu
 
@@ -68,12 +68,46 @@ from _therock_utils.artifact_backend import (
     S3Backend,
     create_backend_from_env,
 )
-from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import (
+    ArtifactName,
+    ArtifactPopulator,
+    prebuilt_marker_relpath,
+)
 from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
+
+
+def _get_base_arch(target: str) -> str:
+    """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
+
+    Note: This strips everything after the first colon. Any suffix (not just
+    xnack) will be removed, e.g., 'gfx942:foo' -> 'gfx942'.
+    """
+    if not target:
+        return ""
+    base = target.split(":")[0]
+    return base if base else target
+
+
+def _matches_target(artifact_target: str, requested_targets: set[str]) -> bool:
+    """Match if the artifact's base arch equals any requested target's base arch.
+
+    Uses base-arch matching: both the artifact target and requested targets are
+    stripped to their base arch before comparison. This means requesting 'gfx942'
+    will match 'gfx942', 'gfx942:xnack+', 'gfx942:xnack-', or any 'gfx942:*' variant.
+
+    Known limitation: All colon-suffixed variants of the same base arch will match.
+    For example, requesting 'gfx942' matches 'gfx942:xnack+', 'gfx942:xnack-',
+    'gfx942:abc', etc. This is intentional to ensure all relevant artifacts are
+    fetched for a given GPU architecture.
+    """
+    if not artifact_target:
+        return False
+    requested_bases = {_get_base_arch(t) for t in requested_targets}
+    return _get_base_arch(artifact_target) in requested_bases
 
 
 def log(msg: str):
@@ -144,22 +178,44 @@ def find_available_artifacts(
 ) -> list[str]:
     """Find which artifacts exist in the available set.
 
-    Iterates artifact_names × target_families × components × extensions,
-    returning filenames that are present in `available`. Prefers .tar.zst
-    over .tar.xz when both exist.
+    Iterates available artifacts and filters by artifact_names, target_families,
+    and components. Uses base-arch matching: requesting a base arch (e.g., "gfx942")
+    will also match variants with suffixes (e.g., "gfx942:xnack+", "gfx942:xnack-").
+
+    Prefers .tar.zst over .tar.xz when both exist, because zstd offers faster
+    decompression and better compression ratios for our artifact workloads.
     """
     excluded_components = excluded_components or set()
+    targets_to_match = set(target_families)
+
+    # Use structured ArtifactName parsing for reliable matching (like fetch_artifacts.py)
     matched = []
-    for artifact_name in sorted(artifact_names):
-        for tf in target_families:
-            for comp in ARTIFACT_COMPONENTS:
-                if comp in excluded_components:
-                    continue
-                for ext in ARTIFACT_EXTENSIONS:
-                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
-                    if filename in available:
-                        matched.append(filename)
-                        break  # Found this artifact, don't check other extensions
+    seen = set()
+
+    # Sort .tar.zst before .tar.xz so dedup prefers zstd (faster decompression)
+    def _sort_key(f: str) -> tuple:
+        base = f.rsplit(".tar", 1)[0]
+        priority = 0 if f.endswith(".tar.zst") else 1
+        return (base, priority)
+
+    for filename in sorted(available, key=_sort_key):
+        an = ArtifactName.from_filename(filename)
+        if not an:
+            continue
+        if an.name not in artifact_names:
+            continue
+        if an.component in excluded_components:
+            continue
+        if not _matches_target(an.target_family, targets_to_match):
+            continue
+
+        # Dedupe: prefer .tar.zst over .tar.xz for same artifact
+        key = (an.name, an.component, an.target_family)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.append(filename)
+
     return matched
 
 
@@ -222,6 +278,7 @@ class ExtractRequest:
     output_dir: Path
     delete_archive: bool
     flatten: bool
+    extraction_cache_dir: Optional[Path] = None
     bootstrap: bool = False
     # Shared state for parallel bootstrap extraction
     cleaned_paths: Optional[set] = None
@@ -301,11 +358,42 @@ class BootstrappingPopulator(ArtifactPopulator):
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
                 rmtree_with_retry(full_path)
-            # Write the ".prebuilt" marker file
-            prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+            # Write the ".prebuilt" marker file where the build looks for it.
+            prebuilt_path = self.output_path / prebuilt_marker_relpath(relpath)
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
             prebuilt_path.touch()
-            self.created_markers.append(prebuilt_path)
+            if prebuilt_path not in self.created_markers:
+                self.created_markers.append(prebuilt_path)
+
+
+def _populate_extraction_cache(archive_path: Path, cache_dir: Path) -> Path:
+    """Extract an artifact once so later flatten operations can hardlink it.
+
+    Callers must treat flattened output files as read-only while the cache is
+    in use because they share inodes with the cached files.
+    """
+    cached_artifact_dir = cache_dir / archive_path.name
+    manifest_path = cached_artifact_dir / "artifact_manifest.txt"
+    if manifest_path.exists():
+        log(f"  == Reusing extracted {archive_path.name}")
+        return cached_artifact_dir
+
+    if cached_artifact_dir.exists():
+        rmtree_with_retry(cached_artifact_dir)
+    cached_artifact_dir.mkdir(parents=True)
+
+    log(f"  ++ Caching extracted {archive_path.name}")
+    populator = ArtifactPopulator(
+        output_path=cached_artifact_dir, verbose=False, flatten=False
+    )
+    populator(archive_path)
+
+    # ArtifactPopulator expects this manifest when its input is an exploded
+    # artifact directory. Write it last so its presence also marks a complete
+    # cache entry.
+    relpaths = sorted(populator.relpaths)
+    manifest_path.write_text("\n".join(relpaths) + "\n")
+    return cached_artifact_dir
 
 
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
@@ -327,11 +415,16 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             populator(archive_path)
         elif request.flatten:
             output_dir = request.output_dir
-            log(f"  ++ Flattening {archive_path.name} to {output_dir}")
+            artifact_path = archive_path
+            if request.extraction_cache_dir is not None:
+                artifact_path = _populate_extraction_cache(
+                    archive_path, request.extraction_cache_dir
+                )
+            log(f"  ++ Flattening {artifact_path.name} to {output_dir}")
             flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
-            flattener(archive_path)
+            flattener(artifact_path)
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
@@ -401,6 +494,8 @@ def do_fetch(args: argparse.Namespace):
 
     # Build download requests
     output_dir = Path(args.output_dir)
+    if args.extraction_cache_dir is not None:
+        args.extraction_cache_dir.mkdir(parents=True, exist_ok=True)
     shared_cache = args.download_cache_dir is not None
     download_dir = (
         args.download_cache_dir if shared_cache else output_dir / ".download_cache"
@@ -428,8 +523,10 @@ def do_fetch(args: argparse.Namespace):
     ]
 
     if not download_requests:
-        log("No matching artifacts found to download")
-        return
+        raise RuntimeError(
+            f"ERROR: No matching artifacts found in {backend.base_uri} for "
+            f"target families: {', '.join(target_families)}"
+        )
 
     log(f"\nDownloading {len(download_requests)} artifacts...")
 
@@ -484,6 +581,7 @@ def do_fetch(args: argparse.Namespace):
                                 # happens after all extractions complete
                                 delete_archive=False,
                                 flatten=args.flatten,
+                                extraction_cache_dir=args.extraction_cache_dir,
                                 bootstrap=args.bootstrap,
                                 cleaned_paths=(
                                     bootstrap_cleaned_paths if args.bootstrap else None
@@ -892,7 +990,10 @@ def copy_single_artifact(request: CopyRequest) -> bool:
 
 
 def _create_source_backend(
-    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+    platform: str,
+    source_run_id: str,
+    source_repository: Optional[str],
+    local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
@@ -912,7 +1013,10 @@ def _create_source_backend(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+        run_id=source_run_id,
+        platform=platform,
+        github_repository=source_repository,
+        lookup_workflow_run=True,
     )
     return S3Backend(output_root=output_root)
 
@@ -949,8 +1053,9 @@ def do_copy(args: argparse.Namespace):
 
     # Create source and dest backends
     source_backend = _create_source_backend(
-        source_run_id=args.source_run_id,
         platform=args.platform,
+        source_run_id=args.source_run_id,
+        source_repository=args.source_repository,
         local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
@@ -1199,6 +1304,15 @@ def main(argv: Optional[List[str]] = None):
         "Defaults to OUTPUT_DIR/.download_cache (cleaned up after extraction).",
     )
     fetch_parser.add_argument(
+        "--extraction-cache-dir",
+        type=Path,
+        default=None,
+        help="Shared cache for extracted artifacts used with --flatten. "
+        "Files in flattened output directories are hardlinked from this cache, "
+        "avoiding repeated decompression and data copies. Flattened outputs "
+        "must remain read-only while the cache is in use.",
+    )
+    fetch_parser.add_argument(
         "--download-concurrency",
         type=int,
         default=10,
@@ -1279,6 +1393,13 @@ def main(argv: Optional[List[str]] = None):
         help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
     )
     copy_parser.add_argument(
+        "--source-repository",
+        type=str,
+        default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+        help="GitHub repository for source-run-id in 'owner/repo' format "
+        "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
+    )
+    copy_parser.add_argument(
         "--stage",
         type=str,
         required=True,
@@ -1319,6 +1440,14 @@ def main(argv: Optional[List[str]] = None):
     list_parser.set_defaults(func=do_list_stages)
 
     args = parser.parse_args(argv)
+    if (
+        args.command == "fetch"
+        and args.extraction_cache_dir is not None
+        and (not args.flatten or args.no_extract)
+    ):
+        fetch_parser.error(
+            "--extraction-cache-dir requires --flatten with extraction enabled"
+        )
 
     # Set environment variable if --local-staging-dir provided (only on fetch/push)
     local_staging_dir = getattr(args, "local_staging_dir", None)

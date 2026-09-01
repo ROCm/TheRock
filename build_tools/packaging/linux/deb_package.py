@@ -17,6 +17,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pathlib import Path
 
 from packaging_utils import *
+from _therock_utils.log_utils import TheRockLogger
+
+logger = TheRockLogger(__name__)
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -35,7 +38,7 @@ def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_nonversioned_deb_package")
     # Create immutable config copy with versioned_pkg=False
     build_config = replace(config, versioned_pkg=False)
 
@@ -75,7 +78,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     Returns:
     output_list: List of packages created
     """
-    print_function_name()
+    logger.debug("create_versioned_deb_package")
     # Explicitly ensure versioned_pkg=True
     build_config = replace(config, versioned_pkg=True)
 
@@ -104,13 +107,13 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     )
     sourcedir_list.extend(dir_list)
 
-    print(f"sourcedir_list:\n  {sourcedir_list}")
+    logger.debug(f"sourcedir_list: {sourcedir_list}")
     # GFX_META is a versioned meta package (empty content, just dependencies)
     is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
         if build_config.enable_kpack:
-            print(
-                f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+            logger.error(
+                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
             )
             return []
         else:
@@ -119,15 +122,12 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
             )
 
     if not sourcedir_list:
-        print(f"{pkg_name} is a Meta package")
+        logger.debug(f"{pkg_name} is a Meta package")
     else:
         # Copy package contents first
         dest_dir = package_dir / Path(build_config.install_prefix).relative_to("/")
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
-
-        if build_config.enable_rpath:
-            convert_runpath_to_rpath(package_dir)
 
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
@@ -150,7 +150,7 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_changelog_file")
     changelog = Path(deb_dir) / "changelog"
 
     pkg_name = update_package_name(pkg_info.get("Package"), config)
@@ -202,7 +202,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_install_file")
     # Note: pkg_info is not used currently:
     # May be required in future to populate any context
     install_file = Path(deb_dir) / "install"
@@ -253,7 +253,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_rules_file")
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
@@ -301,7 +301,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("generate_control_file")
     control_file = Path(deb_dir) / "control"
     pkg_name = pkg_info.get("Package")
     is_meta = is_meta_package(pkg_info)
@@ -417,13 +417,13 @@ def copy_package_contents(source_dir, destination_dir):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("copy_package_contents")
 
     source_dir = Path(source_dir)
     destination_dir = Path(destination_dir)
 
     if not source_dir.is_dir():
-        print(f"Directory does not exist: {source_dir}")
+        logger.warning(f"Directory does not exist: {source_dir}")
         return
 
     # Ensure destination directory exists
@@ -434,19 +434,23 @@ def copy_package_contents(source_dir, destination_dir):
         src = item
         dst = destination_dir / item.name
 
-        if src.is_dir() and not dst.is_symlink():
-            shutil.copytree(
-                src,
-                dst,
-                dirs_exist_ok=True,
-                symlinks=True,
-                ignore_dangling_symlinks=True,
-            )
-        elif src.is_symlink():
-            # Copy the symlink itself (even if dangling)
+        # Check is_symlink() first because is_dir() follows symlinks and returns
+        # True for symlinks pointing to directories. We want to preserve symlinks.
+        if src.is_symlink():
             link_target = src.readlink()
-            dst.symlink_to(link_target)
-        else:
+            if not dst.exists() and not dst.is_symlink():
+                dst.symlink_to(link_target)
+        elif src.is_dir():
+            if not dst.is_symlink():
+                shutil.copytree(
+                    src,
+                    dst,
+                    dirs_exist_ok=True,
+                    symlinks=True,
+                    ignore_dangling_symlinks=True,
+                )
+            # else: skip - don't overwrite existing symlink with directory
+        elif src.is_file():
             shutil.copy2(src, dst)
 
 
@@ -459,14 +463,14 @@ def package_with_dpkg_build(pkg_dir):
 
     Returns: None
     """
-    print_function_name()
+    logger.debug("package_with_dpkg_build")
     # Build the command
     cmd = ["dpkg-buildpackage", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
         subprocess.run(cmd, check=True, cwd=pkg_dir)
-        print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
+        logger.info(f"Deb Package built successfully: {os.path.basename(pkg_dir)}\n")
     except subprocess.CalledProcessError as e:
-        print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
+        logger.error(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)

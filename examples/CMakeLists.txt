@@ -23,11 +23,11 @@ else()
   )
 endif()
 
-# hipTensor is only built when composable_kernel is also built (CK is a hard
+# hipTensor is built conditionally to composable_kernel availability (CK is a hard
 # build dependency). _ck_enabled, set by math-libs/CMakeLists.txt, is OFF when
-# CK was filtered out for the selected gfx targets, in which case hipTensor is
-# not declared even though THEROCK_ENABLE_HIPTENSOR is ON. Reflect the actual
-# built status so the example does not find_package() a missing hiptensor.
+# CK and hipTensor were filtered out for the selected gfx targets.
+# _hiptensor_available reflect the actual built status so the example does not
+# find_package() a missing hiptensor.
 set(_hiptensor_available OFF)
 if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   set(_hiptensor_available ON)

@@ -8,8 +8,9 @@ This script is a pipeline of data transformations:
 
     1. Parse Inputs    — read GitHub event context → CIInputs, GitContext
     2. Check Skip CI   — gate: should we skip CI entirely?
-    3. Decide Jobs     — changed files + topology → per-job-group decisions
-    4. Select Targets  — trigger type + labels → per-platform GPU families
+    3. Select Targets  — trigger type + labels → per-platform GPU families
+    4. Decide Jobs     — changed files + topology + targets → per-job-group
+                         decisions
     5. Build Configs   — families × variant → per-platform build configs
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
@@ -46,6 +47,7 @@ Outputs (written to GITHUB_OUTPUT):
 
 import enum
 import json
+import logging
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -73,6 +75,12 @@ from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+)
+from stage_reuse_decision import (
+    AutoStageReuse,
+    StageReuseMode,
+    compute_auto_stage_reuse,
+    render_step_summary,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -115,6 +123,79 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
+# Maps build stages to the test labels that can run with artifacts from those
+# stages. Used to auto-filter tests when build_stages narrows the build graph.
+# Test labels not listed here require a full build.
+STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
+    "compiler-runtime": ["kfdtest"],
+    "runtime-tests": ["hip-tests", "rocrtst"],
+    "math-libs": [
+        "rocblas",
+        "hipblas",
+        "hipblaslt",
+        "rocfft",
+        "hipfft",
+        "rocrand",
+        "hiprand",
+        "rocsparse",
+        "hipsparse",
+        "rocsolver",
+        "hipsolver",
+        "rocprim",
+        "hipcub",
+        "rocthrust",
+        "rocalution",
+        "rocwmma",
+        "hiptensor",
+        "composable-kernel",
+    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
+    "comm-libs": ["rccl", "rocshmem"],
+    "storage-libs": ["hipfile"],
+    "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
+    "cv-libs": ["rpp"],
+    "media-libs": ["rocdecode", "rocjpeg"],
+    "debug-tools": ["rocgdb"],
+}
+
+
+def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | None:
+    """Return the test labels allowed for a partial build, or None for full builds.
+
+    When build_stages is empty (full build), returns None to indicate no filtering.
+    When build_stages is set, returns the union of test labels for those stages.
+    """
+    if not build_stages:
+        return None
+    allowed = set()
+    for stage in build_stages:
+        allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
+    return sorted(allowed) if allowed else []
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -134,9 +215,11 @@ class CIInputs:
     commit_ref: str  # GITHUB_REF_NAME value
     base_ref: str | None  # Git ref used for diffing, or None to skip path filters
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
-    release_type: str = "ci"  # "ci", or "dev", "nightly", "prerelease" for releases
+    release_type: str = "ci"  # "ci", or one of the supported release types
+    build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
+    build_native_linux: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # PR labels (from event payload for pull_request events)
@@ -152,11 +235,43 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
+    # Repository to query for baseline runs (for cross-repo artifact reuse)
+    baseline_repository: str = ""
+
+    # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
+    # Non-empty when an external repo calls TheRock workflows
+    external_repo: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
         for f in fields(self):
             print(f"  {f.name}: {getattr(self, f.name)!r}")
+
+    def validate(self) -> None:
+        """Validate inputs for consistency (fail-fast behavior).
+
+        Raises ValueError if test labels require stages not in build_stages.
+        """
+        allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
+        if allowed_labels is not None:
+            for platform, labels in [
+                ("Linux", self.linux_test_labels),
+                ("Windows", self.windows_test_labels),
+            ]:
+                invalid = [
+                    lbl
+                    for lbl in labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"{platform} test labels {invalid} require stages not in "
+                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
+                    )
 
     @property
     def is_pull_request(self) -> bool:
@@ -189,8 +304,14 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        build_python_packages = (
+            os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
+        )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        build_native_linux = (
+            os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -229,15 +350,51 @@ class CIInputs:
             + pr_test_labels
         )
 
-        return CIInputs(
+        # When build_stages limits the build, validate or auto-select test labels.
+        # - If labels provided: fail-fast if they require stages not in build_stages
+        # - If no labels provided: auto-select compatible labels for the stages
+        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
+        if allowed_labels is not None:
+            if linux_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in linux_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Linux test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+            if windows_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in windows_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Windows test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+        inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
             base_ref=base_ref,
             build_variant=build_variant,
             release_type=release_type,
+            build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
+            build_native_linux=build_native_linux,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -249,8 +406,15 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
+            external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
+        inputs.validate()
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -298,6 +462,22 @@ class GitContext:
         where we don't want to diff against a prior commit.
         """
         return GitContext()
+
+    @staticmethod
+    def from_external_repo(external_repo_name: str) -> "GitContext":
+        """Create context for external repo builds (e.g., rocm-libraries).
+
+        For external repos, we treat the repo name as both a changed file and
+        a submodule path so that:
+        1. Stage reuse analysis can determine which TheRock stages are affected
+        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
+           families to run their tests
+        """
+        print(f"External repo detected: {external_repo_name}")
+        return GitContext(
+            changed_files=[external_repo_name],
+            submodule_paths=[external_repo_name],
+        )
 
     @property
     def has_submodule_changes(self) -> bool | None:
@@ -396,6 +576,10 @@ class BuildRocmDecision(JobGroupDecision):
     # from workflow_dispatch input; TODO(#3399): derive automatically from
     # the current commit's parent workflow run.
     baseline_run_id: str = ""
+    # Repository to query for baseline runs (for cross-repo artifact reuse).
+    # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
+    # TheRock's baseline runs instead of their own.
+    baseline_repository: str = ""
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -411,6 +595,15 @@ class BuildRocmDecision(JobGroupDecision):
             name
             for name, action in self.stage_decisions.items()
             if action == JobAction.RUN
+        ]
+
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
         ]
 
 
@@ -446,6 +639,9 @@ class JobDecisions:
     build_pytorch: JobGroupDecision
     test_pytorch: JobGroupDecision
     build_jax: JobGroupDecision
+    # Automatic stage-reuse analysis, carried so its report can be appended to
+    # the step summary after the main CI summary.
+    auto_stage_reuse: AutoStageReuse | None = None
 
     def log(self) -> None:
         """Log job decisions for CI diagnostics."""
@@ -477,6 +673,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
@@ -486,7 +683,10 @@ class BuildConfig:
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
+    baseline_repository: str = ""  # For cross-repo artifact reuse
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -494,6 +694,7 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -553,23 +754,41 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+
+    For external repo builds, path filtering is skipped since the external repo
+    name is used for stage reuse analysis, not for CI skip decisions.
     """
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless submodule changes are present.
-    # This avoids running expensive ASAN builds on every PR while still
-    # catching ASAN issues when library code (submodules) changes.
-    # TODO: Contributors may open draft PRs with submodule updates which run ASAN builds.
-    #       If overly expensive, remove that option
+    # Skip ASAN on PRs unless an enabling label is present.
+    # This avoids running expensive ASAN builds on every PR.
+    # Labels that enable ASAN CI:
+    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    has_asan_label = (
+        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    )
     if (
         ci_inputs.is_pull_request
         and ci_inputs.build_variant == "asan"
-        and git_context.has_submodule_changes is False
+        and not has_asan_label
     ):
-        print("  Skipping: ASAN PR without submodule changes")
+        print(
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
+        )
         return True
+
+    if has_asan_label and ci_inputs.build_variant == "asan":
+        print("  Running: ASAN CI triggered by PR label")
+
+    # External repo builds skip path filtering - they always run CI and use
+    # stage reuse to determine which stages to rebuild.
+    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
+    # CI for docs-only changes, experimental projects, etc.
+    if ci_inputs.external_repo:
+        print("  External repo build: skipping path filter checks, using stage reuse")
+        return False
 
     # If we have a list of changed files (push/pull_request events), check if
     # CI should run for that set of changed files. For example: if only .md
@@ -589,161 +808,7 @@ def should_skip_ci(
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Decide Jobs
-# ---------------------------------------------------------------------------
-
-
-_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
-
-
-def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR).
-
-    Note: test_filter: labels are not test labels - they control test_type,
-    not which tests to run.
-    """
-    # Filter out test_filter: labels - those control test_type, not test selection
-    linux_tests = [
-        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
-    ]
-    windows_tests = [
-        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
-    ]
-    if linux_tests or windows_tests:
-        return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
-
-
-def _determine_test_type(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-) -> tuple[str, str]:
-    """Determine test_type and reason based on trigger, labels, and changed files.
-
-    This code implements the policies from docs/development/test_filtering.md
-    and docs/development/ci_behavior_manipulation.md:
-
-    * Available filter types: ["quick", "standard", "comprehensive", "full"]
-    * Workflow runs choose a filter type automatically but PRs can override
-      with labels like `test_filter:comprehensive`
-
-    Returns (test_type, reason).
-    """
-
-    # Check in priority order - highest priority returns early.
-
-    # Priority 1: test_filter: label is an explicit manual override.
-    # This is the escape hatch: run comprehensive on a PR before merge,
-    # or downgrade to quick if you know the change is safe.
-    # Check both PR labels and workflow_dispatch test labels.
-    all_labels = (
-        ci_inputs.pr_labels
-        + ci_inputs.linux_test_labels
-        + ci_inputs.windows_test_labels
-    )
-    for label in all_labels:
-        if not label.startswith("test_filter:"):
-            continue
-        filter_type = label.split(":")[1]
-        if filter_type not in _VALID_TEST_FILTER_TYPES:
-            raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
-                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
-            )
-        return filter_type, f"test_filter label: {label}"
-
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
-
-    # Priority 3: release builds run deeper test suites than regular CI.
-    # * 'nightly' gets comprehensive (deeper than standard, on a daily cadence)
-    # * 'prerelease' gets full (exhaustive pre-release validation)
-    # * 'dev' falls through to later priorities so changes can be tested quickly
-    if ci_inputs.release_type == "nightly":
-        return "comprehensive", "release build (nightly)"
-    if ci_inputs.release_type == "prerelease":
-        return "full", "release build (prerelease)"
-
-    # Priority 4: schedule runs the full nightly suite — comprehensive
-    # coverage on a cadence, catching regressions that quick tests miss.
-    if ci_inputs.is_schedule:
-        return "comprehensive", "scheduled run"
-
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
-    # could affect any downstream consumer.
-    if git_context.has_submodule_changes is True:
-        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
-        return "standard", f"submodule(s) changed: {sorted(matching)}"
-
-    # Default: quick tests for fast CI feedback.
-    return "quick", "default"
-
-
-def decide_jobs(
-    ci_inputs: CIInputs,
-    git_context: GitContext,
-) -> JobDecisions:
-    """Determine which job groups to run, skip, or satisfy with prebuilt files."""
-
-    # Build ROCm.
-    # TODO(#3399): Use changed files and build_topology.py to:
-    #   1. set per-stage prebuilt decisions
-    #   2. skip job groups that aren't reachable from the changed files
-    # Parse explicit prebuilt stages from workflow_dispatch input.
-    stage_decisions: dict[str, JobAction] = {}
-    if ci_inputs.prebuilt_stages:
-        for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
-            stage_decisions[stage] = JobAction.PREBUILT
-    build_rocm = BuildRocmDecision(
-        action=JobAction.RUN,
-        stage_decisions=stage_decisions,
-        baseline_run_id=ci_inputs.baseline_run_id,
-    )
-
-    # Test ROCm.
-    test_type, test_type_reason = _determine_test_type(
-        ci_inputs=ci_inputs,
-        git_context=git_context,
-    )
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-    )
-
-    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
-    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
-
-    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
-    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
-
-    # Other jobs run unconditionally with no configuration.
-    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
-
-    return JobDecisions(
-        build_rocm=build_rocm,
-        test_rocm=test_rocm,
-        build_rocm_python=JobGroupDecision(action=JobAction.RUN),
-        build_pytorch=JobGroupDecision(action=build_pytorch_action),
-        test_pytorch=JobGroupDecision(action=build_pytorch_action),
-        build_jax=JobGroupDecision(action=build_jax_action),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Select Targets
+# Step 3: Select Targets
 # ---------------------------------------------------------------------------
 
 
@@ -892,6 +957,218 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
 
 # ---------------------------------------------------------------------------
+# Step 4: Decide Jobs
+# ---------------------------------------------------------------------------
+
+
+_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
+
+
+def _has_test_labels(ci_inputs: CIInputs) -> bool:
+    """Check whether any test labels were specified (workflow_dispatch or PR).
+
+    Note: test_filter: labels are not test labels - they control test_type,
+    not which tests to run.
+    """
+    # Filter out test_filter: labels - those control test_type, not test selection
+    linux_tests = [
+        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
+    ]
+    windows_tests = [
+        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
+    ]
+    if linux_tests or windows_tests:
+        return True
+    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
+
+
+def _determine_test_type(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> tuple[str, str]:
+    """Determine test_type and reason based on trigger, labels, and changed files.
+
+    This code implements the policies from docs/development/test_filtering.md
+    and docs/development/ci_behavior_manipulation.md:
+
+    * Available filter types: ["quick", "standard", "comprehensive", "full"]
+    * Workflow runs choose a filter type automatically but PRs can override
+      with labels like `test_filter:comprehensive`
+
+    Returns (test_type, reason).
+    """
+
+    # Check in priority order - highest priority returns early.
+
+    # Priority 1: test_filter: label is an explicit manual override.
+    # This is the escape hatch: run comprehensive on a PR before merge,
+    # or downgrade to quick if you know the change is safe.
+    # Check both PR labels and workflow_dispatch test labels.
+    all_labels = (
+        ci_inputs.pr_labels
+        + ci_inputs.linux_test_labels
+        + ci_inputs.windows_test_labels
+    )
+    for label in all_labels:
+        if not label.startswith("test_filter:"):
+            continue
+        filter_type = label.split(":")[1]
+        if filter_type not in _VALID_TEST_FILTER_TYPES:
+            raise ValueError(
+                f"Unrecognized test_filter value: {filter_type!r}. "
+                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
+            )
+        return filter_type, f"test_filter label: {label}"
+
+    # Priority 2: test:* labels request specific component tests (e.g.
+    # test:rocprim). When someone explicitly asks for tests, run the full
+    # suite — they're investigating something specific.
+    if _has_test_labels(ci_inputs):
+        return "full", "test labels specified"
+
+    # Priority 3: release builds run deeper test suites than regular CI.
+    # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
+    #   on a daily cadence)
+    # * 'prerelease' gets full (exhaustive pre-release validation)
+    # * 'dev' falls through to later priorities so changes can be tested quickly
+    if ci_inputs.release_type in ("nightly", "nightly-bkc"):
+        return "comprehensive", "release build (nightly)"
+    if ci_inputs.release_type == "prerelease":
+        return "full", "release build (prerelease)"
+
+    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # coverage on a cadence, catching regressions that quick tests miss.
+    if ci_inputs.is_schedule:
+        return "comprehensive", "scheduled run"
+
+    # Priority 5: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # could affect any downstream consumer.
+    if git_context.has_submodule_changes is True:
+        matching = set(git_context.submodule_paths) & set(git_context.changed_files)
+        return "standard", f"submodule(s) changed: {sorted(matching)}"
+
+    # Default: quick tests for fast CI feedback.
+    return "quick", "default"
+
+
+def decide_jobs(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    targets: TargetSelection,
+) -> JobDecisions:
+    """Determine which job groups to run, skip, or satisfy with prebuilt files.
+    ``targets`` (the per-platform family selection from ``select_targets()``)
+    scopes automatic stage reuse to the platforms and families actually being
+    built, so a stage is only reused when its artifacts exist for every one of
+    those platforms.
+    """
+
+    # Build ROCm.
+    stage_reuse_mode = StageReuseMode.from_environ()
+
+    if stage_reuse_mode is StageReuseMode.OFF:
+        # Strong off is authoritative: do not parse or honor explicit
+        # prebuilt_stages, do not retain a baseline, and do not invoke automatic
+        # stage-reuse analysis.
+        if ci_inputs.prebuilt_stages or ci_inputs.baseline_run_id:
+            logging.info(
+                "[STAGE-REUSE] mode=off: ignoring prebuilt_stages and "
+                "baseline_run_id; all in-scope stages will rebuild"
+            )
+        else:
+            logging.info(
+                "[STAGE-REUSE] mode=off: artifact reuse disabled; "
+                "all in-scope stages will rebuild"
+            )
+
+        stage_decisions: dict[str, JobAction] = {}
+        baseline_run_id = ""
+        baseline_repository = ""
+        auto_stage_reuse = None
+
+    else:
+        # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
+        stage_decisions = {}
+        if ci_inputs.prebuilt_stages:
+            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+                stage_decisions[stage] = JobAction.PREBUILT
+
+        # In dry-run, automatic reuse is analyzed but not applied. In
+        # reuse-stage, eligible stages are added to stage_decisions.
+        auto_stage_reuse = compute_auto_stage_reuse(
+            changed_files=git_context.changed_files,
+            mode=stage_reuse_mode,
+            linux_amdgpu_families=targets.linux_families,
+            windows_amdgpu_families=targets.windows_families,
+        )
+
+        baseline_repository = ci_inputs.baseline_repository
+        baseline_run_id = ci_inputs.baseline_run_id
+
+        for stage in auto_stage_reuse.applied_reuse_stages:
+            stage_decisions.setdefault(stage, JobAction.PREBUILT)
+
+        if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
+            baseline_run_id = auto_stage_reuse.baseline_run_id
+
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
+
+    build_rocm = BuildRocmDecision(
+        action=JobAction.RUN,
+        stage_decisions=stage_decisions,
+        baseline_run_id=baseline_run_id,
+        baseline_repository=baseline_repository,
+    )
+    # Test ROCm.
+    test_type, test_type_reason = _determine_test_type(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+    )
+    test_rocm = TestRocmDecision(
+        action=JobAction.RUN,
+        test_type=test_type,
+        test_type_reason=test_type_reason,
+    )
+
+    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
+    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
+    if ci_inputs.build_variant == "asan":
+        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
+        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            test_rocm = TestRocmDecision(
+                action=JobAction.SKIP,
+                test_type=test_type,
+                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+            )
+
+    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
+
+    # Other jobs run unconditionally with no configuration.
+    # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
+
+    return JobDecisions(
+        build_rocm=build_rocm,
+        test_rocm=test_rocm,
+        build_rocm_python=JobGroupDecision(action=JobAction.RUN),
+        build_pytorch=JobGroupDecision(action=build_pytorch_action),
+        test_pytorch=JobGroupDecision(action=build_pytorch_action),
+        build_jax=JobGroupDecision(action=build_jax_action),
+        auto_stage_reuse=auto_stage_reuse,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Step 5: Build Configs
 # ---------------------------------------------------------------------------
 
@@ -984,11 +1261,12 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on push (postsubmit)
-            if not ci_inputs.is_push:
+            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
+            # due to limited ASAN runner capacity and stability concerns.
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on postsubmit, "
+                    f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
@@ -1089,13 +1367,36 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    test_python_packages_matrix = build_rocm_python_test_matrix(
-        per_family_info=per_family_info,
-        platform=platform,
+    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    # The build_python_packages input allows callers to disable Python packages.
+    is_asan = suffix in ("asan", "host-asan")
+    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    test_python_packages_matrix = (
+        build_rocm_python_test_matrix(
+            per_family_info=per_family_info,
+            platform=platform,
+        )
+        if build_python_packages
+        else []
     )
-    # TODO: Use jobs.build_rocm_python so this matrix is empty when the ROCm
-    # Python package build is disabled. Then multi_arch_ci_* can also condition
-    # build_python_packages on that decision.
+    build_native_linux = ci_inputs.build_native_linux
+
+    # When stages are skipped (partial build), disable package builds since
+    # they require a complete artifact set. Prebuilt/reused stages are OK
+    # because their artifacts are copied from a baseline run.
+    has_skipped_stages = bool(jobs.build_rocm.skipped_stages)
+    if has_skipped_stages:
+        print(
+            f"  Disabling package builds due to skipped stages: "
+            f"{jobs.build_rocm.skipped_stages}"
+        )
+        build_python_packages = False
+        build_pytorch = False
+        build_jax = False
+        build_native_linux = False
+        pytorch_build_matrix = []
+        jax_build_matrix = []
+        test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1104,7 +1405,8 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=(suffix != "asan"),
+        build_native_linux=build_native_linux,
+        build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
@@ -1112,7 +1414,9 @@ def _expand_build_config_for_platform(
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
+        baseline_repository=jobs.build_rocm.baseline_repository,
     )
 
 
@@ -1177,10 +1481,20 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # for ASAN CI runs, workflow_dispatch and scheduled events are "asan".
-    # Otherwise, push events run "host-asan"
-    if build_variant == "asan" and ci_inputs.is_push:
-        build_variant = "host-asan"
+    # ASAN variant selection:
+    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
+    # 2. ci:host-asan label -> host-asan (explicit)
+    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    if build_variant == "asan":
+        if "ci:asan" in ci_inputs.pr_labels:
+            print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan" in ci_inputs.pr_labels:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (ci:host-asan label)")
+        elif ci_inputs.is_push or ci_inputs.is_pull_request:
+            build_variant = "host-asan"
+            print("  Using host-asan variant (push/pull_request default)")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -1272,6 +1586,11 @@ def write_outputs(
         )
     )
 
+    # Append the automatic stage-reuse analysis after the main summary so the
+    # two read top-to-bottom in the job step summary.
+    if outputs.jobs is not None and outputs.jobs.auto_stage_reuse is not None:
+        gha_append_step_summary(render_step_summary(outputs.jobs.auto_stage_reuse))
+
 
 # ---------------------------------------------------------------------------
 # Pipeline orchestration
@@ -1294,13 +1613,15 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
-    print("\n=== Deciding job configuration ===")
-    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context)
-    jobs.log()
-
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
+
+    print("\n=== Deciding job configuration ===")
+    # Target selection runs first so automatic stage reuse can scope its
+    # prebuilt artifact checks to those targets.
+    jobs = decide_jobs(ci_inputs=ci_inputs, git_context=git_context, targets=targets)
+    jobs.log()
 
     print("\n=== Building per-platform configs ===")
     builds = expand_build_configs(
@@ -1326,17 +1647,30 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     ci_inputs = CIInputs.from_environ()
 
-    # Skip path filtering for external repos (e.g., rocm-libraries calling TheRock workflows)
-    # The "run everything" is initial state for superrepo multi-arch CI migration.
-    # We will eventually support path filtering and component selection.
-    # TODO: Provide custom decision logic to run specific components and paths
-    skip_path_filters = os.environ.get("SKIP_PATH_FILTERS", "").lower() == "true"
+    # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
+    if ci_inputs.external_repo:
+        # External repo: use repo name for stage reuse analysis.
+        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError(
+                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
+            ) from exc
 
-    if skip_path_filters:
-        # External repo: skip path filtering, run everything
-        git_context = GitContext.empty()
+        repo_full_name = external_repo.get("repository", "")
+        if not repo_full_name:
+            raise ValueError(
+                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
+            )
+        external_repo_name = repo_full_name.split("/")[-1]
+        git_context = GitContext.from_external_repo(external_repo_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

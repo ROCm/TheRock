@@ -15,6 +15,31 @@ include(therock_flag_utils)
 # Flag declarations
 ###############################################################################
 
+# Build flag infrastructure conformance canaries. These are consumed by the
+# unconditional aux-overlay compile check. They deliberately exercise both
+# BOOL values and INTEGER serialization. Do not remove or repurpose them.
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+  TYPE BOOL
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build flag infrastructure false-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+  TYPE BOOL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build flag infrastructure true-value conformance canary"
+)
+
+therock_declare_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+  TYPE INTEGER
+  DEFAULT_VALUE -17
+  VALID_VALUES -17
+  DESCRIPTION "Build flag infrastructure integer conformance canary"
+)
+
 therock_declare_flag(
   NAME KPACK_SPLIT_ARTIFACTS
   DEFAULT_VALUE ON
@@ -29,6 +54,17 @@ therock_declare_flag(
     HIPDNN_ENABLE_SDPA=ON
   SUB_PROJECTS
     hipDNN
+    hipkernelprovider
+)
+
+therock_declare_flag(
+  NAME HIPBLASLTPROVIDER_ENABLE_MX_GEMM
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable MX (microscaling) data-type support for GEMM in the hipDNN hipBLASLt provider"
+  CMAKE_VARS
+    HIPBLASLTPROVIDER_ENABLE_MX_GEMM=ON
+  SUB_PROJECTS
+    hipblasltprovider
 )
 
 therock_declare_flag(
@@ -39,6 +75,39 @@ therock_declare_flag(
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
   SUB_PROJECTS
     hipkernelprovider
+)
+
+# Gates the generic kernel ingestor platform described in RFC 0017:
+# rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_KERNEL_INGESTOR
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
+  CMAKE_VARS
+    HIPDNN_ENABLE_KERNEL_INGESTOR=ON
+  SUB_PROJECTS
+    hipDNN
+    hipkernelprovider
+)
+
+therock_declare_flag(
+  NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build MIOpen as a public wrapper (libMIOpen.so) over a private implementation library (libMIOpen_private.so), with optional runtime forwarding to hipDNN. See rocm-libraries MIOpen RFC 0001."
+  CMAKE_VARS
+    MIOPEN_ENABLE_HIPDNN_WRAPPER=ON
+  SUB_PROJECTS
+    MIOpen
+)
+
+therock_declare_flag(
+  NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
+  CMAKE_VARS
+    HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
+  SUB_PROJECTS
+    hipDNN
 )
 
 therock_declare_flag(
@@ -59,6 +128,30 @@ therock_declare_flag(
   NAME HSA_WINDOWS_SHARED_RUNTIME
   DEFAULT_VALUE OFF
   DESCRIPTION "Emit ROCR-Runtime and rocminfo from core-runtime on Windows"
+)
+
+therock_declare_flag(
+  NAME LLVM_ENABLE_ASSERTIONS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build amd-llvm with LLVM assertions enabled. In CI costs roughly 20% more build time overall and up to 35% on device-heavy stages."
+  ISSUE "https://github.com/ROCm/TheRock/pull/6102"
+  CMAKE_VARS
+    LLVM_ENABLE_ASSERTIONS=ON
+  SUB_PROJECTS
+    amd-llvm
+)
+
+therock_declare_flag(
+  NAME WINDOWS_DRIVER_BUILD
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  GLOBAL_PROPAGATE_FLAG
+  CMAKE_VARS
+    COMGR_DLL_NAME=amd_comgr_drivers.dll
+  SUB_PROJECTS
+    amd-comgr
+    hip-clr
+    ocl-clr
 )
 
 ###############################################################################
