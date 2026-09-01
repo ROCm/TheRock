@@ -32,10 +32,10 @@ msiexec /i amdrocm-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 msiexec /i amdrocm-runtime.msi /qn TARGETDIR="D:\ROCm\"
 ```
 
-**Silent install with long-path support enabled:**
+**Silent install with long-path support disabled:**
 
 ```bat
-msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=1
+msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 ```
 
 ## What Gets Installed
@@ -58,7 +58,11 @@ Passing `ENABLE_LONG_PATHS=1` additionally writes:
 This lifts the 260-character `MAX_PATH` limit system-wide. Requires Windows 11
 or Windows Server 2019 or later. A reboot is needed for the change to propagate to all running
 processes; processes started after the installer exits pick it up immediately.
-The key is removed on uninstall.
+
+The installer checks whether `LongPathsEnabled` was already set to `1` before
+installing. If it was already enabled (by the user or another installer), the
+key is left untouched on uninstall. If the ROCm installer set it, it is removed
+on uninstall.
 
 ## Upgrade
 
@@ -117,7 +121,7 @@ findstr /i "error" "%TEMP%\rocm-install.log"
 
 ### Long path errors
 
-Enable long-path support at install time:
+Long-path support is enabled by default. If it was explicitly disabled, re-enable it:
 
 ```bat
 msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=1

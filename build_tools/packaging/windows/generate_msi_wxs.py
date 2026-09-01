@@ -685,7 +685,8 @@ def build_wxs(args: argparse.Namespace) -> None:
     )
 
     ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
-    ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Secure="yes")
+    # Long path support is on by default; set ENABLE_LONG_PATHS=0 to disable.
+    ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Value="1", Secure="yes")
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
     # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
     ET.SubElement(
@@ -838,6 +839,29 @@ def build_wxs(args: argparse.Namespace) -> None:
     # -----------------------------------------------------------------------
     # Optional long-path support
     # -----------------------------------------------------------------------
+    # Read the pre-existing LongPathsEnabled value before install. WiX raw
+    # integer registry searches return values as "#<decimal>", so a pre-set
+    # value of 1 appears as "#1". The component is conditionally installed
+    # only when the key is NOT already 1, so uninstall only removes the key
+    # if this installer was the one that set it — not if the user had it
+    # enabled independently.
+    ET.SubElement(
+        pkg,
+        f"{{{ns}}}Property",
+        Id="LONGPATHS_PREEXISTING",
+        Value="0",
+    )
+    ET.SubElement(
+        pkg,
+        f"{{{ns}}}RegistrySearch",
+        Id="LongPathsPreExistingSearch",
+        Root="HKLM",
+        Key="SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+        Name="LongPathsEnabled",
+        Type="raw",
+        Result="value",
+        Property="LONGPATHS_PREEXISTING",
+    )
     lp_comp = ET.SubElement(
         install_dir_el,
         f"{{{ns}}}Component",
@@ -859,11 +883,19 @@ def build_wxs(args: argparse.Namespace) -> None:
         Type="integer",
         KeyPath="yes",
     )
-    lp_feature = ET.SubElement(
-        pkg, f"{{{ns}}}Feature", Id="LongPaths", Title="Enable Long Paths", Level="0"
-    )
+    # Only install (and therefore only uninstall) this component when the key
+    # was not already set to 1 by the user or another installer.
     ET.SubElement(
-        lp_feature, f"{{{ns}}}Level", Value="1", Condition="ENABLE_LONG_PATHS"
+        lp_comp,
+        f"{{{ns}}}Condition",
+    ).text = 'NOT LONGPATHS_PREEXISTING = "#1"'
+    lp_feature = ET.SubElement(
+        pkg, f"{{{ns}}}Feature", Id="LongPaths", Title="Enable Long Paths", Level="1"
+    )
+    # Turn the feature off when ENABLE_LONG_PATHS=0. Default property value
+    # is "1", so the feature is enabled unless explicitly disabled.
+    ET.SubElement(
+        lp_feature, f"{{{ns}}}Level", Value="0", Condition='ENABLE_LONG_PATHS = "0"'
     )
     ET.SubElement(lp_feature, f"{{{ns}}}ComponentRef", Id="LongPathsEnable")
 
