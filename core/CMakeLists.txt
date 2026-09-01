@@ -493,7 +493,6 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
     )
   endif()
-
   if(_therock_enable_hsa_runtime)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools

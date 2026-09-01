@@ -115,6 +115,7 @@ class ROCmCoreTest(unittest.TestCase):
                 "opencl" in str(so_path)
                 or "oclruntime" in so_path.name
                 or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
             ):
                 # OpenCL ICD comes from the distro; oclruntime/oclperf are
                 # test-only libraries that depend on libOpenCL.
