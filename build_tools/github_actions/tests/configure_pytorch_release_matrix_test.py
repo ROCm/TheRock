@@ -26,20 +26,20 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
         # Compared to releases:
-        #   * limited to python 3.12
+        #   * limited to python 3.10
         #   * not including "nightly" pytorch_git_ref
         self.assertEqual(
             matrix,
             [
                 {
-                    "python_version": "3.12",
+                    "python_version": "3.10",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
                 {
-                    "python_version": "3.12",
+                    "python_version": "3.10",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
                     "test_level": "standard",
@@ -56,14 +56,14 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
         # Compared to releases:
-        #   * limited to python 3.12
+        #   * limited to python 3.10
         # Compared to Linux:
         #   * limited to only a single pytorch_git_ref
         self.assertEqual(
             matrix,
             [
                 {
-                    "python_version": "3.12",
+                    "python_version": "3.10",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
                     "test_level": "standard",
@@ -100,7 +100,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
-                    python_versions=["3.12"],
+                    python_versions=["3.10"],
                     pytorch_git_refs=[pytorch_git_ref],
                     amdgpu_families="gfx125X-dcgpu;gfx90c",
                     platform="linux",
@@ -110,7 +110,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     matrix,
                     [
                         {
-                            "python_version": "3.12",
+                            "python_version": "3.10",
                             "pytorch_git_ref": pytorch_git_ref,
                             "amdgpu_families": "gfx125X-dcgpu",
                             "test_level": "standard",
@@ -122,7 +122,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_unknown_explicit_ref_keeps_families(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
-            python_versions=["3.12"],
+            python_versions=["3.10"],
             pytorch_git_refs=["users/alice/gfx125x-bringup"],
             amdgpu_families="gfx125X-dcgpu",
             platform="linux",
@@ -132,7 +132,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             matrix,
             [
                 {
-                    "python_version": "3.12",
+                    "python_version": "3.10",
                     "pytorch_git_ref": "users/alice/gfx125x-bringup",
                     "amdgpu_families": "gfx125X-dcgpu",
                     "test_level": "standard",
@@ -184,7 +184,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                 self.assertEqual(len(matrix), 1)
                 self.assertEqual(matrix[0]["test_amdgpu_families"], "auto")
 
-    def test_only_python_312_runs_standard_gpu_tests(self):
+    def test_only_python_310_runs_standard_gpu_tests(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
             python_versions=["3.10", "3.11", "3.12", "3.13", "3.14"],
@@ -196,18 +196,18 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(
             {row["python_version"]: row["test_level"] for row in matrix},
             {
-                "3.10": "sanity",
+                "3.10": "standard",
                 "3.11": "sanity",
-                "3.12": "standard",
+                "3.12": "sanity",
                 "3.13": "sanity",
                 "3.14": "sanity",
             },
         )
 
-    def test_full_tests_elevate_only_python_312(self):
+    def test_full_tests_elevate_only_python_310(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
-            python_versions=["3.11", "3.12", "3.13"],
+            python_versions=["3.10", "3.11", "3.12"],
             pytorch_git_refs=["nightly"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
@@ -216,7 +216,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
         self.assertEqual(
             {row["python_version"]: row["test_level"] for row in matrix},
-            {"3.11": "sanity", "3.12": "full", "3.13": "sanity"},
+            {"3.10": "full", "3.11": "sanity", "3.12": "sanity"},
         )
 
     def test_full_tests_require_linux_gfx94x_build(self):
@@ -227,7 +227,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             with self.subTest(platform=platform, families=families):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="nightly",
-                    python_versions=["3.12"],
+                    python_versions=["3.10"],
                     pytorch_git_refs=["nightly"],
                     amdgpu_families=families,
                     platform=platform,
@@ -278,7 +278,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type=release_type,
-                    python_versions=["3.12"],
+                    python_versions=["3.10"],
                     pytorch_git_refs=["release/2.11"],
                     amdgpu_families="gfx94X-dcgpu",
                     platform=platform,

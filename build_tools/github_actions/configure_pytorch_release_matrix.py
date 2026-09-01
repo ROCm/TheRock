@@ -29,10 +29,6 @@ RELEASE_TYPES = [
 #       only included in release runs
 
 RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
-CI_PYTHON_VERSIONS = {
-    "linux": ["3.12"],
-    "windows": ["3.12"],
-}
 
 # Refs for the "prerelease" release type. The "nightly" release type extends
 # this set with additional refs (see RELEASE_PYTORCH_REFS).
@@ -87,9 +83,17 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 #   larger upstream PyTorch test suite and can take several hours.
 PYTORCH_TEST_LEVELS = ["sanity", "standard", "full"]
 
-# Workflows by default limit the bulk of testing (standard/full test levels) to
-# one Python version.
-PYTORCH_PRIMARY_TEST_PYTHON_VERSION = "3.12"
+# CI and release workflows limit the bulk of testing (standard/full test
+# levels) to the oldest Python version supported by each PyTorch ref. Match
+# upstream's trunk test version and release support policy:
+# https://github.com/pytorch/pytorch/blob/main/.github/workflows/trunk.yml
+# https://github.com/pytorch/pytorch/blob/main/RELEASE.md#python
+PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
+    "release/2.12": "3.10",
+    "release/2.13": "3.10",
+    "release/2.14": "3.10",
+    "nightly": "3.10",
+}
 
 # The full PyTorch test suite can take several hours, so workflows by default
 # run it on only one representative configuration.
@@ -108,12 +112,6 @@ def _split_values(raw: str) -> list[str]:
 
 def _split_families(raw: str) -> list[str]:
     return [family.strip() for family in raw.split(";") if family.strip()]
-
-
-def _default_python_versions(*, release_type: str, platform: str) -> list[str]:
-    if release_type == "ci":
-        return list(CI_PYTHON_VERSIONS[platform])
-    return list(RELEASE_PYTHON_VERSIONS)
 
 
 def _default_pytorch_git_refs(*, release_type: str, platform: str) -> list[str]:
@@ -137,21 +135,34 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
+def _primary_test_python_version(pytorch_git_ref: str) -> str:
+    """Return the primary test version for a PyTorch ref.
+
+    Unknown explicit refs use the nightly policy because bring-up branches
+    generally track upstream main.
+    """
+    return PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS.get(
+        pytorch_git_ref, PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS["nightly"]
+    )
+
+
 def _select_release_test_level(
     *,
     python_version: str,
+    pytorch_git_ref: str,
     platform: str,
     amdgpu_families: list[str],
     run_full_pytorch_tests: bool,
 ) -> str:
     """Select the shared PyTorch test level for a scheduled release row.
 
-    Use CPU-only sanity coverage outside the designated GPU-test Python
-    version. That version receives standard per-family GPU coverage, or the
+    Use CPU-only sanity coverage outside the ref's primary test Python version.
+    That version receives standard per-family GPU coverage, or the
     hours-long full suite on the one representative configuration selected by
     the release policy above.
     """
-    if python_version != PYTORCH_PRIMARY_TEST_PYTHON_VERSION:
+    primary_python_version = _primary_test_python_version(pytorch_git_ref)
+    if python_version != primary_python_version:
         return "sanity"
     if (
         run_full_pytorch_tests
@@ -177,14 +188,20 @@ def generate_pytorch_matrix_for_release_type(
     if platform not in ["linux", "windows"]:
         raise ValueError(f"Unknown platform: {platform!r}")
 
-    versions = python_versions or _default_python_versions(
-        release_type=release_type, platform=platform
-    )
     refs = pytorch_git_refs or _default_pytorch_git_refs(
         release_type=release_type, platform=platform
     )
+    if release_type == "ci" and not python_versions:
+        # The reduced CI matrix uses each ref's primary test version instead of
+        # building the full Python-version x PyTorch-ref product.
+        version_ref_pairs = [(_primary_test_python_version(ref), ref) for ref in refs]
+    else:
+        versions = python_versions or RELEASE_PYTHON_VERSIONS
+        version_ref_pairs = [
+            (python_version, ref) for python_version in versions for ref in refs
+        ]
 
-    # Build one matrix row per requested Python version and PyTorch ref. Each
+    # Build one matrix row per selected Python-version/PyTorch-ref pair. Each
     # row carries the AMDGPU families that the child build workflow should use
     # for that ref after filtering out families that are not supported yet.
     #
@@ -196,7 +213,7 @@ def generate_pytorch_matrix_for_release_type(
     #     "python_version": "3.10",
     #     "pytorch_git_ref": "release/2.12",
     #     "amdgpu_families": "gfx94X-dcgpu",
-    #     "test_level": "sanity"
+    #     "test_level": "standard"
     #   },
     #   ...
     #   {
@@ -207,36 +224,36 @@ def generate_pytorch_matrix_for_release_type(
     #   }
     # ]
     matrix: list[dict[str, str]] = []
-    for py in versions:
-        for ref in refs:
-            exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
-            families = _filter_families(amdgpu_families, exclude)
-            if not families:
-                continue
-            # These row keys are the contract with workflow files which use them
-            # via matrix.<key> expressions. Empty values are allowed when the
-            # workflow handles them explicitly, but undefined keys are not.
-            row: dict[str, str] = {
-                "python_version": py,
-                "pytorch_git_ref": ref,
-                "amdgpu_families": families,
-                "test_level": _select_release_test_level(
-                    python_version=py,
-                    platform=platform,
-                    amdgpu_families=_split_families(families),
-                    run_full_pytorch_tests=run_full_pytorch_tests,
-                ),
-                # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
-                # scikit-image==0.22.0, which has no cp314 wheel and fails to
-                # build from source. Build those wheels but skip their tests
-                # until that is fixed.
-                "test_amdgpu_families": (
-                    "none"
-                    if (platform, ref, py) == ("windows", "nightly", "3.14")
-                    else "auto"
-                ),
-            }
-            matrix.append(row)
+    for py, ref in version_ref_pairs:
+        exclude = UNSUPPORTED_AMDGPU_FAMILIES[platform].get(ref, set())
+        families = _filter_families(amdgpu_families, exclude)
+        if not families:
+            continue
+        # These row keys are the contract with workflow files which use them
+        # via matrix.<key> expressions. Empty values are allowed when the
+        # workflow handles them explicitly, but undefined keys are not.
+        row: dict[str, str] = {
+            "python_version": py,
+            "pytorch_git_ref": ref,
+            "amdgpu_families": families,
+            "test_level": _select_release_test_level(
+                python_version=py,
+                pytorch_git_ref=ref,
+                platform=platform,
+                amdgpu_families=_split_families(families),
+                run_full_pytorch_tests=run_full_pytorch_tests,
+            ),
+            # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
+            # scikit-image==0.22.0, which has no cp314 wheel and fails to
+            # build from source. Build those wheels but skip their tests
+            # until that is fixed.
+            "test_amdgpu_families": (
+                "none"
+                if (platform, ref, py) == ("windows", "nightly", "3.14")
+                else "auto"
+            ),
+        }
+        matrix.append(row)
     return matrix
 
 
