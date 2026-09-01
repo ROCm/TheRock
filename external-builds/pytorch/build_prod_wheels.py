@@ -59,16 +59,16 @@ You can also install in the same invocation as build by passing `--install-rocm`
 to the build sub-command (useful for docker invocations).
 
 ```
-# For therock-nightly-python
+# For the nightly aggregate index
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+    --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     --rocm-extras device-gfx942
 
-# For therock-dev-python (unstable but useful for testing outside of prod)
+# For the dev aggregate index (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.devreleases.amd.com/whl-multi-arch/ \
+    --index-url https://dev.repo.amd.com/rocm/whl-next/ \
     --rocm-extras device-gfx942
 ```
 
@@ -134,7 +134,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/whl-multi-arch/ \
+        --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
         --rocm-extras device-gfx942 \
         --pytorch-rocm-arch gfx942 \
         --clean \
@@ -188,7 +188,6 @@ LINUX_LIBRARY_PRELOADS = [
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
-    "rocm_smi64",
     # Linux only.
     "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",

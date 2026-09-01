@@ -49,6 +49,8 @@ s3_bucket_configs = [
     # CI (external repos use OIDC with therock-ci-external; fork PRs use runner base credentials)
     S3BucketConfig("therock-ci-artifacts", iam_role="therock-ci"),
     S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
+    # Release type "{dev,nightly}-bkc"; else BKC targets product publication buckets
+    S3BucketConfig("therock-bkc-artifacts", iam_role="therock-bkc"),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
     S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
@@ -92,6 +94,14 @@ _ALLOWED_RELEASE_TYPES = {
 }
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
+_ALLOWED_RELEASE_PRODUCTS = {"core", "pytorch", "jax"}
+_RELEASE_STREAM_BY_TYPE = {
+    "dev": "dev",
+    "dev-bkc": "bkc",
+    "nightly": "nightly",
+    "nightly-bkc": "bkc",
+    "prerelease": "rc",
+}
 
 
 def get_artifacts_bucket_config(
@@ -121,13 +131,10 @@ def get_artifacts_bucket_config(
             bucket_name = "therock-ci-artifacts-external"
         else:
             bucket_name = "therock-ci-artifacts"
+    elif release_type in ("dev-bkc", "nightly-bkc"):
+        bucket_name = "therock-bkc-artifacts"
     else:
-        if release_type == "dev-bkc":
-            bucket_name = "therock-dev-artifacts"
-        elif release_type == "nightly-bkc":
-            bucket_name = "therock-nightly-artifacts"
-        else:
-            bucket_name = f"therock-{release_type}-artifacts"
+        bucket_name = f"therock-{release_type}-artifacts"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
@@ -166,6 +173,62 @@ def get_release_bucket_config(
     else:
         bucket_name = f"therock-{release_type}-{bucket_type}"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
+
+
+def get_release_stream(release_type: str) -> str:
+    """Return the external repo.amd.com stream for an internal release type.
+
+    Args:
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
+
+    Raises:
+        ValueError: If release_type is invalid.
+    """
+    try:
+        return _RELEASE_STREAM_BY_TYPE[release_type]
+    except KeyError as e:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_TYPES}"
+        ) from e
+
+
+def get_product_release_bucket_config(
+    release_type: str,
+    product: str,
+) -> S3BucketConfig:
+    """Look up the final repo.amd.com product publication bucket.
+
+    Artifact buckets and credentials are intentionally separate from this
+    product publication path. This resolver targets the cross-account product
+    buckets used for final public release outputs.
+
+    Args:
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
+        product: "core", "pytorch", or "jax".
+
+    Raises:
+        ValueError: If release_type or product is invalid.
+    """
+    stream = get_release_stream(release_type)
+    if product not in _ALLOWED_RELEASE_PRODUCTS:
+        raise ValueError(
+            f"product={product!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_PRODUCTS}"
+        )
+    return S3BucketConfig(
+        name=f"therock-repo-amd-{stream}-{product}",
+        iam_account="324352301041",
+        iam_role=f"therock-repo-{stream}-{product}",
+    )
+
+
+def get_release_package_index_url(release_type: str) -> str:
+    """Return the aggregate pip index URL for a final release stream."""
+    stream = get_release_stream(release_type)
+    return f"https://{stream}.repo.amd.com/rocm/whl-next/"
 
 
 def get_artifacts_bucket_config_for_workflow_run(

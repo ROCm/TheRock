@@ -567,6 +567,43 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"STAGE_REUSE_MODE": "off"},
+                clear=False,
+            ),
+            patch.object(
+                cm,
+                "compute_auto_stage_reuse",
+            ) as compute_auto_stage_reuse,
+            patch.object(
+                cm,
+                "_get_all_build_stages",
+            ) as get_all_build_stages,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name="workflow_dispatch",
+                    prebuilt_stages="all",
+                    baseline_run_id="12345",
+                    baseline_repository="ROCm/TheRock",
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+
+        # Strong off must skip both automatic analysis and manual "all" parsing.
+        compute_auto_stage_reuse.assert_not_called()
+        get_all_build_stages.assert_not_called()
+
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.prebuilt_stages, [])
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+        self.assertEqual(result.build_rocm.baseline_repository, "")
+        self.assertIsNone(result.auto_stage_reuse)
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -607,6 +644,75 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "profiler-apps"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+    def test_build_stages_allowlist_skips_complement(self):
+        """Stages outside the build_stages allowlist are skipped."""
+        result = cm.decide_jobs(
+            self._inputs(build_stages=["compiler-runtime", "runtime-tests"]),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertIn("math-libs", result.build_rocm.skipped_stages)
+        self.assertNotIn("compiler-runtime", result.build_rocm.skipped_stages)
+
+    def test_build_stages_disables_packages_when_stages_skipped(self):
+        """Package builds are disabled when stages are skipped (partial build)."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        jobs = cm.decide_jobs(inputs, cm.GitContext(), targets)
+        result = cm.expand_build_configs(
+            ci_inputs=inputs,
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=jobs,
+        )
+        # Packages should be disabled due to skipped stages
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertFalse(result.linux.build_jax)
+        self.assertFalse(result.linux.build_native_linux)
+
+    def test_build_stages_rejects_incompatible_test_labels(self):
+        """build_stages raises error for test_labels requiring skipped stages."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:rocblas", "test:miopen"],
+        )
+        # rocblas/miopen require math-libs/ml-libs, not in build_stages
+        # Validation happens in CIInputs.validate() (called by from_environ)
+        with self.assertRaises(ValueError) as ctx:
+            inputs.validate()
+        self.assertIn("rocblas", str(ctx.exception))
+        self.assertIn("miopen", str(ctx.exception))
+
+    def test_build_stages_allows_compatible_test_labels(self):
+        """build_stages allows test_labels that match available stages."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:kfdtest"],
+        )
+        # Validation should pass without raising
+        inputs.validate()
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        # Both labels are compatible with the stages
+        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
@@ -1197,6 +1303,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ],
         )
 
+    def test_build_config_omits_python_package_test_matrix_when_disabled(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_python_packages=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(result.linux.test_python_packages_matrix, [])
+        self.assertEqual(result.windows.test_python_packages_matrix, [])
+
     def test_build_config_includes_pytorch_build_matrix(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
@@ -1212,12 +1333,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(
             result.linux.pytorch_build_matrix,
             [
-                {
-                    "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                    "test_amdgpu_families": "auto",
-                },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
@@ -1237,7 +1352,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             [
                 {
                     "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.11",
+                    "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
                     "test_amdgpu_families": "auto",
                 }
@@ -1336,6 +1451,17 @@ class TestExpandBuildConfigs(unittest.TestCase):
 
         self.assertFalse(result.linux.build_jax)
         self.assertEqual(result.linux.jax_build_matrix, [])
+
+    def test_build_native_linux_input_disables_native_packages(self):
+        """build_native_linux=False disables native package builds."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_linux=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(result.linux.build_native_linux)
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -1699,6 +1825,44 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
 
+    def test_off_clears_reuse_from_platform_build_configs(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            prebuilt_stages="compiler-runtime,runtime-tests",
+            baseline_run_id="12345",
+            baseline_repository="ROCm/TheRock",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"STAGE_REUSE_MODE": "off"},
+            clear=False,
+        ):
+            outputs = cm.configure(
+                inputs,
+                cm.GitContext.empty(),
+            )
+
+        self.assertIsNotNone(outputs.builds.linux)
+        self.assertIsNotNone(outputs.builds.windows)
+
+        for build_config in (
+            outputs.builds.linux,
+            outputs.builds.windows,
+        ):
+            self.assertEqual(build_config.prebuilt_stages, [])
+            self.assertEqual(build_config.baseline_run_id, "")
+            self.assertEqual(build_config.baseline_repository, "")
+
+            payload = build_config.to_dict()
+            self.assertEqual(payload["prebuilt_stages"], "")
+            self.assertEqual(payload["baseline_run_id"], "")
+            self.assertEqual(payload["baseline_repository"], "")
+
 
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
@@ -2042,18 +2206,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 select_build_runner("windows", "release"), "azure-windows-scale-rocm"
             )
 
-    def test_select_build_runner_sanitizer_uses_ramdisk(self):
-        """Sanitizer builds (asan/tsan) should always use Azure ramdisk runner."""
+    def test_select_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer builds (asan/tsan) should use AWS large runner."""
         from amdgpu_family_matrix import select_build_runner
 
         with patch("random.random", return_value=0.5):
             self.assertEqual(
                 select_build_runner("linux", "asan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
             self.assertEqual(
                 select_build_runner("linux", "tsan"),
-                "azure-linux-scale-rocm-heavy-ramdisk",
+                "aws-linux-scale-rocm-large",
             )
 
 

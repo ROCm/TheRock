@@ -46,13 +46,13 @@ on:
         type: choice
         default: "dry-run"
         options:
+          - "off"
           - "dry-run"
           - "reuse-stage"
-        # This drives the AUTOMATIC stage-reuse detection layer, which is
-        # separate from the manual `prebuilt_stages` input above. dry-run only
-        # reports which unaffected stages could be reused; reuse-stage actually
-        # reuses them (skips the build and copies artifacts from a baseline run).
-        description: "dry-run (report only) | reuse-stage (auto-reuse unaffected stages)"
+        # off disables all artifact reuse and ignores explicit prebuilt stages and
+        # baseline inputs. dry-run reports automatic reuse opportunities without
+        # applying them. reuse-stage applies automatic reuse.
+        description: "off (disable reuse) | dry-run (report only) | reuse-stage (auto-reuse unaffected stages)"
       stage_reuse_max_age_hours:
         type: string
         default: "72"
@@ -65,6 +65,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
+      build_python_packages:
+        type: boolean
+        default: true
+        description: "Build ROCm Python packages"
       build_pytorch:
         type: boolean
         default: true
@@ -73,6 +77,14 @@ on:
         type: boolean
         default: true
         description: "Build JAX wheels"
+      build_native_linux:
+        type: boolean
+        default: true
+        description: "Build native Linux packages and run install tests"
+      build_stages:
+        type: string
+        default: ""
+        description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
   pull_request:
     types:
       - labeled
@@ -109,8 +121,11 @@ jobs:
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
       stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
+      build_python_packages: ${{ github.event_name != 'workflow_dispatch' || inputs.build_python_packages }}
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
+      build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
+      build_stages: ${{ inputs.build_stages || '' }}
     secrets: inherit
 
   linux_build_and_test:

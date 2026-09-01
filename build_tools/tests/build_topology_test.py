@@ -1126,6 +1126,27 @@ class BuildTopologyTest(unittest.TestCase):
 class RealTopologyTest(unittest.TestCase):
     """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
 
+    def test_emulation_has_a_dedicated_build_stage(self):
+        topology = get_topology()
+
+        compiler_artifacts = topology.get_produced_artifacts("compiler-runtime")
+        self.assertNotIn("rocjitsu", compiler_artifacts)
+        self.assertNotIn("rocjitsu-hotswap", compiler_artifacts)
+        self.assertNotIn("mirage", compiler_artifacts)
+
+        emulation_artifacts = topology.get_produced_artifacts("emulation")
+        self.assertEqual(
+            emulation_artifacts,
+            {"rocjitsu", "rocjitsu-hotswap", "mirage"},
+        )
+        emulation_inbound = topology.get_inbound_artifacts("emulation")
+        self.assertIn("base", emulation_inbound)
+        self.assertIn("sysdeps", emulation_inbound)
+
+        comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
+        self.assertIn("rocjitsu", comm_libs_inbound)
+        self.assertIn("rocjitsu-hotswap", comm_libs_inbound)
+
     def test_hipkernelprovider_is_split_per_arch(self):
         # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
         # so hipkernelprovider must stay target-specific and kpack-split; reverting

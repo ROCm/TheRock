@@ -12,8 +12,8 @@ Example with ``--source-dir /tmp/dist --release-type dev``::
 
     /tmp/dist/torch-2.10.0+rocm7.10.0-cp312-cp312-linux_x86_64.whl
     /tmp/dist/amd-torch-device-gfx942-2.10.0+rocm7.10.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl/torch-...whl
-      -> s3://therock-dev-python/v4/whl/amd-torch-device-...whl
+      -> s3://therock-repo-amd-dev-pytorch/v5/rocm/pytorch/whl-next/torch/torch-...whl
+      -> s3://therock-repo-amd-dev-pytorch/v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/amd-torch-device-...whl
 
 Test usage::
 
@@ -29,7 +29,11 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.s3_buckets import (
+    get_product_release_bucket_config,
+    get_release_bucket_config,
+    get_release_package_index_url,
+)
 from _therock_utils.python_package_paths import plan_local_uploads
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
@@ -38,9 +42,7 @@ from github_actions.github_actions_api import gha_set_output
 logger = logging.getLogger(__name__)
 
 
-MULTI_ARCH_INDEX_URLS = {
-    # TODO: Move this release bucket to CDN/index URL mapping into
-    # build_tools/_therock_utils/s3_buckets.py.
+LEGACY_MULTI_ARCH_INDEX_URLS = {
     "dev": "https://rocm.devreleases.amd.com/whl-multi-arch/",
     "dev-bkc": "https://rocm.devreleases.amd.com/whl-multi-arch/",
     "nightly": "https://rocm.nightlies.amd.com/whl-multi-arch/",
@@ -89,10 +91,10 @@ def main(argv: list[str]) -> None:
     )
     parser.add_argument(
         "--python-index",
-        default="whl",
+        default="whl-next",
         choices=["whl", "whl-next"],
         help="Product-local index name for structured publishing (default: "
-        "whl). Selects the v5/rocm/pytorch/<index>/ path segment.",
+        "whl-next). Selects the v5/rocm/pytorch/<index>/ path segment.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without uploading"
@@ -102,20 +104,23 @@ def main(argv: list[str]) -> None:
     if not args.source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
-    bucket = get_release_bucket_config(args.release_type, "python")
     backend = create_storage_backend(dry_run=args.dry_run)
 
     if args.structured:
+        bucket = get_product_release_bucket_config(args.release_type, "pytorch")
         _publish_structured(args.source_dir, bucket.name, args.python_index, backend)
+        package_index_url = get_release_package_index_url(args.release_type)
     else:
+        bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")
         logger.info("PyTorch wheels: %s -> %s", args.source_dir, dest.s3_uri)
         count = backend.upload_directory(args.source_dir, dest, include=["*.whl"])
         logger.info("Uploaded %d wheel files", count)
         if count == 0:
             raise FileNotFoundError(f"No wheels found at {args.source_dir}")
+        package_index_url = LEGACY_MULTI_ARCH_INDEX_URLS[args.release_type]
 
-    gha_set_output({"package_index_url": MULTI_ARCH_INDEX_URLS[args.release_type]})
+    gha_set_output({"package_index_url": package_index_url})
 
 
 if __name__ == "__main__":

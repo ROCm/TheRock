@@ -73,6 +73,41 @@ class BuildMarkerExpressionTest(unittest.TestCase):
         cfg = {"pytest_markers": None, "exclude_markers": None}
         self.assertEqual(pytest_runner.build_marker_expression(cfg, None), "")
 
+    def test_amdgpu_targets_substitution_in_include(self):
+        cfg = {"pytest_markers": ["{AMDGPU_TARGETS} and emu_fast"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, "gfx1250", "gfx1250"),
+            "(gfx1250 and emu_fast) and not skip-gfx1250",
+        )
+
+    def test_amdgpu_targets_substitution_in_exclude(self):
+        cfg = {"exclude_markers": ["{AMDGPU_TARGETS}_slow"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, "gfx1250"),
+            "not gfx1250_slow",
+        )
+
+    def test_amdgpu_targets_empty_drops_markers_with_token(self):
+        cfg = {"pytest_markers": ["{AMDGPU_TARGETS} and emu_fast"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, ""),
+            "",
+        )
+
+    def test_amdgpu_targets_empty_keeps_markers_without_token(self):
+        cfg = {"pytest_markers": ["emu_fast", "{AMDGPU_TARGETS} and gfx1250"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, None, ""),
+            "(emu_fast)",
+        )
+
+    def test_amdgpu_targets_no_token_is_noop(self):
+        cfg = {"pytest_markers": ["gfx1250"]}
+        self.assertEqual(
+            pytest_runner.build_marker_expression(cfg, "gfx1250", "gfx1250"),
+            "(gfx1250) and not skip-gfx1250",
+        )
+
 
 class ResolveComponentPathTest(unittest.TestCase):
     def test_known_component(self):

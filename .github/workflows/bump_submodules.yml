@@ -26,7 +26,7 @@ on:
       - rocm-systems
       - rocm-libraries
       - debug-tools/rocgdb/source
-      - third-party/sysdeps/linux/amd-mesa/mesa-fork
+      - third-party/sysdeps/common/mesa-fork
 
 permissions:
   contents: read
@@ -34,6 +34,9 @@ permissions:
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout ROCm/TheRock
@@ -91,3 +94,14 @@ jobs:
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
             --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
             --mesa_token "${{ steps.systems-token.outputs.token }}"
+
+      - name: Post bump breadcrumbs to upstream PRs
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          python3 build_tools/github_actions/post_bump_breadcrumbs.py \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}"
