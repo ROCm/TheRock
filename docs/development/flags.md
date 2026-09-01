@@ -303,6 +303,9 @@ This is generated automatically: `therock_finalize_flags()` writes
    propagation only when maintaining an existing BOOL integration.
 1. Verify standalone defaults and `-D` overrides, integrated provider
    resolution, generated state, manifest types, and C/C++ compilation.
+1. To get CI coverage for a flag that is off by default, map a pull request
+   label to `-DTHEROCK_FLAG_{NAME}=ON`. See
+   [Label-gated cmake flags](./ci_behavior_manipulation.md#label-gated-cmake-flags).
 
 ## Alternatives Considered
 

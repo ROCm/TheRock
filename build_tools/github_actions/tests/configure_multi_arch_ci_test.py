@@ -175,6 +175,33 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
 
+    def test_label_gated_flags_active_from_env(self):
+        """LABEL_GATED_FLAGS_ACTIVE is only true for the literal "true"."""
+        for value, expected in [
+            ("true", True),
+            ("TRUE", True),
+            (" true ", True),
+            ("false", False),
+            ("", False),
+            ("1", False),
+            ("yes", False),
+        ]:
+            with self.subTest(value=value):
+                inputs = _run_from_environ(
+                    event_name="workflow_dispatch",
+                    event_payload={},
+                    extra_env={"LABEL_GATED_FLAGS_ACTIVE": value},
+                )
+                self.assertEqual(inputs.label_gated_flags_active, expected)
+
+    def test_label_gated_flags_inactive_when_unset(self):
+        """The variable is absent for every run that predates the feature."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+        )
+        self.assertFalse(inputs.label_gated_flags_active)
+
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
         inputs = _run_from_environ(
@@ -566,6 +593,106 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "runtime-tests"],
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
+
+    def test_label_gated_flags_neutralize_all_artifact_reuse(self):
+        """A flag-on run may not inherit artifacts built with other flags.
+
+        Explicit prebuilt stages, the caller-supplied baseline and automatic
+        reuse are all keyed on content, never on cmake flags, so all three are
+        dropped and the reuse mode is downgraded to dry-run.
+        """
+        with (
+            patch.dict(os.environ, {"STAGE_REUSE_MODE": "reuse-stage"}, clear=False),
+            patch.object(cm, "compute_auto_stage_reuse") as compute_auto_stage_reuse,
+        ):
+            compute_auto_stage_reuse.return_value = cm.AutoStageReuse(
+                mode=cm.StageReuseMode.DRY_RUN,
+                candidate_stages=(),
+                rebuild_stages=(),
+                full_rebuild_required=False,
+                baseline_run_id="99999",
+                baseline_html_url="",
+                available_stages=("compiler-runtime",),
+                unavailable_stages=(),
+                applied_reuse_stages=(),
+                reasons=(),
+                report_lines=(),
+            )
+            result = cm.decide_jobs(
+                self._inputs(
+                    prebuilt_stages="compiler-runtime,runtime-tests",
+                    baseline_run_id="12345",
+                    baseline_repository="ROCm/TheRock",
+                    label_gated_flags_active=True,
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+
+        # Analysis still runs (dry-run reports what it would have reused) but
+        # is passed the downgraded mode, so nothing is applied.
+        self.assertEqual(
+            compute_auto_stage_reuse.call_args.kwargs["mode"],
+            cm.StageReuseMode.DRY_RUN,
+        )
+        self.assertEqual(result.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.prebuilt_stages, [])
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+
+    def test_label_gated_flags_inactive_leaves_reuse_untouched(self):
+        """The default (flags off) path is unchanged."""
+        result = cm.decide_jobs(
+            self._inputs(
+                event_name="workflow_dispatch",
+                prebuilt_stages="compiler-runtime,runtime-tests",
+                baseline_run_id="12345",
+                baseline_repository="ROCm/TheRock",
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(
+            sorted(result.build_rocm.prebuilt_stages),
+            ["compiler-runtime", "runtime-tests"],
+        )
+        self.assertEqual(result.build_rocm.baseline_run_id, "12345")
+        self.assertEqual(result.build_rocm.baseline_repository, "ROCm/TheRock")
+
+    def test_label_gated_flags_win_over_explicit_reuse_stage_mode(self):
+        """Even STAGE_REUSE_MODE=reuse-stage cannot apply stages to a flag run."""
+        with patch.dict(os.environ, {"STAGE_REUSE_MODE": "reuse-stage"}, clear=False):
+            result = cm.decide_jobs(
+                self._inputs(label_gated_flags_active=True),
+                git_context=cm.GitContext(
+                    changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"]
+                ),
+                targets=cm.TargetSelection(),
+            )
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+        self.assertIsNotNone(result.auto_stage_reuse)
+        self.assertEqual(result.auto_stage_reuse.applied_reuse_stages, ())
+
+    def test_label_gated_flags_do_not_weaken_stage_reuse_off(self):
+        """mode=off is stricter than the dry-run downgrade and is preserved."""
+        with (
+            patch.dict(os.environ, {"STAGE_REUSE_MODE": "off"}, clear=False),
+            patch.object(cm, "compute_auto_stage_reuse") as compute_auto_stage_reuse,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    prebuilt_stages="compiler-runtime",
+                    baseline_run_id="12345",
+                    label_gated_flags_active=True,
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+        compute_auto_stage_reuse.assert_not_called()
+        self.assertIsNone(result.auto_stage_reuse)
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
 
     def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
         with (

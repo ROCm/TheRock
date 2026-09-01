@@ -245,6 +245,10 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # True when a PR label added a non-default -DTHEROCK_FLAG_* option to the
+    # cmake line. Resolved upstream by resolve_label_gated_flags.py.
+    label_gated_flags_active: bool = False
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -384,6 +388,12 @@ class CIInputs:
             else:
                 windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
 
+        # Set by the "Resolve label-gated cmake flags" step in
+        # setup_multi_arch.yml.
+        label_gated_flags_active = (
+            os.environ.get("LABEL_GATED_FLAGS_ACTIVE", "").strip().lower() == "true"
+        )
+
         inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -412,6 +422,7 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            label_gated_flags_active=label_gated_flags_active,
         )
         inputs.validate()
         return inputs
@@ -1066,12 +1077,31 @@ def decide_jobs(
 
     # Build ROCm.
     stage_reuse_mode = StageReuseMode.from_environ()
+    prebuilt_stages = ci_inputs.prebuilt_stages
+    explicit_baseline_run_id = ci_inputs.baseline_run_id
+
+    if ci_inputs.label_gated_flags_active:
+        # No reuse mechanism is keyed on cmake flags, so every artifact this run
+        # could inherit was built with different ones. Drop all three. Dry-run
+        # rather than off keeps the reuse reporting; an explicit off stays off.
+        logging.info(
+            "[STAGE-REUSE] label-gated cmake flags active: building from "
+            "source. Dropping prebuilt_stages=%r and baseline_run_id=%r, and "
+            "downgrading stage reuse mode %s -> dry-run.",
+            prebuilt_stages,
+            explicit_baseline_run_id,
+            stage_reuse_mode.value,
+        )
+        prebuilt_stages = ""
+        explicit_baseline_run_id = ""
+        if stage_reuse_mode is not StageReuseMode.OFF:
+            stage_reuse_mode = StageReuseMode.DRY_RUN
 
     if stage_reuse_mode is StageReuseMode.OFF:
         # Strong off is authoritative: do not parse or honor explicit
         # prebuilt_stages, do not retain a baseline, and do not invoke automatic
         # stage-reuse analysis.
-        if ci_inputs.prebuilt_stages or ci_inputs.baseline_run_id:
+        if prebuilt_stages or explicit_baseline_run_id:
             logging.info(
                 "[STAGE-REUSE] mode=off: ignoring prebuilt_stages and "
                 "baseline_run_id; all in-scope stages will rebuild"
@@ -1090,8 +1120,8 @@ def decide_jobs(
     else:
         # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
         stage_decisions = {}
-        if ci_inputs.prebuilt_stages:
-            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+        if prebuilt_stages:
+            for stage in _parse_prebuilt_stages(prebuilt_stages):
                 stage_decisions[stage] = JobAction.PREBUILT
 
         # In dry-run, automatic reuse is analyzed but not applied. In
@@ -1104,7 +1134,7 @@ def decide_jobs(
         )
 
         baseline_repository = ci_inputs.baseline_repository
-        baseline_run_id = ci_inputs.baseline_run_id
+        baseline_run_id = explicit_baseline_run_id
 
         for stage in auto_stage_reuse.applied_reuse_stages:
             stage_decisions.setdefault(stage, JobAction.PREBUILT)

@@ -30,6 +30,10 @@ The following labels may be added to a pull request to modify CI behavior:
 | `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
 | `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 
+Pull requests in the component repositories that call Multi-Arch CI may also
+carry labels that change the cmake configuration of the build. See
+[Label-gated cmake flags](#label-gated-cmake-flags) below.
+
 ### Push
 
 CI runs on pushes to `main` if modified files pass the filters in
@@ -49,6 +53,121 @@ Actions workflow page:
 \[\[ [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) \]\]
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
+
+## Label-gated cmake flags
+
+A label on an *external repository's* pull request can make the multi-arch
+presubmit build TheRock with a non-default cmake flag, for that pull request
+only. This is how you get CI coverage — including GPU tests — for a code path
+that is off by default.
+
+The mechanism applies to runs that an external repository (for example
+[`ROCm/rocm-libraries`](https://github.com/ROCm/rocm-libraries)) starts by
+calling [`setup_multi_arch.yml`](../../.github/workflows/setup_multi_arch.yml)
+with an `external_repo` input. A called reusable workflow runs in the caller's
+context, so the labels read are the ones on *that* repository's pull request; no
+token and no API call are involved, and it works for pull requests from forks.
+
+Labels are honored only for `pull_request` events. A `workflow_dispatch`, push,
+nightly or release run always builds with the default configuration.
+
+The map lives in
+[`label_gated_flags.py`](../../build_tools/github_actions/label_gated_flags.py)
+and is keyed by repository, then by label. **No labels are mapped today**; the
+entry below is an example of the shape:
+
+```python
+LABEL_GATED_FLAGS: dict[str, dict[str, list[str]]] = {
+    "rocm-libraries": {
+        "ci:miopen-hipdnn-wrapper": [
+            "-DTHEROCK_FLAG_MIOPEN_ENABLE_HIPDNN_WRAPPER=ON",
+        ],
+    },
+}
+```
+
+The repository key is the short name from the `external_repo` payload's
+`repository` field, lowercased (`ROCm/rocm-libraries` → `rocm-libraries`).
+
+List each label as a bullet here when you add it to the map.
+
+### Only `-DTHEROCK_FLAG_*` options are allowed
+
+The resolver rejects anything else, and the prefix is not a formality.
+`therock_declare_flag` *adds* it: declaring `NAME MIOPEN_ENABLE_HIPDNN_WRAPPER`
+creates the cache variable `THEROCK_FLAG_MIOPEN_ENABLE_HIPDNN_WRAPPER`. That
+prefixed name is the superbuild knob you set; the flag machinery forwards the
+unprefixed name down into the subprojects listed in `SUB_PROJECTS`. Setting the
+unprefixed name at the top level does nothing at all — subproject arguments are
+an explicit allowlist — and you get a green build with the flag off. See
+[flags.md](./flags.md).
+
+`-DTHEROCK_ENABLE_*` is rejected for a different reason: TheRock generates its
+own `THEROCK_ENABLE_*` options *after* these are spliced in, and cmake takes the
+last `-D`, so such an option would be silently overridden.
+
+Adding a new gated flag therefore takes two pull requests, in order:
+
+1. Declare the flag in [`FLAGS.cmake`](../../FLAGS.cmake) with
+   `therock_declare_flag(... SUB_PROJECTS <project>)`. If the flag is
+   Linux-only, make it a no-op on Windows here — the Windows build leg gets the
+   same options and there is no per-platform key.
+1. Add the map entry in `label_gated_flags.py`, a bullet under this section, and
+   the label itself to the calling repository's label list.
+
+### A label has an effect if and only if it is a key in the map
+
+There is no naming convention and none is enforced. `ci:<project>-<feature>` is
+suggested for new labels, matching the existing style, but nothing checks it.
+Avoid bare `ci:` names that collide with the already-crowded namespace
+(`ci:skip`, `ci:asan`, `ci:run-all-archs`).
+
+What decides the configuration is the set of labels on the pull request at the
+moment the run is triggered — never which label happened to change. A label
+already applied keeps taking effect on later pushes, and removing one needs no
+special handling because it is simply absent from the next run's label set.
+
+GitHub only lets users with triage or write permission label a pull request, so
+a fork contributor cannot self-apply one. That permission boundary is what makes
+it safe to inject cmake options from a label at all.
+
+### Caveats
+
+**Any label change restarts the multi-arch presubmit, mapped or not.** The
+concurrency group cancels a pull request's in-progress run the moment a new one
+starts, and that happens before anything can inspect the label. Declining to
+rebuild for an unmapped label would not save the build — it is already dead — it
+would only leave the pull request with no build until the next push. Batch label
+edits while a build is running if you care about the wasted runner time.
+
+**The gated build replaces the normal one.** A labeled pull request has no green
+flag-off signal, because both configurations would collide in the same artifact
+store. If you need the baseline too, open a second pull request; separate runs
+are namespaced by run ID and never collide.
+
+**A flag-on run builds every stage itself.** Nothing that carries artifacts
+between runs is keyed on cmake flags, so a flag-on run would otherwise inherit
+stages that were built flag-off. `configure_multi_arch_ci.py` therefore drops
+`prebuilt_stages` and `baseline_run_id` and downgrades the stage reuse mode to
+`dry-run` whenever a label flag is active, naming what it dropped in the log.
+Expect a full build's wall time, not an incremental one.
+
+**Re-running an old run replays its original payload.** The labels a re-run sees
+are the ones that were on the pull request when that run was *first* triggered,
+so applying a label and then re-running a stale failure gives you a flag-off
+build that looks fine. Push a commit or re-apply the label instead. The step
+summary always names the exact label set and the flags the run acted on, which
+is the way to confirm what a given run actually built.
+
+**Removing a label does not always rebuild.** A workflow only reacts to the
+label events it subscribes to; the rocm-libraries ASAN workflow, for instance,
+subscribes to `labeled` but not `unlabeled`. Remove the label and push.
+
+**The pinned TheRock ref decides which labels exist.** A calling repository pins
+a TheRock commit, so a label added to the map after that pin is unknown to the
+run and the build goes green with the flag off. The step summary is the check:
+it names the matched labels, so an empty match on a labeled pull request means
+the pin predates the map entry.
 
 ## Prebuilt stages
 
