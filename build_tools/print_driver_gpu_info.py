@@ -8,21 +8,47 @@ Sanity check script for CI runners.
 On Linux:
   - run "amd-smi static"
   - run "rocminfo"
+  - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
 On Windows:
   - run "hipInfo.exe"
 
-This script prints only raw command output.
+Driver commands (amd-smi, rocminfo, hipInfo) are run with check=True and will
+cause this script to exit non-zero if they fail. The KFD version check also
+causes a non-zero exit when the version is below the supported minimum or
+cannot be queried. A version above the supported maximum produces a warning
+but does not fail.
 """
 
+import fcntl
 import os
 from pathlib import Path
 import platform
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+
+# AMDKFD_IOC_GET_VERSION = _IOR('K', 0x01, struct { u32 major; u32 minor; })
+# _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
+_AMDKFD_IOC_GET_VERSION = 0x80084B01
+_KFD_DEVICE = "/dev/kfd"
+_KFD_VERSION_MIN = (1, 13)
+_KFD_VERSION_MAX = (2, 0)  # exclusive
+
+
+def _get_kfd_version() -> Tuple[int, int]:
+    fd = os.open(_KFD_DEVICE, os.O_RDWR)
+    try:
+        buf = bytearray(8)
+        fcntl.ioctl(fd, _AMDKFD_IOC_GET_VERSION, buf)
+        major, minor = struct.unpack("II", buf)
+        return major, minor
+    finally:
+        os.close(fd)
 
 
 def log(*args, **kwargs):
@@ -89,7 +115,7 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
-def run_sanity(os_name: str) -> None:
+def run_sanity(os_name: str) -> int:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
@@ -125,13 +151,39 @@ def run_sanity(os_name: str) -> None:
             extra_command_search_paths=[bin_dir],
         )
 
+        log("\n=== KFD IOCTL version ===")
+        if not os.path.exists(_KFD_DEVICE):
+            log(f"error: {_KFD_DEVICE} not found — is the AMDGPU driver loaded?")
+            return 1
+        try:
+            major, minor = _get_kfd_version()
+            too_old = (major, minor) < _KFD_VERSION_MIN
+            too_new = (major, minor) >= _KFD_VERSION_MAX
+            if too_old:
+                status = "NOT supported (too old)"
+            elif too_new:
+                status = "NOT supported (warning: newer than tested range)"
+            else:
+                status = "supported"
+            log(f"KFD IOCTL version: {major}.{minor} ({status})")
+            log(
+                f"Required range for rocdbgapi: "
+                f">= {_KFD_VERSION_MIN[0]}.{_KFD_VERSION_MIN[1]}"
+                f" and < {_KFD_VERSION_MAX[0]}.{_KFD_VERSION_MAX[1]}"
+            )
+            if too_old:
+                return 1
+        except OSError as e:
+            log(f"error: failed to query KFD version: {e}")
+            return 1
+
     log("\n=== End of sanity check ===")
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     detected = platform.system()
-    run_sanity(detected)
-    return 0
+    return run_sanity(detected)
 
 
 if __name__ == "__main__":

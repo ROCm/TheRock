@@ -165,6 +165,18 @@ all_build_variants = {
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
         },
+        # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
+        # Used for nightly and release ASAN builds where stack traces need source line info.
+        "asan-debug": {
+            "build_variant_label": "asan-debug",
+            "build_variant_suffix": "asan",
+            "build_variant_cmake_preset": "linux-release-asan-debug",
+        },
+        "host-asan-debug": {
+            "build_variant_label": "host-asan-debug",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan-debug",
+        },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
@@ -226,7 +238,14 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "host-asan", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
         }
     },
     "gfx110x": {
@@ -298,8 +317,6 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -314,7 +331,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }

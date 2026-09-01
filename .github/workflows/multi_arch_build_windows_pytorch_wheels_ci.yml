@@ -105,6 +105,14 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: >-
+          Build runner label. On workflow_dispatch, default to the self-hosted
+          ROCm Windows pool so runs land on a runner with sccache/mirror access;
+          otherwise the runs-on expression falls back to 'windows-2022', which
+          cannot resolve the internal package mirror.
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
 
 permissions:
   contents: read

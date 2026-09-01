@@ -99,7 +99,6 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
-      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -208,11 +207,9 @@ jobs:
         run: |
           cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
 
-      # Remaining build tests (e.g. rocjitsu, mirage) still run and report, but
-      # are not yet gating. Comgr is split out above so its failures block CI.
-      # TODO(#6112): rocjitsu tests are being moved out; drop this step once done.
-      - name: Run build tests (other, non-blocking)
-        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+      # Rocjitsu and mirage build tests report failures without gating CI.
+      - name: Run build tests (emulation, non-blocking)
+        if: ${{ !cancelled() && inputs.stage_name == 'emulation' }}
         continue-on-error: true
         env:
           TEATIME_FORCE_INTERACTIVE: 1

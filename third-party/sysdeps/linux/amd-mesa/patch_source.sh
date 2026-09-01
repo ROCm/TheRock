@@ -59,7 +59,17 @@ sed -i "/^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*$/{
                 search_path = temp_path;\
             }\
         } else {\
-            search_path = VA_DRIVERS_PATH;\
+            Dl_info dl_info;\
+            if (dladdr((void *)va_openDriver, &dl_info) && dl_info.dli_fname) {\
+                const char *last_slash = strrchr(dl_info.dli_fname, '/');\
+                if (last_slash) {\
+                    temp_path = strndup(dl_info.dli_fname, last_slash - dl_info.dli_fname);\
+                    if (temp_path)\
+                        search_path = temp_path;\
+                }\
+            }\
+            if (!search_path)\
+                search_path = VA_DRIVERS_PATH;\
         }\
     }
     }

@@ -380,6 +380,38 @@ The script produces these versions for debian packages for each release type:
 | dev          | `X.Y.Z~devYYYYMMDD`                          | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)                  |
 | dev-bkc      | `X.Y.Z~devYYYYMMDD`<br>(same as regular dev) | `10.1.0~dev20260814`                                                   |
 
+> [!WARNING]
+> Deb package version sorting is currently different than rpm and python version
+> sorting:
+>
+> | Package type | Sort order                            |
+> | ------------ | ------------------------------------- |
+> | Python       | `stable > prerelease > nightly > dev` |
+> | rpm          | `stable > prerelease > nightly > dev` |
+> | deb          | `stable > prerelease > dev > nightly` |
+>
+> This can be checked from Python using the
+> [`python-debian` package](https://pypi.org/project/python-debian/):
+>
+> ```python
+> >>> from debian.debian_support import NativeVersion
+> >>> NativeVersion("7.10.0~20251124") > NativeVersion("7.10.0~dev20251124")
+> False
+> ```
+>
+> As a result, apt may prefer a dev package over a nightly package when both
+> release indexes are configured.
+>
+> See https://github.com/ROCm/TheRock/issues/7638 for details.
+
+### Working with Debian package versions
+
+The `python-debian` package can be used to work with debian package versions:
+
+- https://pypi.org/project/python-debian/
+- https://salsa.debian.org/python-debian-team/python-debian
+- https://python-debian-team.pages.debian.net/python-debian/html/api/debian.debian_support.html
+
 ## Native Windows package versions
 
 TODO: fill this in together with https://github.com/ROCm/TheRock/pull/2159
