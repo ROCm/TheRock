@@ -213,6 +213,57 @@ option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
 ################################################################################
+# Coverage Options
+# Enable code-coverage instrumentation for a whole component group by setting the
+# per-project <PROJECT>_ENABLE_COVERAGE flags that therock_subproject.cmake
+# forwards to each subproject. The per-group project lists are generated from the
+# coverage registry (COVERAGE_PROJECTS in
+# build_tools/github_actions/configure_coverage_ci.py) at configure time.
+################################################################################
+
+option(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL
+  "Enable coverage instrumentation for all rocm-libraries projects" OFF)
+option(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL
+  "Enable coverage instrumentation for all rocm-systems projects" OFF)
+option(THEROCK_COVERAGE_ALL
+  "Enable coverage instrumentation for all coverage-enabled projects" OFF)
+
+# Emit the per-group project lists from COVERAGE_PROJECTS. CMAKE_CONFIGURE_DEPENDS
+# re-runs configure when that file changes.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
+execute_process(
+  COMMAND ${Python3_EXECUTABLE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py"
+    "--emit-cmake" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake"
+  COMMAND_ERROR_IS_FATAL ANY)
+include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake")
+
+set(_therock_coverage_selected "")
+if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_LIBRARIES_ALL)
+  list(APPEND _therock_coverage_selected ${THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS})
+endif()
+if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_SYSTEMS_ALL)
+  list(APPEND _therock_coverage_selected ${THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS})
+endif()
+
+if(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL AND NOT THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS)
+  message(WARNING
+    "THEROCK_COVERAGE_ROCM_SYSTEMS_ALL is ON but no rocm-systems projects are "
+    "onboarded to coverage yet; nothing will be instrumented for that group.")
+endif()
+
+foreach(_proj IN LISTS _therock_coverage_selected)
+  string(TOUPPER "${_proj}" _proj_upper)
+  # Respect an explicit -D<PROJECT>_ENABLE_COVERAGE=OFF from the command line.
+  if(NOT DEFINED ${_proj_upper}_ENABLE_COVERAGE)
+    set(${_proj_upper}_ENABLE_COVERAGE ON)
+    message(STATUS "Coverage: enabling ${_proj_upper}_ENABLE_COVERAGE")
+  endif()
+endforeach()
+
+################################################################################
 # Feature selection
 # Each feature added via therock_add_feature produces a boolean cache variable
 # like `THEROCK_ENABLE_${feature_name}` that takes its default value from the

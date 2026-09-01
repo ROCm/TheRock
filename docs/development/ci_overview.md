@@ -43,6 +43,15 @@ the job starts on a Windows runner, then runs artifact fetch, configure, build,
 and upload steps inside a WSL Ubuntu shell. See
 [WSL ROCDXG CI Stage](wsl_rocdxg.md) for details.
 
+Code coverage runs on its own entry points, since it rebuilds the projects it
+measures with instrumentation rather than reusing the regular build:
+
+- [`.github/workflows/multi_arch_ci_coverage.yml`](/.github/workflows/multi_arch_ci_coverage.yml) - PR coverage, opted into with the `ci:coverage` label
+- [`.github/workflows/multi_arch_ci_coverage_nightly.yml`](/.github/workflows/multi_arch_ci_coverage_nightly.yml) - nightly full-stack instrumented build
+  - [`.github/workflows/multi_arch_ci_coverage_linux.yml`](/.github/workflows/multi_arch_ci_coverage_linux.yml) - per-project build, test, and report for one GPU family
+
+See [Code Coverage](code_coverage.md) for details.
+
 ## Build Phase
 
 TheRock builds ROCm components from source and produces **artifacts** - archive slices of key components.

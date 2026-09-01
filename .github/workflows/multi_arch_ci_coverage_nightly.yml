@@ -1,0 +1,163 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Multi-Arch CI Coverage - Nightly
+#
+# Builds one fully instrumented stack covering every coverage-enabled project,
+# then runs each project's tests against it and reports separately. Compared to
+# the per-PR coverage workflow this pays for a single large build instead of one
+# build per project, which is the right trade-off once several projects are
+# enabled.
+#
+# Phase 1 of RFC0014 runs every enabled component on the default architecture.
+# Change-based selection and multi-architecture expansion come later.
+
+name: Multi-Arch CI Coverage Nightly
+
+on:
+  schedule:
+    # 3 AM UTC, after the regular nightly builds have settled.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on."
+        default: "gfx94X-dcgpu"
+      coverage_config_source:
+        type: string
+        description: "Repository and ref holding the per-project coverage metadata."
+        default: "ROCm/rocm-libraries@main"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  setup_coverage_matrix:
+    name: Setup Coverage Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      coverage_matrix: ${{ steps.matrix.outputs.coverage_matrix }}
+      dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
+      families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
+      coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
+      build_stages: ${{ steps.matrix.outputs.build_stages }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+    steps:
+      - name: Checking out repository
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Generate coverage matrix
+        id: matrix
+        env:
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test || '' }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          COVERAGE_CONFIG_SOURCE: ${{ inputs.coverage_config_source || 'ROCm/rocm-libraries@main' }}
+        run: python ./build_tools/github_actions/configure_coverage_ci.py
+
+      - name: Compute package version
+        id: rocm_package_version
+        run: |
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=ci \
+            --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+  build_instrumented_stack:
+    name: Build Full Instrumented Stack
+    needs: setup_coverage_matrix
+    if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    secrets: inherit
+    with:
+      artifact_group: multi-arch-coverage
+      matrix_per_family_json: ${{ needs.setup_coverage_matrix.outputs.families_matrix_json }}
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      build_variant_label: coverage
+      build_variant_cmake_preset: ""
+      build_variant_suffix: coverage
+      build_stages: ${{ needs.setup_coverage_matrix.outputs.build_stages }}
+      extra_cmake_options: >-
+        ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+        -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
+        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+    permissions:
+      contents: read
+      id-token: write
+
+  # One test + report job per project, all consuming the single instrumented
+  # stack built above (same run id, so the artifacts are already published).
+  coverage_report:
+    name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
+    needs: [setup_coverage_matrix, build_instrumented_stack]
+    # `!failure() && !cancelled()` alone would let this run when
+    # setup_coverage_matrix was skipped, and fromJSON('') is a hard error, so
+    # the matrix has to be checked explicitly.
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.result == 'success' &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        coverage: ${{ fromJSON(needs.setup_coverage_matrix.outputs.coverage_matrix) }}
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    secrets: inherit
+    with:
+      build_enabled: false
+      project_name: ${{ matrix.coverage.project_name }}
+      coverage_flag: ${{ matrix.coverage.coverage_flag }}
+      build_stage: ${{ matrix.coverage.build_stage }}
+      stage_project: ${{ matrix.coverage.stage_project }}
+      test_component: ${{ matrix.coverage.test_component }}
+      object_globs: ${{ matrix.coverage.object_globs }}
+      fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
+      codecov_flag: ${{ matrix.coverage.codecov_flag }}
+      amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      test_type: ${{ inputs.test_type || 'standard' }}
+      release_type: ci
+    permissions:
+      contents: read
+      id-token: write
+
+  ci_summary:
+    name: Nightly Coverage Summary
+    if: always()
+    needs:
+      - setup_coverage_matrix
+      - build_instrumented_stack
+      - coverage_report
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'

@@ -928,6 +928,15 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
+  # Passthrough of -D<PROJECT>_ENABLE_COVERAGE=ON to the subproject. CMake
+  # definitions are conventionally upper case, so only the upper case spelling
+  # is honored (i.e. HIPDNN_ENABLE_COVERAGE, not hipDNN_ENABLE_COVERAGE).
+  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+  if(DEFINED ${_coverage_var_name})
+    list(APPEND _cmake_args "-D${_coverage_var_name}=${${_coverage_var_name}}")
+  endif()
+
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
