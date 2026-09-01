@@ -76,6 +76,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -121,56 +122,6 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     if "all" in stages:
         return _get_all_build_stages()
     return stages
-
-
-def _compute_artifacts_from_changed_projects(
-    changed_projects: list[str],
-) -> tuple[list[str], list[str]]:
-    """Compute rebuild/reusable artifacts from external repo changed_projects.
-
-    Maps project paths (e.g., "projects/rocprim") to artifact names (e.g., "prim")
-    using BUILD_TOPOLOGY.toml mappings.
-
-    Returns:
-        (rebuild_artifacts, reusable_artifacts) tuple
-    """
-    topology = get_topology()
-
-    # Collect artifacts with source_paths mappings (derived from topology, not hardcoded)
-    granular_source_sets = set(topology.get_source_sets_with_source_paths())
-    all_stage_artifacts: set[str] = set()
-    for stage in topology.get_build_stages():
-        for group_name in stage.artifact_groups:
-            group = topology.artifact_groups.get(group_name)
-            if group and set(group.source_sets) & granular_source_sets:
-                for artifact in topology.get_artifacts_in_group(group_name):
-                    if artifact.source_paths:
-                        all_stage_artifacts.add(artifact.name)
-
-    # Map changed projects to artifacts
-    rebuild_artifacts: set[str] = set()
-    alias_map = topology.get_alias_to_artifact_map()
-    for project in changed_projects:
-        normalized = project.split("/")[-1].lower()
-        if normalized in alias_map:
-            rebuild_artifacts.add(alias_map[normalized])
-        else:
-            print(
-                f"  WARNING: unknown project '{project}' - not mapped to any artifact"
-            )
-
-    # Artifacts not in rebuild set are reusable
-    reusable_artifacts = all_stage_artifacts - rebuild_artifacts
-
-    rebuild_list = sorted(rebuild_artifacts)
-    reusable_list = sorted(reusable_artifacts)
-
-    print(f"External repo artifact analysis:")
-    print(f"  changed_projects: {changed_projects}")
-    print(f"  rebuild_artifacts: {rebuild_list}")
-    print(f"  reusable_artifacts: {reusable_list}")
-
-    return rebuild_list, reusable_list
 
 
 def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
@@ -1194,8 +1145,8 @@ def decide_jobs(
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
     if ci_inputs.changed_projects and not rebuild_artifacts:
-        rebuild_artifacts, reusable_artifacts = (
-            _compute_artifacts_from_changed_projects(ci_inputs.changed_projects)
+        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
+            ci_inputs.changed_projects
         )
 
     build_rocm = BuildRocmDecision(
