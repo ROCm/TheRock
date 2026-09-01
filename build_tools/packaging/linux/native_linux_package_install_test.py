@@ -139,7 +139,7 @@ import subprocess
 import sys
 import traceback
 from argparse import ArgumentParser, Namespace
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -1067,35 +1067,10 @@ gpgcheck=0
         why = ",".join(reasons) if reasons else "?"
         return f"uid={st.st_uid} gid={st.st_gid} mode={stat.S_IMODE(mode):04o} -> {why}"
 
-    @classmethod
-    def _describe_flagged_path(cls, path: str) -> str:
-        """Best-effort ``(owner/group/mode -> why)`` annotation for a ``find`` hit.
-
-        ``find`` prints only names, so re-``lstat`` the path to explain why it
-        was flagged. The prefix itself is often a symlink that ``find -H``
-        follows and flags via its *target*; ``lstat`` would only see the link's
-        meaningless ``0777`` bits, so for a symlink we additionally ``stat`` the
-        target and report that. Never raises: on any error it returns an
-        annotation noting the failure so reporting is unaffected.
-        """
-        try:
-            st = os.lstat(path)
-        except OSError as e:
-            return f"(stat failed: {e.strerror or e})"
-        if stat.S_ISLNK(st.st_mode):
-            try:
-                target = os.stat(path)
-            except OSError as e:
-                return f"(symlink; target stat failed: {e.strerror or e})"
-            return f"(symlink target: {cls._format_flagged_reason(target)})"
-        return f"({cls._format_flagged_reason(st)})"
-
     def verify_installed_file_security(self) -> bool:
         """Verify installed files are owned by root:root with safe permissions.
 
-        Combines two related install-tree security checks into a single
-        traversal. A path under the prefix is flagged when any of the following
-        holds:
+        Scans the install tree and flags a path when any of the following holds:
 
         - Ownership: its owner uid or group gid is not 0 (not ``root:root``);
           a non-root-owned path can be tampered with by that owner.
@@ -1111,123 +1086,29 @@ gpgcheck=0
 
         Symbolic links are exempt from the permission rules: on Linux a
         symlink's own mode bits are always ``lrwxrwxrwx`` and are ignored by
-        the kernel (the target's permissions govern access), so checking them
-        would produce false positives. The install prefix itself is commonly a
-        symlink (e.g. ``/opt/rocm/core`` -> ``/opt/rocm/core-X.Y``), so
-        ``find -H`` follows that top-level link to scan the real tree while not
-        following links found *inside* the tree. ``-xdev`` keeps the scan on the
-        prefix's own filesystem so bind mounts inside the tree are not crossed.
-
-        Uses ``find`` (C-level traversal) for speed on large install trees and
-        falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
-        so the check is not silently skipped.
-
-        Returns:
-        True if no offending path is found (or the check could not be run),
-        False if any offending path is found.
-        """
-        print("\nVerifying installed files are owned by root with safe permissions...")
-        # PurePosixPath, not Path: this is a path on the target Linux filesystem
-        # handed to find(1). Path follows the local flavour, so on Windows it
-        # renders "\opt\rocm\core" and the scan silently targets the wrong path.
-        install_prefix = str(PurePosixPath(self.install_prefix))
-        try:
-            result = subprocess.run(
-                [
-                    "find",
-                    # follow the prefix if it is a symlink, but not links inside
-                    "-H",
-                    install_prefix,
-                    # do not cross into other filesystems mounted under prefix
-                    "-xdev",
-                    "(",
-                    # not owned by root:root
-                    "(",
-                    "!",
-                    "-uid",
-                    "0",
-                    "-o",
-                    "!",
-                    "-gid",
-                    "0",
-                    ")",
-                    "-o",
-                    # insecure permissions
-                    "(",
-                    # group/other-writable on any non-symlink (a symlink's own
-                    # mode bits are meaningless; the target is checked on its own)
-                    "(",
-                    "!",
-                    "-type",
-                    "l",
-                    "-perm",
-                    "/022",
-                    ")",
-                    "-o",
-                    # setuid/setgid on a regular file only; setgid on a
-                    # directory (drwxr-sr-x) is a benign group-inheritance
-                    # pattern and must not be flagged.
-                    "(",
-                    "-type",
-                    "f",
-                    "-perm",
-                    "/6000",
-                    ")",
-                    ")",
-                    ")",
-                    "-print",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        except OSError as e:
-            # find not available on this host; fall back to a Python walk so the
-            # check still runs rather than being silently skipped.
-            print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
-            return self._verify_installed_file_security_python(Path(install_prefix))
-
-        # find can exit non-zero (e.g. permission denied on a subtree) while
-        # still printing partial results; surface that rather than passing
-        # silently on an incomplete scan.
-        if result.returncode != 0:
-            print(f" [WARN] find exited {result.returncode}: {result.stderr[:200]}")
-        elif result.stderr.strip():
-            print(f" [WARN] find reported: {result.stderr[:200]}")
-
-        bad = [line for line in result.stdout.splitlines() if line]
-        if bad:
-            print(
-                f" [FAIL] {len(bad)} path(s) not owned by root "
-                "or with insecure permissions:"
-            )
-            for line in bad[:10]:
-                print(f"   {line} {self._describe_flagged_path(line)}")
-            if len(bad) > 10:
-                print(f"   ... and {len(bad) - 10} more")
-            return False
-        print(" [PASS] All installed files owned by root with safe permissions")
-        return True
-
-    def _verify_installed_file_security_python(self, install_path: Path) -> bool:
-        """Pure-Python fallback for the install-tree security check.
-
-        Walks the install tree with ``os.walk`` (does not follow symlinked
-        directories found inside the tree) and ``os.lstat`` each entry, applying
-        the same rules as :meth:`verify_installed_file_security`: flag entries
-        not owned by ``root:root``, group/other-writable entries, and
-        setuid/setgid *regular files*. Symlinks are exempt from the permission
-        rules since their mode bits are meaningless on Linux, and setgid
-        directories are not flagged (a benign group-inheritance pattern).
-        Slower than ``find`` on large trees but portable.
+        the kernel (the target's permissions govern access), so only ownership
+        is meaningful for links. The scan uses ``os.walk`` + ``os.lstat``: it
+        follows the (commonly symlinked) prefix itself -- e.g. ``/opt/rocm/core``
+        -> ``/opt/rocm/core-X.Y`` -- but does not descend into symlinked
+        directories found *inside* the tree.
 
         Returns:
         True if no offending path is found, False if any offending path is found.
         """
+        print("\nVerifying installed files are owned by root with safe permissions...")
+        install_path = Path(self.install_prefix)
+
+        # os.walk swallows traversal errors by default; surface them so an
+        # incomplete scan (e.g. permission denied on a subtree) is not silently
+        # treated as a pass.
+        def _on_walk_error(err: OSError) -> None:
+            where = getattr(err, "filename", None) or install_path
+            print(f" [WARN] scan error under {where}: {err}")
+
         # Store (path, stat) so printing can annotate why each path was flagged
         # without re-stat'ing (the stat result here is authoritative).
         bad: list[tuple[Path, os.stat_result]] = []
-        for root, dirs, files in os.walk(install_path):
+        for root, dirs, files in os.walk(install_path, onerror=_on_walk_error):
             for name in dirs + files:
                 entry = Path(root) / name
                 try:
