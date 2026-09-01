@@ -19,6 +19,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import index_generation_s3_tar
 import install_rocm_from_artifacts as mod
+from _therock_utils.s3_buckets import get_release_tarball_index_url
 
 # A published tarball platform. The host platform is not usable here: tarballs
 # are only published for linux and windows, so a test running on any other host
@@ -188,25 +189,23 @@ class TestTarballIndexParsing(unittest.TestCase):
                 last_modified=datetime(2026, 7, 23),
             ),
         ]
-        index_html = _generated_index_html(entries, mod.NIGHTLY_TARBALL_BUCKET.name)
+        index_html = _generated_index_html(entries, "therock-nightly-tarball")
 
         with mock.patch.object(
             mod, "_read_url", return_value=index_html.encode("utf-8")
         ) as read_url:
-            parsed = mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_BUCKET)
+            parsed = mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_INDEX_URL)
 
         self.assertEqual(parsed, entries)
-        read_url.assert_called_once_with(
-            f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/index.html"
-        )
+        read_url.assert_called_once_with(f"{mod.NIGHTLY_TARBALL_INDEX_URL}/index.html")
 
     def test_reports_index_url_when_file_list_is_missing(self) -> None:
         with mock.patch.object(mod, "_read_url", return_value=b"<html></html>"):
             with self.assertRaises(RuntimeError) as raised:
-                mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_BUCKET)
+                mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_INDEX_URL)
 
         self.assertIn(
-            f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/index.html", str(raised.exception)
+            f"{mod.NIGHTLY_TARBALL_INDEX_URL}/index.html", str(raised.exception)
         )
 
     def test_reports_index_url_when_file_list_is_malformed(self) -> None:
@@ -214,18 +213,11 @@ class TestTarballIndexParsing(unittest.TestCase):
             mod, "_read_url", return_value=b"<script>const files = [{,}];</script>"
         ):
             with self.assertRaises(RuntimeError) as raised:
-                mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_BUCKET)
+                mod._fetch_multiarch_tarball_index(mod.NIGHTLY_TARBALL_INDEX_URL)
 
         self.assertIn(
-            f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/index.html", str(raised.exception)
+            f"{mod.NIGHTLY_TARBALL_INDEX_URL}/index.html", str(raised.exception)
         )
-
-    def test_rejects_a_bucket_with_no_cdn(self) -> None:
-        bucket = mod.get_release_bucket_config("nightly", "tarball")
-        bucket_without_cdn = type(bucket)(name=bucket.name, region=bucket.region)
-
-        with self.assertRaises(ValueError):
-            mod._multiarch_tarball_index_base_url(bucket_without_cdn)
 
     def test_read_url_reports_the_failing_url(self) -> None:
         url = "https://rocm.nightlies.amd.com/tarball-multi-arch/index.html"
@@ -261,21 +253,26 @@ class TestReleaseVersionClassification(unittest.TestCase):
 
 
 class TestReleaseVersionSourceLines(unittest.TestCase):
-    """The '--release' help text derives its URLs from the bucket configs."""
+    """The '--release' help text derives its URLs from the index resolver."""
 
     def test_covers_every_release_kind_that_publishes_tarballs(self) -> None:
         lines = mod.release_version_source_lines()
-        self.assertEqual(len(lines), len(mod.RELEASE_KIND_TARBALL_BUCKETS))
-        for release_kind in mod.RELEASE_KIND_TARBALL_BUCKETS:
+        for release_kind in mod.RELEASE_KIND_VERSION_PATTERNS:
             with self.subTest(release_kind=release_kind):
                 self.assertTrue(any(f"({release_kind} example" in l for l in lines))
 
-    def test_urls_come_from_the_bucket_cdn_urls(self) -> None:
+    def test_each_example_is_listed_under_the_index_it_resolves_to(self) -> None:
         lines = mod.release_version_source_lines()
-        for release_kind, bucket in mod.RELEASE_KIND_TARBALL_BUCKETS.items():
-            with self.subTest(release_kind=release_kind):
-                expected = f"{bucket.cdn_url.rstrip('/')}/ "
-                self.assertTrue(any(expected in l for l in lines))
+        for release_kind, examples in mod.RELEASE_KIND_VERSION_EXAMPLES.items():
+            for version in examples:
+                with self.subTest(release_kind=release_kind, version=version):
+                    index_url = get_release_tarball_index_url(release_kind, version)
+                    self.assertTrue(
+                        any(
+                            line.startswith(f"\t - {index_url}/ ") and version in line
+                            for line in lines
+                        )
+                    )
 
     def test_quoted_examples_classify_as_the_kind_they_are_listed_under(self) -> None:
         for release_kind, examples in mod.RELEASE_KIND_VERSION_EXAMPLES.items():
@@ -332,7 +329,7 @@ class TestReleaseDiscovery(unittest.TestCase):
         asset_name = _tarball_name(platform, "gfx94X-dcgpu", "7.15.0a20260722")
         self.assertIn("Found latest release: 7.15.0a20260722", output.getvalue())
         self.assertIn(f"Would download: {asset_name}", output.getvalue())
-        index.assert_called_with(mod.NIGHTLY_TARBALL_BUCKET)
+        index.assert_called_with(mod.NIGHTLY_TARBALL_INDEX_URL)
 
     def test_discovery_supports_linux_and_windows_tarballs(self) -> None:
         version = "7.15.0a20260722"
@@ -366,9 +363,9 @@ class TestReleaseDiscovery(unittest.TestCase):
             self.assertIsNone(mod.discover_latest_release("gfx94X-dcgpu", "linux"))
 
     def test_nightly_release_dry_run_reports_cdn_url_and_asset(self) -> None:
-        version = "7.15.0a20260722"
+        version = "10.1.0a20260901"
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
-        expected_url = f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/{asset_name}"
+        expected_url = f"{mod.NIGHTLY_TARBALL_INDEX_URL}/{asset_name}"
         output = io.StringIO()
 
         with mock.patch("sys.stdout", output):
@@ -387,7 +384,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
     def test_multiarch_tarball_downloads_over_https(self) -> None:
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
-        expected_url = f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/{asset_name}"
+        expected_url = f"{mod.NIGHTLY_TARBALL_INDEX_URL}/{asset_name}"
         response = io.BytesIO(b"tarball contents")
         response.__enter__ = lambda self=response: self
         response.__exit__ = lambda *args: None
@@ -401,7 +398,7 @@ class TestReleaseDiscovery(unittest.TestCase):
                 mock.patch.object(mod, "_untar_files") as untar_files,
             ):
                 mod._retrieve_multiarch_tarball(
-                    mod.NIGHTLY_TARBALL_BUCKET,
+                    mod.NIGHTLY_TARBALL_INDEX_URL,
                     asset_name,
                     output_dir,
                 )
@@ -414,7 +411,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
     def test_download_failure_reports_the_url(self) -> None:
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
-        expected_url = f"{mod.NIGHTLY_TARBALL_BUCKET.cdn_url}/{asset_name}"
+        expected_url = f"{mod.NIGHTLY_TARBALL_INDEX_URL}/{asset_name}"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             with mock.patch.object(
@@ -426,18 +423,62 @@ class TestReleaseDiscovery(unittest.TestCase):
             ):
                 with self.assertRaises(RuntimeError) as raised:
                     mod._retrieve_multiarch_tarball(
-                        mod.NIGHTLY_TARBALL_BUCKET, asset_name, Path(temp_dir)
+                        mod.NIGHTLY_TARBALL_INDEX_URL, asset_name, Path(temp_dir)
                     )
 
         self.assertIn(expected_url, str(raised.exception))
 
-    def test_dev_release_uses_dev_multiarch_tarball_bucket(self) -> None:
-        self._assert_release_uses_bucket("7.15.0.dev0+deadbeef", mod.DEV_TARBALL_BUCKET)
+    def test_dev_tarball_url_percent_encodes_the_commit_hash_separator(self) -> None:
+        """A raw '+' in the path is a 404 on the CDN; '%2B' is the tarball."""
+        asset_name = _tarball_name(
+            PUBLISHED_PLATFORM, "gfx110X-all", "10.1.0.dev0+0d83284"
+        )
+        index_url = "https://dev.repo.amd.com/rocm/core/tarball"
 
-    def test_prerelease_release_uses_prerelease_multiarch_tarball_bucket(self) -> None:
-        self._assert_release_uses_bucket("7.13.0rc2", mod.PRERELEASE_TARBALL_BUCKET)
+        url = mod._multiarch_tarball_url(index_url, asset_name)
 
-    def _assert_release_uses_bucket(self, version: str, bucket) -> None:
+        self.assertEqual(
+            url,
+            f"{index_url}/therock-dist-{PUBLISHED_PLATFORM}-gfx110X-all-"
+            "10.1.0.dev0%2B0d83284.tar.gz",
+        )
+        self.assertNotIn("+", url)
+
+    def test_dev_release_uses_the_dev_product_layout_index(self) -> None:
+        self._assert_release_uses_index_url(
+            "10.1.0.dev0+deadbeef", "https://dev.repo.amd.com/rocm/core/tarball"
+        )
+
+    def test_prerelease_before_the_product_layout_uses_the_legacy_index(self) -> None:
+        self._assert_release_uses_index_url(
+            "10.0.0rc4", "https://rocm.prereleases.amd.com/tarball-multi-arch"
+        )
+
+    def test_prerelease_from_the_product_layout_uses_the_rc_index(self) -> None:
+        self._assert_release_uses_index_url(
+            "10.1.0rc0", "https://rc.repo.amd.com/rocm/core/tarball"
+        )
+
+    def test_nightly_only_in_the_frozen_legacy_index_is_refused(self) -> None:
+        version = "7.15.0a20260722"
+        args = argparse.Namespace(
+            artifact_group="gfx94X-dcgpu",
+            output_dir=Path("/tmp/therock-test"),
+            release=version,
+            dry_run=False,
+        )
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(mod, "_retrieve_multiarch_tarball") as retrieve_tarball,
+            mock.patch("sys.stdout", output),
+        ):
+            mod.retrieve_artifacts_by_release(args)
+
+        retrieve_tarball.assert_not_called()
+        self.assertIn("legacy_multi_arch_releases.md", output.getvalue())
+
+    def _assert_release_uses_index_url(self, version: str, index_url: str) -> None:
         output_dir = Path("/tmp/therock-test")
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
         args = argparse.Namespace(
@@ -454,8 +495,8 @@ class TestReleaseDiscovery(unittest.TestCase):
         ):
             mod.retrieve_artifacts_by_release(args)
 
-        retrieve_tarball.assert_called_once_with(bucket, asset_name, output_dir)
-        self.assertIn(f"{bucket.cdn_url}/", output.getvalue())
+        retrieve_tarball.assert_called_once_with(index_url, asset_name, output_dir)
+        self.assertIn(f"{index_url}/", output.getvalue())
 
     def test_extract_version_ignores_test_tarball(self) -> None:
         self.assertIsNone(

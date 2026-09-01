@@ -144,11 +144,7 @@ python build_tools/find_artifacts_for_commit.py \
 
 TheRock provides three types of release tarballs:
 
-The installer downloads published release tarballs through the CDN in front of
-the matching release bucket, so it needs no AWS credentials. The Core tarball
-indexes below let users browse available versions and manually download
-tarballs. Earlier releases remain in the
-[legacy multi-arch release locations](../packaging/legacy_multi_arch_releases.md).
+The installer downloads published release tarballs through the CDN in front of the matching release bucket, so it needs no AWS credentials. It resolves the index from the version passed to `--release`: ROCm 10.1 and newer nightly, dev and prerelease tarballs come from the `repo.amd.com` Core layout, and earlier prereleases from the [legacy multi-arch release locations](../packaging/legacy_multi_arch_releases.md). The legacy nightly and dev indexes are frozen, so `--release` does not resolve nightly or dev versions before ROCm 10.1; download those from the legacy index by hand. The Core tarball indexes below let users browse available versions and manually download tarballs.
 
 ##### Nightly Tarballs
 
@@ -180,27 +176,29 @@ Prerelease tarballs are release candidates and follow the naming pattern: `MAJOR
 
 **To find and use a prerelease:**
 
-1. Visit the [prerelease multi-arch tarball index](https://rocm.prereleases.amd.com/tarball-multi-arch/)
+1. Visit the [legacy prerelease multi-arch tarball index](https://rocm.prereleases.amd.com/tarball-multi-arch/) for releases before ROCm 10.1, or the [prerelease Core tarball index](https://rc.repo.amd.com/rocm/core/tarball/) for ROCm 10.1 and newer
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
-   - Example: `therock-dist-linux-gfx110X-all-7.13.0rc2.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-all-10.0.0rc4.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
-   - In the example above, the version is: `7.13.0rc2`
+   - In the example above, the version is: `10.0.0rc4`
 1. Use this version string with `--release`:
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
-       --release 7.13.0rc2 \
+       --release 10.0.0rc4 \
        --amdgpu-family gfx110X-all
    ```
 
 **Version format:** `X.Y.ZrcN`
 
-- `X.Y.Z` = ROCm version (e.g., `7.13.0`)
+- `X.Y.Z` = ROCm version (e.g., `10.0.0`)
 - `rc` = release candidate
-- `N` = release candidate counter (e.g., `2`)
+- `N` = release candidate counter (e.g., `4`)
 
 > [!NOTE]
-> The prerelease bucket grants no anonymous S3 read access, so prerelease
-> tarballs can only be downloaded through the CDN.
+> The prerelease bucket grants no anonymous S3 read access, so prerelease tarballs can only be downloaded through the CDN.
+
+> [!NOTE]
+> ROCm 10.1 and newer prereleases resolve to https://rc.repo.amd.com/, which is not serving yet: every path there currently returns a CloudFront `Request blocked` page. Until it opens, use a prerelease below ROCm 10.1 from the legacy index.
 
 ##### Dev Tarballs
 
