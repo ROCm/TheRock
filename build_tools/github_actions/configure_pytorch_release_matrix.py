@@ -163,15 +163,6 @@ def _select_release_test_level(
     return "standard"
 
 
-def _parse_bool(value: str) -> bool:
-    normalized = value.strip().lower()
-    if normalized == "true":
-        return True
-    if normalized == "false":
-        return False
-    raise argparse.ArgumentTypeError(f"Expected 'true' or 'false', got {value!r}")
-
-
 def generate_pytorch_matrix_for_release_type(
     *,
     release_type: str,
@@ -287,12 +278,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--run-full-pytorch-tests",
-        type=_parse_bool,
-        default=False,
-        help=(
-            "Use the full test level for eligible Python matrix rows "
-            "(default: false)"
-        ),
+        action="store_true",
+        help="Use the full test level for eligible Python matrix rows",
     )
     parser.add_argument(
         "--amdgpu-families",

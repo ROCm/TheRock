@@ -166,8 +166,8 @@ jobs:
             --python-versions="${{ inputs.python_version }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
-            --run-full-pytorch-tests="${{ inputs.run_full_pytorch_tests }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            ${{ inputs.run_full_pytorch_tests && '--run-full-pytorch-tests' || '' }}
 
   build_pytorch_wheels:
     needs: setup_matrix
