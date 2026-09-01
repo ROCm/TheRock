@@ -676,6 +676,26 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # NVIDIA cuDNN sample corpus built against hipDNN's cuDNN compatibility
+    # shim. Distinct from "hipdnn-samples" above, which is hipDNN's own sample
+    # suite; these two are easy to confuse and test entirely different things.
+    "hipdnn-cudnn-samples": {
+        "job_name": "hipdnn-cudnn-samples",
+        # No "fetch_artifact_args" on purpose: this job calls
+        # find_package(hipdnn_frontend), whose config file and headers live in
+        # the "dev" component, and install_rocm_from_artifacts.py expands each
+        # selected artifact to <name>_lib plus <name>_test only -- never
+        # <name>_dev. Omitting the key takes the fetch-everything branch, which
+        # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
+        # enumerated artifact flags back; find_package would fail.
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
