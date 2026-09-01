@@ -75,7 +75,7 @@ on:
       - synchronize
 
 run-name: >-
-  Multi-Arch CI${{ inputs.aws_windows_cpu_build_label && format(' [{0}]', inputs.aws_windows_cpu_build_label) || '' }}
+  Multi-Arch CI${{ inputs.aws_windows_cpu_build_label && format(' [win:{0}]', inputs.aws_windows_cpu_build_label) || '' }} [linux:azure-linux-scale-v7test]
 
 permissions:
   contents: read
@@ -124,6 +124,10 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      # NO-MERGE dev/test branch: force all-arch Linux builds onto the v7 SKU
+      # test pool (OSSCI-3084 / TheRock-Infra #835). The reusable workflow
+      # exposes aws_linux_cpu_build_label as an override; set here explicitly.
+      aws_linux_cpu_build_label: azure-linux-scale-v7test
     permissions:
       contents: read
       id-token: write
