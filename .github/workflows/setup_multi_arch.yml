@@ -40,8 +40,23 @@ on:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
         default: ""
+      build_stages:
+        description: >-
+          Comma-separated allowlist of build stages to run, e.g.
+          "compiler-runtime,runtime-tests". Every other stage is skipped
+          outright, with nothing built and no artifacts copied. Empty (the
+          default) builds every stage.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      baseline_repository:
+        description: >-
+          Repository to query for baseline_run_id. External repos should set
+          this to github.repository when using their own baseline_run_id.
+          Defaults to THEROCK_REPOSITORY (the 'repository' input).
         type: string
         default: ""
       stage_reuse_mode:
@@ -210,7 +225,10 @@ jobs:
           LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
