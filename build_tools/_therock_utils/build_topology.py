@@ -380,6 +380,45 @@ class BuildTopology:
                 collected.add(dep_name)
                 self._collect_transitive_artifact_deps(dep_name, collected)
 
+    def get_transitive_dependents(self, artifact_names: Set[str]) -> Set[str]:
+        """
+        Get all artifacts that transitively depend on any of the given artifacts.
+
+        This computes the reverse build dependency closure: if artifact A has B
+        in its artifact_deps, and B is in artifact_names, then A is returned.
+        This is used by CI to determine which downstream artifacts must be
+        rebuilt when upstream artifacts change.
+
+        Note: This only considers build dependencies (artifact_deps), not test
+        dependencies (test_artifacts). Test artifacts don't need to be rebuilt
+        when their test subjects change.
+
+        Args:
+            artifact_names: Set of artifact names to find dependents for
+
+        Returns:
+            Set of artifact names that depend (directly or transitively) on
+            the input artifacts. Does not include the input artifacts themselves.
+        """
+        # Build reverse dependency graph: artifact -> set of artifacts that depend on it
+        reverse_deps: Dict[str, Set[str]] = {name: set() for name in self.artifacts}
+        for artifact in self.artifacts.values():
+            for dep_name in artifact.artifact_deps:
+                if dep_name in reverse_deps:
+                    reverse_deps[dep_name].add(artifact.name)
+
+        # BFS to find all transitive dependents
+        dependents: Set[str] = set()
+        queue = list(artifact_names)
+        while queue:
+            current = queue.pop(0)
+            for dependent in reverse_deps.get(current, set()):
+                if dependent not in dependents and dependent not in artifact_names:
+                    dependents.add(dependent)
+                    queue.append(dependent)
+
+        return dependents
+
     def get_produced_artifacts(self, build_stage: str) -> Set[str]:
         """
         Get all artifacts produced by a build stage.
