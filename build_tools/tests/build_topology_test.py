@@ -1139,7 +1139,9 @@ class RealTopologyTest(unittest.TestCase):
             emulation_artifacts,
             {"rocjitsu", "rocjitsu-hotswap", "mirage"},
         )
-        self.assertIn("sysdeps", topology.get_inbound_artifacts("emulation"))
+        emulation_inbound = topology.get_inbound_artifacts("emulation")
+        self.assertIn("base", emulation_inbound)
+        self.assertIn("sysdeps", emulation_inbound)
 
         comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
         self.assertIn("rocjitsu", comm_libs_inbound)
