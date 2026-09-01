@@ -120,31 +120,30 @@ class CommandConstructionTest(TempDirTestBase):
     def test_merge_passes_every_profraw_file(self):
         profraw_files = [self.touch("a.profraw"), self.touch("b.profraw")]
         output = self.root / "out" / "coverage.profdata"
+        llvm_profdata = Path("/llvm/llvm-profdata")
 
         with mock.patch("subprocess.run") as run:
-            merge_coverage_report.merge_profraw(
-                Path("/llvm/llvm-profdata"), profraw_files, output
-            )
+            merge_coverage_report.merge_profraw(llvm_profdata, profraw_files, output)
 
         command = run.call_args.args[0]
-        self.assertEqual(command[:3], ["/llvm/llvm-profdata", "merge", "-sparse"])
+        self.assertEqual(command[:3], [str(llvm_profdata), "merge", "-sparse"])
         self.assertEqual(command[-2:], [str(profraw_files[0]), str(profraw_files[1])])
         self.assertTrue(output.parent.is_dir())
 
     def test_export_passes_the_first_object_positionally(self):
         objects = [self.touch("lib/a.so"), self.touch("lib/b.so")]
         output = self.root / "out" / "coverage.info"
+        llvm_cov = Path("/llvm/llvm-cov")
+        profdata = Path("/tmp/coverage.profdata")
 
         with mock.patch("subprocess.run") as run:
-            merge_coverage_report.export_lcov(
-                Path("/llvm/llvm-cov"), Path("/tmp/coverage.profdata"), objects, output
-            )
+            merge_coverage_report.export_lcov(llvm_cov, profdata, objects, output)
 
         command = run.call_args.args[0]
-        self.assertEqual(command[:3], ["/llvm/llvm-cov", "export", str(objects[0])])
+        self.assertEqual(command[:3], [str(llvm_cov), "export", str(objects[0])])
         self.assertIn("-object", command)
         self.assertEqual(
-            command[-2:], ["-instr-profile=/tmp/coverage.profdata", "--format=lcov"]
+            command[-2:], [f"-instr-profile={profdata}", "--format=lcov"]
         )
 
 
