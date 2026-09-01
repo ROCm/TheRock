@@ -11,5 +11,3 @@ scan:
     - .git
     - .venv
     - venv
-    - release-nightly
-    - prereleases

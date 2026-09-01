@@ -18,6 +18,6 @@ permissions:
 jobs:
   security:
     name: Security scan
-    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@ca9c7de9ba875c08d9619319ab81c4587b92ae4e # v1.0.0
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@4b25e6bc1cb0b9bbc3c278b2f1c70d8f2f406e20 # v1.0.0
     with:
       report_formats: human
