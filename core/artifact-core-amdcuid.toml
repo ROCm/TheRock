@@ -1,0 +1,13 @@
+# amdcuid
+[components.lib."core/amdcuid/stage"]
+include = [ "lib/**" ]
+
+[components.run."core/amdcuid/stage"]
+include = [
+  "bin/**",
+  "share/amdcuid/**",
+]
+
+[components.dbg."core/amdcuid/stage"]
+[components.dev."core/amdcuid/stage"]
+[components.doc."core/amdcuid/stage"]

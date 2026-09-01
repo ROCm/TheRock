@@ -52,6 +52,46 @@ therock_provide_artifact(core-kpack
     rocm-kpack
 )
 
+if(THEROCK_ENABLE_CORE_AMDCUID)
+
+  ################################################################################
+  # amdcuid
+  ################################################################################
+  if(NOT WIN32)
+    therock_cmake_subproject_declare(amdcuid
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/cuid"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdcuid"
+      USE_DIST_AMDGPU_TARGETS
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      CMAKE_ARGS
+        "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+        "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+      BUILD_DEPS
+        therock-googletest
+      INSTALL_RPATH_DIRS
+        lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+    )
+    therock_cmake_subproject_activate(amdcuid)
+
+    therock_provide_artifact(core-amdcuid
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-amdcuid.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amdcuid
+    )
+  endif() # NOT WIN32
+endif(THEROCK_ENABLE_CORE_AMDCUID)
+
 if(THEROCK_ENABLE_CORE_AMDSMI)
 
   ################################################################################

@@ -1,6 +1,7 @@
 {
   "rocm_systems_projects": {
     "amdsmi": "core-amdsmi",
+    "amdcuid": "core-amdcuid",
     "clr": "core-hip",
     "hip": "core-hip",
     "hip-tests": "core-hiptests",
