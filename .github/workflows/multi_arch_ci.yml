@@ -46,16 +46,11 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
-      aws_windows_cpu_build_label:
-        type: choice
-        options:
-          - aws-windows-scale-rocm-customer-dev-g624xl
-          - aws-windows-scale-rocm-customer-dev-g616xl
-          - aws-windows-scale-rocm-customer-dev-m8a24xl
-          - aws-windows-scale-rocm-customer-dev-m8azn24xl
-          - aws-windows-scale-rocm-prod
-          - aws-windows-scale-rocm-prod-mix
-          - azure-windows-scale-rocm
+      # NOTE: The Windows CPU build-runner label is hardcoded in the
+      # windows_build_and_test job below (aws_windows_cpu_build_label), not
+      # exposed as a workflow_dispatch input. workflow_dispatch is hard-capped
+      # at 10 inputs and this list is full; see that job for the available
+      # label options.
       build_pytorch:
         type: boolean
         default: true
@@ -75,7 +70,7 @@ on:
       - synchronize
 
 run-name: >-
-  Multi-Arch CI${{ inputs.aws_windows_cpu_build_label && format(' [win:{0}]', inputs.aws_windows_cpu_build_label) || '' }} [linux:azure-linux-scale-v7test]
+  Multi-Arch CI [win:azure-windows-scale-v7test] [linux:azure-linux-scale-v7test]
 
 permissions:
   contents: read
@@ -148,7 +143,20 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
-      aws_windows_cpu_build_label: ${{ inputs.aws_windows_cpu_build_label || '' }}
+      # NO-MERGE dev/test branch: force the Windows CPU build onto the v7 SKU
+      # test pool for AWS-vs-Azure perf comparison (OSSCI-3084 pending;
+      # node pool blocked on Dadsv7 quota). Hardcoded here instead of a
+      # workflow_dispatch choice input (that event is capped at 10 inputs).
+      # Available labels (swap the value below to switch pools):
+      #   - azure-windows-scale-v7test                     (v7 SKU test pool)
+      #   - azure-windows-scale-rocm                       (Azure prod)
+      #   - aws-windows-scale-rocm-prod                    (AWS prod)
+      #   - aws-windows-scale-rocm-prod-mix                (AWS prod mixed)
+      #   - aws-windows-scale-rocm-customer-dev-g624xl     (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-g616xl     (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-m8a24xl    (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-m8azn24xl  (AWS customer-dev)
+      aws_windows_cpu_build_label: azure-windows-scale-v7test
       skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
