@@ -147,17 +147,25 @@ def _compute_artifacts_from_changed_projects(
                     if artifact.source_paths:
                         all_stage_artifacts.add(artifact.name)
 
-    # Map changed projects to artifacts
-    rebuild_artifacts: set[str] = set()
+    # Map changed projects to directly affected artifacts
+    directly_affected: set[str] = set()
     alias_map = topology.get_alias_to_artifact_map()
     for project in changed_projects:
         normalized = project.split("/")[-1].lower()
         if normalized in alias_map:
-            rebuild_artifacts.add(alias_map[normalized])
+            directly_affected.add(alias_map[normalized])
         else:
             print(
                 f"  WARNING: unknown project '{project}' - not mapped to any artifact"
             )
+
+    # Expand rebuild set to include transitive build dependents (reverse artifact_deps)
+    # If prim changes, sparse/solver/rocalution must also rebuild since they depend on prim
+    # Note: This only considers build deps, not test deps (test_artifacts)
+    transitive_dependents = topology.get_transitive_dependents(directly_affected)
+    rebuild_artifacts = directly_affected | (
+        transitive_dependents & all_stage_artifacts
+    )
 
     # Artifacts not in rebuild set are reusable
     reusable_artifacts = all_stage_artifacts - rebuild_artifacts
@@ -167,6 +175,10 @@ def _compute_artifacts_from_changed_projects(
 
     print(f"External repo artifact analysis:")
     print(f"  changed_projects: {changed_projects}")
+    print(f"  directly_affected: {sorted(directly_affected)}")
+    print(
+        f"  transitive_dependents: {sorted(transitive_dependents & all_stage_artifacts)}"
+    )
     print(f"  rebuild_artifacts: {rebuild_list}")
     print(f"  reusable_artifacts: {reusable_list}")
 

@@ -495,6 +495,82 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(len(stage2_inbound), 1)
         self.assertIn("artifact1", stage2_inbound)
 
+    def test_get_transitive_dependents(self):
+        """Test getting transitive dependents (reverse deps) for artifacts."""
+        self.write_topology(
+            """
+            [artifacts.base]
+            artifact_group = "core"
+            type = "target-neutral"
+
+            [artifacts.runtime]
+            artifact_group = "core"
+            type = "target-neutral"
+            artifact_deps = ["base"]
+
+            [artifacts.prim]
+            artifact_group = "math"
+            type = "target-neutral"
+            artifact_deps = ["runtime"]
+
+            [artifacts.sparse]
+            artifact_group = "math"
+            type = "target-neutral"
+            artifact_deps = ["prim"]
+
+            [artifacts.solver]
+            artifact_group = "math"
+            type = "target-neutral"
+            artifact_deps = ["prim", "sparse"]
+
+            [artifacts.rocalution]
+            artifact_group = "math"
+            type = "target-neutral"
+            artifact_deps = ["prim", "sparse"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        # base is depended on by runtime, which is depended on by prim, etc.
+        base_dependents = topology.get_transitive_dependents({"base"})
+        self.assertIn("runtime", base_dependents)
+        self.assertIn("prim", base_dependents)
+        self.assertIn("sparse", base_dependents)
+        self.assertIn("solver", base_dependents)
+        self.assertIn("rocalution", base_dependents)
+        self.assertNotIn("base", base_dependents)
+
+        # prim is depended on by sparse, solver, rocalution
+        prim_dependents = topology.get_transitive_dependents({"prim"})
+        self.assertIn("sparse", prim_dependents)
+        self.assertIn("solver", prim_dependents)
+        self.assertIn("rocalution", prim_dependents)
+        self.assertNotIn("base", prim_dependents)
+        self.assertNotIn("runtime", prim_dependents)
+        self.assertNotIn("prim", prim_dependents)
+
+        # sparse is depended on by solver, rocalution
+        sparse_dependents = topology.get_transitive_dependents({"sparse"})
+        self.assertIn("solver", sparse_dependents)
+        self.assertIn("rocalution", sparse_dependents)
+        self.assertNotIn("sparse", sparse_dependents)
+
+        # solver is a leaf - nothing depends on it
+        solver_dependents = topology.get_transitive_dependents({"solver"})
+        self.assertEqual(len(solver_dependents), 0)
+
+        # Multiple inputs: base and prim
+        multi_dependents = topology.get_transitive_dependents({"base", "prim"})
+        self.assertIn("runtime", multi_dependents)
+        self.assertIn("sparse", multi_dependents)
+        self.assertIn("solver", multi_dependents)
+        self.assertIn("rocalution", multi_dependents)
+        # prim is a dependent of base, but it's also in the input set,
+        # so it should NOT be in the result
+        self.assertNotIn("base", multi_dependents)
+        self.assertNotIn("prim", multi_dependents)
+
     def test_validate_missing_references(self):
         """Test validation catches missing references."""
         self.write_topology(
@@ -1313,6 +1389,41 @@ class RealTopologyTest(unittest.TestCase):
         hkp = topology.artifacts["hipkernelprovider"]
         self.assertEqual(hkp.type, "target-specific")
         self.assertIn("hipkernelprovider", hkp.split_databases)
+
+    def test_get_transitive_dependents_prim_chain(self):
+        """Test that changing prim triggers rebuilds of sparse, solver, rocalution."""
+        topology = get_topology()
+        # prim is depended on by sparse, solver, rocalution
+        dependents = topology.get_transitive_dependents({"prim"})
+        self.assertIn("sparse", dependents)
+        self.assertIn("solver", dependents)
+        self.assertIn("rocalution", dependents)
+        # prim itself should not be in the dependents
+        self.assertNotIn("prim", dependents)
+
+    def test_get_transitive_dependents_blas_chain(self):
+        """Test that changing blas triggers rebuilds of downstream libs."""
+        topology = get_topology()
+        dependents = topology.get_transitive_dependents({"blas"})
+        # blas is depended on by sparse, solver, rocalution, rocwmma, etc.
+        self.assertIn("sparse", dependents)
+        self.assertIn("solver", dependents)
+        self.assertIn("rocalution", dependents)
+        self.assertIn("rocwmma", dependents)
+
+    def test_get_transitive_dependents_empty_input(self):
+        """Test that empty input returns empty dependents."""
+        topology = get_topology()
+        dependents = topology.get_transitive_dependents(set())
+        self.assertEqual(len(dependents), 0)
+
+    def test_get_transitive_dependents_leaf_artifact(self):
+        """Test that a leaf artifact (no dependents) returns empty set."""
+        topology = get_topology()
+        # Find an artifact that nothing depends on
+        dependents = topology.get_transitive_dependents({"rocalution"})
+        # rocalution is a leaf - nothing depends on it
+        self.assertEqual(len(dependents), 0)
 
 
 if __name__ == "__main__":
