@@ -1179,6 +1179,7 @@ def decide_jobs(
             mode=stage_reuse_mode,
             linux_amdgpu_families=targets.linux_families,
             windows_amdgpu_families=targets.windows_families,
+            explicit_prebuilt_stages=explicit_prebuilt_stages,
         )
 
         baseline_repository = ci_inputs.baseline_repository

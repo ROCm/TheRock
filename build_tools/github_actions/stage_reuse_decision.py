@@ -320,6 +320,7 @@ def compute_auto_stage_reuse(
     topology: BuildTopology | None = None,
     baseline_selector: BaselineSelector | None = None,
     baseline_selector_factory: Callable[[str], BaselineSelector] | None = None,
+    explicit_prebuilt_stages: Sequence[str] = (),
 ) -> AutoStageReuse:
     """Compute auto stage-reuse decisions, verified against a baseline run.
 
@@ -330,6 +331,9 @@ def compute_auto_stage_reuse(
     ``windows_amdgpu_families`` implies ``windows``. This guards against the
     case where a stage available only in the Linux baseline is skipped on
     Windows. The report lines are logged before returning.
+
+    Stages in ``explicit_prebuilt_stages`` are excluded from automatic analysis
+    reporting since they will be satisfied by an explicit baseline_run_id input.
     """
     if mode is StageReuseMode.OFF:
         return _log_and_return(
@@ -599,6 +603,7 @@ def compute_auto_stage_reuse(
         platforms=platforms,
         platform_available=per_platform_available,
         platforms_no_compatible_baseline=platforms_no_baseline_t,
+        explicit_prebuilt_stages=explicit_prebuilt_stages,
         # Include artifact-level info in the report
         artifact_level_analysis=artifact_level_analysis,
         impacted_artifacts=verified_rebuild,
@@ -781,12 +786,14 @@ def _format_report(
     platforms: Sequence[str] = (),
     platform_available: dict[str, tuple[str, ...]] | None = None,
     platforms_no_compatible_baseline: Sequence[str] = (),
+    explicit_prebuilt_stages: Sequence[str] = (),
     # Granular artifact-level analysis fields
     artifact_level_analysis: bool = False,
     impacted_artifacts: Sequence[str] = (),
     reusable_artifacts: Sequence[str] = (),
 ) -> tuple[str, ...]:
     platform_available = platform_available or {}
+    explicit_set = set(explicit_prebuilt_stages)
     lines: list[str] = [f"{LOG_PREFIX} mode={mode.value}"]
     if platforms:
         lines.append(f"{LOG_PREFIX} platforms verified: {', '.join(platforms)}")
@@ -829,7 +836,9 @@ def _format_report(
             f"{LOG_PREFIX} stage '{stage}' unaffected AND available in "
             f"baseline on all platforms -> {verb}"
         )
-    for stage in unavailable:
+    # Filter out stages that are explicitly prebuilt - they're already logged separately.
+    unavailable_for_report = [s for s in unavailable if s not in explicit_set]
+    for stage in unavailable_for_report:
         # Call out WHICH platforms are missing the artifacts so the mismatch
         # (e.g. present on linux, absent on windows) is visible in the log.
         # Also clarify whether the issue is no compatible baseline vs missing artifacts.
