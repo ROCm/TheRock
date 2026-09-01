@@ -153,9 +153,12 @@ artifact_groups = [
     "hip-runtime",
     "kfdtest",
     "opencl-runtime",
-    "profiler-core",
-    "rocjitsu"
+    "profiler-core"
 ]
+
+[build_stages.emulation]
+description = "ROCm emulation, virtualization, and instrumentation tools"
+artifact_groups = ["rocjitsu"]
 
 [build_stages.wsl-rocdxg]
 description = "WSL-only ROCDXG bridge library"
