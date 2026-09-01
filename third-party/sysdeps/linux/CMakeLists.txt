@@ -161,3 +161,29 @@ if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
       therock-util-linux
   )
 endif()
+
+# Optional sysdep: libfwupd (amd-smi routes the UMA carveout BIOS setting through
+# fwupd on UEFI-HII platforms) plus its private dependency stack. GLib pulls in
+# libffi and pcre2; libfwupd additionally needs libcurl. fwupd 2.1.x is the last
+# pre-Rust release series and no longer depends on libjcat or json-glib. zlib
+# (used by GLib's gio) is a core sysdep and is always available.
+if(THEROCK_ENABLE_SYSDEPS_FWUPD)
+  add_subdirectory(libffi)
+  add_subdirectory(pcre2)
+  add_subdirectory(libcurl)
+  add_subdirectory(glib)
+  add_subdirectory(libfwupd)
+  therock_provide_artifact(sysdeps-fwupd
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-fwupd.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-libffi
+      therock-pcre2
+      therock-libcurl
+      therock-glib
+      therock-libfwupd
+  )
+endif()
