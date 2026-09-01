@@ -8,12 +8,14 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
+- Check if external repo file changes require TheRock CI
 
 Public API:
     get_git_commit_hash() - Resolve a git ref to a commit hash
     get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
+    is_external_repo_ci_required() - Check if external repo changes require CI
 """
 
 import fnmatch
@@ -313,3 +315,115 @@ def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bo
     if paths is None:
         return False
     return any(_is_path_workflow_file_related_to_ci(p) for p in paths)
+
+
+# ============================================================================
+# External Repo Path Filtering
+# ============================================================================
+
+# Skippable path patterns for external repos (rocm-libraries, rocm-systems).
+# These patterns are a superset of patterns from each external repo's
+# therock_configure_ci.py SKIPPABLE_PATH_PATTERNS. When all changed files
+# match these patterns, TheRock CI can be skipped for that external repo.
+#
+# This list combines common patterns across rocm-libraries and rocm-systems:
+# - rocm-libraries: https://github.com/ROCm/rocm-libraries/.github/scripts/therock_configure_ci.py
+# - rocm-systems: https://github.com/ROCm/rocm-systems/.github/scripts/therock_configure_ci.py
+_EXTERNAL_REPO_SKIPPABLE_PATH_PATTERNS = [
+    # Documentation files
+    "docs/*",
+    "*.md",
+    "*.rst",
+    "*.rtf",
+    # Git/GitHub metadata files
+    ".gitignore",
+    "*/.gitignore",
+    "*.pre-commit-config.*",
+    ".github/label*.yml",
+    "*CODEOWNERS",
+    "*LICENSE",
+    # Documentation tooling files
+    "*/.markdownlint-ci2.yaml",
+    "*/.readthedocs.yaml",
+    "*/.spellcheck.local.yaml",
+    "*/.wordlist.txt",
+    # Project-specific docs
+    "projects/*/docs/*",
+    "shared/*/docs/*",
+    "dnn-providers/*/docs/*",
+    # Experimental code (no impact on standard CI)
+    "experimental/*",
+    # AI/editor rules files
+    "*.clinerules",
+    "*.cursorrules",
+    "*.mdc",
+    # PR bot and standalone tools (no impact on builds)
+    "tools/libraries_pr_bot/*",
+    "tools/systems_pr_bot/*",
+    "projects/hipdnn/tools/*",
+    # WSL support files (rocm-systems)
+    "projects/rocr-runtime/libhsakmt/src/dxg/*",
+    # Composable Kernel standalone directories (not part of TheRock build)
+    "projects/composablekernel/Jenkinsfile",
+    "projects/composablekernel/Docker*",
+    "projects/composablekernel/client_example/*",
+    "projects/composablekernel/codegen/*",
+    "projects/composablekernel/dispatcher/*",
+    "projects/composablekernel/example/*",
+    "projects/composablekernel/experimental/*",
+    "projects/composablekernel/profiler/*",
+    "projects/composablekernel/python/*",
+    "projects/composablekernel/rocm_ck/*",
+    "projects/composablekernel/script/*",
+    "projects/composablekernel/test/*",
+    "projects/composablekernel/test_data/*",
+    "projects/composablekernel/tile_engine/*",
+    "projects/composablekernel/tutorial/*",
+    "projects/composablekernel/vars/*",
+    "projects/composablekernel/groovy/*",
+]
+
+
+def _is_external_repo_path_skippable(path: str) -> bool:
+    """Checks if a single external repo file path matches any skippable pattern."""
+    return any(
+        fnmatch.fnmatch(path, pattern)
+        for pattern in _EXTERNAL_REPO_SKIPPABLE_PATH_PATTERNS
+    )
+
+
+def is_external_repo_ci_required(
+    changed_files: Optional[Iterable[str]],
+    repo_name: str = "",
+) -> bool:
+    """Returns True if any changed file is non-skippable (requires CI)."""
+    repo_label = f"[{repo_name}] " if repo_name else ""
+
+    if changed_files is None:
+        print(f"{repo_label}No changed files provided, CI required (conservative)")
+        return True
+
+    changed_files_list = list(changed_files)
+    if not changed_files_list:
+        print(f"{repo_label}No files changed, skipping CI")
+        return False
+
+    non_skippable = [
+        f for f in changed_files_list if not _is_external_repo_path_skippable(f)
+    ]
+
+    print(f"{repo_label}Evaluating {len(changed_files_list)} changed file(s):")
+    for f in changed_files_list[:10]:
+        skippable = _is_external_repo_path_skippable(f)
+        print(f"  {'[skip]' if skippable else '[ci]  '} {f}")
+    if len(changed_files_list) > 10:
+        print(f"  ... and {len(changed_files_list) - 10} more")
+
+    if non_skippable:
+        print(
+            f"{repo_label}{len(non_skippable)} non-skippable file(s) found, CI required"
+        )
+        return True
+    else:
+        print(f"{repo_label}All files are skippable, CI can be skipped")
+        return False

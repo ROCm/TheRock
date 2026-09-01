@@ -18,47 +18,9 @@ from configure_external_repo_ci import (
     configure,
     find_matched_subtrees,
     get_valid_prefixes,
-    has_non_skippable,
-    is_skippable,
     load_repo_config,
     matches_patterns,
 )
-
-
-class IsSkippableTest(unittest.TestCase):
-    """Tests for is_skippable()."""
-
-    def test_markdown_files_are_skippable(self):
-        self.assertTrue(is_skippable("README.md"))
-        self.assertTrue(is_skippable("docs/guide.md"))
-
-    def test_rst_files_are_skippable(self):
-        self.assertTrue(is_skippable("index.rst"))
-
-    def test_docs_directory_is_skippable(self):
-        self.assertTrue(is_skippable("docs/api.txt"))
-        self.assertTrue(is_skippable("projects/rocblas/docs/readme.md"))
-
-    def test_source_files_are_not_skippable(self):
-        self.assertFalse(is_skippable("src/main.cpp"))
-        self.assertFalse(is_skippable("projects/rocblas/src/blas.cpp"))
-        self.assertFalse(is_skippable("CMakeLists.txt"))
-
-
-class HasNonSkippableTest(unittest.TestCase):
-    """Tests for has_non_skippable()."""
-
-    def test_all_skippable_returns_false(self):
-        paths = ["README.md", "docs/guide.rst", "CHANGELOG.md"]
-        self.assertFalse(has_non_skippable(paths))
-
-    def test_mixed_returns_true(self):
-        paths = ["README.md", "src/main.cpp"]
-        self.assertTrue(has_non_skippable(paths))
-
-    def test_all_non_skippable_returns_true(self):
-        paths = ["src/a.cpp", "src/b.cpp"]
-        self.assertTrue(has_non_skippable(paths))
 
 
 class MatchesPatternsTest(unittest.TestCase):
@@ -159,7 +121,7 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_files, [])
 
     def test_workflow_dispatch_runs_all_tests(self):
         result = configure(
@@ -170,19 +132,24 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_files, [])
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_only_docs_changed_skips_tests(self, mock_api):
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_only_docs_changed_returns_changed_files(self, mock_config, mock_api):
         mock_api.return_value = {"README.md", "docs/guide.md"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
         result = configure(
             event_name="pull_request",
             github_repo="ROCm/rocm-libraries",
             base_sha="abc123",
             head_sha="def456",
-            config_path="",
+            config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.skip_tests, True)
+        # changed_files is returned for TheRock to evaluate skip logic
+        self.assertEqual(sorted(result.changed_files), ["README.md", "docs/guide.md"])
         self.assertEqual(result.run_all_tests, False)
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
@@ -196,7 +163,7 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_files, [".github/workflows/therock-ci.yml"])
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -214,7 +181,7 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result.changed_projects, "projects/rocblas")
         self.assertEqual(result.run_all_tests, False)
-        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_files, ["projects/rocblas/src/main.cpp"])
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     def test_truncated_api_response_runs_all_tests(self, mock_api):
@@ -227,7 +194,7 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
-        self.assertEqual(result.skip_tests, False)
+        self.assertEqual(result.changed_files, [])
 
     def test_no_shas_provided_runs_all_tests(self):
         result = configure(

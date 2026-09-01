@@ -359,8 +359,8 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
-    def test_external_repo_skips_path_filter(self, mock_filter):
-        """External repo builds skip path filtering and always run CI."""
+    def test_external_repo_no_path_info_runs_ci(self, mock_filter):
+        """External repo without path info runs CI (uses stage reuse)."""
         inputs = self._inputs(
             external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
         )
@@ -368,6 +368,34 @@ class TestShouldSkipCI(unittest.TestCase):
         self.assertFalse(cm.should_skip_ci(inputs, git))
         # Path filter should not be called for external repos
         mock_filter.assert_not_called()
+
+    @patch("configure_multi_arch_ci.is_external_repo_ci_required")
+    def test_external_repo_changed_files_skippable_skips(self, mock_external_ci):
+        """External repo with skippable changed_files skips CI."""
+        mock_external_ci.return_value = False
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["README.md","docs/guide.md"]}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+        mock_external_ci.assert_called_once()
+
+    @patch("configure_multi_arch_ci.is_external_repo_ci_required")
+    def test_external_repo_changed_files_non_skippable_runs(self, mock_external_ci):
+        """External repo with non-skippable changed_files runs CI."""
+        mock_external_ci.return_value = True
+        inputs = self._inputs(
+            external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123","changed_files":["projects/rocblas/src/lib.cpp"]}'
+        )
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+        mock_external_ci.assert_called_once()
+
+    def test_external_repo_invalid_json_runs_ci(self):
+        """External repo with invalid JSON runs CI (conservative)."""
+        inputs = self._inputs(external_repo="not valid json")
+        git = cm.GitContext(changed_files=["rocm-libraries"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
 
 
 # ---------------------------------------------------------------------------

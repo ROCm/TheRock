@@ -67,6 +67,7 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    is_external_repo_ci_required,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -782,12 +783,29 @@ def should_skip_ci(
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
 
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
+    # External repo builds: evaluate changed_files from the external repo JSON.
+    # This allows external repos to skip TheRock CI when only docs/metadata
+    # files are changed.
     if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError):
+            # Invalid JSON, run CI to be safe
+            print("  External repo build: invalid JSON, running CI")
+            return False
+
+        # Check changed_files from external repo if provided
+        changed_files = external_repo.get("changed_files")
+        if changed_files is not None:
+            repo_name = external_repo.get("repository", "").split("/")[-1]
+            if not is_external_repo_ci_required(changed_files, repo_name):
+                print("  External repo build: only skippable files changed")
+                return True
+            print("  External repo build: CI-relevant files changed, running CI")
+            return False
+
+        # No changed_files provided, run CI (stage reuse will optimize)
+        print("  External repo build: no path info, using stage reuse")
         return False
 
     # If we have a list of changed files (push/pull_request events), check if
