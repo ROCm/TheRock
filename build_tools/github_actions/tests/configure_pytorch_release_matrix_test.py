@@ -141,49 +141,6 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             ],
         )
 
-    def test_windows_nightly_python_314_skips_tests(self):
-        matrix = m.generate_pytorch_matrix_for_release_type(
-            release_type="nightly",
-            python_versions=["3.14"],
-            pytorch_git_refs=["nightly"],
-            amdgpu_families="gfx110X-all",
-            platform="windows",
-        )
-
-        # The row still builds and publishes wheels; only its tests are skipped.
-        self.assertEqual(
-            matrix,
-            [
-                {
-                    "python_version": "3.14",
-                    "pytorch_git_ref": "nightly",
-                    "amdgpu_families": "gfx110X-all",
-                    "test_level": "sanity",
-                    "test_amdgpu_families": "none",
-                }
-            ],
-        )
-
-    def test_only_windows_nightly_python_314_skips_tests(self):
-        # Each neighbor of the skipped (platform, ref, python version) keeps the
-        # normal "auto" behavior.
-        for platform, ref, python_version in (
-            ("linux", "nightly", "3.14"),
-            ("windows", "nightly", "3.13"),
-            ("windows", "release/2.13", "3.14"),
-        ):
-            with self.subTest(platform=platform, ref=ref, py=python_version):
-                matrix = m.generate_pytorch_matrix_for_release_type(
-                    release_type="nightly",
-                    python_versions=[python_version],
-                    pytorch_git_refs=[ref],
-                    amdgpu_families="gfx110X-all",
-                    platform=platform,
-                )
-
-                self.assertEqual(len(matrix), 1)
-                self.assertEqual(matrix[0]["test_amdgpu_families"], "auto")
-
     def test_only_python_310_runs_standard_gpu_tests(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
