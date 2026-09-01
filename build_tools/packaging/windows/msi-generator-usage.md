@@ -8,12 +8,11 @@ with no separate manifest to maintain.
 
 ## Prerequisites
 
-| Requirement                               | Notes                                                |
-| ----------------------------------------- | ---------------------------------------------------- |
-| Python 3.11+                              | Or Python 3.9+ with `pip install tomli`              |
-| [WiX Toolset v4](https://wixtoolset.org/) | `dotnet tool install --global wix --version "4.*"`   |
-| `pyzstd`                                  | Required for `--artifacts-url`: `pip install pyzstd` |
-| Built TheRock or artifact URL             | Local build or remote `.tar.zst` artifacts           |
+| Requirement                               | Notes                                              |
+| ----------------------------------------- | -------------------------------------------------- |
+| Python 3.11+                              | `pip install -r requirements.txt` from repo root   |
+| [WiX Toolset v4](https://wixtoolset.org/) | `dotnet tool install --global wix --version "4.*"` |
+| Built TheRock or artifact URL             | Local build or remote `.tar.zst` artifacts         |
 
 ## Quick Start
 
