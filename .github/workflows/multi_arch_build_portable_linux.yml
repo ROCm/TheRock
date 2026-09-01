@@ -118,10 +118,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'compiler-runtime') &&
+        !contains(inputs.skip_stages, 'compiler-runtime') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',compiler-runtime,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -152,10 +152,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'runtime-tests') &&
+        !contains(inputs.skip_stages, 'runtime-tests') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',runtime-tests,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'runtime-tests') && !contains(inputs.skip_stages, 'runtime-tests') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -186,10 +186,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'wsl-rocdxg') &&
+        !contains(inputs.skip_stages, 'wsl-rocdxg') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',wsl-rocdxg,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -217,10 +217,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'math-libs') &&
+        !contains(inputs.skip_stages, 'math-libs') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',math-libs,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') && !contains(inputs.skip_stages, 'math-libs') }}
     strategy:
       # `fail-fast: false` lets all families complete even if one fails.
       # This is useful for CI (to see all failures at once), but for releases
@@ -264,10 +264,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'comm-libs') &&
+        !contains(inputs.skip_stages, 'comm-libs') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',comm-libs,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'comm-libs') && !contains(inputs.skip_stages, 'comm-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -300,10 +300,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'storage-libs') &&
+        !contains(inputs.skip_stages, 'storage-libs') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',storage-libs,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'storage-libs') && !contains(inputs.skip_stages, 'storage-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -335,10 +335,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'debug-tools') &&
+        !contains(inputs.skip_stages, 'debug-tools') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',debug-tools,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'debug-tools') && !contains(inputs.skip_stages, 'debug-tools') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -369,10 +369,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'dctools-core') &&
+        !contains(inputs.skip_stages, 'dctools-core') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',dctools-core,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'dctools-core') && !contains(inputs.skip_stages, 'dctools-core') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -403,10 +403,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'profiler-apps') &&
+        !contains(inputs.skip_stages, 'profiler-apps') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',profiler-apps,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'profiler-apps') && !contains(inputs.skip_stages, 'profiler-apps') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -437,10 +437,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'cv-libs') &&
+        !contains(inputs.skip_stages, 'cv-libs') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',cv-libs,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') && !contains(inputs.skip_stages, 'cv-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -471,10 +471,10 @@ jobs:
       ${{
         !cancelled() && !failure() &&
         !contains(inputs.prebuilt_stages, 'media-libs') &&
+        !contains(inputs.skip_stages, 'media-libs') &&
         (inputs.build_stages == '' ||
           contains(format(',{0},', inputs.build_stages), ',media-libs,'))
       }}
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'media-libs') && !contains(inputs.skip_stages, 'media-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
