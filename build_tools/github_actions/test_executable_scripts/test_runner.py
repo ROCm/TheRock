@@ -178,7 +178,7 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   suppressed.
 COMPONENT_OVERRIDES = {
     # ctest fragments live under libexec, not bin.
-    # ctest_parallel pinned to 1: tests are pytest runs that parallelize
+    # ctest_parallel_count pinned to 1: tests are pytest runs that parallelize
     # internally (-n), so concurrent ctest jobs over-subscribe.
     "rocprofiler-compute": {
         "test_dir": ["libexec", "rocprofiler-compute"],
@@ -186,7 +186,7 @@ COMPONENT_OVERRIDES = {
             "PATH": [["bin"]],
             "LD_LIBRARY_PATH": [["lib"]],
         },
-        "ctest_parallel": 1,
+        "ctest_parallel_count": 1,
     },
     # rocprofiler-systems tests are pytest-driven CTests living under
     # share/rocprofiler-systems/tests. They need the rocm bin on PATH so the
@@ -303,7 +303,7 @@ def apply_component_overrides(
     env,
     default_parallel_count,
 ):
-    """Apply component-specific overrides; returns (test_dir, ctest_parallel).
+    """Apply component-specific overrides; returns (test_dir, ctest_parallel_count).
 
     Precedence for test_dir resolution (highest -> lowest):
       1. test_dir_by_type[test_type] - TEST_TYPE-aware route (e.g. rocwmma
@@ -321,8 +321,12 @@ def apply_component_overrides(
     - 'env' sets literal environment variables (str.format() with the
       "{rocm_path}" placeholder).
 
-    ctest_parallel: per-component ctest -j override; falls back to
-    default_parallel_count when the component does not pin one.
+    ctest_parallel_count: per-component ctest -j override; falls back to
+    default_parallel_count when the component does not pin one. A value of 0
+    means "run serially" and is honoured by build_ctest_command(), which drops
+    the --parallel flag entirely. This is the single place the override is
+    resolved; callers use the returned value rather than re-reading
+    COMPONENT_OVERRIDES.
     """
     overrides = COMPONENT_OVERRIDES.get(job_name)
     if not overrides:
@@ -339,7 +343,7 @@ def apply_component_overrides(
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
     for env_key, value_template in overrides.get("env", {}).items():
         env[env_key] = value_template.format(rocm_path=str(rocm_path))
-    return test_dir, overrides.get("ctest_parallel", default_parallel_count)
+    return test_dir, overrides.get("ctest_parallel_count", default_parallel_count)
 
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)
@@ -549,14 +553,13 @@ def build_ctest_command(
     # Add common ctest parameters
     cmd.append("--output-on-failure")
 
-    # ctest_parallel_count is the module-level default (arch-tuned). Components
-    # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
-    # a value of 0 means "drop --parallel entirely" (serial execution).
-    component_parallel_count = COMPONENT_OVERRIDES.get(test_component_job_name, {}).get(
-        "ctest_parallel_count", ctest_parallel_count
-    )
-    if component_parallel_count > 0:
-        cmd.extend(["--parallel", f"{component_parallel_count}"])
+    # ctest_parallel_count already holds the resolved value: the module-level
+    # default (arch-tuned), overridden per component by
+    # COMPONENT_OVERRIDES[...]["ctest_parallel_count"] via
+    # apply_component_overrides() at import time. A value of 0 means "drop
+    # --parallel entirely" (serial execution).
+    if ctest_parallel_count > 0:
+        cmd.extend(["--parallel", f"{ctest_parallel_count}"])
 
     cmd.extend(
         [
