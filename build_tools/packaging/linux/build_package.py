@@ -672,7 +672,7 @@ def run(args: argparse.Namespace):
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    logs_dir = Path(config.dest_dir) / "logs"
+    logs_dir = Path(config.dest_dir).parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     built_pkglist = []
