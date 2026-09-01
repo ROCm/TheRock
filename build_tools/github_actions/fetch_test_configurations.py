@@ -774,7 +774,9 @@ test_matrix = {
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+        # rocjpeg backs the jpegdecode example, whose binary links librocjpeg.so
+        # at runtime.
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --rocjpeg --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
             "share/rocprofiler-systems/tests/requirements.txt",

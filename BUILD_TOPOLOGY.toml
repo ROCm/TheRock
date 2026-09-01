@@ -206,6 +206,10 @@ artifact_groups = ["profiler-apps"]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
 
+[build_stages.profiler-examples]
+description = "Profiler example binaries (depends on profiler-apps and media-libs)"
+artifact_groups = ["profiler-examples"]
+
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
@@ -345,6 +349,13 @@ description = "Media Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
 source_sets = ["amd-mesa", "rocm-systems"]
+
+# Test-only example binaries for profiler-apps
+[artifact_groups.profiler-examples]
+description = "Profiler example binaries (test-only)"
+type = "generic"
+artifact_group_deps = ["profiler-apps", "media-libs"]
+source_sets = ["rocm-systems"]
 
 [artifact_groups.rocjitsu]
 description = "ROCm emulation, virtualization, and instrumentation tools"
@@ -807,9 +818,9 @@ disable_platforms = ["windows"]
 disable_processors = ["ppc64le"]
 
 [artifacts.rocprofiler-systems-examples]
-artifact_group = "profiler-apps"
+artifact_group = "profiler-examples"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-systems"]
+artifact_deps = ["rocprofiler-systems", "rocjpeg"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 disable_processors = ["ppc64le"]

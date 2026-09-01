@@ -404,6 +404,20 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
     endif()
 
+    # The jpegdecode example locates rocJPEG by probing a ROCm-style prefix with
+    # find_path() instead of find_package(), so seed the `rocjpeg_ROOT_DIR` cache
+    # entry with the sub-project dist tree. That tree also holds the sample images
+    # (share/rocjpeg/images) that the example copies in.
+    set(_rocprofsys_examples_media_deps)
+    set(_rocprofsys_examples_media_args)
+    if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      get_target_property(_rocjpeg_dist_dir rocjpeg THEROCK_DIST_DIR)
+      list(APPEND _rocprofsys_examples_media_deps rocjpeg)
+      list(APPEND _rocprofsys_examples_media_args
+        -Drocjpeg_ROOT_DIR="${_rocjpeg_dist_dir}"
+      )
+    endif()
+
     therock_cmake_subproject_declare(rocprofiler-systems-examples
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
@@ -412,6 +426,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       CMAKE_ARGS
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
+        ${_rocprofsys_examples_media_args}
       COMPILER_TOOLCHAIN
         amd-hip
       INSTALL_RPATH_DIRS
@@ -420,6 +435,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
         "lib/llvm/lib"
       RUNTIME_DEPS
         rocprofiler-systems
+        ${_rocprofsys_examples_media_deps}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
       SUBDIRS .
