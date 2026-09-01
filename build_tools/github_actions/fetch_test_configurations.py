@@ -1072,23 +1072,6 @@ def run():
                 }
                 all_components.append(pal_entry)
 
-<<<<<<< HEAD
-                if windows_hip_rocr_tests:
-                    rocr_entry = {
-                        **_common_settings,
-                        "job_name": "hip-tests (ROCR)",
-                        "fetch_artifact_args": base["fetch_artifact_args"],
-                        "timeout_minutes": base["timeout_minutes"],
-                        "test_script": base["test_script"],
-                        "platform": base["platform"],
-                        "total_shards": total_shards,
-                        "test_type": test_type,
-                        "shard_arr": shard_arr,
-                        "expect_failure": False, # Default and Fatal
-                        "gpu_enable_pal": "0",
-                    }
-                    all_components.append(rocr_entry)
-=======
                 rocr_entry = {
                     **_common_settings,
                     "job_name": "hip-tests (ROCR)",
@@ -1102,7 +1085,6 @@ def run():
                     "gpu_enable_pal": "0",
                 }
                 all_components.append(rocr_entry)
->>>>>>> origin/main
                 continue
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
