@@ -87,13 +87,12 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 #   larger upstream PyTorch test suite and can take several hours.
 PYTORCH_TEST_LEVELS = ["sanity", "standard", "full"]
 
-# Scheduled release matrices limit self-hosted GPU testing to one Python
-# version. Other Python versions still receive the build-time sanity check.
-PYTORCH_GPU_TEST_PYTHON_VERSION = "3.12"
+# Workflows by default limit the bulk of testing (standard/full test levels) to
+# one Python version.
+PYTORCH_PRIMARY_TEST_PYTHON_VERSION = "3.12"
 
-# The full upstream PyTorch suite can take several hours, so scheduled release
-# workflows run it on only one representative configuration. These constants
-# are release scheduling policy, not restrictions on direct workflow dispatch.
+# The full PyTorch test suite can take several hours, so workflows by default
+# run it on only one representative configuration.
 PYTORCH_FULL_TEST_PLATFORM = "linux"
 PYTORCH_FULL_TEST_AMDGPU_FAMILY = "gfx94X-dcgpu"
 
@@ -152,7 +151,7 @@ def _select_release_test_level(
     hours-long full suite on the one representative configuration selected by
     the release policy above.
     """
-    if python_version != PYTORCH_GPU_TEST_PYTHON_VERSION:
+    if python_version != PYTORCH_PRIMARY_TEST_PYTHON_VERSION:
         return "sanity"
     if (
         run_full_pytorch_tests
