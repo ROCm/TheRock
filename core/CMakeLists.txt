@@ -489,10 +489,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocprofiler-register
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
   endif()
+  list(APPEND OCL_CLR_CMAKE_ARGS
+    "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
   if(_therock_enable_hsa_runtime)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
