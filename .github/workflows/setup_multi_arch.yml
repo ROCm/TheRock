@@ -206,6 +206,15 @@ jobs:
           path: ci-config
         continue-on-error: true
 
+      - name: Checkout external repo for path filtering
+        if: ${{ inputs.external_repo != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: _external_repo
+          fetch-depth: 2
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -240,7 +249,9 @@ jobs:
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
+          # checkout_path is added by the workflow for git diff operations
           EXTERNAL_REPO: ${{ inputs.external_repo }}
+          EXTERNAL_REPO_CHECKOUT_PATH: ${{ inputs.external_repo != '' && '_external_repo' || '' }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)

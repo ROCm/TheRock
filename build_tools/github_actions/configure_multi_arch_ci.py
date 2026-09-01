@@ -464,18 +464,40 @@ class GitContext:
         return GitContext()
 
     @staticmethod
-    def from_external_repo(external_repo_name: str) -> "GitContext":
+    def from_external_repo(
+        external_repo_name: str,
+        changed_files: list[str] | None = None,
+    ) -> "GitContext":
         """Create context for external repo builds (e.g., rocm-libraries).
 
-        For external repos, we treat the repo name as both a changed file and
-        a submodule path so that:
+        For external repos, we use the provided changed_files list for skip-CI
+        analysis. The repo name is always included in both changed_files and
+        submodule_paths so that:
         1. Stage reuse analysis can determine which TheRock stages are affected
         2. has_submodule_changes returns True, enabling submodule_bump_tests_only
            families to run their tests
+
+        Args:
+            external_repo_name: Name of the external repo (e.g., "rocm-libraries")
+            changed_files: List of files changed in the external repo PR/push.
+                If provided, these are used for skip-CI path filtering.
+                If None, only the repo name is used (no skip-CI filtering).
         """
         print(f"External repo detected: {external_repo_name}")
+        if changed_files is not None:
+            print(f"External repo changed files: {len(changed_files)} file(s)")
+            for path in changed_files[:20]:
+                print(f"  {path}")
+            if len(changed_files) > 20:
+                print(f"  ... and {len(changed_files) - 20} more")
+            # Include repo name in changed_files for stage reuse analysis
+            all_changed = list(changed_files) + [external_repo_name]
+        else:
+            print("No changed files provided, skipping path-based CI filtering")
+            all_changed = [external_repo_name]
+
         return GitContext(
-            changed_files=[external_repo_name],
+            changed_files=all_changed,
             submodule_paths=[external_repo_name],
         )
 
@@ -1656,7 +1678,8 @@ def main():
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
         # External repo: use repo name for stage reuse analysis.
-        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
+        # external_repo is JSON like:
+        # {"repository":"ROCm/rocm-libraries","ref":"...","changed_files":["path/to/file",...]}
         try:
             external_repo = json.loads(ci_inputs.external_repo)
         except (json.JSONDecodeError, TypeError) as exc:
@@ -1670,7 +1693,20 @@ def main():
                 f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
             )
         external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+
+        # Get changed files for skip-CI path filtering.
+        # Use git diff if checkout_path (from env) and base_sha are provided.
+        changed_files: list[str] | None = None
+        checkout_path = os.environ.get("EXTERNAL_REPO_CHECKOUT_PATH")
+        base_sha = external_repo.get("base_sha")
+        if checkout_path and base_sha:
+            changed_files = list(
+                get_git_modified_paths(base_sha, cwd=checkout_path) or []
+            )
+
+        git_context = GitContext.from_external_repo(
+            external_repo_name, changed_files=changed_files
+        )
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.

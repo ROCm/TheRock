@@ -375,19 +375,28 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
 # ============================================================================
 
 
-def _is_path_skippable(path: str) -> bool:
-    """Checks if a single file path matches any skippable pattern."""
+def is_path_skippable(path: str) -> bool:
+    """Checks if a single file path matches any skippable pattern.
+
+    This function is public so external repo CI can use the same skip logic.
+    """
     return any(fnmatch.fnmatch(path, pattern) for pattern in _SKIPPABLE_PATH_PATTERNS)
 
 
-def _check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
+def has_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
     """Checks if any path in the collection is non-skippable.
 
     Returns True if at least one path doesn't match any skippable pattern.
+    This function is public so external repo CI can use the same skip logic.
     """
     if paths is None:
         return False
-    return any(not _is_path_skippable(p) for p in paths)
+    return any(not is_path_skippable(p) for p in paths)
+
+
+# Keep private aliases for internal use
+_is_path_skippable = is_path_skippable
+_check_for_non_skippable_path = has_non_skippable_path
 
 
 def _is_path_workflow_file_related_to_ci(path: str) -> bool:
