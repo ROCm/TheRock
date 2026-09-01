@@ -1,0 +1,12 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# bandit configuration for Quartz, picked up by the rocm-security-gh
+# reusable scanner (.github/workflows/security_scan_pr.yml and
+# security_scan_weekly.yml) in place of its own org-wide default.
+# Reference: https://bandit.readthedocs.io/en/latest/config.html
+
+exclude_dirs:
+  - .git
+  - .venv
+  - venv

@@ -1,0 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# zizmor configuration for Quartz, picked up by the rocm-security-gh
+# reusable scanner (.github/workflows/security_scan_pr.yml and
+# security_scan_weekly.yml) in place of its own org-wide default.
+# Reference: https://docs.zizmor.sh/configuration/
+
+rules: {}
