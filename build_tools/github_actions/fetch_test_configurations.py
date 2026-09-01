@@ -988,6 +988,19 @@ def run():
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
+    # Resolve the test-label groups for this run. TEST_LABEL_GROUPS provides the
+    # static, explicitly-curated groups. "multi-gpu" is a *dynamic* group: it
+    # expands to every component that declares a multi_gpu runner requirement
+    # (e.g. rccl, rocshmem, and the *-multi-gpu split jobs), so a dev can request
+    # all multi-GPU tests with a single `test:multi-gpu` label. Computing it from
+    # the matrix means new multi-GPU components are picked up automatically. An
+    # explicit TEST_LABEL_GROUPS["multi-gpu"] entry, if ever added, wins.
+    label_groups = dict(TEST_LABEL_GROUPS)
+    label_groups.setdefault(
+        "multi-gpu",
+        [key for key, cfg in selected_matrix.items() if "multi_gpu" in cfg],
+    )
+
     all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
@@ -1033,7 +1046,7 @@ def run():
         expanded_test_labels = [
             member
             for label in parsed_test_labels
-            for member in TEST_LABEL_GROUPS.get(label, [label])
+            for member in label_groups.get(label, [label])
         ]
         if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")

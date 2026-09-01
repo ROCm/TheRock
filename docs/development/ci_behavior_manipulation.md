@@ -27,6 +27,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `gfx...`           | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                                                                                |
 | `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Sets test level to `full` unless overridden by `test_filter:`. Multiple `test:` labels can be combined.      |
+| `test:multi-gpu`   | Run all multi-GPU test jobs (e.g. `rccl`, `rocshmem`, and any `*-multi-gpu` split jobs). Group label that expands to every component requiring a multi-GPU runner. Combinable with other `test:`. |
 | `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
 | `test_filter:...`  | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 

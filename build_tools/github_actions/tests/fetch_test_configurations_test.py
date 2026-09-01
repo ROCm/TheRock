@@ -738,6 +738,41 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
 
+    def test_multi_gpu_label_selects_all_multi_gpu_jobs(self):
+        """test:multi-gpu is a dynamic group selecting every component that needs a
+        multi-GPU runner (rccl, rocshmem, ...) and nothing else."""
+        with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:multi-gpu"])}):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
+        # Only multi-GPU jobs get selected: a plain single-GPU job is excluded.
+        self.assertNotIn("rocblas", names)
+        # Every selected component is flagged for a multi-GPU runner.
+        for job in components:
+            self.assertIn(
+                "multi_gpu_runner",
+                job,
+                f"{job['job_name']} was selected by test:multi-gpu but is not a "
+                "multi-GPU job",
+            )
+
+    def test_multi_gpu_label_composes_with_component_label(self):
+        """test:multi-gpu can be combined with a specific component label."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:multi-gpu", "test:rocblas"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
+        self.assertIn("rocblas", names)
+
 
 if __name__ == "__main__":
     unittest.main()
