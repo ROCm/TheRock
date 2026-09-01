@@ -161,6 +161,7 @@ jobs:
       # Linux performance baseline: keep the original AWS ROCm prod runner for
       # direct comparison against the v7 Linux test pool.
       aws_linux_cpu_build_label: aws-linux-scale-rocm-prod
+      skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
       id-token: write
