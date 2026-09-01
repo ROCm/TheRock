@@ -158,10 +158,9 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
-      # NO-MERGE dev/test branch: force all-arch Linux builds onto the v7 SKU
-      # test pool (OSSCI-3084 / TheRock-Infra #835). The reusable workflow
-      # exposes aws_linux_cpu_build_label as an override; set here explicitly.
-      aws_linux_cpu_build_label: azure-linux-scale-v7test
+      # Linux performance baseline: keep the original AWS ROCm prod runner for
+      # direct comparison against the v7 Linux test pool.
+      aws_linux_cpu_build_label: aws-linux-scale-rocm-prod
     permissions:
       contents: read
       id-token: write
