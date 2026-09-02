@@ -76,7 +76,7 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: ${{ inputs.build_runs_on }}
+    runs-on: ${{ inputs.build_runs_on || 'azure-windows-scale-rocm' }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
