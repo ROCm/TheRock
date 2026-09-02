@@ -13,7 +13,58 @@
 
 cmake_minimum_required(VERSION 3.25)
 
-project(therock-aux-overlay)
+project(therock-aux-overlay LANGUAGES C CXX)
+
+# This is the canonical example of consuming ROCm build flags from either a
+# super-repository provider or project-specific standalone cache variables.
+# ROCm projects include their super-repository's verbatim helper copy through
+# its root variable (for example, ROCM_LIBRARIES_ROOT). This project uses
+# THEROCK_SOURCE_DIR because its containing repository is TheRock.
+include("${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake")
+
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+  TYPE BOOL
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_BOOL_FALSE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Standalone false-value build flag conformance canary"
+  OUTPUT_VARIABLE _canary_bool_false
+)
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+  TYPE BOOL
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_BOOL_TRUE
+  DEFAULT_VALUE ON
+  DESCRIPTION "Standalone true-value build flag conformance canary"
+  OUTPUT_VARIABLE _canary_bool_true
+)
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+  TYPE INTEGER
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_INTEGER_NEGATIVE
+  DEFAULT_VALUE -17
+  VALID_VALUES -17
+  DESCRIPTION "Standalone integer build flag conformance canary"
+  OUTPUT_VARIABLE _canary_integer_negative
+)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/aux_overlay_build_flags.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/aux_overlay_build_flags.h"
+  @ONLY
+)
+add_library(aux-overlay-build-flags-conformance OBJECT
+  build_flags_conformance.c
+  build_flags_conformance.cpp
+)
+set_target_properties(aux-overlay-build-flags-conformance PROPERTIES
+  C_STANDARD 11
+  C_STANDARD_REQUIRED YES
+  C_EXTENSIONS NO
+)
+target_include_directories(aux-overlay-build-flags-conformance PRIVATE
+  "${CMAKE_CURRENT_BINARY_DIR}"
+)
 
 if(NOT WIN32)
   add_custom_target(symlinks ALL
@@ -51,6 +102,28 @@ if(NOT WIN32)
     "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
     DESTINATION bin
   )
+
+  # Begin creation of compiler configs. We will need LLVM_VERSION_MAJOR.
+  include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
+  set(rocm_config_name "rocm.cfg")
+  set(rocm_config_dir "${CMAKE_CURRENT_BINARY_DIR}/lib/llvm/bin")
+  set(rocm_config_content "$-Wl,--enable-new-dtags\n--rocm-path='<CFGDIR>/../../..'\n-frtlib-add-rpath")
+
+  # Generate rocm.cfg
+  file(MAKE_DIRECTORY "${rocm_config_dir}")
+  message(STATUS "Generating ${rocm_config_dir}/${rocm_config_name}")
+  file(WRITE "${rocm_config_dir}/${rocm_config_name}" ${rocm_config_content})
+  install(FILES "${rocm_config_dir}/${rocm_config_name}"
+    DESTINATION "lib/llvm/bin")
+
+  # Generate additional config aliases
+  set(config_names "clang-${LLVM_VERSION_MAJOR}.cfg;clang++.cfg;clang.cfg;clang-cl.cfg;clang-cpp.cfg;flang.cfg")
+  foreach(name ${config_names})
+    message(STATUS "Generating ${rocm_config_dir}/${name}")
+    file(WRITE "${rocm_config_dir}/${name}" "@rocm.cfg")
+    install(FILES "${rocm_config_dir}/${name}"
+      DESTINATION "lib/llvm/bin")
+  endforeach()
 endif()
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/overlay/" DESTINATION ".")

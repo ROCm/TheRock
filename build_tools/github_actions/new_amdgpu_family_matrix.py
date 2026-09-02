@@ -65,6 +65,7 @@ amdgpu_family_predefined_groups = {
     # The 'nightly' matrix runs on 'schedule' triggers.
     "amdgpu_nightly": [
         "gfx90X-dcgpu",
+        "gfx90c",
         "gfx101X-dgpu",
         "gfx103X-all",
         "gfx1150",
@@ -396,7 +397,7 @@ amdgpu_family_info_matrix_all = {
                     # No gfx1250 hardware available for testing yet.
                     "run_tests": False,
                     "runs_on": {},
-                    "fetch-gfx-targets": [],
+                    "fetch-gfx-targets": ["gfx1250"],
                 },
                 "release": {
                     "push_on_success": False,
@@ -439,6 +440,37 @@ amdgpu_family_info_matrix_all = {
                 },
             },
         }
+    },
+    "gfx90c": {
+        "linux": {
+            "build": {
+                "build_variants": ["release"],
+            },
+            "test": {
+                "run_tests": False,
+                "runs_on": {},
+                "fetch-gfx-targets": [],
+                "sanity_check_only_for_family": True,
+            },
+            "release": {
+                "push_on_success": False,
+                "bypass_tests_for_releases": False,
+            },
+        },
+        "windows": {
+            "build": {
+                "build_variants": ["release"],
+            },
+            "test": {
+                "run_tests": False,
+                "runs_on": {},
+                "fetch-gfx-targets": [],
+            },
+            "release": {
+                "push_on_success": False,
+                "bypass_tests_for_releases": False,
+            },
+        },
     },
     "gfx101X": {
         "dgpu": {

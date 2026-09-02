@@ -15,16 +15,14 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-gfx942-1gpu-core42-ossci-rocm"
-      package_index_url_base:
+        default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+      package_index_url:
         description: >-
-          Base Python package index URL. For legacy per-family builds, this is
-          without the GPU family subdir. For kpack-split builds, this is the
-          full flat index URL.
+          Full repo.amd.com aggregate Python package index URL for use with --index-url.
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       package_find_links_url:
-        description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
+        description: Full Python package index URL for use with --find-links (usually instead of package_index_url)
         type: string
       python_version:
         required: true
@@ -61,11 +59,9 @@ on:
       test_runs_on:
         required: true
         type: string
-      package_index_url_base:
+      package_index_url:
         description: >-
-          Base Python package index URL. For legacy per-family builds, this is
-          without the GPU family subdir. For kpack-split builds, this is the
-          full flat index URL.
+          Full Python package index URL for use with --index-url.
         type: string
       package_find_links_url:
         type: string
@@ -75,10 +71,6 @@ on:
       rocm_version:
         required: true
         type: string
-      kpack_split:
-        description: "'true' if this is a kpack-split flat build."
-        type: string
-        default: "false"
       container_image_name:
         description: >-
           Short, human-readable label for the container image (e.g. 'ubuntu24.04',
@@ -128,11 +120,16 @@ jobs:
       run:
         shell: bash
     env:
-      VENV_DIR: ${{ github.workspace }}/.venv
+      # Use a venv path containing a space on Windows so that `rocm-sdk test`
+      # exercises the space-in-path handling of the console-script trampolines
+      # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").
+      # See https://github.com/ROCm/TheRock/issues/7075.
+      VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
+      PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -140,12 +137,11 @@ jobs:
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
         if: ${{ inputs.container_image_url == '' || contains(inputs.container_image_name, 'ubuntu') }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ inputs.python_version }}
 
       - name: Compute ROCm device extras
-        if: ${{ inputs.kpack_split == 'true' }}
         id: device_extras
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
@@ -160,20 +156,11 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          if [ "${{ inputs.kpack_split }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --find-links=${{ inputs.package_find_links_url }} \
-              --activate-in-future-github-actions-steps
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --find-links=${{ inputs.package_find_links_url }} \
-              --activate-in-future-github-actions-steps
-          fi
+          python build_tools/setup_venv.py "${VENV_DIR}" \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
 
       - name: Show installed packages (libraries)
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
@@ -195,18 +182,10 @@ jobs:
           if [ -n "${{ steps.device_extras.outputs.device_extras }}" ]; then
             pkg="${pkg%]},${{ steps.device_extras.outputs.device_extras }}]"
           fi
-          if [ "${{ inputs.kpack_split }}" = "true" ]; then
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --find-links=${{ inputs.package_find_links_url }}
-          else
-            python build_tools/setup_venv.py ${VENV_DIR} \
-              --packages "${pkg}==${{ inputs.rocm_version }}" \
-              --index-url=${{ inputs.package_index_url_base }} \
-              --index-subdir=${{ inputs.amdgpu_family }} \
-              --find-links=${{ inputs.package_find_links_url }}
-          fi
+          python build_tools/setup_venv.py "${VENV_DIR}" \
+            --packages "${pkg}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }}
 
       - name: Show installed packages (libraries,devel)
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
@@ -215,6 +194,34 @@ jobs:
 
       - name: Test rocm[libraries,devel]
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      # Install rocm[profiler] on its own into a fresh venv. Per
+      # docs/packaging/python_packaging.md, rocm[profiler] alone must pull in
+      # rocm-sdk-core and be sufficient to run the profiler tools - this step
+      # validates that documented minimal install. rocm-profiler is a generic
+      # (non-target-specific) package, so no device_extras are appended.
+      - name: Install rocm[profiler]
+        id: install_profiler
+        # rocm[profiler] is not built on Windows, so skip the whole flow there
+        # (the two dependent steps gate on this step's success).
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: |
+          python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
+            --packages "rocm[profiler]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Show installed packages (profiler)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
+        run: |
+          pip freeze
+
+      - name: Test rocm[profiler]
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
         run: |
           rocm-sdk test

@@ -7,20 +7,27 @@ Unit tests for build_topology module.
 """
 
 import os
+import re
 import sys
 import tempfile
 import textwrap
 import unittest
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from configure_stage import get_stage_features
 from _therock_utils.build_topology import (
     BuildStage,
     ArtifactGroup,
     Artifact,
     BuildTopology,
+    get_topology,
 )
+from topology_to_cmake import generate_feature_declarations
+
+REPO_ROOT = Path(__file__).parent.parent.parent
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -265,6 +272,113 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertEqual(hip.type, "target-specific")
         self.assertEqual(hip.artifact_deps, ["rocm-core"])
         self.assertEqual(hip.platform, "linux")
+
+    def test_parse_platform_disables_guarded_by_flags(self):
+        """Test parsing platform disables guarded by build flags."""
+        self.write_topology(
+            """
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["core-runtime"]
+
+        self.assertEqual(
+            artifact.disable_platforms_if_flags_not_set,
+            {"windows": "HSA_WINDOWS_SHARED_RUNTIME"},
+        )
+        self.assertTrue(topology.is_artifact_disabled_on_platform(artifact, "windows"))
+        self.assertFalse(
+            topology.is_artifact_disabled_on_platform(
+                artifact,
+                "windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            )
+        )
+        self.assertFalse(topology.is_artifact_disabled_on_platform(artifact, "linux"))
+
+    def test_stage_features_skip_platform_disables_guarded_by_flags(self):
+        """Test stage features skip artifacts disabled by unset flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        self.assertNotIn(
+            "CORE_RUNTIME",
+            get_stage_features(topology, "runtime", platform_name="windows"),
+        )
+        self.assertIn(
+            "CORE_RUNTIME",
+            get_stage_features(
+                topology,
+                "runtime",
+                platform_name="windows",
+                enabled_flags={"HSA_WINDOWS_SHARED_RUNTIME"},
+            ),
+        )
+
+    def test_generates_conditional_disabled_platform_feature(self):
+        """Test generated CMake for platform disables guarded by flags."""
+        self.write_topology(
+            """
+            [build_stages.runtime]
+            description = "Runtime"
+            artifact_groups = ["runtime"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+
+            [artifacts.core-runtime]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            feature_name = "CORE_RUNTIME"
+            feature_group = "CORE"
+            disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("if(NOT THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME)", cmake)
+        self.assertIn(
+            "list(APPEND _THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS windows)",
+            cmake,
+        )
+        self.assertIn("else()", cmake)
+        self.assertIn(
+            "DISABLE_PLATFORMS ${_THEROCK_CORE_RUNTIME_DISABLE_PLATFORMS}",
+            cmake,
+        )
+        self.assertIn(
+            "CORE_RUNTIME can be built on ${CMAKE_SYSTEM_NAME} only with "
+            "-DTHEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME=ON",
+            cmake,
+        )
 
     def test_get_artifacts_in_group(self):
         """Test getting artifacts belonging to a group."""
@@ -892,6 +1006,313 @@ class BuildTopologyTest(unittest.TestCase):
         # Foundation stage should need nothing
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
+
+    def test_parse_disable_processors(self):
+        """Test parsing disable_processors from TOML."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["profiler"]
+
+        self.assertEqual(artifact.disable_processors, ["aarch64"])
+
+    def test_is_artifact_disabled_on_processor(self):
+        """Test is_artifact_disabled_on_processor method."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["profiler"]
+
+        self.assertTrue(topology.is_artifact_disabled_on_processor(artifact, "aarch64"))
+        self.assertFalse(topology.is_artifact_disabled_on_processor(artifact, "x86_64"))
+        self.assertFalse(topology.is_artifact_disabled_on_processor(artifact, ""))
+
+    def test_validate_invalid_disable_processor(self):
+        """Test validation catches invalid processor names."""
+        self.write_topology(
+            """
+            [artifacts.profiler]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            disable_processors = ["invalid_arch"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+
+        self.assertTrue(
+            any("invalid disable_processor" in e for e in errors),
+            f"Expected processor validation error, got: {errors}",
+        )
+
+    def test_stage_features_skip_processor_disabled_artifacts(self):
+        """Test get_stage_features excludes artifacts disabled on a processor."""
+        self.write_topology(
+            """
+            [build_stages.profiler]
+            description = "Profiler"
+            artifact_groups = ["profiler"]
+
+            [artifact_groups.profiler]
+            description = "Profiler"
+            type = "generic"
+
+            [artifacts.profiler-sdk]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "PROFILER_SDK"
+            feature_group = "PROFILER"
+
+            [artifacts.rocprofiler-systems]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "ROCPROFSYS"
+            feature_group = "PROFILER"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        features = get_stage_features(topology, "profiler", processor_name="aarch64")
+        self.assertNotIn("ROCPROFSYS", features)
+        self.assertIn("PROFILER_SDK", features)
+
+        features = get_stage_features(topology, "profiler", processor_name="x86_64")
+        self.assertIn("ROCPROFSYS", features)
+        self.assertIn("PROFILER_SDK", features)
+
+    def test_generates_disable_processors_feature(self):
+        """Test generated CMake includes DISABLE_PROCESSORS."""
+        self.write_topology(
+            """
+            [build_stages.profiler]
+            description = "Profiler"
+            artifact_groups = ["profiler"]
+
+            [artifact_groups.profiler]
+            description = "Profiler"
+            type = "generic"
+
+            [artifacts.rocprofiler-systems]
+            artifact_group = "profiler"
+            type = "target-neutral"
+            feature_name = "ROCPROFSYS"
+            feature_group = "PROFILER"
+            disable_processors = ["aarch64"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        output = StringIO()
+        generate_feature_declarations(topology, output)
+        cmake = output.getvalue()
+
+        self.assertIn("DISABLE_PROCESSORS aarch64", cmake)
+
+
+class ExtractSourcePathFromPathTest(unittest.TestCase):
+    """Tests for source_path extraction from file paths."""
+
+    def test_projects_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path("projects/rocblas/src/foo.cpp"),
+            "rocblas",
+        )
+
+    def test_shared_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path(
+                "shared/rocroller/include/bar.hpp"
+            ),
+            "rocroller",
+        )
+
+    def test_dnn_providers_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path(
+                "dnn-providers/miopen-provider/src/baz.cpp"
+            ),
+            "miopen-provider",
+        )
+
+    def test_root_file_returns_none(self):
+        self.assertIsNone(BuildTopology.extract_source_path_from_path("CMakeLists.txt"))
+
+
+class GetArtifactForSourcePathTest(unittest.TestCase):
+    """Tests for artifact lookup by source_path."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_rocblas_maps_to_blas(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("rocblas"), "blas")
+
+    def test_hipblas_maps_to_blas(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("hipblas"), "blas")
+
+    def test_rocrand_maps_to_rand(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("rocrand"), "rand")
+
+    def test_unknown_source_path_returns_none(self):
+        self.assertIsNone(
+            self.topology.get_artifact_for_source_path("unknown-source-path")
+        )
+
+
+class GetArtifactForPathTest(unittest.TestCase):
+    """Tests for artifact lookup by full file path."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_rocblas_maps_to_blas(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("projects/rocblas/src/foo.cpp"),
+            "blas",
+        )
+
+    def test_rocfft_maps_to_fft(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("projects/rocfft/src/kernel.cpp"),
+            "fft",
+        )
+
+    def test_shared_rocroller_maps_to_blas(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("shared/rocroller/src/foo.cpp"),
+            "blas",
+        )
+
+    def test_unknown_path_returns_none(self):
+        self.assertIsNone(self.topology.get_artifact_for_path("cmake/FindHIP.cmake"))
+
+
+class ParseChangedPathTest(unittest.TestCase):
+    """Tests for parsing changed paths into submodule and subpath."""
+
+    def test_simple_path(self):
+        submodule, subpath = BuildTopology.parse_changed_path(
+            "rocm-libraries/projects/rocblas/foo.cpp"
+        )
+        self.assertEqual(submodule, "rocm-libraries")
+        self.assertEqual(subpath, "projects/rocblas/foo.cpp")
+
+    def test_single_component(self):
+        submodule, subpath = BuildTopology.parse_changed_path("rocm-libraries")
+        self.assertEqual(submodule, "rocm-libraries")
+        self.assertEqual(subpath, "")
+
+
+class SourceSetsWithSourcePathsTest(unittest.TestCase):
+    """Tests for source sets containing source_paths."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_returns_rocm_libraries(self):
+        self.assertIn(
+            "rocm-libraries", self.topology.get_source_sets_with_source_paths()
+        )
+
+    def test_returns_rocm_systems(self):
+        self.assertIn("rocm-systems", self.topology.get_source_sets_with_source_paths())
+
+
+class SourcePathsInSyncTest(unittest.TestCase):
+    """Verify BUILD_TOPOLOGY.toml source_paths match CMakeLists.txt."""
+
+    def test_cmake_source_paths_in_topology(self):
+        topology = get_topology()
+        topology_source_paths = set()
+        for artifact in topology.artifacts.values():
+            topology_source_paths.update(artifact.source_paths)
+
+        cmake_source_paths = self._extract_cmake_source_paths()
+        missing = cmake_source_paths - topology_source_paths
+        self.assertEqual(
+            missing,
+            set(),
+            f"Source paths in CMakeLists.txt but not BUILD_TOPOLOGY.toml: {sorted(missing)}",
+        )
+
+    def _extract_cmake_source_paths(self) -> set[str]:
+        source_paths: set[str] = set()
+        patterns = [
+            re.compile(
+                r'EXTERNAL_SOURCE_DIR\s+"?\$\{THEROCK_ROCM_LIBRARIES_SOURCE_DIR\}'
+                r"/(?:projects|shared|dnn-providers)/([a-zA-Z0-9_-]+)"
+            ),
+            re.compile(
+                r'EXTERNAL_SOURCE_DIR\s+"?\$\{THEROCK_ROCM_SYSTEMS_SOURCE_DIR\}'
+                r"/(?:projects|shared)/([a-zA-Z0-9_-]+)"
+            ),
+        ]
+        for cmake_file in REPO_ROOT.rglob("CMakeLists.txt"):
+            rel_path = cmake_file.relative_to(REPO_ROOT)
+            if any(
+                part in ("rocm-libraries", "rocm-systems", "build", ".git")
+                for part in rel_path.parts
+            ):
+                continue
+            try:
+                content = cmake_file.read_text()
+            except Exception:
+                continue
+            for pattern in patterns:
+                for match in pattern.finditer(content):
+                    source_paths.add(match.group(1))
+        return source_paths
+
+
+class RealTopologyTest(unittest.TestCase):
+    """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
+
+    def test_emulation_has_a_dedicated_build_stage(self):
+        topology = get_topology()
+
+        compiler_artifacts = topology.get_produced_artifacts("compiler-runtime")
+        self.assertNotIn("rocjitsu", compiler_artifacts)
+        self.assertNotIn("rocjitsu-hotswap", compiler_artifacts)
+        self.assertNotIn("mirage", compiler_artifacts)
+
+        emulation_artifacts = topology.get_produced_artifacts("emulation")
+        self.assertEqual(
+            emulation_artifacts,
+            {"rocjitsu", "rocjitsu-hotswap", "mirage"},
+        )
+        emulation_inbound = topology.get_inbound_artifacts("emulation")
+        self.assertIn("base", emulation_inbound)
+        self.assertIn("sysdeps", emulation_inbound)
+
+        comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
+        self.assertIn("rocjitsu", comm_libs_inbound)
+        self.assertIn("rocjitsu-hotswap", comm_libs_inbound)
+
+    def test_hipkernelprovider_is_split_per_arch(self):
+        # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
+        # so hipkernelprovider must stay target-specific and kpack-split; reverting
+        # either drops the per-arch bundles from the device artifacts.
+        topology = get_topology()
+        hkp = topology.artifacts["hipkernelprovider"]
+        self.assertEqual(hkp.type, "target-specific")
+        self.assertIn("hipkernelprovider", hkp.split_databases)
 
 
 if __name__ == "__main__":

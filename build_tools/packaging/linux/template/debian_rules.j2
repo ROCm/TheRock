@@ -8,11 +8,14 @@
 
 
 override_dh_builddeb:
-	dh_builddeb -- -Zxz
+	dh_builddeb -- -Zxz --root-owner-group
 
 {% if disable_dwz %}
 override_dh_dwz:
 	:
+{% else %}
+override_dh_dwz:
+	dh_dwz -X.hsaco -X.co -- --low-mem-die-limit=none --max-die-limit=none
 {% endif %}
 
 

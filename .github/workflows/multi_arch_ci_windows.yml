@@ -14,6 +14,7 @@ on:
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, build_pytorch,
           build_native_linux, test_python_packages_matrix,
+          pytorch_build_matrix,
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
@@ -22,7 +23,7 @@ on:
       test_type:
         type: string
       release_type:
-        description: 'Release type: "ci", "dev", "nightly", or "prerelease".'
+        description: "Release type used for artifact storage and package versioning."
         type: string
         default: ci
       external_repo_config:
@@ -51,7 +52,7 @@ jobs:
     if: ${{ fromJSON(inputs.build_config).prebuilt_stages != '' && fromJSON(inputs.build_config).baseline_run_id != '' }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: azure-windows-scale-rocm
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on || 'azure-windows-scale-rocm' }}
     defaults:
       run:
         shell: bash
@@ -60,13 +61,13 @@ jobs:
       id-token: write
     steps:
       - name: Checking out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -85,7 +86,9 @@ jobs:
         run: |
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(inputs.build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(inputs.build_config).baseline_repository }} \
             --stage="${{ fromJSON(inputs.build_config).prebuilt_stages }}" \
+            --artifacts="${{ fromJSON(inputs.build_config).reusable_artifacts }}" \
             --amdgpu-families="${{ fromJSON(inputs.build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
 
@@ -103,6 +106,8 @@ jobs:
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
+      rebuild_artifacts: ${{ fromJSON(inputs.build_config).rebuild_artifacts }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
@@ -118,6 +123,7 @@ jobs:
     name: Validate Artifact Structure
     if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/test_artifacts_structure.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
@@ -134,6 +140,7 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
@@ -151,8 +158,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_python_packages == true }}
     uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
@@ -176,6 +184,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_config).test_python_packages_matrix }}
     uses: ./.github/workflows/test_rocm_wheels.yml
+    secrets: inherit
     with:
       amdgpu_family: ${{ matrix.amdgpu_family }}
       test_runs_on: ${{ matrix.test_runs_on }}
@@ -191,7 +200,6 @@ jobs:
         }}
       python_version: ${{ matrix.python_version }}
       rocm_version: ${{ inputs.rocm_package_version }}
-      kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       container_image_name: ${{ matrix.container_image_name }}
       container_image_url: ${{ matrix.container_image_url }}
       repository: ${{ inputs.repository }}
@@ -206,18 +214,29 @@ jobs:
   build_pytorch_wheel_fat:
     needs: [build_python_packages]
     name: Build PyTorch (fat + split)
-    if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_pytorch == true }}
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_pytorch == true &&
+        toJSON(fromJSON(inputs.build_config).pytorch_build_matrix) != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.build_config).pytorch_build_matrix }}
     uses: ./.github/workflows/multi_arch_build_windows_pytorch_wheels_ci.yml
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
-      python_version: "3.12"
-      pytorch_git_ref: "release/2.10"
+      python_version: ${{ matrix.python_version }}
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
-      amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      amdgpu_families: ${{ matrix.amdgpu_families }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:

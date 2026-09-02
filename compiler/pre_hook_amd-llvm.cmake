@@ -29,7 +29,7 @@ else()
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
+    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib:\$ORIGIN/../../../../lib")
     set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
     set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
     # There is an issue with finding the zstd config built by TheRock when zstd
@@ -39,11 +39,19 @@ else()
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
 
+    # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
+    # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
+    # "Unknown debugging section .debug_str_offsets" even in version 0.16
+    # (Ubuntu 26.04). This is an upstream dwz limitation, not something we
+    # can fix by updating distro packages. Revisit if dwz gains DWARF5 support.
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR THEROCK_SANITIZER STREQUAL "TSAN")
+        string(APPEND RUNTIMES_CMAKE_ARGS ";-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -gdwarf-4;-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -gdwarf-4")
+    endif()
+
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")

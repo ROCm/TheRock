@@ -32,6 +32,7 @@ class LibraryEntry:
         so_pattern: str,
         dll_pattern: str,
         posix_relpath="lib",
+        optional: bool = False,
     ):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
@@ -39,6 +40,11 @@ class LibraryEntry:
         self.windows_relpath = "bin"
         self.so_pattern = so_pattern
         self.dll_pattern = dll_pattern
+        # Optional libraries may be absent from a built distribution (e.g.
+        # rocdxg only builds on a WSL host and is skipped on fork PRs and
+        # local single-command Linux builds). find_libraries skips these
+        # rather than raising when no file matches.
+        self.optional = optional
         assert shortname not in ALL_LIBRARIES
         ALL_LIBRARIES[shortname] = self
 
@@ -90,7 +96,8 @@ class PackageEntry:
             )
         kwargs = {}
         if target_family is not None:
-            kwargs["target_family"] = target_family
+            # Strip xnack suffix (e.g., 'gfx942:xnack+' -> 'gfx942') for valid package names
+            kwargs["target_family"] = target_family.split(":")[0]
         return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
@@ -261,10 +268,12 @@ LibraryEntry(
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
-LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
+LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
-LibraryEntry("rocdxg", "core", "librocdxg*.so*", "")
+LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")
+LibraryEntry("rocdxg", "core", "librocdxg*.so*", "", optional=True)
+LibraryEntry("rpp", "libraries", "librpp.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
@@ -274,6 +283,7 @@ LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
+LibraryEntry("origami", "libraries", "liborigami.so*", "origami*.dll")
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
 
 # Others we may want:
@@ -320,8 +330,13 @@ def get_target_family_platform_marker(target_family: str) -> str:
     """
     if not LINUX_TARGET_FAMILIES or not WINDOWS_TARGET_FAMILIES:
         return ""
-    in_linux = target_family in LINUX_TARGET_FAMILIES
-    in_windows = target_family in WINDOWS_TARGET_FAMILIES
+    # Compare base targets (strip xnack suffix) since platform lists may contain
+    # xnack-suffixed entries like 'gfx942:xnack+' while we receive base targets.
+    base_target = target_family.split(":")[0]
+    linux_base_targets = {t.split(":")[0] for t in LINUX_TARGET_FAMILIES}
+    windows_base_targets = {t.split(":")[0] for t in WINDOWS_TARGET_FAMILIES}
+    in_linux = base_target in linux_base_targets
+    in_windows = base_target in windows_base_targets
     if in_linux and not in_windows:
         return 'sys_platform == "linux"'
     if in_windows and not in_linux:
@@ -342,13 +357,16 @@ def build_per_target_extras() -> "dict[str, list[str]]":
     the generic extras already in setup.py's EXTRAS_REQUIRE suffice).
     """
     result: dict[str, list[str]] = {}
-    if len(AVAILABLE_TARGET_FAMILIES) <= 1:
+    # Deduplicate by base target (strip xnack suffix) to avoid redundant iterations
+    # when both 'gfx942' and 'gfx942:xnack+' exist in AVAILABLE_TARGET_FAMILIES.
+    base_targets = sorted(set(tf.split(":")[0] for tf in AVAILABLE_TARGET_FAMILIES))
+    if len(base_targets) <= 1:
         return result
     for pkg in ALL_PACKAGES.values():
         if not pkg.is_target_specific or pkg.required:
             continue
         all_requires: list[str] = []
-        for tf in sorted(AVAILABLE_TARGET_FAMILIES):
+        for tf in base_targets:
             extra_name = f"{pkg.logical_name}-{tf}"
             req = pkg.get_dist_package_require(target_family=tf)
             marker = get_target_family_platform_marker(tf)
@@ -358,3 +376,14 @@ def build_per_target_extras() -> "dict[str, list[str]]":
             all_requires.append(req)
         result[f"{pkg.logical_name}-all"] = all_requires
     return result
+
+
+def build_install_requires(target_family: str) -> list[str]:
+    """Builds install_requires for the rocm meta package."""
+    return [
+        pkg.get_dist_package_require(target_family=target_family)
+        for pkg in ALL_PACKAGES.values()
+        # Excludes the meta package itself so the rocm sdist never
+        # declares a Requires-Dist on its own distribution name.
+        if pkg.required and pkg.logical_name != "meta"
+    ]

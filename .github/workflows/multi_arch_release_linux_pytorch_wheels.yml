@@ -56,6 +56,17 @@ on:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
         default: false
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -78,7 +89,7 @@ on:
         type: string
         default: ""
       release_type:
-        description: 'Release type; developer-triggered jobs should use "dev"'
+        description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
         options:
           - dev
@@ -107,6 +118,17 @@ on:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
         default: false
+      build_runs_on:
+        description: "Build runner label"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Release Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
 
@@ -119,8 +141,20 @@ jobs:
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     steps:
+      - name: "Quartz - started - release PyTorch wheels"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -131,11 +165,13 @@ jobs:
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
             --platform=linux \
+            --release-type="${{ inputs.release_type }}" \
             --amdgpu-families="${{ inputs.amdgpu_families }}"
 
   build_pytorch_wheels:
     needs: setup_matrix
     name: Build | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
+    if: ${{ needs.setup_matrix.outputs.pytorch_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -148,8 +184,10 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -159,7 +197,27 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
+      build_runs_on: ${{ inputs.build_runs_on }}
       # The reusable build workflow dispatches the full PyTorch test suite for
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+
+  notify_quartz_completed:
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [setup_matrix, build_pytorch_wheels]
+    name: "Quartz - completed - release PyTorch wheels"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: "Quartz - completed - release PyTorch wheels"
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_captured_outputs: ${{ toJSON(needs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

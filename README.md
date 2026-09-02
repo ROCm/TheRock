@@ -2,7 +2,9 @@
 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![Multi-arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml?query=branch%3Amain) [![Multi-arch CI ASan](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci_asan.yml?query=branch%3Amain)
 
-TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
+TheRock (The HIP Environment and ROCm Kit) is the open source build and release system for HIP and ROCm, and the top-level entry point that integrates ROCm's components into a single buildable, testable, and releasable product. Since ROCm 7.14, ROCm is built and released through TheRock, which replaces the previous monolithic release process with a modular workflow that makes ROCm components easier to build, integrate, and distribute. It is designed for ROCm contributors as well as developers, researchers, and advanced users who need access to the latest ROCm capabilities without the complexity of traditional package-based installations. The project is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info and the [FAQ](docs/faq.md) for frequently asked questions.
+
+For general information about the ROCm software platform, see the [ROCm documentation](https://rocm.docs.amd.com/).
 
 ## Features
 
@@ -10,8 +12,7 @@ TheRock includes:
 
 - Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Support for building PyTorch with ROCm from source
-  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Support for building PyTorch and JAX with ROCm from source
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
@@ -20,11 +21,11 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
+> ROCm, PyTorch, and JAX packages.
 
 ## Project status
 
-See the unified project HUD at https://therock-hud-dev.amd.com/
+See the unified project HUD at https://therock-hud.amd.com/
 
 ### Nightly release status
 
@@ -33,6 +34,7 @@ Multi-arch releases (all GPU architectures):
 | Job description                        | Status                                                                                                                                                                                                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Build ROCm artifacts/tarballs/packages | [![Multi-Arch Release](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release.yml)                                                                      |
+| ASan instrumented build                | [![Multi-Arch Release ASan](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_asan.yml)                                                       |
 | Test ROCm artifacts                    | [![Test Artifacts](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_artifacts.yml)                                                                                  |
 | Test ROCm native Linux packages        | [![Test Native Linux Packages Install](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/test_native_linux_packages_install.yml)                      |
 | PyTorch packages - Linux build/test    | [![Multi-Arch Release Linux PyTorch Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_pytorch_wheels.yml)       |
@@ -41,6 +43,9 @@ Multi-arch releases (all GPU architectures):
 | JAX packages - Linux build/test        | [![Multi-Arch Release Linux JAX Wheels](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml/badge.svg)](https://github.com/ROCm/rockrel/actions/workflows/multi_arch_release_linux_jax_wheels.yml)                   |
 
 ## Building from source
+
+> [!WARNING]
+> **Disk Space and Build Time Requirements:** Building from source requires approximately 200 GB of free disk space and can take multiple hours to compile. Builds will fail if you run out of space.
 
 We keep the following instructions for recent, commonly used operating system
 versions. Most build failures are due to minor operating system differences in
@@ -77,6 +82,11 @@ cd TheRock
 # https://github.com/ROCm/TheRock/blob/main/docs/environment_setup_guide.md#patchelf
 sudo apt install curl make
 sudo env INSTALL_PREFIX=/usr/local ./dockerfiles/install_pinned_patchelf.sh
+
+# Install Rust 1.95 for the Mirage emulator build
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+  sh -s -- --default-toolchain 1.95.0
+source "$HOME/.cargo/env"
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
@@ -150,7 +160,7 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 
 You can install the `rocm` Python package for any architecture inside a venv and run `offload-arch` from there:
 
-1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
+1. `python build_tools/setup_venv.py --index-name nightly --packages rocm .tmpvenv`
 1. `.tmpvenv/bin/offload-arch` on Linux, `.tmpvenv\Scripts\offload-arch` on Windows
 1. `rm -rf .tmpvenv`
 
@@ -159,19 +169,20 @@ You can install the `rocm` Python package for any architecture inside a venv and
 By default, the project builds everything available. The following group flags
 enable/disable selected subsets:
 
-| Group flag                         | Description                          |
-| ---------------------------------- | ------------------------------------ |
-| `-DTHEROCK_ENABLE_ALL=OFF`         | Disables all optional components     |
-| `-DTHEROCK_ENABLE_CORE=OFF`        | Disables all core components         |
-| `-DTHEROCK_ENABLE_COMM_LIBS=OFF`   | Disables all communication libraries |
-| `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF` | Disables all debug tools             |
-| `-DTHEROCK_ENABLE_MATH_LIBS=OFF`   | Disables all math libraries          |
-| `-DTHEROCK_ENABLE_ML_LIBS=OFF`     | Disables all ML libraries            |
-| `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                   |
-| `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools           |
-| `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries         |
-| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts       |
-| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools              |
+| Group flag                         | Description                            |
+| ---------------------------------- | -------------------------------------- |
+| `-DTHEROCK_ENABLE_ALL=OFF`         | Disables all optional components       |
+| `-DTHEROCK_ENABLE_CORE=OFF`        | Disables all core components           |
+| `-DTHEROCK_ENABLE_COMM_LIBS=OFF`   | Disables all communication libraries   |
+| `-DTHEROCK_ENABLE_CV_LIBS=OFF`     | Disables all computer vision libraries |
+| `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF` | Disables all debug tools               |
+| `-DTHEROCK_ENABLE_MATH_LIBS=OFF`   | Disables all math libraries            |
+| `-DTHEROCK_ENABLE_ML_LIBS=OFF`     | Disables all ML libraries              |
+| `-DTHEROCK_ENABLE_PROFILER=OFF`    | Disables profilers                     |
+| `-DTHEROCK_ENABLE_DC_TOOLS=OFF`    | Disables data center tools             |
+| `-DTHEROCK_ENABLE_MEDIA_LIBS=OFF`  | Disables all media libraries           |
+| `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts         |
+| `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools                |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -209,10 +220,12 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCALUTION=ON`       | Enables rocALUTION                                  |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)          |
 | `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                                   |
-| `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs (Linux only)        |
+| `-DTHEROCK_ENABLE_HIPTHREADS=ON`       | Enables hipThreads                                  |
+| `-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON` | Enables AMD Mesa for media libs                     |
 | `-DTHEROCK_ENABLE_ROCDECODE=ON`        | Enables rocDecode video decoder (Linux only)        |
 | `-DTHEROCK_ENABLE_ROCJPEG=ON`          | Enables rocJPEG JPEG decoder (Linux only)           |
 | `-DTHEROCK_ENABLE_ROCJITSU=ON`         | Enables ROCm emulation tools (Linux only)           |
+| `-DTHEROCK_ENABLE_RPP=ON`              | Enables RPP (Windows: experimental, off by default) |
 
 hipDNN provider plugins:
 
@@ -342,13 +355,16 @@ with ctest:
 ctest --test-dir build
 ```
 
-Testing functionality on an actual GPU is in progress and will be documented
-separately.
+See [TESTING.md](/TESTING.md#testing-changes-to-rocm-subprojects-with-therock)
+for more details about testing.
 
 ## Development manuals
 
 - [FAQ](docs/faq.md): Frequently asked questions for TheRock users.
-- [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
+- [GOVERNANCE.md](GOVERNANCE.md): The governance model, contributor roles, common contribution guidelines, and code of conduct shared across ROCm repositories.
+- [SECURITY.md](SECURITY.md): How to report a security vulnerability.
+- [TESTING.md](TESTING.md): Testing policies for TheRock itself and ROCm subprojects.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
 - [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.

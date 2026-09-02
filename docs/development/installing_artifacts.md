@@ -38,6 +38,7 @@ Choose one of these options to specify where to install from:
 | `--hipdnn`      | Flag | Include hipDNN artifacts                           |
 | `--hiptensor`   | Flag | Include hipTensor artifacts                        |
 | `--libhipcxx`   | Flag | Include libhipcxx artifacts                        |
+| `--hipthreads`  | Flag | Include hipThreads artifacts                       |
 | `--miopen`      | Flag | Include MIOpen artifacts                           |
 | `--prim`        | Flag | Include primitives artifacts                       |
 | `--rand`        | Flag | Include random number generator artifacts          |
@@ -45,8 +46,10 @@ Choose one of these options to specify where to install from:
 | `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
+| `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
 | `--rocalution`  | Flag | Include rocALUTION artifacts                       |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
+| `--rpp`         | Flag | Include RPP artifacts                              |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]
@@ -141,29 +144,34 @@ python build_tools/find_artifacts_for_commit.py \
 
 TheRock provides two types of release tarballs:
 
+The installer reads published release tarballs directly from the matching S3
+release bucket. The public Core tarball indexes below let users browse
+available versions and manually download tarballs. Earlier releases remain in
+the [legacy multi-arch release locations](../packaging/legacy_multi_arch_releases.md).
+
 ##### Nightly Tarballs
 
 Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYYYYMMDD`
 
 **To find and use a nightly release:**
 
-1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/index.html)
+1. Visit the [nightly Core tarball index](https://nightly.repo.amd.com/rocm/core/tarball/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
-   - Example: `therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-all-10.1.0a20260823.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
-   - In the example above, the version is: `7.11.0a20251124`
+   - In the example above, the version is: `10.1.0a20260823`
 1. Use this version string with `--release`:
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
-       --release 7.11.0a20251124 \
+       --release 10.1.0a20260823 \
        --amdgpu-family gfx110X-all
    ```
 
 **Version format:** `X.Y.ZaYYYYMMDD`
 
-- `X.Y.Z` = ROCm version (e.g., `7.11.0`)
+- `X.Y.Z` = ROCm version (e.g., `10.1.0`)
 - `a` = alpha version
-- `YYYYMMDD` = build date (e.g., `20251124` = November 24, 2025)
+- `YYYYMMDD` = build date (e.g., `20260823` = August 23, 2026)
 
 ##### Dev Tarballs
 
@@ -171,27 +179,23 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 
 **To find and use a dev release:**
 
-1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/index.html)
+1. Visit the [dev Core tarball index](https://dev.repo.amd.com/rocm/core/tarball/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
-   - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
+   - Example: `therock-dist-linux-gfx94X-dcgpu-10.1.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
-   - In the example above, the version is: `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
+   - In the example above, the version is: `10.1.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
 1. Use this version string with `--release`:
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
-       --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
+       --release 10.1.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
        --amdgpu-family gfx94X-dcgpu
    ```
 
 **Version format:** `X.Y.Z.dev0+{HASH}`
 
-- `X.Y.Z` = ROCm version (e.g., `6.4.0`)
+- `X.Y.Z` = ROCm version (e.g., `10.1.0`)
 - `dev0` = development build indicator
 - `{HASH}` = full Git commit hash (40 characters)
-
-> [!TIP]
-> You can browse the S3 buckets directly in your browser to see all available versions and GPU families.
-> The version string to use with `--release` is always the portion of the filename between the GPU family and `.tar.gz`.
 
 #### Using The Latest Release
 

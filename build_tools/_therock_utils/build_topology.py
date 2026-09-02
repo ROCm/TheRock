@@ -8,9 +8,11 @@ This module provides classes and utilities for parsing BUILD_TOPOLOGY.toml
 and computing artifact dependencies for sharded build pipelines.
 """
 
+import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 
 def get_topology(topology_path: Optional[Path] = None) -> "BuildTopology":
@@ -114,12 +116,24 @@ class Artifact:
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
+    disable_platforms_if_flags_not_set: Dict[str, str] = field(
+        default_factory=dict
+    )  # Platforms disabled unless the named build flag is set
+    disable_processors: List[str] = field(
+        default_factory=list
+    )  # CPU processors where disabled (canonical: x86_64, aarch64, ppc64le)
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
     split_databases: List[str] = field(
         default_factory=list
     )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
+    test_artifacts: List[str] = field(
+        default_factory=list
+    )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
+    source_paths: List[str] = field(
+        default_factory=list
+    )  # Monorepo source paths for granular CI reuse (e.g., ["rocblas", "hipblas"])
 
 
 class BuildTopology:
@@ -207,6 +221,16 @@ class BuildTopology:
                     f"Artifact '{artifact_name}' python_requires must be a list, "
                     f"got {type(python_requires).__name__}"
                 )
+            disable_platforms_if_flags_not_set = artifact_data.get(
+                "disable_platforms_if_flags_not_set", {}
+            )
+            if disable_platforms_if_flags_not_set and not isinstance(
+                disable_platforms_if_flags_not_set, dict
+            ):
+                raise ValueError(
+                    f"Artifact '{artifact_name}' disable_platforms_if_flags_not_set "
+                    f"must be a table, got {type(disable_platforms_if_flags_not_set).__name__}"
+                )
             self.artifacts[artifact_name] = Artifact(
                 name=artifact_name,
                 artifact_group=artifact_data.get("artifact_group", ""),
@@ -216,8 +240,12 @@ class BuildTopology:
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
+                disable_platforms_if_flags_not_set=disable_platforms_if_flags_not_set,
+                disable_processors=artifact_data.get("disable_processors", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
+                test_artifacts=artifact_data.get("test_artifacts", []),
+                source_paths=artifact_data.get("source_paths") or [artifact_name],
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -231,6 +259,33 @@ class BuildTopology:
     def get_artifacts(self) -> List[Artifact]:
         """Get all artifacts."""
         return list(self.artifacts.values())
+
+    def is_artifact_disabled_on_platform(
+        self,
+        artifact: Artifact,
+        platform_name: str,
+        enabled_flags: Optional[Set[str]] = None,
+    ) -> bool:
+        """Return whether an artifact is disabled for a platform and flag set."""
+        if not platform_name:
+            return False
+        if platform_name in artifact.disable_platforms:
+            return True
+        required_flag = artifact.disable_platforms_if_flags_not_set.get(platform_name)
+        if not required_flag:
+            return False
+        enabled_flags = enabled_flags or set()
+        return required_flag not in enabled_flags
+
+    def is_artifact_disabled_on_processor(
+        self,
+        artifact: Artifact,
+        processor_name: str,
+    ) -> bool:
+        """Return whether an artifact is disabled for a CPU processor."""
+        if not processor_name:
+            return False
+        return processor_name in artifact.disable_processors
 
     def get_artifact_feature_name(self, artifact: Artifact) -> str:
         """Get the effective feature name for an artifact."""
@@ -362,8 +417,6 @@ class BuildTopology:
         Returns:
             List of validation error messages
         """
-        import re
-
         errors = []
 
         # Pattern for entity names: lowercase letters, numbers, and hyphens
@@ -375,6 +428,7 @@ class BuildTopology:
         valid_stage_types = {"generic", "per-arch"}
         valid_artifact_types = {"target-neutral", "target-specific"}
         valid_platforms = {"windows", "linux"}
+        valid_processors = {"x86_64", "aarch64", "ppc64le"}
 
         # Validate build stage names and types
         for stage_name, stage in self.build_stages.items():
@@ -435,6 +489,23 @@ class BuildTopology:
                     errors.append(
                         f"Artifact '{artifact_name}' has invalid disable_platform '{platform}' "
                         f"(expected: {valid_platforms})"
+                    )
+            for platform, flag in artifact.disable_platforms_if_flags_not_set.items():
+                if platform not in valid_platforms:
+                    errors.append(
+                        f"Artifact '{artifact_name}' has invalid conditional disable_platform '{platform}' "
+                        f"(expected: {valid_platforms})"
+                    )
+                if not isinstance(flag, str) or not feature_pattern.match(flag):
+                    errors.append(
+                        f"Artifact '{artifact_name}' disable_platforms_if_flags_not_set "
+                        f"entry for '{platform}' should be UPPERCASE_WITH_UNDERSCORES"
+                    )
+            for proc in artifact.disable_processors:
+                if proc not in valid_processors:
+                    errors.append(
+                        f"Artifact '{artifact_name}' has invalid disable_processor "
+                        f"'{proc}' (expected: {valid_processors})"
                     )
 
         # Validate source set disable_platforms
@@ -1098,3 +1169,229 @@ class BuildTopology:
                         requires.append(req)
 
         return requires
+
+    def load_subproject_manifest(
+        self, manifest_path: Optional[Path] = None
+    ) -> Optional[Dict[str, List[str]]]:
+        """Load artifact_subprojects.json from manifest_path or build_tools/."""
+        if manifest_path is None:
+            manifest_path = (
+                self.toml_path.parent / "build_tools" / "artifact_subprojects.json"
+            )
+        if not manifest_path.exists():
+            return None
+        with manifest_path.open() as f:
+            return json.load(f)
+
+    def _load_json_manifest(self, filename: str) -> Optional[Dict]:
+        """Load a JSON manifest file from build_tools/."""
+        manifest_path = self.toml_path.parent / "build_tools" / filename
+        if not manifest_path.exists():
+            return None
+        with manifest_path.open() as f:
+            return json.load(f)
+
+    def _load_project_mappings(self) -> Optional[Dict]:
+        """Load project_mappings.json from build_tools/."""
+        return self._load_json_manifest("project_mappings.json")
+
+    def get_subproject_to_feature_map(
+        self, build_dir: Optional[Path] = None
+    ) -> Dict[str, str]:
+        """Map subproject names directly to feature names."""
+        feature_map: Dict[str, str] = {}
+        mappings = self._load_project_mappings()
+        if mappings and "subproject_features" in mappings:
+            for subproject, feature in mappings["subproject_features"].items():
+                feature_map[subproject.lower()] = feature
+        return feature_map
+
+    def get_alias_to_artifact_map(
+        self, build_dir: Optional[Path] = None
+    ) -> Dict[str, str]:
+        """Map subproject/artifact names to artifact names."""
+        alias_map: Dict[str, str] = {}
+
+        manifest = None
+        if build_dir:
+            build_manifest = build_dir / "artifact_subprojects.json"
+            if build_manifest.exists():
+                manifest = self.load_subproject_manifest(build_manifest)
+        if manifest is None:
+            manifest = self.load_subproject_manifest()
+
+        for artifact in self.artifacts.values():
+            alias_map[artifact.name.lower()] = artifact.name
+
+            if manifest and artifact.name in manifest:
+                for alias in manifest[artifact.name]:
+                    alias_lower = alias.lower()
+                    if alias_lower not in alias_map or alias_lower == artifact.name:
+                        alias_map[alias_lower] = artifact.name
+
+            for db_name in artifact.split_databases:
+                alias_map[db_name.lower()] = artifact.name
+
+            # Include source_paths mappings from BUILD_TOPOLOGY.toml
+            for source_path in artifact.source_paths:
+                source_path_lower = source_path.lower()
+                if source_path_lower not in alias_map:
+                    alias_map[source_path_lower] = artifact.name
+
+        return alias_map
+
+    def resolve_alias_to_artifact(
+        self, alias: str, build_dir: Optional[Path] = None
+    ) -> Optional[str]:
+        """Resolve an alias (artifact name, source_path, or subproject) to its canonical artifact name."""
+        return self.get_alias_to_artifact_map(build_dir).get(alias.lower())
+
+    def resolve_artifacts_to_features(
+        self,
+        artifact_names: List[str],
+        platform_name: str = "",
+        build_dir: Optional[Path] = None,
+        processor_name: str = "",
+    ) -> Set[str]:
+        """Resolve artifact names/aliases to CMake feature names."""
+        features: Set[str] = set()
+        feature_map = self.get_subproject_to_feature_map(build_dir)
+        alias_map = self.get_alias_to_artifact_map(build_dir)
+
+        for artifact in artifact_names:
+            artifact_lower = artifact.lower()
+
+            # First check direct subproject -> feature mapping
+            if artifact_lower in feature_map:
+                features.add(feature_map[artifact_lower])
+                continue
+
+            # Fall back to artifact mapping
+            artifact_name = alias_map.get(artifact_lower)
+            if artifact_name and artifact_name in self.artifacts:
+                artifact = self.artifacts[artifact_name]
+                if platform_name and platform_name in artifact.disable_platforms:
+                    continue
+                if self.is_artifact_disabled_on_processor(artifact, processor_name):
+                    continue
+                features.add(self.get_artifact_feature_name(artifact))
+
+        return features
+
+    def get_stage_for_artifact(self, artifact_name: str) -> Optional[str]:
+        """Get the build stage that produces a given artifact."""
+        if artifact_name not in self.artifacts:
+            return None
+        artifact = self.artifacts[artifact_name]
+        artifact_group = artifact.artifact_group
+
+        for stage in self.build_stages.values():
+            if artifact_group in stage.artifact_groups:
+                return stage.name
+        return None
+
+    def get_stages_for_artifacts(
+        self,
+        artifact_names: List[str],
+        build_dir: Optional[Path] = None,
+    ) -> Set[str]:
+        """Get build stages required to build the given artifacts."""
+        # Resolve artifact aliases to canonical artifact names
+        alias_map = self.get_alias_to_artifact_map(build_dir)
+        required_artifacts: Set[str] = set()
+        for artifact in artifact_names:
+            canonical_name = alias_map.get(artifact.lower())
+            if canonical_name:
+                required_artifacts.add(canonical_name)
+
+        # Also include test_artifacts for each required artifact
+        artifacts_to_process = list(required_artifacts)
+        while artifacts_to_process:
+            artifact_name = artifacts_to_process.pop()
+            if artifact_name not in self.artifacts:
+                continue
+            artifact = self.artifacts[artifact_name]
+            for test_artifact in artifact.test_artifacts:
+                if test_artifact not in required_artifacts:
+                    required_artifacts.add(test_artifact)
+                    artifacts_to_process.append(test_artifact)
+
+        # Get stages that produce these artifacts
+        required_stages: Set[str] = set()
+        for artifact_name in required_artifacts:
+            stage_name = self.get_stage_for_artifact(artifact_name)
+            if stage_name:
+                required_stages.add(stage_name)
+
+        # Include dependent stages (stages that produce artifacts we depend on)
+        # Walk the dependency chain
+        stages_to_check = list(required_stages)
+        while stages_to_check:
+            stage_name = stages_to_check.pop()
+            if stage_name not in self.build_stages:
+                continue
+            stage = self.build_stages[stage_name]
+
+            # Get all artifacts in this stage's groups
+            for group_name in stage.artifact_groups:
+                for artifact in self.get_artifacts_in_group(group_name):
+                    # Check artifact dependencies
+                    for dep_artifact_name in artifact.artifact_deps:
+                        dep_stage = self.get_stage_for_artifact(dep_artifact_name)
+                        if dep_stage and dep_stage not in required_stages:
+                            required_stages.add(dep_stage)
+                            stages_to_check.append(dep_stage)
+
+        return required_stages
+
+    def get_all_stage_names(self) -> Set[str]:
+        """Get all build stage names."""
+        return set(self.build_stages.keys())
+
+    def get_source_path_to_artifact_map(self) -> Dict[str, str]:
+        """Return {source_path_name: artifact_name} mapping."""
+        mapping: Dict[str, str] = {}
+        for artifact_name, artifact in self.artifacts.items():
+            for source_path in artifact.source_paths:
+                mapping[source_path] = artifact_name
+        return mapping
+
+    def get_artifact_for_source_path(self, source_path_name: str) -> Optional[str]:
+        """Look up artifact name for a source path directory name."""
+        return self.get_source_path_to_artifact_map().get(source_path_name)
+
+    def get_source_sets_with_source_paths(self) -> List[str]:
+        """Get source sets that support granular artifact analysis."""
+        source_sets: Set[str] = set()
+        for group in self.artifact_groups.values():
+            for artifact in self.get_artifacts_in_group(group.name):
+                if artifact.source_paths:
+                    source_sets.update(group.source_sets)
+        return sorted(source_sets)
+
+    def get_all_artifacts_for_source_set(self, source_set_name: str) -> FrozenSet[str]:
+        """Get all artifacts with source_paths for a source set."""
+        artifacts: Set[str] = set()
+        for group_name, group in self.artifact_groups.items():
+            if source_set_name in group.source_sets:
+                for artifact in self.get_artifacts_in_group(group_name):
+                    if artifact.source_paths:
+                        artifacts.add(artifact.name)
+        return frozenset(artifacts)
+
+    @staticmethod
+    def extract_source_path_from_path(path: str) -> Optional[str]:
+        """Extract source path name from projects/NAME/... or shared/NAME/... path."""
+        match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
+        return match.group(1) if match else None
+
+    def get_artifact_for_path(self, path: str) -> Optional[str]:
+        """Map submodule path to artifact. Returns None if source path not found."""
+        source_path = self.extract_source_path_from_path(path)
+        return self.get_artifact_for_source_path(source_path) if source_path else None
+
+    @staticmethod
+    def parse_changed_path(changed_path: str) -> Tuple[Optional[str], Optional[str]]:
+        """Split 'submodule/path' into (submodule, path)."""
+        parts = changed_path.split("/", 1)
+        return (parts[0], parts[1]) if len(parts) >= 2 else (changed_path, "")

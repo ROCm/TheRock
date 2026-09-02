@@ -88,7 +88,7 @@ def build_rocm_python_test_matrix(
         # [
         #   {
         #     "amdgpu_family": "gfx94X-dcgpu",
-        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
         #     "python_version": "3.10",
         #     "container_image_name": "ubuntu24.04",
         #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:..."
@@ -103,7 +103,7 @@ def build_rocm_python_test_matrix(
         #   ...
         #   {
         #     "amdgpu_family": "gfx94X-dcgpu",
-        #     "test_runs_on": "linux-gfx942-1gpu-core42-ossci-rocm",
+        #     "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
         #     "python_version": "3.12",
         #     "container_image_name": "ubi10",
         #     "container_image_url": "ghcr.io/rocm/no_rocm_image_ubi10@sha256:..."
@@ -111,12 +111,18 @@ def build_rocm_python_test_matrix(
         # ]
         for environment in test_environments:
             test_runs_on = _select_test_runs_on(family_info)
+            # These row keys are the contract with workflow files which use them
+            # via matrix.<key> expressions. Empty values are allowed when the
+            # workflow handles them explicitly, but undefined keys are not.
             matrix.append(
                 {
                     "amdgpu_family": amdgpu_family,
                     "test_runs_on": test_runs_on,
                     "python_version": environment.python_version,
                     "container_image_name": environment.container_image_name,
+                    # container_image_url is intentionally empty for native
+                    # Windows test environments and non-empty for Linux
+                    # container test environments.
                     "container_image_url": environment.container_image_url,
                 }
             )

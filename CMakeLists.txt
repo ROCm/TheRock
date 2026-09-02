@@ -125,6 +125,8 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_ENABLE_HOTSWAP "Enables the comgr hotswap transpiler/tool and loads it in the runtime via HSA_TOOLS_LIB" ON)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
+set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
@@ -184,23 +186,6 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   endif()
 endblock()
 
-# Various things need to be lined up across layers to precisely match the HIP version.
-# The only source of truth for this is from the HIP/VERSION file, so we parse it the
-# same way that clr does. While this *should* generally match the ROCM version, at
-# least from a major/minor perspective, the ROCM version is a "user" version, whereas
-# the HIP version is hardcoded into various places in the code.
-block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
-  set(VERSION_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip/VERSION")
-  if(NOT EXISTS "${VERSION_PATH}")
-    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
-  endif()
-  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
-  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
-  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
-  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
-  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
-endblock()
-
 ################################################################################
 # Feature flags
 # Project wide flags for controlling the build system.
@@ -236,6 +221,14 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
 option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
+# Computer vision libraries (RPP) build on Linux by default. On Windows they are
+# experimental and disabled by default, but can be opted into explicitly with
+# -DTHEROCK_ENABLE_CV_LIBS=ON (or -DTHEROCK_ENABLE_RPP=ON).
+if(WIN32)
+  option(THEROCK_ENABLE_CV_LIBS "Enable building of computer vision libraries" OFF)
+else()
+  option(THEROCK_ENABLE_CV_LIBS "Enable building of computer vision libraries" "${THEROCK_ENABLE_ALL}")
+endif()
 option(THEROCK_ENABLE_STORAGE_LIBS "Enable building of storage libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DEBUG_TOOLS "Enable building the ROCm debug tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
@@ -264,9 +257,10 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
+#     The ROCR-Runtime/rocminfo payload in core-runtime can be enabled
+#     experimentally with THEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-# Platform-specific dependencies are handled automatically by therock_add_feature()
-# which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
+# Platform-specific dependencies are handled automatically by therock_add_feature().
 
 # Optional sub-features that control behavior within artifacts
 cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
@@ -380,6 +374,7 @@ set(THEROCK_BUNDLED_HWLOC)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
+set(THEROCK_BUNDLED_LIBIBERTY)
 set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_LIBMNL)
 set(THEROCK_BUNDLED_LIBNL)
@@ -406,6 +401,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+    set(THEROCK_BUNDLED_LIBIBERTY therock-libiberty)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_LIBMNL therock-libmnl)
     set(THEROCK_BUNDLED_LIBNL therock-libnl)
@@ -467,6 +463,15 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      # meson is only needed to build the amd-mesa/libva sysdep; gate the
+      # requirement so bundled-sysdeps builds without mesa don't need it.
+      find_program(MESON_BUILD meson)
+      if(NOT MESON_BUILD)
+        message(FATAL_ERROR "Building with THEROCK_ENABLE_SYSDEPS_AMD_MESA=ON on Windows requires `meson` (easiest: `pip install meson`)")
+      endif()
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()
@@ -492,10 +497,18 @@ endif()
 # don't be fooled).
 add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
+add_subdirectory(third-party/googletest)
 add_subdirectory(compiler)
 add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
+# media-libs (rocdecode/rocjpeg) must be added before profiler: rocprofiler-sdk
+# performs optional find_package(rocdecode)/find_package(rocjpeg) for trace
+# feature detection.
+add_subdirectory(media-libs)
+# storage-libs (hipfile) must be added before profiler: rocprofiler-sdk performs
+# optional find_package(hipfile) for hipFILE trace feature detection.
+add_subdirectory(storage-libs)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -504,10 +517,9 @@ add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
-add_subdirectory(storage-libs)
+add_subdirectory(cv-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
@@ -535,3 +547,9 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
+
+# Write artifact→subprojects manifest for Python scripts to use
+therock_write_subproject_manifest()
+
+include(therock_emit_consumer_graph)
+therock_emit_consumer_graph("${CMAKE_BINARY_DIR}/therock_consumer_graph.json")

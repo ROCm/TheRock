@@ -1,95 +1,51 @@
-# TheRock PR Bot — Policy FAQ Document
+# TheRock PR Bot — Policy FAQ Doc
+
+**TheRock PR Bot** is an automated Pull Request (PR) gatekeeper.
+On every Pull Request, it runs a set of policy checks — PR description,
+forbidden files, unit tests, and required CI checks — then posts a single
+results table comment summarising what passed or failed.
+PRs that fail key checks are flagged with a **`Not ready to Review`** label
+until the issues are resolved.
+
+It helps save time on the **first level of PR review** by automating the basic
+checks a reviewer would otherwise perform manually, reducing first-pass review
+time. Reviewers can filter out **`Not ready to Review`** PRs from their pending
+review list and only start reviewing once that label has been removed — i.e.
+once all policy checks have passed.
 
 This document explains what each policy check means, why it exists, and how to fix a failure.
 
-______________________________________________________________________
-
-## 🌿 Branch Name
-
-**What does it check?**
-Your branch name must follow the agreed naming convention so PRs are easy to trace back to a contributor and topic.
-
-**Allowed formats**
-
-| Pattern                                  | Example                                               |
-| ---------------------------------------- | ----------------------------------------------------- |
-| `users/<username>/<feature-or-bug-name>` | `users/chi/ucicd_setup_visible_devices`               |
-| `<namespace>/<feature-or-bug-name>`      | `samathew121/docker`                                  |
-| `<single-segment-name>`                  | `bump-rocm-libraries-936a6c7`                         |
-| `dependabot/<ecosystem>/<dependency>`    | `dependabot/github_actions/github-actions-3dfd2199fc` |
-| `revert-<pr-number>-<original-branch>`   | `revert-5217-users/derobins/add_hipfile_support`      |
-
-Rules:
-
-- `username` — lowercase letters, digits, hyphens only.
-- `branch name` — lowercase letters, digits, hyphens, underscores only.
-
-**How to fix**
-Rename your branch before opening the PR:
-
-```bash
-git branch -m old-name users/<your-username>/<topic>
-git push origin -u users/<your-username>/<topic>
-```
+> **Note:** This is **NOT an AI Bot and does not use any LLMs**. It is a
+> deterministic, rule-based checker driven entirely by `policy.yml`.
 
 ______________________________________________________________________
 
-## 📝 PR Title
+## 🙋 Wish to Override the Policy Process and get unblocked?
 
-**What does it check?**
-The PR title must follow **Conventional Commits** style so the changelog and release notes can be generated automatically.
+Contact CODEOWNERS or supporters channel - (DevOps - Support or Help)
 
-> **Note:** In the results table, the title and description checks are reported together as a single **PR Title/Description** row. Any title *or* description failure shows up there.
+## 🙋 For any policy related feedback?
 
-**Required format**
+please reach out to the **ROCm Policy Council**.
 
-```
-type(optional-scope): short description
-```
+📧 **Drop a mail to:** `rocm-repo-policy@amd.com` (ROCm Policy Council DLL)
 
-**Allowed types**
+Include your PR link, the check(s) you want overridden, and a short
+justification so the council can review your request.
 
-| Type       | When to use                              |
-| ---------- | ---------------------------------------- |
-| `feat`     | A new feature                            |
-| `fix`      | A bug fix                                |
-| `docs`     | Documentation only changes               |
-| `style`    | Formatting, whitespace — no logic change |
-| `refactor` | Code restructure — no feature or fix     |
-| `perf`     | Performance improvement                  |
-| `test`     | Adding or fixing tests                   |
-| `build`    | Build system or dependency changes       |
-| `ci`       | CI / workflow changes                    |
-| `chore`    | Maintenance tasks                        |
-| `revert`   | Reverting a previous commit              |
+## ✅ Skip the PR Bot entirely (`@skip-pr-bot`)
 
-**Length rules**
+If you want to opt a PR **out of the bot completely**, add the tag
+**`@skip-pr-bot`** anywhere in the PR description. When present:
 
-- Minimum: **10** characters
-- Maximum: **80** characters
+- The bot runs **no policy checks** at all.
+- Any existing **`Not ready to Review`** label is **removed**.
+- The bot posts a short notice:
+  *"Author chose to skip pr bot run hence removing label."*
 
-**Forbidden words** — titles containing `WIP` or `do not merge` are blocked.
-
-**How to fix**
-Edit the PR title on GitHub (top of the PR page → pencil icon) to match the format, e.g.:
-
-```
-feat(auth): add token refresh support
-fix(ci): correct codeql workflow trigger
-```
-
-______________________________________________________________________
-
-## 🚫 Draft PR
-
-> **Status: 🔜 To Be Enabled.** This check is planned but **not yet enforced**.
-> It currently shows as *To Be Enabled* in the results table and never fails a PR.
-
-**What it will check (once enabled)**
-Draft PRs (and PRs with `WIP` / `do not merge` in the title) will be blocked from passing policy, so reviews are only requested on finished work.
-
-**How to prepare**
-Click **"Ready for review"** on the GitHub PR page once your work is complete, and remove any `WIP` prefix from the title.
+This works both when the tag is present at PR creation **and** when it is added
+later via a description edit. Removing the tag (and pushing/editing again)
+re-enables the normal checks.
 
 ______________________________________________________________________
 
@@ -99,25 +55,32 @@ ______________________________________________________________________
 The PR body (description) must be at least **30 characters** long **and** reference a tracking item (JIRA ID or ISSUE ID).
 An empty or one-line description makes it hard for reviewers to understand the context.
 
-**Required tracking reference** — include **one** of the following lines:
+**Required tracking reference** — include **one** of the following. Type the line
+**exactly as shown, without surrounding backticks**:
 
-| Field      | Example                                                  |
-| ---------- | -------------------------------------------------------- |
-| `JIRA ID`  | `JIRA ID : TESTAUTO-6039`                                |
-| `JIRA ID`  | `JIRA ID - #330`                                         |
-| `JIRA ID`  | `JIRA ID #330`                                           |
-| `ISSUE ID` | `ISSUE ID : TESTUTO-3334`                                |
-| `ISSUE ID` | `ISSUE ID - TESTAUTO-3433`                               |
-| `ISSUE ID` | `ISSUE ID : https://github.com/abc/abc_repo/issues/1234` |
+| Type             | Example                                                |
+| ---------------- | ------------------------------------------------------ |
+| JIRA ID          | JIRA ID : TESTAUTO-6039                                |
+| JIRA ID          | JIRA ID - #330                                         |
+| JIRA ID          | JIRA ID #330                                           |
+| ISSUE ID         | ISSUE ID : TESTUTO-3334                                |
+| ISSUE ID         | ISSUE ID - TESTAUTO-3433                               |
+| ISSUE ID (link)  | ISSUE ID : https://github.com/abc/abc_repo/issues/1234 |
+| Closing keyword  | Closes #10                                             |
+| Closing keyword  | Fixes octo-org/octo-repo#100                           |
+| Closing keyword  | Resolves: #123                                         |
+| GitHub issue     | #123                                                   |
+| GitHub issue URL | https://github.com/abc/abc_repo/issues/123             |
 
-> **Note:** The separator is **optional** and may be `:` or `-` (`JIRA ID #330`, `JIRA ID : #330`, and `JIRA ID - #330` all work). Each field accepts a JIRA key (`PREFIX-<number>` — any project), a number (with or without `#`), or a link.
+> **Note:** For `JIRA ID` / `ISSUE ID`, the separator is **optional** and may be `:` or `-` (`ISSUE ID #330`, `ISSUE ID : #330`, and `ISSUE ID - #330` all work). Each accepts a JIRA key (`PREFIX-<number>` — any project), a number (with or without `#`), or a link.
+>
+> **Closing keywords** (case-insensitive, optional colon): `close` / `closes` / `closed`, `fix` / `fixes` / `fixed`, `resolve` / `resolves` / `resolved` — followed by `#<number>` or `<org>/<repo>#<number>`.
 
 **How to fix**
 Edit the PR description and explain:
 
 - *What* changed and *why*.
-- A `JIRA ID :` or `ISSUE ID :` line referencing the tracking item (required).
-- Any related issue numbers (`Fixes #123`).
+- A tracking reference from the table above (required) — e.g. a `JIRA ID :` / `ISSUE ID :` line, a `Closes #123`, or a plain `#123`.
 - Testing steps if applicable.
 
 ______________________________________________________________________
@@ -125,15 +88,14 @@ ______________________________________________________________________
 ## 📏 PR Size
 
 **What does it check?**
-Large PRs are hard to review thoroughly. Three limits are enforced:
+Large PRs are hard to review thoroughly.
 
-| Limit                   | Value | Reason                                         |
-| ----------------------- | ----- | ---------------------------------------------- |
-| Max files changed       | 50    | Avoids PRs that touch too many unrelated areas |
-| Max total changes       | 2000  | Keeps the overall diff reviewable              |
-| Max changes in one file | 700   | Flags files that may need splitting            |
+> **Note:** PR size limits are **not currently enforced** by `policy.yml`
+> (there are no `max_files_changed` / `max_total_changes` /
+> `max_single_file_changes` values configured). This section is guidance only
+> and the bot does not fail a PR on size today.
 
-**How to fix**
+**Recommended guidance**
 Split your work into smaller, focused PRs. Each PR should ideally do one thing:
 
 - One feature, one fix, or one refactor — not all three at once.
@@ -145,6 +107,12 @@ ______________________________________________________________________
 
 **What does it check?**
 Certain file types must never be committed to the repository because they can expose secrets or introduce security risks.
+
+> **⚠️ Warning-only (non-blocking):** The Forbidden Files check **never fails
+> the workflow** and **never adds the `Not ready to Review` label**. If a
+> forbidden file is present, the results table shows a **⚠️ Warning** row
+> listing the offending file(s) — but the PR Bot check stays **green**. It is a
+> reminder to remove the file, not a hard gate.
 
 | Pattern                                                  | Reason                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------- |
@@ -176,20 +144,39 @@ ______________________________________________________________________
 **What does it check?**
 PRs that change real source code must include at least one accompanying unit test.
 
+> **⚠️ Warning-only (non-blocking):** The Unit Test check **never fails the
+> workflow** and **never adds the `Not ready to Review` label**. If a code
+> change is missing a test, the results table shows a **⚠️ Warning** row
+> explaining what is missing — but the PR Bot check stays **green**. It is a
+> reminder, not a gate.
+
 **Rules**
 
 - **Doc / config-only PRs are exempt.** If your PR only touches files like
   `.md`, `.txt`, `.yml`, `.yaml`, `.ini`, the check **passes automatically** — no test required.
 - **Code PRs require a test.** If your PR changes source files such as
   `.py`, `.cpp`, `.cc`, `.c`, `.h`, `.js`, `.ts`, `.go`, `.java`, it must also
-  add a test file.
+  include changes to a test file (a new test, or edits to an existing one).
 
-**How a test file is recognised**
+**What counts as a test file?**
 
-| Pattern    | Example          |
-| ---------- | ---------------- |
-| `test_*`   | `test_parser.py` |
-| `*_test.*` | `parser_test.py` |
+- Basename matches one of: `test_*`, `testing_*`, `*_test.*`, `*_tests.*`, `*_gtest.*`, or `Test*`
+  - ✅ `test_parser.py`, `testing_parser.py`, `parser_test.cpp`, `parser_tests.cpp`, `parser_gtest.cpp`, `TestUtils.cpp`
+  - ❌ `test.py` (does NOT have the `test_` prefix)
+
+| Pattern     | Example             |
+| ----------- | ------------------- |
+| `test_*`    | `test_parser.py`    |
+| `testing_*` | `testing_parser.py` |
+| `*_test.*`  | `parser_test.cpp`   |
+| `*_tests.*` | `parser_tests.cpp`  |
+| `*_gtest.*` | `parser_gtest.cpp`  |
+| `Test*`     | `TestUtils.cpp`     |
+
+**Path-based recognition**
+Any file located under a `test/gtest/` directory is also treated as a unit
+test, regardless of its filename — e.g.
+`projects/miopen/test/gtest/unit_conv_solver_ConvWinoRageRxS.cpp`.
 
 **How to fix**
 Add a unit test for the code you changed, named `test_<something>`:
@@ -198,6 +185,9 @@ Add a unit test for the code you changed, named `test_<something>`:
 # example for Python
 touch tests/test_my_feature.py
 ```
+
+> Even though this is only a warning, adding the missing test clears the ⚠️
+> from the table.
 
 ______________________________________________________________________
 
@@ -246,29 +236,61 @@ Common findings include:
 
 ______________________________________________________________________
 
+## 🌿 Bump PRs (Automated Dependency Updates)
+
+**What is a "Bump PR"?**
+
+A **Bump PR** is an automated pull request that updates dependencies (e.g. from Dependabot or a bot like `assistant-librarian`). These PRs are routine, high-volume, and do not follow the standard PR conventions.
+
+**Why did my Bump PR skip policy checks?**
+
+When a PR is detected as a bump update from a configured bot account (e.g. `@assistant-librarian[bot]`), **all policy checks are auto-approved**. This includes:
+
+- JIRA/ISSUE ID reference requirement in Description
+- Unit test requirement
+- And all other policies
+
+This keeps automated bots from being blocked by human-oriented policy gates and prevents spam of "Not ready to Review" labels.
+
+**How does the bot know it's a Bump PR?**
+
+The PR author's login is checked against a configured list of bump bot accounts. Currently recognized:
+
+- `assistant-librarian` (and `assistant-librarian[bot]`)
+- `systems-assistant` (and `systems-assistant[bot]`)
+- `dependabot` (and `dependabot[bot]`)
+
+If a different bot opens dependency-bump PRs in your repo, request that the maintainers add it to `bump_bot_authors` in `policy.yml`.
+
+______________________________________________________________________
+
 ## General Questions
 
-### What is the "Not ready to Review" label?
+**What is the "Not ready to Review" label?**
 
-When **PR Title/Description**, **Unit Test**, or **Forbidden Files** fails, the bot adds a **`Not ready to Review`** label to the PR so it is clearly gated.
-The label is removed automatically once all policy checks pass.
-Other failures (Branch Name, PR Size, Draft PR, pre-commit, CodeQL) do **not** add the label.
+When the **JIRA/ISSUE ID reference** is missing from the PR description, the bot
+adds a **`Not ready to Review`** label to the PR so it is clearly gated.
+The label is removed automatically once that reference is added.
+The **Unit Test** check and **Forbidden Files** are (⚠️ warning-only).Other failures (
+Draft PR, pre-commit, CodeQL) do **not** add the label.
 
-### How are pre-commit and CodeQL shown?
+**How are pre-commit and CodeQL shown?**
 
 These run as separate CI workflows. The bot waits for them and folds their results into the same table — `pre-commit` and a single combined `CodeQL` row. The CodeQL row fails if CodeQL reports any error / critical / high severity alert.
 
-### The bot timed out — what do I do?
+**The bot timed out — what do I do?**
 
 If `pre-commit` or CodeQL takes longer than 15 minutes, the bot times out.
-Push an empty commit to re-trigger the workflow:
+Push an empty commit to re-trigger the workflow or close and reopen PR:
 
 ```bash
 git commit --allow-empty -m "ci: retrigger policy check"
 git push
 ```
 
-### How do I re-run the bot after fixing issues?
+**How do I re-run the bot after fixing issues?**
 
 Push any commit (including `--allow-empty`) to the PR branch.
 The `synchronize` event triggers a fresh policy check automatically.
+
+______________________________________________________________________
