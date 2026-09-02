@@ -65,6 +65,11 @@ on:
         type: string
         default: ""
         description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
+      # NOTE: The Windows and Linux CPU build-runner labels are hardcoded in
+      # the windows_build_and_test / linux_build_and_test jobs below
+      # (aws_windows_cpu_build_label / aws_linux_cpu_build_label) as a
+      # deterministic pin for this perf run, not exposed as workflow_dispatch
+      # inputs. See those jobs for available label options.
       build_python_packages:
         type: boolean
         default: true
@@ -77,6 +82,10 @@ on:
         type: boolean
         default: true
         description: "Build JAX wheels"
+      skip_gpu_tests:
+        type: boolean
+        default: false
+        description: "Skip GPU test jobs (Windows test artifacts + test python). Used for CPU-pool load testing."
       build_native_linux:
         type: boolean
         default: true
@@ -94,6 +103,9 @@ on:
       - labeled
       - opened
       - synchronize
+
+run-name: >-
+  Multi-Arch CI [linux:azure-linux-scale-rocm-v7-himem-tmp]
 
 permissions:
   contents: read
@@ -151,6 +163,9 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
       force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
+      # Linux performance run: pin the CPU build onto the Azure v7 hi-mem test pool.
+      aws_linux_cpu_build_label: azure-linux-scale-rocm-v7-himem-tmp
+      skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
       id-token: write
@@ -171,6 +186,21 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      # NO-MERGE dev/test branch: force the Windows CPU build onto the v7 SKU
+      # test pool for AWS-vs-Azure perf comparison (OSSCI-3084 pending;
+      # node pool blocked on Dadsv7 quota). Hardcoded here (deterministic pin
+      # for the perf run) rather than exposed as a workflow_dispatch input.
+      # Available labels (swap the value below to switch pools):
+      #   - azure-windows-scale-v7test                     (v7 SKU test pool)
+      #   - azure-windows-scale-rocm                       (Azure prod)
+      #   - aws-windows-scale-rocm-prod                    (AWS prod)
+      #   - aws-windows-scale-rocm-prod-mix                (AWS prod mixed)
+      #   - aws-windows-scale-rocm-customer-dev-g624xl     (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-g616xl     (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-m8a24xl    (AWS customer-dev)
+      #   - aws-windows-scale-rocm-customer-dev-m8azn24xl  (AWS customer-dev)
+      aws_windows_cpu_build_label: azure-windows-scale-v7test
+      skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
       id-token: write
