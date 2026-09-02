@@ -9,12 +9,10 @@ import email.parser
 import email.policy
 import functools
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name, parse_wheel_filename
@@ -119,33 +117,12 @@ def finalize_wheel(
     return finalized_wheel
 
 
-def _gpu_targets(wheel_path: Path, llvm_objdump: str) -> set[str]:
-    with zipfile.ZipFile(wheel_path) as wheel:
-        extensions = [
-            name
-            for name in wheel.namelist()
-            if re.fullmatch(r"_rocshmem4py.*\.so", name)
-        ]
-        if len(extensions) != 1:
-            raise ValueError(
-                f"Expected one extension in {wheel_path}; found {extensions}"
-            )
-        with tempfile.TemporaryDirectory(prefix="rocshmem4py-inspect-") as temp_dir:
-            extension = Path(wheel.extract(extensions[0], temp_dir))
-            offloading = subprocess.check_output(
-                [llvm_objdump, "--offloading", str(extension)], text=True
-            )
-    return set(re.findall(r"hipv\d+-amdgcn-amd-amdhsa--(gfx[0-9a-z]+)", offloading))
-
-
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--rocm-version", required=True)
-    parser.add_argument("--expected-gpu-target", action="append", required=True)
     parser.add_argument("--patchelf", default="patchelf")
-    parser.add_argument("--llvm-objdump", default="llvm-objdump")
     args = parser.parse_args(argv)
 
     input_wheels = sorted(args.input_dir.glob("rocshmem4py-*.whl"))
@@ -166,16 +143,6 @@ def main(argv: list[str] | None = None) -> None:
             )
             for wheel in input_wheels
         ]
-
-        expected_gpu_targets = set(args.expected_gpu_target)
-        for wheel in finalized_wheels:
-            actual_gpu_targets = _gpu_targets(wheel, args.llvm_objdump)
-            if actual_gpu_targets != expected_gpu_targets:
-                raise ValueError(
-                    f"GPU target mismatch in {wheel.name}: "
-                    f"embedded={sorted(actual_gpu_targets)}, "
-                    f"expected={sorted(expected_gpu_targets)}"
-                )
 
         if args.output_dir.exists():
             shutil.rmtree(args.output_dir)

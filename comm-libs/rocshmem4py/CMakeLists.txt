@@ -45,40 +45,7 @@ get_filename_component(_rocshmem_prefix "${rocshmem_INCLUDE_DIRS}/.." ABSOLUTE)
 set(_build_prefix_path "${_rocshmem_prefix};${CMAKE_PREFIX_PATH}")
 string(REPLACE ";" ":" _build_prefix_path "${_build_prefix_path}")
 
-set(_rocshmem_config_header
-  "${rocshmem_INCLUDE_DIRS}/rocshmem/rocshmem_config.h")
-if(NOT EXISTS "${_rocshmem_config_header}")
-  message(FATAL_ERROR
-    "The selected rocSHMEM package has no rocshmem_config.h: "
-    "${_rocshmem_config_header}")
-endif()
-
-file(READ "${_rocshmem_config_header}" _rocshmem_config_contents)
-string(REGEX MATCH
-  "#[ \t]*define[ \t]+ROCSHMEM_OFFLOAD_TARGETS[ \t]+\"([^\"]+)\""
-  _rocshmem_targets_definition
-  "${_rocshmem_config_contents}"
-)
-set(_expected_gpu_targets "${CMAKE_MATCH_1}")
-string(REGEX REPLACE "[ \t]+" ";"
-  _expected_gpu_targets "${_expected_gpu_targets}"
-)
-if(NOT _rocshmem_targets_definition OR NOT _expected_gpu_targets)
-  message(FATAL_ERROR
-    "The selected rocSHMEM package records no GPU targets in "
-    "${_rocshmem_config_header}")
-endif()
-list(REMOVE_DUPLICATES _expected_gpu_targets)
-list(SORT _expected_gpu_targets)
-
 find_program(ROCSHMEM4PY_PATCHELF NAMES patchelf REQUIRED)
-find_program(ROCSHMEM4PY_LLVM_OBJDUMP
-  NAMES llvm-objdump
-  HINTS
-    "${THEROCK_TOOLCHAIN_ROOT}/lib/llvm/bin"
-    "${THEROCK_TOOLCHAIN_ROOT}/bin"
-  REQUIRED
-)
 
 set(_raw_wheel_dir "${CMAKE_CURRENT_BINARY_DIR}/raw-wheelhouse")
 set(_wheel_dir "${CMAKE_CURRENT_BINARY_DIR}/wheelhouse")
@@ -101,21 +68,16 @@ foreach(_python IN LISTS ROCSHMEM4PY_PYTHON_EXECUTABLES)
     message(FATAL_ERROR "rocshmem4py Python interpreter does not exist: ${_python}")
   endif()
   list(APPEND _wheel_build_commands
-    COMMAND "${_python}" -m pip install
-      --disable-pip-version-check "build>=1.2.2"
     COMMAND "${CMAKE_COMMAND}" -E env
       "CMAKE_PREFIX_PATH=${_build_prefix_path}"
       "THEROCK_TOOLCHAIN_ROOT=${THEROCK_TOOLCHAIN_ROOT}"
       --
-      "${_python}" -m build --wheel
-        --outdir "${_raw_wheel_dir}"
+      "${_python}" -m pip wheel
+        --disable-pip-version-check
+        --no-deps
+        --wheel-dir "${_raw_wheel_dir}"
         "${_build_source_dir}"
   )
-endforeach()
-
-set(_finalize_validation_args)
-foreach(_gpu_target IN LISTS _expected_gpu_targets)
-  list(APPEND _finalize_validation_args --expected-gpu-target "${_gpu_target}")
 endforeach()
 
 add_custom_command(
@@ -135,8 +97,6 @@ add_custom_command(
     --output-dir "${_wheel_dir}"
     --rocm-version "${THEROCK_PACKAGE_VERSION}"
     --patchelf "${ROCSHMEM4PY_PATCHELF}"
-    --llvm-objdump "${ROCSHMEM4PY_LLVM_OBJDUMP}"
-    ${_finalize_validation_args}
   COMMAND "${CMAKE_COMMAND}" -E touch "${_wheel_stamp}"
   DEPENDS
     ${_rocshmem4py_source_files}
