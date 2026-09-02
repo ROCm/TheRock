@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_primlibs_build_tests ${THEROCK_BUILD_TESTING})
 set(_primlibs_benchmark_enable ${THEROCK_BUILD_TESTING})
 set(_primlibs_benchmark_deps)
 set(_primlibs_benchmark_includes)
@@ -14,6 +15,27 @@ if(NOT WIN32)
   else()
     set(_primlibs_benchmark_deps amdsmi)
     set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
+  endif()
+endif()
+
+# ADDSPV: rocPRIM/hipCUB/rocThrust libs build fine for amdgcnspirv, but their
+# client tests/benchmarks compile device code with --offload-arch=amdgcnspirv
+# that crashes the SPIR-V backend (segfault in LLVM SPIRVEmitIntrinsics /
+# SPIRVGlobalRegistry::buildAssignPtr, e.g. rocThrust test_pair_scan.cpp).
+# EXCLUDE_TARGET_PROJECTS keeps the libs building; here we additionally drop the
+# prim-lib tests/benchmarks for a shard whose only target is amdgcnspirv, using
+# the same per-shard detection as the gates below. Non-spirv shards keep
+# tests/benchmarks. Upstream compiler bug tracked separately.
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  set(_primlibs_non_spirv_targets ${THEROCK_AMDGPU_TARGETS})
+  list(REMOVE_ITEM _primlibs_non_spirv_targets amdgcnspirv)
+  if(NOT _primlibs_non_spirv_targets)
+    message(STATUS
+      "prim-libs: shard targets '${THEROCK_AMDGPU_TARGETS}' are SPIR-V only; "
+      "disabling rocPRIM/hipCUB/rocThrust tests and benchmarks (SPIR-V backend "
+      "crashes compiling their device test code).")
+    set(_primlibs_build_tests "OFF")
+    set(_primlibs_benchmark_enable "OFF")
   endif()
 endif()
 
@@ -127,7 +149,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_BUILD_TESTING)
+  if(_primlibs_build_tests)
     ##############################################################################
     # rocPRIM tests
     ##############################################################################
@@ -174,7 +196,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=${_primlibs_build_tests}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
@@ -203,7 +225,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=${_primlibs_build_tests}
       -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
     CMAKE_INCLUDES
       ${_primlibs_benchmark_includes}
@@ -232,7 +254,7 @@ if(THEROCK_ENABLE_PRIM)
     rocThrust
   )
 
-  if(THEROCK_BUILD_TESTING)
+  if(_primlibs_build_tests)
     list(APPEND _prim_subproject_deps rocPRIM_tests)
   endif()
 
@@ -248,7 +270,27 @@ if(THEROCK_ENABLE_PRIM)
   )
 endif(THEROCK_ENABLE_PRIM)
 
-if(THEROCK_ENABLE_FFT)
+# ADDSPV: rocFFT/hipFFT are excluded for amdgcnspirv (EXCLUDE_TARGET_PROJECTS in
+# therock_amdgpu_targets.cmake), but EXCLUDE only strips device archs -- it does
+# not stop the subproject (or its clients/tests) from being declared/built. In a
+# shard whose only targets are excluded for rocFFT (e.g. the amdgcnspirv shard),
+# rocFFT still links rocfft-test and fails. Gate the whole FFT block per-shard,
+# same pattern as composable_kernel / rocWMMA below: if no gfx targets survive
+# filtering, skip rocFFT/hipFFT and the fft artifact entirely for this shard.
+# Non-spirv shards (gfx90a, etc.) are unaffected -- tests are NOT touched there.
+set(_fft_enabled ${THEROCK_ENABLE_FFT})
+if(_fft_enabled AND THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_filter_amdgpu_targets(_fft_targets rocFFT ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _fft_targets)
+    message(STATUS
+      "FFT: no supported gfx targets remain after filtering "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping "
+      "rocFFT/hipFFT and the fft artifact for this shard.")
+    set(_fft_enabled OFF)
+  endif()
+endif()
+
+if(_fft_enabled)
   if(WIN32)
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
@@ -343,7 +385,7 @@ if(THEROCK_ENABLE_FFT)
       test
     SUBPROJECT_DEPS ${_fft_subproject_names}
   )
-endif(THEROCK_ENABLE_FFT)
+endif(_fft_enabled)
 
 if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
@@ -355,6 +397,26 @@ if(THEROCK_ENABLE_ROCWMMA)
   set(_rocwmma_build_tests ${THEROCK_BUILD_TESTING})
   set(_rocwmma_enable_benchmarks ${THEROCK_ROCWMMA_ENABLE_BENCHMARKS})
   set(_rocwmma_artifact_components dbg dev lib test)
+
+  # ADDSPV: rocWMMA validates/benchmarks against rocBLAS (RUNTIME_DEPS rocBLAS +
+  # ROCWMMA_VALIDATE_WITH_ROCBLAS). In a shard where rocBLAS is excluded (e.g.
+  # amdgcnspirv) that target does not exist, so referencing it fails configure
+  # with "non-existent target rocBLAS". Make the rocBLAS dependency conditional
+  # on rocBLAS surviving the per-shard filter; the host/API rocWMMA lib itself
+  # still builds. Non-spirv shards keep validation ON.
+  set(_rocwmma_rocblas_deps rocBLAS)
+  set(_rocwmma_validate_with_rocblas ON)
+  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_rocwmma_rocblas_targets rocBLAS ${THEROCK_AMDGPU_TARGETS})
+    if(NOT _rocwmma_rocblas_targets)
+      message(STATUS
+        "rocWMMA: rocBLAS is excluded for this shard "
+        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); dropping the "
+        "rocBLAS dependency and disabling rocBLAS validation.")
+      set(_rocwmma_rocblas_deps)
+      set(_rocwmma_validate_with_rocblas OFF)
+    endif()
+  endif()
 
   # rocWMMA intentionally supports only targets with MFMA/WMMA instructions.
   # Use the same target filtering metadata as CK to recognize all-filtered
@@ -397,7 +459,7 @@ if(THEROCK_ENABLE_ROCWMMA)
       -DROCM_DIR=
       "-DROCWMMA_BUILD_SAMPLES=$<BOOL:${_rocwmma_build_samples}>"
       "-DROCWMMA_BUILD_TESTS=$<BOOL:${_rocwmma_build_tests}>"
-      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=ON"
+      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=$<BOOL:${_rocwmma_validate_with_rocblas}>"
       "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<BOOL:${_rocwmma_enable_benchmarks}>"
       "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${_rocwmma_enable_benchmarks}>"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
@@ -411,7 +473,7 @@ if(THEROCK_ENABLE_ROCWMMA)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
-      rocBLAS
+      ${_rocwmma_rocblas_deps}
       ${_rocwmma_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
@@ -430,7 +492,24 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
-if(THEROCK_ENABLE_ROCALUTION)
+# ADDSPV: rocALUTION functionally requires rocBLAS + rocSPARSE (RUNTIME_DEPS and
+# link-time). Both are excluded in the amdgcnspirv shard, so the subproject
+# can't build there and referencing them fails configure with "non-existent
+# target rocBLAS/rocSPARSE". rocALUTION is a leaf lib (nothing in-tree depends
+# on it), so gate the whole block per-shard on rocBLAS availability. Non-spirv
+# shards (gfx90a, etc.) build it as before.
+set(_rocalution_enabled ${THEROCK_ENABLE_ROCALUTION})
+if(_rocalution_enabled AND THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_filter_amdgpu_targets(_rocalution_rocblas_targets rocBLAS ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _rocalution_rocblas_targets)
+    message(STATUS
+      "rocALUTION: rocBLAS/rocSPARSE are excluded for this shard "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping rocALUTION.")
+    set(_rocalution_enabled OFF)
+  endif()
+endif()
+
+if(_rocalution_enabled)
   ##############################################################################
   # rocALUTION
   ##############################################################################
@@ -480,7 +559,7 @@ if(THEROCK_ENABLE_ROCALUTION)
     SUBPROJECT_DEPS
       rocALUTION
   )
-endif(THEROCK_ENABLE_ROCALUTION)
+endif(_rocalution_enabled)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
