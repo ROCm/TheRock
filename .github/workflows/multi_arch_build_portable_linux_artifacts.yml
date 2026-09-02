@@ -123,6 +123,8 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      # Checkout external repository with sparse checkout if changed_projects specified
+      # sparse_checkout_paths is computed by detect_external_repo_config.py from changed_projects
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
         timeout-minutes: 10
@@ -131,6 +133,8 @@ jobs:
           repository: ${{ fromJSON(inputs.external_repo_config).repository }}
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+          sparse-checkout: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_paths }}
+          sparse-checkout-cone-mode: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_paths != '' }}
 
       - name: Install python deps
         run: pip install -r requirements.txt

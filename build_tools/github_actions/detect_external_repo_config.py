@@ -70,6 +70,46 @@ def _log_warning(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
+# Essential paths that must always be checked out for any external repo build
+ESSENTIAL_CHECKOUT_PATHS = [
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    "cmake",
+    ".github/scripts",
+]
+
+
+def compute_sparse_checkout_paths(changed_projects: str) -> str:
+    """Compute sparse checkout paths from changed_projects.
+
+    Args:
+        changed_projects: Comma-separated list of changed project paths
+            (e.g., "projects/rocprim,shared/rocroller")
+
+    Returns:
+        Newline-separated string of paths for sparse checkout.
+        Empty string if changed_projects is empty (signals full checkout).
+    """
+    if not changed_projects or not changed_projects.strip():
+        return ""
+
+    # Parse changed_projects into a set
+    paths = set()
+    for project in changed_projects.split(","):
+        project = project.strip()
+        if project:
+            paths.add(project)
+
+    if not paths:
+        return ""
+
+    # Add essential paths
+    all_paths = sorted(set(ESSENTIAL_CHECKOUT_PATHS) | paths)
+
+    # Return as newline-separated string for actions/checkout sparse-checkout
+    return "\n".join(all_paths)
+
+
 def get_repo_config(repo_name: str) -> Dict[str, Any]:
     """Returns config for a known external repo name."""
     if repo_name not in REPO_CONFIGS:
@@ -365,6 +405,13 @@ def main(argv=None):
         action="store_true",
         help="List all known repository configurations",
     )
+    parser.add_argument(
+        "--changed-projects",
+        type=str,
+        default="",
+        help="Comma-separated list of changed project paths (e.g., 'projects/rocprim,shared/rocroller'). "
+        "Used to compute sparse checkout paths for the external repo.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -460,6 +507,15 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
+        # Compute sparse checkout paths from changed_projects
+        # If changed_projects is provided, only checkout those paths plus essentials
+        # If empty, sparse_checkout_paths will be empty (signals full checkout)
+        sparse_checkout_paths = compute_sparse_checkout_paths(args.changed_projects)
+        print(
+            f"Sparse checkout paths: {sparse_checkout_paths}",
+            file=sys.stderr,
+        )
+
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
@@ -469,6 +525,7 @@ def main(argv=None):
             "extra_cmake_options": extra_cmake_options,
             "projects": projects,
             "family_overrides": family_overrides,
+            "sparse_checkout_paths": sparse_checkout_paths,
         }
         config["config_json"] = json.dumps(config_json)
         print(
