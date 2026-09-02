@@ -98,6 +98,10 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
+      # Resource-usage profiling (resource_info.py as the compiler launcher) sits
+      # in the compile hot path, so it is limited to nightly/release builds. Other
+      # builds use ccache directly. See #7692.
+      ENABLE_RESOURCE_PROFILING: ${{ inputs.release_type == 'nightly' || inputs.release_type == 'release' }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
@@ -182,10 +186,16 @@ jobs:
 
       - name: Configure
         run: |
+          # resource_info.py invokes ccache internally, so it is a drop-in
+          # replacement for the ccache launcher when profiling is enabled.
+          COMPILER_LAUNCHER=ccache
+          if [ "${ENABLE_RESOURCE_PROFILING}" = "true" ]; then
+            COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py"
+          fi
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER="${COMPILER_LAUNCHER}" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="${COMPILER_LAUNCHER}" \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
@@ -225,6 +235,18 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      # Generate the per-stage build_observability.html report from this stage's
+      # .ninja_log (and comp-summary.html when resource profiling is enabled).
+      # The report lands in ${BUILD_DIR}/logs and is uploaded by "Upload stage
+      # logs" below; "Upload stage logs" then links to it from the job summary.
+      - name: Analyze build times
+        if: ${{ !cancelled() }}
+        run: |
+          if [ "${ENABLE_RESOURCE_PROFILING}" = "true" ]; then
+            python3 build_tools/resource_info.py --finalize || true
+          fi
+          python3 build_tools/analyze_build_times.py --build-dir "${BUILD_DIR}"
 
       - name: Test Packaging
         run: |

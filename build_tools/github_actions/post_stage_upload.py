@@ -43,6 +43,7 @@ THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+from github_actions_api import gha_append_step_summary
 
 
 def log(*args):
@@ -160,6 +161,29 @@ def upload_manifest(
     backend.upload_file(manifest_path, output_root.manifest_root())
 
 
+def write_gha_stage_summary(
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    stage_name: str,
+    amdgpu_family: str,
+):
+    """Append a [Build Observability] link to the stage job summary.
+
+    The report is generated per stage by analyze_build_times.py and uploaded
+    with the rest of the stage logs, so we only add the link when the HTML was
+    actually produced.
+    """
+    observability_path = build_dir / "logs" / "build_observability.html"
+    if not observability_path.is_file():
+        log("[INFO] Build Observability: Not generated")
+        return
+
+    analysis_url = output_root.build_observability_stage(
+        stage_name, amdgpu_family
+    ).https_url
+    gha_append_step_summary(f"[Build Observability]({analysis_url})")
+
+
 def run(args: argparse.Namespace):
     log(f"Creating log archives for stage '{args.stage}'")
     create_ninja_log_archive(args.build_dir)
@@ -184,6 +208,13 @@ def run(args: argparse.Namespace):
             output_root=output_root,
             backend=backend,
         )
+
+    write_gha_stage_summary(
+        build_dir=args.build_dir,
+        output_root=output_root,
+        stage_name=args.stage,
+        amdgpu_family=args.amdgpu_family,
+    )
 
 
 def main(argv: list[str] | None = None):
