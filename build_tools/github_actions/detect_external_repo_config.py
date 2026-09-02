@@ -70,30 +70,25 @@ def _log_warning(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-# Essential paths that must always be checked out for any external repo build
-ESSENTIAL_CHECKOUT_PATHS = [
-    "CMakeLists.txt",
-    "CMakePresets.json",
-    "cmake",
-    ".github/scripts",
-]
-
-
-def compute_sparse_checkout_paths(changed_projects: str) -> str:
-    """Compute sparse checkout paths from changed_projects.
+def normalize_changed_projects(changed_projects: str) -> str:
+    """Normalize changed_projects into a consistent format.
 
     Args:
         changed_projects: Comma-separated list of changed project paths
             (e.g., "projects/rocprim,shared/rocroller")
 
     Returns:
-        Newline-separated string of paths for sparse checkout.
-        Empty string if changed_projects is empty (signals full checkout).
+        Comma-separated string of paths (normalized, deduplicated, sorted).
+        Empty string if changed_projects is empty.
+
+    Note: The sparse checkout paths are computed per-stage in the workflow
+    using compute_stage_sparse_checkout.py, which checks if the stage is
+    affected by any of these paths.
     """
     if not changed_projects or not changed_projects.strip():
         return ""
 
-    # Parse changed_projects into a set
+    # Parse changed_projects into a set - just use the paths directly
     paths = set()
     for project in changed_projects.split(","):
         project = project.strip()
@@ -103,11 +98,8 @@ def compute_sparse_checkout_paths(changed_projects: str) -> str:
     if not paths:
         return ""
 
-    # Add essential paths
-    all_paths = sorted(set(ESSENTIAL_CHECKOUT_PATHS) | paths)
-
-    # Return as newline-separated string for actions/checkout sparse-checkout
-    return "\n".join(all_paths)
+    # Return as comma-separated string (will be parsed per-stage)
+    return ",".join(sorted(paths))
 
 
 def get_repo_config(repo_name: str) -> Dict[str, Any]:
@@ -507,12 +499,12 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
-        # Compute sparse checkout paths from changed_projects
-        # If changed_projects is provided, only checkout those paths plus essentials
-        # If empty, sparse_checkout_paths will be empty (signals full checkout)
-        sparse_checkout_paths = compute_sparse_checkout_paths(args.changed_projects)
+        # Normalize changed_projects for per-stage sparse checkout computation
+        # The actual sparse checkout paths are determined per-stage based on
+        # which projects affect which stages (via BUILD_TOPOLOGY.toml)
+        changed_projects_normalized = normalize_changed_projects(args.changed_projects)
         print(
-            f"Sparse checkout paths: {sparse_checkout_paths}",
+            f"Changed projects (normalized): {changed_projects_normalized}",
             file=sys.stderr,
         )
 
@@ -525,7 +517,7 @@ def main(argv=None):
             "extra_cmake_options": extra_cmake_options,
             "projects": projects,
             "family_overrides": family_overrides,
-            "sparse_checkout_paths": sparse_checkout_paths,
+            "changed_projects": changed_projects_normalized,
         }
         config["config_json"] = json.dumps(config_json)
         print(

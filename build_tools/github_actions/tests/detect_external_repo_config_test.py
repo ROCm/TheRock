@@ -466,41 +466,31 @@ class TestGetTestList(unittest.TestCase):
         self.assertEqual(result, [])
 
 
-class TestComputeSparseCheckoutPaths(unittest.TestCase):
-    """Tests for compute_sparse_checkout_paths function."""
+class TestNormalizeChangedProjects(unittest.TestCase):
+    """Tests for normalize_changed_projects function."""
 
     def test_empty_changed_projects_returns_empty(self):
-        """Empty changed_projects should return empty string (full checkout)."""
-        from detect_external_repo_config import compute_sparse_checkout_paths
+        """Empty changed_projects should return empty string."""
+        from detect_external_repo_config import normalize_changed_projects
 
-        self.assertEqual(compute_sparse_checkout_paths(""), "")
-        self.assertEqual(compute_sparse_checkout_paths("  "), "")
+        self.assertEqual(normalize_changed_projects(""), "")
+        self.assertEqual(normalize_changed_projects("  "), "")
 
-    def test_single_project_includes_essentials(self):
-        """Single project path should include essential paths."""
-        from detect_external_repo_config import (
-            ESSENTIAL_CHECKOUT_PATHS,
-            compute_sparse_checkout_paths,
-        )
+    def test_single_project(self):
+        """Single project path should be normalized."""
+        from detect_external_repo_config import normalize_changed_projects
 
-        result = compute_sparse_checkout_paths("projects/rocprim")
-        paths = result.split("\n")
-
-        # Check essential paths are included
-        for essential in ESSENTIAL_CHECKOUT_PATHS:
-            self.assertIn(essential, paths)
-
-        # Check the project path is included
-        self.assertIn("projects/rocprim", paths)
+        result = normalize_changed_projects("projects/rocprim")
+        self.assertEqual(result, "projects/rocprim")
 
     def test_multiple_projects(self):
         """Multiple projects should all be included."""
-        from detect_external_repo_config import compute_sparse_checkout_paths
+        from detect_external_repo_config import normalize_changed_projects
 
-        result = compute_sparse_checkout_paths(
+        result = normalize_changed_projects(
             "projects/rocprim,shared/rocroller,dnn-providers/miopen-provider"
         )
-        paths = result.split("\n")
+        paths = result.split(",")
 
         self.assertIn("projects/rocprim", paths)
         self.assertIn("shared/rocroller", paths)
@@ -508,22 +498,20 @@ class TestComputeSparseCheckoutPaths(unittest.TestCase):
 
     def test_paths_are_sorted(self):
         """Paths should be sorted alphabetically."""
-        from detect_external_repo_config import compute_sparse_checkout_paths
+        from detect_external_repo_config import normalize_changed_projects
 
-        result = compute_sparse_checkout_paths("projects/zebra,projects/alpha")
-        paths = result.split("\n")
+        result = normalize_changed_projects("projects/zebra,projects/alpha")
+        paths = result.split(",")
 
         # Verify sorted order
         self.assertEqual(paths, sorted(paths))
 
     def test_whitespace_handling(self):
         """Whitespace around paths should be trimmed."""
-        from detect_external_repo_config import compute_sparse_checkout_paths
+        from detect_external_repo_config import normalize_changed_projects
 
-        result = compute_sparse_checkout_paths(
-            "  projects/rocprim , shared/rocroller  "
-        )
-        paths = result.split("\n")
+        result = normalize_changed_projects("  projects/rocprim , shared/rocroller  ")
+        paths = result.split(",")
 
         self.assertIn("projects/rocprim", paths)
         self.assertIn("shared/rocroller", paths)

@@ -107,19 +107,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      # Checkout external repository with sparse checkout if changed_projects specified
-      # sparse_checkout_paths is computed by detect_external_repo_config.py from changed_projects
-      - name: Checkout external repository
-        if: ${{ inputs.external_repo_config != '' }}
-        timeout-minutes: 10
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
-          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
-          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
-          sparse-checkout: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_paths }}
-          sparse-checkout-cone-mode: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_paths != '' }}
-
       - name: Setting up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -127,6 +114,39 @@ jobs:
 
       - name: Install python deps
         run: pip install -r requirements.txt
+
+      # Compute sparse checkout paths for this stage based on changed_projects
+      - name: Compute sparse checkout paths
+        id: sparse_checkout
+        if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).changed_projects != '' }}
+        shell: bash
+        run: |
+          python build_tools/github_actions/compute_stage_sparse_checkout.py \
+            --stage "${STAGE_NAME}" \
+            --changed-projects '${{ fromJSON(inputs.external_repo_config).changed_projects }}'
+
+      # Checkout external repository:
+      # - If sparse_checkout_paths is set: sparse checkout only those paths
+      # - Otherwise: full checkout
+      - name: Checkout external repository (sparse)
+        if: ${{ inputs.external_repo_config != '' && steps.sparse_checkout.outputs.sparse_checkout_paths != '' }}
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+          sparse-checkout: ${{ steps.sparse_checkout.outputs.sparse_checkout_paths }}
+          sparse-checkout-cone-mode: true
+
+      - name: Checkout external repository (full)
+        if: ${{ inputs.external_repo_config != '' && steps.sparse_checkout.outputs.sparse_checkout_paths == '' }}
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
       - name: Runner health status
         run: python build_tools/health_status.py
