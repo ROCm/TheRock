@@ -41,34 +41,21 @@ package_dir = {
     "": "src",
     platform_package_name: f"platform/{platform_package_name}",
 }
-
-
 install_requires = []
 
-
-def _add_platform_site_package(package_name: str) -> bool:
-    site_packages_rel = (
-        Path("platform") / platform_package_name / "lib" / "python3" / "site-packages"
-    )
-    site_packages = THIS_DIR / site_packages_rel
-    package_path = site_packages / package_name
-    if not package_path.is_dir():
-        return False
-
-    for found_package in find_packages(
-        where=site_packages,
-        include=[package_name, f"{package_name}.*"],
-    ):
-        if found_package not in packages:
-            packages.append(found_package)
-        package_dir[found_package] = str(
-            site_packages_rel / Path(*found_package.split("."))
-        )
-    return True
-
-
-if _add_platform_site_package("rocprof_trace_decoder"):
+# The rocprof-trace-decoder Python API is staged inside the platform dir (under
+# lib/python*/site-packages/); re-home it as a top level package so it is
+# importable. It is absent on ROCm builds that predate the API.
+platform_dir = THIS_DIR / "platform" / platform_package_name
+for site_packages in sorted(platform_dir.glob("lib/python*/site-packages")):
+    if not (site_packages / "rocprof_trace_decoder").is_dir():
+        continue
+    site_packages_rel = site_packages.relative_to(THIS_DIR)
+    for name in find_packages(where=site_packages):
+        packages.append(name)
+        package_dir[name] = str(site_packages_rel / Path(*name.split(".")))
     install_requires.append("pyelftools>=0.31")
+    break
 
 version = os.environ.get("ROCM_SDK_VERSION")
 if version is None:

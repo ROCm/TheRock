@@ -9,12 +9,14 @@ These tests cover:
   - params.populated_packages: registration and cross-package search helpers
 """
 
+import importlib.util
 import json
 import os
 import stat
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import sys
@@ -23,7 +25,12 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
-from build_python_packages import validate_kpack_split_target_completeness
+from build_python_packages import (
+    _artifact_catalog_has_matches,
+    PROFILER_WHEEL_INCLUDES,
+    profiler_artifact_filter,
+    validate_kpack_split_target_completeness,
+)
 
 
 class TmpDirTestCase(unittest.TestCase):
@@ -165,96 +172,6 @@ class MultiArchPackagingTest(TmpDirTestCase):
             artifacts=ArtifactCatalog(artifact_dir),
         )
 
-    def test_trace_decoder_profiler_selection_requires_python_payload(self):
-        """TheRock-only changes must not make old trace-decoder artifacts look non-empty."""
-        from build_python_packages import (
-            _artifact_catalog_has_matches,
-            profiler_artifact_filter,
-        )
-
-        artifact_dir = self.temp_dir / "artifacts"
-        self._add_artifact(
-            artifact_dir,
-            "rocprofiler-sdk",
-            "lib",
-            "generic",
-            {"lib/librocprof-trace-decoder.so": "so"},
-        )
-
-        artifacts = ArtifactCatalog(
-            artifact_dir,
-            filter=profiler_artifact_filter,
-            includes=["lib/python*/site-packages/rocprof_trace_decoder/**"],
-        )
-
-        self.assertTrue(artifacts.artifact_names)
-        self.assertFalse(_artifact_catalog_has_matches(artifacts))
-
-        self._add_artifact(
-            artifact_dir,
-            "rocprofiler-sdk",
-            "lib",
-            "generic",
-            {"lib/python3/site-packages/rocprof_trace_decoder/__init__.py": ""},
-        )
-        artifacts = ArtifactCatalog(
-            artifact_dir,
-            filter=profiler_artifact_filter,
-            includes=["lib/python*/site-packages/rocprof_trace_decoder/**"],
-        )
-        self.assertTrue(_artifact_catalog_has_matches(artifacts))
-
-    def test_trace_decoder_profiler_setup_builds_wheel_with_python_payload(self):
-        """The profiler wheel must expose trace decoder as a normal Python package."""
-        try:
-            import wheel  # noqa: F401
-        except ImportError:
-            self.skipTest("wheel package is not available")
-
-        import zipfile
-
-        artifact_dir = self.temp_dir / "artifacts"
-        artifact_dir.mkdir()
-        dest_dir = self.temp_dir / "packages"
-        dest_dir.mkdir()
-        params = Parameters(
-            dest_dir=dest_dir,
-            version="0.0.1.dev0",
-            version_suffix="",
-            artifacts=ArtifactCatalog(artifact_dir),
-        )
-        profiler = PopulatedDistPackage(params, logical_name="profiler")
-        trace_decoder_pkg = (
-            profiler.platform_dir
-            / "lib"
-            / "python3"
-            / "site-packages"
-            / "rocprof_trace_decoder"
-        )
-        trace_decoder_pkg.mkdir(parents=True)
-        (trace_decoder_pkg / "__init__.py").write_text("__version__ = '0.0.1.dev0'\n")
-
-        wheel_dir = self.temp_dir / "wheels"
-        wheel_dir.mkdir()
-        subprocess.run(
-            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
-            cwd=profiler.path,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-
-        wheel_path = next(wheel_dir.glob("rocm_profiler-*.whl"))
-        with zipfile.ZipFile(wheel_path) as zf:
-            names = set(zf.namelist())
-            self.assertIn("rocprof_trace_decoder/__init__.py", names)
-            metadata_name = next(
-                name for name in names if name.endswith(".dist-info/METADATA")
-            )
-            metadata = zf.read(metadata_name).decode()
-            self.assertIn("Requires-Dist: pyelftools", metadata)
-
     def test_each_library_package_independently_owns_shared_relpaths(self):
         """Both arch-specific library packages must contain all their runtime files.
 
@@ -321,6 +238,101 @@ class MultiArchPackagingTest(TmpDirTestCase):
 
         self.assertEqual(len(params.populated_packages), 1)
         self.assertIs(params.populated_packages[0], lib)
+
+    def test_profiler_selection_ignores_artifacts_without_trace_decoder_payload(self):
+        """The profiler wheel is only built when selected artifacts contain files.
+
+        profiler_artifact_filter matches the rocprofiler-sdk `lib` artifact so that
+        the rocprof_trace_decoder Python API can be packaged. That artifact exists
+        in every build, including ROCm versions that ship no Python API at all, so
+        matching by artifact name alone is not enough: without a file-level check
+        we would emit a rocm-profiler wheel containing no payload whenever
+        rocprofiler-systems/-compute are absent. This asserts that selection is
+        driven by matched files, not by matched artifact names.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-sdk",
+            "lib",
+            "generic",
+            {"lib/librocprof-trace-decoder.so": "so"},
+        )
+
+        params = self._make_params(artifact_dir)
+        artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+
+        self.assertTrue(artifacts.artifact_names)
+        self.assertFalse(_artifact_catalog_has_matches(artifacts))
+
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-sdk",
+            "lib",
+            "generic",
+            {"lib/python3/site-packages/rocprof_trace_decoder/__init__.py": ""},
+        )
+        params = self._make_params(artifact_dir)
+        artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        self.assertTrue(_artifact_catalog_has_matches(artifacts))
+
+    def test_trace_decoder_profiler_setup_builds_wheel_with_python_payload(self):
+        """The profiler wheel exposes trace decoder as a normal importable package.
+
+        The trace decoder Python API lands in the platform dir under
+        lib/python3/site-packages/. setup.py must remap it to a top level
+        `rocprof_trace_decoder` package and declare its pyelftools dependency.
+        """
+        if importlib.util.find_spec("wheel") is None:
+            self.skipTest("wheel package is not available")
+
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir()
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir()
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.dev0",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        trace_decoder_pkg = (
+            profiler.platform_dir
+            / "lib"
+            / "python3"
+            / "site-packages"
+            / "rocprof_trace_decoder"
+        )
+        trace_decoder_pkg.mkdir(parents=True)
+        (trace_decoder_pkg / "__init__.py").write_text("__version__ = '0.0.1.dev0'\n")
+
+        wheel_dir = self.temp_dir / "wheels"
+        wheel_dir.mkdir()
+        subprocess.run(
+            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
+            cwd=profiler.path,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        wheel_path = next(wheel_dir.glob("rocm_profiler-*.whl"))
+        with zipfile.ZipFile(wheel_path) as zf:
+            names = set(zf.namelist())
+            self.assertIn("rocprof_trace_decoder/__init__.py", names)
+            metadata_name = next(
+                name for name in names if name.endswith(".dist-info/METADATA")
+            )
+            metadata = zf.read(metadata_name).decode()
+            self.assertIn("Requires-Dist: pyelftools", metadata)
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
