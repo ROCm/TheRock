@@ -2203,7 +2203,8 @@ class TestBuildRunnerSelection(unittest.TestCase):
         # Windows still uses Azure
         with patch("random.random", return_value=0.5):
             self.assertEqual(
-                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
+                select_build_runner("windows", "release"),
+                "aws-windows-scale-rocm-customer-dev-g624xl",
             )
 
     def test_select_build_runner_sanitizer_uses_large_runner(self):
