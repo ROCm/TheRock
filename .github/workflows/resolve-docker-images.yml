@@ -6,6 +6,12 @@ name: Resolve Docker image references
 on:
   workflow_call:
     inputs:
+      image_name:
+        description: >-
+          Logical image key from dockerfiles/docker_images.json
+          (e.g. therock_build_manylinux_x86_64).
+        type: string
+        required: true
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -13,30 +19,24 @@ on:
           set it manually.
         type: string
     outputs:
-      therock_build_manylinux_x86_64:
-        description: Full image reference for therock_build_manylinux_x86_64
-        value: ${{ jobs.resolve.outputs.therock_build_manylinux_x86_64 }}
-      no_rocm_image_ubuntu24_04:
-        description: Full image reference for no_rocm_image_ubuntu24_04
-        value: ${{ jobs.resolve.outputs.no_rocm_image_ubuntu24_04 }}
+      image_ref:
+        description: Full image reference for the requested image_name
+        value: ${{ jobs.resolve.outputs.image_ref }}
 
 permissions:
   contents: read
 
 jobs:
   resolve:
-    name: Resolve image references from docker_images.json
+    name: Resolve image reference from docker_images.json
     runs-on: ubuntu-24.04
     outputs:
-      therock_build_manylinux_x86_64: ${{ steps.read.outputs.therock_build_manylinux_x86_64 }}
-      no_rocm_image_ubuntu24_04: ${{ steps.read.outputs.no_rocm_image_ubuntu24_04 }}
+      image_ref: ${{ steps.read.outputs.image_ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
-      - name: Read image references
+      - name: Read image reference
         id: read
         run: |
-          manylinux=$(python3 build_tools/resolve_docker_image.py get-image therock_build_manylinux_x86_64)
-          ubuntu24=$(python3 build_tools/resolve_docker_image.py get-image no_rocm_image_ubuntu24_04)
-          echo "therock_build_manylinux_x86_64=${manylinux}" >> "$GITHUB_OUTPUT"
-          echo "no_rocm_image_ubuntu24_04=${ubuntu24}" >> "$GITHUB_OUTPUT"
+          ref=$(python3 build_tools/resolve_docker_image.py get-image "${{ inputs.image_name }}")
+          echo "image_ref=${ref}" >> "$GITHUB_OUTPUT"
