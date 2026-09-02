@@ -22,6 +22,7 @@ Examples:
 
 import argparse
 import boto3
+import html
 import os
 from pathlib import Path
 from urllib.parse import quote
@@ -66,7 +67,17 @@ def generate_index_html(directory: str) -> None:
         for entry in os.scandir(directory):
             if entry.name.startswith("."):
                 continue
-            rows.append(f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>')
+            if entry.is_dir():
+                rows.append(
+                    f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>'
+                )
+                continue
+            # Escape only at render: quote() percent-encodes '+' (and any
+            # other unsafe char) in the href, while html.escape() guards the
+            # display text.
+            rows.append(
+                f'<tr><td><a href="{quote(entry.name)}">{html.escape(entry.name)}</a></td></tr>'
+            )
     except PermissionError:
         return
 
@@ -117,7 +128,12 @@ def generate_top_index_from_s3(
                 continue
             name = key[len(prefix) + 1 :]
             if "/" not in name:  # Only files at this level
-                rows.append(f'<tr><td><a href="{name}">{name}</a></td></tr>')
+                # Escape only at render: quote() percent-encodes '+' (and
+                # any other unsafe char) in the href, while html.escape()
+                # guards the display text.
+                rows.append(
+                    f'<tr><td><a href="{quote(name)}">{html.escape(name)}</a></td></tr>'
+                )
 
     index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
     index_key = f"{prefix}/index.html"
@@ -257,13 +273,12 @@ def generate_index_from_s3(
                 f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>'
             )
 
-        # Add files
+        # Add files. Escape only at render: quote() percent-encodes '+'
+        # (and any other unsafe char) in the href, while html.escape()
+        # guards the display text.
         for filename in sorted(files):
-            # Percent-encode the filename for use in the href. In particular, '+' must
-            # be encoded as '%2B' so S3 does not interpret it as a space.
-            encoded_filename = quote(filename, safe="")
             rows.append(
-                f'<tr><td><a href="{encoded_filename}">{filename}</a></td></tr>'
+                f'<tr><td><a href="{quote(filename)}">{html.escape(filename)}</a></td></tr>'
             )
 
         index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
