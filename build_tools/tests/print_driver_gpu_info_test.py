@@ -17,7 +17,7 @@ class ImportTest(unittest.TestCase):
 
         fcntl is a Unix-only stdlib module used inside print_driver_gpu_info.
         Importing it at the top level causes a ModuleNotFoundError on Windows.
-        This test catches that class of mistake by running on CPU-only runners
+        This test catches that class of mistakes by running on CPU-only runners
         before any GPU job has a chance to fail.
         """
         import print_driver_gpu_info  # noqa: F401
