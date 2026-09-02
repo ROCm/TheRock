@@ -45,6 +45,9 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+import pyzstd
+import yaml
+
 # Add build_tools/ to sys.path so _therock_utils can be imported.
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
 if str(BUILD_TOOLS_DIR) not in sys.path:
@@ -201,10 +204,6 @@ def fetch_artifacts(
     """
 
     def _open_zst(path: Path):
-        try:
-            import pyzstd
-        except ModuleNotFoundError:
-            sys.exit("pyzstd is required for --artifacts-url: pip install pyzstd")
         return tarfile.TarFile(fileobj=pyzstd.ZstdFile(path, "rb"), mode="r")
 
     artifacts_url = artifacts_url.rstrip("/")
@@ -367,11 +366,6 @@ def fetch_legacy_dlls_from_dvc(
 
     dvc_remote = "https://therock-dvc.s3.us-east-2.amazonaws.com/rocm-systems/files/md5"
     dest_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        import yaml
-    except ModuleNotFoundError:
-        sys.exit("PyYAML is required to parse .dvc files: pip install pyyaml")
 
     for dvc_file in sorted(dvc_dir.glob("*.dvc")):
         dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
