@@ -1393,6 +1393,20 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
+        # If skip_tests_on_submodule_bump is set, skip tests when submodule changes
+        # are detected. This is the inverse of submodule_bump_tests_only - useful for
+        # architectures with limited hardware where submodule bumps are tested elsewhere.
+        if (
+            platform_info.get("skip_tests_on_submodule_bump", False)
+            and not ci_inputs.is_workflow_dispatch
+            and git_context.has_submodule_changes is True
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: skip_tests_on_submodule_bump flag set, "
+                f"disabling tests (submodule changes detected)"
+            )
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
