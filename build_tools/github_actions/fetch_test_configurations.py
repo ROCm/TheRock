@@ -704,6 +704,15 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # profiler-hub install/consumption tests
+    "profiler-hub": {
+        "job_name": "profiler-hub",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_profiler_hub_install.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {"linux": 1},
+    },
     # MIOpen provider tests
     "miopenprovider": {
         "job_name": "miopenprovider",
