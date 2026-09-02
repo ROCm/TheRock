@@ -38,11 +38,19 @@ import hashlib
 import json
 import os
 import sys
+import tarfile
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+
+# Add build_tools/ to sys.path so _therock_utils can be imported.
+BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
+if str(BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(BUILD_TOOLS_DIR))
+
+from _therock_utils.artifacts import ArtifactCatalog, ArtifactName, ArtifactPopulator
 
 
 # ---------------------------------------------------------------------------
@@ -174,13 +182,6 @@ STANDARD_DIR_TOKENS: set[str] = {
 # ---------------------------------------------------------------------------
 
 
-def _import_therock_utils() -> None:
-    """Add build_tools/ to sys.path so _therock_utils can be imported."""
-    build_tools_dir = Path(__file__).parent.parent.parent
-    if str(build_tools_dir) not in sys.path:
-        sys.path.insert(0, str(build_tools_dir))
-
-
 def fetch_artifacts(
     artifacts_url: str,
     artifact_names: list[str],
@@ -198,13 +199,6 @@ def fetch_artifacts(
 
     Returns the _extracted/ directory.
     """
-    _import_therock_utils()
-    try:
-        from _therock_utils.artifacts import ArtifactPopulator
-    except ImportError as e:
-        sys.exit(f"Error: could not import _therock_utils: {e}")
-
-    import tarfile
 
     def _open_zst(path: Path):
         try:
@@ -297,12 +291,6 @@ def collect_files_from_catalog(
         )
         return []
 
-    _import_therock_utils()
-    try:
-        from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
-    except ImportError as e:
-        sys.exit(f"Error: could not import _therock_utils: {e}")
-
     artifact_set = set(pkg_def.artifacts)
     overrides = pkg_def.per_artifact_includes  # {artifact_name: [glob, ...]}
 
@@ -383,9 +371,7 @@ def fetch_legacy_dlls_from_dvc(
     try:
         import yaml
     except ModuleNotFoundError:
-        sys.exit(
-            "PyYAML is required to parse .dvc files: pip install pyyaml"
-        )
+        sys.exit("PyYAML is required to parse .dvc files: pip install pyyaml")
 
     for dvc_file in sorted(dvc_dir.glob("*.dvc")):
         dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
@@ -698,7 +684,9 @@ def build_wxs(args: argparse.Namespace) -> None:
 
     ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
     # Long path support is on by default; set ENABLE_LONG_PATHS=0 to disable.
-    ET.SubElement(pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Value="1", Secure="yes")
+    ET.SubElement(
+        pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
+    )
     ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
     # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
     ET.SubElement(
