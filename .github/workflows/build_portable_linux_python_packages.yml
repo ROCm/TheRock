@@ -186,8 +186,8 @@ jobs:
           shopt -s nullglob
           artifact_dir="${{ env.ARTIFACTS_DIR }}/rocshmem4py_lib_generic"
           if [ ! -d "$artifact_dir" ]; then
-            echo "No rocshmem4py artifact fetched; skipping"
-            exit 0
+            echo "Expected rocshmem4py artifact was not fetched: $artifact_dir"
+            exit 1
           fi
           wheels=("$artifact_dir"/comm-libs/rocshmem4py/stage/share/rocshmem4py/wheels/*.whl)
           if [ ${#wheels[@]} -eq 0 ]; then

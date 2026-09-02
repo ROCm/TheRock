@@ -249,6 +249,16 @@ if(THEROCK_ENABLE_ROCSHMEM4PY)
   ##############################################################################
   # rocshmem4py
   ##############################################################################
+  therock_detect_python_versions(
+    _rocshmem4py_python_executables
+    _rocshmem4py_python_versions
+  )
+  # therock_cmake_subproject_declare does not preserve CMake lists in
+  # CMAKE_ARGS, so escape the separators before forwarding the interpreters.
+  list(JOIN _rocshmem4py_python_executables "\;"
+    _rocshmem4py_python_executables_str
+  )
+
   therock_cmake_subproject_declare(rocshmem4py
     FPRINT_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/python/rocshmem"
     FPRINT_FILE_GLOBS
@@ -260,7 +270,7 @@ if(THEROCK_ENABLE_ROCSHMEM4PY)
     BACKGROUND_BUILD
     CMAKE_ARGS
       "-DROCSHMEM4PY_SOURCE_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/python/rocshmem"
-      "-DROCSHMEM4PY_PYTHON_EXECUTABLES=${THEROCK_DIST_PYTHON_EXECUTABLES}"
+      "-DROCSHMEM4PY_PYTHON_EXECUTABLES:STRING=${_rocshmem4py_python_executables_str}"
       "-DROCSHMEM4PY_FINALIZE_SCRIPT=${THEROCK_SOURCE_DIR}/build_tools/packaging/python/finalize_rocshmem4py_wheel.py"
       "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
       -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
