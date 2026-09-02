@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 #
-# bandit configuration for Quartz, picked up by the rocm-security-gh
+# bandit configuration for TheRock, picked up by the rocm-security-gh
 # reusable scanner (.github/workflows/security_scan_pr.yml and
 # security_scan_weekly.yml) in place of its own org-wide default.
 # Reference: https://bandit.readthedocs.io/en/latest/config.html
@@ -10,3 +10,10 @@ exclude_dirs:
   - .git
   - .venv
   - venv
+  - test
+
+skips:
+  - B404 # import subprocess
+  - B603 # subprocess call without shell=True
+  - B606 # start process with no shell
+  - B607 # start process with a partial executable path
