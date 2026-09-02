@@ -126,6 +126,7 @@ run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
+  | Python: ${{ inputs.python_version || 'all' }}
 
 jobs:
   notify_quartz_start:

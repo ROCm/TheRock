@@ -193,6 +193,34 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
                 self.assertEqual(matrix[0]["test_level"], "standard")
 
+    def test_summary_explains_an_all_sanity_matrix(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        summary = m.format_matrix_summary(
+            release_type="dev",
+            platform="linux",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            run_full_pytorch_tests=False,
+            matrix=matrix,
+        )
+
+        self.assertIn("| Generated rows | 2 (`sanity`: 2) |", summary)
+        self.assertIn("`release/2.12`: `3.10`", summary)
+        self.assertIn("`nightly`: `3.10`", summary)
+        self.assertIn("All generated rows use `sanity`", summary)
+        self.assertIn(
+            "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `sanity` |",
+            summary,
+        )
+
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
         # JSON for use in workflow files like:

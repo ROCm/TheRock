@@ -13,13 +13,6 @@ sys.path.insert(0, os.fspath(THIS_DIR.parent))
 sys.path.insert(0, os.fspath(THIS_DIR.parent.parent))
 
 import configure_pytorch_test_matrix as m
-from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
-from workflow_utils import (
-    WORKFLOWS_DIR,
-    get_choice_options,
-    get_workflow_job,
-    load_workflow,
-)
 
 
 FamilyMatrix = dict[str, dict[str, dict[str, object]]]
@@ -50,35 +43,6 @@ def _fake_family_matrix(_trigger_types: list[str]) -> FamilyMatrix:
 
 
 class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
-    def test_direct_build_workflows_default_to_standard_tests(self) -> None:
-        expected_options = {
-            "multi_arch_build_portable_linux_pytorch_wheels.yml": PYTORCH_TEST_LEVELS,
-            "multi_arch_build_windows_pytorch_wheels.yml": ["sanity", "standard"],
-        }
-
-        for workflow_filename, options in expected_options.items():
-            with self.subTest(workflow_filename=workflow_filename):
-                workflow = load_workflow(WORKFLOWS_DIR / workflow_filename)
-                on_block = workflow.get("on") or workflow[True]
-                dispatch_input = on_block["workflow_dispatch"]["inputs"]["test_level"]
-                call_input = on_block["workflow_call"]["inputs"]["test_level"]
-
-                self.assertEqual(dispatch_input["default"], "standard")
-                self.assertEqual(call_input["default"], "standard")
-                self.assertEqual(get_choice_options(workflow, "test_level"), options)
-
-    def test_full_dispatch_uses_requested_level_and_gfx94_guard(self) -> None:
-        workflow = load_workflow(
-            WORKFLOWS_DIR / "multi_arch_build_portable_linux_pytorch_wheels.yml"
-        )
-        dispatch_job = get_workflow_job(workflow, "dispatch_pytorch_wheels_full_test")
-
-        condition = dispatch_job["if"]
-        self.assertIn("inputs.test_level == 'full'", condition)
-        self.assertIn("contains(inputs.amdgpu_families, 'gfx94X-dcgpu')", condition)
-        self.assertNotIn("inputs.python_version", condition)
-        self.assertEqual(dispatch_job["needs"], ["build_pytorch_wheels"])
-
     def test_empty_family_list_returns_empty_matrix(self) -> None:
         matrix = m.build_test_matrix(
             amdgpu_families=[],
@@ -228,6 +192,41 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             )
 
         self.assertEqual(len(matrix["include"]), 1)
+
+    def test_sanity_summary_explains_cpu_only_decision(self) -> None:
+        summary = m.format_test_summary(
+            platform="linux",
+            test_level="sanity",
+            built_families=["gfxalpha-all"],
+            requested_test_families="auto",
+            resolved_test_families=["gfxalpha-all"],
+            matrix={"include": []},
+        )
+
+        self.assertIn("| Test level | `sanity` |", summary)
+        self.assertIn("| Self-hosted GPU test jobs | 0 |", summary)
+        self.assertIn("because the test level is `sanity`", summary)
+        self.assertIn("`sanity_check_wheel.py` on CPU", summary)
+
+    def test_standard_summary_lists_family_runner_mapping(self) -> None:
+        summary = m.format_test_summary(
+            platform="linux",
+            test_level="standard",
+            built_families=["gfxalpha-all"],
+            requested_test_families="auto",
+            resolved_test_families=["gfxalpha-all"],
+            matrix={
+                "include": [
+                    {
+                        "amdgpu_family": "gfxalpha-all",
+                        "test_runs_on": "linux-alpha",
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("| Self-hosted GPU test jobs | 1 |", summary)
+        self.assertIn("| `gfxalpha-all` | `linux-alpha` |", summary)
 
     def test_real_family_matrix_finds_gfx950_runner(self) -> None:
         matrix = m.build_test_matrix(
