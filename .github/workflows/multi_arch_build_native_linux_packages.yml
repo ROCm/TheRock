@@ -26,7 +26,7 @@ on:
         type: string
         default: ""
       build_variant:
-        description: "Build variant (e.g. 'asan'). When set to 'asan', changes the install prefix to DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR (e.g. /opt/rocm/core-asan-7.15)."
+        description: "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', 'host-asan-debug'). When it contains 'asan', changes the install prefix to DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR (e.g. /opt/rocm/core-asan-7.15)."
         required: false
         type: string
         default: ""
