@@ -400,6 +400,70 @@ class MultiArchPackagingTest(TmpDirTestCase):
         )
 
 
+    def test_emit_soname_alias_symlinks_creates_runtime_symlinks(self):
+        """Soname aliases with a materialized SONAME target get symlinks in the
+        runtime package so dlopen by unversioned name succeeds (ROCM-29954)."""
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "wsl-rocdxg",
+            "lib",
+            "generic",
+            {"lib/placeholder.txt": "x"},
+        )
+
+        params = self._make_params(artifact_dir)
+        core = PopulatedDistPackage(params, logical_name="core")
+        core.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.name == "wsl-rocdxg")
+        )
+
+        # Simulate what populate_runtime_files does for a versioned .so:
+        # the SONAME file is materialized, the others become aliases.
+        soname_file = core.platform_dir / "lib" / "librocdxg.so.1"
+        soname_file.parent.mkdir(parents=True, exist_ok=True)
+        soname_file.write_text("fake soname file")
+        core.files.mark_populated(core, "lib/librocdxg.so.1", soname_file)
+
+        core.files.soname_aliases["lib/librocdxg.so"] = "librocdxg.so.1"
+        core.files.soname_aliases["lib/librocdxg.so.1.1.0"] = "librocdxg.so.1"
+
+        core._emit_soname_alias_symlinks(core.platform_dir)
+
+        # Unversioned namelink should now be a symlink to the SONAME.
+        namelink = core.platform_dir / "lib" / "librocdxg.so"
+        self.assertTrue(namelink.is_symlink())
+        self.assertEqual(os.readlink(namelink), "librocdxg.so.1")
+        self.assertTrue(core.files.has("lib/librocdxg.so"))
+
+        # Full-version file should also be a symlink to the SONAME.
+        fullver = core.platform_dir / "lib" / "librocdxg.so.1.1.0"
+        self.assertTrue(fullver.is_symlink())
+        self.assertEqual(os.readlink(fullver), "librocdxg.so.1")
+        self.assertTrue(core.files.has("lib/librocdxg.so.1.1.0"))
+
+    def test_emit_soname_alias_skips_when_soname_not_materialized(self):
+        """Aliases whose SONAME target was not materialized are left alone."""
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir, "orphan", "lib", "generic", {"lib/dummy.txt": "x"}
+        )
+
+        params = self._make_params(artifact_dir)
+        pkg = PopulatedDistPackage(params, logical_name="core")
+        pkg.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.name == "orphan")
+        )
+
+        # Alias recorded but SONAME file was never materialized.
+        pkg.files.soname_aliases["lib/liborphan.so"] = "liborphan.so.2"
+
+        pkg._emit_soname_alias_symlinks(pkg.platform_dir)
+
+        self.assertFalse((pkg.platform_dir / "lib" / "liborphan.so").exists())
+        self.assertFalse(pkg.files.has("lib/liborphan.so"))
+
+
 # ---------------------------------------------------------------------------
 # Tests for Parameters construction edge cases
 # ---------------------------------------------------------------------------
