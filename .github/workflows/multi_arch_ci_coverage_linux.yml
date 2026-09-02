@@ -7,10 +7,10 @@
 #
 #   build (instrumented) -> test (collect profraw) -> merge -> report
 #
-# The compiler-runtime stage is expected to have been built already, by the
-# caller, with the ROCm profiling runtime enabled. This workflow rebuilds only
-# the stage that owns the target project, so a coverage run costs roughly one
-# extra library build per project rather than a full instrumented stack.
+# The compiler-runtime stage is expected to have been built already in this run
+# by the caller. This workflow rebuilds only the stage that owns the target
+# project, so a coverage run costs roughly one extra library build per project
+# rather than a full instrumented stack.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -33,7 +33,10 @@ on:
       build_stage:
         type: string
         default: math-libs
-        description: "Build stage that produces the instrumented project"
+        description: >-
+          Per-arch build stage that produces the instrumented project. Coverage
+          projects are library projects, so this is a per-arch stage (math-libs,
+          comm-libs) and is built for a single GPU family at a time.
       stage_project:
         type: string
         description: "Project name passed to configure_stage.py --projects"
@@ -79,26 +82,25 @@ permissions:
   contents: read
 
 jobs:
+  # Only the stage that owns the target project is rebuilt. The compiler-runtime
+  # it links against was published earlier in this same run by the caller, so the
+  # stage's inbound artifact fetch picks it up by run id.
   build_coverage:
     name: Build Coverage (${{ inputs.project_name }})
     if: ${{ inputs.build_enabled }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      artifact_group: multi-arch-coverage
-      matrix_per_family_json: >-
-        [{"amdgpu_family": "${{ inputs.amdgpu_families }}"}]
+      stage_name: ${{ inputs.build_stage }}
+      stage_display_name: "Stage - Coverage ${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      amdgpu_family: ${{ inputs.amdgpu_families }}
       dist_amdgpu_families: ${{ inputs.amdgpu_families }}
-      build_variant_label: coverage
-      build_variant_cmake_preset: ""
-      build_variant_suffix: coverage
-      build_stages: ${{ inputs.build_stage }}
       stage_projects: ${{ inputs.stage_project }}
       # KPACK artifact splitting is disabled so the instrumented device code
       # stays in the library that llvm-cov is pointed at.
       extra_cmake_options: >-
         -D${{ inputs.coverage_flag }}=ON
-        -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
         -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
         ${{ inputs.extra_cmake_options }}
       rocm_package_version: ${{ inputs.rocm_package_version }}

@@ -231,9 +231,9 @@ definitions: `HIPDNN_ENABLE_COVERAGE`, not `hipDNN_ENABLE_COVERAGE`.
   -DHIPRAND_ENABLE_COVERAGE=ON -DROCBLAS_ENABLE_COVERAGE=ON
 ```
 
-Instrumented device code additionally needs the ROCm profiling runtime, which is
-built by passing `-DCOMPILER_RT_BUILD_PROFILE_ROCM=ON` to the top level
-configure. See [Code coverage](code_coverage.md) for the full workflow.
+Instrumented device code additionally needs the ROCm profiling runtime, which
+comes from the compiler build rather than from a top level TheRock option. See
+[Code coverage](code_coverage.md) for the full workflow.
 
 ### Additional CMake developer ergonomic flags
 

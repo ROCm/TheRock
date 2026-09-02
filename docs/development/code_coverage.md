@@ -15,8 +15,7 @@ name must be upper case, matching the usual CMake convention for definitions:
 ```bash
 cmake -B build -GNinja . \
   -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu \
-  -DHIPRAND_ENABLE_COVERAGE=ON \
-  -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
+  -DHIPRAND_ENABLE_COVERAGE=ON
 ```
 
 `therock_subproject.cmake` forwards the flag to the matching subproject, which
@@ -24,9 +23,11 @@ is responsible for translating it into compiler flags (usually
 `-fprofile-instr-generate -fcoverage-mapping`). Passing the flag for a project
 that does not implement it has no effect.
 
-`COMPILER_RT_BUILD_PROFILE_ROCM=ON` builds `libclang_rt.profile_rocm`, the
-device side profiling runtime. Without it, instrumented device code cannot write
-profiles, and you will only see host coverage.
+Device side profiling relies on the ROCm profiling runtime
+(`libclang_rt.profile_rocm`) being present in the compiler build. TheRock does
+not configure that from the top level; it comes from how amd-llvm's compiler-rt
+is built. If a report shows host coverage only, check that the runtime is in the
+compiler you built against.
 
 > [!NOTE]
 > Coverage builds are incompatible with split kernel packaging. The CI
@@ -47,8 +48,7 @@ naming each project. All default `OFF`:
 ```bash
 cmake -B build -GNinja . \
   -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu \
-  -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON \
-  -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
+  -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON
 ```
 
 Each option expands to the individual `<PROJECT>_ENABLE_COVERAGE` flags above, so
@@ -104,9 +104,15 @@ component, the object globs handed to `llvm-cov`, and its Codecov flag.
 | `multi_arch_ci_coverage_nightly.yml` | Nightly schedule, or manual dispatch            | Builds the whole instrumented stack once, then tests and reports on each project against that single build |
 
 Both delegate to `multi_arch_ci_coverage_linux.yml`, which owns the per-project
-build, test, and aggregation sequence for one GPU family. Keeping the nesting at
-three levels matters: GitHub refuses to run reusable workflows nested more than
-four deep.
+build, test, and aggregation sequence for one GPU family.
+
+Instrumented builds call `multi_arch_build_portable_linux_artifacts.yml` — the
+same per-stage build workflow regular CI uses — one job per stage, rather than
+going through the full `multi_arch_build_portable_linux.yml` pipeline. Coverage
+only ever needs compiler-runtime plus the stage owning the project under test, so
+naming those stages directly keeps the shared pipeline free of coverage-specific
+stage filtering. `stage_projects` and `extra_cmake_options` on that workflow are
+the only build-side hooks coverage adds.
 
 The test jobs run through the same `test_component.yml` as regular CI, with
 `coverage_enabled: true` adding an `LLVM_PROFILE_FILE` pointing into the

@@ -22,7 +22,6 @@ Outputs (GITHUB_OUTPUT):
     per-arch stages of multi_arch_build_portable_linux.yml.
   - coverage_cmake_options: every selected project's coverage flag, for the
     nightly full-stack instrumented build.
-  - build_stages: comma-separated stages the selected projects live in.
 """
 
 import argparse
@@ -82,6 +81,10 @@ class CoverageProject:
 
 # Projects that participate in coverage CI. Start small (RFC0014 phase 1) and
 # grow the list as component test suites become good enough to report on.
+#
+# The nightly workflow builds one instrumented job per stage, and currently only
+# has a math-libs job. Onboarding a project from another stage also means adding
+# that stage's build job to multi_arch_ci_coverage_nightly.yml.
 COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     "hiprand": CoverageProject(
         cmake_target="hipRAND",
@@ -266,7 +269,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         f"-D{COVERAGE_PROJECTS[key].cmake_target.upper()}_ENABLE_COVERAGE=ON"
         for key in project_keys
     ]
-    build_stages = sorted({COVERAGE_PROJECTS[key].stage for key in project_keys})
     outputs = {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),
@@ -274,7 +276,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             [{"amdgpu_family": family} for family in amdgpu_families]
         ),
         "coverage_cmake_options": " ".join(coverage_flags),
-        "build_stages": ",".join(["compiler-runtime"] + build_stages),
     }
 
     if args.print_matrix:

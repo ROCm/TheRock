@@ -9,6 +9,10 @@
 # build per project, which is the right trade-off once several projects are
 # enabled.
 #
+# The stack is assembled by naming the stages coverage needs and calling the
+# shared per-stage build workflow for each, rather than running the whole
+# multi_arch_build_portable_linux.yml pipeline and filtering stages out of it.
+#
 # Phase 1 of RFC0014 runs every enabled component on the default architecture.
 # Change-based selection and multi-architecture expansion come later.
 
@@ -53,7 +57,6 @@ jobs:
       dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
       families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
       coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
-      build_stages: ${{ steps.matrix.outputs.build_stages }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
@@ -81,23 +84,48 @@ jobs:
             --release-type=ci \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
-  build_instrumented_stack:
-    name: Build Full Instrumented Stack
+  # Built first so that every later stage in this run has a compiler-runtime to
+  # link against and to fetch as an inbound artifact.
+  build_instrumented_compiler_runtime:
+    name: Build Instrumented Compiler Runtime
     needs: setup_coverage_matrix
     if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      artifact_group: multi-arch-coverage
-      matrix_per_family_json: ${{ needs.setup_coverage_matrix.outputs.families_matrix_json }}
+      stage_name: compiler-runtime
+      stage_display_name: "Stage - Coverage Compiler Runtime"
+      timeout_minutes: 480 # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      build_variant_label: coverage
-      build_variant_cmake_preset: ""
-      build_variant_suffix: coverage
-      build_stages: ${{ needs.setup_coverage_matrix.outputs.build_stages }}
+      extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+    permissions:
+      contents: read
+      id-token: write
+
+  # The whole stage is built, not just the onboarded projects: the test jobs
+  # below run against this run's artifacts and need the complete dependency set.
+  # `coverage_cmake_options` decides which projects get instrumented; the rest
+  # build normally.
+  build_instrumented_math_libs:
+    name: Build Instrumented Math Libs
+    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.families_matrix_json) }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: math-libs
+      stage_display_name: "Stage - Coverage Math Libs (${{ matrix.family_info.amdgpu_family }})"
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
       extra_cmake_options: >-
         ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
-        -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
         -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
@@ -109,7 +137,7 @@ jobs:
   # stack built above (same run id, so the artifacts are already published).
   coverage_report:
     name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
-    needs: [setup_coverage_matrix, build_instrumented_stack]
+    needs: [setup_coverage_matrix, build_instrumented_math_libs]
     # `!failure() && !cancelled()` alone would let this run when
     # setup_coverage_matrix was skipped, and fromJSON('') is a hard error, so
     # the matrix has to be checked explicitly.
@@ -148,7 +176,8 @@ jobs:
     if: always()
     needs:
       - setup_coverage_matrix
-      - build_instrumented_stack
+      - build_instrumented_compiler_runtime
+      - build_instrumented_math_libs
       - coverage_report
     runs-on: ubuntu-24.04
     steps:

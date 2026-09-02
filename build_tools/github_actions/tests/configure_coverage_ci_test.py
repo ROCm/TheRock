@@ -177,8 +177,9 @@ class MainTest(unittest.TestCase):
             self.assertIn("families_matrix_json", written)
             self.assertIn("coverage_cmake_options", written)
             self.assertIn("-DHIPRAND_ENABLE_COVERAGE=ON", written)
-            # compiler-runtime is always built so the profiling runtime exists.
-            self.assertIn("compiler-runtime,math-libs", written)
+            # The workflow builds this stage, narrowed to this project.
+            self.assertIn('"build_stage": "math-libs"', written)
+            self.assertIn('"stage_project": "hiprand"', written)
 
 
 class EmitCmakeTest(unittest.TestCase):

@@ -63,7 +63,6 @@ jobs:
     outputs:
       coverage_matrix: ${{ steps.matrix.outputs.coverage_matrix }}
       dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
-      families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
@@ -91,26 +90,22 @@ jobs:
             --release-type=ci \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
-  # Instrumented device code needs the ROCm profiling runtime, which lives in
-  # compiler-rt. Building this stage once keeps the per-project jobs cheap and
-  # avoids several jobs racing to publish the same compiler artifacts.
+  # Each per-project stage below fetches its inbound artifacts by this run's id,
+  # so the run needs a compiler-runtime of its own. Building it once here keeps
+  # the per-project jobs cheap and avoids several of them racing to publish the
+  # same compiler artifacts.
   build_instrumented_compiler_runtime:
     name: Build Instrumented Compiler Runtime
     needs: setup_coverage_matrix
     if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      artifact_group: multi-arch-coverage
-      matrix_per_family_json: ${{ needs.setup_coverage_matrix.outputs.families_matrix_json }}
+      stage_name: compiler-runtime
+      stage_display_name: "Stage - Coverage Compiler Runtime"
+      timeout_minutes: 480 # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      build_variant_label: coverage
-      build_variant_cmake_preset: ""
-      build_variant_suffix: coverage
-      build_stages: compiler-runtime
-      extra_cmake_options: >-
-        -DCOMPILER_RT_BUILD_PROFILE_ROCM=ON
-        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
     permissions:
