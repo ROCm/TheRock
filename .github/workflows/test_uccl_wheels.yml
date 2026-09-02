@@ -6,15 +6,6 @@
 name: Test UCCL Wheels
 
 on:
-  # TODO: Remove this push trigger before merging to main.
-  push:
-    branches:
-      - users/adityakankariya/uccl-tests
-    paths:
-      - .github/workflows/build_linux_uccl_wheels.yml
-      - .github/workflows/test_uccl_wheels.yml
-      - external-builds/uccl/**
-
   workflow_call:
     inputs:
       build_runs_on:
