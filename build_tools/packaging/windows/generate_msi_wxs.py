@@ -468,12 +468,15 @@ def make_id(path: Path, prefix: str) -> str:
     """Return a stable, WiX-legal element ID derived from a relative file path.
 
     WiX v4 requires alphanumeric or underscore characters only, max 72 chars.
-    An 8-hex-digit SHA-256 digest of the normalized path is appended to prevent
-    collisions after sanitization (e.g. foo-bar vs foo_bar would otherwise
-    collide).  The digest is deterministic across interpreter runs.
+    Only ASCII alphanumerics are kept; every other character (dashes, spaces,
+    dots, non-ASCII/unicode letters) is replaced with an underscore.  An
+    8-hex-digit SHA-256 digest of the normalized path is appended to prevent
+    collisions after sanitization (e.g. foo-bar vs foo_bar, or café vs cafe,
+    would otherwise collide).  The digest is deterministic across runs.
     """
     safe = "".join(
-        c if c.isalnum() or c == "_" else "_" for c in str(path).replace("\\", "/")
+        c if (c.isascii() and c.isalnum()) or c == "_" else "_"
+        for c in str(path).replace("\\", "/")
     )
     h = hashlib.sha256(str(path).encode()).hexdigest()[:8]
     return f"{prefix}_{safe}"[:55] + f"_{h}"

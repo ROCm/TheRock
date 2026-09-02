@@ -77,6 +77,37 @@ class TestMakeId(unittest.TestCase):
         result = make_id(Path("lib/llvm/lib/clang/17/include/stddef.h"), "f")
         self.assertRegex(result, r"^[A-Za-z0-9_]+$")
 
+    def test_illegal_symbols_sanitized(self):
+        # Dashes, dots, spaces, and other punctuation are all illegal in WiX
+        # v4 IDs and must be replaced, leaving only [A-Za-z0-9_].
+        for name in [
+            "bin/foo-bar.dll",
+            "bin/foo bar.dll",
+            "bin/foo+bar(1).dll",
+            "bin/foo@bar#baz.dll",
+            "bin/foo.bar.baz.dll",
+        ]:
+            result = make_id(Path(name), "f")
+            self.assertRegex(
+                result, r"^[A-Za-z0-9_]+$", f"illegal char leaked for {name!r}"
+            )
+
+    def test_unicode_sanitized(self):
+        # Non-ASCII letters pass Python's str.isalnum() but are illegal in WiX
+        # IDs; they must be replaced with underscores, not passed through.
+        for name in ["bin/café.dll", "bin/naïve.dll", "bin/日本語.dll", "bin/Ωmega.dll"]:
+            result = make_id(Path(name), "f")
+            self.assertRegex(
+                result, r"^[A-Za-z0-9_]+$", f"unicode leaked for {name!r}"
+            )
+
+    def test_unicode_collision_resistance(self):
+        # "café" and "cafe" sanitize to different-length safe strings but the
+        # digest must keep their IDs distinct regardless.
+        a = make_id(Path("bin/café.dll"), "f")
+        b = make_id(Path("bin/cafe.dll"), "f")
+        self.assertNotEqual(a, b)
+
     def test_max_length(self):
         result = make_id(Path("a/very/deeply/nested/path/to/some/file/name.dll"), "f")
         self.assertLessEqual(len(result), 72)
