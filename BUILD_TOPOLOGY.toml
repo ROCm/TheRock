@@ -627,9 +627,9 @@ source_paths = ["hip-tests"]
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
-split_databases = ["rocblas", "hipblaslt", "hipsparselt"]
-source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "hipsparselt", "rocroller", "origami"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
+split_databases = ["rocblas", "hipblaslt"]
+source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
@@ -653,7 +653,8 @@ source_paths = ["rocprim", "hipcub", "rocthrust"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["blas", "prim"]
-source_paths = ["rocsparse", "hipsparse"]
+split_databases = ["hipsparselt"]
+source_paths = ["rocsparse", "hipsparse", "hipsparselt"]
 
 [artifacts.solver]
 artifact_group = "math-libs"
