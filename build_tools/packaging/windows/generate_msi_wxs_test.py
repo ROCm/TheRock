@@ -135,6 +135,16 @@ class TestReadRocmVersion(unittest.TestCase):
             (root / "version.json").write_text('{"rocm-version": "9.1.2"}')
             self.assertEqual(_read_rocm_version(root), "9.1.2")
 
+    def test_reads_rocm_version_ignoring_other_keys(self):
+        # When both "rocm-version" and unrelated keys are present, the unrelated
+        # keys are ignored and "rocm-version" is returned.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "version.json").write_text(
+                '{"other-key": "1.0.0", "rocm-version": "9.1.2"}'
+            )
+            self.assertEqual(_read_rocm_version(root), "9.1.2")
+
     def test_missing_file_returns_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(_read_rocm_version(Path(tmp)), "7.0.0")
