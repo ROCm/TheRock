@@ -44,6 +44,7 @@ THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
+ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT = "spm_runner_preflight.py"
 ROCPROFILER_SDK_TESTS_BUILD_PATH = ROCPROFILER_SDK_TESTS_PATH / "build"
 
 _DEFAULT_CDASH_PROJECT = "rocprofiler-sdk-alt"
@@ -235,7 +236,7 @@ def cmake_build() -> None:
 
 def run_spm_preflight() -> None:
     """Run rocprofiler-sdk SPM runner checks before executing spm-labeled tests."""
-    preflight = ROCPROFILER_SDK_TESTS_PATH / "spm_runner_preflight.py"
+    preflight = ROCPROFILER_SDK_TESTS_PATH / ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT
     if not preflight.is_file():
         raise FileNotFoundError(
             f"Missing SPM preflight script in test tree: {preflight}"

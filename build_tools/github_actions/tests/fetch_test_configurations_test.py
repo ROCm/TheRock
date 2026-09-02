@@ -767,7 +767,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         spm = next(j for j in components if j["job_name"] == "rocprofiler-sdk-spm")
         self.assertEqual(
             spm["test_runner"],
-            fetch_test_configurations._ROCPROFILER_SDK_SPM_TEST_RUNNER,
+            "linux-gfx942-gpu-rocm-profiler",
         )
 
     def test_rocprofiler_sdk_excludes_spm_label_in_script(self):

@@ -201,9 +201,6 @@ _rocgdb_common = {
 # runner; the default job excludes them via --ctest-label-exclude spm. Preflight
 # and spm labels live in the companion rocm-systems rocprofiler-sdk PR.
 
-# Pinned runner for rocprofiler-sdk SPM tests.
-_ROCPROFILER_SDK_SPM_TEST_RUNNER = "linux-gfx942-gpu-rocm-profiler"
-
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -670,7 +667,7 @@ test_matrix = {
     # in the companion rocm-systems PR). To disable scheduling, comment out this entry.
     "rocprofiler-sdk-spm": {
         "job_name": "rocprofiler-sdk-spm",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
@@ -685,7 +682,7 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
-        "test_runner": _ROCPROFILER_SDK_SPM_TEST_RUNNER,
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
         "include_family": {
             "linux": ["gfx94X-dcgpu"],
         },
