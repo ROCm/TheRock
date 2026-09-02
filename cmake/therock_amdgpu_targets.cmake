@@ -257,6 +257,115 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
+# amdgcnspirv architecture-independent portable SPIR-V target
+# Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
+  PLATFORM_INDEPENDENT
+  # Classification legend for the notes below:
+  #   ! - target neutral, @ - generic, ? - unknown, "" - target-specific, * per-arch
+  # Tracking issue for enabling SPIR-V across components:
+  #   https://github.com/ROCm/TheRock/issues/6918
+  EXCLUDE_TARGET_PROJECTS
+    MIOpen #<
+    composable_kernel #<
+    hip-clr #?
+    hip-tests #?
+    hipDNN_samples #<
+    hipFFT #*
+    hipRAND #*
+    hipSOLVER #<
+    hipSPARSE #<
+    hipSPARSELt #<
+    hipTensor #<
+    hipdnn_integration_tests #<
+    hipkernelprovider #<
+    libhipcxx #<
+    mxDataGenerator #?
+    ocl-clr #?
+    rccl #<
+    rccl-tests #?
+    rocALUTION #<
+    rocFFT #*
+    rocRoller #?
+    rocSOLVER #<
+    rocSPARSE #<
+    rocWMMA #<
+    roctracer #?
+
+    rocBLAS #* ADDSPV: re-excluded; Tensile has no amdgcnspirv arch
+             # (rocm_check_target_ids / tensilelite reject it).
+    hipBLASLt #? ADDSPV: re-excluded; tensilelite_supported_architectures.cmake:90
+               # "Unsupported GPU target: amdgcnspirv" (Tensile has no SPIR-V arch).
+    aqlprofile #@ ADDSPV: re-excluded; test builds simple_convolution.cl with
+                 # `clang -x cl -mcpu=amdgcnspirv` which errors "invalid target ID
+                 # 'amdgcnspirv'" (OpenCL path can't target SPIR-V mcpu).
+    rocprofiler-compute #! ADDSPV: re-excluded; sample/rocflop.cpp uses MFMA
+                         # intrinsics (__builtin_amdgcn_mfma_*) needing mai-insts/
+                         # gfx940-insts features not available for amdgcnspirv.
+    rocprofiler-sdk #! ADDSPV: re-excluded; counters/tests build per-target
+                     # *_agent_kernels.hsaco via foreach(GPU_TARGETS) → clang
+                     # "invalid target ID 'amdgcnspirv'".
+
+    # rocprofiler-systems #!
+    # rocprofiler-systems-examples #!
+    # rocr-debug-agent
+    # rocr-debug-agent-tests #!
+    rocrtst #! ADDSPV: re-excluded; builds per-arch test kernels
+             # amdgcnspirv/*_kernels.hsaco via `clang -mcpu=amdgcnspirv`
+             # -> "invalid target ID 'amdgcnspirv'".
+    rocshmem #! ADDSPV: re-excluded; compiles device bitcode per-arch incl.
+             # amdgcnspirv; `opt -O3 -mtriple=amdgcn-amd-amdhsa -mcpu=amdgcnspirv`
+             # on the linked module fails "alloca on amdgpu must be in
+             # addrspace(5)" -> "input module is broken!" (addrspace lowering
+             # not performed for the SPIR-V target).
+    # rdc #!
+    # rocThrust #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    # rocPRIM #< ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    # rocPRIM_tests #< ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    # rocRAND #* ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    # hipfile #!
+    # hipblasltprovider #<
+    # ROCR-Runtime #!
+    # hipBLAS #*
+    # hipBLAS-common #?
+    # hipCUB #? ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
+    # hipDNN #!
+    # hipInfo #!
+    # miopenprovider #!
+    # mirage #!
+    # rocdecode #!
+    # rocjitsu #!
+    # rocjpeg #!
+    # rocm-kpack # keep enabled; kpack split is guarded per-artifact
+
+    # --- ADDSPV: additionally excluded so that an ENABLE_ALL build for
+    # amdgcnspirv contains the same set of projects as a compiler-only build.
+    # These are runtime / kernel / tooling / third-party components not part of
+    # the SPIR-V compiler slice. Each name is a verified existing subproject.
+    # amd-dbgapi
+    # amdsmi
+    # hipify
+    # hipthreads
+    # ocl-icd
+    # origami
+    # rocgdb
+    # rocminfo
+    # rocprof-trace-decoder
+    # therock-SuiteSparse
+    # therock-amd-mesa
+    # therock-elfio
+    # therock-expat
+    # therock-gmp
+    # therock-host-blas
+    # therock-host-blas64
+    # therock-hwloc
+    # therock-libpciaccess
+    # therock-mpfr
+    # therock-ncurses
+    # therock-spdlog
+    # therock-util-linux
+)
+
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
