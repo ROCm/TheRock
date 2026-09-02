@@ -7,6 +7,7 @@ Unit tests for build_topology module.
 """
 
 import os
+import re
 import sys
 import tempfile
 import textwrap
@@ -25,6 +26,8 @@ from _therock_utils.build_topology import (
     get_topology,
 )
 from topology_to_cmake import generate_feature_declarations
+
+REPO_ROOT = Path(__file__).parent.parent.parent
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -1123,8 +1126,184 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("DISABLE_PROCESSORS aarch64", cmake)
 
 
+class ExtractSourcePathFromPathTest(unittest.TestCase):
+    """Tests for source_path extraction from file paths."""
+
+    def test_projects_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path("projects/rocblas/src/foo.cpp"),
+            "rocblas",
+        )
+
+    def test_shared_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path(
+                "shared/rocroller/include/bar.hpp"
+            ),
+            "rocroller",
+        )
+
+    def test_dnn_providers_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path(
+                "dnn-providers/miopen-provider/src/baz.cpp"
+            ),
+            "miopen-provider",
+        )
+
+    def test_root_file_returns_none(self):
+        self.assertIsNone(BuildTopology.extract_source_path_from_path("CMakeLists.txt"))
+
+
+class GetArtifactForSourcePathTest(unittest.TestCase):
+    """Tests for artifact lookup by source_path."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_rocblas_maps_to_blas(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("rocblas"), "blas")
+
+    def test_hipblas_maps_to_blas(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("hipblas"), "blas")
+
+    def test_rocrand_maps_to_rand(self):
+        self.assertEqual(self.topology.get_artifact_for_source_path("rocrand"), "rand")
+
+    def test_unknown_source_path_returns_none(self):
+        self.assertIsNone(
+            self.topology.get_artifact_for_source_path("unknown-source-path")
+        )
+
+
+class GetArtifactForPathTest(unittest.TestCase):
+    """Tests for artifact lookup by full file path."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_rocblas_maps_to_blas(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("projects/rocblas/src/foo.cpp"),
+            "blas",
+        )
+
+    def test_rocfft_maps_to_fft(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("projects/rocfft/src/kernel.cpp"),
+            "fft",
+        )
+
+    def test_shared_rocroller_maps_to_blas(self):
+        self.assertEqual(
+            self.topology.get_artifact_for_path("shared/rocroller/src/foo.cpp"),
+            "blas",
+        )
+
+    def test_unknown_path_returns_none(self):
+        self.assertIsNone(self.topology.get_artifact_for_path("cmake/FindHIP.cmake"))
+
+
+class ParseChangedPathTest(unittest.TestCase):
+    """Tests for parsing changed paths into submodule and subpath."""
+
+    def test_simple_path(self):
+        submodule, subpath = BuildTopology.parse_changed_path(
+            "rocm-libraries/projects/rocblas/foo.cpp"
+        )
+        self.assertEqual(submodule, "rocm-libraries")
+        self.assertEqual(subpath, "projects/rocblas/foo.cpp")
+
+    def test_single_component(self):
+        submodule, subpath = BuildTopology.parse_changed_path("rocm-libraries")
+        self.assertEqual(submodule, "rocm-libraries")
+        self.assertEqual(subpath, "")
+
+
+class SourceSetsWithSourcePathsTest(unittest.TestCase):
+    """Tests for source sets containing source_paths."""
+
+    def setUp(self):
+        self.topology = get_topology()
+
+    def test_returns_rocm_libraries(self):
+        self.assertIn(
+            "rocm-libraries", self.topology.get_source_sets_with_source_paths()
+        )
+
+    def test_returns_rocm_systems(self):
+        self.assertIn("rocm-systems", self.topology.get_source_sets_with_source_paths())
+
+
+class SourcePathsInSyncTest(unittest.TestCase):
+    """Verify BUILD_TOPOLOGY.toml source_paths match CMakeLists.txt."""
+
+    def test_cmake_source_paths_in_topology(self):
+        topology = get_topology()
+        topology_source_paths = set()
+        for artifact in topology.artifacts.values():
+            topology_source_paths.update(artifact.source_paths)
+
+        cmake_source_paths = self._extract_cmake_source_paths()
+        missing = cmake_source_paths - topology_source_paths
+        self.assertEqual(
+            missing,
+            set(),
+            f"Source paths in CMakeLists.txt but not BUILD_TOPOLOGY.toml: {sorted(missing)}",
+        )
+
+    def _extract_cmake_source_paths(self) -> set[str]:
+        source_paths: set[str] = set()
+        patterns = [
+            re.compile(
+                r'EXTERNAL_SOURCE_DIR\s+"?\$\{THEROCK_ROCM_LIBRARIES_SOURCE_DIR\}'
+                r"/(?:projects|shared|dnn-providers)/([a-zA-Z0-9_-]+)"
+            ),
+            re.compile(
+                r'EXTERNAL_SOURCE_DIR\s+"?\$\{THEROCK_ROCM_SYSTEMS_SOURCE_DIR\}'
+                r"/(?:projects|shared)/([a-zA-Z0-9_-]+)"
+            ),
+        ]
+        for cmake_file in REPO_ROOT.rglob("CMakeLists.txt"):
+            rel_path = cmake_file.relative_to(REPO_ROOT)
+            if any(
+                part in ("rocm-libraries", "rocm-systems", "build", ".git")
+                for part in rel_path.parts
+            ):
+                continue
+            try:
+                content = cmake_file.read_text()
+            except Exception:
+                continue
+            for pattern in patterns:
+                for match in pattern.finditer(content):
+                    source_paths.add(match.group(1))
+        return source_paths
+
+
 class RealTopologyTest(unittest.TestCase):
     """Assertions against the repo's actual BUILD_TOPOLOGY.toml."""
+
+    def test_emulation_has_a_dedicated_build_stage(self):
+        topology = get_topology()
+
+        compiler_artifacts = topology.get_produced_artifacts("compiler-runtime")
+        self.assertNotIn("rocjitsu", compiler_artifacts)
+        self.assertNotIn("rocjitsu-hotswap", compiler_artifacts)
+        self.assertNotIn("mirage", compiler_artifacts)
+
+        emulation_artifacts = topology.get_produced_artifacts("emulation")
+        self.assertEqual(
+            emulation_artifacts,
+            {"rocjitsu", "rocjitsu-hotswap", "mirage"},
+        )
+        emulation_inbound = topology.get_inbound_artifacts("emulation")
+        self.assertIn("base", emulation_inbound)
+        self.assertIn("sysdeps", emulation_inbound)
+
+        comm_libs_inbound = topology.get_inbound_artifacts("comm-libs")
+        self.assertIn("rocjitsu", comm_libs_inbound)
+        self.assertIn("rocjitsu-hotswap", comm_libs_inbound)
 
     def test_hipkernelprovider_is_split_per_arch(self):
         # rocKE ships per-arch AOT bundles under engines/arch_content/rocke/<arch>,
