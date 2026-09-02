@@ -23,6 +23,7 @@ Example
 import argparse
 import functools
 import json
+import subprocess
 from pathlib import Path
 import sys
 
@@ -77,6 +78,42 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link = target.with_suffix("")
             if not link.exists():
                 link.symlink_to(target.name)
+
+
+def discover_llvm_host_triple(artifacts: ArtifactCatalog) -> str | None:
+    """Discover the LLVM host triple for libomp's per-target runtime dir.
+
+    With LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON, libomp.so is installed under
+    lib/llvm/lib/<host-triple>/ instead of lib/llvm/lib/.
+    """
+    for an, basedir in artifacts.artifact_basedirs:
+        if an.name != "amd-llvm" or an.component != "lib":
+            continue
+
+        llvm_lib = basedir / "lib" / "llvm" / "lib"
+        for libomp in sorted(llvm_lib.glob("*/libomp.so")):
+            return libomp.parent.name
+
+        for clang_name in ("amdclang", "clang"):
+            clang = basedir / "lib" / "llvm" / "bin" / clang_name
+            if not clang.is_file():
+                clang = basedir / "bin" / clang_name
+            if not clang.is_file():
+                continue
+            try:
+                triple = subprocess.run(
+                    [str(clang), "--print-target-triple"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=True,
+                ).stdout.strip()
+            except (subprocess.SubprocessError, OSError):
+                continue
+            if triple and (llvm_lib / triple / "libomp.so").is_file():
+                return triple
+
+    return None
 
 
 def _platform_targets(
@@ -233,9 +270,13 @@ def run(args: argparse.Namespace):
         windows_target_families=windows_targets,
     )
 
+    host_triple = discover_llvm_host_triple(artifacts)
+
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
+    if host_triple:
+        core.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
     core.rpath_dep(core, "lib/rocm_sysdeps/lib")
     core.populate_runtime_files(
         params.filter_artifacts(
@@ -265,6 +306,8 @@ def run(args: argparse.Namespace):
         profiler = PopulatedDistPackage(params, logical_name="profiler")
         profiler.rpath_dep(core, "lib")
         profiler.rpath_dep(core, "lib/llvm/lib")
+        if host_triple:
+            profiler.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
         profiler.rpath_dep(core, "lib/rocm_sysdeps/lib")
         profiler.populate_runtime_files(profiler_artifacts)
         ensure_profiler_library_symlinks(profiler)
@@ -295,9 +338,9 @@ def run(args: argparse.Namespace):
         )
 
     if kpack_split:
-        _run_kpack_split(args, params, core)
+        _run_kpack_split(args, params, core, host_triple)
     else:
-        _run_legacy(args, params, core)
+        _run_legacy(args, params, core, host_triple)
 
     if args.build_packages:
         validate_required_dist_packages(
@@ -315,7 +358,10 @@ def run(args: argparse.Namespace):
 
 
 def _run_kpack_split(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    host_triple: str | None,
 ):
     """Kpack-split mode: arch-neutral host libraries + per-ISA device wheels."""
 
@@ -324,8 +370,10 @@ def _run_kpack_split(
     lib.rpath_dep(core, "lib")
     lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
     lib.rpath_dep(core, "lib/host-math/lib")
-    # rpp needs libomp, which ships in core under lib/llvm/lib.
+    # rpp needs libomp, which ships in core under lib/llvm/lib[/<host-triple>].
     lib.rpath_dep(core, "lib/llvm/lib")
+    if host_triple:
+        lib.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
     lib.populate_runtime_files(
         params.filter_artifacts(
             filter=functools.partial(libraries_artifact_filter, "generic"),
@@ -402,7 +450,10 @@ def _run_kpack_split(
 
 
 def _run_legacy(
-    args: argparse.Namespace, params: Parameters, core: PopulatedDistPackage
+    args: argparse.Namespace,
+    params: Parameters,
+    core: PopulatedDistPackage,
+    host_triple: str | None,
 ):
     """Legacy mode: per-family libraries wheels with embedded device code."""
 
@@ -414,8 +465,10 @@ def _run_legacy(
         lib.rpath_dep(core, "lib")
         lib.rpath_dep(core, "lib/rocm_sysdeps/lib")
         lib.rpath_dep(core, "lib/host-math/lib")
-        # rpp needs libomp, which ships in core under lib/llvm/lib.
+        # rpp needs libomp, which ships in core under lib/llvm/lib[/<host-triple>].
         lib.rpath_dep(core, "lib/llvm/lib")
+        if host_triple:
+            lib.rpath_dep(core, f"lib/llvm/lib/{host_triple}")
         lib.populate_runtime_files(
             params.filter_artifacts(
                 filter=functools.partial(libraries_artifact_filter, target_family),
