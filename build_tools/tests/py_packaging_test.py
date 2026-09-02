@@ -399,7 +399,7 @@ class MultiArchPackagingTest(TmpDirTestCase):
             "core (generic) file must be reachable from arch-specific devel",
         )
 
-
+    @unittest.skipIf(sys.platform == "win32", "SONAME symlinks are Linux-only")
     def test_emit_soname_alias_symlinks_creates_runtime_symlinks(self):
         """Soname aliases with a materialized SONAME target get symlinks in the
         runtime package so dlopen by unversioned name succeeds (ROCM-29954)."""
