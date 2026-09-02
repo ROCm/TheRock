@@ -534,9 +534,12 @@ cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
 > [Super-project CMake build - Design for testing](#super-project-cmake-build---design-for-testing) section above.
 
 > [!WARNING]
-> Build tests currently run _after_ other build steps rather than in parallel
-> with them. This can introduce bottlenecks and could be revisited once all
-> build tests pass and can be marked blocking, see notes in
+> Each stage currently runs its build tests after producing that stage's
+> artifacts rather than requesting both targets together. Non-blocking
+> emulation build tests run in a dedicated stage so they do not delay the
+> compiler-runtime fan-out, except for consumers of emulation artifacts.
+> The remaining per-stage sequencing could be revisited once all build tests
+> pass and can be marked blocking. See notes in
 > [`.github/workflows/multi_arch_build_portable_linux_artifacts.yml`](/.github/workflows/multi_arch_build_portable_linux_artifacts.yml)
 > and
 > [`.github/workflows/multi_arch_build_windows_artifacts.yml`](/.github/workflows/multi_arch_build_windows_artifacts.yml)
