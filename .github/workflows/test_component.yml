@@ -198,7 +198,10 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # Normally the job name. Components that decorate their job name set
+          # test_component to the undecorated name, which test_runner.py maps to
+          # a test directory.
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
