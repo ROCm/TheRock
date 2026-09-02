@@ -322,7 +322,7 @@ def upload_to_s3(
 
 
 def upload_packaging_logs(
-    package_dir: Path,
+    log_dir: Path,
     pkg_type: str,
     output_root: WorkflowOutputRoot,
     backend: StorageBackend,
@@ -333,7 +333,9 @@ def upload_packaging_logs(
     specified by WorkflowOutputRoot.native_linux_packages_log_dir().
 
     Args:
-        package_dir: Directory containing built packages (logs are in logs/ subdir)
+        log_dir: Directory containing packaging log files. Kept outside of
+        package_dir so upload_to_s3() never walks/uploads these files
+        to the packages/<pkg_type> S3 prefix.
         pkg_type: Package type ('deb' or 'rpm')
         output_root: WorkflowOutputRoot for computing S3 paths
         backend: Storage backend for uploads
@@ -341,7 +343,6 @@ def upload_packaging_logs(
     Returns:
         URL to the log index page, or None if no logs were uploaded
     """
-    log_dir = package_dir / "logs"
     if not log_dir.is_dir():
         print(f"[INFO] Log directory {log_dir} not found. Skipping log upload.")
         return None
@@ -448,9 +449,8 @@ def main() -> None:
         run_id=args.run_id, platform="linux"
     )
     backend = create_storage_backend()
-    log_index_url = upload_packaging_logs(
-        package_dir, args.pkg_type, output_root, backend
-    )
+    logs_dir = package_dir.parent / "logs"
+    log_index_url = upload_packaging_logs(logs_dir, args.pkg_type, output_root, backend)
     if log_index_url:
         _emit_github_output("packaging_logs_url", log_index_url)
 
