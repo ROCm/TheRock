@@ -24,10 +24,6 @@ from .logger import log
 from .exceptions import TestExecutionError
 from .extended_test_client import ExtendedTestClient
 
-from github_actions_api import (
-    gha_append_step_summary,
-)
-
 
 class ExtendedTestBase:
     """Base class providing shared infrastructure for extended tests."""
