@@ -332,6 +332,55 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       libprofiler-hub.so
   )
 
+  # The artifact target cannot supply this filtered tree: it emits one command for
+  # all components, and the test component holds the executable built from it.
+  set(_profiler_hub_test_dir "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub-install-test")
+  set(_profiler_hub_test_components "${_profiler_hub_test_dir}/artifact/components")
+  set(_profiler_hub_test_prefix "${_profiler_hub_test_dir}/artifact/prefix")
+  set(_profiler_hub_test_stamp "${_profiler_hub_test_dir}/artifact/prefix.stamp")
+  set(_profiler_hub_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  get_target_property(_profiler_hub_stamp_dir profiler-hub THEROCK_STAMP_DIR)
+  add_custom_command(
+    OUTPUT "${_profiler_hub_test_stamp}"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf
+      "${_profiler_hub_test_components}" "${_profiler_hub_test_prefix}"
+    COMMAND "${Python3_EXECUTABLE}" "${_profiler_hub_fileset_tool}" artifact
+      --root-dir "${THEROCK_BINARY_DIR}"
+      --descriptor "${CMAKE_CURRENT_SOURCE_DIR}/artifact-profiler-hub.toml"
+      --artifact-name profiler-hub
+      dev "${_profiler_hub_test_components}/dev"
+      lib "${_profiler_hub_test_components}/lib"
+    COMMAND "${Python3_EXECUTABLE}" "${_profiler_hub_fileset_tool}" artifact-flatten
+      -o "${_profiler_hub_test_prefix}"
+      "${_profiler_hub_test_components}/dev" "${_profiler_hub_test_components}/lib"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_profiler_hub_test_stamp}"
+    DEPENDS
+      "${_profiler_hub_stamp_dir}/stage.stamp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/artifact-profiler-hub.toml"
+      "${_profiler_hub_fileset_tool}"
+    COMMENT "Assembling profiler-hub artifact tree for the install test"
+    VERBATIM
+  )
+
+  # Deliberately no BUILD_DEPS or RUNTIME_DEPS: either installs the super-project
+  # find_package provider, which would resolve profiler-hub from the unfiltered
+  # dist tree and mask the omission this test detects.
+  therock_cmake_subproject_declare(profiler-hub-install-test
+    DISABLE_AMDGPU_TARGETS
+    COMPILER_TOOLCHAIN amd-llvm
+    FPRINT_SOURCE_HASH
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/profiler-hub-install-test"
+    BINARY_DIR "${_profiler_hub_test_dir}"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DPROFILER_HUB_ARTIFACT_PREFIX=${_profiler_hub_test_prefix}"
+    EXTRA_DEPENDS
+      "${_profiler_hub_test_stamp}"
+    INSTALL_RPATH_DIRS
+      lib
+  )
+  therock_cmake_subproject_activate(profiler-hub-install-test)
+
   therock_provide_artifact(profiler-hub
     TARGET_NEUTRAL
     DESCRIPTOR artifact-profiler-hub.toml
@@ -341,8 +390,10 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       profiler-hub
+      profiler-hub-install-test
   )
 endif(THEROCK_ENABLE_PROFILER_HUB)
 
