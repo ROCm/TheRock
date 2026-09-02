@@ -544,7 +544,7 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Directory for downloaded and extracted artifacts when using "
-            "--artifacts-url. Defaults to <script-dir>/.artifact-cache. "
+            "--artifacts-url. Defaults to <script-dir>/artifact-cache. "
             "Reuse this dir across runs to avoid re-downloading."
         ),
     )
@@ -613,7 +613,7 @@ def parse_args() -> argparse.Namespace:
         args.output = script_dir / f"{pkg.output_stem}.wxs"
 
     if args.artifacts_cache_dir is None:
-        args.artifacts_cache_dir = script_dir / ".artifact-cache"
+        args.artifacts_cache_dir = script_dir / "artifact-cache"
 
     return args
 

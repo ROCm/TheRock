@@ -255,7 +255,7 @@ class TestBuildWxs(unittest.TestCase):
             version_dir="ROCm",
             package_version="1.2.3",
             artifacts_url=None,
-            artifacts_cache_dir=root / ".artifact-cache",
+            artifacts_cache_dir=root / "artifact-cache",
         )
         defaults.update(extra_args or {})
         # Override build_root so artifacts/ is under it
@@ -348,7 +348,7 @@ class TestBuildWxs(unittest.TestCase):
                 version_dir="ROCm",
                 package_version="1.2.3",
                 artifacts_url=None,
-                artifacts_cache_dir=root_path / ".artifact-cache",
+                artifacts_cache_dir=root_path / "artifact-cache",
             )
             with redirect_stderr(buf):
                 build_wxs(args)

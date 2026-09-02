@@ -33,7 +33,7 @@ __pycache__
 /out/
 
 # Windows MSI packaging — generated files and local artifact cache.
-build_tools/packaging/windows/.artifact-cache/
+build_tools/packaging/windows/artifact-cache/
 build_tools/packaging/windows/*.wxs
 build_tools/packaging/windows/*.msi
 build_tools/packaging/windows/*.wixpdb
