@@ -20,7 +20,6 @@ cannot be queried. A version above the supported maximum produces a warning
 but does not fail.
 """
 
-import fcntl
 import os
 from pathlib import Path
 import platform
@@ -41,6 +40,11 @@ _KFD_VERSION_MAX = (2, 0)  # exclusive
 
 
 def _get_kfd_version() -> Tuple[int, int]:
+    # fcntl is a Unix-only stdlib module and is only needed for this Linux
+    # KFD ioctl query. Import it lazily so the Windows sanity check does not
+    # crash at import time with ModuleNotFoundError: No module named 'fcntl'.
+    import fcntl
+
     fd = os.open(_KFD_DEVICE, os.O_RDWR)
     try:
         buf = bytearray(8)

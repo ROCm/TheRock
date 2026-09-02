@@ -42,6 +42,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      rebuild_artifacts:
+        type: string
+        default: ""
+        description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
       skip_stages:
         type: string
         default: ""
@@ -221,6 +225,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
