@@ -195,6 +195,12 @@ python_indexes:
       markupsafe:
         owner_path: core/whl-next
         stream_group: all
+      migraphx:
+        owner_path: migraphx/whl-next
+        stream_group: all
+      migraphx-libs:
+        owner_path: migraphx/whl-next
+        stream_group: all
       mpmath:
         owner_path: core/whl-next
         stream_group: all
@@ -203,6 +209,9 @@ python_indexes:
         stream_group: all
       numpy:
         owner_path: core/whl-next
+        stream_group: all
+      onnxruntime:
+        owner_path: onnxruntime/whl-next
         stream_group: all
       pillow:
         owner_path: core/whl-next
@@ -299,6 +308,12 @@ python_indexes:
         stream_group: all
       torch:
         owner_path: pytorch/whl-next
+        stream_group: all
+      torch-migraphx:
+        owner_path: migraphx/whl-next
+        stream_group: all
+      transformer-engine:
+        owner_path: transformer_engine/whl-next
         stream_group: all
       torchaudio:
         owner_path: pytorch/whl-next
