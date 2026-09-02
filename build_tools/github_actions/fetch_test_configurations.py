@@ -305,7 +305,7 @@ test_matrix = {
     },
     "hipblas": {
         "job_name": "hipblas",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--blas --solver --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -343,7 +343,7 @@ test_matrix = {
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --sparse --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -354,7 +354,7 @@ test_matrix = {
     },
     "rocsolver": {
         "job_name": "rocsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --tests",
         # test_runner.py drives ctest category labels, so it runs a filtered
         # subset rather than the full ~5 hr extended suite.
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
@@ -447,7 +447,7 @@ test_matrix = {
     # SPARSE tests
     "hipsparse": {
         "job_name": "hipsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -458,7 +458,7 @@ test_matrix = {
     },
     "rocsparse": {
         "job_name": "rocsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
         # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
         # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
@@ -473,7 +473,7 @@ test_matrix = {
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
@@ -733,7 +733,7 @@ test_matrix = {
     # rocALUTION tests
     "rocalution": {
         "job_name": "rocalution",
-        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "fetch_artifact_args": "--rocalution --tests --blas --sparse --rand",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
