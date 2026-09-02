@@ -153,6 +153,7 @@ jobs:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: no_rocm_image_ubuntu24_04
 
   prepare_matrix:
     runs-on: ubuntu-24.04
@@ -199,7 +200,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && needs.resolve-images.outputs.image_ref || null }}
       # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --shm-size=10g
