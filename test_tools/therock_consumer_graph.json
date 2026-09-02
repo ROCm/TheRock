@@ -444,7 +444,6 @@
       "hipblaslt",
       "hipsparselt",
       "miopen",
-      "profiler-hub",
       "rccl",
       "rdc",
       "rocblas",
