@@ -229,9 +229,11 @@ def fetch_artifacts(
                 print(f"  Cached:    {filename}")
             else:
                 print(f"  Fetching:  {filename}")
+                tmp_path = local_path.with_suffix(".tmp")
                 try:
-                    urllib.request.urlretrieve(url, local_path)
+                    urllib.request.urlretrieve(url, tmp_path)
                 except urllib.error.HTTPError as e:
+                    tmp_path.unlink(missing_ok=True)
                     # 404 is expected: not every artifact publishes every
                     # component (e.g. Windows-only components have no Linux
                     # tarball). Any other HTTP error is a real failure.
@@ -239,6 +241,10 @@ def fetch_artifacts(
                         print(f"  Skipped:   {filename} (not found)")
                         continue
                     sys.exit(f"Error fetching {url}: HTTP {e.code} {e.reason}")
+                except Exception:
+                    tmp_path.unlink(missing_ok=True)
+                    raise
+                tmp_path.rename(local_path)
 
             artifact_out = extract_dir / f"{artifact_name}_{component}_generic"
             manifest_path = artifact_out / "artifact_manifest.txt"
