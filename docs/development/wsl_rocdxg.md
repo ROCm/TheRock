@@ -39,7 +39,9 @@ target-neutral artifact from the `rocm-systems` source set.
 The relevant feature controls are:
 
 - `THEROCK_ENABLE_WSL`: enables the WSL feature group.
-- `THEROCK_ENABLE_WSL_ROCDXG`: enables the ROCDXG component.
+- `THEROCK_ENABLE_WSL_ROCDXG`: enables the ROCDXG component. This also builds
+  amdsmi with `ENABLE_WSL_BACKEND=ON`, since that backend dlopens the
+  `librocdxg.so` produced here.
 
 The `wsl-rocdxg` artifact group depends on `base`, and the artifact depends on
 `core-hip`. This lets the WSL stage bootstrap from the same inbound Linux
