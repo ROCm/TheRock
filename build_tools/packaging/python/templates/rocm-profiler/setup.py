@@ -43,9 +43,15 @@ package_dir = {
 }
 install_requires = []
 
-# The rocprof-trace-decoder Python API is staged inside the platform dir (under
-# lib/python*/site-packages/); re-home it as a top level package so it is
-# importable. It is absent on ROCm builds that predate the API.
+# rocprof-trace-decoder's CMake installs its Python API into the prefix at
+# lib/python3/site-packages/, which lands inside our platform dir and is never
+# on sys.path. Re-home it as a top level package so `import
+# rocprof_trace_decoder` works, since this wheel is the only channel it ships
+# through. It is absent on ROCm builds that predate the API.
+#
+# install_requires mirrors the upstream project's pyproject.toml, which is not
+# staged into the artifact and so cannot be read here. profiler_test.py imports
+# the packaged API to catch drift between the two.
 platform_dir = THIS_DIR / "platform" / platform_package_name
 for site_packages in sorted(platform_dir.glob("lib/python*/site-packages")):
     if not (site_packages / "rocprof_trace_decoder").is_dir():
