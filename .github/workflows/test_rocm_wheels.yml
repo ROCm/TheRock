@@ -183,12 +183,8 @@ jobs:
           PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
         run: |
           # Keep this inline: repository/ref may select untrusted checkout code.
-          python - <<'PY'
-          import os
-          import venv
-
-          venv.create(os.environ["ROCSHMEM4PY_VENV_DIR"], with_pip=True, clear=True)
-          PY
+          # Use the provisioned pip to install into a clean, pip-less venv.
+          python -m venv --clear --without-pip "${ROCSHMEM4PY_VENV_DIR}"
 
           pip_args=(--disable-pip-version-check --no-cache-dir --only-binary=:all: --pre rocshmem4py)
           if [[ -n "${PACKAGE_INDEX_URL}" ]]; then
@@ -201,7 +197,8 @@ jobs:
           fi
 
           for attempt in {1..13}; do
-            if "${ROCSHMEM4PY_VENV_DIR}/bin/pip" install "${pip_args[@]}"; then
+            if python -m pip --python "${ROCSHMEM4PY_VENV_DIR}" \
+              install "${pip_args[@]}"; then
               break
             fi
             if [[ "${attempt}" == 13 ]]; then
@@ -217,19 +214,34 @@ jobs:
           EXPECTED_ROCM_VERSION: ${{ inputs.rocm_version }}
           ROCSHMEM_HEAP_SIZE: 268435456
         run: |
-          "${ROCSHMEM4PY_VENV_DIR}/bin/python" - <<'PY'
+          # Parse installed metadata with the provisioned pip environment.
+          python - "${ROCSHMEM4PY_VENV_DIR}/bin/python" <<'PY'
           import os
-          from importlib.metadata import requires, version
+          from importlib.metadata import distributions
+          import subprocess
+          import sys
 
           from pip._vendor.packaging.requirements import Requirement
           from pip._vendor.packaging.utils import canonicalize_name
           from pip._vendor.packaging.version import Version
 
-          import _rocshmem4py
-          import rocshmem4py
+          target_python = sys.argv[1]
+          target_site_packages = subprocess.check_output(
+              [
+                  target_python,
+                  "-c",
+                  "import sysconfig; print(sysconfig.get_path('purelib'))",
+              ],
+              text=True,
+          ).strip()
+          installed = {
+              canonicalize_name(dist.metadata["Name"]): dist
+              for dist in distributions(path=[target_site_packages])
+          }
+          rocshmem4py_dist = installed["rocshmem4py"]
+          core_dist = installed["rocm-sdk-core"]
 
-          wheel_version = Version(version("rocshmem4py"))
-          assert rocshmem4py.__rocshmem_version__
+          wheel_version = Version(rocshmem4py_dist.version)
 
           expected_rocm_version = Version(os.environ["EXPECTED_ROCM_VERSION"])
           identity = "devrocm" if expected_rocm_version.is_devrelease else "rocm"
@@ -237,17 +249,24 @@ jobs:
               f"0+{identity}{str(expected_rocm_version).replace('+', '-')}"
           ).local
           assert wheel_version.local == expected_local
-          assert Version(version("rocm-sdk-core")) == expected_rocm_version
+          assert Version(core_dist.version) == expected_rocm_version
 
           core_requirements = [
               requirement
-              for requirement in map(Requirement, requires("rocshmem4py") or [])
+              for requirement in map(Requirement, rocshmem4py_dist.requires or [])
               if canonicalize_name(requirement.name) == "rocm-sdk-core"
           ]
           assert len(core_requirements) == 1
           assert str(core_requirements[0].specifier) == (
               f"=={expected_rocm_version}"
           )
+          PY
+
+          "${ROCSHMEM4PY_VENV_DIR}/bin/python" - <<'PY'
+          import _rocshmem4py
+          import rocshmem4py
+
+          assert rocshmem4py.__rocshmem_version__
 
           rocshmem4py.set_hip_device_from_env()
           unique_id = rocshmem4py.rocshmem_get_uniqueid()
