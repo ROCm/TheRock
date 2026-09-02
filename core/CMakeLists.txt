@@ -70,9 +70,7 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
       CMAKE_ARGS
         "-DCMAKE_VERBOSE_MAKEFILE=OFF"
         "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-        # The backend dlopens librocdxg.so, which only exists when the
-        # wsl-rocdxg subproject is built.
-        "-DENABLE_WSL_BACKEND=${THEROCK_ENABLE_WSL_ROCDXG}"
+        "-DENABLE_WSL_BACKEND=ON"
       BUILD_DEPS
         therock-googletest
       RUNTIME_DEPS
