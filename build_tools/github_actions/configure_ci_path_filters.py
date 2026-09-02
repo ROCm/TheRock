@@ -274,6 +274,7 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
     "test_artifacts_structure.yml",
     "test_artifacts.yml",
     "test_component.yml",
+    "test_multi_arch_linux_jax_wheels.yml",
     "test_native_linux_packages_install.yml",
     "test_rocm_wheels.yml",
 }

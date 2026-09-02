@@ -25,8 +25,13 @@ on:
         required: false
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', 'host-asan-debug'). When it contains 'asan', changes the install prefix to DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR (e.g. /opt/rocm/core-asan-7.15)."
+        required: false
+        type: string
+        default: ""
       release_type:
-        description: "Release type: 'ci', 'dev', 'nightly', or 'prerelease'"
+        description: "Release type used for artifact storage and package publishing."
         required: false
         type: string
         default: ci
@@ -38,6 +43,13 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
         required: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -130,7 +142,8 @@ jobs:
             --rocm-version "${{ inputs.rocm_version }}" \
             --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
             --pkg-type "${{ inputs.native_package_type }}" \
-            --version-suffix "${{ env.ARTIFACT_RUN_ID }}"
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
+            --build-variant "${{ inputs.build_variant }}"
 
       - name: Simulated install Test
         id: test-packages

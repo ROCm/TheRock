@@ -10,14 +10,14 @@ for performance.
 
 Usage:
     # Fetch inbound artifacts for a stage (downloads and extracts in parallel)
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --output-dir build/
 
     # Fetch and flatten artifacts into single directory structure
-    python stage_artifact_manager.py fetch \
+    python artifact_manager.py fetch \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
@@ -25,14 +25,14 @@ Usage:
         --flatten
 
     # Push produced artifacts after building (compresses and uploads in parallel)
-    python stage_artifact_manager.py push \
+    python artifact_manager.py push \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --build-dir build/
 
     # List what artifacts a stage needs/produces
-    python stage_artifact_manager.py info \
+    python artifact_manager.py info \
         --stage math-libs \
         --amdgpu-families gfx94X-dcgpu
 
@@ -68,7 +68,11 @@ from _therock_utils.artifact_backend import (
     S3Backend,
     create_backend_from_env,
 )
-from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import (
+    ArtifactName,
+    ArtifactPopulator,
+    prebuilt_marker_relpath,
+)
 from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
@@ -274,6 +278,7 @@ class ExtractRequest:
     output_dir: Path
     delete_archive: bool
     flatten: bool
+    extraction_cache_dir: Optional[Path] = None
     bootstrap: bool = False
     # Shared state for parallel bootstrap extraction
     cleaned_paths: Optional[set] = None
@@ -353,11 +358,42 @@ class BootstrappingPopulator(ArtifactPopulator):
             # Do cleanup while holding lock to prevent race with extraction
             if full_path.exists():
                 rmtree_with_retry(full_path)
-            # Write the ".prebuilt" marker file
-            prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+            # Write the ".prebuilt" marker file where the build looks for it.
+            prebuilt_path = self.output_path / prebuilt_marker_relpath(relpath)
             prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
             prebuilt_path.touch()
-            self.created_markers.append(prebuilt_path)
+            if prebuilt_path not in self.created_markers:
+                self.created_markers.append(prebuilt_path)
+
+
+def _populate_extraction_cache(archive_path: Path, cache_dir: Path) -> Path:
+    """Extract an artifact once so later flatten operations can hardlink it.
+
+    Callers must treat flattened output files as read-only while the cache is
+    in use because they share inodes with the cached files.
+    """
+    cached_artifact_dir = cache_dir / archive_path.name
+    manifest_path = cached_artifact_dir / "artifact_manifest.txt"
+    if manifest_path.exists():
+        log(f"  == Reusing extracted {archive_path.name}")
+        return cached_artifact_dir
+
+    if cached_artifact_dir.exists():
+        rmtree_with_retry(cached_artifact_dir)
+    cached_artifact_dir.mkdir(parents=True)
+
+    log(f"  ++ Caching extracted {archive_path.name}")
+    populator = ArtifactPopulator(
+        output_path=cached_artifact_dir, verbose=False, flatten=False
+    )
+    populator(archive_path)
+
+    # ArtifactPopulator expects this manifest when its input is an exploded
+    # artifact directory. Write it last so its presence also marks a complete
+    # cache entry.
+    relpaths = sorted(populator.relpaths)
+    manifest_path.write_text("\n".join(relpaths) + "\n")
+    return cached_artifact_dir
 
 
 def extract_artifact(request: ExtractRequest) -> Optional[Path]:
@@ -379,11 +415,16 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             populator(archive_path)
         elif request.flatten:
             output_dir = request.output_dir
-            log(f"  ++ Flattening {archive_path.name} to {output_dir}")
+            artifact_path = archive_path
+            if request.extraction_cache_dir is not None:
+                artifact_path = _populate_extraction_cache(
+                    archive_path, request.extraction_cache_dir
+                )
+            log(f"  ++ Flattening {artifact_path.name} to {output_dir}")
             flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
-            flattener(archive_path)
+            flattener(artifact_path)
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
@@ -453,6 +494,8 @@ def do_fetch(args: argparse.Namespace):
 
     # Build download requests
     output_dir = Path(args.output_dir)
+    if args.extraction_cache_dir is not None:
+        args.extraction_cache_dir.mkdir(parents=True, exist_ok=True)
     shared_cache = args.download_cache_dir is not None
     download_dir = (
         args.download_cache_dir if shared_cache else output_dir / ".download_cache"
@@ -480,8 +523,10 @@ def do_fetch(args: argparse.Namespace):
     ]
 
     if not download_requests:
-        log("No matching artifacts found to download")
-        return
+        raise RuntimeError(
+            f"ERROR: No matching artifacts found in {backend.base_uri} for "
+            f"target families: {', '.join(target_families)}"
+        )
 
     log(f"\nDownloading {len(download_requests)} artifacts...")
 
@@ -536,6 +581,7 @@ def do_fetch(args: argparse.Namespace):
                                 # happens after all extractions complete
                                 delete_archive=False,
                                 flatten=args.flatten,
+                                extraction_cache_dir=args.extraction_cache_dir,
                                 bootstrap=args.bootstrap,
                                 cleaned_paths=(
                                     bootstrap_cleaned_paths if args.bootstrap else None
@@ -979,28 +1025,38 @@ def do_copy(args: argparse.Namespace):
     """Copy produced artifacts for one or more stages from one run to another."""
     topology = get_topology(args.topology)
 
-    # Parse and validate stages (comma-separated). Unlike fetch/push which
-    # operate on a single stage, copy accepts multiple stages at once so that
-    # a single setup job can copy all prebuilt stages in one invocation.
-    stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
-    available_stages = topology.build_stages.keys()
-    for stage_name in stage_names:
-        if stage_name not in available_stages:
-            log(f"ERROR: Stage '{stage_name}' not found")
-            log(f"Available stages: {', '.join(available_stages)}")
-            sys.exit(1)
-
-    # Union produced artifacts across all specified stages
     produced: Set[str] = set()
-    for stage_name in stage_names:
-        stage_produced = topology.get_produced_artifacts(stage_name)
-        log(
-            f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
-        )
-        produced.update(stage_produced)
+
+    # Support --artifacts for granular artifact-level copying
+    if args.artifacts:
+        artifact_names = [a.strip() for a in args.artifacts.split(",") if a.strip()]
+        available_artifacts = set(topology.artifacts.keys())
+        for artifact_name in artifact_names:
+            if artifact_name not in available_artifacts:
+                log(f"ERROR: Artifact '{artifact_name}' not found")
+                log(f"Available artifacts: {', '.join(sorted(available_artifacts))}")
+                sys.exit(1)
+        produced.update(artifact_names)
+        log(f"Copying {len(produced)} artifacts: {', '.join(sorted(produced))}")
+
+    # Support --stage for stage-level copying
+    if args.stage:
+        stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
+        available_stages = topology.build_stages.keys()
+        for stage_name in stage_names:
+            if stage_name not in available_stages:
+                log(f"ERROR: Stage '{stage_name}' not found")
+                log(f"Available stages: {', '.join(available_stages)}")
+                sys.exit(1)
+        for stage_name in stage_names:
+            stage_produced = topology.get_produced_artifacts(stage_name)
+            log(
+                f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
+            )
+            produced.update(stage_produced)
 
     if not produced:
-        log("Specified stages produce no artifacts")
+        log("No artifacts specified (use --stage and/or --artifacts)")
         return
 
     target_families = parse_target_families(args)
@@ -1258,6 +1314,15 @@ def main(argv: Optional[List[str]] = None):
         "Defaults to OUTPUT_DIR/.download_cache (cleaned up after extraction).",
     )
     fetch_parser.add_argument(
+        "--extraction-cache-dir",
+        type=Path,
+        default=None,
+        help="Shared cache for extracted artifacts used with --flatten. "
+        "Files in flattened output directories are hardlinked from this cache, "
+        "avoiding repeated decompression and data copies. Flattened outputs "
+        "must remain read-only while the cache is in use.",
+    )
+    fetch_parser.add_argument(
         "--download-concurrency",
         type=int,
         default=10,
@@ -1328,7 +1393,7 @@ def main(argv: Optional[List[str]] = None):
     # copy command
     copy_parser = subparsers.add_parser(
         "copy",
-        help="Copy produced artifacts for a stage from one run to another",
+        help="Copy artifacts from one run to another (by stage or artifact name)",
     )
     _add_backend_args(copy_parser)
     copy_parser.add_argument(
@@ -1347,8 +1412,14 @@ def main(argv: Optional[List[str]] = None):
     copy_parser.add_argument(
         "--stage",
         type=str,
-        required=True,
-        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,runtime-tests,math-libs')",
+        default="",
+        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,math-libs')",
+    )
+    copy_parser.add_argument(
+        "--artifacts",
+        type=str,
+        default="",
+        help="Artifact name(s), comma-separated (e.g., 'rand,fft,sparse')",
     )
     _add_target_args(copy_parser)
     copy_parser.add_argument(
@@ -1385,6 +1456,14 @@ def main(argv: Optional[List[str]] = None):
     list_parser.set_defaults(func=do_list_stages)
 
     args = parser.parse_args(argv)
+    if (
+        args.command == "fetch"
+        and args.extraction_cache_dir is not None
+        and (not args.flatten or args.no_extract)
+    ):
+        fetch_parser.error(
+            "--extraction-cache-dir requires --flatten with extraction enabled"
+        )
 
     # Set environment variable if --local-staging-dir provided (only on fetch/push)
     local_staging_dir = getattr(args, "local_staging_dir", None)

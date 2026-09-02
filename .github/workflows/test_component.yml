@@ -38,6 +38,9 @@ on:
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 
 permissions:
@@ -156,6 +159,7 @@ jobs:
           python ./build_tools/health_status.py
 
       - name: Driver / GPU sanity check
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
@@ -194,7 +198,10 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # Normally the job name. Components that decorate their job name set
+          # test_component to the undecorated name, which test_runner.py maps to
+          # a test directory.
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587

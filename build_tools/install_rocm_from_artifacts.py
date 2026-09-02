@@ -429,6 +429,8 @@ def retrieve_artifacts_by_run_id(args):
             args.kfdtest,
             args.rocwmma,
             args.rpp,
+            args.solver,
+            args.sparse,
             args.libhipcxx,
             args.hipthreads,
         ]
@@ -469,6 +471,8 @@ def retrieve_artifacts_by_run_id(args):
             # --test-engine; without _run, ctest finds the entry but errors with
             # "Unable to find executable: ../hipdnn_integration_tests".
             argv.append("hipdnn-integration-tests_run")
+            # The test binaries link librocrand.
+            argv.append("rand_lib")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.hipfile:
@@ -565,6 +569,10 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.solver:
+            extra_artifacts.append("solver")
+        if args.sparse:
+            extra_artifacts.append("sparse")
         if args.rpp:
             extra_artifacts.append("rpp")
             # test_rpp.py compiles the test suite against the installed tree,
@@ -806,6 +814,20 @@ def main(argv):
         "--blas",
         default=False,
         help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--solver",
+        default=False,
+        help="Include 'solver' artifacts (rocSOLVER, hipSOLVER)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--sparse",
+        default=False,
+        help="Include 'sparse' artifacts (rocSPARSE, hipSPARSE, hipSPARSELt)",
         action=argparse.BooleanOptionalAction,
     )
 

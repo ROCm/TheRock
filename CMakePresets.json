@@ -23,12 +23,10 @@
       }
     },
     {
-      "name": "linux-release-asan",
-      "displayName": "Linux release asan build",
-      "description": "Ninja generator, default compiler, RelWithDebInfo and ASAN for most runtime subprojects",
+      "name": "linux-asan-base",
+      "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "amd-llvm_BUILD_TYPE": "Release",
         "therock-host-blas_BUILD_TYPE": "Release",
         "therock-SuiteSparse_BUILD_TYPE": "Release",
@@ -40,20 +38,15 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
-        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
-        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
-      }
+      },
+      "description": "Hidden base for full ASAN variants. Sets all sanitizer flags and per-subproject overrides. Variants inherit this and only set CMAKE_BUILD_TYPE (and optionally debug flags)."
     },
     {
-      "name": "linux-release-host-asan",
-      "displayName": "Linux release host-only asan build",
-      "description": "Ninja generator, default compiler, RelWithDebInfo with host-side ASAN only (no device-side instrumentation)",
+      "name": "linux-host-asan-base",
+      "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "amd-llvm_BUILD_TYPE": "Release",
         "therock-host-blas_BUILD_TYPE": "Release",
         "therock-SuiteSparse_BUILD_TYPE": "Release",
@@ -65,11 +58,52 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+      },
+      "description": "Hidden base for host-only ASAN variants. Like linux-asan-base but scopes instrumentation to host code only (no device-side, no xnack+ required)."
+    },
+    {
+      "name": "linux-release-asan",
+      "displayName": "Linux release ASAN build (no debug info)",
+      "description": "CI builds: Release + full ASAN, no debug info. Inherits linux-asan-base.",
+      "inherits": "linux-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-release-asan-debug",
+      "displayName": "Linux release ASAN build with debug info",
+      "description": "Nightly/release builds: RelWithDebInfo + full ASAN + -g1 -gdwarf-4 for stack traces. Inherits linux-asan-base.",
+      "inherits": "linux-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
+      }
+    },
+    {
+      "name": "linux-release-host-asan",
+      "displayName": "Linux release host-only ASAN build (no debug info)",
+      "description": "CI builds: Release + host-only ASAN, no debug info. Inherits linux-host-asan-base.",
+      "inherits": "linux-host-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-release-host-asan-debug",
+      "displayName": "Linux release host-only ASAN build with debug info",
+      "description": "Nightly/release builds: RelWithDebInfo + host-only ASAN + -g1 -gdwarf-4 for stack traces. Inherits linux-host-asan-base.",
+      "inherits": "linux-host-asan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
       }
     },
     {

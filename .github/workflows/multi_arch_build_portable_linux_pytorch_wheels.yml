@@ -11,7 +11,8 @@
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     other packages ship as-is (nothing to split).
-#   - Upload the result to s3://therock-{release_type}-python/v4/whl/
+#   - Upload the result to s3://therock-repo-amd-<stream>-pytorch/
+#     under v5/rocm/pytorch/whl-next/
 #     via publish_pytorch_to_release_bucket.py (pip-compatible index generation
 #     happens server-side).
 #
@@ -90,6 +91,13 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       amdgpu_families:
@@ -111,9 +119,9 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.12").
+        description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.12"
+        default: "release/2.13"
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
@@ -128,15 +136,15 @@ on:
         description: >-
           URL for pip --find-links to install ROCm packages (flat page). Set
           either this or rocm_package_index_url to override the ROCm package
-          source; leave both blank to use the nightly multi-arch index.
+          source; leave both blank to use the nightly repo.amd.com aggregate index.
         type: string
         default: ""
       rocm_package_index_url:
         description: >-
           URL for pip --index-url to install ROCm packages (PEP 503 index).
           Set either this or rocm_package_find_links_url to override the ROCm
-          package source; leave both blank to use the nightly multi-arch index
-          (https://rocm.nightlies.amd.com/whl-multi-arch).
+          package source; leave both blank to use the nightly repo.amd.com aggregate
+          index.
         type: string
         default: ""
       release_type:
@@ -167,12 +175,23 @@ on:
           - sccache
           - ccache
         default: sccache
+      build_runs_on:
+        description: "Build runner label (selected by configure script with weighted distribution)"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
 run-name: Build Multi-Arch Linux PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -187,11 +206,17 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:a382085df3ba2419b58aa9051350883a0d0b732a4bc0a4ef60458f8161bb08c6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: "therock-pytorch-sccache-${{ inputs.release_type }}"
+      # TODO: Move the sccache bucket and IAM role mapping into a shared script.
+      SCCACHE_BUCKET: >-
+        ${{
+          inputs.release_type == 'dev-bkc' && 'therock-pytorch-sccache-dev'
+          || inputs.release_type == 'nightly-bkc' && 'therock-pytorch-sccache-nightly'
+          || format('therock-pytorch-sccache-{0}', inputs.release_type)
+        }}
       SCCACHE_REGION: us-east-1
       SCCACHE_S3_KEY_PREFIX: "linux/multiarch/v1/"
       SCCACHE_S3_USE_SSL: "true"
@@ -302,7 +327,12 @@ jobs:
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::324352301041:role/therock-${{ inputs.release_type }}
+          role-to-assume: >-
+            ${{
+              inputs.release_type == 'dev-bkc' && 'arn:aws:iam::324352301041:role/therock-dev'
+              || inputs.release_type == 'nightly-bkc' && 'arn:aws:iam::324352301041:role/therock-nightly'
+              || format('arn:aws:iam::324352301041:role/therock-{0}', inputs.release_type)
+            }}
           # Multi-package PyTorch builds can exceed the default 1h credential
           # window; the role's MaxSessionDuration must be >= this value.
           role-duration-seconds: 21600
@@ -323,15 +353,15 @@ jobs:
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       - name: Build PyTorch wheels
-        # Default to the nightly multi-arch ROCm index when neither source is
+        # Default to the nightly repo.amd.com aggregate ROCm index when neither source is
         # provided so a bare manual dispatch works; setting either input
         # overrides it. The default is applied here rather than on the input
         # because GitHub reverts an emptied input back to its declared default,
         # which would make the two inputs impossible to use exclusively.
         env:
           # Use the index if given; else the find-links page; else default to
-          # the nightly multi-arch index (both empty is the bare-dispatch case).
-          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://rocm.nightlies.amd.com/whl-multi-arch' || '') }}
+          # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
+          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
           ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
         run: |
           cache_flag=""
@@ -392,6 +422,9 @@ jobs:
             -e rocm-systems/python/rocm-bootstrap \
             -e rocm-systems/shared/kpack
 
+      # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
+      # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
+      # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
           # The splitter writes the host wheel under the same filename as
@@ -441,16 +474,18 @@ jobs:
             --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials
-        uses: ./.github/actions/configure_aws_artifacts_credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
+          product: pytorch
 
       - name: Upload PyTorch wheels to release bucket
         id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}"
+            --release-type="${{ inputs.release_type }}" \
+            --structured
 
       - name: Capture job summary
         id: summary
@@ -519,6 +554,7 @@ jobs:
       pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   # Dispatch the full PyTorch test suite for this exact build. Because this
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
@@ -568,7 +604,8 @@ jobs:
               "test_configs": "default distributed inductor",
               "tests_to_include": "",
               "repository": "${{ inputs.repository || github.repository }}",
-              "ref": "${{ inputs.ref }}"
+              "ref": "${{ inputs.ref }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
   notify_quartz_completed:
