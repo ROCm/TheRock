@@ -109,8 +109,23 @@ class TestMakeId(unittest.TestCase):
         self.assertNotEqual(a, b)
 
     def test_max_length(self):
-        result = make_id(Path("a/very/deeply/nested/path/to/some/file/name.dll"), "f")
+        # Use a path long enough that the sanitized string would blow past the
+        # 72-char WiX limit if it weren't truncated, so this actually exercises
+        # the length cap rather than passing trivially.
+        long_path = Path("a/" + "/".join(f"segment{i:02d}" for i in range(30)) + "/name.dll")
+        self.assertGreater(len(str(long_path)), 72)
+        result = make_id(long_path, "f")
         self.assertLessEqual(len(result), 72)
+
+    def test_long_paths_stay_unique(self):
+        # Two long paths that share a truncated prefix must still get distinct
+        # IDs via the digest suffix, even after the cap chops the common head.
+        base = "a/" + "/".join(f"segment{i:02d}" for i in range(30))
+        a = make_id(Path(base + "/alpha.dll"), "f")
+        b = make_id(Path(base + "/beta.dll"), "f")
+        self.assertLessEqual(len(a), 72)
+        self.assertLessEqual(len(b), 72)
+        self.assertNotEqual(a, b)
 
 
 class TestReadRocmVersion(unittest.TestCase):
