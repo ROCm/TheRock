@@ -77,6 +77,8 @@ permissions:
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: therock_build_manylinux_x86_64
 
   generate-report:
     needs: [resolve-images]
@@ -88,7 +90,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ${{ needs.resolve-images.outputs.therock_build_manylinux_x86_64 }}
+      image: ${{ needs.resolve-images.outputs.image_ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -209,6 +209,7 @@ jobs:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: no_rocm_image_ubuntu24_04
 
   test_jax_wheels:
     needs: [resolve-images]
@@ -222,7 +223,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
 
     container:
-      image: ${{ needs.resolve-images.outputs.no_rocm_image_ubuntu24_04 }}
+      image: ${{ needs.resolve-images.outputs.image_ref }}
       options: >-
         --shm-size=128g
         --device /dev/kfd
