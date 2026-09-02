@@ -30,6 +30,7 @@
       "mxdatagenerator",
       "ocl-clr",
       "profiler-hub",
+      "profiler-hub-install-test",
       "rdc",
       "rocgdb",
       "rocminfo",
@@ -263,6 +264,9 @@
     "consumers": [
       "rocprofiler-systems"
     ]
+  },
+  "profiler-hub-install-test": {
+    "consumers": []
   },
   "rccl": {
     "consumers": [
