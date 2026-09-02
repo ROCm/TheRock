@@ -15,6 +15,30 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
+# ADDSPV: rocBLAS and its dependent chain (hipBLASLt, rocSPARSE, hipSPARSE,
+# hipSPARSELt, rocSOLVER, hipSOLVER, hipBLAS) are excluded for amdgcnspirv.
+# EXCLUDE_TARGET_PROJECTS only strips device archs; the subprojects are still
+# declared and their client tests built. rocBLAS's own configure hard-fails on
+# an unsupported target (rocblas/CMakeLists.txt:150 "Unsupported target ... by
+# compiler" -- Tensile/rocm_check_target_ids has no amdgcnspirv). Since hipBLAS
+# and the SPARSE/SOLVER libs depend on rocBLAS, they can't build without it.
+# Gate the whole rocBLAS chain per-shard, same pattern as composable_kernel /
+# rocWMMA / FFT: if no gfx targets survive filtering for rocBLAS, skip rocBLAS
+# and everything that depends on it for this shard. hipBLAS-common and origami
+# (target-neutral leaf libs) still build. Non-spirv shards (gfx90a, etc.) are
+# unaffected -- tests are NOT touched there.
+set(_blas_core_enabled ON)
+if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
+  therock_filter_amdgpu_targets(_rocblas_targets rocBLAS ${THEROCK_AMDGPU_TARGETS})
+  if(NOT _rocblas_targets)
+    message(STATUS
+      "BLAS: no supported gfx targets remain after filtering for rocBLAS "
+      "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping rocBLAS "
+      "and its dependent chain (hipBLASLt/SPARSE/SOLVER/hipBLAS) for this shard.")
+    set(_blas_core_enabled OFF)
+  endif()
+endif()
+
 
 ##############################################################################
 # hipBLAS-common
@@ -51,7 +75,7 @@ else()
   set(_enable_rocRoller "ON")
 endif()
 
-if(_enable_rocRoller)
+if(_enable_rocRoller AND _blas_core_enabled)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
@@ -155,6 +179,7 @@ if(_enable_rocRoller)
   )
 endif()
 
+if(_blas_core_enabled)
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
@@ -197,12 +222,14 @@ therock_cmake_subproject_glob_c_sources(hipBLASLt
 therock_cmake_subproject_provide_package(hipBLASLt hipblaslt lib/cmake/hipblaslt)
 therock_cmake_subproject_activate(hipBLASLt)
 list(APPEND _blas_subproject_names hipBLASLt)
+endif() # _blas_core_enabled (hipBLASLt)
 
 
 ##############################################################################
 # rocBLAS
 ##############################################################################
 
+if(_blas_core_enabled)
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
@@ -563,6 +590,8 @@ SUBDIRS
 therock_cmake_subproject_provide_package(hipBLAS hipblas lib/cmake/hipblas)
 therock_cmake_subproject_activate(hipBLAS)
 list(APPEND _blas_subproject_names hipBLAS)
+
+endif() # _blas_core_enabled (rocBLAS + SPARSE/SOLVER + hipBLAS chain)
 
 
 ##############################################################################
