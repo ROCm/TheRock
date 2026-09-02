@@ -11,3 +11,12 @@ include = [
   "lib/cmake/profiler-hub/**",
 ]
 [components.doc."profiler/profiler-hub/stage"]
+
+# profiler-hub-install-test
+# libprofiler-hub.so is not listed here: it reaches the test machine through the
+# lib component above, and the executable resolves it through $ORIGIN/../lib.
+[components.test."profiler/profiler-hub-install-test/stage"]
+default_patterns = false
+include = [
+  "bin/test_profiler-hub",
+]
