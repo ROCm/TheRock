@@ -443,25 +443,25 @@ class MultiArchPackagingTest(TmpDirTestCase):
         self.assertFalse(core.files.has("lib/librocdxg.so.1.1.0"))
 
     def test_emit_soname_alias_skips_when_soname_not_materialized(self):
-        """Aliases whose SONAME target was not materialized are left alone."""
+        """Allowlisted alias is skipped when its SONAME target is absent."""
         artifact_dir = self.temp_dir / "artifacts"
         self._add_artifact(
-            artifact_dir, "orphan", "lib", "generic", {"lib/dummy.txt": "x"}
+            artifact_dir, "wsl-rocdxg", "lib", "generic", {"lib/dummy.txt": "x"}
         )
 
         params = self._make_params(artifact_dir)
         pkg = PopulatedDistPackage(params, logical_name="core")
         pkg.populate_runtime_files(
-            params.filter_artifacts(lambda an: an.name == "orphan")
+            params.filter_artifacts(lambda an: an.name == "wsl-rocdxg")
         )
 
-        # Alias recorded but SONAME file was never materialized.
-        pkg.files.soname_aliases["lib/liborphan.so"] = "liborphan.so.2"
+        # librocdxg is allowlisted but its SONAME file was never materialized.
+        pkg.files.soname_aliases["lib/librocdxg.so"] = "librocdxg.so.1"
 
         pkg._emit_soname_alias_symlinks(pkg.platform_dir)
 
-        self.assertFalse((pkg.platform_dir / "lib" / "liborphan.so").exists())
-        self.assertFalse(pkg.files.has("lib/liborphan.so"))
+        self.assertFalse((pkg.platform_dir / "lib" / "librocdxg.so").exists())
+        self.assertFalse(pkg.files.has("lib/librocdxg.so"))
 
     def test_emit_soname_alias_skips_non_allowlisted_libraries(self):
         """Only libraries in RUNTIME_DLOPEN_ALIASES get runtime aliases."""

@@ -39,8 +39,8 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
-# Libraries that are dlopen'd by unversioned name at runtime
-# runtime wheel will include them and not just the devel
+# Libraries dlopen'd by unversioned name at runtime (ROCM-29954).
+# The unversioned namelink is included in the runtime wheel, not just devel.
 RUNTIME_DLOPEN_ALIASES: set[str] = {
     "librocdxg",
 }
@@ -364,11 +364,8 @@ class PopulatedDistPackage:
         needed by runtime packages. Specifically, this impacts shared library symlinks,
         which only populate the soname variant in the link farm.
 
-        Non-SONAME shared library names (e.g. the unversioned namelink
-        ``librocdxg.so`` or the full-version file ``librocdxg.so.1.1.0``) are
-        recorded as soname aliases and emitted as relative symlinks pointing at
-        the SONAME file so that runtime ``dlopen`` by any of the three names
-        succeeds.
+        Libraries listed in ``RUNTIME_DLOPEN_ALIASES`` also get their
+        unversioned namelink emitted (see ``_emit_soname_alias_symlinks``).
         """
         log(
             f"::: Populating runtime files {self.logical_name}[{self.target_family}]: "
