@@ -12,7 +12,7 @@ with optional dedupe and always re-uploads metadata (Issue #6540).
 
 CI flow (``multi_arch_build_native_linux_packages.yml``)::
 
-  build_package.py → simulate test → build_package_repo.py → this script
+  build_package.py → simulate test → build_package_repo.py (--release-type) → this script
 
 Usage:
   python ./build_tools/packaging/linux/upload_package_repo.py \\

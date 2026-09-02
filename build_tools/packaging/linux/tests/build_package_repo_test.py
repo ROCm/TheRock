@@ -9,6 +9,8 @@ Regression guards for local repo metadata creation (Phase 2 split from upload).
 Coverage:
 
   - ``generate_release_file_with_checksums`` — DEB ``Release`` has checksum sections
+  - ``parse_release_type`` — ``--release-type`` normalization and empty rejection
+  - ``main`` — ``--package-dir`` must be an existing directory
 
 Prerequisites:
 
@@ -24,6 +26,7 @@ Run::
         -p 'build_package_repo_test.py' -v
 """
 
+import argparse
 import gzip
 import os
 import sys
@@ -39,14 +42,19 @@ if os.fspath(LINUX_DIR) not in sys.path:
 
 import build_package_repo as repo_builder  # noqa: E402
 
-TEST_JOB_TYPE = "nightly"
+TEST_RELEASE_TYPE = "nightly"
 
 
 class GenerateReleaseFileTest(unittest.TestCase):
-    """Tests for ``generate_release_file_with_checksums()`` (DEB upload-ready Release)."""
+    """Tests for :func:`build_package_repo.generate_release_file_with_checksums`."""
 
     def test_release_includes_checksum_sections(self) -> None:
-        """Release must include MD5/SHA256 sections before S3 upload."""
+        """DEB Release must include checksum sections and a release-type label.
+
+        Builds a minimal ``Packages`` / ``Packages.gz`` tree, writes a
+        ``Release`` file, and asserts MD5/SHA256 sections, indexed paths, and
+        the ``Label: ROCm … Packages`` line are present.
+        """
         with tempfile.TemporaryDirectory() as temp_dir:
             dists_dir = Path(temp_dir) / "main" / "binary-amd64"
             dists_dir.mkdir(parents=True)
@@ -56,13 +64,48 @@ class GenerateReleaseFileTest(unittest.TestCase):
 
             release_file = Path(temp_dir) / "Release"
             repo_builder.generate_release_file_with_checksums(
-                release_file, TEST_JOB_TYPE, dists_dir
+                release_file, TEST_RELEASE_TYPE, dists_dir
             )
             release_text = release_file.read_text(encoding="utf-8")
 
         self.assertIn("MD5Sum:", release_text)
         self.assertIn("SHA256:", release_text)
         self.assertIn("main/binary-amd64/Packages", release_text)
+        self.assertIn(f"Label: ROCm {TEST_RELEASE_TYPE} Packages", release_text)
+
+
+class ParseReleaseTypeTest(unittest.TestCase):
+    """Tests for :func:`build_package_repo.parse_release_type`."""
+
+    def test_parse_release_type_strips_and_lowercases(self) -> None:
+        """Whitespace is trimmed and the value is lowercased."""
+        parser = argparse.ArgumentParser()
+        self.assertEqual(
+            repo_builder.parse_release_type(parser, "  NIGHTLY  "),
+            "nightly",
+        )
+
+    def test_parse_release_type_rejects_empty(self) -> None:
+        """Empty or whitespace-only values exit via ``parser.error``."""
+        parser = argparse.ArgumentParser()
+        with self.assertRaises(SystemExit):
+            repo_builder.parse_release_type(parser, "   ")
+
+
+class MainTest(unittest.TestCase):
+    """Tests for :func:`build_package_repo.main`."""
+
+    def test_main_rejects_nonexistent_package_dir(self) -> None:
+        """``--package-dir`` must refer to an existing directory."""
+        with self.assertRaises(SystemExit):
+            repo_builder.main(
+                [
+                    "--pkg-type",
+                    "deb",
+                    "--package-dir",
+                    "/nonexistent/package/dir",
+                ],
+            )
 
 
 if __name__ == "__main__":
