@@ -1140,6 +1140,12 @@ def run():
             # component's test_categories.yaml only defines standard/
             # comprehensive/full so far (promote to quick once the standard
             # tier proves stable). See AIHPBLAS-4410.
+            #
+            # TODO(#7851): this is a temporary special-case. test_runner.py
+            # only knows how to run the C++/ctest suite today, so the pytest
+            # and ctest stages have to be chained here instead. Fold both
+            # into test_runner.py's own dual-mode support and drop this
+            # branch once that lands.
             if key == "tensilelite" and test_type != "quick":
                 job_config_data["test_script"] = (
                     job_config_data["test_script"]
