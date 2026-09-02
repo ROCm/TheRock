@@ -272,7 +272,6 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
     hip-tests #?
     hipDNN_samples #<
     hipFFT #*
-    hipRAND #*
     hipSOLVER #<
     hipSPARSE #<
     hipSPARSELt #<
@@ -323,6 +322,10 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpugeneric
     # rocPRIM #< ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
     # rocPRIM_tests #< ADDSPV: un-excluded; compiles for amdgcnspirv (verified local)
     # rocRAND #* ADDSPV: un-excluded; builds clean for amdgcnspirv (verified local + CI)
+    # hipRAND #* ADDSPV: un-excluded; thin wrapper over rocRAND (which is
+    #   un-excluded). Was excluded only by inertia in the initial per-arch
+    #   sweep, not for a proven reason. Needed so test_hiprand_kernel has
+    #   amdgcnspirv device code (else kpack error 5 / no kernel at runtime).
     # hipfile #!
     # hipblasltprovider #<
     # ROCR-Runtime #!
