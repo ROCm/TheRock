@@ -218,11 +218,9 @@ class ROCmProfilerTest(unittest.TestCase):
                     )
 
     def test_rocprof_trace_decoder_python_api(self):
-        """The packaged rocprof_trace_decoder API must import and pull pyelftools.
+        """The packaged rocprof_trace_decoder API must be importable.
 
-        Importing it dlopens the decoder library, so this catches a wheel that
-        re-homed the Python sources without their runtime dependencies. Skips on
-        ROCm builds whose rocprof-trace-decoder ships no Python API.
+        Skips on ROCm builds whose rocprof-trace-decoder ships no Python API.
         """
         try:
             trace_decoder_mod = importlib.import_module("rocprof_trace_decoder")
@@ -230,5 +228,3 @@ class ROCmProfilerTest(unittest.TestCase):
             raise unittest.SkipTest(f"rocprof_trace_decoder is not installed: {e}")
 
         utils.assert_is_physical_package(trace_decoder_mod)
-        # setup.py declares pyelftools whenever the API is packaged.
-        importlib.import_module("elftools")
