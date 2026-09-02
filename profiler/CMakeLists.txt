@@ -313,8 +313,11 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     BUILD_DEPS
       ${_profiler_hub_build_deps}
     RUNTIME_DEPS
-      rocprofiler-sdk
       ${THEROCK_BUNDLED_SQLITE3}
+    INSTALL_RPATH_DIRS
+      lib/rocm_sysdeps/lib
+      lib/llvm/lib
+      lib
     INTERFACE_INCLUDE_DIRS
       include
     INTERFACE_LINK_DIRS
