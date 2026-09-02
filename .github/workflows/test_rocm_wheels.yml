@@ -103,6 +103,8 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, py${{ inputs.python_ver
 jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
 
   test_wheels:
     needs: [resolve-images]
@@ -111,7 +113,7 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.no_rocm_image_ubuntu24_04) || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.image_ref) || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
