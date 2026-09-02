@@ -27,7 +27,6 @@ import os
 from pathlib import Path
 from urllib.parse import quote
 
-
 SVG_DEFS = """<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
 <defs>
   <symbol id="file" viewBox="0 0 265 323">
@@ -67,6 +66,11 @@ def generate_index_html(directory: str) -> None:
     try:
         for entry in os.scandir(directory):
             if entry.name.startswith("."):
+                continue
+            if entry.is_dir():
+                rows.append(
+                    f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>'
+                )
                 continue
             # Escape only at render: quote() percent-encodes '+' (and any
             # other unsafe char) in the href, while html.escape() guards the
@@ -113,11 +117,8 @@ def generate_top_index_from_s3(
         # Add subdirectories (CommonPrefixes returned by Delimiter)
         for cp in page.get("CommonPrefixes", []):
             folder = cp["Prefix"][len(prefix) + 1 :].rstrip("/")
-            # Escape only at render: quote() percent-encodes '+' (and any
-            # other unsafe char) in the href, while html.escape() guards the
-            # display text.
             rows.append(
-                f'<tr><td><a href="{quote(folder)}/index.html">{html.escape(folder)}/</a></td></tr>'
+                f'<tr><td><a href="{folder}/index.html">{folder}/</a></td></tr>'
             )
 
         # Add files at this level only (no nested files)
@@ -127,6 +128,9 @@ def generate_top_index_from_s3(
                 continue
             name = key[len(prefix) + 1 :]
             if "/" not in name:  # Only files at this level
+                # Escape only at render: quote() percent-encodes '+' (and
+                # any other unsafe char) in the href, while html.escape()
+                # guards the display text.
                 rows.append(
                     f'<tr><td><a href="{quote(name)}">{html.escape(name)}</a></td></tr>'
                 )
@@ -264,15 +268,14 @@ def generate_index_from_s3(
                     if subdir:
                         subdirs.add(subdir)
 
-        # Escape only at render: quote() percent-encodes '+' (and any other
-        # unsafe char) in the href, while html.escape() guards the display
-        # text.
         for subdir in sorted(subdirs):
             rows.append(
-                f'<tr><td><a href="{quote(subdir)}/index.html">{html.escape(subdir)}/</a></td></tr>'
+                f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>'
             )
 
-        # Add files
+        # Add files. Escape only at render: quote() percent-encodes '+'
+        # (and any other unsafe char) in the href, while html.escape()
+        # guards the display text.
         for filename in sorted(files):
             rows.append(
                 f'<tr><td><a href="{quote(filename)}">{html.escape(filename)}</a></td></tr>'
