@@ -191,7 +191,7 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("compiler-runtime", result.unavailable_stages)
         self.assertEqual(result.available_stages, ())
         joined = "\n".join(result.report_lines)
-        self.assertIn("artifacts NOT available", joined)
+        self.assertIn("artifacts not in baseline", joined)
 
     def test_no_baseline_found_rebuilds_candidates(self):
         result = compute_auto_stage_reuse(
@@ -205,7 +205,8 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertEqual(result.available_stages, ())
         self.assertIsNone(result.baseline_run_id)
         joined = "\n".join(result.report_lines)
-        self.assertIn("no baseline run contains artifacts", joined)
+        # When no baseline is found, we now report it as "no commit-compatible baseline"
+        self.assertIn("no commit-compatible baseline", joined)
 
     def test_partial_family_availability_rebuilds(self):
         # Needs base for a real family + generic; baseline only has the generic
