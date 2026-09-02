@@ -158,9 +158,37 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
+        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
+      - name: Enable sanitizer-specific test flags
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
+        run: |
+          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
+          echo "HSA_XNACK=1" >> $GITHUB_ENV
+          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+          # Resolve ASAN runtime path for steps that need LD_PRELOAD (e.g., sanity check).
+          # Non-instrumented executables like Python need LD_PRELOAD to load ASAN-instrumented
+          # libraries (e.g., libamdhip64). We don't set LD_PRELOAD globally to avoid false
+          # leak reports from third-party libraries.
+          CLANG_BIN="${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/clang"
+          if [[ -x "${CLANG_BIN}" ]]; then
+            ASAN_RT_PATH=$("${CLANG_BIN}" -print-file-name=libclang_rt.asan.so)
+            if [[ -f "${ASAN_RT_PATH}" ]]; then
+              echo "ASAN_RUNTIME_PATH=${ASAN_RT_PATH}" >> $GITHUB_ENV
+              echo "Resolved ASAN runtime: ${ASAN_RT_PATH}"
+            else
+              echo "Warning: ASAN runtime not found at ${ASAN_RT_PATH}"
+            fi
+          else
+            echo "Warning: clang not found at ${CLANG_BIN}, ASAN runtime path not resolved"
+          fi
+
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
+        env:
+          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
@@ -169,14 +197,6 @@ jobs:
         run: |
           python ./build_tools/install_additional_requirements.py \
             --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
-
-        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
-      - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.artifact_group, 'asan') }}
-        run: |
-          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
-          echo "HSA_XNACK=1" >> $GITHUB_ENV
-          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
