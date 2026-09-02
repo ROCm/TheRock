@@ -705,5 +705,65 @@ class ParseInputPackageListTest(BuildPackageTestCase):
         self.assertEqual(skipped, [])
 
 
+# ---------------------------------------------------------------------------
+# copy_package_contents — symlink handling
+# ---------------------------------------------------------------------------
+class CopyPackageContentsTest(BuildPackageTestCase):
+    """``copy_package_contents`` preserves symlinks correctly.
+
+    Regression test: in ROCm 10.1, symlinks pointing to valid directories
+    (e.g., llvm -> lib/llvm) were incorrectly expanded via copytree because
+    Path.is_dir() follows symlinks and returns True.
+    """
+
+    def test_valid_symlink_to_directory_preserved(self) -> None:
+        """Symlink to existing directory must remain a symlink.
+
+        In ROCm 10.1, llvm -> lib/llvm points to a valid directory. Without
+        the fix, is_dir() returns True and copytree expands it into a directory.
+        """
+        source = self.temp_dir / "source"
+        dest = self.temp_dir / "dest"
+        source.mkdir()
+
+        # Create lib/llvm structure (the real directory)
+        lib_llvm = source / "lib" / "llvm"
+        lib_llvm.mkdir(parents=True)
+        (lib_llvm / "bin").mkdir()
+        (lib_llvm / "bin" / "clang").write_bytes(b"\x00")
+
+        # Valid symlink: target exists
+        (source / "llvm").symlink_to("lib/llvm")
+
+        deb_package.copy_package_contents(source, dest)
+
+        self.assertTrue(
+            (dest / "llvm").is_symlink(),
+            "valid symlink should be preserved, not expanded",
+        )
+        self.assertEqual((dest / "llvm").readlink(), Path("lib/llvm"))
+
+    def test_dangling_symlink_preserved(self) -> None:
+        """Dangling symlinks must be preserved.
+
+        In ROCm 10.0, symlinks like amdgcn -> lib/llvm/amdgcn were dangling
+        at copy time (target didn't exist yet).
+        """
+        source = self.temp_dir / "source"
+        dest = self.temp_dir / "dest"
+        source.mkdir()
+
+        # Dangling symlink: target doesn't exist
+        (source / "amdgcn").symlink_to("lib/llvm/amdgcn")
+
+        deb_package.copy_package_contents(source, dest)
+
+        self.assertTrue(
+            (dest / "amdgcn").is_symlink(),
+            "dangling symlink should be preserved",
+        )
+        self.assertEqual((dest / "amdgcn").readlink(), Path("lib/llvm/amdgcn"))
+
+
 if __name__ == "__main__":
     unittest.main()

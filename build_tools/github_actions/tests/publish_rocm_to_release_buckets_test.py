@@ -374,6 +374,66 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             r"^v5/rocm/core/packages-asan/rpm/\d{8}-123$",
         )
 
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_asan_debug_publishes_same_as_asan(self, mock_copy):
+        # 'asan-debug' is a build_variant_suffix alias for 'asan' (see
+        # amdgpu_family_matrix.py) — it must publish to the same tarball-asan
+        # path and skip python packages, exactly like 'asan'.
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "dev",
+                "--build-variant",
+                "asan-debug",
+                "--skip-native-packages",
+                "--dry-run",
+            ]
+        )
+
+        self.assertEqual(mock_copy.call_count, 1)
+        tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+        self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+        self.assertEqual(tarball_dest.bucket, "therock-repo-amd-dev-core")
+        self.assertEqual(tarball_dest.relative_path, "v5/rocm/core/tarball-asan")
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_host_asan_variants_publish_same_as_asan(self, mock_copy):
+        # host-asan and host-asan-debug are also ASAN-family variants and are
+        # assumed to publish to the same "-asan" paths as full ASAN (see the
+        # ASSUMPTION note on _is_asan_variant — unverified against a real
+        # host-asan publish run, since nothing calls this script with
+        # "host-asan" today).
+        for build_variant in ("host-asan", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                mock_copy.reset_mock()
+                mock_copy.return_value = 2
+                main(
+                    [
+                        "--run-id",
+                        "123",
+                        "--platform",
+                        "linux",
+                        "--release-type",
+                        "dev",
+                        "--build-variant",
+                        build_variant,
+                        "--skip-native-packages",
+                        "--dry-run",
+                    ]
+                )
+
+                self.assertEqual(mock_copy.call_count, 1)
+                tarball_source, tarball_dest = mock_copy.call_args_list[0].args
+                self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
+                self.assertEqual(
+                    tarball_dest.relative_path, "v5/rocm/core/tarball-asan"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
