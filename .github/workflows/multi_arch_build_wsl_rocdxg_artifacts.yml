@@ -59,6 +59,7 @@ jobs:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: therock_build_manylinux_x86_64
 
   build_stage:
     needs: [resolve-images]
@@ -81,7 +82,7 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
-      MANYLINUX_IMAGE: ${{ needs.resolve-images.outputs.therock_build_manylinux_x86_64 }}
+      MANYLINUX_IMAGE: ${{ needs.resolve-images.outputs.image_ref }}
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
       # misparses during nested subproject configure.

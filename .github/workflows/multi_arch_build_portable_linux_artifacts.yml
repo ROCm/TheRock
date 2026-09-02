@@ -85,6 +85,7 @@ jobs:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: therock_build_manylinux_x86_64
 
   build_stage:
     needs: [resolve-images]
@@ -97,7 +98,7 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: ${{ needs.resolve-images.outputs.therock_build_manylinux_x86_64 }}
+      image: ${{ needs.resolve-images.outputs.image_ref }}
     env:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_portable_linux_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"

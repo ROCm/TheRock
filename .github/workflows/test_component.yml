@@ -51,6 +51,7 @@ jobs:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: no_rocm_image_ubuntu24_04
 
   test_component:
     needs: [resolve-images]
@@ -70,7 +71,7 @@ jobs:
       # resolved image from docker_images.json.
       image: >-
         ${{ inputs.platform == 'linux' &&
-            (fromJSON(inputs.component).container_image || inputs.default_container_image || needs.resolve-images.outputs.no_rocm_image_ubuntu24_04)
+            (fromJSON(inputs.component).container_image || inputs.default_container_image || needs.resolve-images.outputs.image_ref)
             || null
         }}
       # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
