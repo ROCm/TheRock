@@ -39,6 +39,12 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
+# Libraries that are dlopen'd by unversioned name at runtime
+# runtime wheel will include them and not just the devel
+RUNTIME_DLOPEN_ALIASES: set[str] = {
+    "librocdxg",
+}
+
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -499,15 +505,15 @@ class PopulatedDistPackage:
         self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
 
     def _emit_soname_alias_symlinks(self, package_dest_dir: Path):
-        """Create relative symlinks for soname aliases in the runtime tree.
-
-        After the main population pass, every non-SONAME shared library entry
-        (the unversioned namelink and the full-version real file) is recorded
-        in ``soname_aliases`` as ``{relpath: soname}``.  For each alias whose
-        SONAME target was materialized, emit a relative symlink so that
-        ``dlopen`` by any of the three conventional names succeeds at runtime.
-        """
+        """Emit unversioned namelinks for libraries in RUNTIME_DLOPEN_ALIASES."""
         for relpath, soname in self.files.soname_aliases.items():
+            filename = Path(relpath).name
+            basename = filename.split(".so")[0]
+            if basename not in RUNTIME_DLOPEN_ALIASES:
+                continue
+            suffix = filename[len(basename) :]
+            if suffix != ".so":
+                continue
             soname_relpath = str(Path(relpath).parent / soname)
             if not self.files.has(soname_relpath):
                 continue
