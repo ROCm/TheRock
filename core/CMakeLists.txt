@@ -247,8 +247,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   # clr
   # The primary HIP compiler and runtime target. This is also the project used
   # to root the "amd-hip" compiler toolchain and is a superset of amd-llvm.
-  # As a particularly sharp edge, the `hipconfig` tool is really only fully
-  # functional from this project (which contributes version and metadata).
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
@@ -314,7 +312,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     RUNTIME_DEPS
       amd-llvm
       amd-comgr
-      hipcc     # For hipconfig
       rocm-core
       rocm-kpack
       ${HIP_CLR_RUNTIME_DEPS}
