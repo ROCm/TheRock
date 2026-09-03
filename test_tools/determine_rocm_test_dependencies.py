@@ -85,6 +85,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "shared/origami": ["hipblas", "hipblaslt", "origami", "rocblas", "tensilelite"],
     "shared/stinkytofu": ["hipblas", "hipblaslt", "rocblas", "tensilelite"],
     "shared/tensile": ["hipblas", "rocblas"],
+    "dnn-providers/cmake": ["hipdnn_integration_tests"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
     "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
     "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
@@ -98,6 +99,8 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "projects/rocm-smi-lib": ["rocm_smi_lib"],
     "projects/rocprofiler": ["rocprofiler-sdk"],
 }
+
+_EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
@@ -427,6 +430,11 @@ def _normalize_changed_project(project: str) -> list[str]:
     project_lower = project.lower()
     if project_lower in _EXTERNAL_SUBTREE_ALIASES:
         return _EXTERNAL_SUBTREE_ALIASES[project_lower]
+    if project_lower.startswith(_EXTERNAL_ONLY_NAMESPACES):
+        raise ValueError(
+            f"'{project}' has no entry in _EXTERNAL_SUBTREE_ALIASES. Add one "
+            "before merging; this namespace has no valid self-select fallback."
+        )
     return [project_lower.removeprefix("projects/")]
 
 
@@ -532,7 +540,10 @@ def main():
     if changed:
         normalized = []
         for project in changed:
-            normalized.extend(_normalize_changed_project(project))
+            try:
+                normalized.extend(_normalize_changed_project(project))
+            except ValueError as e:
+                raise SystemExit(str(e)) from e
         changed = normalized
 
     # No projects specified → all tests

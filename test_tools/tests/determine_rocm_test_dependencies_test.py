@@ -363,7 +363,13 @@ class TestCliInputParsing(_FixtureTestCase):
 
     def test_dnn_provider_prefixes_mapped(self) -> None:
         graph = {
-            "hipdnn_integration_tests": {"consumers": ["miopenprovider"]},
+            "hipdnn_integration_tests": {
+                "consumers": [
+                    "hipblasltprovider",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ]
+            },
             "hipblasltprovider": {"consumers": []},
             "hipkernelprovider": {"consumers": []},
             "miopenprovider": {"consumers": []},
@@ -409,7 +415,52 @@ class TestCliInputParsing(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(
                 json.loads(proc.stdout.strip()),
-                ["hipdnn-integration-tests", "miopenprovider"],
+                [
+                    "hipblasltprovider",
+                    "hipdnn-integration-tests",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ],
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_dnn_provider_cmake_prefix_maps_to_integration_tests(self) -> None:
+        graph = {
+            "hipdnn_integration_tests": {
+                "consumers": [
+                    "hipblasltprovider",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ]
+            },
+            "hipblasltprovider": {"consumers": []},
+            "hipkernelprovider": {"consumers": []},
+            "miopenprovider": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "dnn-providers/cmake",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                json.loads(proc.stdout.strip()),
+                [
+                    "hipblasltprovider",
+                    "hipdnn-integration-tests",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ],
             )
         finally:
             shutil.rmtree(root, ignore_errors=True)
@@ -491,6 +542,11 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rdc", projects)  # amdsmi direct consumer
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)  # rocroller direct consumer
+
+    def test_unmapped_external_namespace_fails(self) -> None:
+        proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no entry in _EXTERNAL_SUBTREE_ALIASES", proc.stderr)
 
     def test_empty_changed_projects_outputs_wildcard(self) -> None:
         proc = self._run()
