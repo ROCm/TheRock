@@ -84,7 +84,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
     ],
     "shared/origami": ["hipblas", "hipblaslt", "origami", "rocblas", "tensilelite"],
     "shared/stinkytofu": ["hipblas", "hipblaslt", "rocblas", "tensilelite"],
-    "shared/tensile": ["hipblas", "hipblaslt", "rocblas", "tensilelite"],
+    "shared/tensile": ["hipblas", "rocblas"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
     "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
     "dnn-providers/integration-tests": ["hipdnn_integration_tests", "miopenprovider"],
