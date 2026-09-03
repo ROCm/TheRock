@@ -39,6 +39,12 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: >-
+          PyTorch test coverage: 'none' stops after build-time wheel validation
+          and 'standard' runs the selected GPU suite.
+        type: string
+        default: "standard"
       python_version:
         description: Python version to build wheels for.
         type: string
@@ -114,6 +120,13 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: PyTorch test coverage level.
+        type: choice
+        options:
+          - none
+          - standard
+        default: standard
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -524,6 +537,7 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
+            --test-level "${{ inputs.test_level }}" \
             --platform linux
 
       - name: Capture job summary

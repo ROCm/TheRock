@@ -23,6 +23,7 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
 from github_actions.github_actions_api import gha_set_output
+from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
 
 
 def split_families(value: str) -> list[str]:
@@ -47,7 +48,17 @@ def build_test_matrix(
     *,
     amdgpu_families: list[str],
     platform: str,
+    test_level: str,
 ) -> dict[str, list[dict[str, str]]]:
+    if test_level not in PYTORCH_TEST_LEVELS:
+        raise ValueError(f"Unknown PyTorch test level: {test_level!r}")
+    if test_level == "none":
+        print(
+            "Test level 'none': no self-hosted GPU test jobs will be scheduled; "
+            "the build job still runs its build-time wheel validation"
+        )
+        return {"include": []}
+
     print(f"Requested {platform} AMDGPU families: {amdgpu_families}")
     include: list[dict[str, str]] = []
     for requested_family in amdgpu_families:
@@ -98,6 +109,15 @@ def main(argv: list[str]) -> None:
         ),
     )
     parser.add_argument(
+        "--test-level",
+        choices=PYTORCH_TEST_LEVELS,
+        default="standard",
+        help=(
+            "Test coverage level. 'none' stops after build-time wheel "
+            "validation; 'standard' runs the GPU test matrix."
+        ),
+    )
+    parser.add_argument(
         "--platform",
         choices=["linux", "windows"],
         default=platform_module.system().lower(),
@@ -123,6 +143,7 @@ def main(argv: list[str]) -> None:
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
+        test_level=args.test_level,
     )
     emit_outputs(matrix)
 

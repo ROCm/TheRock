@@ -47,6 +47,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         matrix = m.build_test_matrix(
             amdgpu_families=[],
             platform="linux",
+            test_level="standard",
         )
         self.assertEqual(matrix, {"include": []})
 
@@ -57,6 +58,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             matrix = m.build_test_matrix(
                 amdgpu_families=["gfxnorunner"],
                 platform="linux",
+                test_level="standard",
             )
         self.assertEqual(matrix, {"include": []})
 
@@ -67,6 +69,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             matrix = m.build_test_matrix(
                 amdgpu_families=["gfxalpha-all"],
                 platform="linux",
+                test_level="standard",
             )
         # FAKE_FAMILY_MATRIX also has a windows-alpha runner. The Linux
         # request should only use the Linux platform entry and canonical family.
@@ -89,7 +92,16 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
             m.build_test_matrix(
                 amdgpu_families=["not-a-family"],
                 platform="linux",
+                test_level="standard",
             )
+
+    def test_none_level_skips_gpu_tests(self) -> None:
+        matrix = m.build_test_matrix(
+            amdgpu_families=["not-a-family"],
+            platform="linux",
+            test_level="none",
+        )
+        self.assertEqual(matrix, {"include": []})
 
     def test_main_writes_outputs(self) -> None:
         with mock.patch.object(
@@ -164,6 +176,7 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         matrix = m.build_test_matrix(
             amdgpu_families=["gfx950-dcgpu"],
             platform="linux",
+            test_level="standard",
         )
         include = matrix["include"]
         self.assertEqual(len(include), 1)

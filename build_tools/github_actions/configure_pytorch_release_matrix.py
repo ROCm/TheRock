@@ -75,6 +75,13 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
     },
 }
 
+# PyTorch test levels are additive:
+#
+# * none schedules no self-hosted GPU tests. The wheel build job still runs
+#   its build-time wheel validation.
+# * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
+PYTORCH_TEST_LEVELS = ["none", "standard"]
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -170,6 +177,7 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
+                "test_level": "standard",
                 # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
                 # scikit-image==0.22.0, which has no cp314 wheel and fails to
                 # build from source. Build those wheels but skip their tests
