@@ -172,6 +172,41 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         self.assertEqual(outputs["enabled"], "false")
         self.assertEqual(json.loads(outputs["matrix"]), {"include": []})
 
+    def test_none_summary_explains_no_gpu_tests(self) -> None:
+        summary = m.format_test_summary(
+            platform="linux",
+            test_level="none",
+            built_families=["gfxalpha-all"],
+            requested_test_families="auto",
+            resolved_test_families=["gfxalpha-all"],
+            matrix={"include": []},
+        )
+
+        self.assertIn("| Test level | `none` |", summary)
+        self.assertIn("| Self-hosted GPU test jobs | 0 |", summary)
+        self.assertIn("because the test level is `none`", summary)
+        self.assertIn("`sanity_check_wheel.py` as build-time", summary)
+
+    def test_standard_summary_lists_family_runner_mapping(self) -> None:
+        summary = m.format_test_summary(
+            platform="linux",
+            test_level="standard",
+            built_families=["gfxalpha-all"],
+            requested_test_families="auto",
+            resolved_test_families=["gfxalpha-all"],
+            matrix={
+                "include": [
+                    {
+                        "amdgpu_family": "gfxalpha-all",
+                        "test_runs_on": "linux-alpha",
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("| Self-hosted GPU test jobs | 1 |", summary)
+        self.assertIn("| `gfxalpha-all` | `linux-alpha` |", summary)
+
     def test_real_family_matrix_finds_gfx950_runner(self) -> None:
         matrix = m.build_test_matrix(
             amdgpu_families=["gfx950-dcgpu"],

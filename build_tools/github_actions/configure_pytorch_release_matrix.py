@@ -13,7 +13,7 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from github_actions.github_actions_api import gha_set_output
+from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
 
 RELEASE_TYPES = [
     "ci",
@@ -192,6 +192,81 @@ def generate_pytorch_matrix_for_release_type(
     return matrix
 
 
+def format_matrix_summary(
+    *,
+    release_type: str,
+    platform: str,
+    python_versions: list[str] | None,
+    pytorch_git_refs: list[str] | None,
+    amdgpu_families: str,
+    matrix: list[dict[str, str]],
+) -> str:
+    """Format the resolved release matrix for logs and the job summary."""
+
+    level_counts = {
+        level: sum(row["test_level"] == level for row in matrix)
+        for level in PYTORCH_TEST_LEVELS
+    }
+    count_summary = (
+        ", ".join(
+            f"`{level}`: {count}" for level, count in level_counts.items() if count
+        )
+        or "none"
+    )
+    lines = [
+        "## PyTorch Release Matrix",
+        "",
+        "| Setting | Value |",
+        "| --- | --- |",
+        f"| Release type | `{release_type}` |",
+        f"| Platform | `{platform}` |",
+        "| Python selection | "
+        + (
+            ", ".join(f"`{version}`" for version in python_versions)
+            if python_versions
+            else "default"
+        )
+        + " |",
+        "| PyTorch ref selection | "
+        + (
+            ", ".join(f"`{ref}`" for ref in pytorch_git_refs)
+            if pytorch_git_refs
+            else "default"
+        )
+        + " |",
+        f"| Requested AMDGPU families | `{amdgpu_families or 'none'}` |",
+        f"| Generated rows | {len(matrix)} ({count_summary}) |",
+    ]
+
+    if not matrix:
+        lines.extend(
+            [
+                "",
+                "**Decision:** No build rows remain after applying the "
+                "PyTorch-ref AMDGPU-family support filters.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "| Python | PyTorch ref | AMDGPU families | Test level |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for row in matrix:
+        families = ", ".join(
+            f"`{family}`" for family in _split_families(row["amdgpu_families"])
+        )
+        lines.append(
+            f"| `{row['python_version']}` | `{row['pytorch_git_ref']}` | "
+            f"{families} | `{row['test_level']}` |"
+        )
+    if not matrix:
+        lines.append("| none | none | none | none |")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate PyTorch release build matrix"
@@ -249,6 +324,16 @@ def main(argv: list[str] | None = None) -> int:
         pytorch_git_refs=pytorch_git_refs,
         amdgpu_families=args.amdgpu_families,
         platform=args.platform,
+    )
+    gha_append_step_summary(
+        format_matrix_summary(
+            release_type=args.release_type,
+            platform=args.platform,
+            python_versions=python_versions,
+            pytorch_git_refs=pytorch_git_refs,
+            amdgpu_families=args.amdgpu_families,
+            matrix=matrix,
+        )
     )
     gha_set_output({"pytorch_matrix": json.dumps(matrix)})
     return 0
