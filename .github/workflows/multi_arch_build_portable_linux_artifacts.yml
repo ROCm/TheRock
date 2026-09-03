@@ -251,7 +251,9 @@ jobs:
       # Generate the per-stage build_observability.html report from this stage's
       # .ninja_log (and comp-summary.html when resource profiling is enabled).
       # The report lands in ${BUILD_DIR}/logs and is uploaded by "Upload stage
-      # logs" below; "Upload stage logs" then links to it from the job summary.
+      # logs" below. The links are surfaced in one consolidated "Build
+      # Observability" table in the top-level configure job summary (see
+      # configure_multi_arch_ci_summary.py), not from this per-stage job summary.
       - name: Analyze build times
         if: ${{ !cancelled() }}
         run: |
