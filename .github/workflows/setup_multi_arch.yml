@@ -238,8 +238,10 @@ jobs:
           # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
           BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
-          # The checkout commit is used for commit-compatibility checking.
-          STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
+          # The checkout commit is used for commit-compatibility checking. A
+          # pull request checks out a merge commit that is not on the baseline
+          # branch, so ancestry is established from its base commit instead.
+          STAGE_REUSE_CURRENT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || steps.checkout.outputs.commit }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
           STAGE_REUSE_COMMIT_HISTORY: ${{ inputs.stage_reuse_commit_history }}
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
