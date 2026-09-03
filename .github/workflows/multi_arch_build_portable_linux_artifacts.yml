@@ -72,6 +72,13 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      force_resource_profiling:
+        description: >-
+          Override for resource-usage profiling. "true" forces it on, "false"
+          forces it off, and "" (default) falls back to the release_type gate
+          (on for nightly/release only). See #7692.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -99,9 +106,14 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
       # Resource-usage profiling (resource_info.py as the compiler launcher) sits
-      # in the compile hot path, so it is limited to nightly/release builds. Other
-      # builds use ccache directly. See #7692.
-      ENABLE_RESOURCE_PROFILING: ${{ inputs.release_type == 'nightly' || inputs.release_type == 'release' }}
+      # in the compile hot path, so by default it is limited to nightly/release
+      # builds; other builds use ccache directly. A run can override this via the
+      # force_resource_profiling input ("true"/"false"). See #7692.
+      ENABLE_RESOURCE_PROFILING: >-
+        ${{ (inputs.force_resource_profiling == 'true'
+             || (inputs.force_resource_profiling != 'false'
+                 && (inputs.release_type == 'nightly' || inputs.release_type == 'release')))
+            && 'true' || 'false' }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
 
     steps:
