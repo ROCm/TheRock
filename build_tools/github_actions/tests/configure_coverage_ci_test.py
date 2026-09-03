@@ -151,6 +151,58 @@ class BuildCoverageMatrixTest(unittest.TestCase):
                 self.assertTrue(project.stage_project)
                 self.assertTrue(project.test_component)
 
+    def test_every_registered_project_declares_hybrid_fetch_inputs(self):
+        # Without these the nightly test job cannot tell which files belong to
+        # the project, and would test an entirely non-instrumented install.
+        for name, project in configure_coverage_ci.COVERAGE_PROJECTS.items():
+            with self.subTest(project=name):
+                self.assertTrue(project.artifact_names, "needs artifacts to overlay")
+                self.assertTrue(project.artifact_relpaths, "needs relpaths to overlay")
+
+    def test_hybrid_fetch_inputs_reach_the_matrix(self):
+        (entry,) = configure_coverage_ci.build_coverage_matrix(
+            ["hiprand"], ["gfx94X-dcgpu"], "ROCm/rocm-libraries", "main"
+        )
+        self.assertEqual(entry["artifact_names"], "rand")
+        self.assertEqual(entry["artifact_relpaths"], "math-libs/hipRAND/stage")
+
+
+class BuildCoverageCmakeOptionsTest(unittest.TestCase):
+    def test_full_selection_collapses_to_the_group_option(self):
+        # What the nightly does: instrument every onboarded project at once.
+        self.assertEqual(
+            configure_coverage_ci.build_coverage_cmake_options(
+                sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+            ),
+            ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"],
+        )
+
+    def test_partial_selection_names_each_project(self):
+        # Only meaningful once a second rocm-libraries project is onboarded;
+        # until then the single project is also the whole group.
+        if len(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS) < 2:
+            self.skipTest("needs at least two onboarded rocm-libraries projects")
+        first, *_ = sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+        self.assertEqual(
+            configure_coverage_ci.build_coverage_cmake_options([first]),
+            [
+                f"-D{configure_coverage_ci.COVERAGE_PROJECTS[first].cmake_target.upper()}"
+                "_ENABLE_COVERAGE=ON"
+            ],
+        )
+
+    def test_empty_group_does_not_produce_a_group_option(self):
+        # rocm-systems has no onboarded projects, so selecting only
+        # rocm-libraries must not claim to cover everything.
+        options = configure_coverage_ci.build_coverage_cmake_options(
+            sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+        )
+        self.assertNotIn("-DTHEROCK_COVERAGE_ALL=ON", options)
+        self.assertNotIn("-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON", options)
+
+    def test_no_selection_produces_no_options(self):
+        self.assertEqual(configure_coverage_ci.build_coverage_cmake_options([]), [])
+
 
 class MainTest(unittest.TestCase):
     def setUp(self):
@@ -176,7 +228,9 @@ class MainTest(unittest.TestCase):
             self.assertIn("dist_amdgpu_families", written)
             self.assertIn("families_matrix_json", written)
             self.assertIn("coverage_cmake_options", written)
-            self.assertIn("-DHIPRAND_ENABLE_COVERAGE=ON", written)
+            # hipRAND is currently the whole rocm-libraries group, so selecting
+            # it selects the group option.
+            self.assertIn("-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON", written)
             # The workflow builds this stage, narrowed to this project.
             self.assertIn('"build_stage": "math-libs"', written)
             self.assertIn('"stage_project": "hiprand"', written)

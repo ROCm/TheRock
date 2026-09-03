@@ -101,7 +101,7 @@ component, the object globs handed to `llvm-cov`, and its Codecov flag.
 | Workflow                             | Trigger                                         | Build strategy                                                                                             |
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `multi_arch_ci_coverage.yml`         | `ci:coverage` label on a PR, or manual dispatch | Builds the instrumented compiler-runtime once, then rebuilds only the target project for each matrix entry |
-| `multi_arch_ci_coverage_nightly.yml` | Nightly schedule, or manual dispatch            | Builds the whole instrumented stack once, then tests and reports on each project against that single build |
+| `multi_arch_ci_coverage_nightly.yml` | Dispatched by the regular nightly, or by hand   | Builds the whole instrumented stack once, then tests and reports on each project against that single build |
 
 Both delegate to `multi_arch_ci_coverage_linux.yml`, which owns the per-project
 build, test, and aggregation sequence for one GPU family.
@@ -119,6 +119,56 @@ The test jobs run through the same `test_component.yml` as regular CI, with
 workspace and uploading the resulting profiles as an artifact. The aggregation
 job downloads the profiles from every shard, merges them, and uploads the lcov
 report.
+
+### Nightly coverage
+
+The regular nightly dispatches `multi_arch_ci_coverage_nightly.yml` once its
+build stage finishes, handing over its own run id as `baseline_run_id`. Coverage
+therefore has a run id of its own: a coverage failure does not colour the
+nightly's status, and the nightly's test jobs — which rarely all pass — do not
+hold coverage up. It waits on the build alone because that is the part producing
+the artifacts coverage needs.
+
+The dispatch is gated on the `COVERAGE_NIGHTLY_ENABLED` repository variable
+being `"true"`, so a repository or fork that does not want nightly coverage
+simply never sets it. Dispatching the workflow by hand and pasting in a
+`baseline_run_id` from a recent nightly does the same thing, which is the
+supported way to reproduce or re-run a nightly report.
+
+Nightly coverage currently runs every onboarded project on one architecture
+(gfx942, the `gfx94X-dcgpu` family). Running only what changed, and running more
+architectures, come later.
+
+#### Why there are two run ids
+
+The nightly instruments the whole stack in one build, because building each
+project separately would mean rebuilding its dependencies each time. Reporting,
+though, has to stay per project: a coverage report for hipRAND should not shift
+because rocRAND changed, and an instrumented rocRAND under an instrumented
+hipRAND also writes its own profiles into the same run.
+
+Each test job therefore assembles a mostly non-instrumented install:
+
+1. `setup_test_environment` installs the **baseline** run in full — every
+   library non-instrumented, as the regular nightly built it.
+1. `overlay_coverage_artifacts.py` fetches the artifact holding the project
+   under test from the **coverage** run and copies only that project's files
+   over the baseline ones.
+
+The baseline is read from the channel that published it (`baseline_release_type`,
+normally `nightly`) rather than from the coverage run's own `ci` channel, since
+artifacts are bucketed per channel.
+
+Step 2 is per project rather than per artifact because TheRock's artifacts are
+grouped: `rand` carries both rocRAND and hipRAND. Each project's files sit under
+the subproject stage directory they were built in (`math-libs/hipRAND/stage`),
+which is what `artifact_relpaths` in the coverage registry names. Nothing is
+renamed along the way — the two runs write to different S3 directories, so the
+instrumented `rand_lib_gfx942.tar.xz` and the regular one never collide.
+
+If the overlay finds none of the project's files, the job fails rather than
+testing the baseline build and reporting coverage for binaries that were never
+instrumented.
 
 ### Selecting projects to run
 
@@ -149,3 +199,13 @@ that is what routes the project into the correct group alias and
 `THEROCK_COVERAGE_*_ALL` option. No CMake edit is needed — the group membership
 lists are generated from `COVERAGE_PROJECTS` at configure time, so both the local
 aggregate flags and the CI aliases pick up the new project automatically.
+
+`artifact_names` and `artifact_relpaths` are what the nightly overlay uses, so
+they need to name the artifact the project ships in and the subproject stage
+directory holding its files. Getting `artifact_relpaths` wrong fails the nightly
+test job outright rather than quietly reporting against a non-instrumented
+build.
+
+A project whose stage is not yet built by `multi_arch_ci_coverage_nightly.yml`
+also needs that stage's build job added there; today it builds compiler-runtime
+and math-libs.

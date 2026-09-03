@@ -11,6 +11,12 @@
 # by the caller. This workflow rebuilds only the stage that owns the target
 # project, so a coverage run costs roughly one extra library build per project
 # rather than a full instrumented stack.
+#
+# `baseline_run_id` switches the test half to the nightly hybrid model: the
+# install tree comes from a regular nightly run and only the project under test
+# is overlaid from this run, keeping instrumented dependencies out of the
+# report. Without it the run's own artifacts are tested as built, which is what
+# PR coverage wants since it only instruments the project it rebuilt.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -50,6 +56,29 @@ on:
         type: string
         default: ""
         description: "Extra install_rocm_from_artifacts.py args for the report job"
+      baseline_run_id:
+        type: string
+        default: ""
+        description: >-
+          Regular nightly run to take non-instrumented dependencies from. Set
+          by the nightly caller, which instruments the whole stack in its own
+          run; the test jobs then install this run and overlay only the project
+          under test. Empty tests this run's artifacts as built.
+      baseline_release_type:
+        type: string
+        default: "nightly"
+        description: >-
+          Release channel baseline_run_id published to. Artifacts are bucketed
+          by channel, so the baseline is read from its own channel rather than
+          from this run's.
+      artifact_names:
+        type: string
+        default: ""
+        description: "Artifact names holding the instrumented project, for the hybrid fetch"
+      artifact_relpaths:
+        type: string
+        default: ""
+        description: "Subproject stage directories to overlay, for the hybrid fetch"
       codecov_flag:
         type: string
         default: ""
@@ -75,6 +104,12 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, propagated from the caller
+          to link this run to its release lineage.
         type: string
         default: ""
 
@@ -107,6 +142,7 @@ jobs:
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
@@ -184,6 +220,11 @@ jobs:
       build_variant: coverage
       coverage_enabled: true
       coverage_artifact_prefix: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
+      coverage_baseline_run_id: ${{ inputs.baseline_run_id }}
+      coverage_baseline_release_type: ${{ inputs.baseline_release_type }}
+      coverage_artifact_names: ${{ inputs.artifact_names }}
+      coverage_artifact_relpaths: ${{ inputs.artifact_relpaths }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   aggregate_coverage:
     name: Coverage Report (${{ inputs.project_name }})

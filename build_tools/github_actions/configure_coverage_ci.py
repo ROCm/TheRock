@@ -20,8 +20,9 @@ Outputs (GITHUB_OUTPUT):
   - dist_amdgpu_families: semicolon-separated families, as CMake expects them.
   - families_matrix_json: JSON array of {amdgpu_family} objects for the
     per-arch stages of multi_arch_build_portable_linux.yml.
-  - coverage_cmake_options: every selected project's coverage flag, for the
-    nightly full-stack instrumented build.
+  - coverage_cmake_options: the coverage flags for the nightly full-stack
+    instrumented build, collapsed to a THEROCK_COVERAGE_*_ALL group option
+    whenever the selection covers a whole group.
 """
 
 import argparse
@@ -66,6 +67,13 @@ class CoverageProject:
         codecov_flag: Flag the report is filed under in Codecov.
         source_repo: The repo this project ships from (ROCM_LIBRARIES or
             ROCM_SYSTEMS); drives the group aliases.
+        artifact_names: BUILD_TOPOLOGY artifact(s) the instrumented project
+            ships in. These are grouped (`rand` holds both rocRAND and
+            hipRAND), which is why artifact_relpaths exists.
+        artifact_relpaths: Subproject stage directories inside those artifacts
+            that belong to this project alone. The nightly hybrid fetch copies
+            only these over the baseline install tree, so a run measuring
+            hipRAND does not also pick up an instrumented rocRAND.
     """
 
     cmake_target: str
@@ -77,6 +85,8 @@ class CoverageProject:
     fetch_artifact_args: str = ""
     codecov_flag: str = ""
     source_repo: str = ROCM_LIBRARIES
+    artifact_names: list[str] = field(default_factory=list)
+    artifact_relpaths: list[str] = field(default_factory=list)
 
 
 # Projects that participate in coverage CI. Start small (RFC0014 phase 1) and
@@ -95,6 +105,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/libhiprand.so*"],
         fetch_artifact_args="--rand",
         codecov_flag="hipRAND",
+        artifact_names=["rand"],
+        artifact_relpaths=["math-libs/hipRAND/stage"],
     ),
 }
 
@@ -202,9 +214,47 @@ def build_coverage_matrix(
                     "fetch_artifact_args": project.fetch_artifact_args,
                     "codecov_flag": project.codecov_flag or project_key,
                     "amdgpu_families": family,
+                    "artifact_names": ",".join(project.artifact_names),
+                    "artifact_relpaths": ",".join(project.artifact_relpaths),
                 }
             )
     return matrix
+
+
+def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
+    """Picks the CMake coverage flags that instrument exactly this selection.
+
+    A nightly run instruments every onboarded project, which is what the
+    THEROCK_COVERAGE_*_ALL group options say directly; a narrowed selection
+    falls back to naming each project. Both spellings reach the same
+    <PROJECT>_ENABLE_COVERAGE flags, so this only affects how the configure
+    line reads.
+    """
+    selected = set(project_keys)
+    covers_libraries = bool(ROCM_LIBRARIES_PROJECTS) and ROCM_LIBRARIES_PROJECTS <= (
+        selected
+    )
+    covers_systems = bool(ROCM_SYSTEMS_PROJECTS) and ROCM_SYSTEMS_PROJECTS <= selected
+
+    options: list[str] = []
+    grouped: set[str] = set()
+    if covers_libraries and covers_systems:
+        options.append("-DTHEROCK_COVERAGE_ALL=ON")
+        grouped |= ROCM_LIBRARIES_PROJECTS | ROCM_SYSTEMS_PROJECTS
+    else:
+        if covers_libraries:
+            options.append("-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON")
+            grouped |= ROCM_LIBRARIES_PROJECTS
+        if covers_systems:
+            options.append("-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON")
+            grouped |= ROCM_SYSTEMS_PROJECTS
+
+    options.extend(
+        f"-D{COVERAGE_PROJECTS[key].cmake_target.upper()}_ENABLE_COVERAGE=ON"
+        for key in project_keys
+        if key not in grouped
+    )
+    return options
 
 
 def emit_cmake(output_path: Path) -> None:
@@ -265,10 +315,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     matrix = build_coverage_matrix(
         project_keys, amdgpu_families, config_repository, config_ref
     )
-    coverage_flags = [
-        f"-D{COVERAGE_PROJECTS[key].cmake_target.upper()}_ENABLE_COVERAGE=ON"
-        for key in project_keys
-    ]
+    coverage_flags = build_coverage_cmake_options(project_keys)
     outputs = {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),

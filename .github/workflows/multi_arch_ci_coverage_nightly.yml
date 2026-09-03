@@ -13,24 +13,39 @@
 # shared per-stage build workflow for each, rather than running the whole
 # multi_arch_build_portable_linux.yml pipeline and filtering stages out of it.
 #
-# Phase 1 of RFC0014 runs every enabled component on the default architecture.
-# Change-based selection and multi-architecture expansion come later.
+# RFC0014 phase 1 runs every enabled component on one default architecture
+# (gfx942, i.e. the gfx94X-dcgpu family). Change-based selection and
+# multi-architecture expansion come later.
+#
+# Scheduling follows the RFC's option C: the regular nightly dispatches this
+# workflow once its build finishes and hands over its run id as
+# `baseline_run_id`, so there is no cron here. Coverage therefore gets its own
+# run id -- a failure here leaves the nightly's status alone, and the nightly's
+# unstable test jobs do not hold coverage up -- while still being pointed at a
+# baseline that was just built from the same commit. Dispatching this workflow
+# by hand with a `baseline_run_id` copied from a nightly run is the RFC's
+# option B1 and works the same way.
 
 name: Multi-Arch CI Coverage Nightly
 
 on:
-  schedule:
-    # 3 AM UTC, after the regular nightly builds have settled.
-    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
       projects_to_test:
         type: string
         description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
         default: ""
       amdgpu_families:
         type: string
-        description: "Comma-separated GPU families to collect coverage on."
+        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
         default: "gfx94X-dcgpu"
       coverage_config_source:
         type: string
@@ -40,9 +55,22 @@ on:
         type: string
         description: "Test type to run against the instrumented build."
         default: "standard"
+      quartz_tracking_id:
+        type: string
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          nightly that dispatched this run to link it to its release lineage.
+        default: ""
 
 permissions:
   contents: read
+
+# The two run ids are only connected through this input, so surface it in the
+# run title rather than making people open the logs to find the baseline.
+run-name: >-
+  Multi-Arch CI Coverage Nightly
+  | baseline: ${{ inputs.baseline_run_id || 'none (self-contained)' }}
+  | ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.run_id }}
@@ -100,14 +128,17 @@ jobs:
       extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
 
   # The whole stage is built, not just the onboarded projects: the test jobs
-  # below run against this run's artifacts and need the complete dependency set.
-  # `coverage_cmake_options` decides which projects get instrumented; the rest
-  # build normally.
+  # below need the complete dependency set, and phase 1 instruments every
+  # onboarded project in one pass rather than per changed project.
+  # `coverage_cmake_options` is the THEROCK_COVERAGE_*_ALL group option when the
+  # selection covers a whole group, and the individual project flags otherwise;
+  # everything not selected builds normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
     needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
@@ -129,12 +160,15 @@ jobs:
         -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write
 
-  # One test + report job per project, all consuming the single instrumented
-  # stack built above (same run id, so the artifacts are already published).
+  # One test + report job per project. The instrumented stack built above is the
+  # only thing taken from this run: each job installs `baseline_run_id` and then
+  # overlays its own project, so a project's dependencies stay non-instrumented
+  # even though the build instrumented all of them at once.
   coverage_report:
     name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
     needs: [setup_coverage_matrix, build_instrumented_math_libs]
@@ -164,9 +198,14 @@ jobs:
       fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
       codecov_flag: ${{ matrix.coverage.codecov_flag }}
       amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_release_type: ${{ inputs.baseline_release_type || 'nightly' }}
+      artifact_names: ${{ matrix.coverage.artifact_names }}
+      artifact_relpaths: ${{ matrix.coverage.artifact_relpaths }}
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
       id-token: write

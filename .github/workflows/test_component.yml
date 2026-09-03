@@ -49,6 +49,35 @@ on:
           something project-specific to keep each project's profiles apart.
         type: string
         default: "coverage-profraw"
+      coverage_baseline_run_id:
+        description: >-
+          Regular nightly run holding the non-instrumented artifacts. When set,
+          the whole install tree comes from that run and only the project under
+          test is overlaid from this run's instrumented build, so its
+          dependencies stay out of the coverage report. Empty means the run's
+          own artifacts are already the ones to test.
+        type: string
+        default: ""
+      coverage_baseline_release_type:
+        description: >-
+          Release channel the baseline run published to. Artifacts are bucketed
+          by channel, so this has to match the run that produced them rather
+          than the coverage run reading them.
+        type: string
+        default: "nightly"
+      coverage_artifact_names:
+        description: >-
+          Comma-separated artifact names holding the instrumented project
+          (e.g. 'rand'). Required alongside coverage_baseline_run_id.
+        type: string
+        default: ""
+      coverage_artifact_relpaths:
+        description: >-
+          Comma-separated subproject stage directories to overlay from those
+          artifacts (e.g. 'math-libs/hipRAND/stage'). TheRock's artifacts are
+          grouped, so this is what keeps sibling projects non-instrumented.
+        type: string
+        default: ""
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -98,6 +127,12 @@ jobs:
       QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      # Nightly coverage installs the baseline run and overlays the
+      # instrumented project afterwards; every other run installs its own
+      # artifacts directly. The channel travels with the run id because
+      # artifacts are bucketed by channel.
+      INSTALL_ARTIFACT_RUN_ID: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_run_id || (inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id) }}"
+      INSTALL_RELEASE_TYPE: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_release_type || inputs.release_type }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -153,14 +188,32 @@ jobs:
           STEP_TIMEOUT_MINUTES: "15" # should match timeout-minutes specified above at this step
         uses: './.github/actions/setup_test_environment'
         with:
-          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          ARTIFACT_RUN_ID: ${{ env.INSTALL_ARTIFACT_RUN_ID }}
           # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
           ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          RELEASE_TYPE: ${{ env.INSTALL_RELEASE_TYPE }}
+
+      # The step above installed the baseline run, so every library here is
+      # non-instrumented. Replacing just this project's files leaves its
+      # dependencies out of the profiles the test run is about to write.
+      - name: Overlay instrumented coverage artifacts
+        if: ${{ inputs.coverage_baseline_run_id != '' }}
+        timeout-minutes: 15
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          python ./build_tools/github_actions/overlay_coverage_artifacts.py \
+            --run-id="${{ github.run_id }}" \
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            --amdgpu-targets="${{ inputs.amdgpu_targets }}" \
+            --artifact-names="${{ inputs.coverage_artifact_names }}" \
+            --artifact-relpaths="${{ inputs.coverage_artifact_relpaths }}" \
+            --install-dir="${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
