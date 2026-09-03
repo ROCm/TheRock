@@ -1,0 +1,30 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Trusted security scan: full-repo scan (scan_mode: all) with SARIF results
+# uploaded to the Security tab. `security-events: write` is granted on the
+# `uses:` job itself, not just the top-level `permissions:` block above it,
+# since a `permissions:` block (wherever declared) implicitly zeroes out
+# anything it doesn't list. See the PR-time counterpart
+# (security_scan_pr.yml) for the human-readable, non-elevated variant.
+
+name: Weekly security scan
+
+on:
+  schedule:
+    - cron: "0 10 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Security scan
+    permissions:
+      contents: read
+      security-events: write
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@4b25e6bc1cb0b9bbc3c278b2f1c70d8f2f406e20 # v1.0.0
+    with:
+      scan_mode: all
+      report_formats: sarif
