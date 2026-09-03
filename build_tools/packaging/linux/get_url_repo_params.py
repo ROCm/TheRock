@@ -43,6 +43,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
+from resolve_docker_image import get_image_ref
 from github_actions.github_actions_api import gha_set_output
 
 LAYOUT_PER_FAMILY = "per_family"
@@ -533,14 +534,14 @@ def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
 
 # --- get-container-image ---
 
-# Maps OS profile prefixes to container images (checked in order; first match wins).
-# Single-profile entries (e.g. "rhel8") require an exact match so "rhel10" does not
-# match the "rhel8" prefix via startswith.
+# Maps OS profile prefixes to container image keys in docker_images.json.
+# Checked in order; first match wins. Single-profile entries (e.g. "rhel8")
+# require an exact match so "rhel10" does not match the "rhel8" prefix via startswith.
 _OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
-    (("sles",), "registry.suse.com/bci/bci-base:16.0"),
-    (("ubuntu", "debian"), "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
-    (("rhel8",), "registry.access.redhat.com/ubi8/ubi:8.10"),
-    ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel10)
+    (("sles",), get_image_ref("bci_base_sles")),
+    (("ubuntu", "debian"), get_image_ref("no_rocm_image_ubuntu24_04")),
+    (("rhel8",), get_image_ref("ubi8")),
+    ((), get_image_ref("ubi10")),  # default (e.g. rhel10)
 ]
 
 # Single-prefix entries that must match the full profile (not startswith).
@@ -551,8 +552,8 @@ def get_container_image(os_profile: str) -> str:
     """Return the container image for a given OS profile.
 
     Examples:
-        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
-        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>
+        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>
         sles16      -> registry.suse.com/bci/bci-base:16.0
         rhel8       -> registry.access.redhat.com/ubi8/ubi:8.10
         rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
@@ -744,7 +745,7 @@ def main(argv: list[str] | None = None) -> int:
         "get-container-image",
         help=(
             "Get container image for a given OS profile "
-            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest)."
+            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:<digest>)."
         ),
     )
     p_img.add_argument(

@@ -1,0 +1,42 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Resolve Docker image references
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: >-
+          Logical image key from dockerfiles/docker_images.json
+          (e.g. therock_build_manylinux_x86_64).
+        type: string
+        required: true
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+    outputs:
+      image_ref:
+        description: Full image reference for the requested image_name
+        value: ${{ jobs.resolve.outputs.image_ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve image reference from docker_images.json
+    runs-on: ubuntu-24.04
+    outputs:
+      image_ref: ${{ steps.read.outputs.image_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+      - name: Read image reference
+        id: read
+        run: |
+          ref=$(python3 build_tools/resolve_docker_image.py get-image "${{ inputs.image_name }}")
+          echo "image_ref=${ref}" >> "$GITHUB_OUTPUT"
