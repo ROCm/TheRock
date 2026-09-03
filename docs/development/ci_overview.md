@@ -56,7 +56,9 @@ measures with instrumentation rather than reusing the regular build:
 - [`.github/workflows/multi_arch_ci_coverage_nightly.yml`](/.github/workflows/multi_arch_ci_coverage_nightly.yml) - nightly full-stack instrumented build, dispatched by the regular nightly
   - [`.github/workflows/multi_arch_ci_coverage_linux.yml`](/.github/workflows/multi_arch_ci_coverage_linux.yml) - per-project test and report for one GPU family
 
-See [Code Coverage](code_coverage.md) for details.
+See [Code Coverage](code_coverage.md) for the CMake options and how to onboard a
+project, and [Nightly Code Coverage Flow](code_coverage_flows.md) for the
+end-to-end CI walkthrough.
 
 ## Build Phase
 

@@ -92,6 +92,11 @@ that built the instrumented objects, so the script prefers the copies under
 
 ## Coverage CI
 
+For a step-by-step walkthrough of a nightly run, from the dispatch through to
+the Codecov upload, see
+[Nightly Code Coverage Flow](code_coverage_flows.md). The rest of this section
+is the summary.
+
 Coverage reports are produced nightly by
 `multi_arch_ci_coverage_nightly.yml`, which builds the whole instrumented stack
 once and then tests and reports on each project against that single build. It
