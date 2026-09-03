@@ -4,8 +4,8 @@ This directory contains tools for creating ROCm SDK archives - file-tree
 representations of an SDK installation that can be extracted and used directly.
 
 Each archive contains a flattened set of ROCm build
-[artifacts](/docs/development/artifacts.md) including code from all ROCm
-subprojects:
+[artifacts](/docs/development/artifacts.md) from the ROCm subprojects included
+in the build:
 
 ```bash
 install/      # Arbitrary file path the archive is extracted to
@@ -36,37 +36,50 @@ GitHub Actions workflow run, flattens them into an install-prefix-like layout,
 and creates `.tar.gz` archives. It can create per-family archives and, for
 builds using split kernel-pack artifacts, a combined multi-architecture archive.
 
-From the repository root, run:
+From the repository root, run. This example uses artifacts from
+[rockrel release run 33697653391](https://github.com/ROCm/rockrel/actions/runs/33697653391):
 
 ```bash
+RUN_ID=33697653391
+RUN_GITHUB_REPO=ROCm/rockrel
+PACKAGE_VERSION=10.1.0a20260903
+DIST_AMDGPU_FAMILIES="gfx94X-dcgpu;gfx110X-all;gfx1151;gfx120X-all;gfx90a;gfx950-dcgpu;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx125X-dcgpu"
+OUTPUT_DIR=build/tarballs
+
 python build_tools/packaging/archives/build_tarballs.py \
-  --run-id=<run-id> \
-  --dist-amdgpu-families="gfx94X-dcgpu;gfx110X-all" \
+  --run-id="$RUN_ID" \
+  --run-github-repo="$RUN_GITHUB_REPO" \
+  --dist-amdgpu-families="$DIST_AMDGPU_FAMILIES" \
   --platform=linux \
-  --package-version=<version> \
-  --output-dir=<output-directory>
+  --package-version="$PACKAGE_VERSION" \
+  --output-dir="$OUTPUT_DIR"
 ```
 
-### Creating an archive directly from CI artifacts
+### Creating an archive directly from workflow run artifacts
 
 For manual packaging, `artifact_manager.py fetch --flatten` can download and
-merge the artifact slices from a CI run into one SDK-root directory. That
+merge the artifact slices from a CI/CD run into one SDK-root directory. That
 directory can then be compressed directly:
 
 ```bash
+RUN_ID=33697653391
+RUN_GITHUB_REPO=ROCm/rockrel
+ARCHIVE_ROOT=build/archive-root
+ARCHIVE_PATH=build/rocm-sdk-ci-linux.tar.gz
+
 python build_tools/artifact_manager.py fetch \
-  --run-id=<run-id> \
-  --run-github-repo=ROCm/TheRock \
+  --run-id="$RUN_ID" \
+  --run-github-repo="$RUN_GITHUB_REPO" \
   --stage=all \
   --amdgpu-families=gfx110X-all \
   --expand-family-to-targets \
   --platform=linux \
   --exclude-components=test \
   --exclude-artifacts=fftw3 \
-  --output-dir=build/archive-root \
+  --output-dir="$ARCHIVE_ROOT" \
   --flatten
 
-tar -czf build/rocm-sdk-ci-linux.tar.gz -C build/archive-root .
+tar -czf "$ARCHIVE_PATH" -C "$ARCHIVE_ROOT" .
 ```
 
 Remove the two `--exclude-*` options to include test and FFTW artifacts. The
