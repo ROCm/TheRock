@@ -2,9 +2,14 @@
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
+import os
 import platform
 import shutil
 import sys
+
+therock_source_dir = Path(os.environ["THEROCK_SOURCE_DIR"])
+sys.path.insert(0, str(therock_source_dir / "build_tools"))
+from patch_linux_so import relativize_pc_file
 
 PREFIX = sys.argv[1]
 
@@ -27,9 +32,7 @@ cmake_dir = Path(PREFIX) / "lib" / "cmake" / "zlib"
 if cmake_dir.is_dir():
     shutil.rmtree(cmake_dir)
 
-# Remove zlib's auto-generated pkg-config file, which hardcodes the build-time
-# prefix. TheRock installs its own relocatable zlib.pc to the same path, so
-# leaving this one in place makes the result depend on install ordering.
-pc_file = Path(PREFIX) / "lib" / "pkgconfig" / "zlib.pc"
-if pc_file.exists():
-    pc_file.unlink()
+# zlib's auto-generated pkg-config files hardcode the absolute build-time
+# prefix. Rewrite them in place to be relocatable.
+for pc_file in (Path(PREFIX) / "lib" / "pkgconfig").glob("*.pc"):
+    relativize_pc_file(pc_file)
