@@ -130,6 +130,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
     secrets: inherit
 
   linux_build_and_test:
