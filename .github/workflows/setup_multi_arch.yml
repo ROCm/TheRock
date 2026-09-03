@@ -94,6 +94,13 @@ on:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
         default: true
+      presubmit:
+        description: >-
+          Declare this caller an automatic presubmit gate: a run scoped cheaply
+          enough to start on every pull request. Currently this lets host-asan
+          allocate a sandbox test runner outside of nightly.
+        type: boolean
+        default: false
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -227,6 +234,7 @@ jobs:
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          PRESUBMIT: ${{ inputs.presubmit }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
