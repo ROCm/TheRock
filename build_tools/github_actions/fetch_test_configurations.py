@@ -6,7 +6,9 @@ This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
   - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run.
+    prerequisite that must pass before other components are run. The
+    ``test_runner`` field within this object is non-empty only on GPU runners,
+    so callers can gate GPU-only steps on that field.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -30,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
+import emulation
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
@@ -303,7 +306,7 @@ test_matrix = {
     },
     "hipblas": {
         "job_name": "hipblas",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--blas --solver --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -341,7 +344,7 @@ test_matrix = {
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --sparse --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -352,7 +355,7 @@ test_matrix = {
     },
     "rocsolver": {
         "job_name": "rocsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --tests",
         # test_runner.py drives ctest category labels, so it runs a filtered
         # subset rather than the full ~5 hr extended suite.
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
@@ -398,7 +401,6 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "expect_failure": True,
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
@@ -408,7 +410,6 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
-        "expect_failure": True,
         "test_script": (
             "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
             " gdb.rocm/corefile.exp"
@@ -447,7 +448,7 @@ test_matrix = {
     # SPARSE tests
     "hipsparse": {
         "job_name": "hipsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -458,7 +459,7 @@ test_matrix = {
     },
     "rocsparse": {
         "job_name": "rocsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
         # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
         # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
@@ -473,7 +474,7 @@ test_matrix = {
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
@@ -580,6 +581,33 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
+        },
+    },
+    # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
+    # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
+    # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
+    # list from AMDGPU_FAMILIES, builds the pinned rocjitsu KMD, and runs StaticFDBSync once per CU
+    # with a CU-corrected config. Restricted to the arches rocjitsu has a KMD config for -- gfx942
+    # (MI300X 304 + MI300A 228) and gfx950 (256) -- via include_family. linux_cpu_runner: no scarce
+    # GPU test runner needed; uses the default no_rocm Ubuntu container (the runner apt-installs
+    # cmake/build-essential/libdrm-dev to build rocjitsu).
+    "miopen-dbsync": {
+        "job_name": "miopen-dbsync",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # Skipped on the `quick` tier by the runner script (TEST_TYPE guard); this
+        # governs standard/comprehensive/full only. Runs serially
+        # (MIOPEN_DBSYNC_MAX_THREADS=1) under rocjitsu; full set (gfx942 304+228 or
+        # gfx950 256) + artifact fetch + rocjitsu build measures ~15 min, so 30 gives
+        # margin and fails a hung interposer faster.
+        "timeout_minutes": 30,
+        "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "include_family": {
+            "linux": ["gfx942", "gfx950"],
+        },
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     # RCCL tests
@@ -733,7 +761,7 @@ test_matrix = {
     # rocALUTION tests
     "rocalution": {
         "job_name": "rocalution",
-        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "fetch_artifact_args": "--rocalution --tests --blas --sparse --rand",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -897,6 +925,26 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+        # Also run these against an emulated GPU, pinned to a cheap category
+        # and told it is emulated. See docs/development/adding_tests.md.
+        "emulate": "rocjitsu",
+        "emulate_test_type": "quick",
+        "emulate_env": {"ROCRTST_PLATFORM_OVERRIDE": "EMULATOR"},
+    },
+    # Checks that mirage, rocjitsu and the ROCr runtime in the artifacts agree.
+    # When this fails, every other emulated job is expected to fail too.
+    "emulation": {
+        "job_name": "emulation",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 3,
+        "test_script": f"python {_get_script_path('test_emulation.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "linux_cpu_runner": True,
+        "emulate": "rocjitsu",
+        "emulate_only": True,
     },
     # hipTensor tests
     "hiptensor": {
@@ -963,6 +1011,11 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
+    # The mirage profile for this family, or None if we do not emulate it.
+    emulate_profile = emulation.get_emulated_profile(amdgpu_families, platform)
+    if emulate_profile:
+        logging.info(f"Emulating {amdgpu_families} with profile {emulate_profile}")
+
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
@@ -991,6 +1044,17 @@ def run():
     all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
+        emulator = selected_matrix[key].get("emulate")
+        emulate_only = selected_matrix[key].get("emulate_only", False)
+
+        # Components that only make sense under an emulator are skipped
+        # wholesale on families we do not emulate.
+        if emulate_only and not (emulator and emulate_profile):
+            logging.info(
+                f"Excluding job {job_name} since it only runs emulated and "
+                f"family {amdgpu_families} is not emulated on {platform}"
+            )
+            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1045,7 +1109,11 @@ def run():
         if platform in selected_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name} with test_type {test_type}")
+            if emulate_only:
+                # This entry is only a template for the emulated variant below.
+                logging.info(f"Including job {job_name} emulated only")
+            else:
+                logging.info(f"Including job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
@@ -1102,6 +1170,19 @@ def run():
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
+            # Derived *before* the multi-GPU block below, which `continue`s
+            # when the family has no multi-GPU pool -- an emulated variant needs
+            # no GPU at all.
+            if emulator and emulate_profile:
+                emulated_job = emulation.build_emulated_job(
+                    job_config_data, emulator, emulate_profile
+                )
+                logging.info(
+                    f"Including job {emulated_job['job_name']} on the CPU runner "
+                    f"(timeout {emulated_job['timeout_minutes']} min)"
+                )
+                all_components.append(emulated_job)
+
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
@@ -1123,12 +1204,17 @@ def run():
                     )
                     continue
 
-            all_components.append(job_config_data)
+            if not emulate_only:
+                for emulation_key in emulation.MATRIX_KEYS:
+                    job_config_data.pop(emulation_key, None)
+                all_components.append(job_config_data)
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
-    # For ASAN builds, use the sandbox runner to isolate potentially failing tests
-    is_asan_build = build_variant in ("asan", "host-asan")
+    # For ASan builds, use the sandbox runner to isolate potentially failing tests.
+    # This matches multiple build variants, including "asan", "host-asan",
+    # "asan-debug", and "host-asan-debug".
+    is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")

@@ -76,6 +76,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -240,6 +241,8 @@ class CIInputs:
     build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
+    # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
+    changed_projects: list[str] = field(default_factory=list)
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
@@ -408,7 +411,10 @@ class CIInputs:
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
             build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
+            changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
         inputs.validate()
@@ -578,6 +584,9 @@ class BuildRocmDecision(JobGroupDecision):
     # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
     # TheRock's baseline runs instead of their own.
     baseline_repository: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -685,6 +694,9 @@ class BuildConfig:
     skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -692,6 +704,8 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["rebuild_artifacts"] = ",".join(self.rebuild_artifacts)
+        d["reusable_artifacts"] = ",".join(self.reusable_artifacts)
         d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
@@ -1088,9 +1102,26 @@ def decide_jobs(
     else:
         # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
         stage_decisions = {}
+        explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
+
+        # Log explicit baseline configuration when provided.
+        if ci_inputs.baseline_run_id and explicit_prebuilt_stages:
+            baseline_repo_info = (
+                f" from {ci_inputs.baseline_repository}"
+                if ci_inputs.baseline_repository
+                else ""
+            )
+            logging.info(
+                "[STAGE-REUSE] using explicit baseline_run_id=%s%s for "
+                "prebuilt_stages: %s",
+                ci_inputs.baseline_run_id,
+                baseline_repo_info,
+                ", ".join(explicit_prebuilt_stages),
+            )
 
         # In dry-run, automatic reuse is analyzed but not applied. In
         # reuse-stage, eligible stages are added to stage_decisions.
@@ -1099,6 +1130,7 @@ def decide_jobs(
             mode=stage_reuse_mode,
             linux_amdgpu_families=targets.linux_families,
             windows_amdgpu_families=targets.windows_families,
+            explicit_prebuilt_stages=explicit_prebuilt_stages,
         )
 
         baseline_repository = ci_inputs.baseline_repository
@@ -1121,11 +1153,27 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
+    # For external repos, use changed_projects to determine artifact-level reuse.
+    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
+    # changed-file analysis.
+    rebuild_artifacts: list[str] = (
+        list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
+    )
+    reusable_artifacts: list[str] = (
+        list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
+    )
+    if ci_inputs.changed_projects and not rebuild_artifacts:
+        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
+            ci_inputs.changed_projects
+        )
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
+        rebuild_artifacts=rebuild_artifacts,
+        reusable_artifacts=reusable_artifacts,
     )
     # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
@@ -1314,6 +1362,20 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
+        # If skip_tests_on_submodule_bump is set, skip tests when submodule changes
+        # are detected. This is the inverse of submodule_bump_tests_only - useful for
+        # architectures with limited hardware where submodule bumps are tested elsewhere.
+        if (
+            platform_info.get("skip_tests_on_submodule_bump", False)
+            and not ci_inputs.is_workflow_dispatch
+            and git_context.has_submodule_changes is True
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: skip_tests_on_submodule_bump flag set, "
+                f"disabling tests (submodule changes detected)"
+            )
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
@@ -1415,6 +1477,8 @@ def _expand_build_config_for_platform(
         skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
+        rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
+        reusable_artifacts=jobs.build_rocm.reusable_artifacts,
     )
 
 

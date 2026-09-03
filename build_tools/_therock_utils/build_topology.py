@@ -9,9 +9,10 @@ and computing artifact dependencies for sharded build pipelines.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 
 def get_topology(topology_path: Optional[Path] = None) -> "BuildTopology":
@@ -130,6 +131,9 @@ class Artifact:
     test_artifacts: List[str] = field(
         default_factory=list
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
+    source_paths: List[str] = field(
+        default_factory=list
+    )  # Monorepo source paths for granular CI reuse (e.g., ["rocblas", "hipblas", "origami"])
 
 
 class BuildTopology:
@@ -241,6 +245,7 @@ class BuildTopology:
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
+                source_paths=artifact_data.get("source_paths") or [artifact_name],
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -412,8 +417,6 @@ class BuildTopology:
         Returns:
             List of validation error messages
         """
-        import re
-
         errors = []
 
         # Pattern for entity names: lowercase letters, numbers, and hyphens
@@ -1229,46 +1232,42 @@ class BuildTopology:
             for db_name in artifact.split_databases:
                 alias_map[db_name.lower()] = artifact.name
 
-        # Include rocm-systems project mappings (e.g., "hip" -> "core-hip")
-        mappings = self._load_project_mappings()
-        if mappings and "rocm_systems_projects" in mappings:
-            for project_name, artifact_name in mappings[
-                "rocm_systems_projects"
-            ].items():
-                project_lower = project_name.lower()
-                if project_lower not in alias_map:
-                    alias_map[project_lower] = artifact_name
+            # Include source_paths mappings from BUILD_TOPOLOGY.toml
+            for source_path in artifact.source_paths:
+                source_path_lower = source_path.lower()
+                if source_path_lower not in alias_map:
+                    alias_map[source_path_lower] = artifact.name
 
         return alias_map
 
-    def resolve_project_to_artifact(
-        self, project_name: str, build_dir: Optional[Path] = None
+    def resolve_alias_to_artifact(
+        self, alias: str, build_dir: Optional[Path] = None
     ) -> Optional[str]:
-        """Resolve a project name to its artifact name."""
-        return self.get_alias_to_artifact_map(build_dir).get(project_name.lower())
+        """Resolve an alias (artifact name, source_path, or subproject) to its canonical artifact name."""
+        return self.get_alias_to_artifact_map(build_dir).get(alias.lower())
 
-    def resolve_projects_to_features(
+    def resolve_artifacts_to_features(
         self,
-        project_names: List[str],
+        artifact_names: List[str],
         platform_name: str = "",
         build_dir: Optional[Path] = None,
         processor_name: str = "",
     ) -> Set[str]:
-        """Resolve project names to CMake feature names."""
+        """Resolve artifact names/aliases to CMake feature names."""
         features: Set[str] = set()
         feature_map = self.get_subproject_to_feature_map(build_dir)
         alias_map = self.get_alias_to_artifact_map(build_dir)
 
-        for project in project_names:
-            project_lower = project.lower()
+        for artifact in artifact_names:
+            artifact_lower = artifact.lower()
 
             # First check direct subproject -> feature mapping
-            if project_lower in feature_map:
-                features.add(feature_map[project_lower])
+            if artifact_lower in feature_map:
+                features.add(feature_map[artifact_lower])
                 continue
 
             # Fall back to artifact mapping
-            artifact_name = alias_map.get(project_lower)
+            artifact_name = alias_map.get(artifact_lower)
             if artifact_name and artifact_name in self.artifacts:
                 artifact = self.artifacts[artifact_name]
                 if platform_name and platform_name in artifact.disable_platforms:
@@ -1291,19 +1290,19 @@ class BuildTopology:
                 return stage.name
         return None
 
-    def get_stages_for_projects(
+    def get_stages_for_artifacts(
         self,
-        project_names: List[str],
+        artifact_names: List[str],
         build_dir: Optional[Path] = None,
     ) -> Set[str]:
-        """Get build stages required to build the given projects."""
-        # Resolve projects to artifacts
+        """Get build stages required to build the given artifacts."""
+        # Resolve artifact aliases to canonical artifact names
         alias_map = self.get_alias_to_artifact_map(build_dir)
         required_artifacts: Set[str] = set()
-        for project in project_names:
-            artifact_name = alias_map.get(project.lower())
-            if artifact_name:
-                required_artifacts.add(artifact_name)
+        for artifact in artifact_names:
+            canonical_name = alias_map.get(artifact.lower())
+            if canonical_name:
+                required_artifacts.add(canonical_name)
 
         # Also include test_artifacts for each required artifact
         artifacts_to_process = list(required_artifacts)
@@ -1348,3 +1347,60 @@ class BuildTopology:
     def get_all_stage_names(self) -> Set[str]:
         """Get all build stage names."""
         return set(self.build_stages.keys())
+
+    def get_source_path_to_artifacts_map(self) -> Dict[str, List[str]]:
+        """Return {source_path_name: [artifact_name, ...]} mapping.
+
+        Multiple artifacts can share the same source path (e.g., shared libraries).
+        """
+        mapping: Dict[str, List[str]] = {}
+        for artifact_name, artifact in self.artifacts.items():
+            for source_path in artifact.source_paths:
+                mapping.setdefault(source_path, []).append(artifact_name)
+        return mapping
+
+    def get_artifacts_for_source_path(self, source_path_name: str) -> List[str]:
+        """Look up artifact names for a source path directory name."""
+        return self.get_source_path_to_artifacts_map().get(source_path_name, [])
+
+    def get_source_sets_with_source_paths(self) -> List[str]:
+        """Get source sets that support granular artifact analysis."""
+        source_sets: Set[str] = set()
+        for group in self.artifact_groups.values():
+            for artifact in self.get_artifacts_in_group(group.name):
+                if artifact.source_paths:
+                    source_sets.update(group.source_sets)
+        return sorted(source_sets)
+
+    def get_all_artifacts_for_source_set(self, source_set_name: str) -> FrozenSet[str]:
+        """Get all artifacts with source_paths for a source set."""
+        artifacts: Set[str] = set()
+        for group_name, group in self.artifact_groups.items():
+            if source_set_name in group.source_sets:
+                for artifact in self.get_artifacts_in_group(group_name):
+                    if artifact.source_paths:
+                        artifacts.add(artifact.name)
+        return frozenset(artifacts)
+
+    @staticmethod
+    def extract_source_path_from_path(path: str) -> Optional[str]:
+        """Extract source path name from projects/NAME/..., shared/NAME/..., or dnn-providers/NAME/... path."""
+        match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
+        return match.group(1) if match else None
+
+    def get_artifacts_for_path(self, path: str) -> List[str]:
+        """Map submodule path to artifacts. Returns empty list if not found.
+
+        Works for both projects/ and shared/ paths - looks up source_paths mapping.
+        Multiple artifacts can share the same source path.
+        """
+        source_path = self.extract_source_path_from_path(path)
+        if source_path is None:
+            return []
+        return self.get_artifacts_for_source_path(source_path)
+
+    @staticmethod
+    def parse_changed_path(changed_path: str) -> Tuple[Optional[str], Optional[str]]:
+        """Split 'submodule/path' into (submodule, path)."""
+        parts = changed_path.split("/", 1)
+        return (parts[0], parts[1]) if len(parts) >= 2 else (changed_path, "")
