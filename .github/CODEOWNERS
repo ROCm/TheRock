@@ -28,8 +28,8 @@
 
 # A few central CI system components that must align with
 # https://github.com/ROCm/TheRock/blob/main/docs/development/ci_overview.md
-/.github/workflows/setup_multi_arch.yml                   @ScottTodd
-/build_tools/github_actions/configure_multi_arch_ci.py    @ScottTodd
+/.github/workflows/setup_multi_arch.yml                   @ScottTodd @jayhawk-commits
+/build_tools/github_actions/configure_multi_arch_ci.py    @ScottTodd @jayhawk-commits
 
 # Debug tools configs and ROCgdb cmake wrapper.
 /debug-tools            @ROCm/TheRock-infra-write @ROCm/ROCm-DevTools-Debugger
