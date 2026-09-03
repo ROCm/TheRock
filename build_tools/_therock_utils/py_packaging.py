@@ -39,6 +39,12 @@ assert DIST_INFO_PATH.exists()
 
 ENABLED_VLOG_LEVEL: int = 5
 
+# Libraries dlopen'd by unversioned name at runtime (ROCM-29954).
+# The unversioned namelink is included in the runtime wheel, not just devel.
+RUNTIME_DLOPEN_ALIASES: set[str] = {
+    "librocdxg",
+}
+
 
 def log(*args, vlog: int = 0, **kwargs):
     if vlog > ENABLED_VLOG_LEVEL:
@@ -357,6 +363,9 @@ class PopulatedDistPackage:
         In this context, "runtime" means that we are only populating a subset of files
         needed by runtime packages. Specifically, this impacts shared library symlinks,
         which only populate the soname variant in the link farm.
+
+        Libraries listed in ``RUNTIME_DLOPEN_ALIASES`` also get their
+        unversioned namelink emitted (see ``_emit_soname_alias_symlinks``).
         """
         log(
             f"::: Populating runtime files {self.logical_name}[{self.target_family}]: "
@@ -393,6 +402,8 @@ class PopulatedDistPackage:
                         continue
                 # Otherwise, just copy the file.
                 self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+
+        self._emit_soname_alias_symlinks(package_dest_dir)
         self.params.populated_packages.append(self)
         return self
 
@@ -489,6 +500,27 @@ class PopulatedDistPackage:
             return
         # Case 4: Copy.
         self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
+
+    def _emit_soname_alias_symlinks(self, package_dest_dir: Path):
+        """Emit unversioned namelinks for libraries in RUNTIME_DLOPEN_ALIASES."""
+        for relpath, soname in self.files.soname_aliases.items():
+            filename = Path(relpath).name
+            basename = filename.split(".so")[0]
+            if basename not in RUNTIME_DLOPEN_ALIASES:
+                continue
+            suffix = filename[len(basename) :]
+            if suffix != ".so":
+                continue
+            soname_relpath = str(Path(relpath).parent / soname)
+            if not self.files.has(soname_relpath):
+                continue
+            dest_path = package_dest_dir / relpath
+            if dest_path.exists() or dest_path.is_symlink():
+                continue
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            log(f"  SONAME_ALIAS: {relpath} -> {soname}", vlog=2)
+            dest_path.symlink_to(soname)
+            self.files.mark_populated(self, relpath, dest_path)
 
     def _populate_file(
         self,
