@@ -395,3 +395,52 @@ def analyze_stage_impact(
 
     analyzer = StageImpactAnalyzer(topology=topology, rules=rules)
     return analyzer.analyze(changed_inputs=changed_inputs, platform=platform)
+
+
+def analyze_artifact_impact_from_projects(
+    changed_projects: Sequence[str],
+    topology: Optional[BuildTopology] = None,
+) -> Tuple[List[str], List[str]]:
+    """Compute rebuild/reusable artifacts from external repo changed_projects.
+
+    Maps project paths (e.g., "projects/rocprim") to artifact names (e.g., "prim")
+    using BUILD_TOPOLOGY.toml source_paths mappings. This enables granular CI
+    artifact reuse: when only specific source paths change in an external repo,
+    only affected artifacts rebuild while others reuse baseline artifacts.
+
+    Args:
+        changed_projects: List of changed project paths from external repo
+            (e.g., ["projects/rocprim", "projects/hipcub"]).
+        topology: BuildTopology instance (loaded from BUILD_TOPOLOGY.toml if None).
+
+    Returns:
+        (rebuild_artifacts, reusable_artifacts) tuple of sorted artifact name lists.
+    """
+    if topology is None:
+        from _therock_utils.build_topology import get_topology
+
+        topology = get_topology()
+
+    # Collect artifacts with source_paths mappings (derived from topology)
+    granular_source_sets = set(topology.get_source_sets_with_source_paths())
+    all_stage_artifacts: Set[str] = set()
+    for stage in topology.get_build_stages():
+        for group_name in stage.artifact_groups:
+            group = topology.artifact_groups.get(group_name)
+            if group and set(group.source_sets) & granular_source_sets:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    if artifact.source_paths:
+                        all_stage_artifacts.add(artifact.name)
+
+    # Map changed projects to artifacts
+    rebuild_artifacts: Set[str] = set()
+    alias_map = topology.get_alias_to_artifact_map()
+    for project in changed_projects:
+        normalized = project.split("/")[-1].lower()
+        if normalized in alias_map:
+            rebuild_artifacts.add(alias_map[normalized])
+
+    # Artifacts not in rebuild set are reusable
+    reusable_artifacts = all_stage_artifacts - rebuild_artifacts
+
+    return sorted(rebuild_artifacts), sorted(reusable_artifacts)
