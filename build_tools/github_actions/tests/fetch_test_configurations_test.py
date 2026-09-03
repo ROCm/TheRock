@@ -277,6 +277,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotIn("rocgdb-corefile", self._selected_names())
 
     # -----------------------
+    # Emulation logic
+    # -----------------------
+
+    def test_emulate_only_job_routes_to_cpu_runner(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "emulation"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(len(components), 1)
+        emulation_job = components[0]
+        self.assertEqual(emulation_job["job_name"], "emulation (emulated mi350x)")
+        self.assertTrue(emulation_job["linux_cpu_runner"])
+        self.assertNotIn("emulate", emulation_job)
+        self.assertNotIn("emulate_only", emulation_job)
+        self.assertNotIn("--device /dev/kfd", emulation_job["container_options"])
+
+    # -----------------------
     # Functional test merging via run_extended_tests
     # -----------------------
 

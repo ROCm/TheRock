@@ -2066,43 +2066,55 @@ class RunStreamingTest(unittest.TestCase):
 
 
 class BuildVariantPackageNamesTest(unittest.TestCase):
-    """Verify that build_variant='asan' inserts '-asan' before version in package names."""
+    """Verify that ASan-family build variants insert '-asan' before version in
+    package names. Covers 'asan', 'host-asan', and their '-debug' counterparts
+    ('asan-debug', 'host-asan-debug'), which must all collapse to the same
+    '-asan' name as full asan — there is no separate amdrocm-host-asan or
+    amdrocm-asan-debug package."""
 
-    def test_asan_with_gfx_arch_and_rocm_version(self):
-        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-            repo_url="https://example.com",
-            os_profile="ubuntu2404",
-            gfx_arch="gfx942",
-            rocm_version="7.15.0",
-            build_variant="asan",
-        )
-        self.assertEqual(
-            t.package_names,
-            ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
-        )
+    ASAN_FAMILY_VARIANTS = ("asan", "host-asan", "asan-debug", "host-asan-debug")
 
-    def test_asan_with_rocm_version_only(self):
-        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-            repo_url="https://example.com",
-            os_profile="rhel10",
-            rocm_version="7.15.0",
-            build_variant="asan",
-        )
-        self.assertEqual(
-            t.package_names,
-            ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
-        )
+    def test_asan_family_with_gfx_arch_and_rocm_version(self):
+        for build_variant in self.ASAN_FAMILY_VARIANTS:
+            with self.subTest(build_variant=build_variant):
+                t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                    repo_url="https://example.com",
+                    os_profile="ubuntu2404",
+                    gfx_arch="gfx942",
+                    rocm_version="7.15.0",
+                    build_variant=build_variant,
+                )
+                self.assertEqual(
+                    t.package_names,
+                    ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
+                )
 
-    def test_asan_without_version_or_arch(self):
-        t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-            repo_url="https://example.com",
-            os_profile="ubuntu2404",
-            build_variant="asan",
-        )
-        self.assertEqual(
-            t.package_names,
-            ["amdrocm-asan", "amdrocm-core-sdk-asan"],
-        )
+    def test_asan_family_with_rocm_version_only(self):
+        for build_variant in self.ASAN_FAMILY_VARIANTS:
+            with self.subTest(build_variant=build_variant):
+                t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                    repo_url="https://example.com",
+                    os_profile="rhel10",
+                    rocm_version="7.15.0",
+                    build_variant=build_variant,
+                )
+                self.assertEqual(
+                    t.package_names,
+                    ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
+                )
+
+    def test_asan_family_without_version_or_arch(self):
+        for build_variant in self.ASAN_FAMILY_VARIANTS:
+            with self.subTest(build_variant=build_variant):
+                t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                    repo_url="https://example.com",
+                    os_profile="ubuntu2404",
+                    build_variant=build_variant,
+                )
+                self.assertEqual(
+                    t.package_names,
+                    ["amdrocm-asan", "amdrocm-core-sdk-asan"],
+                )
 
     def test_no_build_variant_unchanged(self):
         # Verify default (no build_variant) is unaffected.
