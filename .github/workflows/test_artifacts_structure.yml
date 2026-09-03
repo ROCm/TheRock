@@ -61,6 +61,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
 
 permissions:
   contents: read
@@ -68,7 +72,7 @@ permissions:
 jobs:
   test_artifact_structure:
     name: "Validate artifact structure"
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.runs_on || 'ubuntu-24.04' }}
     container:
       image: python:3.12-slim
     env:
