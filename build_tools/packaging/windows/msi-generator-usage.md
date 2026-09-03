@@ -48,10 +48,10 @@ wix build build_tools\packaging\windows\amdrocm-runtime.wxs ^
 python build_tools\packaging\windows\generate_msi_wxs.py --list
 ```
 
-| Package    | Output stem       | Contents                                                            |
-| ---------- | ----------------- | ------------------------------------------------------------------- |
-| `runtime`  | `amdrocm-runtime` | HIP runtime + AMD LLVM compiler runtime (comgr, device libs)        |
-| `core`     | `amdrocm-core`    | HIP + OpenCL + AMD SMI + ROCR-Runtime                               |
+| Package   | Output stem       | Contents                                                     |
+| --------- | ----------------- | ------------------------------------------------------------ |
+| `runtime` | `amdrocm-runtime` | HIP runtime + AMD LLVM compiler runtime (comgr, device libs) |
+| `core`    | `amdrocm-core`    | HIP + OpenCL + AMD SMI + ROCR-Runtime                        |
 
 ## Options
 
@@ -64,12 +64,12 @@ python build_tools\packaging\windows\generate_msi_wxs.py --list
 
 ### Artifact source
 
-| Flag                         | Default                        | Description                                                                                                                                                                             |
-| ---------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--artifacts-url URL`        | *(none)*                       | Base URL of a TheRock artifact storage directory containing `{name}_{component}_generic.tar.zst` files. When set, artifacts are downloaded, extracted, and used as precise stage trees. |
+| Flag                         | Default                       | Description                                                                                                                                                                             |
+| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--artifacts-url URL`        | *(none)*                      | Base URL of a TheRock artifact storage directory containing `{name}_{component}_generic.tar.zst` files. When set, artifacts are downloaded, extracted, and used as precise stage trees. |
 | `--artifacts-cache-dir PATH` | `<script-dir>/artifact-cache` | Cache directory for downloaded and extracted artifacts. Reuse across runs to avoid re-downloading.                                                                                      |
-| `--build-root PATH`          | `build/`                       | CMake build directory containing per-component stage trees (`build/<basedir>/stage/`). Ignored when `--artifacts-url` is set.                                                           |
-| `--dist-root PATH`           | `build/dist/rocm`              | Merged ROCm distribution tree. Used as the fallback search root when stage dirs are absent, and for resolving `Source=` paths in the generated WXS.                                     |
+| `--build-root PATH`          | `build/`                      | CMake build directory containing per-component stage trees (`build/<basedir>/stage/`). Ignored when `--artifacts-url` is set.                                                           |
+| `--dist-root PATH`           | `build/dist/rocm`             | Merged ROCm distribution tree. Used as the fallback search root when stage dirs are absent, and for resolving `Source=` paths in the generated WXS.                                     |
 
 ### Output
 

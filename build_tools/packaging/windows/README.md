@@ -2,12 +2,12 @@
 
 ## System Requirements
 
-| | |
-|---|---|
-| OS | Windows 11 / Windows Server 2019 or later |
-| Architecture | x86-64 |
-| Privileges | Administrator |
-| Disk space | ~200 MB |
+|              |                                           |
+| ------------ | ----------------------------------------- |
+| OS           | Windows 11 / Windows Server 2019 or later |
+| Architecture | x86-64                                    |
+| Privileges   | Administrator                             |
+| Disk space   | ~200 MB                                   |
 
 ## Install
 
@@ -40,19 +40,19 @@ msiexec /i amdrocm-runtime.msi /qn ENABLE_LONG_PATHS=0
 
 ## What Gets Installed
 
-| Item | Default location |
-|---|---|
+| Item                         | Default location                                   |
+| ---------------------------- | -------------------------------------------------- |
 | Runtime DLLs and executables | `C:\Program Files\AMD\ROCm\runtime-<version>\bin\` |
-| Import libraries (`.lib`) | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
-| System PATH entry | `...\bin` appended to the machine-wide PATH |
-| Install-dir registry key | `HKLM\Software\AMD\ROCm\<version>\InstallDir` |
+| Import libraries (`.lib`)    | `C:\Program Files\AMD\ROCm\runtime-<version>\lib\` |
+| System PATH entry            | `...\bin` appended to the machine-wide PATH        |
+| Install-dir registry key     | `HKLM\Software\AMD\ROCm\<version>\InstallDir`      |
 
 ### Optional: Long Path Support
 
 Passing `ENABLE_LONG_PATHS=1` additionally writes:
 
-| Registry key | Value | Data |
-|---|---|---|
+| Registry key                                       | Value              | Data        |
+| -------------------------------------------------- | ------------------ | ----------- |
 | `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem` | `LongPathsEnabled` | `1` (DWORD) |
 
 This lifts the 260-character `MAX_PATH` limit system-wide. Requires Windows 11
