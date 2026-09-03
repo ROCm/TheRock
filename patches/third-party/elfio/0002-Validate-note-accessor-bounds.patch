@@ -1,0 +1,151 @@
+From d66c8453c6239320efc39ad462cd0816685ab1f0 Mon Sep 17 00:00:00 2001
+From: sstamenk <strahinja.stamenkovic@amd.com>
+Date: Mon, 31 Aug 2026 14:56:31 +0200
+Subject: [PATCH] Validate note accessor bounds
+
+ELFIO 3.12 compares a requested note index with the section size in bytes before indexing the parsed note-position vector. A caller that probes an out-of-range index can therefore read beyond the vector. Truncated name or descriptor payloads also need complete padded-extent validation before data is returned.
+
+Use bounded, alignment-safe header reads and validate parsed note extents.
+
+This is a temporary TheRock backport while the fix is reviewed upstream.
+
+Upstream tracking: https://github.com/serge1/ELFIO/pull/173
+
+Reproduction: create a section with one note and call get_note(1); ASan reports a heap-buffer-overflow in note_start_positions[index].
+---
+ elfio/elfio_note.hpp | 93 ++++++++++++++++++++++++++++++--------------
+ 1 file changed, 63 insertions(+), 30 deletions(-)
+
+diff --git a/elfio/elfio_note.hpp b/elfio/elfio_note.hpp
+index 63ef102..5ecbc40 100644
+--- a/elfio/elfio_note.hpp
++++ b/elfio/elfio_note.hpp
+@@ -23,6 +23,8 @@ THE SOFTWARE.
+ #ifndef ELFIO_NOTE_HPP
+ #define ELFIO_NOTE_HPP
+ 
++#include <cstring>
++
+ namespace ELFIO {
+ 
+ //------------------------------------------------------------------------------
+@@ -62,32 +64,56 @@ class note_section_accessor_template
+                    char*&       desc,
+                    Elf_Word&    descSize ) const
+     {
+-        if ( index >= ( notes->*F_get_size )() ) {
++        if ( index >= note_start_positions.size() ) {
+             return false;
+         }
+ 
+-        const char* pData = notes->get_data() + note_start_positions[index];
+-        int         align = sizeof( Elf_Word );
++        const char* data        = notes->get_data();
++        Elf_Xword   data_size   = ( notes->*F_get_size )();
++        Elf_Xword   position    = note_start_positions[index];
++        Elf_Xword   align       = sizeof( Elf_Word );
++        Elf_Xword   header_size = 3 * align;
++        if ( data == nullptr || position > data_size ||
++             header_size > data_size - position ) {
++            return false;
++        }
+ 
+         const endianess_convertor& convertor = elf_file.get_convertor();
+-        type = convertor( *(const Elf_Word*)( pData + 2 * (size_t)align ) );
+-        Elf_Word namesz = convertor( *(const Elf_Word*)( pData ) );
+-        descSize = convertor( *(const Elf_Word*)( pData + sizeof( namesz ) ) );
+-
+-        Elf_Xword max_name_size =
+-            ( notes->*F_get_size )() - note_start_positions[index];
+-        if ( namesz < 1 || namesz > max_name_size ||
+-             (Elf_Xword)namesz + descSize > max_name_size ) {
++        const char*                pData     = data + position;
++        Elf_Word                   raw_namesz;
++        Elf_Word                   raw_descsz;
++        Elf_Word                   raw_type;
++        std::memcpy( &raw_namesz, pData, sizeof( raw_namesz ) );
++        std::memcpy( &raw_descsz, pData + align, sizeof( raw_descsz ) );
++        std::memcpy( &raw_type, pData + 2 * align, sizeof( raw_type ) );
++
++        Elf_Word  namesz        = convertor( raw_namesz );
++        Elf_Word  parsed_descsz = convertor( raw_descsz );
++        Elf_Word  parsed_type   = convertor( raw_type );
++        Elf_Xword padded_name =
++            ( static_cast<Elf_Xword>( namesz ) + align - 1 ) / align * align;
++        Elf_Xword padded_desc =
++            ( static_cast<Elf_Xword>( parsed_descsz ) + align - 1 ) / align *
++            align;
++        Elf_Xword remaining = data_size - position - header_size;
++        if ( padded_name > remaining ||
++             padded_desc > remaining - padded_name ) {
+             return false;
+         }
+-        name.assign( pData + 3 * (size_t)align, namesz - 1 );
+-        if ( 0 == descSize ) {
++
++        type     = parsed_type;
++        descSize = parsed_descsz;
++        if ( namesz == 0 ) {
++            name.clear();
++        }
++        else {
++            name.assign( pData + header_size, namesz - 1 );
++        }
++        if ( 0 == parsed_descsz ) {
+             desc = nullptr;
+         }
+         else {
+-            desc = const_cast<char*>( pData + 3 * (size_t)align +
+-                                      ( ( namesz + align - 1 ) / align ) *
+-                                          (size_t)align );
++            desc = const_cast<char*>( pData + header_size + padded_name );
+         }
+ 
+         return true;
+@@ -143,23 +169,30 @@ class note_section_accessor_template
+             return;
+         }
+ 
+-        Elf_Word align = sizeof( Elf_Word );
+-        while ( current + (Elf_Xword)3 * align <= size ) {
+-            Elf_Word namesz = convertor( *(const Elf_Word*)( data + current ) );
+-            Elf_Word descsz = convertor(
+-                *(const Elf_Word*)( data + current + sizeof( namesz ) ) );
+-            Elf_Word advance =
+-                (Elf_Xword)3 * sizeof( Elf_Word ) +
+-                ( ( namesz + align - 1 ) / align ) * (Elf_Xword)align +
+-                ( ( descsz + align - 1 ) / align ) * (Elf_Xword)align;
+-            if ( namesz < size && descsz < size && current + advance <= size ) {
+-                note_start_positions.emplace_back( current );
+-            }
+-            else {
++        const Elf_Xword align       = sizeof( Elf_Word );
++        const Elf_Xword header_size = 3 * align;
++        while ( current <= size && header_size <= size - current ) {
++            Elf_Word raw_namesz;
++            Elf_Word raw_descsz;
++            std::memcpy( &raw_namesz, data + current, sizeof( raw_namesz ) );
++            std::memcpy( &raw_descsz, data + current + sizeof( raw_namesz ),
++                         sizeof( raw_descsz ) );
++            Elf_Word  namesz = convertor( raw_namesz );
++            Elf_Word  descsz = convertor( raw_descsz );
++            Elf_Xword padded_name =
++                ( static_cast<Elf_Xword>( namesz ) + align - 1 ) / align *
++                align;
++            Elf_Xword padded_desc =
++                ( static_cast<Elf_Xword>( descsz ) + align - 1 ) / align *
++                align;
++            Elf_Xword remaining = size - current - header_size;
++            if ( padded_name > remaining ||
++                 padded_desc > remaining - padded_name ) {
+                 break;
+             }
+ 
+-            current += advance;
++            note_start_positions.emplace_back( current );
++            current += header_size + padded_name + padded_desc;
+         }
+     }
+ 
+-- 
+2.43.0
