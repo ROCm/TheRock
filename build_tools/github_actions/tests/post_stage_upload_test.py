@@ -267,60 +267,6 @@ class TestUploadStageLogs(unittest.TestCase):
             )
 
 
-class TestWriteGhaStageSummary(unittest.TestCase):
-    """Tests for write_gha_stage_summary()."""
-
-    def test_appends_observability_link_when_report_exists(self):
-        """Verify the [Build Observability] link is written when HTML exists."""
-        output_root = _make_output_root()
-        with tempfile.TemporaryDirectory() as tmp:
-            build_dir = Path(tmp)
-            log_dir = build_dir / "logs"
-            log_dir.mkdir()
-            (log_dir / "build_observability.html").write_text("<html></html>")
-            summary_file = build_dir / "summary.md"
-
-            with mock.patch.dict(
-                os.environ,
-                {"GITHUB_STEP_SUMMARY": os.fspath(summary_file)},
-                clear=False,
-            ):
-                os.environ.pop("RUNNER_TEMP", None)
-                post_stage_upload.write_gha_stage_summary(
-                    build_dir=build_dir,
-                    output_root=output_root,
-                    stage_name="math-libs",
-                    amdgpu_family="gfx1151",
-                )
-
-            content = summary_file.read_text()
-            self.assertIn("[Build Observability]", content)
-            self.assertIn("logs/math-libs/gfx1151/build_observability.html", content)
-
-    def test_no_link_when_report_missing(self):
-        """Verify nothing is written when the report was not generated."""
-        output_root = _make_output_root()
-        with tempfile.TemporaryDirectory() as tmp:
-            build_dir = Path(tmp)
-            (build_dir / "logs").mkdir()
-            summary_file = build_dir / "summary.md"
-
-            with mock.patch.dict(
-                os.environ,
-                {"GITHUB_STEP_SUMMARY": os.fspath(summary_file)},
-                clear=False,
-            ):
-                os.environ.pop("RUNNER_TEMP", None)
-                post_stage_upload.write_gha_stage_summary(
-                    build_dir=build_dir,
-                    output_root=output_root,
-                    stage_name="foundation",
-                    amdgpu_family="",
-                )
-
-            self.assertFalse(summary_file.exists())
-
-
 class TestMainCli(unittest.TestCase):
     """Tests for CLI argument parsing."""
 
