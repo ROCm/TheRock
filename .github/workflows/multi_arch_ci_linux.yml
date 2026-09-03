@@ -369,6 +369,8 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.build_config).jax_build_matrix }}
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml
+    # Carries the Bazel remote cache credentials into the wheel build.
+    secrets: inherit
     with:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       python_version: ${{ matrix.python_version }}
