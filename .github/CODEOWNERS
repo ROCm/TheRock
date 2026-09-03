@@ -15,7 +15,7 @@
 # https://github.com/ROCm/TheRock/blob/main/docs/packaging/python_packaging.md
 /build_tools/packaging/python           @ScottTodd @marbre
 /build_tools/build_python_packages.py   @ScottTodd @marbre
-/external-builds/pytorch                @ScottTodd
+/external-builds/pytorch                @ScottTodd @ethanwee1
 
 # Native Linux packages.
 /build_tools/packaging/linux                                     @nunnikri @raramakr @arvindcheru
