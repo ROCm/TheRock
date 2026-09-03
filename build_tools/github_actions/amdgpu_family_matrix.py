@@ -109,6 +109,9 @@ BUILD_RUNNER_LABELS = {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
+        "small": [
+            {"label": "aws-linux-scale-rocm-small", "weight": 1.0},
+        ],
         "sanitizer": [
             {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
@@ -138,6 +141,29 @@ def select_build_runner(platform: str, build_variant: str) -> str:
     else:
         labels_config = platform_config["default"]
         context_name = f"build-runner ({platform})"
+
+    return select_weighted_label(labels_config, context_name)
+
+
+def select_small_build_runner(platform: str, build_variant: str) -> str:
+    """Select a runner label for low-CPU build stages (packaging, media, storage, etc.).
+
+    Falls back to the default build runner if no small runner is configured for
+    the platform (e.g. Windows), or if the variant uses sanitizer runners.
+    """
+    build_runner_labels = get_build_runner_labels()
+    if platform not in build_runner_labels:
+        return ""
+
+    platform_config = build_runner_labels[platform]
+
+    # Sanitizer builds are memory-intensive; keep them on dedicated runners
+    if "san" in build_variant:
+        labels_config = platform_config.get("sanitizer", platform_config["default"])
+        context_name = f"small-build-runner ({platform}, {build_variant})"
+    else:
+        labels_config = platform_config.get("small", platform_config["default"])
+        context_name = f"small-build-runner ({platform})"
 
     return select_weighted_label(labels_config, context_name)
 

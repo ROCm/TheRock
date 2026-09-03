@@ -50,6 +50,11 @@ on:
           set it manually.
         type: string
         default: ""
+      runs_on:
+        description: "Runner label for the build job"
+        type: string
+        required: false
+        default: "aws-linux-scale-rocm-prod"
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -64,7 +69,7 @@ run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_vers
 jobs:
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.runs_on || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
     outputs:
