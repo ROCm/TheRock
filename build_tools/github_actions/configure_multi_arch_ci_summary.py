@@ -222,6 +222,9 @@ def _append_build_rocm(
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    # TODO(#7731): Show each row's test level once multi_arch_ci consumes it to
+    # schedule PyTorch tests. Today these CI jobs stop after build-time wheel
+    # validation even though the generated matrix carries a test level.
     lines.append("| Platform | Python | PyTorch ref | Families |")
     lines.append("|----------|--------|-------------|----------|")
 
