@@ -199,7 +199,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
-      # GPU device passthrough on OSSCI GPU runners (rocminfo, RDHC). SLES omits --group-add video — see prepare_install_context.
+      # GPU device passthrough on OSSCI GPU runners (rocminfo, RDHC) — see prepare_install_context.
       options: ${{ needs.prepare_install_context.outputs.container_gpu_options }}
     env:
       REPO_URL: ${{ inputs.package_install_url }}
