@@ -306,8 +306,69 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)
 
+    def test_shared_blas_prefixes_mapped(self) -> None:
+        graph = {
+            "hipblas": {"consumers": []},
+            "hipblaslt": {"consumers": []},
+            "origami": {"consumers": []},
+            "rocblas": {"consumers": []},
+            "rocroller": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            cases = {
+                "shared/mxdatagenerator": {
+                    "hipblas",
+                    "hipblaslt",
+                    "rocblas",
+                    "rocroller",
+                    "tensilelite",
+                },
+                "shared/origami": {
+                    "hipblas",
+                    "hipblaslt",
+                    "origami",
+                    "rocblas",
+                    "tensilelite",
+                },
+                "shared/stinkytofu": {
+                    "hipblas",
+                    "hipblaslt",
+                    "rocblas",
+                    "tensilelite",
+                },
+                "shared/tensile": {
+                    "hipblas",
+                    "hipblaslt",
+                    "rocblas",
+                    "tensilelite",
+                },
+            }
+            for changed_project, expected in cases.items():
+                with self.subTest(changed_project=changed_project):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed_project,
+                            "--level",
+                            "5",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertEqual(set(json.loads(proc.stdout.strip())), expected)
+                    self.assertEqual(proc.stderr, "")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_dnn_provider_prefixes_mapped(self) -> None:
         graph = {
+            "hipdnn_integration_tests": {"consumers": []},
             "hipblasltprovider": {"consumers": []},
             "hipkernelprovider": {"consumers": []},
             "miopenprovider": {"consumers": []},
@@ -337,6 +398,50 @@ class TestCliInputParsing(_FixtureTestCase):
                     )
                     self.assertEqual(proc.returncode, 0, proc.stderr)
                     self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "dnn-providers/integration-tests",
+                    "--level",
+                    "5",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                json.loads(proc.stdout.strip()),
+                ["hipdnn-integration-tests", "miopenprovider"],
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_composablekernel_prefix_mapped(self) -> None:
+        graph = {"composable_kernel": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/composablekernel",
+                    "--level",
+                    "5",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout.strip()), ["composable_kernel"])
+            self.assertEqual(proc.stderr, "")
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -635,7 +740,7 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
 
     def test_graph_keys_use_underscores_not_matrix_hyphens(self) -> None:
         # Selection returns graph keys (underscore-form), not the hyphenated CI
-        # matrix keys — asserting the skew a future mapping step must bridge.
+        # matrix keys. CLI output translates the skew for GitHub Actions.
         graph = {
             "miopen": {"consumers": ["hipdnn_integration_tests"]},
             "hipdnn_integration_tests": {"consumers": []},
@@ -645,6 +750,34 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
             selected = get_subprojects_to_test(["miopen"], root, level=4)
             self.assertIn("hipdnn_integration_tests", selected)
             self.assertNotIn("hipdnn-integration-tests", selected)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_cli_outputs_matrix_selector_aliases(self) -> None:
+        graph = {
+            "miopen": {"consumers": ["hipdnn_integration_tests"]},
+            "hipdnn_integration_tests": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "miopen",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertIn("hipdnn-integration-tests", selected)
+            self.assertNotIn("hipdnn_integration_tests", selected)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -686,6 +819,21 @@ class TestExplain(_FixtureTestCase):
         }
         selection = get_subprojects_to_test(["amdsmi"], self.root)
         self.assertEqual(final_set, selection)
+
+    def test_explain_reports_ci_selector_aliases(self) -> None:
+        graph = {
+            "miopen": {"consumers": ["hipdnn_integration_tests"]},
+            "hipdnn_integration_tests": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            text = explain_component("miopen", root)
+            self.assertIn("final:", text)
+            self.assertIn("hipdnn_integration_tests", text)
+            self.assertIn("ci selectors:", text)
+            self.assertIn("hipdnn-integration-tests", text)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
     def test_explain_reports_level_3_walk_depth(self) -> None:
         text = explain_component("rocm-core", self.root)
