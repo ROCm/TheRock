@@ -53,7 +53,9 @@ on:
         type: string
         default: ""
       run_full_pytorch_tests:
-        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        description: >-
+          Request full PyTorch tests for stable refs daily and the nightly ref
+          on Sundays.
         type: boolean
         default: false
       build_runs_on:
@@ -115,7 +117,9 @@ on:
         type: string
         default: ""
       run_full_pytorch_tests:
-        description: Run full PyTorch tests after scheduled nightly wheel builds complete.
+        description: >-
+          Request full PyTorch tests for stable refs daily and the nightly ref
+          on Sundays.
         type: boolean
         default: false
       build_runs_on:
@@ -171,7 +175,8 @@ jobs:
             --python-versions="${{ inputs.python_version }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}"
+            --amdgpu-families="${{ inputs.amdgpu_families }}" \
+            ${{ inputs.run_full_pytorch_tests && '--run-full-pytorch-tests' || '' }}
 
   build_pytorch_wheels:
     needs: setup_matrix
@@ -204,10 +209,6 @@ jobs:
       ref: ${{ inputs.ref }}
       cache_type: ${{ inputs.cache_type }}
       build_runs_on: ${{ inputs.build_runs_on }}
-      # The reusable build workflow dispatches the full PyTorch test suite for
-      # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
-      # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:

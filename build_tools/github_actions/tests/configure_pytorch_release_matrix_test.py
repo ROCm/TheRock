@@ -170,6 +170,8 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             python_versions=["3.12"],
             pytorch_git_refs=["release/2.12", "nightly"],
             amdgpu_families="gfx94X-dcgpu",
+            run_full_pytorch_tests=False,
+            run_nightly_full_pytorch_tests=False,
             matrix=matrix,
         )
 
@@ -180,6 +182,52 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         self.assertIn(
             "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `none` |",
             summary,
+        )
+
+    def test_full_tests_run_for_primary_stable_configuration(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.10"],
+            pytorch_git_refs=["release/2.13"],
+            amdgpu_families="gfx94X-dcgpu;gfx110X-all",
+            platform="linux",
+            run_full_pytorch_tests=True,
+        )
+
+        self.assertEqual(matrix[0]["test_level"], "full")
+
+    def test_nightly_full_tests_run_only_when_weekly_tests_are_due(self):
+        common_args = {
+            "release_type": "nightly",
+            "python_versions": ["3.10"],
+            "pytorch_git_refs": ["nightly"],
+            "amdgpu_families": "gfx94X-dcgpu",
+            "platform": "linux",
+            "run_full_pytorch_tests": True,
+        }
+
+        daily_matrix = m.generate_pytorch_matrix_for_release_type(**common_args)
+        weekly_matrix = m.generate_pytorch_matrix_for_release_type(
+            **common_args,
+            run_nightly_full_pytorch_tests=True,
+        )
+
+        self.assertEqual(daily_matrix[0]["test_level"], "standard")
+        self.assertEqual(weekly_matrix[0]["test_level"], "full")
+
+    def test_full_request_does_not_expand_eligible_configuration(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="nightly",
+            python_versions=["3.10", "3.12"],
+            pytorch_git_refs=["release/2.13"],
+            amdgpu_families="gfx110X-all",
+            platform="linux",
+            run_full_pytorch_tests=True,
+        )
+
+        self.assertEqual(
+            [(row["python_version"], row["test_level"]) for row in matrix],
+            [("3.10", "standard"), ("3.12", "none")],
         )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
