@@ -188,16 +188,7 @@ jobs:
             --artifact-group "${{ inputs.artifact_group }}"
           python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
             --os-profile "${{ inputs.os_profile }}"
-          # SLES BCI base image has no "video" group in /etc/group; Docker resolves
-          # --group-add names against the container group file. Use numeric GIDs only.
-          case "${{ inputs.os_profile }}" in
-            sles*)
-              CONTAINER_GPU_OPTIONS="--ipc host --device /dev/kfd --device /dev/dri --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings --user 0:0"
-              ;;
-            *)
-              CONTAINER_GPU_OPTIONS="--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings --user 0:0"
-              ;;
-          esac
+          CONTAINER_GPU_OPTIONS="--device /dev/kfd --device /dev/dri"
           echo "container_gpu_options=${CONTAINER_GPU_OPTIONS}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
