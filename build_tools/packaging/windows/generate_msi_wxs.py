@@ -949,24 +949,29 @@ def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
     """
     # Read the pre-existing LongPathsEnabled value before install. WiX raw
     # integer registry searches return values as "#<decimal>", so a pre-set
-    # value of 1 appears as "#1".
-    ET.SubElement(doc.package, _tag("Property"), Id="LONGPATHS_PREEXISTING", Value="0")
+    # value of 1 appears as "#1". In WiX v4 the RegistrySearch nests inside the
+    # Property it populates (AppSearch), not as a sibling of it.
+    preexisting_prop = ET.SubElement(
+        doc.package, _tag("Property"), Id="LONGPATHS_PREEXISTING", Value="0"
+    )
     ET.SubElement(
-        doc.package,
+        preexisting_prop,
         _tag("RegistrySearch"),
         Id="LongPathsPreExistingSearch",
         Root="HKLM",
         Key="SYSTEM\\CurrentControlSet\\Control\\FileSystem",
         Name="LongPathsEnabled",
         Type="raw",
-        Result="value",
-        Property="LONGPATHS_PREEXISTING",
     )
+    # The component installs (and therefore uninstalls) only when the key was
+    # not already set to 1. In WiX v4 the install condition is an attribute on
+    # the Component, not a child <Condition> element (which was v3 syntax).
     component = ET.SubElement(
         doc.install_dir,
         _tag("Component"),
         Id="LongPathsEnable",
         Guid=_stable_guid(f"ROCm_{package.feature_id}_LongPaths_component"),
+        Condition='NOT LONGPATHS_PREEXISTING = "#1"',
     )
     ET.SubElement(
         component,
@@ -977,9 +982,6 @@ def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
         Value="1",
         Type="integer",
         KeyPath="yes",
-    )
-    ET.SubElement(component, _tag("Condition")).text = (
-        'NOT LONGPATHS_PREEXISTING = "#1"'
     )
     feature = ET.SubElement(
         doc.package,

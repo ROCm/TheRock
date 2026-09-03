@@ -452,6 +452,42 @@ class TestBuildWxs(unittest.TestCase):
             features = [f.get("Id") for f in root.iter(_ns("Feature"))]
             self.assertIn("LongPaths", features)
 
+    def test_long_paths_uses_wix_v4_schema(self):
+        # Regression guard for two WiX v4 schema requirements that a real
+        # `wix build` rejects but structural XML checks miss:
+        #   1. RegistrySearch must nest inside the Property it populates, not
+        #      sit as a sibling of it.
+        #   2. A Component's install condition is a `Condition` attribute, not
+        #      a child <Condition> element (that was WiX v3 syntax).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._run(tmp, self._minimal_specs("runtime"))
+
+            prop = next(
+                p
+                for p in root.iter(_ns("Property"))
+                if p.get("Id") == "LONGPATHS_PREEXISTING"
+            )
+            self.assertIsNotNone(
+                prop.find(_ns("RegistrySearch")),
+                "RegistrySearch must be nested inside LONGPATHS_PREEXISTING",
+            )
+            # No RegistrySearch may appear anywhere except inside a Property.
+            for search in root.iter(_ns("RegistrySearch")):
+                self.assertEqual(search.get("Property"), None)
+
+            component = next(
+                c
+                for c in root.iter(_ns("Component"))
+                if c.get("Id") == "LongPathsEnable"
+            )
+            self.assertEqual(
+                component.get("Condition"), 'NOT LONGPATHS_PREEXISTING = "#1"'
+            )
+            self.assertIsNone(
+                component.find(_ns("Condition")),
+                "Component condition must be an attribute, not a child element",
+            )
+
     def test_installfolder_property_present(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._run(tmp, self._minimal_specs("runtime"))
