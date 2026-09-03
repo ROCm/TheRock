@@ -193,7 +193,7 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 
 [`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
 resolves configured third-party wheels from PyPI and publishes them to the
-structured Core `whl-next` prefix. It is usable from CI or locally.
+structured core `whl-next` prefix. It is usable from CI or locally.
 
 Resolve and download an immutable snapshot without AWS access:
 
@@ -222,18 +222,27 @@ are not refreshed. Run
 `python build_tools/packaging/python/mirror_python_dependencies.py --help` and
 the subcommand help for project and individual dependency selection.
 
-The tool publishes only product-local objects under
-`v5/rocm/core/whl-next/`. Adding a dependency to the aggregate
-`/rocm/whl-next/` index remains a separate ownership decision.
+The tool publishes to the core product-local index under
+`v5/rocm/core/whl-next/`; see the
+[nightly core index](https://nightly.repo.amd.com/rocm/core/whl-next/) for a
+user-visible example. The aggregate `/rocm/whl-next/` index does not duplicate
+these wheels. Instead,
+[`rocm_whl_next_ownership.yaml`](/build_tools/packaging/python/rocm_whl_next_ownership.yaml)
+separately controls which product-local package page the aggregate index routes
+to. Publishing only to the product-local path is sufficient to populate the
+core index without implicitly changing that routing. If a mirrored dependency
+should also be available through the aggregate index used by pip, add its core
+ownership mapping and redeploy the aggregate index.
 
-The rockrel `Mirror Python Dependencies` workflow resolves one snapshot every
-Monday and sequentially publishes it to `dev`, `nightly`, `rc`, and
-`stable-staging`. Manual dispatch defaults to resolve-only and can target one
-stream for diagnostics. Retained streams refresh only the current snapshot's
-existing objects; stable-staging skips existing objects because it has no
-lifecycle expiration. If a stream fails, rerun the complete workflow. Each run
-is idempotent, and older versions remain subject to their normal retention
-policy.
+The `Mirror Python Dependencies` workflow will live with the other
+[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
+It will resolve one snapshot every Monday and sequentially publish it to `dev`,
+`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
+resolve-only and allow targeting one stream for diagnostics. Retained streams
+will refresh only the current snapshot's existing objects; stable-staging will
+skip existing objects because it has no lifecycle expiration. If a stream
+fails, rerun the complete workflow. Each run is idempotent, and older versions
+remain subject to their normal retention policy.
 
 ## rocm-profiler
 

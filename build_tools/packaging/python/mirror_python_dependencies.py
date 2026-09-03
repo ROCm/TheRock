@@ -31,7 +31,9 @@ from packaging.version import InvalidVersion, Version
 
 
 _ALLOWED_PLATFORM_TAGS = frozenset({"any", "linux_x86_64", "win_amd64"})
-_ALLOWED_CPYTHON_TAGS = frozenset({"cp310", "cp311", "cp312", "cp313", "cp314"})
+_ALLOWED_CPYTHON_TAGS = frozenset(
+    {"cp310", "cp311", "cp312", "cp313", "cp314", "cp315"}
+)
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _INDEX_NAME = "whl-next"
 _MANIFEST_FILENAME = "manifest.json"
@@ -146,7 +148,7 @@ def normalize_package_name(name: str) -> str:
 
 
 def dependency_destination_key(package: str, filename: str) -> str:
-    """Return the structured Core ``whl-next`` destination key."""
+    """Return the structured core ``whl-next`` destination key."""
     normalized_package = normalize_package_name(package)
     return f"v5/rocm/core/{_INDEX_NAME}/{normalized_package}/{filename}"
 

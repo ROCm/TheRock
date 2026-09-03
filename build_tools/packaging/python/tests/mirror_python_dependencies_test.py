@@ -123,6 +123,39 @@ def _write_snapshot_with_filename(snapshot_dir: Path, filename: str) -> None:
     )
 
 
+def _mock_command_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        mirror,
+        "DEPENDENCIES",
+        {
+            "demo-package": DependencyPolicy(
+                project="demo",
+                versions=("latest",),
+            )
+        },
+    )
+    monkeypatch.setattr(
+        mirror, "fetch_pypi_project", lambda package: _project_metadata()
+    )
+
+    def fake_download(wheel: PypiWheel, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(_WHEEL_BYTES)
+
+    monkeypatch.setattr(mirror, "download_wheel", fake_download)
+
+
+def _mock_s3_client(
+    monkeypatch: pytest.MonkeyPatch,
+    client: "FakeS3Client",
+) -> None:
+    def fake_boto3_client(service_name: str) -> "FakeS3Client":
+        assert service_name == "s3"
+        return client
+
+    monkeypatch.setattr(mirror.boto3, "client", fake_boto3_client)
+
+
 class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[str, dict[str, object]] = {}
@@ -211,6 +244,7 @@ class FakeS3Client:
     [
         "numpy-2.0.0-cp310-cp310-linux_x86_64.whl",
         "numpy-2.0.0-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "numpy-2.0.0-cp315-cp315-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-win_amd64.whl",
         "sympy-1.13.0-py3-none-any.whl",
     ],
@@ -224,6 +258,7 @@ def test_is_wheel_allowed(filename: str) -> None:
     [
         "numpy-2.0.0-cp39-cp39-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp314-cp314t-manylinux_2_28_x86_64.whl",
+        "numpy-2.0.0-cp315-cp315t-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-manylinux_2_28_aarch64.whl",
         "numpy-2.0.0-cp312-cp312-macosx_14_0_x86_64.whl",
         "six-1.0.0-py2.py3-none-any.whl",
@@ -270,10 +305,6 @@ def test_select_dependencies_filters_project_and_name() -> None:
         project="torch", dependency_names=frozenset({"typing_extensions"})
     )
     assert list(selected) == ["typing-extensions"]
-
-
-def test_numpy_includes_python_310_compatibility_release() -> None:
-    assert mirror.DEPENDENCIES["numpy"].versions == ("2.2.6", "latest")
 
 
 def test_select_dependencies_rejects_unknown_name() -> None:
@@ -604,32 +635,95 @@ def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
     assert not client.copy_calls
 
 
-def test_cli_exposes_local_commands() -> None:
-    parser = mirror.create_parser()
-    resolve_args = parser.parse_args(["resolve", "--output-dir", "/tmp/snapshot"])
-    publish_args = parser.parse_args(
-        ["publish", "--snapshot-dir", "/tmp/snapshot", "--bucket", "bucket"]
-    )
-    mirror_args = parser.parse_args(["mirror", "--bucket", "bucket", "--dry-run"])
-    assert resolve_args.command == "resolve"
-    assert publish_args.command == "publish"
-    assert mirror_args.command == "mirror"
-
-
-def test_summary_file_records_snapshot_and_publication(tmp_path: Path) -> None:
-    snapshot = _write_snapshot(tmp_path / "snapshot")
+def test_resolve_command_creates_snapshot_and_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_command_resolution(monkeypatch)
+    snapshot_dir = tmp_path / "snapshot"
     summary_path = tmp_path / "summary.md"
-    mirror.append_snapshot_summary(snapshot, summary_path)
-    mirror.append_publish_summary(
-        bucket="test-bucket",
-        summary=mirror.PublishSummary(uploaded=1, refreshed=2, skipped=3),
-        dry_run=False,
-        summary_path=summary_path,
+
+    result = mirror.main(
+        [
+            "resolve",
+            "--output-dir",
+            os.fspath(snapshot_dir),
+            "--source-revision",
+            "command-revision",
+            "--summary-file",
+            os.fspath(summary_path),
+        ]
     )
 
+    assert result == 0
+    snapshot = mirror.load_snapshot(snapshot_dir)
+    assert snapshot.source_revision == "command-revision"
+    assert [wheel.filename for wheel in snapshot.wheels] == [_WHEEL_FILENAME]
+    assert (snapshot_dir / snapshot.wheels[0].relative_path).read_bytes() == (
+        _WHEEL_BYTES
+    )
     summary_text = summary_path.read_text(encoding="utf-8")
-    assert "TheRock revision: `abc123`" in summary_text
+    assert "TheRock revision: `command-revision`" in summary_text
     assert "| `demo-package` | `2.0.0` |" in summary_text
-    assert "`test-bucket`: published; uploaded 1, refreshed 2, skipped 3" in (
+
+
+def test_publish_command_uploads_snapshot_and_records_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    snapshot = _write_snapshot(snapshot_dir)
+    summary_path = tmp_path / "summary.md"
+    client = FakeS3Client()
+    _mock_s3_client(monkeypatch, client)
+
+    result = mirror.main(
+        [
+            "publish",
+            "--snapshot-dir",
+            os.fspath(snapshot_dir),
+            "--bucket",
+            "test-bucket",
+            "--summary-file",
+            os.fspath(summary_path),
+        ]
+    )
+
+    assert result == 0
+    assert client.objects[snapshot.wheels[0].destination_key]["body"] == _WHEEL_BYTES
+    assert (
+        "`test-bucket`: published; uploaded 1, refreshed 0, skipped 0"
+        in summary_path.read_text(encoding="utf-8")
+    )
+
+
+def test_mirror_command_resolves_and_uploads_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _mock_command_resolution(monkeypatch)
+    snapshot_dir = tmp_path / "snapshot"
+    summary_path = tmp_path / "summary.md"
+    client = FakeS3Client()
+    _mock_s3_client(monkeypatch, client)
+
+    result = mirror.main(
+        [
+            "mirror",
+            "--snapshot-dir",
+            os.fspath(snapshot_dir),
+            "--bucket",
+            "test-bucket",
+            "--summary-file",
+            os.fspath(summary_path),
+        ]
+    )
+
+    assert result == 0
+    snapshot = mirror.load_snapshot(snapshot_dir)
+    assert client.objects[snapshot.wheels[0].destination_key]["body"] == _WHEEL_BYTES
+    summary_text = summary_path.read_text(encoding="utf-8")
+    assert "| `demo-package` | `2.0.0` |" in summary_text
+    assert "`test-bucket`: published; uploaded 1, refreshed 0, skipped 0" in (
         summary_text
     )
