@@ -402,7 +402,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
         pattern = f"{pkg_name}-{script}.j2"
         for file in templates_root.glob(pattern):
             script_file = Path(deb_dir) / script
-            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            template = env.get_template(file.relative_to(SCRIPT_DIR).as_posix())
             with script_file.open("w", encoding="utf-8") as f:
                 f.write(template.render(context))
             os.chmod(script_file, 0o755)
