@@ -16,9 +16,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from generate_msi_wxs import (
     PACKAGES,
     PackageDef,
+    InstallLayout,
+    WixDocument,
     collect_files_from_catalog,
     make_id,
     build_wxs,
+    create_wix_document,
+    resolve_install_layout,
+    add_install_directory_tree,
+    add_legacy_system32_feature,
+    _stable_guid,
     _read_rocm_version,
 )
 
@@ -521,6 +528,91 @@ class TestPackageDefs(unittest.TestCase):
             self.assertTrue(
                 has_placeholder, msg=f"{name} registry_key missing version placeholder"
             )
+
+
+class TestBuildWxsHelpers(unittest.TestCase):
+    """Unit tests for the individually-testable build_wxs building blocks."""
+
+    def _args(self, **overrides):
+        defaults = dict(
+            package="runtime",
+            install_root="ProgramFilesFolder",
+            product_dir="AMD",
+            version_dir="ROCm",
+        )
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_resolve_install_layout_splits_version(self):
+        layout = resolve_install_layout(self._args(), "7.15.3")
+        self.assertEqual(layout.major, "7")
+        self.assertEqual(layout.minor, "15")
+        self.assertEqual(layout.version, "7.15.3")
+        self.assertEqual(layout.subdir_name, "core-7.15")
+
+    def test_resolve_install_layout_handles_short_version(self):
+        # Missing minor/patch components resolve to empty strings, not errors.
+        layout = resolve_install_layout(self._args(), "8")
+        self.assertEqual(layout.major, "8")
+        self.assertEqual(layout.minor, "")
+
+    def test_install_layout_uses_standard_dir(self):
+        std = resolve_install_layout(
+            self._args(install_root="ProgramFilesFolder"), "1.2.3"
+        )
+        self.assertTrue(std.uses_standard_dir)
+        custom = resolve_install_layout(self._args(install_root="C:\\AMD"), "1.2.3")
+        self.assertFalse(custom.uses_standard_dir)
+
+    def test_stable_guid_is_deterministic_and_upper(self):
+        a = _stable_guid("System32", "amdhip64_7.dll")
+        b = _stable_guid("System32", "amdhip64_7.dll")
+        self.assertEqual(a, b)
+        self.assertEqual(a, a.upper())
+
+    def test_stable_guid_distinct_for_distinct_inputs(self):
+        self.assertNotEqual(_stable_guid("a"), _stable_guid("b"))
+        # Multi-part identities are joined with "/", matching the real call
+        # sites (e.g. "System32"/dll vs a distinct component key).
+        self.assertNotEqual(
+            _stable_guid("System32", "amdhip64_7.dll"),
+            _stable_guid("ROCm_ROCmRuntime_PATH_component"),
+        )
+
+    def test_create_wix_document_emits_control_properties(self):
+        pkg = PACKAGES["runtime"]
+        doc = create_wix_document(pkg, "1.2.3")
+        self.assertIsInstance(doc, WixDocument)
+        prop_ids = {el.get("Id") for el in doc.package.findall(_ns("Property"))}
+        self.assertEqual(
+            prop_ids, {"ENABLE_LONG_PATHS", "INSTALLFOLDER", "LEGACY_INSTALL"}
+        )
+
+    def test_add_install_directory_tree_standard_vs_custom(self):
+        pkg = PACKAGES["runtime"]
+        # Standard token -> StandardDirectory root.
+        std_doc = create_wix_document(pkg, "1.2.3")
+        add_install_directory_tree(
+            std_doc, resolve_install_layout(self._args(), "1.2.3")
+        )
+        self.assertIsNotNone(std_doc.package.find(_ns("StandardDirectory")))
+        self.assertEqual(std_doc.install_dir.get("Id"), "InstallDir")
+        # Absolute path -> TARGETDIR/CustomInstallRoot chain instead.
+        custom_doc = create_wix_document(pkg, "1.2.3")
+        add_install_directory_tree(
+            custom_doc,
+            resolve_install_layout(self._args(install_root="C:\\AMD"), "1.2.3"),
+        )
+        self.assertIsNone(custom_doc.package.find(_ns("StandardDirectory")))
+        targetdir = custom_doc.package.find(_ns("Directory"))
+        self.assertEqual(targetdir.get("Id"), "TARGETDIR")
+
+    def test_add_legacy_system32_feature_no_dlls_is_noop(self):
+        doc = create_wix_document(PACKAGES["runtime"], "1.2.3")
+        add_legacy_system32_feature(doc, [])
+        self.assertIsNone(doc.package.find(_ns("StandardDirectory")))
+        feature_ids = {f.get("Id") for f in doc.package.findall(_ns("Feature"))}
+        self.assertNotIn("LegacyInstall", feature_ids)
 
 
 if __name__ == "__main__":

@@ -42,7 +42,7 @@ import tarfile
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pyzstd
@@ -605,17 +605,98 @@ def parse_args() -> argparse.Namespace:
 # WXS builder
 # ---------------------------------------------------------------------------
 
+# WiX v4 schema namespace. Every generated element is Clark-notation qualified
+# with it (ElementTree's convention for namespaced tags).
+WXS_NS = "http://wixtoolset.org/schemas/v4/wxs"
 
-def build_wxs(args: argparse.Namespace) -> None:
-    pkg_def = PACKAGES[args.package]
-    version = args.package_version
-    use_standard_dir = args.install_root in STANDARD_DIR_TOKENS
+
+def _tag(name: str) -> str:
+    """Return the namespace-qualified form of a WiX element name."""
+    return f"{{{WXS_NS}}}{name}"
+
+
+def _stable_guid(*parts: str) -> str:
+    """Return a deterministic upper-case GUID derived from the given parts.
+
+    Using uuid5 over a fixed namespace keeps component GUIDs stable across runs
+    for the same logical identity, which Windows Installer requires for correct
+    upgrade and repair behavior.
+    """
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "/".join(parts))).upper()
+
+
+@dataclass
+class PackageInputs:
+    """Everything gathered from disk before any WiX XML is emitted.
+
+    files:       (install_rel, source) payload pairs for the primary feature.
+    legacy_dlls: (dll_name, source) pairs for the legacy System32 feature.
+    """
+
+    package: PackageDef
+    version: str
+    files: list[tuple[Path, Path]]
+    legacy_dlls: list[tuple[str, Path]]
+
+
+@dataclass
+class InstallLayout:
+    """Resolved install location, split into the pieces WiX needs.
+
+    subdir_name is the final versioned path segment (e.g. "core-7.15"); major
+    and minor are the parsed version components used to expand registry keys.
+    """
+
+    install_root: str
+    product_dir: str
+    version_dir: str
+    version: str
+    subdir_name: str
+    major: str
+    minor: str
+
+    @property
+    def uses_standard_dir(self) -> bool:
+        """True when install_root is a Windows Installer standard-directory token."""
+        return self.install_root in STANDARD_DIR_TOKENS
+
+    @property
+    def display_path(self) -> str:
+        """Human-readable install path for logging."""
+        return (
+            f"[{self.install_root}]\\{self.product_dir}"
+            f"\\{self.version_dir}\\{self.subdir_name}\\"
+        )
+
+
+@dataclass
+class WixDocument:
+    """A WiX document under construction.
+
+    Holds the <Wix> root, the <Package> element, and the leaf <Directory
+    Id="InstallDir"> that payload components hang off of. `directory_cache`
+    deduplicates on-demand payload subdirectories by their POSIX path.
+    """
+
+    root: ET.Element
+    package: ET.Element
+    install_dir: ET.Element = None
+    directory_cache: dict[str, ET.Element] = field(default_factory=dict)
+
+
+def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
+    """Gather artifacts and payload/legacy file lists for the selected package.
+
+    Downloads artifacts when --artifacts-url is set and fetches legacy DLLs from
+    DVC when applicable, then enumerates the concrete files to install.
+    """
+    package = PACKAGES[args.package]
 
     if args.artifacts_url:
         print(f"Fetching artifacts from {args.artifacts_url} ...")
         artifact_dir = fetch_artifacts(
             artifacts_url=args.artifacts_url,
-            artifact_names=pkg_def.artifacts,
+            artifact_names=package.artifacts,
             components=PACKAGE_COMPONENTS,
             dest_dir=args.artifacts_cache_dir,
         )
@@ -625,34 +706,61 @@ def build_wxs(args: argparse.Namespace) -> None:
         artifact_dir = args.build_root / "artifacts"
         legacy_bin = args.build_root / "_legacy" / "bin"
 
+    # --fetch-legacy-dlls defaults to True in --artifacts-url mode, False for a
+    # local build. Skip entirely when the package declares no legacy DLLs.
     fetch_legacy = args.fetch_legacy_dlls
     if fetch_legacy is None:
         fetch_legacy = bool(args.artifacts_url)
-    if fetch_legacy and pkg_def.legacy_system32_dlls:
+    if fetch_legacy and package.legacy_system32_dlls:
         print("Fetching legacy DLLs from DVC ...")
         fetch_legacy_dlls_from_dvc(
             dest_dir=legacy_bin,
             repo_root=Path(__file__).parent.parent.parent.parent,
         )
 
-    files = collect_files_from_catalog(artifact_dir, pkg_def)
-    legacy_dlls = resolve_legacy_dlls(artifact_dir, pkg_def.legacy_system32_dlls)
+    return PackageInputs(
+        package=package,
+        version=args.package_version,
+        files=collect_files_from_catalog(artifact_dir, package),
+        legacy_dlls=resolve_legacy_dlls(artifact_dir, package.legacy_system32_dlls),
+    )
 
-    ET.register_namespace("", "http://wixtoolset.org/schemas/v4/wxs")
-    ns = "http://wixtoolset.org/schemas/v4/wxs"
 
-    # -----------------------------------------------------------------------
-    # Root and Package
-    # -----------------------------------------------------------------------
-    root = ET.Element(f"{{{ns}}}Wix")
+def resolve_install_layout(args: argparse.Namespace, version: str) -> InstallLayout:
+    """Resolve the install location and versioned subdirectory name."""
+    parts = version.split(".")
+    major = parts[0] if len(parts) > 0 else ""
+    minor = parts[1] if len(parts) > 1 else ""
+    package = PACKAGES[args.package]
+    subdir_name = package.install_subdir.format(
+        version=version, major=major, minor=minor
+    )
+    return InstallLayout(
+        install_root=args.install_root,
+        product_dir=args.product_dir,
+        version_dir=args.version_dir,
+        version=version,
+        subdir_name=subdir_name,
+        major=major,
+        minor=minor,
+    )
 
+
+def create_wix_document(package: PackageDef, version: str) -> WixDocument:
+    """Create the <Wix>/<Package> skeleton with summary, upgrade, and properties.
+
+    Emits everything that precedes the directory tree: SummaryInformation,
+    MajorUpgrade, MediaTemplate, the three control Properties, and the
+    INSTALLFOLDER redirect.
+    """
+    root = ET.Element(_tag("Wix"))
     pkg = ET.SubElement(
         root,
-        f"{{{ns}}}Package",
-        Name=pkg_def.product_name,
+        _tag("Package"),
+        Name=package.product_name,
         Version=version,
         Manufacturer="Advanced Micro Devices, Inc.",
-        UpgradeCode=pkg_def.upgrade_code,
+        UpgradeCode=package.upgrade_code,
         Language="1033",
         Codepage="1252",
         InstallerVersion="500",
@@ -662,192 +770,190 @@ def build_wxs(args: argparse.Namespace) -> None:
     # x64`, not here (WiX v4 has no Package/@Platform attribute). x64 is
     # required so SystemFolder resolves to C:\Windows\System32 rather than the
     # WOW64-redirected SysWOW64, and so the 64-bit DLLs install correctly.
-
     ET.SubElement(
         pkg,
-        f"{{{ns}}}SummaryInformation",
+        _tag("SummaryInformation"),
         Keywords="ROCm AMD GPU",
-        Description=f"{pkg_def.product_name} {version}",
+        Description=f"{package.product_name} {version}",
     )
-
     ET.SubElement(
         pkg,
-        f"{{{ns}}}MajorUpgrade",
-        DowngradeErrorMessage=f"A newer version of {pkg_def.product_name} is already installed.",
+        _tag("MajorUpgrade"),
+        DowngradeErrorMessage=f"A newer version of {package.product_name} is already installed.",
     )
-
-    ET.SubElement(pkg, f"{{{ns}}}MediaTemplate", EmbedCab="yes")
+    ET.SubElement(pkg, _tag("MediaTemplate"), EmbedCab="yes")
     # Long path support is on by default; set ENABLE_LONG_PATHS=0 to disable.
     ET.SubElement(
-        pkg, f"{{{ns}}}Property", Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
+        pkg, _tag("Property"), Id="ENABLE_LONG_PATHS", Value="1", Secure="yes"
     )
-    ET.SubElement(pkg, f"{{{ns}}}Property", Id="INSTALLFOLDER", Secure="yes")
+    ET.SubElement(pkg, _tag("Property"), Id="INSTALLFOLDER", Secure="yes")
     # Legacy System32 install is on by default; set LEGACY_INSTALL=0 to disable.
-    ET.SubElement(
-        pkg, f"{{{ns}}}Property", Id="LEGACY_INSTALL", Value="1", Secure="yes"
-    )
+    ET.SubElement(pkg, _tag("Property"), Id="LEGACY_INSTALL", Value="1", Secure="yes")
     # When INSTALLFOLDER is set on the command line, redirect InstallDir to it.
     # Runs in both UI and execute sequences so repair/modify picks it up too.
     ET.SubElement(
         pkg,
-        f"{{{ns}}}SetDirectory",
+        _tag("SetDirectory"),
         Id="InstallDir",
         Value="[INSTALLFOLDER]",
         Sequence="both",
         Condition="INSTALLFOLDER",
     )
+    return WixDocument(root=root, package=pkg)
 
-    # -----------------------------------------------------------------------
-    # Directory tree
-    # -----------------------------------------------------------------------
-    if use_standard_dir:
-        install_dir = ET.SubElement(
-            pkg, f"{{{ns}}}StandardDirectory", Id=args.install_root
-        )
-        rocm_dir = ET.SubElement(
-            install_dir, f"{{{ns}}}Directory", Id="ROCmDir", Name=args.product_dir
+
+def add_install_directory_tree(doc: WixDocument, layout: InstallLayout) -> None:
+    """Build the install directory tree and record its leaf on the document.
+
+    Sets doc.install_dir to the <Directory Id="InstallDir"> that payload
+    components attach to.
+    """
+    if layout.uses_standard_dir:
+        parent = ET.SubElement(
+            doc.package, _tag("StandardDirectory"), Id=layout.install_root
         )
     else:
-        targetdir = ET.SubElement(
-            pkg, f"{{{ns}}}Directory", Id="TARGETDIR", Name="SourceDir"
+        target_dir = ET.SubElement(
+            doc.package, _tag("Directory"), Id="TARGETDIR", Name="SourceDir"
         )
-        custom_root = ET.SubElement(
-            targetdir,
-            f"{{{ns}}}Directory",
+        parent = ET.SubElement(
+            target_dir,
+            _tag("Directory"),
             Id="CustomInstallRoot",
-            Name=args.install_root,
-        )
-        rocm_dir = ET.SubElement(
-            custom_root, f"{{{ns}}}Directory", Id="ROCmDir", Name=args.product_dir
+            Name=layout.install_root,
         )
 
-    ver_dir = ET.SubElement(
-        rocm_dir, f"{{{ns}}}Directory", Id="ROCmVerDir", Name=args.version_dir
+    rocm_dir = ET.SubElement(
+        parent, _tag("Directory"), Id="ROCmDir", Name=layout.product_dir
     )
-    version_parts = version.split(".")
-    major = version_parts[0] if len(version_parts) > 0 else ""
-    minor = version_parts[1] if len(version_parts) > 1 else ""
-    install_subdir_name = pkg_def.install_subdir.format(
-        version=version, major=major, minor=minor
+    version_dir = ET.SubElement(
+        rocm_dir, _tag("Directory"), Id="ROCmVerDir", Name=layout.version_dir
     )
-    install_dir_el = ET.SubElement(
-        ver_dir, f"{{{ns}}}Directory", Id="InstallDir", Name=install_subdir_name
+    doc.install_dir = ET.SubElement(
+        version_dir, _tag("Directory"), Id="InstallDir", Name=layout.subdir_name
     )
 
-    # -----------------------------------------------------------------------
-    # Feature
-    # -----------------------------------------------------------------------
-    feature = ET.SubElement(
-        pkg,
-        f"{{{ns}}}Feature",
-        Id=pkg_def.feature_id,
-        Title=pkg_def.feature_title,
+
+def add_primary_feature(doc: WixDocument, package: PackageDef) -> ET.Element:
+    """Create and return the package's primary <Feature>."""
+    return ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id=package.feature_id,
+        Title=package.feature_title,
         Level="1",
     )
 
-    # -----------------------------------------------------------------------
-    # Components — one per file, grouped by parent directory
-    # -----------------------------------------------------------------------
-    dir_elements: dict[str, ET.Element] = {}
 
+def _get_or_create_directory(doc: WixDocument, install_rel: Path) -> ET.Element:
+    """Return the <Directory> for a payload file's parent, creating ancestors.
+
+    Intermediate directories are created once and cached by their POSIX path so
+    that repeated file paths reuse the same directory elements.
+    """
+    parent = doc.install_dir
+    accumulated = Path()
+    for part in install_rel.parent.parts:
+        accumulated = accumulated / part
+        dir_key = accumulated.as_posix()
+        cached = doc.directory_cache.get(dir_key)
+        if cached is None:
+            dir_id = "Dir_" + "".join(
+                c if c.isascii() and c.isalnum() else "_" for c in dir_key
+            )
+            cached = ET.SubElement(parent, _tag("Directory"), Id=dir_id, Name=part)
+            doc.directory_cache[dir_key] = cached
+        parent = cached
+    return parent
+
+
+def add_payload_components(
+    doc: WixDocument, feature: ET.Element, files: list[tuple[Path, Path]]
+) -> None:
+    """Emit one <Component>/<File> per payload file under the install tree."""
     for install_rel, source in files:
-        parent_rel = install_rel.parent
-
-        current_parent = install_dir_el
-        accumulated = Path()
-        for part in parent_rel.parts:
-            accumulated = accumulated / part
-            dir_key = str(accumulated)
-            if dir_key not in dir_elements:
-                dir_id = "Dir_" + (
-                    dir_key.replace("\\", "_")
-                    .replace("/", "_")
-                    .replace("-", "_")
-                    .replace(".", "_")
-                )
-                dir_elements[dir_key] = ET.SubElement(
-                    current_parent,
-                    f"{{{ns}}}Directory",
-                    Id=dir_id,
-                    Name=part,
-                )
-            current_parent = dir_elements[dir_key]
-
-        file_id = make_id(install_rel, "f")
+        parent = _get_or_create_directory(doc, install_rel)
         comp_id = make_id(install_rel, "c")
-        guid = str(uuid.uuid5(uuid.NAMESPACE_URL, str(install_rel))).upper()
-
-        comp_el = ET.SubElement(
-            current_parent, f"{{{ns}}}Component", Id=comp_id, Guid=guid
+        component = ET.SubElement(
+            parent,
+            _tag("Component"),
+            Id=comp_id,
+            Guid=_stable_guid(str(install_rel)),
         )
         ET.SubElement(
-            comp_el,
-            f"{{{ns}}}File",
-            Id=file_id,
+            component,
+            _tag("File"),
+            Id=make_id(install_rel, "f"),
             Source=str(source.resolve()),
             Name=source.name,
             KeyPath="yes",
         )
-        ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id=comp_id)
+        ET.SubElement(feature, _tag("ComponentRef"), Id=comp_id)
 
-    # -----------------------------------------------------------------------
-    # PATH environment variable + registry install-dir marker
-    # -----------------------------------------------------------------------
-    has_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
-    if has_bin:
-        env_comp = ET.SubElement(
-            install_dir_el,
-            f"{{{ns}}}Component",
-            Id="EnvPath",
-            Guid=str(
-                uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    f"ROCm_{pkg_def.feature_id}_PATH_component",
-                )
-            ).upper(),
-        )
-        ET.SubElement(
-            env_comp,
-            f"{{{ns}}}Environment",
-            Id="ROCmBinPath",
-            Name="PATH",
-            Value="[InstallDir]bin",
-            Permanent="no",
-            Part="last",
-            Action="set",
-            System="yes",
-        )
-        reg_key = pkg_def.registry_key.format(version=version, major=major, minor=minor)
-        ET.SubElement(
-            env_comp,
-            f"{{{ns}}}RegistryValue",
-            Root="HKLM",
-            Key=reg_key,
-            Name="InstallDir",
-            Value="[InstallDir]",
-            Type="string",
-            KeyPath="yes",
-        )
-        ET.SubElement(feature, f"{{{ns}}}ComponentRef", Id="EnvPath")
 
-    # -----------------------------------------------------------------------
-    # Optional long-path support
-    # -----------------------------------------------------------------------
-    # Read the pre-existing LongPathsEnabled value before install. WiX raw
-    # integer registry searches return values as "#<decimal>", so a pre-set
-    # value of 1 appears as "#1". The component is conditionally installed
-    # only when the key is NOT already 1, so uninstall only removes the key
-    # if this installer was the one that set it — not if the user had it
-    # enabled independently.
-    ET.SubElement(
-        pkg,
-        f"{{{ns}}}Property",
-        Id="LONGPATHS_PREEXISTING",
-        Value="0",
+def add_path_registration(
+    doc: WixDocument,
+    feature: ET.Element,
+    package: PackageDef,
+    layout: InstallLayout,
+    files: list[tuple[Path, Path]],
+) -> None:
+    """Add the machine PATH entry and install-dir registry marker.
+
+    No-op when the package installs nothing under bin/, since there would be
+    nothing worth adding to PATH.
+    """
+    installs_to_bin = any(install_rel.parts[0] == "bin" for install_rel, _ in files)
+    if not installs_to_bin:
+        return
+
+    component = ET.SubElement(
+        doc.install_dir,
+        _tag("Component"),
+        Id="EnvPath",
+        Guid=_stable_guid(f"ROCm_{package.feature_id}_PATH_component"),
     )
     ET.SubElement(
-        pkg,
-        f"{{{ns}}}RegistrySearch",
+        component,
+        _tag("Environment"),
+        Id="ROCmBinPath",
+        Name="PATH",
+        Value="[InstallDir]bin",
+        Permanent="no",
+        Part="last",
+        Action="set",
+        System="yes",
+    )
+    registry_key = package.registry_key.format(
+        version=layout.version, major=layout.major, minor=layout.minor
+    )
+    ET.SubElement(
+        component,
+        _tag("RegistryValue"),
+        Root="HKLM",
+        Key=registry_key,
+        Name="InstallDir",
+        Value="[InstallDir]",
+        Type="string",
+        KeyPath="yes",
+    )
+    ET.SubElement(feature, _tag("ComponentRef"), Id="EnvPath")
+
+
+def add_long_paths_feature(doc: WixDocument, package: PackageDef) -> None:
+    """Add the optional LongPathsEnabled feature (on unless ENABLE_LONG_PATHS=0).
+
+    A pre-existing value is preserved: the component installs (and therefore
+    uninstalls) only when the key was not already set to 1 by the user or
+    another installer.
+    """
+    # Read the pre-existing LongPathsEnabled value before install. WiX raw
+    # integer registry searches return values as "#<decimal>", so a pre-set
+    # value of 1 appears as "#1".
+    ET.SubElement(doc.package, _tag("Property"), Id="LONGPATHS_PREEXISTING", Value="0")
+    ET.SubElement(
+        doc.package,
+        _tag("RegistrySearch"),
         Id="LongPathsPreExistingSearch",
         Root="HKLM",
         Key="SYSTEM\\CurrentControlSet\\Control\\FileSystem",
@@ -856,20 +962,15 @@ def build_wxs(args: argparse.Namespace) -> None:
         Result="value",
         Property="LONGPATHS_PREEXISTING",
     )
-    lp_comp = ET.SubElement(
-        install_dir_el,
-        f"{{{ns}}}Component",
+    component = ET.SubElement(
+        doc.install_dir,
+        _tag("Component"),
         Id="LongPathsEnable",
-        Guid=str(
-            uuid.uuid5(
-                uuid.NAMESPACE_URL,
-                f"ROCm_{pkg_def.feature_id}_LongPaths_component",
-            )
-        ).upper(),
+        Guid=_stable_guid(f"ROCm_{package.feature_id}_LongPaths_component"),
     )
     ET.SubElement(
-        lp_comp,
-        f"{{{ns}}}RegistryValue",
+        component,
+        _tag("RegistryValue"),
         Root="HKLM",
         Key="SYSTEM\\CurrentControlSet\\Control\\FileSystem",
         Name="LongPathsEnabled",
@@ -877,84 +978,99 @@ def build_wxs(args: argparse.Namespace) -> None:
         Type="integer",
         KeyPath="yes",
     )
-    # Only install (and therefore only uninstall) this component when the key
-    # was not already set to 1 by the user or another installer.
-    ET.SubElement(
-        lp_comp,
-        f"{{{ns}}}Condition",
-    ).text = 'NOT LONGPATHS_PREEXISTING = "#1"'
-    lp_feature = ET.SubElement(
-        pkg, f"{{{ns}}}Feature", Id="LongPaths", Title="Enable Long Paths", Level="1"
+    ET.SubElement(component, _tag("Condition")).text = (
+        'NOT LONGPATHS_PREEXISTING = "#1"'
+    )
+    feature = ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id="LongPaths",
+        Title="Enable Long Paths",
+        Level="1",
     )
     # Turn the feature off when ENABLE_LONG_PATHS=0. Default property value
     # is "1", so the feature is enabled unless explicitly disabled.
     ET.SubElement(
-        lp_feature, f"{{{ns}}}Level", Value="0", Condition='ENABLE_LONG_PATHS = "0"'
+        feature, _tag("Level"), Value="0", Condition='ENABLE_LONG_PATHS = "0"'
     )
-    ET.SubElement(lp_feature, f"{{{ns}}}ComponentRef", Id="LongPathsEnable")
+    ET.SubElement(feature, _tag("ComponentRef"), Id="LongPathsEnable")
 
-    # -----------------------------------------------------------------------
-    # Legacy System32 DLL install (default-enabled; LEGACY_INSTALL=0 disables)
-    # -----------------------------------------------------------------------
-    if legacy_dlls:
-        # System64Folder is the real C:\Windows\System32 in an x64 package;
-        # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
-        # package architecture, which is not what we want for 64-bit DLLs.
-        sysfolder = ET.SubElement(
-            pkg, f"{{{ns}}}StandardDirectory", Id="System64Folder"
+
+def add_legacy_system32_feature(
+    doc: WixDocument, legacy_dlls: list[tuple[str, Path]]
+) -> None:
+    """Add the legacy System32 DLL feature (on unless LEGACY_INSTALL=0).
+
+    No-op when the package has no legacy DLLs to install.
+    """
+    if not legacy_dlls:
+        return
+
+    # System64Folder is the real C:\Windows\System32 in an x64 package;
+    # SystemFolder resolves to the WOW64-redirected SysWOW64 regardless of
+    # package architecture, which is not what we want for 64-bit DLLs.
+    system_dir = ET.SubElement(
+        doc.package, _tag("StandardDirectory"), Id="System64Folder"
+    )
+    feature = ET.SubElement(
+        doc.package,
+        _tag("Feature"),
+        Id="LegacyInstall",
+        Title="Legacy System32 DLLs",
+        Level="1",
+    )
+    # Turn the feature off when LEGACY_INSTALL=0. Default property value
+    # is "1", so the feature is enabled unless explicitly disabled.
+    ET.SubElement(feature, _tag("Level"), Value="0", Condition='LEGACY_INSTALL = "0"')
+    for dll_name, source in legacy_dlls:
+        install_rel = Path("System32") / dll_name
+        comp_id = make_id(install_rel, "c")
+        component = ET.SubElement(
+            system_dir,
+            _tag("Component"),
+            Id=comp_id,
+            Guid=_stable_guid("System32", dll_name),
         )
-        legacy_feature = ET.SubElement(
-            pkg,
-            f"{{{ns}}}Feature",
-            Id="LegacyInstall",
-            Title="Legacy System32 DLLs",
-            Level="1",
-        )
-        # Turn the feature off when LEGACY_INSTALL=0. Default property value
-        # is "1", so the feature is enabled unless explicitly disabled.
         ET.SubElement(
-            legacy_feature,
-            f"{{{ns}}}Level",
-            Value="0",
-            Condition='LEGACY_INSTALL = "0"',
+            component,
+            _tag("File"),
+            Id=make_id(install_rel, "f"),
+            Source=str(source.resolve()),
+            Name=dll_name,
+            KeyPath="yes",
         )
-        for dll_name, source in legacy_dlls:
-            comp_id = make_id(Path("System32") / dll_name, "c")
-            file_id = make_id(Path("System32") / dll_name, "f")
-            guid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"System32/{dll_name}")).upper()
-            comp_el = ET.SubElement(
-                sysfolder,
-                f"{{{ns}}}Component",
-                Id=comp_id,
-                Guid=guid,
-            )
-            ET.SubElement(
-                comp_el,
-                f"{{{ns}}}File",
-                Id=file_id,
-                Source=str(source.resolve()),
-                Name=dll_name,
-                KeyPath="yes",
-            )
-            ET.SubElement(legacy_feature, f"{{{ns}}}ComponentRef", Id=comp_id)
+        ET.SubElement(feature, _tag("ComponentRef"), Id=comp_id)
 
-    # -----------------------------------------------------------------------
-    # Serialize
-    # -----------------------------------------------------------------------
+
+def write_wxs(root: ET.Element, output_path: Path) -> None:
+    """Serialize the WiX document to output_path with a stable XML declaration."""
+    ET.register_namespace("", WXS_NS)
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "wb") as f:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "wb") as f:
         f.write(b'<?xml version="1.0" encoding="UTF-8"?>\n')
         tree.write(f, encoding="utf-8", xml_declaration=False)
 
+
+def build_wxs(args: argparse.Namespace) -> None:
+    """Generate a WiX v4 .wxs source file for the selected package."""
+    inputs = resolve_package_inputs(args)
+    layout = resolve_install_layout(args, inputs.version)
+
+    doc = create_wix_document(inputs.package, inputs.version)
+    add_install_directory_tree(doc, layout)
+    feature = add_primary_feature(doc, inputs.package)
+    add_payload_components(doc, feature, inputs.files)
+    add_path_registration(doc, feature, inputs.package, layout, inputs.files)
+    add_long_paths_feature(doc, inputs.package)
+    add_legacy_system32_feature(doc, inputs.legacy_dlls)
+
+    write_wxs(doc.root, args.output)
+
     print(f"Written:  {args.output}")
-    print(f"Files:    {len(files)}")
-    print(
-        f"Install:  [{args.install_root}]\\{args.product_dir}"
-        f"\\{args.version_dir}\\{install_subdir_name}\\"
-    )
+    print(f"Files:    {len(inputs.files)}")
+    print(f"Install:  {layout.display_path}")
 
 
 if __name__ == "__main__":
