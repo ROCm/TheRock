@@ -1356,9 +1356,16 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif build_variant == "host-asan":
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Run host-asan tests on nightly (schedule or workflow_dispatch) or
+            # for external repo builds that have narrowed the build graph.
+            # External repos that set build_stages (e.g., rocm-systems presubmit)
+            # have already scoped the build enough to make sandbox runners
+            # affordable on every PR.
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or (ci_inputs.external_repo and ci_inputs.build_stages)
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
