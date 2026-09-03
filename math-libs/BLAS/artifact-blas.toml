@@ -102,6 +102,9 @@ include = [
   "share/hipblaslt/tensilelite/**",
   # TensileLite client binary (common/benchmark tests)
   "libexec/hipblaslt/tensilelite/**",
+  # TensileLite C++ tests (test_runner runs ctest from bin/hipblaslt-tensilelite/;
+  # needs CTestTestfile.cmake, the test binary, and its data/ fixtures)
+  "bin/hipblaslt-tensilelite/**",
 ]
 
 # rocBLAS
