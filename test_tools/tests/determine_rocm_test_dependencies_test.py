@@ -363,7 +363,7 @@ class TestCliInputParsing(_FixtureTestCase):
 
     def test_dnn_provider_prefixes_mapped(self) -> None:
         graph = {
-            "hipdnn_integration_tests": {"consumers": []},
+            "hipdnn_integration_tests": {"consumers": ["miopenprovider"]},
             "hipblasltprovider": {"consumers": []},
             "hipkernelprovider": {"consumers": []},
             "miopenprovider": {"consumers": []},
@@ -402,8 +402,6 @@ class TestCliInputParsing(_FixtureTestCase):
                     str(root),
                     "--changed-projects",
                     "dnn-providers/integration-tests",
-                    "--level",
-                    "5",
                 ],
                 capture_output=True,
                 text=True,

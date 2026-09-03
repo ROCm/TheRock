@@ -87,7 +87,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "shared/tensile": ["hipblas", "rocblas"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
     "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
-    "dnn-providers/integration-tests": ["hipdnn_integration_tests", "miopenprovider"],
+    "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
     "dnn-providers/miopen-provider": ["miopenprovider"],
     "projects/clr": ["hip-clr"],
     "projects/composablekernel": ["composable_kernel"],
