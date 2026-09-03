@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Builds the job matrix for TheRock's code coverage CI workflows.
+"""Builds the job matrix for TheRock's nightly code coverage CI workflow.
 
 Coverage is opt-in per project: instrumenting a library slows it down
 substantially and only pays off for projects whose test suites are good enough
@@ -54,9 +54,9 @@ class CoverageProject:
         cmake_target: TheRock subproject name. Upper cased to form the
             `<PROJECT>_ENABLE_COVERAGE` flag that therock_subproject.cmake
             forwards to the subproject.
-        stage: Build stage that produces the project.
-        stage_project: Name passed to configure_stage.py --projects, which
-            narrows the stage down so only this project is rebuilt.
+        stage: Build stage that produces the project. The nightly needs a build
+            job for this stage, so onboarding a project from a new stage means
+            adding one.
         test_component: Key in fetch_test_configurations.py's test matrix.
         coverage_config: Per-project coverage metadata file, relative to the
             root of the repository named by COVERAGE_CONFIG_SOURCE.
@@ -78,7 +78,6 @@ class CoverageProject:
 
     cmake_target: str
     stage: str
-    stage_project: str
     test_component: str
     coverage_config: str
     object_globs: list[str] = field(default_factory=list)
@@ -99,7 +98,6 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     "hiprand": CoverageProject(
         cmake_target="hipRAND",
         stage="math-libs",
-        stage_project="hiprand",
         test_component="hiprand",
         coverage_config="projects/hiprand/test_categories_coverage.yaml",
         object_globs=["lib/libhiprand.so*"],
@@ -200,12 +198,7 @@ def build_coverage_matrix(
             matrix.append(
                 {
                     "project_name": project_key,
-                    # therock_subproject.cmake only honors the upper case
-                    # spelling of the per-project coverage flag.
-                    "coverage_flag": f"{project.cmake_target.upper()}_ENABLE_COVERAGE",
                     "cmake_target": project.cmake_target,
-                    "build_stage": project.stage,
-                    "stage_project": project.stage_project,
                     "test_component": project.test_component,
                     "coverage_config": project.coverage_config,
                     "coverage_config_repository": config_repository,

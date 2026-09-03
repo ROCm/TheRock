@@ -49,13 +49,6 @@ on:
         required: false
         default: ""
         description: "CMake preset name for this build variant (optional)"
-      stage_projects:
-        type: string
-        required: false
-        default: ""
-        description: >-
-          Space-separated project names to narrow the stage down to (e.g.
-          "hiprand"). Empty builds every project in the stage.
       extra_cmake_options:
         type: string
         required: false
@@ -192,7 +185,6 @@ jobs:
             --artifacts="${{ inputs.rebuild_artifacts }}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
-            ${{ inputs.stage_projects && format('--projects {0}', inputs.stage_projects) || '' }} \
             --manylinux \
             --gha-output
 

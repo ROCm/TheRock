@@ -92,27 +92,25 @@ that built the instrumented objects, so the script prefers the copies under
 
 ## Coverage CI
 
-Two workflows produce the reports that land in Codecov. Both take their project
-list from `build_tools/github_actions/configure_coverage_ci.py`, which is the
-registry of coverage-enabled projects and everything the pipeline needs to know
-about each one: the CMake target, the build stage it lives in, its test
-component, the object globs handed to `llvm-cov`, and its Codecov flag.
+Coverage reports are produced nightly by
+`multi_arch_ci_coverage_nightly.yml`, which builds the whole instrumented stack
+once and then tests and reports on each project against that single build. It
+delegates to `multi_arch_ci_coverage_linux.yml` for the per-project test and
+aggregation sequence on one GPU family.
 
-| Workflow                             | Trigger                                         | Build strategy                                                                                             |
-| ------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `multi_arch_ci_coverage.yml`         | `ci:coverage` label on a PR, or manual dispatch | Builds the instrumented compiler-runtime once, then rebuilds only the target project for each matrix entry |
-| `multi_arch_ci_coverage_nightly.yml` | Dispatched by the regular nightly, or by hand   | Builds the whole instrumented stack once, then tests and reports on each project against that single build |
+Both take their project list from
+`build_tools/github_actions/configure_coverage_ci.py`, which is the registry of
+coverage-enabled projects and everything the pipeline needs to know about each
+one: the CMake target, the build stage it lives in, its test component, the
+object globs handed to `llvm-cov`, and its Codecov flag.
 
-Both delegate to `multi_arch_ci_coverage_linux.yml`, which owns the per-project
-build, test, and aggregation sequence for one GPU family.
-
-Instrumented builds call `multi_arch_build_portable_linux_artifacts.yml` — the
-same per-stage build workflow regular CI uses — one job per stage, rather than
-going through the full `multi_arch_build_portable_linux.yml` pipeline. Coverage
-only ever needs compiler-runtime plus the stage owning the project under test, so
-naming those stages directly keeps the shared pipeline free of coverage-specific
-stage filtering. `stage_projects` and `extra_cmake_options` on that workflow are
-the only build-side hooks coverage adds.
+The instrumented build calls `multi_arch_build_portable_linux_artifacts.yml` —
+the same per-stage build workflow regular CI uses — one job per stage, rather
+than going through the full `multi_arch_build_portable_linux.yml` pipeline.
+Coverage only ever needs compiler-runtime plus the stages owning the projects
+under test, so naming those stages directly keeps the shared pipeline free of
+coverage-specific stage filtering. `extra_cmake_options` on that workflow is the
+only build-side hook coverage adds.
 
 The test jobs run through the same `test_component.yml` as regular CI, with
 `coverage_enabled: true` adding an `LLVM_PROFILE_FILE` pointing into the
@@ -120,7 +118,7 @@ workspace and uploading the resulting profiles as an artifact. The aggregation
 job downloads the profiles from every shard, merges them, and uploads the lcov
 report.
 
-### Nightly coverage
+### Scheduling
 
 The regular nightly dispatches `multi_arch_ci_coverage_nightly.yml` once its
 build stage finishes, handing over its own run id as `baseline_run_id`. Coverage
@@ -172,19 +170,20 @@ instrumented.
 
 ### Selecting projects to run
 
-Both workflows' `projects_to_test` input takes a comma-separated list of project
-names, and also accepts three case-insensitive **group aliases** that expand to a
-whole component group: `rocm_libraries_all`, `rocm_systems_all`, and `all`. They
-may be mixed with explicit names, an empty input still means "every project", and
-selecting a group with no onboarded projects fails the run with a clear error
-rather than launching an empty matrix.
+A nightly run measures every onboarded project. Dispatching the workflow by hand
+narrows that down: the `projects_to_test` input takes a comma-separated list of
+project names, and also accepts three case-insensitive **group aliases** that
+expand to a whole component group: `rocm_libraries_all`, `rocm_systems_all`, and
+`all`. They may be mixed with explicit names, an empty input still means "every
+project", and selecting a group with no onboarded projects fails the run with a
+clear error rather than launching an empty matrix.
 
 The aliases are expanded to concrete project names inside
 `configure_coverage_ci.py` before the job matrix is built, so nothing downstream
 ever sees them: the coverage pipeline hands `fetch_test_configurations.py`
 (shared with regular CI) an already-resolved per-project `test_component`, never
-an alias. The `projects_to_test` input and these aliases exist only on the two
-coverage workflows, so non-coverage test selection is unaffected.
+an alias. The `projects_to_test` input and these aliases exist only on the
+coverage workflow, so non-coverage test selection is unaffected.
 
 ### Adding a project
 

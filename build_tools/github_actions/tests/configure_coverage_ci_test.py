@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -130,13 +131,6 @@ class BuildCoverageMatrixTest(unittest.TestCase):
             ["gfx94X-dcgpu", "gfx110X-all"],
         )
 
-    def test_coverage_flag_uses_the_upper_case_project_name(self):
-        # therock_subproject.cmake only forwards the upper case spelling.
-        (entry,) = configure_coverage_ci.build_coverage_matrix(
-            ["hiprand"], ["gfx94X-dcgpu"], "ROCm/rocm-libraries", "main"
-        )
-        self.assertEqual(entry["coverage_flag"], "HIPRAND_ENABLE_COVERAGE")
-
     def test_entries_are_json_serializable(self):
         matrix = configure_coverage_ci.build_coverage_matrix(
             ["hiprand"], ["gfx94X-dcgpu"], "ROCm/rocm-libraries", "main"
@@ -148,7 +142,7 @@ class BuildCoverageMatrixTest(unittest.TestCase):
             with self.subTest(project=name):
                 self.assertTrue(project.object_globs, "needs objects for llvm-cov")
                 self.assertTrue(project.fetch_artifact_args, "needs artifacts to fetch")
-                self.assertTrue(project.stage_project)
+                self.assertTrue(project.stage)
                 self.assertTrue(project.test_component)
 
     def test_every_registered_project_declares_hybrid_fetch_inputs(self):
@@ -177,19 +171,29 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
             ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"],
         )
 
-    def test_partial_selection_names_each_project(self):
-        # Only meaningful once a second rocm-libraries project is onboarded;
-        # until then the single project is also the whole group.
-        if len(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS) < 2:
-            self.skipTest("needs at least two onboarded rocm-libraries projects")
-        first, *_ = sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
-        self.assertEqual(
-            configure_coverage_ci.build_coverage_cmake_options([first]),
-            [
-                f"-D{configure_coverage_ci.COVERAGE_PROJECTS[first].cmake_target.upper()}"
-                "_ENABLE_COVERAGE=ON"
-            ],
+    def test_partial_selection_names_each_project_in_upper_case(self):
+        # therock_subproject.cmake only forwards the upper case spelling. Today
+        # hipRAND is the whole rocm-libraries group, so a second project has to
+        # be stubbed in to reach the per-project fallback at all.
+        registry = dict(configure_coverage_ci.COVERAGE_PROJECTS)
+        registry["rocblas"] = configure_coverage_ci.CoverageProject(
+            cmake_target="rocBLAS",
+            stage="math-libs",
+            test_component="rocblas",
+            coverage_config="projects/rocblas/test_categories_coverage.yaml",
         )
+        with (
+            mock.patch.object(configure_coverage_ci, "COVERAGE_PROJECTS", registry),
+            mock.patch.object(
+                configure_coverage_ci,
+                "ROCM_LIBRARIES_PROJECTS",
+                frozenset(registry),
+            ),
+        ):
+            self.assertEqual(
+                configure_coverage_ci.build_coverage_cmake_options(["rocblas"]),
+                ["-DROCBLAS_ENABLE_COVERAGE=ON"],
+            )
 
     def test_empty_group_does_not_produce_a_group_option(self):
         # rocm-systems has no onboarded projects, so selecting only
@@ -231,9 +235,9 @@ class MainTest(unittest.TestCase):
             # hipRAND is currently the whole rocm-libraries group, so selecting
             # it selects the group option.
             self.assertIn("-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON", written)
-            # The workflow builds this stage, narrowed to this project.
-            self.assertIn('"build_stage": "math-libs"', written)
-            self.assertIn('"stage_project": "hiprand"', written)
+            # The per-project test and overlay inputs the nightly reads back.
+            self.assertIn('"test_component": "hiprand"', written)
+            self.assertIn('"artifact_relpaths": "math-libs/hipRAND/stage"', written)
 
 
 class EmitCmakeTest(unittest.TestCase):

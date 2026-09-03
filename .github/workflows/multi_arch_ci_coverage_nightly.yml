@@ -4,10 +4,9 @@
 # Multi-Arch CI Coverage - Nightly
 #
 # Builds one fully instrumented stack covering every coverage-enabled project,
-# then runs each project's tests against it and reports separately. Compared to
-# the per-PR coverage workflow this pays for a single large build instead of one
-# build per project, which is the right trade-off once several projects are
-# enabled.
+# then runs each project's tests against it and reports separately. Paying for a
+# single large build rather than one build per project is what keeps the cost
+# flat as more projects are onboarded.
 #
 # The stack is assembled by naming the stages coverage needs and calling the
 # shared per-stage build workflow for each, rather than running the whole
@@ -188,11 +187,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
     secrets: inherit
     with:
-      build_enabled: false
       project_name: ${{ matrix.coverage.project_name }}
-      coverage_flag: ${{ matrix.coverage.coverage_flag }}
-      build_stage: ${{ matrix.coverage.build_stage }}
-      stage_project: ${{ matrix.coverage.stage_project }}
       test_component: ${{ matrix.coverage.test_component }}
       object_globs: ${{ matrix.coverage.object_globs }}
       fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
@@ -202,7 +197,6 @@ jobs:
       baseline_release_type: ${{ inputs.baseline_release_type || 'nightly' }}
       artifact_names: ${{ matrix.coverage.artifact_names }}
       artifact_relpaths: ${{ matrix.coverage.artifact_relpaths }}
-      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}

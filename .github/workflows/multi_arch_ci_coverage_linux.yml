@@ -3,20 +3,20 @@
 
 # Multi-Arch CI Coverage - Linux
 #
-# Runs the coverage pipeline for a single project on a single GPU family:
+# Runs the test and report half of the coverage pipeline for a single project on
+# a single GPU family:
 #
-#   build (instrumented) -> test (collect profraw) -> merge -> report
+#   test (collect profraw) -> merge -> report
 #
-# The compiler-runtime stage is expected to have been built already in this run
-# by the caller. This workflow rebuilds only the stage that owns the target
-# project, so a coverage run costs roughly one extra library build per project
-# rather than a full instrumented stack.
+# The instrumented stack itself is built by the caller
+# (multi_arch_ci_coverage_nightly.yml), which instruments every onboarded
+# project in one pass. This workflow only consumes it.
 #
-# `baseline_run_id` switches the test half to the nightly hybrid model: the
-# install tree comes from a regular nightly run and only the project under test
-# is overlaid from this run, keeping instrumented dependencies out of the
-# report. Without it the run's own artifacts are tested as built, which is what
-# PR coverage wants since it only instruments the project it rebuilt.
+# `baseline_run_id` drives the hybrid install: the tree comes from a regular
+# nightly run and only the project under test is overlaid from the instrumented
+# run, keeping instrumented dependencies out of the report. Without it the
+# instrumented run's own artifacts are tested as built, which measures the
+# project's dependencies alongside it.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -26,26 +26,6 @@ on:
       project_name:
         type: string
         description: "Coverage project key (e.g. hiprand)"
-      build_enabled:
-        type: boolean
-        default: true
-        description: >-
-          Build the instrumented project. Set to false when the caller already
-          built a full instrumented stack in this run (nightly coverage) and
-          only the test and report halves are needed.
-      coverage_flag:
-        type: string
-        description: "Per-project CMake coverage flag (e.g. HIPRAND_ENABLE_COVERAGE)"
-      build_stage:
-        type: string
-        default: math-libs
-        description: >-
-          Per-arch build stage that produces the instrumented project. Coverage
-          projects are library projects, so this is a per-arch stage (math-libs,
-          comm-libs) and is built for a single GPU family at a time.
-      stage_project:
-        type: string
-        description: "Project name passed to configure_stage.py --projects"
       test_component:
         type: string
         description: "Test matrix key for the project's tests"
@@ -62,8 +42,8 @@ on:
         description: >-
           Regular nightly run to take non-instrumented dependencies from. Set
           by the nightly caller, which instruments the whole stack in its own
-          run; the test jobs then install this run and overlay only the project
-          under test. Empty tests this run's artifacts as built.
+          run; the test jobs then install that run and overlay only the project
+          under test. Empty tests the instrumented artifacts as built.
       baseline_release_type:
         type: string
         default: "nightly"
@@ -85,16 +65,10 @@ on:
         description: "Codecov flag to file the report under"
       amdgpu_families:
         type: string
-        description: "GPU family to build and test coverage for"
-      extra_cmake_options:
-        type: string
-        default: ""
-        description: "Additional CMake options for the instrumented build"
-      rocm_package_version:
-        type: string
+        description: "GPU family to test coverage on"
       test_type:
         type: string
-        default: quick
+        default: standard
       release_type:
         type: string
         default: ci
@@ -117,40 +91,8 @@ permissions:
   contents: read
 
 jobs:
-  # Only the stage that owns the target project is rebuilt. The compiler-runtime
-  # it links against was published earlier in this same run by the caller, so the
-  # stage's inbound artifact fetch picks it up by run id.
-  build_coverage:
-    name: Build Coverage (${{ inputs.project_name }})
-    if: ${{ inputs.build_enabled }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: ${{ inputs.build_stage }}
-      stage_display_name: "Stage - Coverage ${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
-      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
-      amdgpu_family: ${{ inputs.amdgpu_families }}
-      dist_amdgpu_families: ${{ inputs.amdgpu_families }}
-      stage_projects: ${{ inputs.stage_project }}
-      # KPACK artifact splitting is disabled so the instrumented device code
-      # stays in the library that llvm-cov is pointed at.
-      extra_cmake_options: >-
-        -D${{ inputs.coverage_flag }}=ON
-        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
-        ${{ inputs.extra_cmake_options }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-      release_type: ${{ inputs.release_type }}
-      repository: ${{ inputs.repository }}
-      ref: ${{ inputs.ref }}
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-    permissions:
-      contents: read
-      id-token: write
-
   configure_test_matrix:
     name: Configure Coverage Tests (${{ inputs.project_name }})
-    needs: build_coverage
-    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     outputs:
       components: ${{ steps.configure.outputs.components }}
@@ -184,8 +126,8 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: "[]"
-          # Only the instrumented project was rebuilt, so only its tests can
-          # contribute coverage.
+          # The report covers one project, so only that project's tests run
+          # here; the other onboarded projects get their own job.
           PROJECTS_TO_TEST: ${{ inputs.test_component }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: coverage
@@ -195,7 +137,7 @@ jobs:
 
   test_coverage:
     name: Test Coverage (${{ inputs.project_name }})
-    needs: [build_coverage, configure_test_matrix]
+    needs: configure_test_matrix
     if: >-
       ${{
         !failure() && !cancelled() &&
