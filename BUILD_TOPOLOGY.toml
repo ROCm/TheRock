@@ -74,7 +74,8 @@
 #       to this artifact. Used for granular CI artifact reuse: when only specific
 #       source paths change in an external repo (e.g., rocm-libraries), only affected
 #       artifacts rebuild while others reuse baseline. Path names are directory
-#       basenames within projects/ or shared/ subdirs. Defaults to [artifact_name]
+#       basenames within projects/ or shared/ subdirs. Multiple artifacts can share
+#       the same source_path (e.g., shared libraries). Defaults to [artifact_name]
 #       if omitted.
 #
 # ==============================================================================
@@ -542,7 +543,7 @@ feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms_if_flags_not_set = { windows = "HSA_WINDOWS_SHARED_RUNTIME" }
 test_artifacts = ["core-hiptests", "rocrtst"]  # When building ROCR, also build hip-tests and rocrtst
-source_paths = ["rocr-runtime", "rocminfo"]
+source_paths = ["rocr-runtime", "rocminfo", "amdgpu-windows-interop"]
 
 [artifacts.wsl-rocdxg]
 artifact_group = "wsl-rocdxg"
@@ -575,7 +576,7 @@ artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
-source_paths = ["clr", "hip"]
+source_paths = ["clr", "hip", "amdgpu-windows-interop"]
 
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
@@ -629,13 +630,13 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
-source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami"]
+source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
 
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-source_paths = ["rocrand", "hiprand"]
+source_paths = ["rocrand", "hiprand", "primbench"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
@@ -647,7 +648,7 @@ source_paths = ["rocfft", "hipfft"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "rand"]
-source_paths = ["rocprim", "hipcub", "rocthrust"]
+source_paths = ["rocprim", "hipcub", "rocthrust", "primbench"]
 
 [artifacts.sparse]
 artifact_group = "math-libs"
@@ -897,6 +898,7 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
+source_paths = ["rocjitsu", "machine-readable-isa"]
 
 [artifacts.rocjitsu-hotswap]
 artifact_group = "rocjitsu"

@@ -356,9 +356,12 @@ class StageImpactAnalyzer:
             if submodule is None or submodule not in granular_source_sets:
                 continue
 
-            artifact = self.topology.get_artifact_for_path(subpath)
-            if artifact is not None:
-                impacted.add(artifact)
+            # get_artifacts_for_path handles both project and shared paths:
+            # - For project paths, returns the single artifact that owns the path
+            # - For shared paths, returns all artifacts that declare this shared_dep
+            artifacts = self.topology.get_artifacts_for_path(subpath)
+            if artifacts:
+                impacted.update(artifacts)
             else:
                 # Path affects all artifacts in this source set
                 is_conservative = True
