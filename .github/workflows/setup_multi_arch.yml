@@ -117,6 +117,15 @@ on:
           set it manually.
         type: string
         default: ""
+      force_resource_profiling:
+        description: >-
+          Resource-usage profiling override for the build observability report
+          (Linux builds): "true" forces it on, "false" forces it off, empty
+          (default) falls back to the release_type gate (nightly/release only).
+          Passed through so the CI configuration summary can report the
+          effective state. See #7692.
+        type: string
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -215,6 +224,7 @@ jobs:
         env:
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          FORCE_RESOURCE_PROFILING: ${{ inputs.force_resource_profiling }}
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
