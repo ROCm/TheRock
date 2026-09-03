@@ -15,11 +15,40 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from _therock_utils.build_topology import get_topology
 
 # Hardcoded for now — prebuilt artifacts are always fetched from ROCm/TheRock
 # workflow runs. TODO(#3399): when baseline_run_id carries a repo qualifier,
 # pass the repo slug through from CIInputs instead of hardcoding.
 _REPO_SLUG = "ROCm/TheRock"
+
+# Stages that emit a per-stage build_observability.html report, keyed by the
+# `platform` value used to build the WorkflowOutputRoot log prefix.
+#
+# The report is produced by the "Analyze build times" step, which today only
+# lives in .github/workflows/multi_arch_build_portable_linux_artifacts.yml. Only
+# the Linux stages routed through that reusable workflow generate a report, so
+# only they get a link here. `wsl-rocdxg` (a separate reusable workflow) and the
+# Windows build workflow are not wired for the report yet and are intentionally
+# omitted to avoid permanently-404 links.
+#
+# Keep this in sync with the stage jobs in
+# .github/workflows/multi_arch_build_portable_linux.yml. Stage names must match
+# `[build_stages.*]` in BUILD_TOPOLOGY.toml (used for per-arch fan-out).
+_OBSERVABILITY_STAGES: dict[str, list[str]] = {
+    "linux": [
+        "compiler-runtime",
+        "runtime-tests",
+        "math-libs",
+        "comm-libs",
+        "storage-libs",
+        "debug-tools",
+        "dctools-core",
+        "profiler-apps",
+        "cv-libs",
+        "media-libs",
+    ],
+}
 
 
 def format_summary(
@@ -63,6 +92,8 @@ def format_summary(
     lines.append("### build-rocm")
     lines.append("")
     _append_build_rocm(lines, ci_inputs, outputs)
+
+    _append_build_observability(lines, ci_inputs, outputs)
 
     lines.append("### test-rocm")
     lines.append("")
@@ -219,6 +250,62 @@ def _append_build_rocm(
         "The report is generated after the setup job completes and the link may be "
         "unavailable until then; it is not produced on ASAN workflows."
     )
+
+
+def _append_build_observability(
+    lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
+) -> None:
+    """Append one consolidated table of per-stage build-observability links.
+
+    Previously each stage job appended its own `[Build Observability]` link to
+    that job's step summary, scattering ~10 links across the run and bloating the
+    aggregated summary page. This gathers them into a single table in the
+    top-level configure summary. Links are deterministic (derived from the stage
+    log layout) so they can be rendered before the stages finish; a link 404s
+    until its stage uploads its logs.
+    """
+    linux_config = outputs.builds.linux
+    if linux_config is None:
+        return
+
+    # Stages fetched from a baseline run (prebuilt) or excluded (skipped) do not
+    # produce a fresh report in this run's output tree, so omit them.
+    omit = set(linux_config.prebuilt_stages) | set(linux_config.skip_stages)
+
+    stage_types = {s.name: s.type for s in get_topology().get_build_stages()}
+    families = [f["amdgpu_family"] for f in linux_config.per_family_info]
+
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=ci_inputs.run_id, platform="linux"
+    )
+
+    rows: list[str] = []
+    for stage in _OBSERVABILITY_STAGES["linux"]:
+        if stage in omit:
+            continue
+        # Per-arch stages produce one report per family; generic stages one.
+        stage_families = families if stage_types.get(stage) == "per-arch" else [""]
+        for family in stage_families:
+            url = output_root.build_observability_stage(stage, family).https_url
+            family_cell = f"`{family}`" if family else "—"
+            rows.append(f"`{stage}` | {family_cell} | {url}")
+
+    if not rows:
+        return
+
+    lines.append("## Build Observability")
+    lines.append("")
+    lines.append("Stage | Family | 📈 Report")
+    lines.append("-- | -- | --")
+    lines.extend(rows)
+    lines.append("")
+    lines.append(
+        "> Per-stage build-time reports (ninja timings, and resource profiling "
+        "on nightly/release builds). Each link becomes available once that stage "
+        "finishes uploading its logs. Linux only for now; prebuilt and skipped "
+        "stages are omitted."
+    )
+    lines.append("")
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
