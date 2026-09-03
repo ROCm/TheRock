@@ -127,6 +127,7 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: linux
       release_type: ${{ inputs.release_type }}
+      runs_on: ${{ fromJSON(inputs.build_config).small_build_runs_on }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
