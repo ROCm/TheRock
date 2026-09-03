@@ -38,7 +38,9 @@ class RocprofilerSdkSpmPreflightTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             tests_dir = Path(tmpdir) / "share" / "rocprofiler-sdk" / "tests"
             tests_dir.mkdir(parents=True)
-            preflight = tests_dir / test_rocprofiler_sdk.ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT
+            preflight = (
+                tests_dir / test_rocprofiler_sdk.ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT
+            )
             preflight.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
 
             with mock.patch.object(
