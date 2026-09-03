@@ -2,7 +2,7 @@
 
 - **Authors:** Brian Harrison (bharriso), Tony Davis (tony-davis)
 - **Created:** 2026-06-04
-- **Modified:** 2026-09-02
+- **Modified:** 2026-09-03
 - **Status:** Draft
 - **Discussion:** TBD (GitHub Discussion link to be added)
 
@@ -38,7 +38,7 @@ rather than the header.
 **Flags are ephemeral by design.** A feature flag in this lifecycle is temporary scaffolding for
 landing a risky change incrementally. It is not a supported product configuration knob and not a
 permanent tuning surface for users. Every flag carries an owner and an expiry, and a flag promoted
-to ON in release *R* ships in at most two releases: `default-on` in *R*, `deprecated` in *R+1*, and
+to ON in release *R* ships in exactly two releases: `default-on` in *R*, `deprecated` in *R+1*, and
 removed during *R+2* (see Retirement cadence). The single exception is an explicitly marked
 `long-lived` operational kill switch. This is why the lifecycle below treats retirement as a
 mandatory stage rather than an afterthought: a flag that outlives its purpose is debt, not a feature.
@@ -549,14 +549,14 @@ job, and records the release that promoted the default.
 | `in-development` | OFF                                         | feature branch | Immature; not yet promoting.                                                                                                   |
 | `canary`         | ON on canary (this batch only), OFF on main | canary         | Soaking one cadence cycle before the default is swapped on main. Only flags in the current promotion batch are ON on canary.   |
 | `default-on`     | ON                                          | main           | Promoted; the new default.                                                                                                     |
-| `deprecated`     | ON, removal scheduled                       | main           | The kill-switch window: release *R+1*, where *R* is `PROMOTED_IN`. Removed during *R+2* (see Retirement cadence).              |
+| `deprecated`     | ON, removal scheduled                       | main           | The kill-switch window: all of release *R+1*, where *R* is `PROMOTED_IN`. Removed during *R+2* (see Retirement cadence).       |
 | `long-lived`     | ON (or as configured)                       | main           | The justified exception: a permanent operational kill switch or permissioning toggle, exempt from expiry (see Hygiene rule 6). |
 
 ### Hygiene rules
 
 1. **Owner and expiry are mandatory.** No flag merges without both. `EXPIRES` is a review-by date.
 1. **Minimize toggle points:** guard entry points only (for example, one `validateBeforeAdding` check), and never sprinkle conditionals.
-1. **The kill switch is retained one release** after `default-on`, then the flag and dead code path are retired via a normal PR (see Retirement cadence); dependents are already removed, so it is a pure dead-code deletion (team-owned).
+1. **The kill switch is retained for the release following `default-on`**, then the flag and dead code path are retired in the release after that via a normal PR (see Retirement cadence); dependents are already removed, so it is a pure dead-code deletion (team-owned).
 1. **Test both states while live** (team-owned both-state CI; see CI Integration), and collapse to one when removed.
 1. **A per-cycle flag-debt audit** runs at each promotion cycle (the automated promotion job; see cadence): it lists flags past `EXPIRES`, flags whose `PROMOTED_IN` is two or more releases behind the current `rocm-version`, and stale flags, and files removal issues.
 1. **Long-lived flags are the justified exception:** a permanent operational kill switch or permissioning toggle may live indefinitely but must be explicitly marked `STAGE: long-lived` and exempt from expiry.
@@ -565,24 +565,31 @@ job, and records the release that promoted the default.
 
 Soak is measured in cadence cycles; everything after promotion is measured in releases, because a
 release is the unit in which QA validation and customer backout matter. A flag promoted ON in
-release *R* (recorded in `PROMOTED_IN`) is `deprecated` for *R+1* and removed during *R+2*: flag,
-dead OFF path, and declaration. It therefore ships in at most two releases, and *R+2* is the first
-release without it. `long-lived` flags are exempt.
+release *R* (recorded in `PROMOTED_IN`) is `deprecated` for all of *R+1* and removed during *R+2*:
+flag, dead OFF path, and declaration. The window is fixed rather than an upper bound. The flag
+ships in exactly two releases, and *R+2* is the first release without it. `long-lived` flags are
+exempt.
 
 | Promoting release, relative to the current one | Stage        | Action                                                                                          |
 | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------- |
 | Current release (*R*)                          | `default-on` | Keep. QA validation and kill-switch backout still matter for the release customers are on.      |
-| Previous release (current is *R+1*)            | `deprecated` | Keep as the kill-switch window, or remove early once QA has signed off.                         |
+| Previous release (current is *R+1*)            | `deprecated` | Keep. This is the kill-switch window, and it is not shortened; removal lands in *R+2*.          |
 | Two or more back (current is *R+2* or later)   | Removal due  | Remove the flag, the dead OFF path, and the declaration before this release ships (Playbook D). |
 
 Example: a flag promoted a week before 10.1 ships records `PROMOTED_IN 10.1`. It ships `default-on`
 in 10.1, ships `deprecated` in 10.2 with the kill switch still available, and is removed when 10.3
 opens, so 10.3 ships clean.
 
-*R+2* is an outer bound, not a target. A team with QA sign-off may retire in *R+1*; the rule fixes
-only the latest acceptable point, so flags cannot accumulate. Promoting late in *R* needs no
-adjustment, because the bound is anchored to the promoting release rather than to elapsed time: such
-a flag still gets all of *R+1* with the kill switch available.
+Neither end of the window moves. Retirement in *R+1* is not permitted, because the incompatibility
+that matters is often not visible in *R*: a feature promoted in *R* can pass CI against everything
+then on `main` and still conflict, on one configuration, with a feature landing in *R+1*. The
+deprecated flag is what gives the release manager a backout in that case, so it is retained through
+the whole of *R+1* even when QA has signed the feature off. Retention past *R+2* is not permitted
+either, or flags accumulate; a team that expects to need the toggle beyond that window is
+describing a permanent operational kill switch and must declare it `STAGE: long-lived`, with the
+justification that stage requires. Promoting late in *R* needs no adjustment, because the window is
+anchored to the promoting release rather than to elapsed time: such a flag still gets all of *R+1*
+with the kill switch available.
 
 Flags in `in-development` or `canary` have no `PROMOTED_IN` and are governed by `EXPIRES` instead.
 The flag-debt audit (Hygiene rule 5) files a removal issue for any `default-on` or `deprecated` flag
@@ -995,7 +1002,7 @@ manifest, CI mechanism, and promotion train; Quartz (RFC0011) owns the green sig
 1. **Validate both states in CI** (team-owned both-state CI): apply the `ci:flag-both-state` label and add a `Flag: <NAME>` line to the PR description (or use a dispatch input), or develop on a flip branch. Runtime takes one build and two test runs; build-time takes two builds.
 1. **Open a reviewed PR into `canary` changing the flag's default** (`STAGE` to `canary`); a fully observable diff (the runtime registry or `feature_flags.json` default for runtime; `DEFAULT_VALUE` in `FLAGS.cmake` for build-time). The default is one reviewed batch per cycle. The flip soaks one cadence cycle, accumulating the canary soak signal.
 1. **Automated promotion** lands the soaked default change on `main` (a reviewed `FLAGS.cmake` `DEFAULT_VALUE` or runtime registry diff), once the soak signal is green and the gated code is already on `main` (guaranteed by the rebase model); it is merged by a release manager other than the flip author. Stage becomes `default-on`.
-1. **Retire the flag** once QA has signed off, and during the second release after promotion at the latest (see Retirement cadence). Work in dependency order: first drop both-state CI for it; then remove the now-dead gated code from the owning library's trunk (for example, a PR against rocm-libraries `develop`), deleting the OFF path and keeping the former ON path; then remove the flag declaration from TheRock `main` (`FLAGS.cmake` or the runtime registry). Removing the consumer before the declaration is uniformly safe for both flag kinds: once the gated code is gone nothing references the flag, so the declaration removal can neither revert the live build nor break a consumer. The dead-code step is a pure deletion. Permanent kill switches (`STAGE: long-lived`) are the marked exception.
+1. **Retire the flag** during the second release after promotion, having kept the kill switch through the whole of the first (see Retirement cadence). Work in dependency order: first drop both-state CI for it; then remove the now-dead gated code from the owning library's trunk (for example, a PR against rocm-libraries `develop`), deleting the OFF path and keeping the former ON path; then remove the flag declaration from TheRock `main` (`FLAGS.cmake` or the runtime registry). Removing the consumer before the declaration is uniformly safe for both flag kinds: once the gated code is gone nothing references the flag, so the declaration removal can neither revert the live build nor break a consumer. The dead-code step is a pure deletion. Permanent kill switches (`STAGE: long-lived`) are the marked exception.
 
 ## Maintainer Playbooks
 
@@ -1082,7 +1089,7 @@ attributable to this PR.
 **Completion criteria:** the default-ON diff is merged on `main` by a release manager, `STAGE` is
 `default-on`, and the post-merge nightly is green.
 
-### Playbook D: retiring a flag (due during *R+2*, earlier is fine)
+### Playbook D: retiring a flag (during *R+2*)
 
 **Goal:** pay down the flag debt by removing the toggle and the now-dead OFF path.
 
@@ -1091,10 +1098,10 @@ before the declaration it depends on. This sequence is uniformly safe for runtim
 flags alike: once the gated code is gone, nothing references the flag, so removing the declaration
 can neither revert the live build nor break a consumer.
 
-1. **Check that retirement is safe:** the feature is QA-signed-off and nothing still depends on the
-   OFF behavior. Retire as soon as that holds; retirement becomes mandatory once the current
-   `rocm-version` is two or more releases past `PROMOTED_IN` (see Retirement cadence). Keep a
-   permanent kill switch only if it is explicitly `STAGE: long-lived` (the marked exception).
+1. **Check that retirement is safe:** the current `rocm-version` is two releases past `PROMOTED_IN`,
+   the feature is QA-signed-off, and nothing still depends on the OFF behavior. Retirement is due
+   in this release and is not brought forward into *R+1* (see Retirement cadence). Keep a permanent
+   kill switch only if it is explicitly `STAGE: long-lived` (the marked exception).
 1. **Collapse both-state CI to one** for that flag (drop the label or flip-branch handling). Do this
    first: it depends on nothing and stops CI from exercising a flag that is about to disappear.
 1. **Remove the dead gated code** from the owning library's trunk (for example, a PR against
@@ -1260,7 +1267,7 @@ identical. No per-repo reimplementation, no drift.
 1. **The build-time mechanism is PR #6984's typed provider protocol, adopted as-is.** This RFC does not define a competing declaration or consumption surface. It adds lifecycle metadata, hygiene, canary, promotion, and both-state CI on top, and adopts the protocol's fail-closed posture and distribution boundary.
 1. **A flag may originate in TheRock or in a consuming super-repository.** TheRock owns the mechanism and the aggregated inventory, not the mandatory birthplace. Restricting origination to TheRock would interlock the repositories at the point where a team is trying to start work.
 1. **Runtime flags start `BOOL`-only and may gain `INTEGER` later.** Build-time flags are typed `BOOL` or `INTEGER` (PR #6984). Starting the runtime contract at `BOOL` keeps `ROCM_FEATURE_<NAME>=0|1` and the shipped JSON simple, and no runtime use case yet needs a non-BOOL value. Nothing precludes extending it when one does: neither the JSON, the manifest `runtime_flags` block, nor the precedence order depends on the value being boolean.
-1. **Retirement is release-relative; soak stays cadence-relative.** A flag promoted in release *R* is `deprecated` for *R+1* and removed during *R+2*, so it ships in at most two releases (`long-lived` excepted). *R+2* is an outer bound, not a schedule: a team with QA sign-off may retire in *R+1*. The promoting release is recorded in `PROMOTED_IN`, stamped by the promotion job, so the flag-debt audit evaluates the rule with no manual bookkeeping.
+1. **Retirement is release-relative; soak stays cadence-relative.** A flag promoted in release *R* is `deprecated` for all of *R+1* and removed during *R+2*, so it ships in exactly two releases (`long-lived` excepted). The window is fixed at both ends: not shortened, because a feature promoted in *R* can still be found incompatible with one landing in *R+1* and the deprecated flag is the backout for that; not extended, because a toggle needed beyond *R+2* is a permanent kill switch and belongs in `long-lived`. The promoting release is recorded in `PROMOTED_IN`, stamped by the promotion job, so the flag-debt audit evaluates the rule with no manual bookkeeping.
 
 ### Open for reviewer input
 
@@ -1315,13 +1322,13 @@ installs); build-time backout takes one cadence cycle.
 
 Full detail in Maintainer Playbooks.
 
-| To do this                         | Do the following                                                                                                                                                                                                                                                      | Success criterion                                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock or in your own super-repository (lands quickly); guard your code at one check; ship it OFF on trunk.                                                                                          | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
-| **Test it both ways**              | Add the `ci:flag-both-state` label and a `Flag: <NAME>` line to the PR description (or use a flip branch). Runtime: one build, tests run twice with `ROCM_FEATURE_<NAME>=0` then `=1`. Build-time: build OFF and ON, testing each.                                    | The affected tests are green in both states on CI.                                                |
-| **Turn it on for everyone**        | Open a PR flipping the default ON into `canary` (`STAGE: canary`); let it soak one cadence cycle green; the automated job opens the `main` PR; a release manager (not you) merges it.                                                                                 | The default-ON change is merged on `main` by a release manager, and the nightly is green.         |
-| **Turn it off quickly (it broke)** | Set `ROCM_FEATURE_<NAME>=0` on the affected host (minutes, no rebuild). For everyone: land a PR setting the default back to OFF; existing installs need a respin.                                                                                                     | The bad path no longer runs.                                                                      |
-| **Clean up afterward**             | Once QA has signed off, and before the release two past `PROMOTED_IN` ships, drop both-state CI for the flag, delete the dead OFF code from your library, then remove the flag declaration from TheRock. (A `long-lived` flag is the exception; it is never retired.) | The flag is gone from the registry, the manifest, and the code.                                   |
+| To do this                         | Do the following                                                                                                                                                                                                                                                                            | Success criterion                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Start a new feature**            | Pick runtime (default) or build-time; add a default-OFF flag in TheRock or in your own super-repository (lands quickly); guard your code at one check; ship it OFF on trunk.                                                                                                                | The flag exists (OFF), the code is guarded at one point, and trunk is green with the feature OFF. |
+| **Test it both ways**              | Add the `ci:flag-both-state` label and a `Flag: <NAME>` line to the PR description (or use a flip branch). Runtime: one build, tests run twice with `ROCM_FEATURE_<NAME>=0` then `=1`. Build-time: build OFF and ON, testing each.                                                          | The affected tests are green in both states on CI.                                                |
+| **Turn it on for everyone**        | Open a PR flipping the default ON into `canary` (`STAGE: canary`); let it soak one cadence cycle green; the automated job opens the `main` PR; a release manager (not you) merges it.                                                                                                       | The default-ON change is merged on `main` by a release manager, and the nightly is green.         |
+| **Turn it off quickly (it broke)** | Set `ROCM_FEATURE_<NAME>=0` on the affected host (minutes, no rebuild). For everyone: land a PR setting the default back to OFF; existing installs need a respin.                                                                                                                           | The bad path no longer runs.                                                                      |
+| **Clean up afterward**             | During the release two past `PROMOTED_IN` (the kill switch stays available for the one before it), drop both-state CI for the flag, delete the dead OFF code from your library, then remove the flag declaration from TheRock. (A `long-lived` flag is the exception; it is never retired.) | The flag is gone from the registry, the manifest, and the code.                                   |
 
 The core sequence: add a runtime flag, default off; guard one entry point; soak on canary;
 promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
@@ -1356,3 +1363,4 @@ promote via the release-manager-merged PR; revert with `ROCM_FEATURE_<NAME>=0`.
 - **2026-08-04**: Align with the typed build flag provider protocol, [PR #6984](https://github.com/ROCm/TheRock/pull/6984) (Tony Davis). PR #6984 lands the build-time declaration and consumption mechanism this RFC had only sketched, so the RFC now defers to it rather than proposing a parallel surface, and is positioned as the lifecycle layer above it. Four substantive changes. (1) **Origination is no longer TheRock-only.** "All flags start in TheRock as the single source of truth" is replaced by "TheRock owns the mechanism and the aggregated inventory; a flag may originate in TheRock or in a consuming super-repository," following the author's stated intent on #6984 to let a flag originate in either place "so we aren't so strictly interlocked." This removes the declare-then-wait round trip that blocked a team from guarding code until a TheRock declaration both landed and reached their branch; where a TheRock declaration is still involved, advancing the pinned TheRock ref is self-service via a resync with `develop` ([rocm-libraries PR #9602](https://github.com/ROCm/rocm-libraries/pull/9602)) rather than a wait on the 12-hour bump cron (Where flags are declared, "Adding a flag does not block development", the declaration diagram, Playbook A steps 2 and 3, the Where-flags-live alternatives table, P1 inventory aggregation, a new resolved decision, a new open question, Summary, Quick reference). (2) **Flags are typed, not boolean.** The Glossary, taxonomy table, and `therock_declare_flag` example now carry `TYPE` (`BOOL` default, `INTEGER` with `VALID_VALUES`), with a note on what a multi-valued flag means for the promotion train and for both-state CI (the current default versus the candidate value, not the full cross-product). Runtime flags stay BOOL-only for now, deliberately without precluding typing later (new open question). (3) **The distribution boundary is adopted, and the runtime exception is justified explicitly.** #6984 forbids installing build-time inputs; this RFC ships an installed `feature_flags.json`. A new "Distribution boundary" subsection states the rule for build-time flags unchanged and explains why runtime state is on the other side of the line by construction (a value unreadable after install is not a runtime flag), so the two read as consistent rather than contradictory. (4) **Fail-closed on flag names.** The runtime reader keeps its silent fallback on a missing or unparseable file (a standalone build has none), but a misspelled or unregistered flag *name* must now be detectable, mirroring the intent of #6984's function-like `ROCM_BUILD_FLAG(name)` accessor; `rocm-feature-flags --list` reports names absent from the manifest. Also adds a P0 phase for #6984 itself, two resolved decisions, and reference entries for #6984 and #9602.
 - **2026-08-05**: Review feedback on the #6984 alignment (Tony Davis). (1) The Distribution boundary subsection separated build-flag *inputs* from the build-flag *record*, which the earlier two-column framing blurred: the provider state file and helper are never installed, but the manifest `flags` block continues to ship the as-built flag state for provenance, triage, and the flag-debt audit, and is a record rather than an input. The table is now keyed by artifact, with the manifest as its own row. (2) The typed-runtime-flags question moved from open to resolved: runtime flags start `BOOL`-only and may gain `INTEGER` later, with nothing in the JSON, the manifest `runtime_flags` block, or the precedence order precluding it.
 - **2026-09-02**: Release-relative retirement cadence (proposed by Kim Liegeois, kliegeois). "Retire after roughly one cycle" was ambiguous between the promotion train's cadence cycle and a ROCm release. The Glossary now defines both terms, soak stays cadence-relative, and retirement is stated in releases: a flag promoted in release *R* is `deprecated` for *R+1* and removed during *R+2*, so it ships in at most two releases and *R+2* is the first release without it (`long-lived` excepted). *R+2* is an outer bound rather than a schedule; a team with QA sign-off may retire in *R+1*. Adds the `PROMOTED_IN` field, holding the `rocm-version` current on `main` when the promotion PR merges, so the flag-debt audit can identify overdue flags with no manual bookkeeping. Adds a Retirement cadence subsection under Hygiene rules, and updates the Overview, Goal 7, Stages, Hygiene rules 3 and 5, the promotion job, Playbooks C and D, Team Workflow, the Quick reference, P1, and Resolved decisions to match.
+- **2026-09-03**: Retirement window fixed at both ends (Kim Liegeois, kliegeois). The previous wording made *R+2* an upper bound ("ships in at most two releases"), which permitted deprecating and removing a flag inside a single release and left the kill-switch window shortenable at the team's discretion. That is the wrong default: a feature promoted in *R* can pass CI against everything then on `main` and still be found incompatible, on one configuration, with a feature landing in *R+1*, and the deprecated flag is precisely the release manager's backout in that case. The window is now fixed rather than bounded: `deprecated` for all of *R+1*, removed during *R+2*, so the flag ships in exactly two releases. It is not extendable either; a toggle needed past *R+2* is a permanent operational kill switch and must be declared `STAGE: long-lived` with that stage's justification, rather than a deprecated flag left to linger. Updates the Overview, Stages, Hygiene rule 3, Retirement cadence, Team Workflow, Playbook D, the Quick reference, and Resolved decisions.
