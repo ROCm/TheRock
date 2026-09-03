@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    echo "AMD ROCm repository configured."
+    echo "Run 'sudo apt-get update' to refresh package lists."
+
+    # apt satisfies this package's Conflicts by removing
+    # {{ legacy_installer_package }} rather than refusing it, and that
+    # package's repository definition and its apt pin are conffiles, so both
+    # survive the removal. The pin outranks this repository, so ROCm keeps
+    # resolving to the old one until the user purges rather than removes.
+    #
+    # Detect that one state -- removed but not purged -- rather than scanning
+    # apt's configuration. A scan cannot tell a leftover ROCm repository from
+    # the AMDGPU driver repository the same vendor ships and the user still
+    # needs, so it would name files that must not be removed.
+    #
+    # Every command below must succeed: this script runs under "set -e" and
+    # before #DEBHELPER#, so a non-zero status here fails the package install.
+    # dpkg-query exits non-zero for an unknown package, hence the guard.
+    legacy_state=$(
+        dpkg-query -W -f='${Status}' {{ legacy_installer_package }} 2>/dev/null || true
+    )
+
+    if [ "$legacy_state" = "deinstall ok config-files" ]; then
+        echo ""
+        echo "Warning: {{ legacy_installer_package }} must be fully removed before"
+        echo "the AMD ROCm repository will be used. Run"
+        echo "'sudo apt purge {{ legacy_installer_package }}'."
+    fi
+fi
+
+#DEBHELPER#
+
+exit 0
