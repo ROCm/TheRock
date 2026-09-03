@@ -95,11 +95,14 @@ class TestMakeId(unittest.TestCase):
     def test_unicode_sanitized(self):
         # Non-ASCII letters pass Python's str.isalnum() but are illegal in WiX
         # IDs; they must be replaced with underscores, not passed through.
-        for name in ["bin/café.dll", "bin/naïve.dll", "bin/日本語.dll", "bin/Ωmega.dll"]:
+        for name in [
+            "bin/café.dll",
+            "bin/naïve.dll",
+            "bin/日本語.dll",
+            "bin/Ωmega.dll",
+        ]:
             result = make_id(Path(name), "f")
-            self.assertRegex(
-                result, r"^[A-Za-z0-9_]+$", f"unicode leaked for {name!r}"
-            )
+            self.assertRegex(result, r"^[A-Za-z0-9_]+$", f"unicode leaked for {name!r}")
 
     def test_unicode_collision_resistance(self):
         # "café" and "cafe" sanitize to different-length safe strings but the
@@ -112,7 +115,9 @@ class TestMakeId(unittest.TestCase):
         # Use a path long enough that the sanitized string would blow past the
         # 72-char WiX limit if it weren't truncated, so this actually exercises
         # the length cap rather than passing trivially.
-        long_path = Path("a/" + "/".join(f"segment{i:02d}" for i in range(30)) + "/name.dll")
+        long_path = Path(
+            "a/" + "/".join(f"segment{i:02d}" for i in range(30)) + "/name.dll"
+        )
         self.assertGreater(len(str(long_path)), 72)
         result = make_id(long_path, "f")
         self.assertLessEqual(len(result), 72)
@@ -312,6 +317,7 @@ class TestBuildWxs(unittest.TestCase):
             package_version="1.2.3",
             artifacts_url=None,
             artifacts_cache_dir=root / "artifact-cache",
+            fetch_legacy_dlls=False,
         )
         defaults.update(extra_args or {})
         # Override build_root so artifacts/ is under it
@@ -335,9 +341,7 @@ class TestBuildWxs(unittest.TestCase):
             pkg = root.find(_ns("Package"))
             self.assertEqual(pkg.get("Version"), "1.2.3")
             self.assertEqual(pkg.get("Manufacturer"), "Advanced Micro Devices, Inc.")
-            self.assertEqual(
-                pkg.get("UpgradeCode"), PACKAGES["runtime"].upgrade_code
-            )
+            self.assertEqual(pkg.get("UpgradeCode"), PACKAGES["runtime"].upgrade_code)
 
     def test_install_subdir_uses_version(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -405,6 +409,7 @@ class TestBuildWxs(unittest.TestCase):
                 package_version="1.2.3",
                 artifacts_url=None,
                 artifacts_cache_dir=root_path / "artifact-cache",
+                fetch_legacy_dlls=False,
             )
             with redirect_stderr(buf):
                 build_wxs(args)

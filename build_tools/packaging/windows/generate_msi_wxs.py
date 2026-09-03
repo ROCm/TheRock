@@ -611,7 +611,7 @@ def build_wxs(args: argparse.Namespace) -> None:
     version = args.package_version
     use_standard_dir = args.install_root in STANDARD_DIR_TOKENS
 
-    if getattr(args, "artifacts_url", None):
+    if args.artifacts_url:
         print(f"Fetching artifacts from {args.artifacts_url} ...")
         artifact_dir = fetch_artifacts(
             artifacts_url=args.artifacts_url,
@@ -625,9 +625,9 @@ def build_wxs(args: argparse.Namespace) -> None:
         artifact_dir = args.build_root / "artifacts"
         legacy_bin = args.build_root / "_legacy" / "bin"
 
-    fetch_legacy = getattr(args, "fetch_legacy_dlls", None)
+    fetch_legacy = args.fetch_legacy_dlls
     if fetch_legacy is None:
-        fetch_legacy = bool(getattr(args, "artifacts_url", None))
+        fetch_legacy = bool(args.artifacts_url)
     if fetch_legacy and pkg_def.legacy_system32_dlls:
         print("Fetching legacy DLLs from DVC ...")
         fetch_legacy_dlls_from_dvc(
