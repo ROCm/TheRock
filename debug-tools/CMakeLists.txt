@@ -213,6 +213,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
         "-DHIP_PLATFORM=amd"
       COMPILER_TOOLCHAIN
         amd-hip
+      BUILD_DEPS
+        therock-googletest
       RUNTIME_DEPS
         amd-dbgapi
         hip-clr
