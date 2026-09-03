@@ -61,6 +61,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     select_build_runner,
+    select_small_build_runner,
 )
 from configure_ci_path_filters import (
     get_git_commit_hash,
@@ -735,8 +736,9 @@ class BuildConfig:
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
+    # Build runner labels for this platform/variant combination
     build_runs_on: str = ""
+    small_build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -1451,6 +1453,7 @@ def _expand_build_config_for_platform(
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
+    small_build_runs_on = select_small_build_runner(platform, build_variant)
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1521,6 +1524,7 @@ def _expand_build_config_for_platform(
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
+        small_build_runs_on=small_build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,

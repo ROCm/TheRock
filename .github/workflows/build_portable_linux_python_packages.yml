@@ -92,6 +92,10 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -109,7 +113,7 @@ jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'aws-linux-scale-rocm-prod' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.runs_on || 'ubuntu-24.04' }}
     permissions:
       id-token: write
     container:
