@@ -46,7 +46,7 @@ install locations, and versioning are all inherited from the Core SDK
   cadence, schedule, or promotion flow.
 - **Versioning:** the CV SDK and its components carry the **same
   version as the ROCm Core SDK release they are built in** (`<X.Y>`,
-  e.g. `7.14`; patch releases `<X.Y>.N`, e.g. `7.14.1`). There is no
+  e.g. `10.1`; patch releases `<X.Y>.N`, e.g. `10.1.1`). There is no
   separate CV version number. This applies to packages only. The
   individual components still version their APIs and ABIs independently
   from the package version that follows the ROCm Core SDK.
@@ -156,7 +156,7 @@ CV SDK component packages follow the **same versioning and naming as
 all other Core SDK components** — there is no CV-specific scheme.
 Naming follows the Core SDK convention
 (`amdrocm-<component>[-<target>]-<version>-<pkgrel>.<arch>.<ext>`,
-e.g. `amdrocm-rocal-gfx1152-7.14.0-1.x86_64.rpm`), with `<version>`
+e.g. `amdrocm-rocal-gfx1152-10.1.0-1.x86_64.rpm`), with `<version>`
 matching the Core SDK, and by extension CV SDK, release.
 
 ## Components
@@ -166,3 +166,4 @@ First release (pinned to ROCm 10.1):
 - MiVisionX
 - rocAL
 - rocCV
+- rocPyDecode
