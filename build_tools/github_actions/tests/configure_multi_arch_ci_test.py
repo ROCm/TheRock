@@ -567,6 +567,43 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.build_rocm.rebuild_stages, [])
 
+    def test_off_ignores_manual_reuse_and_skips_auto_analysis(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"STAGE_REUSE_MODE": "off"},
+                clear=False,
+            ),
+            patch.object(
+                cm,
+                "compute_auto_stage_reuse",
+            ) as compute_auto_stage_reuse,
+            patch.object(
+                cm,
+                "_get_all_build_stages",
+            ) as get_all_build_stages,
+        ):
+            result = cm.decide_jobs(
+                self._inputs(
+                    event_name="workflow_dispatch",
+                    prebuilt_stages="all",
+                    baseline_run_id="12345",
+                    baseline_repository="ROCm/TheRock",
+                ),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+
+        # Strong off must skip both automatic analysis and manual "all" parsing.
+        compute_auto_stage_reuse.assert_not_called()
+        get_all_build_stages.assert_not_called()
+
+        self.assertEqual(result.build_rocm.stage_decisions, {})
+        self.assertEqual(result.build_rocm.prebuilt_stages, [])
+        self.assertEqual(result.build_rocm.baseline_run_id, "")
+        self.assertEqual(result.build_rocm.baseline_repository, "")
+        self.assertIsNone(result.auto_stage_reuse)
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic
@@ -607,6 +644,75 @@ class TestDecideJobs(unittest.TestCase):
             ["compiler-runtime", "profiler-apps"],
         )
         self.assertEqual(decision.rebuild_stages, ["math-libs"])
+
+    def test_build_stages_allowlist_skips_complement(self):
+        """Stages outside the build_stages allowlist are skipped."""
+        result = cm.decide_jobs(
+            self._inputs(build_stages=["compiler-runtime", "runtime-tests"]),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertIn("math-libs", result.build_rocm.skipped_stages)
+        self.assertNotIn("compiler-runtime", result.build_rocm.skipped_stages)
+
+    def test_build_stages_disables_packages_when_stages_skipped(self):
+        """Package builds are disabled when stages are skipped (partial build)."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+        )
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        jobs = cm.decide_jobs(inputs, cm.GitContext(), targets)
+        result = cm.expand_build_configs(
+            ci_inputs=inputs,
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=jobs,
+        )
+        # Packages should be disabled due to skipped stages
+        self.assertFalse(result.linux.build_python_packages)
+        self.assertFalse(result.linux.build_pytorch)
+        self.assertFalse(result.linux.build_jax)
+        self.assertFalse(result.linux.build_native_linux)
+
+    def test_build_stages_rejects_incompatible_test_labels(self):
+        """build_stages raises error for test_labels requiring skipped stages."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:rocblas", "test:miopen"],
+        )
+        # rocblas/miopen require math-libs/ml-libs, not in build_stages
+        # Validation happens in CIInputs.validate() (called by from_environ)
+        with self.assertRaises(ValueError) as ctx:
+            inputs.validate()
+        self.assertIn("rocblas", str(ctx.exception))
+        self.assertIn("miopen", str(ctx.exception))
+
+    def test_build_stages_allows_compatible_test_labels(self):
+        """build_stages allows test_labels that match available stages."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_stages=["compiler-runtime", "runtime-tests"],
+            linux_test_labels=["test:hip-tests", "test:kfdtest"],
+        )
+        # Validation should pass without raising
+        inputs.validate()
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        # Both labels are compatible with the stages
+        self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
@@ -1197,6 +1303,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ],
         )
 
+    def test_build_config_omits_python_package_test_matrix_when_disabled(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_python_packages=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        self.assertEqual(result.linux.test_python_packages_matrix, [])
+        self.assertEqual(result.windows.test_python_packages_matrix, [])
+
     def test_build_config_includes_pytorch_build_matrix(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
@@ -1704,6 +1825,44 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertEqual(linux_payload["baseline_run_id"], "123")
         self.assertEqual(linux_payload["prebuilt_stages"], "compiler-runtime")
 
+    def test_off_clears_reuse_from_platform_build_configs(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            prebuilt_stages="compiler-runtime,runtime-tests",
+            baseline_run_id="12345",
+            baseline_repository="ROCm/TheRock",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"STAGE_REUSE_MODE": "off"},
+            clear=False,
+        ):
+            outputs = cm.configure(
+                inputs,
+                cm.GitContext.empty(),
+            )
+
+        self.assertIsNotNone(outputs.builds.linux)
+        self.assertIsNotNone(outputs.builds.windows)
+
+        for build_config in (
+            outputs.builds.linux,
+            outputs.builds.windows,
+        ):
+            self.assertEqual(build_config.prebuilt_stages, [])
+            self.assertEqual(build_config.baseline_run_id, "")
+            self.assertEqual(build_config.baseline_repository, "")
+
+            payload = build_config.to_dict()
+            self.assertEqual(payload["prebuilt_stages"], "")
+            self.assertEqual(payload["baseline_run_id"], "")
+            self.assertEqual(payload["baseline_repository"], "")
+
 
 # ---------------------------------------------------------------------------
 # Contract: BuildConfig fields match workflow YAML references
@@ -1761,7 +1920,11 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
-        unused_fields = {"build_native_linux", "build_jax", "jax_build_matrix"}
+        unused_fields = {
+            "build_native_linux",
+            "build_jax",
+            "jax_build_matrix",
+        }
         self.assertEqual(
             yaml_fields,
             python_fields - unused_fields,
@@ -1774,11 +1937,11 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 class TestFamilyTestFilters(unittest.TestCase):
     """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
 
-    def test_real_family_gfx90a_postsubmit(self):
-        """Integration test: gfx90a is in postsubmit matrix with submodule changes."""
+    def test_real_family_gfx90a_postsubmit_no_submodule_changes(self):
+        """Integration test: gfx90a runs tests on push without submodule changes."""
         # gfx90a is in postsubmit matrix, so it runs on push events.
-        # It has submodule_bump_tests_only=True, so tests only run when
-        # submodule changes are detected.
+        # It has skip_tests_on_submodule_bump=True, so tests run on regular
+        # pushes but are skipped when submodule changes are detected.
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
@@ -1786,8 +1949,37 @@ class TestFamilyTestFilters(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
         )
-        # gfx90a has submodule_bump_tests_only=True, so we need submodule changes
-        # for tests to be enabled. Simulate a submodule bump.
+        # No submodule changes - regular CI change
+        git_context = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-systems", "rocm-libraries"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        gfx90a_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        # gfx90a should have tests enabled on regular pushes (no submodule changes)
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+
+    def test_real_family_gfx90a_postsubmit_with_submodule_changes(self):
+        """Integration test: gfx90a skips tests on push with submodule changes."""
+        # gfx90a has skip_tests_on_submodule_bump=True, so tests are skipped
+        # when submodule changes are detected.
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        # Simulate a submodule bump
         git_context = cm.GitContext(
             changed_files=["some-submodule"],
             submodule_paths=["some-submodule"],
@@ -1803,8 +1995,8 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx90a_info)
-        # gfx90a should have test-runs-on set in postsubmit when submodule changes
-        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+        # gfx90a should have tests DISABLED on submodule bumps
+        self.assertEqual(gfx90a_info["test-runs-on"], "")
 
     def test_workflow_dispatch_allows_gfx90a(self):
         """workflow_dispatch should allow testing gfx90a."""

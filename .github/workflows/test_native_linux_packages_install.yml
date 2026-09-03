@@ -56,7 +56,7 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
-        description: "Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages."
+        description: "Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). Changes expected package names to match variant-suffixed packages."
         required: false
         type: string
         default: ""

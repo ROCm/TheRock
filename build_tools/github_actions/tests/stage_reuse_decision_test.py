@@ -7,7 +7,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -68,6 +68,18 @@ class FakeTopology:
     def get_source_set_for_path(self, path, platform=None):
         return None
 
+    def get_source_sets_with_source_paths(self):
+        return []
+
+    def get_all_artifacts_for_source_set(self, source_set_name):
+        return frozenset()
+
+    def parse_changed_path(self, path):
+        return (None, None)
+
+    def get_artifact_for_path(self, path):
+        return None
+
 
 def _baseline(run_id, matched_filenames):
     summary = WorkflowRunSummary(
@@ -111,12 +123,40 @@ class ModeParsingTest(unittest.TestCase):
 
     def test_explicit_modes(self):
         for value, expected in [
+            ("off", StageReuseMode.OFF),
             ("dry-run", StageReuseMode.DRY_RUN),
             ("reuse-stage", StageReuseMode.REUSE_STAGE),
             ("garbage", StageReuseMode.DRY_RUN),
         ]:
             with patch.dict(os.environ, {"STAGE_REUSE_MODE": value}):
                 self.assertEqual(StageReuseMode.from_environ(), expected)
+
+    def test_off_short_circuits_all_analysis_and_lookup(self):
+        baseline_selector = Mock()
+
+        with (
+            patch.object(srd, "_build_platforms") as build_platforms,
+            patch.object(srd, "get_topology") as get_topology,
+            patch.object(srd, "plan_stage_reuse") as plan_stage_reuse,
+        ):
+            result = compute_auto_stage_reuse(
+                changed_files=["rocm-libraries/projects/rocBLAS/x.cpp"],
+                mode=StageReuseMode.OFF,
+                linux_amdgpu_families=["gfx94X-dcgpu"],
+                baseline_selector=baseline_selector,
+            )
+
+        build_platforms.assert_not_called()
+        get_topology.assert_not_called()
+        plan_stage_reuse.assert_not_called()
+        baseline_selector.assert_not_called()
+
+        self.assertTrue(result.full_rebuild_required)
+        self.assertIsNone(result.baseline_run_id)
+        self.assertEqual(result.candidate_stages, ())
+        self.assertEqual(result.available_stages, ())
+        self.assertEqual(result.applied_reuse_stages, ())
+        self.assertIn("mode=off", "\n".join(result.report_lines))
 
 
 class AvailabilityGateTest(unittest.TestCase):
@@ -151,7 +191,7 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertIn("compiler-runtime", result.unavailable_stages)
         self.assertEqual(result.available_stages, ())
         joined = "\n".join(result.report_lines)
-        self.assertIn("artifacts NOT available", joined)
+        self.assertIn("artifacts not in baseline", joined)
 
     def test_no_baseline_found_rebuilds_candidates(self):
         result = compute_auto_stage_reuse(
@@ -165,7 +205,8 @@ class AvailabilityGateTest(unittest.TestCase):
         self.assertEqual(result.available_stages, ())
         self.assertIsNone(result.baseline_run_id)
         joined = "\n".join(result.report_lines)
-        self.assertIn("no baseline run contains artifacts", joined)
+        # When no baseline is found, we now report it as "no commit-compatible baseline"
+        self.assertIn("no commit-compatible baseline", joined)
 
     def test_partial_family_availability_rebuilds(self):
         # Needs base for a real family + generic; baseline only has the generic

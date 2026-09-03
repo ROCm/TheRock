@@ -211,6 +211,7 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
+- skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -238,7 +239,14 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "host-asan", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
         }
     },
     "gfx110x": {
@@ -310,8 +318,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            "skip_tests_on_submodule_bump": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -326,7 +333,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
