@@ -163,7 +163,7 @@ jobs:
             --artifact-group=${{ inputs.amdgpu_families }} \
             --amdgpu-targets=${{ inputs.amdgpu_targets }} \
             --tests \
-            --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }}
+            --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status

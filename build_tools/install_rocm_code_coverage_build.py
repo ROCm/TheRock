@@ -36,18 +36,17 @@ from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_famili
 # Maps each --replace-<name> flag (argparse dest) to the TheRock artifact name
 # that ships the instrumented library. rocBLAS is packaged in the 'blas'
 # artifact and rocSOLVER in the 'solver' artifact (see BUILD_TOPOLOGY.toml).
-REPLACE_ARTIFACT_MAP = {
-    "replace_rocblas": "blas",
-    "replace_rocsolver": "solver",
+COMPONENT_MAP = {
+    # option: (artifact_prefix, library_folder),
+    "replace_rocblas": ("blas", "rocBLAS"),
+    "replace_rocsolver": ("solver", "rocSOLVER"),
 }
-
 # The 'blas' and 'solver' artifacts ship more than one library (e.g. blas also
 # carries hipBLAS). Map each artifact to the library-name substring so only the
 # instrumented rocBLAS/rocSOLVER paths are replaced, leaving the rest untouched.
 ARTIFACT_LIBRARY_KEYWORD = {
-    name: dest[len("replace_") :] for dest, name in REPLACE_ARTIFACT_MAP.items()
+    name: dest for option, (name, dest) in COMPONENT_MAP.items()
 }
-
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
@@ -206,13 +205,11 @@ def replace_instrumented_libraries(dest_dir, output_dir):
             while member := tf.next():
                 for prefix in relpaths:
                     prefix_slash = prefix + "/"
-                    #log(f"{member.name=} {prefix_slash=}")
                     if not member.name.startswith(prefix_slash):
                         continue
                     scoped_path = member.name[len(prefix_slash) :]
                     if keyword.lower() not in scoped_path.lower():
                         break
-                    #log(f"{keyword=} {scoped_path=}")
                     dest_path = output_dir / PurePosixPath(scoped_path)
                     _replace_scoped_member(tf, member, dest_path, output_dir, relpaths)
                     replaced += 1
@@ -246,11 +243,11 @@ def main(argv):
     args, extra_args = parser.parse_known_args(argv)
 
     # install generic build from --run-id artifacts
-    install_from_artifacts_main(extra_args)
+#    install_from_artifacts_main(extra_args)
 
     # Resolve which artifacts to replace from the --replace-* flags.
     artifact_names = {
-        name for dest, name in REPLACE_ARTIFACT_MAP.items() if getattr(args, dest)
+        name[0] for dest, name in COMPONENT_MAP.items() if getattr(args, dest)
     }
     if not artifact_names:
         log("No --replace-* components specified; nothing to download.")
