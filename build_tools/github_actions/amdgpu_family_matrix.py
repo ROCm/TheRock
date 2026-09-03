@@ -491,7 +491,16 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
-            "build_variants": ["release"],
+            # gfx1250 has xnack enabled by default and is not in the
+            # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
+            # so GPU_TARGETS stays plain "gfx1250" for these variants.
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+            ],
         },
     },
 }
