@@ -148,8 +148,9 @@ def get_gpg_key_url(package_url: str) -> str:
     """Derive the AMD repo signing-key URL from a package repository URL.
 
     Keys sit beside the packages tree in the URL path:
-    ``…/packages/gpg/``, ``…/rocm/packages/gpg/``, or
-    ``…/packages-multi-arch/gpg/`` (stable: ``…/rocm/packages-multi-arch/gpg/``).
+    ``…/packages/gpg/``, ``…/rocm/packages/gpg/``,
+    ``…/rocm/core/packages/gpg/`` (current multi-arch Core layout),
+    or ``…/packages-multi-arch/gpg/`` (legacy multi-arch).
 
     Args:
         package_url: Full or partial native Linux package repo URL.
@@ -165,6 +166,8 @@ def get_gpg_key_url(package_url: str) -> str:
             → https://sample-cdn.example/packages/gpg/rocm.gpg
         https://sample-cdn.example/rocm/packages/rhel10/x86_64/
             → https://sample-cdn.example/rocm/packages/gpg/rocm.gpg
+        https://rc.repo.amd.com/rocm/core/packages/ubuntu2404
+            → https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
         https://sample-cdn.example/packages-multi-arch/ubuntu2604
             → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
         https://sample-cdn.example/packages-multi-arch/deb/20260204-12345/
@@ -186,6 +189,14 @@ def get_gpg_key_url(package_url: str) -> str:
         "/packages-multi-arch"
     ):
         return f"{origin}/packages-multi-arch/gpg/rocm.gpg"
+    if "/rocm/core/packages-asan/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages-asan"
+    ):
+        return f"{origin}/rocm/core/packages-asan/gpg/rocm.gpg"
+    if "/rocm/core/packages/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages"
+    ):
+        return f"{origin}/rocm/core/packages/gpg/rocm.gpg"
     if "/rocm/packages/" in path or path.rstrip("/").endswith("/rocm/packages"):
         return f"{origin}/rocm/packages/gpg/rocm.gpg"
     if "/packages/" in path or path.rstrip("/").endswith("/packages"):
@@ -214,17 +225,21 @@ def get_gpg_key_url_from_release_type(
     Examples:
         prerelease + per_family
             → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        stable + per_family
+            → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
+        prerelease + multi_arch
+            → https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
         stable + multi_arch
-            → https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg
+            → https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
     """
     rt = _normalize_release_type(release_type)
     layout_norm = normalize_layout(layout)
 
     if layout_norm == LAYOUT_MULTI_ARCH:
         if rt == "prerelease":
-            return "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg"
+            return "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg"
         if rt == "release":
-            return "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg"
+            return "https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg"
         raise ValueError(
             f"GPG key URL not defined for release_type={release_type!r} "
             f"with layout={layout!r}"

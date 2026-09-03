@@ -120,6 +120,10 @@ class GetGpgKeyUrlTest(unittest.TestCase):
                 "https://repo.amd.com/",
                 "https://repo.amd.com/rocm/packages/gpg/rocm.gpg",
             ),
+            (
+                "https://rc.repo.amd.com/rocm/core/packages/ubuntu2404",
+                "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
+            ),
         ]
         for repo_url, gpg_url in cases:
             with self.subTest(repo_url=repo_url):
@@ -140,12 +144,12 @@ class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
             (
                 "prerelease",
                 "multi_arch",
-                "https://rocm.prereleases.amd.com/packages-multi-arch/gpg/rocm.gpg",
+                "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
             ),
             (
                 "stable",
                 "multiarch",
-                "https://repo.amd.com/rocm/packages-multi-arch/gpg/rocm.gpg",
+                "https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
             ),
         ]
         for release_type, layout, expected in cases:
