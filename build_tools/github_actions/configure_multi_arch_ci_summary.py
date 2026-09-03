@@ -299,13 +299,44 @@ def _append_build_observability(
     lines.append("-- | -- | --")
     lines.extend(rows)
     lines.append("")
+
+    profiling_on = _resource_profiling_enabled(ci_inputs)
+    status = "**ON**" if profiling_on else "**OFF**"
     lines.append(
-        "> Per-stage build-time reports (ninja timings, and resource profiling "
-        "on nightly/release builds). Each link becomes available once that stage "
-        "finishes uploading its logs. Linux only for now; prebuilt and skipped "
-        "stages are omitted."
+        f"> **Resource profiling: {status}** for this run — "
+        "when ON, each report embeds a CPU/memory usage timeline "
+        "(`resource_info.py` replaces ccache as the compiler launcher); when OFF, "
+        "reports contain ninja build timings only. Profiling defaults ON for "
+        "`nightly`/`release` builds and OFF otherwise (it sits in the compile hot "
+        "path). Force it via the `force_resource_profiling` workflow_dispatch "
+        'input: `"true"` to force on, `"false"` to force off, empty to use the '
+        "default gate."
     )
     lines.append("")
+    lines.append(
+        "> Per-stage build-time reports. Each link becomes available once that "
+        "stage finishes uploading its logs. Linux only for now; prebuilt and "
+        "skipped stages are omitted."
+    )
+    lines.append("")
+
+
+def _resource_profiling_enabled(ci_inputs: CIInputs) -> bool:
+    """Compute whether resource-usage profiling is active for this run.
+
+    Mirrors the ENABLE_RESOURCE_PROFILING gate in
+    multi_arch_build_portable_linux_artifacts.yml so the summary reports the
+    effective state:
+      force == "true"  -> on
+      force == "false" -> off
+      otherwise        -> on for release_type nightly/release, else off
+    """
+    force = (ci_inputs.force_resource_profiling or "").strip().lower()
+    if force == "true":
+        return True
+    if force == "false":
+        return False
+    return ci_inputs.release_type in ("nightly", "release")
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
