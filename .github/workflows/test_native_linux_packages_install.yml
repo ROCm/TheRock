@@ -141,12 +141,14 @@ run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
   prepare_install_context:
-    name: Prepare install context (package type, GPU arch, container image)
+    name: Prepare install context (package type, GPU arch, container image, container_gpu_options)
     runs-on: ubuntu-24.04
     outputs:
       pkg_type: ${{ steps.derive.outputs.pkg_type }}
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
       container_image: ${{ steps.derive.outputs.container_image }}
+      # Emitting container_gpu_options from this job keeps OS-specific differences in one
+      # place and lets the install matrix grow without duplicating container blocks.
       container_gpu_options: ${{ steps.derive.outputs.container_gpu_options }}
     steps:
       - name: Validate test_runs_on input
@@ -188,6 +190,14 @@ jobs:
             --artifact-group "${{ inputs.artifact_group }}"
           python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
             --os-profile "${{ inputs.os_profile }}"
+
+          # Using Minimal GPU passthrough for native install basic verification (rocminfo).
+          # Device nodes are required so rocminfo can reach the AMDGPU driver on
+          # OSSCI GPU runners.
+          #
+          # Options are emitted as this job output (not inlined on the test job) so
+          # we can vary them per os_profile. Install CI uses different base images
+          # (Ubuntu, RHEL/UBI, SLES BCI), Extend based on specific os_profile needs.
           CONTAINER_GPU_OPTIONS="--device /dev/kfd --device /dev/dri"
           echo "container_gpu_options=${CONTAINER_GPU_OPTIONS}" >> $GITHUB_OUTPUT
 
@@ -199,7 +209,8 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
     container:
       image: ${{ needs.prepare_install_context.outputs.container_image }}
-      # GPU device passthrough on OSSCI GPU runners (rocminfo, RDHC) — see prepare_install_context.
+      # GPU options from prepare_install_context — see comment there for why this
+      # is dynamic across os_profile (multi-OS install matrix, SLES /etc/group).
       options: ${{ needs.prepare_install_context.outputs.container_gpu_options }}
     env:
       REPO_URL: ${{ inputs.package_install_url }}
