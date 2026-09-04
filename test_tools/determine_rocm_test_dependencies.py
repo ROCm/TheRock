@@ -71,20 +71,44 @@ _TEST_POLICIES_NAME = "test_policies.toml"
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
 _EXTERNAL_SUBTREE_ALIASES = {
-    "emulation/mirage": "mirage",
-    "emulation/rocjitsu": "rocjitsu",
-    "shared/rocroller": "rocroller",
-    "shared/amdgpu-windows-interop": "hip-clr",
-    "dnn-providers/hipblaslt-provider": "hipblasltprovider",
-    "dnn-providers/hip-kernel-provider": "hipkernelprovider",
-    "dnn-providers/miopen-provider": "miopenprovider",
-    "projects/clr": "hip-clr",
-    "projects/cuid": "rdc",
-    "projects/hip": "hip-clr",
-    "projects/hipother": "hip-clr",
-    "projects/rocdbgapi": "amd-dbgapi",
-    "projects/rocm-smi-lib": "rocm_smi_lib",
-    "projects/rocprofiler": "rocprofiler-sdk",
+    "emulation/mirage": ["mirage"],
+    "emulation/rocjitsu": ["rocjitsu"],
+    "shared/rocroller": ["rocroller"],
+    "shared/amdgpu-windows-interop": ["hip-clr"],
+    "shared/mxdatagenerator": [
+        "hipblas",
+        "hipblaslt",
+        "rocblas",
+        "rocroller",
+        "tensilelite",
+    ],
+    "shared/origami": ["hipblas", "hipblaslt", "origami", "rocblas", "tensilelite"],
+    "shared/stinkytofu": ["hipblas", "hipblaslt", "rocblas", "tensilelite"],
+    "shared/tensile": ["hipblas", "rocblas"],
+    "dnn-providers/cmake": ["hipdnn_integration_tests"],
+    "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+    "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+    "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+    "dnn-providers/miopen-provider": ["miopenprovider"],
+    "projects/clr": ["hip-clr"],
+    "projects/composablekernel": ["composable_kernel"],
+    "projects/cuid": ["rdc"],
+    "projects/hip": ["hip-clr"],
+    "projects/hipother": ["hip-clr"],
+    "projects/rocdbgapi": ["amd-dbgapi"],
+    "projects/rocm-smi-lib": ["rocm_smi_lib"],
+    "projects/rocprofiler": ["rocprofiler-sdk"],
+}
+
+_EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
+
+_CI_TEST_SELECTOR_ALIASES = {
+    "hipdnn_integration_tests": ["hipdnn-integration-tests"],
+    "hipdnn_samples": ["hipdnn-samples"],
+}
+
+_TEST_ONLY_SELECTORS = {
+    "tensilelite",
 }
 
 
@@ -235,9 +259,8 @@ def get_subprojects_to_test(
     the external-repo subtree identifiers it receives from GitHub Actions by
     stripping a leading `projects/` and mapping known non-project subtree paths
     to graph keys. Callers holding other identifiers must map them to graph keys
-    first — notably, subtree paths like `projects/clr` (-> `hip-clr`) and the
-    hyphenated CI test-matrix keys (`hipdnn-integration-tests` vs the graph's
-    `hipdnn_integration_tests`). That mapping is tracked separately.
+    first — notably, subtree paths like `projects/clr` (-> `hip-clr`). The CLI
+    output path translates graph keys that have different CI test selector names.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
@@ -246,7 +269,9 @@ def get_subprojects_to_test(
 
     # Warn on unrecognized projects (typo guard).
     known = set(graph.keys())
-    unknown = [p for p in changed_lower if p not in known]
+    unknown = [
+        p for p in changed_lower if p not in known and p not in _TEST_ONLY_SELECTORS
+    ]
     if unknown:
         print(
             f"Warning: unrecognized project(s) {unknown}; "
@@ -275,7 +300,8 @@ def explain_component(component: str, therock_dir: Path | None = None) -> str:
     The final set is computed by calling the real selection function
     (`get_subprojects_to_test`) so `--explain` can never drift from what selection
     actually computes. The graph-walk line is shown separately for insight into
-    how that final set was reached.
+    how that final set was reached, and the CI selector line shows the final
+    names emitted to GitHub Actions after output-only selector translation.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
@@ -311,7 +337,10 @@ def explain_component(component: str, therock_dir: Path | None = None) -> str:
         lines.append("\ttest_exclude:\t" + ", ".join(sorted(exclude)))
     else:
         lines.append("\ttest_exclude:\t(none)")
+    ci_selectors = _to_ci_test_selectors(final)
     lines.append("\tfinal:\t" + ", ".join(sorted(final)))
+    if ci_selectors != final:
+        lines.append("\tci selectors:\t" + ", ".join(sorted(ci_selectors)))
     return "\n".join(lines)
 
 
@@ -396,12 +425,25 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
     return sorted(graph.keys())
 
 
-def _normalize_changed_project(project: str) -> str:
+def _normalize_changed_project(project: str) -> list[str]:
     """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
     project_lower = project.lower()
     if project_lower in _EXTERNAL_SUBTREE_ALIASES:
         return _EXTERNAL_SUBTREE_ALIASES[project_lower]
-    return project_lower.removeprefix("projects/")
+    if project_lower.startswith(_EXTERNAL_ONLY_NAMESPACES):
+        raise ValueError(
+            f"'{project}' has no entry in _EXTERNAL_SUBTREE_ALIASES. Add one "
+            "before merging; this namespace has no valid self-select fallback."
+        )
+    return [project_lower.removeprefix("projects/")]
+
+
+def _to_ci_test_selectors(projects: set[str]) -> set[str]:
+    """Translate graph keys to CI test-matrix selector names for CLI output."""
+    result: set[str] = set()
+    for project in projects:
+        result.update(_CI_TEST_SELECTOR_ALIASES.get(project, [project]))
+    return result
 
 
 def main():
@@ -496,7 +538,13 @@ def main():
         changed = flattened
 
     if changed:
-        changed = [_normalize_changed_project(p) for p in changed]
+        normalized = []
+        for project in changed:
+            try:
+                normalized.extend(_normalize_changed_project(project))
+            except ValueError as e:
+                raise SystemExit(str(e)) from e
+        changed = normalized
 
     # No projects specified → all tests
     if not changed:
@@ -507,14 +555,15 @@ def main():
         return
 
     result = get_subprojects_to_test(changed, therock_dir, level=args.level)
-    projects_to_test = ",".join(sorted(result))
+    ci_test_selectors = _to_ci_test_selectors(result)
+    projects_to_test = ",".join(sorted(ci_test_selectors))
 
     if args.gha_output:
         gha_set_output({"projects_to_test": projects_to_test})
     elif args.format == "json":
-        print(json.dumps(sorted(result)))
+        print(json.dumps(sorted(ci_test_selectors)))
     else:
-        for item in sorted(result):
+        for item in sorted(ci_test_selectors):
             print(item)
 
 

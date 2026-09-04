@@ -77,8 +77,8 @@ class FakeTopology:
     def parse_changed_path(self, path):
         return (None, None)
 
-    def get_artifact_for_path(self, path):
-        return None
+    def get_artifacts_for_path(self, path):
+        return []
 
 
 def _baseline(run_id, matched_filenames):

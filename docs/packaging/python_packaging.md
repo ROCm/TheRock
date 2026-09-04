@@ -189,6 +189,61 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
 > structure used by CI uploads.
 
+## Mirroring Third-Party Python Dependencies
+
+[`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
+resolves configured third-party wheels from PyPI and publishes them to the
+structured core `whl-next` prefix. It is usable from CI or locally.
+
+Resolve and download an immutable snapshot without AWS access:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py resolve \
+  --output-dir /tmp/rocm-dependency-snapshot
+```
+
+After configuring normal boto3/AWS credentials with `HeadObject`, `GetObject`,
+`PutObject`, and same-key `CopyObject` access to one destination bucket,
+publish the same local snapshot:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py publish \
+  --snapshot-dir /tmp/rocm-dependency-snapshot \
+  --bucket therock-repo-amd-dev-core \
+  --refresh-existing
+```
+
+Use `mirror` for a convenient one-bucket resolve and publish. Add `--dry-run`
+to `publish` or `mirror` to inspect the required S3 operations without writing.
+Existing objects are skipped by default. `--refresh-existing` performs a
+conditional same-key copy, which updates `LastModified` so retained-stream
+lifecycle rules do not expire the current dependency version. Older versions
+are not refreshed. Run
+`python build_tools/packaging/python/mirror_python_dependencies.py --help` and
+the subcommand help for project and individual dependency selection.
+
+The tool publishes to the core product-local index under
+`v5/rocm/core/whl-next/`; see the
+[nightly core index](https://nightly.repo.amd.com/rocm/core/whl-next/) for a
+user-visible example. The aggregate `/rocm/whl-next/` index does not duplicate
+these wheels. Instead,
+[`rocm_whl_next_ownership.yaml`](/build_tools/packaging/python/rocm_whl_next_ownership.yaml)
+separately controls which product-local package page the aggregate index routes
+to. Publishing only to the product-local path is sufficient to populate the
+core index without implicitly changing that routing. If a mirrored dependency
+should also be available through the aggregate index used by pip, add its core
+ownership mapping and redeploy the aggregate index.
+
+The `Mirror Python Dependencies` workflow will live with the other
+[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
+It will resolve one snapshot every Monday and sequentially publish it to `dev`,
+`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
+resolve-only and allow targeting one stream for diagnostics. Retained streams
+will refresh only the current snapshot's existing objects; stable-staging will
+skip existing objects because it has no lifecycle expiration. If a stream
+fails, rerun the complete workflow. Each run is idempotent, and older versions
+remain subject to their normal retention policy.
+
 ## rocm-profiler
 
 The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:

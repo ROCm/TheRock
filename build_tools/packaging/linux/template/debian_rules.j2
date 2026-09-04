@@ -52,6 +52,15 @@ override_dh_shlibdeps:
 override_dh_makeshlibs:
 	dh_makeshlibs -X.co
 
+# Use hard links instead of copying files for faster package builds.
+# Falls back to regular dh_install if hard links fail (e.g., cross-filesystem).
+override_dh_install:
+	if [ -d "$(CURDIR){{ install_prefix }}" ]; then \
+		mkdir -p "$(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}" && \
+		cp -al "$(CURDIR){{ install_prefix }}/." "$(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/" || dh_install; \
+	else \
+		dh_install; \
+	fi
 
 override_dh_clean:
 	dh_clean

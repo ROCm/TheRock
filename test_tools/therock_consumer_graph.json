@@ -38,6 +38,7 @@
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
+      "therock-grpc",
       "therock-spdlog"
     ]
   },
