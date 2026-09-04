@@ -1430,7 +1430,12 @@ def _expand_build_config_for_platform(
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
     is_asan = suffix in ("asan", "host-asan")
-    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    # Coverage artifacts are only consumed by the coverage test and report jobs,
+    # so building wheels or distro packages from them is wasted node time.
+    is_coverage = suffix == "coverage"
+    build_python_packages = (
+        ci_inputs.build_python_packages and not is_asan and not is_coverage
+    )
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
             per_family_info=per_family_info,
@@ -1439,7 +1444,7 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
-    build_native_linux = ci_inputs.build_native_linux
+    build_native_linux = ci_inputs.build_native_linux and not is_coverage
 
     # When stages are skipped (partial build), disable package builds since
     # they require a complete artifact set. Prebuilt/reused stages are OK

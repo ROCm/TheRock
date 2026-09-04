@@ -182,6 +182,14 @@ all_build_variants = {
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
         },
+        # Code coverage builds run from the nightly coverage workflow only. The
+        # suffix keeps their artifacts in a separate S3 namespace so a coverage
+        # run can never be mistaken for a regular one.
+        "coverage": {
+            "build_variant_label": "coverage",
+            "build_variant_suffix": "coverage",
+            "build_variant_cmake_preset": "linux-release-coverage",
+        },
     },
     "windows": {
         "release": {
@@ -246,6 +254,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "coverage",
             ],
         }
     },
@@ -334,7 +343,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "asan-debug", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan", "coverage"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }

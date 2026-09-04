@@ -928,6 +928,13 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
+  # Code coverage options are appended per sub-project rather than set globally:
+  # only the component being measured may be instrumented, or its dependencies
+  # emit profraw files into the same report. See cmake/therock_coverage.cmake.
+  therock_coverage_get_subproject_args(_coverage_args
+    "${_logical_target_name}" "${_external_source_dir}")
+  list(APPEND _cmake_args ${_coverage_args})
+
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")

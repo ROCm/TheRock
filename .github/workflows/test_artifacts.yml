@@ -109,6 +109,13 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      coverage_enabled:
+        description: >-
+          When true, each component collects llvm profraw during its test run
+          and publishes a merged coverage report. Requires artifacts from an
+          instrumented build; see docs/development/code_coverage.md.
+        type: boolean
+        default: false
       quartz_tracking_id:
         type: string
         default: ""
@@ -210,6 +217,8 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      # The sanity check only proves the artifacts are usable, so there is
+      # nothing worth reporting coverage for.
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   test_components:
@@ -267,6 +276,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       build_variant: ${{ inputs.build_variant }}
+      coverage_enabled: ${{ inputs.coverage_enabled }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
