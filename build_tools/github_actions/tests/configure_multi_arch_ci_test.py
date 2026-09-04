@@ -1697,7 +1697,7 @@ class TestFormatSummary(unittest.TestCase):
         )
 
     def test_summary_includes_build_observability(self):
-        """The consolidated Build Observability table renders per-stage links."""
+        """The consolidated Build Observability list renders per-stage links."""
         jobs = cm.JobDecisions(
             build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
             test_rocm=cm.TestRocmDecision(action=cm.JobAction.SKIP, test_type=""),
