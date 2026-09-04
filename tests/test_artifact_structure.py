@@ -76,6 +76,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("mirage", "dev"),  # new artifact, no packages yet.
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
+    ("rocshmem4py", "lib"),  # Python-index-only; not shipped in RPM/DEB packages.
     ("rocrtst", "lib"),
     ("support", "dev"),
     ("support", "doc"),

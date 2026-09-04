@@ -244,3 +244,51 @@ if(THEROCK_ENABLE_ROCSHMEM)
       ${_rocshmem_subproject_names}
   )
 endif(THEROCK_ENABLE_ROCSHMEM)
+
+if(THEROCK_ENABLE_ROCSHMEM4PY)
+  ##############################################################################
+  # rocshmem4py
+  ##############################################################################
+  therock_detect_python_versions(
+    _rocshmem4py_python_executables
+    _rocshmem4py_python_versions
+  )
+  # therock_cmake_subproject_declare does not preserve CMake lists in
+  # CMAKE_ARGS, so escape the separators before forwarding the interpreters.
+  list(JOIN _rocshmem4py_python_executables "\;"
+    _rocshmem4py_python_executables_str
+  )
+
+  therock_cmake_subproject_declare(rocshmem4py
+    FPRINT_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/python/rocshmem"
+    FPRINT_FILE_GLOBS
+      "${CMAKE_CURRENT_SOURCE_DIR}/rocshmem4py/*"
+      "${THEROCK_SOURCE_DIR}/build_tools/packaging/python/finalize_rocshmem4py_wheel.py"
+      "${THEROCK_SOURCE_DIR}/build_tools/third_party/change_wheel_version/change_wheel_version.py"
+    EXTERNAL_SOURCE_DIR "rocshmem4py"
+    DISABLE_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DROCSHMEM4PY_SOURCE_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/python/rocshmem"
+      "-DROCSHMEM4PY_PYTHON_EXECUTABLES:STRING=${_rocshmem4py_python_executables_str}"
+      "-DROCSHMEM4PY_FINALIZE_SCRIPT=${THEROCK_SOURCE_DIR}/build_tools/packaging/python/finalize_rocshmem4py_wheel.py"
+      "-DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}"
+      -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocshmem
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_activate(rocshmem4py)
+
+  therock_provide_artifact(rocshmem4py
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocshmem4py.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      rocshmem4py
+  )
+endif(THEROCK_ENABLE_ROCSHMEM4PY)
