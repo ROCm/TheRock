@@ -2,6 +2,7 @@
 testpaths = [
     "tests",
     "github_actions/tests",
+    "packaging/archives/tests",
     "packaging/linux/tests",
     "packaging/python/tests",
     "packaging/windows/tests",
@@ -16,6 +17,7 @@ source = ["."]
 omit = [
     "tests/*",
     "github_actions/tests/*",
+    "packaging/archives/tests/*",
     "packaging/linux/tests/*",
     "packaging/python/tests/*",
     "packaging/windows/tests/*",
