@@ -176,6 +176,7 @@ VERIFY_KEY_COMPONENTS = [
     "bin/clinfo",
     "include/hip/hip_runtime.h",
     "lib/libamdhip64.so",
+    "lib/cmake/profiler-hub/profiler-hub-config.cmake",
 ]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
