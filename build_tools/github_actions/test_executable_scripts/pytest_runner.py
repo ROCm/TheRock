@@ -251,6 +251,28 @@ def build_environment(rocm_path, component_name):
     return env
 
 
+def resolve_runs(category_config, test_type):
+    """Return the list of sub-run configs to execute for a category.
+
+    A category is either a single test run (its own config) or a ``runs:`` list
+    of independent pytest invocations (needed when one tier mixes suites that
+    require different marker expressions or client args). Sub-run ``name`` values
+    must be present and unique — they key the per-run JUnit report
+    (``{component}_{name}.xml``), so a duplicate/missing name would silently
+    overwrite another sub-run's results.
+    """
+    runs = category_config.get("runs")
+    if runs is None:
+        return [category_config]  # single-run category (backward compatible)
+    names = [r.get("name") for r in runs]
+    if None in names or len(set(names)) != len(names):
+        _fail(
+            f"Category '{test_type}' with 'runs:' requires a unique 'name' "
+            f"per sub-run (got {names}); names key the per-run JUnit report."
+        )
+    return runs
+
+
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
     TEST_TYPE = os.getenv("TEST_TYPE", "quick")
@@ -280,10 +302,6 @@ if __name__ == "__main__":
             f"Available categories: {sorted(all_categories)}"
         )
 
-    test_paths = category_config.get("test_paths", [])
-    if not test_paths:
-        _fail(f"Category '{TEST_TYPE}' defines no test_paths")
-
     gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
     # Resolve a concrete gfx target for {AMDGPU_TARGETS} substitution.
     # AMDGPU_TARGETS (set by test_component.yml from fetch-gfx-targets)
@@ -294,37 +312,19 @@ if __name__ == "__main__":
     amdgpu_target = (
         AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
     ) or (gpu_arch or "")
-    marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
-
-    # Extra pytest CLI options for this category.  {ROCM_PATH} and
-    # {AMDGPU_TARGETS} tokens are substituted with runtime values.
-    pytest_args = [
-        str(arg)
-        .replace("{ROCM_PATH}", str(rocm_path))
-        .replace("{AMDGPU_TARGETS}", amdgpu_target)
-        for arg in (category_config.get("pytest_args", []) or [])
-    ]
 
     exec_settings = config.get("execution_settings", {})
-    # Per-test timeout and worker count resolve as: env override > YAML > default.
-    # test_categories.yaml ships inside the installed artifact, so these env
-    # overrides let CI steps / reproduce_test_failure.py tune them without a
-    # rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds (passed to
-    # pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
-    timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or exec_settings.get(
-        "category_timeouts", {}
-    ).get(TEST_TYPE)
-    # parallel_workers may be overridden per category (e.g. GPU GEMM tests want
-    # more xdist workers than the default), falling back to the global setting.
-    num_workers = get_env_int_override("PYTEST_NUM_WORKERS") or category_config.get(
-        "parallel_workers", exec_settings.get("parallel_workers", 1)
-    )
+    # Per-test timeout and worker count resolve as: env override > per-run/category
+    # YAML > tier/global default. test_categories.yaml ships inside the installed
+    # artifact, so these env overrides let CI steps / reproduce_test_failure.py tune
+    # them without a rebuild. PYTEST_TEST_TIMEOUT is the per-test timeout in seconds
+    # (passed to pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
+    tier_timeout = exec_settings.get("category_timeouts", {}).get(TEST_TYPE)
+    env_timeout = get_env_int_override("PYTEST_TEST_TIMEOUT")
+    env_workers = get_env_int_override("PYTEST_NUM_WORKERS")
 
-    junit_dir = os.getenv("JUNIT_XML_DIR")
-    junit_xml = (
-        str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
-    )
-
+    # The environment (PYTHONPATH/LD_LIBRARY_PATH/PATH + configured extras) is
+    # shared across all sub-runs; {ROCM_PATH}/{AMDGPU_TARGETS} tokens resolved once.
     env = build_environment(rocm_path, TEST_COMPONENT_NAME)
     for key, value in (exec_settings.get("environment", {}) or {}).items():
         value = (
@@ -335,8 +335,44 @@ if __name__ == "__main__":
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 
-    sys.exit(
-        run_pytest(
+    # A category runs once, or once per `runs:` sub-run when that key is a list —
+    # needed when a tier mixes suites with different markers/args (e.g. `standard`
+    # = host unit `not gpu` AND GPU common `-m <arch>`). Each sub-run has its own
+    # paths/markers/args/timeout/JUnit; all run (run-all), step fails if any did.
+    runs = resolve_runs(category_config, TEST_TYPE)
+
+    junit_dir = os.getenv("JUNIT_XML_DIR")
+    multi = len(runs) > 1
+    overall_rc = 0
+    for run_cfg in runs:
+        test_paths = run_cfg.get("test_paths", [])
+        if not test_paths:
+            _fail(f"Category '{TEST_TYPE}' run defines no test_paths")
+
+        marker_expr = build_marker_expression(run_cfg, gpu_arch, amdgpu_target)
+
+        # Extra pytest CLI options for this run. {ROCM_PATH} and {AMDGPU_TARGETS}
+        # tokens are substituted with runtime values.
+        pytest_args = [
+            str(arg)
+            .replace("{ROCM_PATH}", str(rocm_path))
+            .replace("{AMDGPU_TARGETS}", amdgpu_target)
+            for arg in (run_cfg.get("pytest_args", []) or [])
+        ]
+        # parallel_workers may be overridden per run/category (e.g. GPU GEMM tests
+        # want more xdist workers than the default), falling back to the global.
+        timeout = env_timeout or run_cfg.get("timeout_seconds") or tier_timeout
+        num_workers = env_workers or run_cfg.get(
+            "parallel_workers", exec_settings.get("parallel_workers", 1)
+        )
+        junit_xml = None
+        if junit_dir:
+            # One JUnit file per sub-run so a multi-run tier doesn't overwrite its
+            # own report; single-run categories keep the plain {component}.xml name.
+            suffix = f"_{run_cfg['name']}" if multi else ""
+            junit_xml = str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}{suffix}.xml")
+
+        rc = run_pytest(
             test_paths,
             marker_expr,
             pytest_args,
@@ -346,4 +382,8 @@ if __name__ == "__main__":
             component_path,
             env,
         )
-    )
+        # Run-all (not fail-fast): keep going so every sub-run's results are
+        # reported; the step still fails if ANY sub-run failed.
+        overall_rc = overall_rc or rc
+
+    sys.exit(overall_rc)

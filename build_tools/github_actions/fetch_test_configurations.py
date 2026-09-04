@@ -289,7 +289,10 @@ test_matrix = {
     "tensilelite": {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        # 150 min: the `standard` tier now runs GPU-integrated common GEMM tests
+        # (xdist) in addition to host-only unit/rocisa; `quick` still exits well
+        # under this.
+        "timeout_minutes": 150,
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
