@@ -255,14 +255,17 @@ def _append_build_rocm(
 def _append_build_observability(
     lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
 ) -> None:
-    """Append one consolidated table of per-stage build-observability links.
+    """Append one compact horizontal list of per-stage build-observability links.
 
     Previously each stage job appended its own `[Build Observability]` link to
     that job's step summary, scattering ~10 links across the run and bloating the
-    aggregated summary page. This gathers them into a single table in the
-    top-level configure summary. Links are deterministic (derived from the stage
-    log layout) so they can be rendered before the stages finish; a link 404s
-    until its stage uploads its logs.
+    aggregated summary page. This gathers them into a single line in the top-level
+    configure summary. Each entry is a short markdown link (`[stage](url)`) so the
+    rendered summary shows just the stage name instead of expanding the full S3
+    URL, and the whole set flows horizontally instead of a tall per-stage table.
+    Links are deterministic (derived from the stage log layout) so they can be
+    rendered before the stages finish; a link 404s until its stage uploads its
+    logs (i.e. a 404 means that stage has not produced a report yet).
     """
     linux_config = outputs.builds.linux
     if linux_config is None:
@@ -279,7 +282,7 @@ def _append_build_observability(
         run_id=ci_inputs.run_id, platform="linux"
     )
 
-    rows: list[str] = []
+    links: list[str] = []
     for stage in _OBSERVABILITY_STAGES["linux"]:
         if stage in omit:
             continue
@@ -287,36 +290,31 @@ def _append_build_observability(
         stage_families = families if stage_types.get(stage) == "per-arch" else [""]
         for family in stage_families:
             url = output_root.build_observability_stage(stage, family).https_url
-            family_cell = f"`{family}`" if family else "—"
-            rows.append(f"`{stage}` | {family_cell} | {url}")
+            label = f"{stage}/{family}" if family else stage
+            links.append(f"[{label}]({url})")
 
-    if not rows:
+    if not links:
         return
-
-    lines.append("## Build Observability")
-    lines.append("")
-    lines.append("Stage | Family | 📈 Report")
-    lines.append("-- | -- | --")
-    lines.extend(rows)
-    lines.append("")
 
     profiling_on = _resource_profiling_enabled(ci_inputs)
     status = "**ON**" if profiling_on else "**OFF**"
-    lines.append(
-        f"> **Resource profiling: {status}** for this run — "
-        "when ON, each report embeds a CPU/memory usage timeline "
-        "(`resource_info.py` replaces ccache as the compiler launcher); when OFF, "
-        "reports contain ninja build timings only. Profiling defaults ON for "
-        "`nightly`/`release` builds and OFF otherwise (it sits in the compile hot "
-        "path). Force it via the `force_resource_profiling` workflow_dispatch "
-        'input: `"true"` to force on, `"false"` to force off, empty to use the '
-        "default gate."
-    )
+
+    lines.append("## Build Observability")
+    lines.append("")
+    # One compact horizontal row of short links instead of a tall per-stage table:
+    # the link text stays short so the rendered summary does not expand the raw S3
+    # URLs, and a stage that has not produced a report yet simply 404s on click.
+    lines.append("📈 Per-stage build-time reports: " + " · ".join(links))
     lines.append("")
     lines.append(
-        "> Per-stage build-time reports. Each link becomes available once that "
-        "stage finishes uploading its logs. Linux only for now; prebuilt and "
-        "skipped stages are omitted."
+        f"> Resource profiling: {status} for this run — when ON, each report also "
+        "embeds a CPU/memory usage timeline (`resource_info.py` wraps ccache as the "
+        "compiler launcher, so ccache still caches); when OFF, reports contain ninja "
+        "build timings only. Profiling defaults ON for `nightly`/`release` builds and "
+        "OFF otherwise. Force it via the `force_resource_profiling` workflow_dispatch "
+        'input: `"true"` to force on, `"false"` to force off, empty for the default '
+        "gate. Each link 404s until its stage uploads its logs; Linux only for now; "
+        "prebuilt and skipped stages are omitted."
     )
     lines.append("")
 
