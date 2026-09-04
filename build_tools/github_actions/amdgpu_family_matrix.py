@@ -485,13 +485,13 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx125x": {
         "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds are included — workflow_dispatch can be used
-            # to trigger manually; nightly schedule runs both ROCm stack
-            # and PyTorch builds.
+            # No hardware available for testing yet; build-only on every PR.
+            # gfx1250 targets + nightly/dispatch-only gate are pre-staged so
+            # enabling tests later is a one-line `test-runs-on` flip.
             "test-runs-on": "",
             "family": "gfx125X-dcgpu",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1250"],
+            "nightly_check_only_for_family": True,
             "build_variants": ["release"],
         },
     },
