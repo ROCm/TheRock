@@ -20,6 +20,7 @@
 - (root) [TESTING.md](/TESTING.md) - **Start here** for an overview of testing in this project
 - [Adding tests](adding_tests.md)
 - [Code Coverage](code_coverage.md)
+- [Code Coverage Flow](code_coverage_flow.md) - end-to-end trace of the nightly coverage pipeline
 - [Test Debugging](test_debugging.md)
 - [Test Filtering](test_filtering.md)
 - [Test Environment Reproduction](test_environment_reproduction.md)

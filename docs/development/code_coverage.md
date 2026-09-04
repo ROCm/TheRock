@@ -6,6 +6,10 @@ phase 1 of
 [RFC0014](https://github.com/ROCm/TheRock/pull/6967): full coverage on a single
 default architecture, driven by a standalone nightly workflow.
 
+This page covers the concepts and how to request coverage.
+[Code Coverage Flow](code_coverage_flow.md) traces a nightly run end to end,
+naming the file responsible at each step.
+
 ## Why coverage is requested per project
 
 Instrumented code writes `.profraw` counter files whenever it runs. If a
