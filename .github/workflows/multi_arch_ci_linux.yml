@@ -108,6 +108,7 @@ jobs:
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
       small_build_runs_on: ${{ fromJSON(inputs.build_config).small_build_runs_on }}
+      medium_build_runs_on: ${{ fromJSON(inputs.build_config).medium_build_runs_on }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
