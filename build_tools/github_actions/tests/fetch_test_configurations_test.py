@@ -457,6 +457,86 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
 
+    def test_fft_multi_gpu_jobs_included_for_full(self):
+        """hipfft/rocfft multi-GPU split jobs are scheduled on multi-GPU runners
+        for the full tier when the family supports it."""
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+        for name in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
+            job = next(j for j in components if j["job_name"] == name)
+            self.assertEqual(job["multi_gpu_runner"], "linux-mi300-mgpu")
+
+    def test_fft_multi_gpu_selected_via_base_project_label(self):
+        """`test:hipfft`/`test:rocfft` labels select the multi-GPU variants too,
+        since they declare base_project even though they have no label of their own."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_selected_via_projects_to_test(self):
+        """PROJECTS_TO_TEST=hipfft selects the hipfft multi-GPU variant too."""
+        os.environ["PROJECTS_TO_TEST"] = "hipfft"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft", names)
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_jobs_excluded_for_quick(self):
+        """The FFT multi-GPU split jobs only run for comprehensive/full tiers, so
+        they are skipped for quick (but the single-GPU fft jobs still run)."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+        self.assertIn("hipfft", names)
+        self.assertIn("rocfft", names)
+
     # -----------------------
     # Output contract
     # -----------------------
