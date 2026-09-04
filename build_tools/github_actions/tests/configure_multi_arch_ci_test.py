@@ -1666,6 +1666,131 @@ class TestFormatSummary(unittest.TestCase):
         # explanation for why.
         self.assertIn("skipped", result)
 
+    def _linux_config(self, **kwargs):
+        defaults = dict(
+            per_family_info=[
+                {"amdgpu_family": "gfx110X-all", "test-runs-on": ""},
+                {"amdgpu_family": "gfx1151", "test-runs-on": ""},
+            ],
+            dist_amdgpu_families="gfx110X-all;gfx1151",
+            artifact_group="multi-arch-release",
+            build_variant_label="release",
+            build_variant_suffix="",
+            build_variant_cmake_preset="release",
+            build_pytorch=False,
+            build_jax=False,
+            build_native_linux=True,
+            build_python_packages=False,
+        )
+        defaults.update(kwargs)
+        return cm.BuildConfig(**defaults)
+
+    def _observability_jobs(self):
+        """JobDecisions with only build_rocm running (for observability tests)."""
+        return cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.SKIP, test_type=""),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+
+    def test_summary_includes_build_observability(self):
+        """The consolidated Build Observability list renders per-stage links."""
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.SKIP, test_type=""),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=jobs,
+            builds=cm.BuildConfigs(
+                linux=self._linux_config(
+                    prebuilt_stages=["comm-libs"],
+                    skip_stages=["cv-libs"],
+                )
+            ),
+        )
+        result = format_summary(self._inputs(run_id="12345"), outputs)
+
+        self.assertIn("## Build Observability", result)
+        # Generic stage → single link.
+        self.assertIn("logs/compiler-runtime/build_observability.html", result)
+        # Per-arch stage (math-libs) fans out one link per family.
+        self.assertIn("logs/math-libs/gfx110X-all/build_observability.html", result)
+        self.assertIn("logs/math-libs/gfx1151/build_observability.html", result)
+        # Prebuilt and skipped stages produce no fresh report → omitted.
+        self.assertNotIn("logs/comm-libs/", result)
+        self.assertNotIn("logs/cv-libs/", result)
+
+    def test_summary_observability_profiling_off_by_default(self):
+        """Default push/ci run → profiling reported OFF."""
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=self._observability_jobs(),
+            builds=cm.BuildConfigs(linux=self._linux_config()),
+        )
+        result = format_summary(self._inputs(), outputs)
+        self.assertIn("Resource profiling: **OFF**", result)
+        # The "how to force it" hint is always present.
+        self.assertIn("force_resource_profiling", result)
+
+    def test_summary_observability_profiling_on_when_forced(self):
+        """force_resource_profiling='true' → profiling reported ON even for ci."""
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=self._observability_jobs(),
+            builds=cm.BuildConfigs(linux=self._linux_config()),
+        )
+        result = format_summary(self._inputs(force_resource_profiling="true"), outputs)
+        self.assertIn("Resource profiling: **ON**", result)
+
+    def test_summary_observability_profiling_on_for_nightly(self):
+        """release_type nightly (no override) → profiling reported ON."""
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=self._observability_jobs(),
+            builds=cm.BuildConfigs(linux=self._linux_config()),
+        )
+        result = format_summary(self._inputs(release_type="nightly"), outputs)
+        self.assertIn("Resource profiling: **ON**", result)
+
+    def test_summary_observability_profiling_off_when_forced_off(self):
+        """force_resource_profiling='false' overrides nightly → OFF."""
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=self._observability_jobs(),
+            builds=cm.BuildConfigs(linux=self._linux_config()),
+        )
+        result = format_summary(
+            self._inputs(release_type="nightly", force_resource_profiling="false"),
+            outputs,
+        )
+        self.assertIn("Resource profiling: **OFF**", result)
+
+    def test_summary_no_observability_without_linux_build(self):
+        """No Linux build config → no Build Observability section."""
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.RUN),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.SKIP, test_type=""),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            test_pytorch=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+            build_jax=cm.JobGroupDecision(action=cm.JobAction.SKIP),
+        )
+        outputs = cm.CIOutputs(
+            is_ci_enabled=True,
+            jobs=jobs,
+            builds=cm.BuildConfigs(linux=None, windows=self._linux_config()),
+        )
+        result = format_summary(self._inputs(), outputs)
+        self.assertNotIn("## Build Observability", result)
+
 
 class TestWriteOutputs(unittest.TestCase):
     """Test writing CI configuration to GitHub Actions output files."""

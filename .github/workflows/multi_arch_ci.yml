@@ -88,6 +88,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      force_resource_profiling:
+        type: string
+        default: ""
+        description: 'Resource-usage profiling override (Linux builds): "true" = force on, "false" = force off, empty = default (nightly/release only). See #7692.'
   pull_request:
     types:
       - labeled
@@ -129,6 +133,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
     secrets: inherit
 
   linux_build_and_test:
@@ -149,6 +154,7 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
     permissions:
       contents: read
       id-token: write
