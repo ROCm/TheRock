@@ -173,6 +173,14 @@ def generate_cmake_args(
     if amdgpu_families:
         args.append(f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}")
 
+    # Enable generic GFX target replacement for opted-in subprojects.
+    # This replaces groups of specific gfx targets (e.g. gfx1030-gfx1036) with
+    # their LLVM generic equivalent (e.g. gfx10-3-generic) to reduce build time
+    # and package size.
+    # TODO(sa-faizal): Thread this through workflow_dispatch inputs once validated.
+    # For now, always enable on this prototype branch.
+    args.append("-DTHEROCK_USE_GENERIC_GFX_TARGETS=ON")
+
     # GPU families for dist targets (all architectures in the distribution)
     # Quote the value since it contains semicolons (CMake list separator)
     if dist_amdgpu_families:

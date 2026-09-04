@@ -31,6 +31,7 @@ if(THEROCK_ENABLE_RCCL)
     # Build all GPU targets in a single target-neutral artifact as long as the
     # host code isn't fully target agnostic.
     USE_TEST_AMDGPU_TARGETS
+    USE_GENERIC_GFX_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.

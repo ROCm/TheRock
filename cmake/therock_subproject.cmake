@@ -250,6 +250,13 @@ endfunction()
 #   set this for projects that cannot build with an empty target list. This
 #   should only be needed during bringup of new targets and is not intended
 #   for production use.
+# USE_GENERIC_GFX_TARGETS: When set, and the global THEROCK_USE_GENERIC_GFX_TARGETS
+#   option is ON, groups of specific gfx targets (e.g. gfx1030;...;gfx1036)
+#   are replaced with their LLVM generic equivalent (e.g. gfx10-3-generic)
+#   before being written to the toolchain file. The replacement happens after
+#   per-project target exclusions are applied. Each sub-project team can opt
+#   in independently by adding this flag to their declare() call. Requires
+#   Code Object V6 runtime support (ROCm >= 6.3).
 # NO_MERGE_COMPILE_COMMANDS: Option to disable merging of this project's
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
@@ -361,7 +368,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;USE_GENERIC_GFX_TARGETS"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
@@ -517,6 +524,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
     THEROCK_DEFAULT_GPU_TARGETS "${ARG_DEFAULT_GPU_TARGETS}"
     THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
+    THEROCK_USE_GENERIC_GFX_TARGETS "${ARG_USE_GENERIC_GFX_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
     THEROCK_EXTERNAL_SOURCE_DIR "${ARG_EXTERNAL_SOURCE_DIR}"
@@ -1715,6 +1723,19 @@ function(_therock_cmake_subproject_setup_toolchain
         message(FATAL_ERROR
           "Internal error: Subproject ${target_name} received unexpected NOTFOUND sentinel "
           "'${_filtered_gpu_targets}'. This is a bug in TheRock's AMDGPU target handling.")
+      endif()
+    endif()
+
+    # Replace specific gfx targets with their LLVM generic equivalents when
+    # both the global option is ON and the subproject has opted in.
+    if(THEROCK_USE_GENERIC_GFX_TARGETS)
+      get_target_property(_use_generic "${target_name}" THEROCK_USE_GENERIC_GFX_TARGETS)
+      if(_use_generic)
+        set(_pre_generic_targets "${_filtered_gpu_targets}")
+        therock_replace_with_generic_targets(_filtered_gpu_targets ${_filtered_gpu_targets})
+        if(NOT "${_filtered_gpu_targets}" STREQUAL "${_pre_generic_targets}")
+          message(STATUS "[therock] Using generic GFX targets for ${target_name}: ${_filtered_gpu_targets}")
+        endif()
       endif()
     endif()
 
