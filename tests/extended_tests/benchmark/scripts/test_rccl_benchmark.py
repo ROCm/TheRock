@@ -9,6 +9,7 @@ Runs RCCL collective communication benchmarks, collects results, and uploads to 
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
@@ -17,8 +18,25 @@ from prettytable import PrettyTable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For extended_tests/utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
-from github_actions_api import get_visible_gpu_count
 from utils.logger import log
+
+
+def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
+    rocminfo = Path(therock_bin_dir) / "rocminfo"
+    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
+
+    result = subprocess.run(
+        [rocminfo_cmd],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+
+    return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
 
 
 class RCCLBenchmark(BenchmarkBase):
@@ -27,7 +45,7 @@ class RCCLBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rccl", display_name="RCCL")
         self.log_file = self.script_dir / "rccl_bench.log"
-        self.ngpu = get_visible_gpu_count(therock_bin_dir=self.therock_bin_dir)
+        self.ngpu = _get_visible_gpu_count(therock_bin_dir=self.therock_bin_dir)
 
         # Validate OpenMPI is available (from base class)
         self._validate_openmpi()

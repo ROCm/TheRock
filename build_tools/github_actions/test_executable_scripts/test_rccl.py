@@ -3,14 +3,11 @@
 
 import logging
 import os
+import re
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 import pytest
-
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-from github_actions_api import get_visible_gpu_count
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -18,12 +15,30 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
 
+def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
+    rocminfo = Path(therock_bin_dir) / "rocminfo"
+    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
+
+    result = subprocess.run(
+        [rocminfo_cmd],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+
+    return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
+
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
         environ_vars = os.environ.copy()
         # Expect at least 2 GPUs for RCCL collectives
-        gpu_count = get_visible_gpu_count(
+        gpu_count = _get_visible_gpu_count(
             env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR
         )
         logging.info(f"Visible GPU count: {gpu_count}")
