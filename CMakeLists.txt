@@ -65,6 +65,35 @@ block(SCOPE_FOR VARIABLES)
   message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
 endblock()
 
+################################################################################
+# Source timestamp for reproducible builds
+################################################################################
+# Empty by default, and deliberately not derived here. The build writes no
+# archives -- the tools that do run after it and resolve their own timestamp
+# from the source state at that moment. Resolving it at configure would freeze
+# a value that goes stale the moment anything is pulled, and CMake has no other
+# use for it.
+#
+# Setting it is therefore the whole opt-in: a value can only arrive by an
+# explicit -D, and the only thing CMake does with one is export it as
+# SOURCE_DATE_EPOCH to every subproject configure and build. That makes the
+# compilers themselves reproducible, at the cost of rebuilding the tree whenever
+# the value changes, plus a wider blast radius across the components.
+# See docs/development/reproducible_archives.md.
+set(THEROCK_SOURCE_DATE_EPOCH "" CACHE STRING
+  "Unix timestamp to export as SOURCE_DATE_EPOCH to subproject builds (empty: do not export)")
+
+# Compared against the empty string rather than with if(NOT ...), which is false
+# for the string "0" and would silently ignore a deliberate -D...=0.
+if(NOT "${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
+  if(NOT THEROCK_SOURCE_DATE_EPOCH MATCHES "^[0-9]+$")
+    message(FATAL_ERROR
+      "THEROCK_SOURCE_DATE_EPOCH must be a non-negative integer number of "
+      "seconds since the Unix epoch, got '${THEROCK_SOURCE_DATE_EPOCH}'")
+  endif()
+  message(STATUS "Exporting SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH} to subprojects")
+endif()
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################

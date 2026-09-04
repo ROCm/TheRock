@@ -13,6 +13,7 @@
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
 - [Installing Artifacts](installing_artifacts.md)
+- [Reproducible Archives](reproducible_archives.md)
 - [Sanitizers](sanitizers.md)
 
 ### Testing

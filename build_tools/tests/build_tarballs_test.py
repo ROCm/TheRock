@@ -17,10 +17,12 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from build_tarballs import (
+    _tar_is_gnu,
     compress_tarball,
     determine_compress_workers,
     is_kpack_split,
     main,
+    reproducible_tar_flags,
 )
 
 
@@ -121,6 +123,85 @@ class TestCompressTarball(unittest.TestCase):
 
             with tarfile.open(tarball_path, "r:gz") as tf:
                 self.assertIn("./hello", tf.getnames())
+
+
+class TestReproducibleTarballs(unittest.TestCase):
+    """Release tarballs must depend only on their content.
+
+    `tar` has no filter hook, so unlike the Python archive writers this relies
+    on command-line flags, and those are GNU extensions.
+    """
+
+    FIXED_EPOCH = 1700000000
+
+    def _write_tree(self, root: Path) -> None:
+        # Created out of sorted order so a passing order assertion cannot be
+        # explained by creation order.
+        (root / "sub").mkdir(parents=True)
+        (root / "z.txt").write_text("z")
+        (root / "a.txt").write_text("a")
+        (root / "sub" / "m.txt").write_text("m")
+
+    def test_flags_are_omitted_without_a_timestamp(self):
+        self.assertEqual(reproducible_tar_flags(None), [])
+
+    @unittest.skipUnless(_tar_is_gnu(), "Reproducibility flags are GNU tar extensions")
+    def test_flags_pin_order_metadata_and_time(self):
+        flags = reproducible_tar_flags(self.FIXED_EPOCH)
+        self.assertIn("--sort=name", flags)
+        self.assertIn(f"--mtime=@{self.FIXED_EPOCH}", flags)
+        self.assertIn("--owner=0", flags)
+        self.assertIn("--group=0", flags)
+
+    @unittest.skipUnless(_tar_is_gnu(), "Reproducibility flags are GNU tar extensions")
+    def test_same_content_different_mtimes_gives_identical_bytes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            src = tmpdir / "src"
+            self._write_tree(src)
+
+            first = tmpdir / "first.tar.gz"
+            compress_tarball(
+                source_dir=src,
+                tarball_path=first,
+                source_date_epoch=self.FIXED_EPOCH,
+            )
+
+            # Simulate the same content produced by a later build.
+            for path in src.rglob("*"):
+                os.utime(path, (1600000000, 1600000000))
+
+            second = tmpdir / "second.tar.gz"
+            compress_tarball(
+                source_dir=src,
+                tarball_path=second,
+                source_date_epoch=self.FIXED_EPOCH,
+            )
+
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+    @unittest.skipUnless(_tar_is_gnu(), "Reproducibility flags are GNU tar extensions")
+    def test_members_carry_the_pinned_metadata(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            src = tmpdir / "src"
+            self._write_tree(src)
+            tarball = tmpdir / "out.tar.gz"
+            compress_tarball(
+                source_dir=src,
+                tarball_path=tarball,
+                source_date_epoch=self.FIXED_EPOCH,
+            )
+
+            with tarfile.open(tarball, "r:gz") as tf:
+                members = tf.getmembers()
+            self.assertTrue(members)
+            for member in members:
+                self.assertEqual(member.mtime, self.FIXED_EPOCH, member.name)
+                self.assertEqual(member.uid, 0, member.name)
+                self.assertEqual(member.gid, 0, member.name)
+            names = [m.name for m in members]
+            self.assertEqual(names, sorted(names))
 
 
 class TestDetermineCompressWorkers(unittest.TestCase):
