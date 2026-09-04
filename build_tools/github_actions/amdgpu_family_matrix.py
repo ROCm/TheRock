@@ -168,6 +168,29 @@ def select_small_build_runner(platform: str, build_variant: str) -> str:
     return select_weighted_label(labels_config, context_name)
 
 
+def select_medium_build_runner(platform: str, build_variant: str) -> str:
+    """Select a runner label for medium-CPU build stages (e.g. runtime-tests).
+
+    Falls back to the default build runner if no medium runner is configured for
+    the platform (e.g. Windows), or if the variant uses sanitizer runners.
+    """
+    build_runner_labels = get_build_runner_labels()
+    if platform not in build_runner_labels:
+        return ""
+
+    platform_config = build_runner_labels[platform]
+
+    # Sanitizer builds are memory-intensive; keep them on dedicated runners
+    if "san" in build_variant:
+        labels_config = platform_config.get("sanitizer", platform_config["default"])
+        context_name = f"medium-build-runner ({platform}, {build_variant})"
+    else:
+        labels_config = platform_config.get("medium", platform_config["default"])
+        context_name = f"medium-build-runner ({platform})"
+
+    return select_weighted_label(labels_config, context_name)
+
+
 all_build_variants = {
     "linux": {
         "release": {
