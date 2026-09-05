@@ -207,6 +207,27 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         self.assertIn("| Self-hosted GPU test jobs | 1 |", summary)
         self.assertIn("| `gfxalpha-all` | `linux-alpha` |", summary)
 
+    def test_full_level_includes_standard_gpu_matrix(self) -> None:
+        with mock.patch.object(
+            m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
+        ):
+            matrix = m.build_test_matrix(
+                amdgpu_families=["gfxalpha-all"],
+                platform="linux",
+                test_level="full",
+            )
+
+        self.assertEqual(matrix["include"][0]["test_runs_on"], "linux-alpha")
+        summary = m.format_test_summary(
+            platform="linux",
+            test_level="full",
+            built_families=["gfxalpha-all"],
+            requested_test_families="auto",
+            resolved_test_families=["gfxalpha-all"],
+            matrix=matrix,
+        )
+        self.assertIn("dispatches the additional full suite", summary)
+
     def test_real_family_matrix_finds_gfx950_runner(self) -> None:
         matrix = m.build_test_matrix(
             amdgpu_families=["gfx950-dcgpu"],

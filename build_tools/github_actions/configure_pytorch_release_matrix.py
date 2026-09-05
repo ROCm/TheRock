@@ -8,6 +8,7 @@ import argparse
 import json
 import platform as platform_module
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
@@ -86,7 +87,9 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 # * none schedules no self-hosted GPU tests. The wheel build job still runs
 #   its build-time wheel validation.
 # * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
-PYTORCH_TEST_LEVELS = ["none", "standard"]
+# * full also dispatches test_pytorch_wheels_full.yml, which runs the much
+#   larger upstream PyTorch test suite and can take several hours.
+PYTORCH_TEST_LEVELS = ["none", "standard", "full"]
 
 # Release workflows limit standard GPU testing to the oldest Python version
 # supported by each PyTorch ref. Match upstream's trunk test version and
@@ -99,6 +102,14 @@ PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
     "release/2.14": "3.10",
     "nightly": "3.10",
 }
+
+# The full PyTorch test suite can take several hours, so release workflows run
+# it on only one representative platform and AMDGPU family. The build workflow
+# still accepts direct full-test dispatches for this family on any Python
+# version; the release policy additionally limits full coverage to the primary
+# Python version selected above.
+PYTORCH_FULL_TEST_PLATFORM = "linux"
+PYTORCH_FULL_TEST_AMDGPU_FAMILY = "gfx94X-dcgpu"
 
 
 def _split_values(raw: str) -> list[str]:
@@ -153,15 +164,33 @@ def _primary_test_python_version(pytorch_git_ref: str) -> str:
 
 
 def _select_test_level(
-    *, release_type: str, python_version: str, pytorch_git_ref: str
+    *,
+    release_type: str,
+    python_version: str,
+    pytorch_git_ref: str,
+    platform: str,
+    amdgpu_families: list[str],
+    run_full_pytorch_tests: bool,
+    run_nightly_full_pytorch_tests: bool,
 ) -> str:
     # multi_arch_ci does not schedule PyTorch GPU tests yet. Preserve its
     # standard level until that workflow's test policy is selected explicitly.
     if release_type == "ci":
         return "standard"
-    if python_version == _primary_test_python_version(pytorch_git_ref):
-        return "standard"
-    return "none"
+    if python_version != _primary_test_python_version(pytorch_git_ref):
+        return "none"
+
+    full_tests_due_for_ref = run_full_pytorch_tests and (
+        pytorch_git_ref != "nightly" or run_nightly_full_pytorch_tests
+    )
+    if (
+        full_tests_due_for_ref
+        and platform == PYTORCH_FULL_TEST_PLATFORM
+        and PYTORCH_FULL_TEST_AMDGPU_FAMILY.lower()
+        in {family.lower() for family in amdgpu_families}
+    ):
+        return "full"
+    return "standard"
 
 
 def generate_pytorch_matrix_for_release_type(
@@ -171,6 +200,8 @@ def generate_pytorch_matrix_for_release_type(
     platform: str,
     python_versions: list[str] | None = None,
     pytorch_git_refs: list[str] | None = None,
+    run_full_pytorch_tests: bool = False,
+    run_nightly_full_pytorch_tests: bool = False,
 ) -> list[dict[str, str]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
@@ -224,6 +255,10 @@ def generate_pytorch_matrix_for_release_type(
                     release_type=release_type,
                     python_version=py,
                     pytorch_git_ref=ref,
+                    platform=platform,
+                    amdgpu_families=_split_families(families),
+                    run_full_pytorch_tests=run_full_pytorch_tests,
+                    run_nightly_full_pytorch_tests=run_nightly_full_pytorch_tests,
                 ),
                 "test_amdgpu_families": "auto",
             }
@@ -238,6 +273,8 @@ def format_matrix_summary(
     python_versions: list[str] | None,
     pytorch_git_refs: list[str] | None,
     amdgpu_families: str,
+    run_full_pytorch_tests: bool,
+    run_nightly_full_pytorch_tests: bool,
     matrix: list[dict[str, str]],
 ) -> str:
     """Format the resolved release matrix for logs and the job summary."""
@@ -281,6 +318,7 @@ def format_matrix_summary(
         )
         + " |",
         f"| Requested AMDGPU families | `{amdgpu_families or 'none'}` |",
+        f"| Full tests requested | `{'yes' if run_full_pytorch_tests else 'no'}` |",
         f"| Generated rows | {len(matrix)} ({count_summary}) |",
     ]
 
@@ -314,8 +352,20 @@ def format_matrix_summary(
         lines.extend(
             [
                 "",
-                "All generated rows use `none` because none uses its "
+                "All generated rows use `none` because no row uses its "
                 "PyTorch ref's primary test Python version.",
+            ]
+        )
+
+    if matrix and run_full_pytorch_tests:
+        lines.extend(
+            [
+                "",
+                "`full` is selected only for primary-version Linux rows that "
+                f"include `{PYTORCH_FULL_TEST_AMDGPU_FAMILY}`. Stable refs are "
+                "eligible daily; the nightly ref is eligible on Sunday. "
+                f"Nightly full tests are due now: "
+                f"`{'yes' if run_nightly_full_pytorch_tests else 'no'}`.",
             ]
         )
 
@@ -376,6 +426,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Release type selecting default PyTorch/Python matrix (default: dev)",
     )
     parser.add_argument(
+        "--run-full-pytorch-tests",
+        action="store_true",
+        help=(
+            "Use the full test level for eligible stable-ref rows and for "
+            "eligible nightly rows on Sunday"
+        ),
+    )
+    parser.add_argument(
         "--amdgpu-families",
         type=str,
         default="",
@@ -390,12 +448,17 @@ def main(argv: list[str] | None = None) -> int:
     python_versions = _split_values(args.python_versions) or None
     pytorch_git_refs = _split_values(args.pytorch_git_refs) or None
 
+    run_nightly_full_pytorch_tests = (
+        args.run_full_pytorch_tests and datetime.now(timezone.utc).isoweekday() == 7
+    )
     matrix = generate_pytorch_matrix_for_release_type(
         release_type=args.release_type,
         python_versions=python_versions,
         pytorch_git_refs=pytorch_git_refs,
         amdgpu_families=args.amdgpu_families,
         platform=args.platform,
+        run_full_pytorch_tests=args.run_full_pytorch_tests,
+        run_nightly_full_pytorch_tests=run_nightly_full_pytorch_tests,
     )
     gha_append_step_summary(
         format_matrix_summary(
@@ -404,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
             python_versions=python_versions,
             pytorch_git_refs=pytorch_git_refs,
             amdgpu_families=args.amdgpu_families,
+            run_full_pytorch_tests=args.run_full_pytorch_tests,
+            run_nightly_full_pytorch_tests=run_nightly_full_pytorch_tests,
             matrix=matrix,
         )
     )
