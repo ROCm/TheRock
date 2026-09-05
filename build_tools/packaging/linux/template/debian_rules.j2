@@ -49,6 +49,9 @@ override_dh_installdocs:
 override_dh_shlibdeps:
 	@echo "Skipping dh_shlibdeps"
 
+override_dh_makeshlibs:
+	dh_makeshlibs -X.co
+
 # Use hard links instead of copying files for faster package builds.
 # Falls back to regular dh_install if hard links fail (e.g., cross-filesystem).
 override_dh_install:
