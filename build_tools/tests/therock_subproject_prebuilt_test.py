@@ -33,6 +33,7 @@ HARNESS_INCLUDES = (
     "therock_sanitizers",
     "therock_flag_utils",
     "therock_default_targets",
+    "therock_coverage",
     "therock_subproject",
 )
 
