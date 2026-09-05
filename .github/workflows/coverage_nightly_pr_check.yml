@@ -1,0 +1,67 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# TEMPORARY. Delete this file before merging the coverage PR.
+#
+# coverage_nightly.yml is triggered by hand, but a workflow_dispatch only
+# appears once it is on the default branch, so there is no way to run it from a
+# branch and no way to see it in a PR's checks. That leaves the phase 1 PoC
+# unable to demonstrate the one thing it exists to demonstrate.
+#
+# A caller has no such restriction: ./.github/workflows paths resolve against
+# the caller's own commit, so this runs the branch's coverage_nightly.yml, and
+# its jobs show up under this PR's checks.
+#
+# This is scaffolding, not the design. Nothing in the phase 1 scope wants
+# coverage on presubmit: an instrumented build plus a full test suite is hours
+# of machine time, which is why coverage is a separate manually triggered
+# workflow in the first place. Leaving this file in place would quietly make
+# every PR touching coverage pay that cost, so it goes away once the PoC has
+# been shown to work end to end.
+
+name: Coverage Nightly PR Check
+
+on:
+  pull_request:
+    # Narrow on purpose. Every run here is a multi-hour instrumented build, so
+    # only the files that carry coverage logic are worth spending one on.
+    paths:
+      - ".github/workflows/coverage_nightly.yml"
+      - ".github/workflows/coverage_nightly_pr_check.yml"
+      - ".github/workflows/test_component.yml"
+      - "cmake/therock_coverage.cmake"
+      - "cmake/therock_subproject.cmake"
+      - "build_tools/github_actions/coverage_report.py"
+
+concurrency:
+  # A later push supersedes this run. Queueing multi-hour instrumented builds
+  # behind each other to report on code that has already been replaced only
+  # occupies build nodes the rest of CI needs.
+  group: coverage-nightly-pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage
+    uses: ./.github/workflows/coverage_nightly.yml
+    secrets: inherit
+    # A called workflow cannot hold more than its caller, so these have to be
+    # granted here even though coverage_nightly.yml also declares them:
+    # id-token for the AWS role the artifact copy assumes, actions:read for the
+    # baseline run lookup.
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    with:
+      # The 2026-09-03 ROCm/rockrel release nightly, which built math-libs for
+      # gfx94X-dcgpu. Pinned rather than resolved: a PoC wants the same baseline
+      # every run so a change in the report means a change in this branch.
+      # rockrel publishes under the nightly release type, so its artifacts live
+      # in the nightly bucket rather than this run's ci one.
+      baseline_run_id: "33697653391"
+      baseline_repository: "ROCm/rockrel"
+      baseline_release_type: "nightly"
+      amdgpu_family: "gfx94x"
+      coverage_projects: "hiprand"
+      test_labels: "hiprand"

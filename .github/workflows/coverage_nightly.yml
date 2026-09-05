@@ -17,8 +17,10 @@
 #   - baseline_run_id is supplied by hand (RFC option B1). Manual coordination
 #     is acceptable for initial validation, which is the whole point of the
 #     PoC; automating it is a later phase's problem.
-#   - No changes to the production nightly, and nothing triggers this
-#     automatically, so it can fail or be abandoned without consequence.
+#   - No changes to the production nightly. The only thing that triggers this
+#     automatically is coverage_nightly_pr_check.yml, which exists to validate
+#     this workflow before it merges and is deleted once it has, so coverage
+#     can fail or be abandoned without consequence.
 #
 # This is deliberately a separate workflow rather than an extension of the
 # regular nightly:
@@ -36,6 +38,61 @@
 name: Nightly Code Coverage
 
 on:
+  # Exposed so a caller can run this from a branch. A workflow_dispatch has to
+  # exist on the default branch before it can be triggered at all, which makes
+  # it useless for validating this workflow before it merges; a caller resolves
+  # ./.github/workflows paths against its own commit, so it runs the branch's
+  # copy. See coverage_nightly_pr_check.yml.
+  workflow_call:
+    inputs:
+      baseline_run_id:
+        description: "Regular nightly run_id to take non-instrumented dependencies from."
+        type: string
+        required: true
+      baseline_repository:
+        description: >-
+          Repository owning baseline_run_id, when it is not this one. Release
+          nightlies live in ROCm/rockrel, for example.
+        type: string
+        default: ""
+      baseline_release_type:
+        description: >-
+          Release type the baseline run published under, which selects the
+          bucket its artifacts are read from. Use "nightly" for a ROCm/rockrel
+          release nightly; "ci" for a regular ROCm/TheRock CI run.
+        type: string
+        default: "ci"
+      amdgpu_family:
+        description: "Single GPU family to build and test coverage on."
+        type: string
+        default: "gfx94x"
+      coverage_projects:
+        description: >-
+          Projects to instrument, comma or semicolon separated, in any casing
+          (e.g. "hiprand"). Empty instruments every rocm-libraries component.
+        type: string
+        default: "hiprand"
+      test_labels:
+        description: >-
+          Components to run coverage tests for, comma separated (e.g.
+          "hiprand"). Empty runs every component available for the family.
+        type: string
+        default: "hiprand"
+      prebuilt_stages:
+        description: >-
+          Build stages to copy from baseline_run_id instead of building
+          instrumented. The default reuses everything except math-libs, so only
+          the stage holding the projects under test is built.
+        type: string
+        default: "compiler-runtime,emulation,runtime-tests,wsl-rocdxg,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       baseline_run_id:
