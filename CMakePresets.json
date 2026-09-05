@@ -107,6 +107,20 @@
       }
     },
     {
+      "name": "linux-release-coverage",
+      "displayName": "Linux code coverage build",
+      "description": "Nightly host-side code coverage. Instruments every rocm-libraries component; pass -DTHEROCK_COVERAGE_PROJECTS=<projects> to narrow the scope to individual components.",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_COVERAGE_ROCM_LIBRARIES_ALL": "ON",
+        "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
+      }
+    },
+    {
       "name": "linux-release-tsan",
       "displayName": "Linux release tsan build",
       "description": "Ninja generator, default compiler, RelWithDebInfo and TSAN for most runtime subprojects",

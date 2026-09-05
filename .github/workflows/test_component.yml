@@ -35,6 +35,13 @@ on:
         description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
         type: string
         default: "release"
+      coverage_enabled:
+        description: >-
+          When true, collect llvm profraw from the test run and generate a
+          coverage report for this component. Only meaningful against an
+          instrumented build; see docs/development/code_coverage.md.
+        type: boolean
+        default: false
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
@@ -86,6 +93,9 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
+      COVERAGE_PROFRAW_DIR: "${{ github.workspace }}/coverage-report/profraw"
+      COVERAGE_ARTIFACT_NAME: >-
+        coverage-profraw-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
@@ -178,6 +188,21 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      # Instrumented binaries write their counters wherever LLVM_PROFILE_FILE
+      # points, so it has to be set before any test runs. %p (process id) and
+      # %m (binary signature) are expanded by the profile runtime and keep
+      # concurrent test processes from overwriting each other's output; the
+      # shard index keeps this shard's files distinct from the other shards'
+      # once they are all downloaded into one directory for merging.
+      - name: Prepare coverage profile directory
+        if: ${{ inputs.coverage_enabled }}
+        env:
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          mkdir -p "${COVERAGE_PROFRAW_DIR}"
+          echo "LLVM_PROFILE_FILE=${COVERAGE_PROFRAW_DIR}/${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw" >> "${GITHUB_ENV}"
+
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
       - name: Set thread limits
@@ -222,6 +247,18 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
+      # Uploaded unmerged: merging here would produce a report covering only
+      # this shard's slice of the suite. The coverage_report job merges every
+      # shard's files into a single report.
+      - name: Upload coverage profraw
+        if: ${{ !cancelled() && inputs.coverage_enabled }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.COVERAGE_ARTIFACT_NAME }}-shard${{ matrix.shard }}
+          path: ${{ env.COVERAGE_PROFRAW_DIR }}
+          retention-days: 3
+          if-no-files-found: error
+
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
         run: |
@@ -265,3 +302,76 @@ jobs:
           workflow_step_outputs: ${{ toJSON(steps) }}
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
+  # A component's coverage is only complete once every shard has reported, so
+  # this runs after the whole matrix rather than inside it. It needs no GPU: it
+  # only reads profraw files and the instrumented binaries.
+  coverage_report:
+    name: >-
+      Coverage ${{ fromJSON(inputs.component).job_name }}
+      (${{ inputs.amdgpu_families }})
+    needs: test_component
+    if: ${{ !cancelled() && inputs.coverage_enabled }}
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 60
+    container:
+      image: ${{ inputs.default_container_image }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_ARTIFACTS_DIR: "./build"
+      COVERAGE_REPORT_DIR: coverage-report
+      COVERAGE_ARTIFACT_NAME: >-
+        coverage-profraw-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}
+      TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
+    steps:
+      - name: Checking out repository
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      # The instrumented binaries are the objects the report is generated
+      # against, and their build's llvm-profdata/llvm-cov are the only tools
+      # guaranteed to understand the profile format they emitted.
+      - name: Run setup test environment workflow
+        timeout-minutes: 15
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+
+      - name: Download coverage profraw from all shards
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ env.COVERAGE_ARTIFACT_NAME }}-shard*
+          merge-multiple: true
+          path: ${{ env.COVERAGE_REPORT_DIR }}/profraw
+
+      - name: Generate coverage report
+        run: |
+          python ./build_tools/github_actions/coverage_report.py \
+            --component "${TEST_COMPONENT}" \
+            --rocm-dir "${OUTPUT_ARTIFACTS_DIR}" \
+            --profraw-dir "${COVERAGE_REPORT_DIR}/profraw" \
+            --output-dir "${COVERAGE_REPORT_DIR}"
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}
+          path: |
+            ${{ env.COVERAGE_REPORT_DIR }}/coverage.info
+            ${{ env.COVERAGE_REPORT_DIR }}/coverage.txt
+          retention-days: 14
+          if-no-files-found: error

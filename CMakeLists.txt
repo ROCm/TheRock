@@ -25,6 +25,7 @@ include(therock_detect_python_versions)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
+include(therock_coverage)
 include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
@@ -155,6 +156,11 @@ cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
 set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems")
 set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
+
+# Code coverage requests are resolved against the monorepo source directories
+# above, so this must run after they are known and before any sub-project is
+# declared.
+therock_coverage_init()
 
 # Allow specifying alternative source locations for ROCgdb, amd-dbgapi
 # and rocr-debug-agent (and rocr-debug-agent-tests as a consequence).

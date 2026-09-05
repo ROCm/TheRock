@@ -1,0 +1,297 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Nightly Code Coverage (RFC0014 phase 1 PoC, option B1)
+#
+# Builds an instrumented ROCm stack, runs the component test suites against it,
+# and publishes one merged lcov report per component. See RFC0014 and
+# docs/development/code_coverage.md.
+#
+# Scope is the phase 1 proof of concept and nothing beyond it. The point is to
+# prove the instrumented build and the coverage report work end to end in
+# isolation, before anything is automated on top of them:
+#
+#   - Host-side coverage. Device-side counters would need the compiler-rt
+#     profile runtime, which is out of scope here.
+#   - Single default architecture (gfx94x/gfx942).
+#   - baseline_run_id is supplied by hand (RFC option B1). Manual coordination
+#     is acceptable for initial validation, which is the whole point of the
+#     PoC; automating it is a later phase's problem.
+#   - No changes to the production nightly. The only thing that triggers this
+#     automatically is coverage_nightly_pr_check.yml, which exists to validate
+#     this workflow before it merges and is deleted once it has, so coverage
+#     can fail or be abandoned without consequence.
+#
+# This is deliberately a separate workflow rather than an extension of the
+# regular nightly:
+#
+#   - Instrumented binaries are not the binaries anyone wants to ship or
+#     benchmark. Coverage disables optimizations and adds counters, so folding
+#     it into the regular nightly would change what that nightly tests.
+#   - Coverage is slow. Instrumented rocPRIM tests take roughly 3 hours against
+#     20 minutes uninstrumented, so coverage needs to be able to fail, be
+#     retried, or be skipped without holding up the regular nightly.
+#   - A separate workflow means a separate run id, which puts coverage artifacts
+#     in their own S3 namespace and removes any chance of a coverage build being
+#     consumed as if it were a regular one.
+
+name: Nightly Code Coverage
+
+on:
+  # Exposed so a caller can run this from a branch. A workflow_dispatch has to
+  # exist on the default branch before it can be triggered at all, which makes
+  # it useless for validating this workflow before it merges; a caller resolves
+  # ./.github/workflows paths against its own commit, so it runs the branch's
+  # copy. See coverage_nightly_pr_check.yml.
+  workflow_call:
+    inputs:
+      baseline_run_id:
+        description: "Regular nightly run_id to take non-instrumented dependencies from."
+        type: string
+        required: true
+      baseline_repository:
+        description: >-
+          Repository owning baseline_run_id, when it is not this one. Release
+          nightlies live in ROCm/rockrel, for example.
+        type: string
+        default: ""
+      baseline_release_type:
+        description: >-
+          Release type the baseline run published under, which selects the
+          bucket its artifacts are read from. Use "nightly" for a ROCm/rockrel
+          release nightly; "ci" for a regular ROCm/TheRock CI run.
+        type: string
+        default: "ci"
+      amdgpu_family:
+        description: "Single GPU family to build and test coverage on."
+        type: string
+        default: "gfx94x"
+      coverage_projects:
+        description: >-
+          Projects to instrument, comma or semicolon separated, in any casing
+          (e.g. "hiprand"). Empty instruments every rocm-libraries component.
+        type: string
+        default: "hiprand"
+      test_labels:
+        description: >-
+          Components to run coverage tests for, comma separated (e.g.
+          "hiprand"). Empty runs every component available for the family.
+        type: string
+        default: "hiprand"
+      prebuilt_stages:
+        description: >-
+          Build stages to copy from baseline_run_id instead of building
+          instrumented. The default reuses everything except math-libs, so only
+          the stage holding the projects under test is built.
+        type: string
+        default: "compiler-runtime,emulation,runtime-tests,wsl-rocdxg,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      baseline_run_id:
+        description: "Regular nightly run_id to take non-instrumented dependencies from."
+        type: string
+        required: true
+      baseline_repository:
+        description: >-
+          Repository owning baseline_run_id, when it is not this one. Release
+          nightlies live in ROCm/rockrel, for example.
+        type: string
+        default: ""
+      baseline_release_type:
+        description: >-
+          Release type the baseline run published under, which selects the
+          bucket its artifacts are read from. Use "nightly" for a ROCm/rockrel
+          release nightly; "ci" for a regular ROCm/TheRock CI run.
+        type: string
+        default: "ci"
+      amdgpu_family:
+        description: "Single GPU family to build and test coverage on."
+        type: string
+        default: "gfx94x"
+      coverage_projects:
+        description: >-
+          Projects to instrument, comma or semicolon separated, in any casing
+          (e.g. "hiprand"). Empty instruments every rocm-libraries component.
+        type: string
+        default: "hiprand"
+      test_labels:
+        description: >-
+          Components to run coverage tests for, comma separated (e.g.
+          "hiprand"). Empty runs every component available for the family.
+        type: string
+        default: "hiprand"
+      prebuilt_stages:
+        description: >-
+          Build stages to copy from baseline_run_id instead of building
+          instrumented. The default reuses everything except math-libs, so only
+          the stage holding the projects under test is built.
+        type: string
+        default: "compiler-runtime,emulation,runtime-tests,wsl-rocdxg,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read # setup_multi_arch queries workflow runs to resolve the baseline
+
+run-name: >-
+  Nightly Code Coverage
+  (${{ inputs.amdgpu_family }},
+  ${{ inputs.coverage_projects || 'all rocm-libraries' }},
+  baseline ${{ inputs.baseline_run_id }})
+
+concurrency:
+  # Two instrumented builds of the same family would race for build nodes for
+  # hours to produce the same report.
+  group: coverage-nightly-${{ github.ref }}-${{ inputs.amdgpu_family }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      actions: read
+    with:
+      build_variant: "coverage"
+      linux_amdgpu_families: ${{ inputs.amdgpu_family }}
+      windows_amdgpu_families: "none"
+      linux_test_labels: ${{ inputs.test_labels }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages != 'none' && inputs.prebuilt_stages || '' }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_repository: ${{ inputs.baseline_repository }}
+      # dry-run honors the prebuilt_stages listed above while only reporting
+      # what automatic reuse could additionally do. Applying it is not safe
+      # here: reusing a stage that holds a project under test would substitute
+      # non-instrumented binaries and produce an empty report rather than an
+      # error. ("off" would discard prebuilt_stages entirely and rebuild the
+      # whole stack instrumented.)
+      stage_reuse_mode: "dry-run"
+      # Nothing downstream of the instrumented artifacts is wanted: wheels,
+      # distro packages and framework builds are all consumers of a shippable
+      # stack, which this is not.
+      build_python_packages: false
+      build_pytorch: false
+      build_jax: false
+      build_native_linux: false
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # Copies the baseline nightly's non-instrumented stages into this run's
+  # artifact namespace. Combined with the instrumented stage built below, this
+  # run then holds a complete stack in which only the projects under test are
+  # instrumented, so the test jobs can fetch everything from a single run id
+  # and dependencies contribute no counters to the report.
+  copy_baseline_stages:
+    name: Copy Baseline Stages
+    needs: setup
+    if: ${{ inputs.prebuilt_stages != 'none' && needs.setup.outputs.linux_build_config != '' }}
+    runs-on: aws-linux-scale-rocm-prod
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: python:3.12-slim
+    steps:
+      - name: Checking out repository
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ needs.setup.outputs.ref }}
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      # RELEASE_TYPE governs where artifacts are written, which is always this
+      # run's ci bucket. --source-release-type governs where they are read from,
+      # which is wherever the baseline published: a ROCm/rockrel release nightly
+      # writes to the nightly bucket, not the ci one.
+      - name: Copy baseline stage artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TYPE: ci
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id=${{ fromJSON(needs.setup.outputs.linux_build_config).baseline_run_id }} \
+            --source-repository=${{ fromJSON(needs.setup.outputs.linux_build_config).baseline_repository }} \
+            --source-release-type="${{ inputs.baseline_release_type }}" \
+            --stage="${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}" \
+            --amdgpu-families="${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}" \
+            --expand-family-to-targets
+
+  build_instrumented_stack:
+    name: Build Instrumented Stack
+    needs: [setup, copy_baseline_stages]
+    if: ${{ !cancelled() && !failure() && needs.setup.outputs.linux_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup.outputs.linux_build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(needs.setup.outputs.linux_build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_suffix }}
+      # The preset instruments every rocm-libraries component, which is what a
+      # full nightly wants. A project list narrows that down, so the group flag
+      # has to be turned back off or it would keep instrumenting everything.
+      extra_cmake_options: >-
+        ${{ inputs.coverage_projects != ''
+            && format('-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=OFF -DTHEROCK_COVERAGE_PROJECTS={0}', inputs.coverage_projects)
+            || '' }}
+      prebuilt_stages: ${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}
+      skip_stages: ${{ fromJSON(needs.setup.outputs.linux_build_config).skip_stages }}
+      build_runs_on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      release_type: ci
+      repository: ${{ inputs.repository }}
+      ref: ${{ needs.setup.outputs.ref }}
+
+  test_coverage:
+    name: Coverage Tests
+    needs: [setup, build_instrumented_stack]
+    if: ${{ !cancelled() && !failure() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(needs.setup.outputs.linux_build_config).per_family_info }}
+    uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ fromJSON(needs.setup.outputs.linux_build_config).artifact_group }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      # Coverage is only worth measuring against the full suite; a partial run
+      # reports a component as less covered than it is.
+      test_type: full
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
+      coverage_enabled: true
+      release_type: ci
+      build_variant: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_label }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ needs.setup.outputs.ref }}

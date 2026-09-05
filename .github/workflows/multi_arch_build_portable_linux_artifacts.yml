@@ -73,6 +73,13 @@ on:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
         type: string
         default: ""
+      extra_cmake_options:
+        description: >-
+          Additional -D options appended to the configure command, for build
+          variants that need per-run settings a preset cannot express (e.g.
+          -DTHEROCK_COVERAGE_PROJECTS=hiprand).
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -194,7 +201,8 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            ${{ inputs.extra_cmake_options }}
 
       - name: Build stage
         run: |

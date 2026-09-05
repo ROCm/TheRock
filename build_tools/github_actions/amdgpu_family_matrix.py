@@ -182,6 +182,15 @@ all_build_variants = {
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
         },
+        # Code coverage builds run from the nightly coverage workflow only. The
+        # suffix keeps their artifacts in a separate S3 namespace so a coverage
+        # run can never be mistaken for a regular one. Phase 1 covers a single
+        # default architecture, so only gfx94x lists this variant.
+        "coverage": {
+            "build_variant_label": "coverage",
+            "build_variant_suffix": "coverage",
+            "build_variant_cmake_preset": "linux-release-coverage",
+        },
     },
     "windows": {
         "release": {
@@ -246,6 +255,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "coverage",
             ],
         }
     },
