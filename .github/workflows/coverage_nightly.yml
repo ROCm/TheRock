@@ -1,11 +1,24 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Nightly Code Coverage (Phase 1)
+# Nightly Code Coverage (RFC0014 phase 1 PoC, option B1)
 #
 # Builds an instrumented ROCm stack, runs the component test suites against it,
 # and publishes one merged lcov report per component. See RFC0014 and
 # docs/development/code_coverage.md.
+#
+# Scope is the phase 1 proof of concept and nothing beyond it. The point is to
+# prove the instrumented build and the coverage report work end to end in
+# isolation, before anything is automated on top of them:
+#
+#   - Host-side coverage. Device-side counters would need the compiler-rt
+#     profile runtime, which is out of scope here.
+#   - Single default architecture (gfx94x/gfx942).
+#   - baseline_run_id is supplied by hand (RFC option B1). Manual coordination
+#     is acceptable for initial validation, which is the whole point of the
+#     PoC; automating it is a later phase's problem.
+#   - No changes to the production nightly, and nothing triggers this
+#     automatically, so it can fail or be abandoned without consequence.
 #
 # This is deliberately a separate workflow rather than an extension of the
 # regular nightly:
@@ -19,13 +32,6 @@
 #   - A separate workflow means a separate run id, which puts coverage artifacts
 #     in their own S3 namespace and removes any chance of a coverage build being
 #     consumed as if it were a regular one.
-#
-# Phase 1 scope:
-#   - Single default architecture (gfx94x/gfx942). Architecture-specific
-#     coverage comes later, once arch-specific change detection exists.
-#   - baseline_run_id is supplied by hand (RFC option B1). Phase 2 replaces this
-#     with a downstream trigger from the regular nightly that passes its own
-#     run id automatically, so nothing here should assume a human typed it.
 
 name: Nightly Code Coverage
 
@@ -55,11 +61,8 @@ on:
       prebuilt_stages:
         description: >-
           Build stages to copy from baseline_run_id instead of building
-          instrumented. The default reuses everything except math-libs, which
-          keeps a PoC run affordable but limits coverage to host code, since
-          device-side counters need the compiler-runtime stage rebuilt with
-          THEROCK_COMPILER_RT_BUILD_PROFILE_ROCM. Set to "none" to build the
-          whole instrumented stack.
+          instrumented. The default reuses everything except math-libs, so only
+          the stage holding the projects under test is built.
         type: string
         default: "compiler-runtime,emulation,runtime-tests,wsl-rocdxg,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs"
       repository:
@@ -68,33 +71,6 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
-        type: string
-        default: ""
-
-  # Phase 2 entry point: the regular nightly calls this after its build stages
-  # finish and passes its own run id as baseline_run_id.
-  workflow_call:
-    inputs:
-      baseline_run_id:
-        description: "Regular nightly run_id to take non-instrumented dependencies from."
-        type: string
-        required: true
-      amdgpu_family:
-        type: string
-        default: "gfx94x"
-      coverage_projects:
-        type: string
-        default: "hiprand"
-      test_labels:
-        type: string
-        default: "hiprand"
-      prebuilt_stages:
-        type: string
-        default: "compiler-runtime,emulation,runtime-tests,wsl-rocdxg,comm-libs,storage-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs"
-      repository:
-        type: string
-        default: ""
-      ref:
         type: string
         default: ""
 

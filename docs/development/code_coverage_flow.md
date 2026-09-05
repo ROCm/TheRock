@@ -42,7 +42,7 @@ flowchart TB
 
     subgraph COV["coverage_nightly.yml — run_id 99999 · artifact_group multi-arch-coverage"]
         direction TB
-        T["1 · trigger<br/>workflow_dispatch / workflow_call"]
+        T["1 · trigger<br/>workflow_dispatch, manual baseline_run_id"]
         S["2 · setup<br/>setup_multi_arch.yml"]
         CP["3 · copy_baseline_stages<br/>artifact_manager.py copy"]
         BI["4 · build_instrumented_stack<br/>multi_arch_build_portable_linux.yml"]
@@ -66,14 +66,14 @@ flowchart TB
 
 **File:** `.github/workflows/coverage_nightly.yml`
 
-Two entry points, no presubmit path:
+`workflow_dispatch` is the only entry point, which is what RFC0014 option B1
+asks for: nothing triggers this automatically, so the production nightly is
+untouched and a coverage run can fail or be abandoned without consequence.
 
-- `workflow_dispatch` — phase 1. `baseline_run_id` is `required: true`; there is
-  no default because silently picking the latest nightly would mix an
-  unknown dependency set into the report.
-- `workflow_call` — the phase 2 entry point, so the regular nightly can invoke
-  this and pass its own `run_id`. Nothing downstream assumes a human typed the
-  value.
+`baseline_run_id` is `required: true` and has no default. Silently picking the
+latest nightly would mix an unknown dependency set into the report, and the
+operator supplying a known-good run id by hand is the "manual coordination"
+the PoC explicitly accepts.
 
 A `concurrency` group keyed on ref and family prevents two instrumented builds
 of the same family competing for nodes for hours to produce the same report.
@@ -171,11 +171,10 @@ alongside the copied ones. The hybrid stack now exists.
 
 | File                             | Role                                                                    |
 | -------------------------------- | ----------------------------------------------------------------------- |
-| `CMakePresets.json`              | `linux-release-coverage`: group flag, profile runtime, `RelWithDebInfo` |
+| `CMakePresets.json`              | `linux-release-coverage`: group flag plus `RelWithDebInfo`              |
 | `CMakeLists.txt`                 | `include(therock_coverage)` and the `therock_coverage_init()` call site |
 | `cmake/therock_coverage.cmake`   | Normalizes requests; decides per sub-project                            |
 | `cmake/therock_subproject.cmake` | Appends the resulting options to one sub-project's configure line       |
-| `compiler/CMakeLists.txt`        | Forwards `COMPILER_RT_BUILD_PROFILE_ROCM` to `amd-llvm`                 |
 
 `therock_coverage_init()` is called from `CMakeLists.txt` after the monorepo
 source directories are known and before any sub-project is declared, because
@@ -312,24 +311,23 @@ coverage service is out of scope; RFC0014 leaves the choice of service open.
 
 ## File index
 
-| File                                                              | Change                                                      |
-| ----------------------------------------------------------------- | ----------------------------------------------------------- |
-| `.github/workflows/coverage_nightly.yml`                          | new                                                         |
-| `.github/workflows/multi_arch_build_portable_linux.yml`           | `extra_cmake_options` input, forwarded to stage jobs        |
-| `.github/workflows/multi_arch_build_portable_linux_artifacts.yml` | `extra_cmake_options` appended to configure                 |
-| `.github/workflows/test_artifacts.yml`                            | `coverage_enabled` input, threaded to components            |
-| `.github/workflows/test_component.yml`                            | profraw capture and upload, `coverage_report` job           |
-| `CMakeLists.txt`                                                  | include + `therock_coverage_init()`, profile runtime option |
-| `CMakePresets.json`                                               | `linux-release-coverage` preset                             |
-| `cmake/therock_coverage.cmake`                                    | new: request normalization and per-project decision         |
-| `cmake/therock_subproject.cmake`                                  | passthrough into the measured sub-project                   |
-| `compiler/CMakeLists.txt`                                         | `COMPILER_RT_BUILD_PROFILE_ROCM` to `amd-llvm`              |
-| `build_tools/github_actions/amdgpu_family_matrix.py`              | `coverage` variant, enabled for `gfx94x` and `gfx950`       |
-| `build_tools/github_actions/configure_multi_arch_ci.py`           | disables packaging for coverage builds                      |
-| `build_tools/github_actions/coverage_report.py`                   | new: merge and export                                       |
-| `build_tools/github_actions/tests/coverage_report_test.py`        | new: 14 tests                                               |
-| `docs/development/code_coverage.md`                               | new: concepts and usage                                     |
-| `docs/development/code_coverage_flow.md`                          | new: this page                                              |
+| File                                                              | Change                                               |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| `.github/workflows/coverage_nightly.yml`                          | new                                                  |
+| `.github/workflows/multi_arch_build_portable_linux.yml`           | `extra_cmake_options` input, forwarded to stage jobs |
+| `.github/workflows/multi_arch_build_portable_linux_artifacts.yml` | `extra_cmake_options` appended to configure          |
+| `.github/workflows/test_artifacts.yml`                            | `coverage_enabled` input, threaded to components     |
+| `.github/workflows/test_component.yml`                            | profraw capture and upload, `coverage_report` job    |
+| `CMakeLists.txt`                                                  | include + `therock_coverage_init()` call site        |
+| `CMakePresets.json`                                               | `linux-release-coverage` preset                      |
+| `cmake/therock_coverage.cmake`                                    | new: request normalization and per-project decision  |
+| `cmake/therock_subproject.cmake`                                  | passthrough into the measured sub-project            |
+| `build_tools/github_actions/amdgpu_family_matrix.py`              | `coverage` variant, enabled for `gfx94x`             |
+| `build_tools/github_actions/configure_multi_arch_ci.py`           | disables packaging for coverage builds               |
+| `build_tools/github_actions/coverage_report.py`                   | new: merge and export                                |
+| `build_tools/github_actions/tests/coverage_report_test.py`        | new: 14 tests                                        |
+| `docs/development/code_coverage.md`                               | new: concepts and usage                              |
+| `docs/development/code_coverage_flow.md`                          | new: this page                                       |
 
 ## Debugging a failed run
 
@@ -341,4 +339,4 @@ coverage service is out of scope; RFC0014 leaves the choice of service open.
 | `Could not find llvm-profdata`               | Whether `amd-llvm_run` was fetched; see `install_rocm_from_artifacts.py`                                                                          |
 | Test job cannot find a library at runtime    | A stage missing from both `prebuilt_stages` and the built stage, so it is in neither half of the hybrid stack                                     |
 | `llvm-cov` reports a profile format mismatch | Tools and binaries came from different builds; the report job must fetch the same run id the tests did                                            |
-| Device code shows no coverage                | Expected with the default `prebuilt_stages`; see the limitations in [Code Coverage](code_coverage.md)                                             |
+| Device code shows no coverage                | Expected. Phase 1 is host-side only; see the scope section in [Code Coverage](code_coverage.md)                                                   |

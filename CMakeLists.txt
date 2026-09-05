@@ -215,11 +215,6 @@ cmake_dependent_option(
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
-# Device-side coverage needs the profiler runtime compiled into instrumented
-# device code, which compiler-rt only builds when asked. Coverage builds enable
-# this via the linux-release-coverage preset; it is off by default because it is
-# dead weight for every other build.
-option(THEROCK_COMPILER_RT_BUILD_PROFILE_ROCM "Builds the compiler-rt device-side profile runtime, required for device code coverage" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 

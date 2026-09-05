@@ -1,10 +1,11 @@
 # Code Coverage
 
 TheRock can build ROCm components with LLVM source-based coverage
-instrumentation and publish an lcov report per component. This implements
-phase 1 of
-[RFC0014](https://github.com/ROCm/TheRock/pull/6967): full coverage on a single
-default architecture, driven by a standalone nightly workflow.
+instrumentation and publish an lcov report per component. This implements the
+phase 1 proof of concept from
+[RFC0014](https://github.com/ROCm/TheRock/pull/6967): host-side coverage on a
+single default architecture, driven by a standalone nightly workflow that takes
+its baseline run id by hand. hipRAND is the component it is validated against.
 
 This page covers the concepts and how to request coverage.
 [Code Coverage Flow](code_coverage_flow.md) traces a nightly run end to end,
@@ -80,10 +81,9 @@ component moving between monorepos needs no bookkeeping here.
 ### CMake preset
 
 `--preset linux-release-coverage` sets up an instrumented build: it turns on
-`THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` and
-`THEROCK_COMPILER_RT_BUILD_PROFILE_ROCM`, the latter being required for
-device-side counters to be compiled into instrumented device code. Narrow the
-scope by adding a project list on top of the preset:
+`THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` and builds `RelWithDebInfo`, since
+source-based coverage needs debug info to map counters back to lines. Narrow
+the scope by adding a project list on top of the preset:
 
 ```bash
 cmake -B build -GNinja --preset linux-release-coverage \
@@ -170,21 +170,28 @@ workflow artifact containing `coverage.info` (lcov) and `coverage.txt`.
 Forwarding those to a coverage service is deliberately left out; RFC0014 places
 the choice of service and its configuration outside its scope.
 
-## Current limitations
+## Scope
 
-- **Single architecture.** Phase 1 covers common code paths on one default
-  family. Architecture-specific coverage needs arch-specific change detection
-  first.
-- **`baseline_run_id` is manual.** RFC0014 option B1. Phase 2 replaces it with a
-  downstream trigger from the regular nightly, which passes its own run id.
-  Nothing in this workflow assumes a human typed the value.
-- **Host-side coverage only, by default.** The default `prebuilt_stages` reuses
-  the baseline's `compiler-runtime`, which was not built with
-  `THEROCK_COMPILER_RT_BUILD_PROFILE_ROCM`, so the device-side profile runtime
-  is absent. This is what makes a PoC run affordable, and it is sufficient for
-  components whose own code is host code (hipRAND being one). Set
-  `prebuilt_stages` to `none` to build the whole instrumented stack and get
-  device-side counters.
+This is the RFC0014 phase 1 proof of concept and nothing beyond it. The
+following are all deliberate omissions rather than oversights, and each is a
+later phase in the RFC:
+
+- **Host-side coverage only.** Device-side counters need the compiler-rt
+  profile runtime compiled into instrumented device code. That is out of scope
+  here; hipRAND's own code is host code, which is enough to validate the
+  pipeline end to end.
+- **Single architecture.** One default family, `gfx94x`/`gfx942`.
+  Architecture-specific coverage needs arch-specific change detection first.
+- **`baseline_run_id` is manual.** RFC0014 option B1: the run id of a
+  successful regular nightly is typed in at dispatch time. Manual coordination
+  is acceptable for initial validation, and it is what keeps the production
+  nightly unmodified.
+- **No changes to the regular nightly.** The coverage workflow is standalone
+  and nothing triggers it automatically, so it can fail, be retried, or be
+  abandoned without any effect on production CI.
+
+Two implementation details will also change as components adopt the RFC:
+
 - **Components still use the legacy option names.** No component accepts
   `<PROJECT>_ENABLE_COVERAGE` yet, so TheRock passes it alongside
   `BUILD_CODE_COVERAGE` and `CODE_COVERAGE`. Passing those is safe here because

@@ -159,8 +159,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
       # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
-      # Device-side code coverage runtime.
-      "-DCOMPILER_RT_BUILD_PROFILE_ROCM=${THEROCK_COMPILER_RT_BUILD_PROFILE_ROCM}"
 
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
