@@ -240,6 +240,49 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
+  # Nightly code coverage runs as its own workflow (RFC0014 option C) rather
+  # than as more jobs here: instrumented builds and tests are slow, and coverage
+  # failing should not colour the nightly's status.
+  #
+  # It needs a non-instrumented ROCm to test each instrumented project against,
+  # which is what this run just built, so the run id goes along as the baseline.
+  # Depending on build_artifacts alone is deliberate: the nightly's test jobs are
+  # dispatched separately and rarely all pass, and waiting on them would mean
+  # coverage rarely runs, while the artifacts coverage actually needs are ready
+  # as soon as the build is.
+  trigger_coverage_nightly:
+    needs: [build_artifacts]
+    name: Trigger Nightly Coverage
+    # Opt-in per repository while coverage is being rolled out. Only the nightly
+    # channel is a useful baseline: dev builds are dispatched ad hoc and would
+    # queue coverage runs against half-finished stacks.
+    if: >-
+      ${{
+        vars.COVERAGE_NIGHTLY_ENABLED == 'true' &&
+        startsWith(inputs.release_type, 'nightly') &&
+        inputs.build_variant == 'release' &&
+        contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu')
+      }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger multi_arch_ci_coverage_nightly
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        with:
+          workflow: multi_arch_ci_coverage_nightly.yml
+          # Phase 1 collects coverage for every onboarded project on the single
+          # default architecture, so the project list is left at its default of
+          # "everything". test_type is deliberately not forwarded: instrumented
+          # tests already run several times longer than normal ones, so coverage
+          # keeps its own, narrower default instead of inheriting the nightly's.
+          inputs: |
+            { "baseline_run_id": "${{ github.run_id }}",
+              "baseline_release_type": "${{ inputs.release_type }}",
+              "amdgpu_families": "gfx94X-dcgpu",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
+            }
+
   # Install tests are dispatched asynchronously (sanity) so publish
   # is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
   trigger_test_native_install:
@@ -330,7 +373,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_coverage_nightly, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-24.04
     timeout-minutes: 10

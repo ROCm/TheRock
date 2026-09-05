@@ -216,6 +216,25 @@ For example, this will add options to set tensilelite build parallel and keep bu
   -DhipBLASLt_CMAKE_ARGS="-DTENSILELITE_BUILD_PARALLEL_LEVEL=32;-DTENSILELITE_KEEP_BUILD_TMP=ON"
 ```
 
+- `{PROJECT}_ENABLE_COVERAGE`
+
+Builds a subproject with source based code coverage instrumentation, provided
+that the subproject itself implements the flag. Unlike the flags above, the
+project name must be upper case, matching the usual CMake convention for
+definitions: `HIPDNN_ENABLE_COVERAGE`, not `hipDNN_ENABLE_COVERAGE`.
+
+```bash
+  # Instrument a single project
+  -DHIPRAND_ENABLE_COVERAGE=ON
+
+  # Instrument several projects
+  -DHIPRAND_ENABLE_COVERAGE=ON -DROCBLAS_ENABLE_COVERAGE=ON
+```
+
+Instrumented device code additionally needs the ROCm profiling runtime, which
+comes from the compiler build rather than from a top level TheRock option. See
+[Code coverage](code_coverage.md) for the full workflow.
+
 ### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:

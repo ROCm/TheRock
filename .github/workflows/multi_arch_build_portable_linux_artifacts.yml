@@ -49,6 +49,13 @@ on:
         required: false
         default: ""
         description: "CMake preset name for this build variant (optional)"
+      extra_cmake_options:
+        type: string
+        required: false
+        default: ""
+        description: >-
+          Extra -D options appended to the configure command, after the
+          stage-derived arguments. Used by variant builds such as coverage.
       release_type:
         description: 'Release type; controls artifact bucket and IAM role'
         type: string
@@ -194,7 +201,8 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            ${{ inputs.extra_cmake_options }}
 
       - name: Build stage
         run: |
