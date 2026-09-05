@@ -122,13 +122,17 @@ on:
         type: string
         default: ""
 
-run-name: Release Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.rocm_version }}, ${{ inputs.amdgpu_families }})
+run-name: >-
+  Release Windows PyTorch Wheels
+  (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
+  ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }})
 
 permissions:
   contents: read
 
 jobs:
   setup_matrix:
+    name: Configure PyTorch Release Matrix
     runs-on: ubuntu-24.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
@@ -175,6 +179,7 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
+      test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
