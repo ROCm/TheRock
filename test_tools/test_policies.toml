@@ -38,7 +38,7 @@ level = 3
 test_include = ["hip-tests"]
 
 [component.rocprofiler-sdk]
-test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]
+test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples", "rocprofiler-sdk-spm"]
 
 [component.rocprofiler-register]
 test_include = ["hipfile"]

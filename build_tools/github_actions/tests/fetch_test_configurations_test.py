@@ -735,6 +735,60 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
 
+    # -----------------------
+    # rocprofiler-sdk SPM
+    # -----------------------
+
+    def test_rocprofiler_sdk_spm_pre_pinned_runner_is_not_overwritten(self):
+        """Pre-pinned test_runner must survive family runner selection."""
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-prod",
+                        "test-runs-on-labels": [
+                            {"label": "linux-gfx942-weighted", "weight": 1.0},
+                        ],
+                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        spm = next(j for j in components if j["job_name"] == "rocprofiler-sdk-spm")
+        self.assertEqual(
+            spm["test_runner"],
+            "linux-gfx942-gpu-rocm-profiler",
+        )
+
+    def test_rocprofiler_sdk_excludes_spm_label_in_script(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        sdk = next(j for j in components if j["job_name"] == "rocprofiler-sdk")
+        self.assertIn("--ctest-label-exclude spm", sdk["test_script"])
+
+    def test_rocprofiler_sdk_spm_excluded_outside_include_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocprofiler-sdk-spm"
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        names = {j["job_name"] for j in components}
+
+        self.assertNotIn("rocprofiler-sdk-spm", names)
+
 
 if __name__ == "__main__":
     unittest.main()
