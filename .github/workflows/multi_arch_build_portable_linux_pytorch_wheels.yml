@@ -324,7 +324,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           aws-region: us-east-1
           role-to-assume: >-
@@ -589,7 +589,7 @@ jobs:
 
       - name: Dispatch full PyTorch test workflow
         if: ${{ steps.cadence.outputs.dispatch == 'true' }}
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_pytorch_wheels_full.yml
           inputs: |
