@@ -993,6 +993,7 @@ def _create_source_backend(
     platform: str,
     source_run_id: str,
     source_repository: Optional[str],
+    source_release_type: Optional[str],
     local_staging_dir: Optional[Path],
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
@@ -1017,6 +1018,7 @@ def _create_source_backend(
         platform=platform,
         github_repository=source_repository,
         lookup_workflow_run=True,
+        release_type=source_release_type,
     )
     return S3Backend(output_root=output_root)
 
@@ -1066,6 +1068,7 @@ def do_copy(args: argparse.Namespace):
         platform=args.platform,
         source_run_id=args.source_run_id,
         source_repository=args.source_repository,
+        source_release_type=args.source_release_type or None,
         local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
@@ -1408,6 +1411,15 @@ def main(argv: Optional[List[str]] = None):
         default=os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
         help="GitHub repository for source-run-id in 'owner/repo' format "
         "(default: GITHUB_REPOSITORY or 'ROCm/TheRock').",
+    )
+    copy_parser.add_argument(
+        "--source-release-type",
+        type=str,
+        default="",
+        help="Release type of the source run, when it differs from this run's "
+        "RELEASE_TYPE (e.g. copying from a 'nightly' release run into a 'ci' "
+        "run). The release type selects the source bucket. Defaults to "
+        "RELEASE_TYPE, i.e. the same bucket family as the destination.",
     )
     copy_parser.add_argument(
         "--stage",

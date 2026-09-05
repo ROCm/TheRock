@@ -42,6 +42,19 @@ on:
         description: "Regular nightly run_id to take non-instrumented dependencies from."
         type: string
         required: true
+      baseline_repository:
+        description: >-
+          Repository owning baseline_run_id, when it is not this one. Release
+          nightlies live in ROCm/rockrel, for example.
+        type: string
+        default: ""
+      baseline_release_type:
+        description: >-
+          Release type the baseline run published under, which selects the
+          bucket its artifacts are read from. Use "nightly" for a ROCm/rockrel
+          release nightly; "ci" for a regular ROCm/TheRock CI run.
+        type: string
+        default: "ci"
       amdgpu_family:
         description: "Single GPU family to build and test coverage on."
         type: string
@@ -104,6 +117,7 @@ jobs:
       linux_test_labels: ${{ inputs.test_labels }}
       prebuilt_stages: ${{ inputs.prebuilt_stages != 'none' && inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_repository: ${{ inputs.baseline_repository }}
       # dry-run honors the prebuilt_stages listed above while only reporting
       # what automatic reuse could additionally do. Applying it is not safe
       # here: reusing a stage that holds a project under test would substitute
@@ -152,6 +166,10 @@ jobs:
         with:
           release_type: ci
 
+      # RELEASE_TYPE governs where artifacts are written, which is always this
+      # run's ci bucket. --source-release-type governs where they are read from,
+      # which is wherever the baseline published: a ROCm/rockrel release nightly
+      # writes to the nightly bucket, not the ci one.
       - name: Copy baseline stage artifacts
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -160,6 +178,7 @@ jobs:
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ fromJSON(needs.setup.outputs.linux_build_config).baseline_run_id }} \
             --source-repository=${{ fromJSON(needs.setup.outputs.linux_build_config).baseline_repository }} \
+            --source-release-type="${{ inputs.baseline_release_type }}" \
             --stage="${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}" \
             --amdgpu-families="${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}" \
             --expand-family-to-targets
