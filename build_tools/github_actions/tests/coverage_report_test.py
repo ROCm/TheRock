@@ -10,10 +10,12 @@ job instead of publishing a misleading report.
 
 import os
 from pathlib import Path
+import shutil
 import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 # Add build_tools to path so _therock_utils is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
@@ -40,6 +42,13 @@ echo "end_of_record"
 """
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "The tool stubs are POSIX shell scripts. Coverage is Linux-only: "
+    "coverage_nightly.yml builds portable Linux, so coverage_report.py never "
+    "runs on Windows, and teaching find_llvm_tool to look for .bat stubs would "
+    "mean changing production code for a platform it is not used on.",
+)
 class CoverageReportTestCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -214,12 +223,46 @@ class TestFailureModes(CoverageReportTestCase):
         with self.assertRaises(FileNotFoundError):
             self.run_report("rocblas")
 
-    def test_missing_llvm_tools_fails(self):
-        for tool in ("llvm-profdata", "llvm-cov"):
-            (self.rocm_dir / "lib" / "llvm" / "bin" / tool).unlink()
 
-        with self.assertRaises(FileNotFoundError):
-            coverage_report.find_llvm_tool(self.rocm_dir, "llvm-profdata")
+class TestLlvmToolDiscovery(unittest.TestCase):
+    """Where the LLVM tools are taken from.
+
+    This needs no tool stubs, only paths, so unlike the cases above it is
+    meaningful on every platform.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.rocm_dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.bin_dir = self.rocm_dir / "lib" / "llvm" / "bin"
+        self.bin_dir.mkdir(parents=True)
+
+    def test_prefers_the_toolchain_that_built_the_artifacts(self):
+        # Coverage data is only readable by a tool at least as new as the
+        # compiler that produced it, so a system tool must not win.
+        bundled = self.bin_dir / "llvm-profdata"
+        bundled.write_text("")
+
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/llvm-profdata"):
+            self.assertEqual(
+                coverage_report.find_llvm_tool(self.rocm_dir, "llvm-profdata"), bundled
+            )
+
+    def test_falls_back_to_path_for_local_runs(self):
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/llvm-profdata"):
+            self.assertEqual(
+                coverage_report.find_llvm_tool(self.rocm_dir, "llvm-profdata"),
+                Path("/usr/bin/llvm-profdata"),
+            )
+
+    def test_missing_llvm_tools_fails(self):
+        # shutil.which is stubbed rather than left to the machine: hosted
+        # Windows runners ship LLVM on PATH, so a real lookup would find a tool
+        # and this would assert on whether the runner has LLVM installed.
+        with mock.patch.object(shutil, "which", return_value=None):
+            with self.assertRaises(FileNotFoundError):
+                coverage_report.find_llvm_tool(self.rocm_dir, "llvm-profdata")
 
 
 class TestTotalLineExtraction(unittest.TestCase):
