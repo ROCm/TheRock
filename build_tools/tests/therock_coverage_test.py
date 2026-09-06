@@ -127,9 +127,20 @@ def probe_profile_runtime_deps() -> list[str]:
 class CoverageInitStanzaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.expected_link_libraries = (
-            f"link_libraries({' '.join(probe_profile_runtime_deps())})"
-        )
+        cls.profile_runtime_deps = probe_profile_runtime_deps()
+
+    def _assert_links_profile_runtime_deps(self, contents: str) -> None:
+        """Asserts the stanza links what the profile runtime needs here.
+
+        On a host where it needs nothing -- Windows, or glibc 2.34 and newer,
+        where both libraries are folded into libc -- the correct stanza is no
+        `link_libraries()` call at all rather than an empty one.
+        """
+        if self.profile_runtime_deps:
+            expected = f"link_libraries({' '.join(self.profile_runtime_deps)})"
+            self.assertIn(expected, contents)
+        else:
+            self.assertNotIn("link_libraries", contents)
 
     def _project_init_contents(self, *cmake_args: str) -> str:
         """Configures the harness and returns main_project's project_init file."""
@@ -170,22 +181,19 @@ class CoverageInitStanzaTest(unittest.TestCase):
         # pthread_getattr_np), which are separate libraries before glibc 2.34. A
         # shared library missing them still links, and the first executable to
         # link against that library then fails --no-allow-shlib-undefined.
-        self.assertIn(
-            self.expected_link_libraries,
+        self._assert_links_profile_runtime_deps(
             self._project_init_contents("-DMAIN_PROJECT_ENABLE_COVERAGE=ON"),
         )
 
     def test_project_list_links_profile_runtime_deps(self):
         # The path CI actually takes: coverage_nightly.yml passes a project list
         # rather than the per-project option.
-        self.assertIn(
-            self.expected_link_libraries,
+        self._assert_links_profile_runtime_deps(
             self._project_init_contents("-DTHEROCK_COVERAGE_PROJECTS=main_project"),
         )
 
     def test_monorepo_group_flag_links_profile_runtime_deps(self):
-        self.assertIn(
-            self.expected_link_libraries,
+        self._assert_links_profile_runtime_deps(
             self._project_init_contents("-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"),
         )
 
