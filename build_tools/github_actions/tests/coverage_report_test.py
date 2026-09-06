@@ -8,6 +8,8 @@ which binaries end up as -object arguments, and which situations must fail the
 job instead of publishing a misleading report.
 """
 
+import contextlib
+import io
 import os
 from pathlib import Path
 import shutil
@@ -159,6 +161,67 @@ class TestSharedLibraryComponent(CoverageReportTestCase):
         export = next(c for c in self.calls() if c.startswith("llvm-cov export"))
         self.assertIn(f"-object {other}", export)
         self.assertNotIn(os.fspath(self.library), export)
+
+
+class TestHtmlReport(CoverageReportTestCase):
+    """The annotated HTML report is opt-in, since it needs the sources."""
+
+    def setUp(self):
+        super().setUp()
+        (self.rocm_dir / "lib").mkdir(parents=True, exist_ok=True)
+        (self.rocm_dir / "lib" / "libhiprand.so").write_text("")
+        self.write_profraw("hiprand-shard1-1-a.profraw")
+
+    def test_html_is_not_written_unless_requested(self):
+        self.assertEqual(self.run_report("hiprand"), 0)
+
+        self.assertFalse((self.output_dir / "coverage.html").exists())
+        self.assertNotIn("llvm-cov show", "\n".join(self.calls()))
+
+    def test_html_flag_writes_a_single_annotated_file(self):
+        # A directory tree would have to be unzipped and browsed; one file
+        # opens straight from the artifact download.
+        self.assertEqual(self.run_report("hiprand", ["--html"]), 0)
+
+        show = next(c for c in self.calls() if c.startswith("llvm-cov show"))
+        self.assertIn("--format=html", show)
+        self.assertNotIn("--output-dir", show)
+        self.assertTrue((self.output_dir / "coverage.html").is_file())
+
+
+class TestSourceAvailability(unittest.TestCase):
+    """Whether `show` will be able to annotate the sources it was given."""
+
+    LCOV = "SF:/absent/one.cpp\nend_of_record\nSF:/absent/two.cpp\nend_of_record\n"
+
+    def test_parses_source_paths_from_lcov(self):
+        self.assertEqual(
+            coverage_report.sources_from_lcov(self.LCOV),
+            [Path("/absent/one.cpp"), Path("/absent/two.cpp")],
+        )
+
+    @staticmethod
+    def capture(*args) -> str:
+        """Returns what warn_on_missing_sources logged, which goes to stdout."""
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            coverage_report.warn_on_missing_sources(*args)
+        return buffer.getvalue()
+
+    def test_warns_when_sources_are_not_at_the_recorded_paths(self):
+        # The paths come from the build machine, so a report job that did not
+        # check the sources out produces an HTML report with no source in it.
+        output = self.capture(self.LCOV)
+
+        self.assertIn("[WARN]", output)
+        self.assertIn("2 of 2 source file(s)", output)
+
+    def test_silent_when_every_source_is_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            present = Path(tmp) / "present.cpp"
+            present.write_text("int main() { return 0; }\n")
+
+            self.assertEqual(self.capture(f"SF:{present}\n"), "")
 
 
 class TestHeaderOnlyComponent(CoverageReportTestCase):

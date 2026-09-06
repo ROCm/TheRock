@@ -173,6 +173,32 @@ def run_llvm_cov(
     return result.stdout
 
 
+def sources_from_lcov(lcov: str) -> list[Path]:
+    """Source files the report covers, as recorded in the profile."""
+    return [
+        Path(line[len("SF:") :]) for line in lcov.splitlines() if line.startswith("SF:")
+    ]
+
+
+def warn_on_missing_sources(lcov: str) -> None:
+    """Warns when the annotated report will not be able to show source.
+
+    `export` and `report` only read the coverage mapping embedded in the
+    binaries, but `show` opens the source files at the absolute paths recorded
+    there. Those come from the build machine, so they are only present if the
+    component's sources were checked out to the same location.
+    """
+    sources = sources_from_lcov(lcov)
+    missing = [p for p in sources if not p.is_file()]
+    if not missing:
+        return
+    log(
+        f"[WARN] {len(missing)} of {len(sources)} source file(s) are not present "
+        f"at the paths recorded in the profile, so the HTML report will show "
+        f"'source not found' for them. First missing: {missing[0]}"
+    )
+
+
 def extract_total_line(report_text: str) -> str:
     for line in report_text.splitlines():
         if line.strip().startswith("TOTAL"):
@@ -218,6 +244,14 @@ def main(argv: list[str]) -> int:
         default=DEFAULT_IGNORE_REGEX,
         help="Exclude matching source paths from the report.",
     )
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help="Also write coverage.html, a single-file report with the source "
+        "annotated line by line. Needs the component's sources present at the "
+        "paths recorded in the profile; without them the report still renders "
+        "but cannot show source.",
+    )
     args = parser.parse_args(argv)
 
     rocm_dir = args.rocm_dir.resolve()
@@ -245,6 +279,23 @@ def main(argv: list[str]) -> int:
     lcov_file = output_dir / "coverage.info"
     lcov_file.write_text(lcov)
     log(f"[INFO] Wrote {lcov_file} ({len(lcov.splitlines())} lines)")
+
+    if args.html:
+        warn_on_missing_sources(lcov)
+        # No --output-dir, so llvm-cov writes one self-contained document to
+        # stdout rather than a directory tree, which keeps the artifact to a
+        # single file that opens straight from a download.
+        html = run_llvm_cov(
+            llvm_cov,
+            "show",
+            objects,
+            profdata,
+            args.ignore_filename_regex,
+            ["--format=html"],
+        )
+        html_file = output_dir / "coverage.html"
+        html_file.write_text(html)
+        log(f"[INFO] Wrote {html_file} ({len(html)} bytes)")
 
     report = run_llvm_cov(
         llvm_cov, "report", objects, profdata, args.ignore_filename_regex

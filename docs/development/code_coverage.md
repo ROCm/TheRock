@@ -236,9 +236,26 @@ or an `LLVM_PROFILE_FILE` pointing somewhere else, would otherwise be published
 as 0% rather than reported as a problem.
 
 Each component's report is uploaded as a `coverage-report-<component>-<family>`
-workflow artifact containing `coverage.info` (lcov) and `coverage.txt`.
-Forwarding those to a coverage service is deliberately left out; RFC0014 places
-the choice of service and its configuration outside its scope.
+workflow artifact containing `coverage.info` (lcov), `coverage.txt` (the summary
+table) and `coverage.html` (the source annotated line by line). Forwarding these
+to a coverage service is deliberately left out; RFC0014 places the choice of
+service and its configuration outside its scope.
+
+The HTML report is written as one self-contained file rather than the directory
+tree `llvm-cov show --output-dir` produces, so that it opens straight from an
+artifact download. It is the only output that needs the component's sources:
+`export` and `report` read the coverage mapping embedded in the binaries, but
+`show` opens each source file at the absolute path recorded there, which is the
+build machine's path.
+
+The report job therefore checks those sources out, but cannot do it the obvious
+way. `rocm-libraries` is around 7GB, which is an absurd download for annotating
+one component, so the job takes a partial clone with `--filter=blob:none` and a
+sparse checkout limited to `projects/<component>`, fetching only the files it
+will actually annotate. This is allowed to fail: the other two reports do not
+need source, and `coverage_report.py` warns rather than failing when the
+recorded paths hold nothing, so a wrong or missing checkout degrades the HTML
+instead of losing the run's results.
 
 ## Scope
 

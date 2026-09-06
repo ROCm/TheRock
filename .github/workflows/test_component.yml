@@ -327,6 +327,9 @@ jobs:
       COVERAGE_ARTIFACT_NAME: >-
         coverage-profraw-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}
       TEST_COMPONENT: ${{ fromJSON(inputs.component).test_component || fromJSON(inputs.component).job_name }}
+      # Phase 1 instruments rocm-libraries components, whose sources all live at
+      # <submodule>/projects/<component>.
+      COVERAGE_SOURCE_SUBMODULE: rocm-libraries
     steps:
       - name: Checking out repository
         timeout-minutes: 15
@@ -357,13 +360,37 @@ jobs:
           merge-multiple: true
           path: ${{ env.COVERAGE_REPORT_DIR }}/profraw
 
+      # The annotated HTML report opens the source files at the absolute paths
+      # recorded in the profile, so they have to exist under this workspace.
+      # Checking out the rocm-libraries submodule normally would fetch ~7GB for
+      # the sake of one component, so this materializes just that component's
+      # directory: a partial clone (no blobs) plus a sparse checkout means only
+      # its files are downloaded. Failure is not fatal -- the lcov and text
+      # reports do not need source, and the HTML one degrades to reporting that
+      # it could not find it.
+      - name: Check out component sources for the annotated report
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          submodule_sha="$(git rev-parse "HEAD:${COVERAGE_SOURCE_SUBMODULE}")"
+          submodule_url="$(git config --file .gitmodules --get "submodule.${COVERAGE_SOURCE_SUBMODULE}.url")"
+          mkdir -p "${COVERAGE_SOURCE_SUBMODULE}"
+          cd "${COVERAGE_SOURCE_SUBMODULE}"
+          git init --quiet
+          git remote add origin "${submodule_url}"
+          git sparse-checkout init --cone
+          git sparse-checkout set "projects/${TEST_COMPONENT}"
+          git fetch --quiet --depth 1 --filter=blob:none origin "${submodule_sha}"
+          git checkout --quiet FETCH_HEAD
+
       - name: Generate coverage report
         run: |
           python ./build_tools/github_actions/coverage_report.py \
             --component "${TEST_COMPONENT}" \
             --rocm-dir "${OUTPUT_ARTIFACTS_DIR}" \
             --profraw-dir "${COVERAGE_REPORT_DIR}/profraw" \
-            --output-dir "${COVERAGE_REPORT_DIR}"
+            --output-dir "${COVERAGE_REPORT_DIR}" \
+            --html
 
       - name: Upload coverage report
         if: ${{ !cancelled() }}
@@ -373,5 +400,6 @@ jobs:
           path: |
             ${{ env.COVERAGE_REPORT_DIR }}/coverage.info
             ${{ env.COVERAGE_REPORT_DIR }}/coverage.txt
+            ${{ env.COVERAGE_REPORT_DIR }}/coverage.html
           retention-days: 14
           if-no-files-found: error
