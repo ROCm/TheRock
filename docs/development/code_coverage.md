@@ -81,9 +81,8 @@ component moving between monorepos needs no bookkeeping here.
 ### CMake preset
 
 `--preset linux-release-coverage` sets up an instrumented build: it turns on
-`THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` and builds `RelWithDebInfo`, since
-source-based coverage needs debug info to map counters back to lines. Narrow
-the scope by adding a project list on top of the preset:
+`THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` and builds `Release`. Narrow the scope by
+adding a project list on top of the preset:
 
 ```bash
 cmake -B build -GNinja --preset linux-release-coverage \
@@ -165,9 +164,35 @@ path. A `ROCm/rockrel` baseline was built in `/__w/rockrel/rockrel`, so
 unpacking it into a `ROCm/TheRock` run at `/__w/TheRock/TheRock` leaves those
 configs pointing at a directory that does not exist. Nothing detects this: the
 copy succeeds, most components never look, and the first one that does resolves
-its dependency to `NOTFOUND`. rocFFT is the one that surfaces it, failing its
-configure with `fftw3_libs-NOTFOUND` even though the `fftw3` artifact was copied
-and unpacked correctly.
+its dependency to a path that is not there. rocFFT surfaces it as an
+`FFTW_INCLUDE_DIRS` under `/__w/rockrel/rockrel`, even though the `fftw3`
+artifact was copied and unpacked correctly.
+
+The coverage build also has to use the same `CMAKE_BUILD_TYPE` as the baseline,
+which is why the preset builds `Release` rather than `RelWithDebInfo`. An
+exported package config only defines imported locations for the configuration it
+was built in: the baseline's `fftw3` ships `FFTW3LibraryDepends-release.cmake`
+with `IMPORTED_CONFIGURATIONS RELEASE` and nothing else. Consumers that read
+those properties directly get nothing back under a different build type. rocFFT
+does exactly that:
+
+```cmake
+string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
+get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_LOCATION_${CMAKE_BUILD_TYPE_UPPER})
+```
+
+Under `RelWithDebInfo` that asks for `IMPORTED_LOCATION_RELWITHDEBINFO` and
+configure fails with `fftw3_libs-NOTFOUND`, while `libfftw3_threads.so` in the
+same directory still resolves because it is located with `find_library`, which
+does not depend on the configuration. Setting
+`CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO` does not help here, since that
+mapping is applied when CMake resolves a use of the imported target, not when a
+specific property is read with `get_target_property`.
+
+Building `Release` costs nothing in coverage fidelity. `llvm-cov` reads the
+coverage mapping that `-fcoverage-mapping` emits into the binary rather than
+DWARF, and the instrumented components add their own `-g -O0` for the targets
+being measured.
 
 ### Collecting and merging profraw
 
