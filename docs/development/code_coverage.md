@@ -98,23 +98,32 @@ everything regardless of the project list.
 
 Components own the coverage flags themselves, through whichever option they
 define (`BUILD_CODE_COVERAGE` in hipRAND, `CODE_COVERAGE` in rocRAND). The
-super-project adds one thing they do not declare: a link against `libdl`.
+super-project adds what they do not declare: the profile runtime's own link
+dependencies.
 
-`-fprofile-instr-generate` links the static profile runtime, which calls `dlsym`
-and `dladdr`. Those moved into libc in glibc 2.34, but the portable Linux build
-targets manylinux_2_28, so they still have to come from `libdl`. A shared
-library that does not link it is accepted anyway, because shared libraries are
-allowed undefined symbols, and the failure surfaces later at the first
-executable to link against that library, which is where lld applies
+`-fprofile-instr-generate` links the static profile runtime, which calls into
+`libdl` (`dlsym`, `dladdr`) and `libpthread` (`pthread_once`,
+`pthread_getattr_np`). Both sets moved into libc in glibc 2.34, but the portable
+Linux build targets manylinux_2_28, so they still have to come from the separate
+libraries. A shared library that does not link them is accepted anyway, because
+shared libraries are allowed undefined symbols, and the failure surfaces later
+at the first executable to link against that library, which is where lld applies
 `--no-allow-shlib-undefined`:
 
 ```
-ld.lld: error: undefined reference: dlsym
+ld.lld: error: undefined reference: pthread_once
 >>> referenced by library/libhiprand.so.1.1 (disallowed by --no-allow-shlib-undefined)
 ```
 
-`therock_coverage_get_init_stanza()` adds it to the `project_init.cmake` of
-whichever sub-project is being measured. It has to go there rather than through
+That executable does not have to belong to the instrumented component, which
+makes this confusing to read in a build log: rocFFT is not instrumented, but it
+links `libhiprand.so`, so an incomplete link line on hipRAND fails the build in
+rocFFT.
+
+`therock_coverage_get_init_stanza()` adds them to the `project_init.cmake` of
+whichever sub-project is being measured, asking `FindThreads` whether a separate
+thread library is needed so that a glibc 2.34 or newer host correctly gets
+nothing. It has to go there rather than through
 `CMAKE_<TYPE>_LINKER_FLAGS_INIT` in the toolchain file, because the private link
 dir handling appends to `CMAKE_<TYPE>_LINKER_FLAGS` before `enable_language()`
 has populated it from `*_INIT`, which would drop it.

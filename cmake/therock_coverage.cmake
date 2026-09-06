@@ -197,28 +197,49 @@ function(therock_coverage_get_init_stanza
   endif()
 
   # Linking -fprofile-instr-generate pulls in the static profile runtime, which
-  # calls dlsym and dladdr. Those moved into libc in glibc 2.34, but the
+  # calls into libdl (dlsym, dladdr) and libpthread (pthread_once,
+  # pthread_getattr_np). Both sets moved into libc in glibc 2.34, but the
   # portable Linux build targets manylinux_2_28, so they still have to come from
-  # libdl. A shared library that does not link it is accepted anyway, because
-  # shared libraries are allowed undefined symbols, and the failure surfaces at
-  # the first executable to link against it, which is where lld applies
-  # --no-allow-shlib-undefined:
+  # the separate libraries. A shared library that does not link them is accepted
+  # anyway, because shared libraries are allowed undefined symbols, and the
+  # failure surfaces at the first executable to link against it, which is where
+  # lld applies --no-allow-shlib-undefined:
   #
-  #   ld.lld: error: undefined reference: dlsym
+  #   ld.lld: error: undefined reference: pthread_once
   #   >>> referenced by library/libhiprand.so.1.1
   #
-  # Components declare the coverage flags but not this dependency of them, so it
-  # is added here for whichever component is being measured.
+  # That executable need not be part of the instrumented component. rocFFT is
+  # not instrumented, but it links libhiprand.so and so is where the missing
+  # pthread dependency stopped the build.
+  #
+  # Components declare the coverage flags but not these dependencies of them, so
+  # they are added here for whichever component is being measured.
   #
   # This cannot go through CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file,
   # for the same reason the driver build options cannot: the private link dir
   # handling appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language() has
   # populated it from *_INIT, which shadows the cache value and drops it.
   #
-  # CMAKE_DL_LIBS is resolved here rather than emitted as a reference because
-  # project_init runs before the sub-project has enabled a language, so the
-  # variable is not necessarily set yet on the other side.
+  # The libraries are resolved here rather than emitted as references because
+  # project_init runs before the sub-project has enabled a language: neither
+  # CMAKE_DL_LIBS nor FindThreads is usable on the other side. FindThreads is
+  # what decides whether a separate thread library is needed at all, so it also
+  # gives the right answer on a glibc 2.34 or newer host, where it is not.
+  set(_link_libs)
   if(CMAKE_DL_LIBS)
-    set("${out_var}" "link_libraries(${CMAKE_DL_LIBS})\n" PARENT_SCOPE)
+    list(APPEND _link_libs "${CMAKE_DL_LIBS}")
+  endif()
+  # FindThreads is a hard error without C or CXX enabled, which is how the
+  # super-project runs but not how every caller does.
+  if(CMAKE_C_COMPILER_LOADED OR CMAKE_CXX_COMPILER_LOADED)
+    find_package(Threads QUIET)
+    if(CMAKE_THREAD_LIBS_INIT)
+      list(APPEND _link_libs "${CMAKE_THREAD_LIBS_INIT}")
+    endif()
+  endif()
+
+  if(_link_libs)
+    list(JOIN _link_libs " " _link_libs)
+    set("${out_var}" "link_libraries(${_link_libs})\n" PARENT_SCOPE)
   endif()
 endfunction()

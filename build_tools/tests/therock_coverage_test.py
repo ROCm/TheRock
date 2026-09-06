@@ -8,8 +8,8 @@ and inspect the `project_init.cmake` it generates for the sub-project, which is
 where the coverage link options land.
 """
 
+import re
 import subprocess
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -41,7 +41,9 @@ def write_harness(source_dir: Path) -> None:
         source_dir / "CMakeLists.txt",
         f"""
         cmake_minimum_required(VERSION 3.25)
-        project(therock_coverage_harness NONE)
+        # C is enabled because FindThreads, which decides whether the profile
+        # runtime needs a separate thread library, is a hard error without it.
+        project(therock_coverage_harness C)
 
         set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
         set(THEROCK_BINARY_DIR "${{CMAKE_BINARY_DIR}}")
@@ -92,7 +94,43 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def probe_profile_runtime_deps() -> list[str]:
+    """Returns the libraries the coverage stanza is expected to link here.
+
+    The answer is platform-dependent -- libdl and libpthread are folded into
+    libc from glibc 2.34, and neither applies on Windows -- so it is taken from
+    CMake rather than assumed, and the same values the stanza is built from are
+    the ones asserted against.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
+        source_dir = temp_dir / "source"
+        write_file(
+            source_dir / "CMakeLists.txt",
+            """
+            cmake_minimum_required(VERSION 3.25)
+            project(therock_coverage_probe C)
+            find_package(Threads QUIET)
+            message(STATUS "PROBE=[${CMAKE_DL_LIBS}][${CMAKE_THREAD_LIBS_INIT}]")
+            """,
+        )
+        output = run(
+            "cmake", "-S", str(source_dir), "-B", str(temp_dir / "build"), "-GNinja"
+        ).stdout
+
+    match = re.search(r"PROBE=\[(.*)\]\[(.*)\]", output)
+    if not match:
+        raise AssertionError(f"probe did not report its libraries:\n{output}")
+    return [lib for lib in match.groups() if lib]
+
+
 class CoverageInitStanzaTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.expected_link_libraries = (
+            f"link_libraries({' '.join(probe_profile_runtime_deps())})"
+        )
+
     def _project_init_contents(self, *cmake_args: str) -> str:
         """Configures the harness and returns main_project's project_init file."""
         with tempfile.TemporaryDirectory() as temp_dir_str:
@@ -121,41 +159,33 @@ class CoverageInitStanzaTest(unittest.TestCase):
             )
             return init_files[0].read_text(encoding="utf-8")
 
-    def test_no_coverage_does_not_link_dl(self):
+    def test_no_coverage_does_not_link_profile_runtime_deps(self):
         # Control: an uninstrumented sub-project must not pick up link options it
         # has no use for.
         self.assertNotIn("link_libraries", self._project_init_contents())
 
-    @unittest.skipUnless(
-        sys.platform.startswith("linux"), "CMAKE_DL_LIBS is only set on Linux"
-    )
-    def test_per_project_option_links_dl(self):
+    def test_per_project_option_links_profile_runtime_deps(self):
         # Regression: the profile runtime that -fprofile-instr-generate links
-        # calls dlsym and dladdr, which come from libdl before glibc 2.34. A
-        # shared library missing it still links, and the first executable to
+        # calls into libdl (dlsym, dladdr) and libpthread (pthread_once,
+        # pthread_getattr_np), which are separate libraries before glibc 2.34. A
+        # shared library missing them still links, and the first executable to
         # link against that library then fails --no-allow-shlib-undefined.
         self.assertIn(
-            "link_libraries(dl)",
+            self.expected_link_libraries,
             self._project_init_contents("-DMAIN_PROJECT_ENABLE_COVERAGE=ON"),
         )
 
-    @unittest.skipUnless(
-        sys.platform.startswith("linux"), "CMAKE_DL_LIBS is only set on Linux"
-    )
-    def test_project_list_links_dl(self):
+    def test_project_list_links_profile_runtime_deps(self):
         # The path CI actually takes: coverage_nightly.yml passes a project list
         # rather than the per-project option.
         self.assertIn(
-            "link_libraries(dl)",
+            self.expected_link_libraries,
             self._project_init_contents("-DTHEROCK_COVERAGE_PROJECTS=main_project"),
         )
 
-    @unittest.skipUnless(
-        sys.platform.startswith("linux"), "CMAKE_DL_LIBS is only set on Linux"
-    )
-    def test_monorepo_group_flag_links_dl(self):
+    def test_monorepo_group_flag_links_profile_runtime_deps(self):
         self.assertIn(
-            "link_libraries(dl)",
+            self.expected_link_libraries,
             self._project_init_contents("-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"),
         )
 
