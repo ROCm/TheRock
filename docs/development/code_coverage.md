@@ -158,6 +158,17 @@ The test jobs therefore need no special artifact handling, and there is no
 `-coverage` artifact suffix to maintain: the separate run id already isolates
 these artifacts from the regular nightly's.
 
+The baseline has to come from a run of this repository. Artifacts embed the
+absolute path of the workspace they were built in, which GitHub derives from the
+repository name, and the CMake package configs inside them resolve against that
+path. A `ROCm/rockrel` baseline was built in `/__w/rockrel/rockrel`, so
+unpacking it into a `ROCm/TheRock` run at `/__w/TheRock/TheRock` leaves those
+configs pointing at a directory that does not exist. Nothing detects this: the
+copy succeeds, most components never look, and the first one that does resolves
+its dependency to `NOTFOUND`. rocFFT is the one that surfaces it, failing its
+configure with `fftw3_libs-NOTFOUND` even though the `fftw3` artifact was copied
+and unpacked correctly.
+
 ### Collecting and merging profraw
 
 `test_component.yml` gains a `coverage_enabled` input. When set, each test shard

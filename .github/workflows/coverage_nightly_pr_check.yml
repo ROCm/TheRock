@@ -54,14 +54,22 @@ jobs:
       actions: read
       id-token: write
     with:
-      # The 2026-09-03 ROCm/rockrel release nightly, which built math-libs for
-      # gfx94X-dcgpu. Pinned rather than resolved: a PoC wants the same baseline
-      # every run so a change in the report means a change in this branch.
-      # rockrel publishes under the nightly release type, so its artifacts live
-      # in the nightly bucket rather than this run's ci one.
-      baseline_run_id: "33697653391"
-      baseline_repository: "ROCm/rockrel"
-      baseline_release_type: "nightly"
+      # A ROCm/TheRock Multi-Arch CI run, pinned rather than resolved so that a
+      # change in the report means a change in this branch.
+      #
+      # It has to come from this repository, which rules out the release
+      # nightlies. Artifacts embed the absolute path of the workspace they were
+      # built in, and the CMake package configs inside them resolve against it,
+      # so a rockrel baseline hands this build configs pointing at
+      # /__w/rockrel/rockrel, which does not exist here. rocFFT was the first
+      # consumer to notice, resolving FFTW3 to fftw3_libs-NOTFOUND and failing
+      # its configure. A ROCm/TheRock baseline shares this run's
+      # /__w/TheRock/TheRock, so the embedded paths land where the artifacts
+      # were actually unpacked.
+      #
+      # This run's own test jobs failed, which does not matter: only its build
+      # stages are consumed, and those all succeeded.
+      baseline_run_id: "33990288042"
       amdgpu_family: "gfx94x"
       coverage_projects: "hiprand"
       test_labels: "hiprand"

@@ -51,8 +51,13 @@ on:
         required: true
       baseline_repository:
         description: >-
-          Repository owning baseline_run_id, when it is not this one. Release
-          nightlies live in ROCm/rockrel, for example.
+          Repository owning baseline_run_id, when it is not this one. Prefer
+          leaving this empty. Artifacts embed the absolute path of the workspace
+          they were built in, which GitHub derives from the repository name, and
+          the CMake package configs inside them resolve against it. A baseline
+          from another repository therefore only works if its checkout path
+          matches this one's, so a ROCm/rockrel baseline breaks a ROCm/TheRock
+          build.
         type: string
         default: ""
       baseline_release_type:
@@ -101,8 +106,13 @@ on:
         required: true
       baseline_repository:
         description: >-
-          Repository owning baseline_run_id, when it is not this one. Release
-          nightlies live in ROCm/rockrel, for example.
+          Repository owning baseline_run_id, when it is not this one. Prefer
+          leaving this empty. Artifacts embed the absolute path of the workspace
+          they were built in, which GitHub derives from the repository name, and
+          the CMake package configs inside them resolve against it. A baseline
+          from another repository therefore only works if its checkout path
+          matches this one's, so a ROCm/rockrel baseline breaks a ROCm/TheRock
+          build.
         type: string
         default: ""
       baseline_release_type:
