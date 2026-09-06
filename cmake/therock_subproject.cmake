@@ -889,6 +889,12 @@ function(therock_cmake_subproject_activate target_name)
       "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
   endif()
 
+  # Link half of the coverage options, emitted here for the same reason. See
+  # cmake/therock_coverage.cmake.
+  therock_coverage_get_init_stanza(_coverage_init_stanza
+    "${_logical_target_name}" "${_external_source_dir}")
+  string(APPEND _init_contents "${_coverage_init_stanza}")
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()

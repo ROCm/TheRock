@@ -122,6 +122,32 @@ function(therock_coverage_source_group out_var external_source_dir)
   endif()
 endfunction()
 
+# _therock_coverage_is_enabled
+# Resolves whether a sub-project is being measured, from its per-project option
+# and the monorepo group flags.
+function(_therock_coverage_is_enabled
+    out_var
+    logical_target_name
+    external_source_dir)
+  string(TOUPPER "${logical_target_name}" _project_name)
+
+  if(DEFINED ${_project_name}_ENABLE_COVERAGE)
+    # An explicit request wins over the group flags, in both directions, so that
+    # a nightly run can instrument a whole monorepo except for one component.
+    set("${out_var}" "${${_project_name}_ENABLE_COVERAGE}" PARENT_SCOPE)
+    return()
+  endif()
+
+  set(_enabled OFF)
+  therock_coverage_source_group(_group "${external_source_dir}")
+  if(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL AND _group STREQUAL "rocm-libraries")
+    set(_enabled ON)
+  elseif(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL AND _group STREQUAL "rocm-systems")
+    set(_enabled ON)
+  endif()
+  set("${out_var}" "${_enabled}" PARENT_SCOPE)
+endfunction()
+
 # therock_coverage_get_subproject_args
 # Sets out_var to the coverage options to add to a sub-project's configure
 # command line, or to an empty list when the sub-project is not being measured.
@@ -131,26 +157,14 @@ function(therock_coverage_get_subproject_args
     external_source_dir)
   set("${out_var}" "" PARENT_SCOPE)
 
-  string(TOUPPER "${logical_target_name}" _project_name)
-  set(_coverage_var_name "${_project_name}_ENABLE_COVERAGE")
-
-  if(DEFINED ${_coverage_var_name})
-    # An explicit request wins over the group flags, in both directions, so that
-    # a nightly run can instrument a whole monorepo except for one component.
-    set(_enabled "${${_coverage_var_name}}")
-  else()
-    set(_enabled OFF)
-    therock_coverage_source_group(_group "${external_source_dir}")
-    if(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL AND _group STREQUAL "rocm-libraries")
-      set(_enabled ON)
-    elseif(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL AND _group STREQUAL "rocm-systems")
-      set(_enabled ON)
-    endif()
-  endif()
-
+  _therock_coverage_is_enabled(_enabled
+    "${logical_target_name}" "${external_source_dir}")
   if(NOT _enabled)
     return()
   endif()
+
+  string(TOUPPER "${logical_target_name}" _project_name)
+  set(_coverage_var_name "${_project_name}_ENABLE_COVERAGE")
 
   # The project-specific option from the RFC, which components are moving to.
   set(_args "-D${_coverage_var_name}=ON")
@@ -165,4 +179,46 @@ function(therock_coverage_get_subproject_args
 
   message(STATUS "  ENABLE CODE COVERAGE: ${logical_target_name}")
   set("${out_var}" "${_args}" PARENT_SCOPE)
+endfunction()
+
+# therock_coverage_get_init_stanza
+# Sets out_var to CMake code to add to a sub-project's project_init file, or to
+# an empty string when the sub-project is not being measured.
+function(therock_coverage_get_init_stanza
+    out_var
+    logical_target_name
+    external_source_dir)
+  set("${out_var}" "" PARENT_SCOPE)
+
+  _therock_coverage_is_enabled(_enabled
+    "${logical_target_name}" "${external_source_dir}")
+  if(NOT _enabled)
+    return()
+  endif()
+
+  # Linking -fprofile-instr-generate pulls in the static profile runtime, which
+  # calls dlsym and dladdr. Those moved into libc in glibc 2.34, but the
+  # portable Linux build targets manylinux_2_28, so they still have to come from
+  # libdl. A shared library that does not link it is accepted anyway, because
+  # shared libraries are allowed undefined symbols, and the failure surfaces at
+  # the first executable to link against it, which is where lld applies
+  # --no-allow-shlib-undefined:
+  #
+  #   ld.lld: error: undefined reference: dlsym
+  #   >>> referenced by library/libhiprand.so.1.1
+  #
+  # Components declare the coverage flags but not this dependency of them, so it
+  # is added here for whichever component is being measured.
+  #
+  # This cannot go through CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file,
+  # for the same reason the driver build options cannot: the private link dir
+  # handling appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language() has
+  # populated it from *_INIT, which shadows the cache value and drops it.
+  #
+  # CMAKE_DL_LIBS is resolved here rather than emitted as a reference because
+  # project_init runs before the sub-project has enabled a language, so the
+  # variable is not necessarily set yet on the other side.
+  if(CMAKE_DL_LIBS)
+    set("${out_var}" "link_libraries(${CMAKE_DL_LIBS})\n" PARENT_SCOPE)
+  endif()
 endfunction()

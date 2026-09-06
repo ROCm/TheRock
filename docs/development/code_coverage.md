@@ -95,6 +95,31 @@ cmake -B build -GNinja --preset linux-release-coverage \
 The group flag has to be switched back off explicitly, or it keeps instrumenting
 everything regardless of the project list.
 
+### What the super-project adds to an instrumented sub-project
+
+Components own the coverage flags themselves, through whichever option they
+define (`BUILD_CODE_COVERAGE` in hipRAND, `CODE_COVERAGE` in rocRAND). The
+super-project adds one thing they do not declare: a link against `libdl`.
+
+`-fprofile-instr-generate` links the static profile runtime, which calls `dlsym`
+and `dladdr`. Those moved into libc in glibc 2.34, but the portable Linux build
+targets manylinux_2_28, so they still have to come from `libdl`. A shared
+library that does not link it is accepted anyway, because shared libraries are
+allowed undefined symbols, and the failure surfaces later at the first
+executable to link against that library, which is where lld applies
+`--no-allow-shlib-undefined`:
+
+```
+ld.lld: error: undefined reference: dlsym
+>>> referenced by library/libhiprand.so.1.1 (disallowed by --no-allow-shlib-undefined)
+```
+
+`therock_coverage_get_init_stanza()` adds it to the `project_init.cmake` of
+whichever sub-project is being measured. It has to go there rather than through
+`CMAKE_<TYPE>_LINKER_FLAGS_INIT` in the toolchain file, because the private link
+dir handling appends to `CMAKE_<TYPE>_LINKER_FLAGS` before `enable_language()`
+has populated it from `*_INIT`, which would drop it.
+
 ## Nightly coverage workflow
 
 `.github/workflows/coverage_nightly.yml` runs the pipeline end to end. It is a
