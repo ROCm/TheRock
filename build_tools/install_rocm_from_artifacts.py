@@ -542,6 +542,10 @@ def retrieve_artifacts_by_run_id(args):
             if args.tests:
                 # Installed-test CMake configure needs rocprofiler-sdkConfig.cmake.
                 argv.append("rocprofiler-sdk_dev")
+                # HIP/rocprofiler-sdk tests resolve AMDDeviceLibs via amd-llvm_dev and
+                # libdw headers via sysdeps_dev (sysdeps_lib ships only runtime libs).
+                argv.append("amd-llvm_dev")
+                argv.append("sysdeps_dev")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # Contains the rocprof-compute CLI executable.
