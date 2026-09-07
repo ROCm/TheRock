@@ -125,54 +125,35 @@ report.
 
 ### Scheduling
 
-`multi_arch_ci_coverage_nightly.yml` is dispatched by hand. Pick a recent
-nightly run, pass its id as `baseline_run_id`, and leave
-`baseline_release_type` at `nightly`. There is no cron trigger, and the regular
-nightly does not know about this workflow.
+`multi_arch_ci_coverage_nightly.yml` is dispatched by hand. There is no cron
+trigger, and the regular nightly does not know about this workflow.
 
 Coverage therefore has a run id of its own, which is what keeps a coverage
 failure from colouring the nightly's status and keeps the nightly's test jobs —
 which rarely all pass — from holding coverage up.
 
-Having the regular nightly dispatch this workflow automatically once its build
-finishes, handing over its own run id, is a later change. Nothing else has to
-move for it: `baseline_run_id` is already an input, so that change only adds the
-dispatching job.
+Nightly coverage runs the projects named by `projects_to_test` on one
+architecture (gfx942, the `gfx94X-dcgpu` family). Running only what changed, and
+running more architectures, come later.
 
-Nightly coverage runs every onboarded project on one architecture
-(gfx942, the `gfx94X-dcgpu` family). Running only what changed, and running more
-architectures, come later.
+#### The run is self-contained
 
-#### Why there are two run ids
+A coverage run builds every stage its selection needs, starting from
+compiler-runtime, and instruments only the projects that were selected.
+Everything those projects depend on is built normally in the same run, so the
+run's own artifacts are already the stack to test against. The test jobs install
+them the same way regular CI installs its own, and there is no second run id to
+supply.
 
-The nightly instruments the whole stack in one build, because building each
-project separately would mean rebuilding its dependencies each time. Reporting,
-though, has to stay per project: a coverage report for hipRAND should not shift
-because rocRAND changed, and an instrumented rocRAND under an instrumented
-hipRAND also writes its own profiles into the same run.
+What keeps a report scoped to one project is `object_globs`, not what happens to
+be instrumented. `llvm-cov export` is handed only that project's objects and
+reports only functions found in their coverage mappings, so a selection covering
+several projects still yields one report per project.
 
-Each test job therefore assembles a mostly non-instrumented install:
-
-1. `setup_test_environment` installs the **baseline** run in full — every
-   library non-instrumented, as the regular nightly built it.
-1. `overlay_coverage_artifacts.py` fetches the artifact holding the project
-   under test from the **coverage** run and copies only that project's files
-   over the baseline ones.
-
-The baseline is read from the channel that published it (`baseline_release_type`,
-normally `nightly`) rather than from the coverage run's own `ci` channel, since
-artifacts are bucketed per channel.
-
-Step 2 is per project rather than per artifact because TheRock's artifacts are
-grouped: `rand` carries both rocRAND and hipRAND. Each project's files sit under
-the subproject stage directory they were built in (`math-libs/hipRAND/stage`),
-which is what `artifact_relpaths` in the coverage registry names. Nothing is
-renamed along the way — the two runs write to different S3 directories, so the
-instrumented `rand_lib_gfx942.tar.xz` and the regular one never collide.
-
-If the overlay finds none of the project's files, the job fails rather than
-testing the baseline build and reporting coverage for binaries that were never
-instrumented.
+Selecting more projects therefore costs build time rather than accuracy: each
+one adds an instrumented library, and instrumented libraries are slower to build
+and slower to run under test. Naming the projects you actually want is the cheap
+path.
 
 ### Selecting projects to run
 
@@ -193,11 +174,26 @@ coverage workflow, so non-coverage test selection is unaffected.
 
 ### Adding a project
 
-Add an entry to `COVERAGE_PROJECTS` in `configure_coverage_ci.py`. Before doing
-so, confirm that the project implements `<PROJECT>_ENABLE_COVERAGE` in its own
-CMake, and that a local instrumented build produces a non-empty report. A
-project whose tests never load the instrumented library will build and test
-cleanly but report zero coverage.
+Add an entry to `COVERAGE_PROJECTS` in `configure_coverage_ci.py`.
+
+Its `coverage_option` has to name the CMake option the project actually
+implements, and that option has to select LLVM source-based instrumentation
+(`-fprofile-instr-generate -fcoverage-mapping`). Neither can be assumed. The
+names are not standardised — most projects use `BUILD_CODE_COVERAGE`, several
+use `CODE_COVERAGE`, a few use `<PROJECT>_ENABLE_COVERAGE`, RCCL uses
+`ENABLE_CODE_COVERAGE` — and some projects instrument with gcov
+(`-fprofile-arcs`) instead, which writes `.gcda` files this pipeline cannot
+read. `therock_subproject.cmake` translates TheRock's `<PROJECT>_ENABLE_COVERAGE`
+into whichever name you register, per subproject, so a generic name does not
+leak into the rest of the build.
+
+A project that cannot be measured yet gets an `unsupported_reason` instead. It
+stays in the registry so the gap is recorded, stays out of the group aliases,
+and is rejected with that reason if someone names it.
+
+Confirm a local instrumented build produces a non-empty report before relying on
+a new entry. A project whose tests never load the instrumented library builds
+and tests cleanly and then reports nothing.
 
 Set the entry's `source_repo` (`ROCM_LIBRARIES` by default, or `ROCM_SYSTEMS`);
 that is what routes the project into the correct group alias and
@@ -205,11 +201,11 @@ that is what routes the project into the correct group alias and
 lists are generated from `COVERAGE_PROJECTS` at configure time, so both the local
 aggregate flags and the CI aliases pick up the new project automatically.
 
-`artifact_names` and `artifact_relpaths` are what the nightly overlay uses, so
-they need to name the artifact the project ships in and the subproject stage
-directory holding its files. Getting `artifact_relpaths` wrong fails the nightly
-test job outright rather than quietly reporting against a non-instrumented
-build.
+`object_globs` names the binaries the report is generated from, relative to the
+install tree. For most projects that is the shared library
+(`lib/librocblas.so*`); header-only projects have none, so they name their
+installed test binaries instead. Getting it wrong fails the report job, which
+refuses to run when no glob matches rather than publishing zero coverage.
 
 A project whose stage is not yet built by `multi_arch_ci_coverage_nightly.yml`
 also needs that stage's build job added there; today it builds compiler-runtime

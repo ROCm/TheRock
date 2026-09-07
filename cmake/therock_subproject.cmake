@@ -928,13 +928,29 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
-  # Passthrough of -D<PROJECT>_ENABLE_COVERAGE=ON to the subproject. CMake
-  # definitions are conventionally upper case, so only the upper case spelling
-  # is honored (i.e. HIPDNN_ENABLE_COVERAGE, not hipDNN_ENABLE_COVERAGE).
+  # Translate TheRock's -D<PROJECT>_ENABLE_COVERAGE into whichever option the
+  # subproject actually implements. CMake definitions are conventionally upper
+  # case, so only the upper case spelling of TheRock's flag is honored (i.e.
+  # HIPDNN_ENABLE_COVERAGE, not hipDNN_ENABLE_COVERAGE).
+  #
+  # The names upstream are not standardised: most projects take
+  # BUILD_CODE_COVERAGE or CODE_COVERAGE, a few take <PROJECT>_ENABLE_COVERAGE,
+  # RCCL takes ENABLE_CODE_COVERAGE. The generic ones are the reason this is
+  # done per subproject rather than by setting a global: defining
+  # BUILD_CODE_COVERAGE for the whole build would instrument every project that
+  # happens to understand it, which is exactly what per-project coverage is
+  # trying to avoid.
   string(TOUPPER "${_logical_target_name}" _coverage_project_name)
   set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
   if(DEFINED ${_coverage_var_name})
-    list(APPEND _cmake_args "-D${_coverage_var_name}=${${_coverage_var_name}}")
+    set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
+    if(NOT _coverage_option)
+      message(FATAL_ERROR
+        "${_logical_target_name}: ${_coverage_var_name} was set but the project "
+        "has no coverage option registered. Add one to COVERAGE_PROJECTS in "
+        "build_tools/github_actions/configure_coverage_ci.py.")
+    endif()
+    list(APPEND _cmake_args "-D${_coverage_option}=${${_coverage_var_name}}")
   endif()
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global

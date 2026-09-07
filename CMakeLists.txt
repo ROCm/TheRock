@@ -215,10 +215,12 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 ################################################################################
 # Coverage Options
 # Enable code-coverage instrumentation for a whole component group by setting the
-# per-project <PROJECT>_ENABLE_COVERAGE flags that therock_subproject.cmake
-# forwards to each subproject. The per-group project lists are generated from the
-# coverage registry (COVERAGE_PROJECTS in
-# build_tools/github_actions/configure_coverage_ci.py) at configure time.
+# per-project <PROJECT>_ENABLE_COVERAGE flags. therock_subproject.cmake turns
+# each one into whichever option that subproject actually implements, using the
+# THEROCK_COVERAGE_OPTION_<PROJECT> map generated below. Both the group lists
+# and that map come from the coverage registry (COVERAGE_PROJECTS in
+# build_tools/github_actions/configure_coverage_ci.py) at configure time, and
+# cover only the projects that emit LLVM profile data.
 ################################################################################
 
 option(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL
