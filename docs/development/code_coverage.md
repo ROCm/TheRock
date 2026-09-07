@@ -29,6 +29,15 @@ not configure that from the top level; it comes from how amd-llvm's compiler-rt
 is built. If a report shows host coverage only, check that the runtime is in the
 compiler you built against.
 
+That runtime calls `dlsym`, `dladdr` and `pthread_once`, and the driver does not
+put `-ldl` or `-lpthread` on the link line for it. On the manylinux base those
+symbols are still in `libdl` and `libpthread` rather than in `libc`, so an
+instrumented shared library would be left with undefined references, and any
+executable linking against it would fail `--no-allow-shlib-undefined`.
+`therock_subproject.cmake` adds the two libraries whenever it enables coverage
+for a subproject, so this is handled; it is worth knowing about if you
+instrument a project outside the normal flow.
+
 > [!NOTE]
 > Coverage builds are incompatible with split kernel packaging. The CI
 > workflows pass `-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF`; do the same if you

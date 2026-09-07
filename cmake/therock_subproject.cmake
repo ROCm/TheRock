@@ -913,6 +913,35 @@ function(therock_cmake_subproject_activate target_name)
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
   string(APPEND _init_contents "${_flag_init_contents}")
 
+  # Give the LLVM profile runtime the libraries it depends on.
+  #
+  # -fprofile-instr-generate links libclang_rt.profile_rocm.a, whose
+  # InstrProfilingPlatformROCm.cpp calls dlsym, dladdr and pthread_once. The
+  # driver does not put -ldl or -lpthread on the link line, and on the
+  # manylinux base those symbols are still in libdl and libpthread rather than
+  # in libc, so an instrumented shared library is left with undefined
+  # references. The library itself links -- shared objects tolerate that -- but
+  # every executable linking against it then fails
+  # --no-allow-shlib-undefined, which is how this shows up: hipRAND's tests
+  # cannot link against an instrumented libhiprand.so.
+  #
+  # push-state/pop-state keeps --no-as-needed scoped to these two, so the
+  # DT_NEEDED entries are recorded no matter where the flags land relative to
+  # the objects that need them, without forcing a DT_NEEDED for every other
+  # library on the line.
+  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
+  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+  if(NOT MSVC AND ${_coverage_var_name})
+    set(_coverage_link_flags
+      " -Wl,--push-state,--no-as-needed -ldl -lpthread -Wl,--pop-state")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_EXE_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_SHARED_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+    string(APPEND _init_contents
+      "string(APPEND CMAKE_MODULE_LINKER_FLAGS \"${_coverage_link_flags}\")\n")
+  endif()
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
   list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
@@ -940,8 +969,9 @@ function(therock_cmake_subproject_activate target_name)
   # BUILD_CODE_COVERAGE for the whole build would instrument every project that
   # happens to understand it, which is exactly what per-project coverage is
   # trying to avoid.
-  string(TOUPPER "${_logical_target_name}" _coverage_project_name)
-  set(_coverage_var_name "${_coverage_project_name}_ENABLE_COVERAGE")
+  #
+  # _coverage_project_name and _coverage_var_name are set further up, where the
+  # profile runtime's link libraries are added to the init file.
   if(DEFINED ${_coverage_var_name})
     set(_coverage_option "${THEROCK_COVERAGE_OPTION_${_coverage_project_name}}")
     if(NOT _coverage_option)
