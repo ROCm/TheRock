@@ -18,12 +18,27 @@ from _therock_utils.build_topology import get_topology
 
 
 class ParseProjectsTest(unittest.TestCase):
-    def test_empty_selects_every_measurable_project(self):
+    def test_empty_selects_every_buildable_project(self):
         # Registered-but-unmeasurable projects are deliberately left out: an
-        # empty selection should not schedule a job that cannot report.
+        # empty selection should not schedule a job that cannot report. Nor
+        # should it pick projects whose stage this workflow cannot build.
         self.assertEqual(
             configure_coverage_ci.parse_projects(""),
-            sorted(configure_coverage_ci.SUPPORTED_PROJECTS),
+            sorted(configure_coverage_ci.DEFAULT_PROJECTS),
+        )
+
+    def test_default_selection_is_one_the_workflow_can_actually_build(self):
+        configure_coverage_ci.resolve_build_stages(
+            configure_coverage_ci.parse_projects("")
+        )
+
+    def test_default_is_narrower_than_all_while_comm_libs_has_no_build_job(self):
+        self.assertEqual(
+            sorted(
+                configure_coverage_ci.SUPPORTED_PROJECTS
+                - configure_coverage_ci.DEFAULT_PROJECTS
+            ),
+            ["rccl", "rocshmem"],
         )
 
     def test_whitespace_and_case_are_normalized(self):
@@ -231,61 +246,48 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         self.assertEqual(configure_coverage_ci.build_coverage_cmake_options([]), [])
 
 
-class BuildStagePlanTest(unittest.TestCase):
-    @staticmethod
-    def _names(waves):
-        return [[entry["stage_name"] for entry in wave] for wave in waves]
-
-    def test_math_libs_only_selection_needs_no_generic_stage(self):
-        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["hiprand"])
-        self.assertEqual(waves, [])
-        self.assertTrue(needs_math_libs)
-
-    def test_compiler_runtime_project_adds_no_stage_of_its_own(self):
-        # compiler-runtime is built unconditionally, so a project living there
-        # must not also appear as a generic stage to build.
-        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["amdsmi"])
-        self.assertEqual(waves, [])
-        self.assertFalse(needs_math_libs)
-
-    def test_generic_stage_project_pulls_in_what_that_stage_consumes(self):
-        # comm-libs takes hipify and rocjitsu from emulation, so selecting rccl
-        # has to build emulation as well -- and before comm-libs, or the build
-        # fails on a missing inbound artifact.
-        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["rccl"])
-        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
-        self.assertFalse(needs_math_libs)
-
-    def test_generic_stage_is_named_for_the_build_job(self):
-        waves, _ = configure_coverage_ci.build_stage_plan(["rccl"])
+class ResolveBuildStagesTest(unittest.TestCase):
+    def test_math_libs_project_needs_the_math_libs_stage(self):
         self.assertEqual(
-            waves[-1],
-            [
-                {
-                    "stage_name": "comm-libs",
-                    "stage_display_name": "Stage - Coverage Comm Libs",
-                }
-            ],
+            configure_coverage_ci.resolve_build_stages(["hiprand"]),
+            {"math-libs"},
         )
 
-    def test_stages_are_deduplicated_across_projects(self):
-        waves, _ = configure_coverage_ci.build_stage_plan(["rccl", "rocshmem"])
-        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
-
-    def test_selecting_everything_names_every_non_default_stage(self):
-        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(
-            sorted(configure_coverage_ci.SUPPORTED_PROJECTS)
+    def test_compiler_runtime_project_needs_no_math_libs_build(self):
+        # compiler-runtime is built unconditionally, so a project living there
+        # must not drag in the per-architecture math-libs job.
+        self.assertEqual(
+            configure_coverage_ci.resolve_build_stages(["amdsmi"]),
+            {"compiler-runtime"},
         )
-        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
-        self.assertTrue(needs_math_libs)
 
-    def test_no_selection_needs_more_waves_than_the_workflow_has_jobs(self):
-        # multi_arch_ci_coverage_nightly.yml has two wave jobs. main() raises
-        # past that, but the registry should not get there in the first place.
-        waves, _ = configure_coverage_ci.build_stage_plan(
-            sorted(configure_coverage_ci.COVERAGE_PROJECTS)
+    def test_whole_rocm_libraries_group_stays_within_math_libs(self):
+        keys = configure_coverage_ci.parse_projects("rocm_libraries_all")
+        self.assertEqual(
+            configure_coverage_ci.resolve_build_stages(keys), {"math-libs"}
         )
-        self.assertLessEqual(len(waves), 2)
+
+    def test_comm_libs_project_is_rejected_with_a_actionable_message(self):
+        # comm-libs has no build job, so selecting rccl would leave the test
+        # job with nothing to overlay. It has to fail here instead.
+        with self.assertRaises(ValueError) as caught:
+            configure_coverage_ci.resolve_build_stages(["rccl"])
+        message = str(caught.exception)
+        self.assertIn("rccl", message)
+        self.assertIn("comm-libs", message)
+        self.assertIn("multi_arch_ci_coverage_nightly.yml", message)
+
+    def test_rejection_names_every_unbuildable_project_not_just_the_first(self):
+        with self.assertRaises(ValueError) as caught:
+            configure_coverage_ci.resolve_build_stages(["hiprand", "rccl", "rocshmem"])
+        message = str(caught.exception)
+        self.assertIn("rccl", message)
+        self.assertIn("rocshmem", message)
+
+    def test_every_buildable_stage_is_one_a_project_can_register_against(self):
+        self.assertTrue(
+            configure_coverage_ci.BUILDABLE_STAGES <= configure_coverage_ci.KNOWN_STAGES
+        )
 
 
 class RegistryMatchesBuildTopologyTest(unittest.TestCase):
@@ -336,10 +338,8 @@ class MainTest(unittest.TestCase):
             # The per-project test and overlay inputs the nightly reads back.
             self.assertIn('"test_component": "hiprand"', written)
             self.assertIn('"object_globs": "lib/libhiprand.so*"', written)
-            # hipRAND is a math-libs project, so no other stage is built.
+            # hipRAND is a math-libs project, so that stage has to be built.
             self.assertIn("needs_math_libs=true", written)
-            self.assertIn("stage_wave1_json=[]", written)
-            self.assertIn("stage_wave2_json=[]", written)
 
 
 class EmitCmakeTest(unittest.TestCase):

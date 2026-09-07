@@ -193,13 +193,20 @@ this project's counters in the first place, which globs cannot undo because
 
 ### Selecting projects to run
 
-A nightly run measures every onboarded project. Dispatching the workflow by hand
-narrows that down: the `projects_to_test` input takes a comma-separated list of
-project names, and also accepts three case-insensitive **group aliases** that
-expand to a whole component group: `rocm_libraries_all`, `rocm_systems_all`, and
-`all`. They may be mixed with explicit names, an empty input still means "every
-project", and selecting a group with no onboarded projects fails the run with a
-clear error rather than launching an empty matrix.
+A nightly run measures every onboarded project the workflow can build.
+Dispatching by hand narrows that down: the `projects_to_test` input takes a
+comma-separated list of project names, and also accepts three case-insensitive
+**group aliases** that expand to a whole component group: `rocm_libraries_all`,
+`rocm_systems_all`, and `all`. They may be mixed with explicit names, and
+selecting a group with no onboarded projects fails the run with a clear error
+rather than launching an empty matrix.
+
+An empty input means every project with a build job, which today is
+`rocm_libraries_all`. `rccl` and `rocshmem` are onboarded but live in
+`comm-libs`, which this workflow does not build, so they are excluded from the
+default — and naming them, or `rocm_systems_all` or `all`, is rejected outright.
+The narrowing applies only to the default; an explicit request is never silently
+reduced. See [Adding a stage](#adding-a-stage).
 
 The aliases are expanded to concrete project names inside
 `configure_coverage_ci.py` before the job matrix is built, so nothing downstream
@@ -243,6 +250,16 @@ install tree. For most projects that is the shared library
 installed test binaries instead. Getting it wrong fails the report job, which
 refuses to run when no glob matches rather than publishing zero coverage.
 
-A project whose stage is not yet built by `multi_arch_ci_coverage_nightly.yml`
-also needs that stage's build job added there; today it builds compiler-runtime
-and math-libs.
+### Adding a stage
+
+`multi_arch_ci_coverage_nightly.yml` builds compiler-runtime and math-libs, and
+`configure_coverage_ci.py` rejects any selection that reaches beyond them
+(`BUILDABLE_STAGES`). That covers 17 of the 19 measurable projects.
+
+Onboarding a project from another stage needs a build job for that stage added
+to the workflow, and the stage added to `BUILDABLE_STAGES`. Order matters: a
+stage consumes inbound artifacts from other stages, so anything it depends on
+has to be built first. `comm-libs`, the stage `rccl` and `rocshmem` need, takes
+`hipify` and `rocjitsu` from `emulation` — so it needs two jobs, emulation then
+comm-libs, not one. Consult `build_topology` rather than assuming; a missing
+inbound artifact does not surface until well into the build.

@@ -4,7 +4,7 @@ An end-to-end walk through what happens between dispatching a coverage run and
 a report landing in Codecov. See [Code Coverage](code_coverage.md) for enabling
 coverage on a local build, the CMake options, and how to onboard a project.
 
-The short version: a coverage run builds every stage its selection needs,
+The short version: a coverage run builds the stages its selection needs,
 instruments only the selected projects, and reports on each of them separately
 from that one run.
 
@@ -12,10 +12,8 @@ from that one run.
 graph TD
     dispatch[Manual dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
     matrix --> compilerRuntime[Build instrumented compiler-runtime]
-    compilerRuntime --> generic[Build other needed stages]
     compilerRuntime --> mathLibs[Build instrumented math-libs]
-    generic --> report[Per project: configure, test, report]
-    mathLibs --> report
+    mathLibs --> report[Per project: configure, test, report]
     report --> codecov[Codecov]
 ```
 
@@ -34,9 +32,14 @@ names, or one of the group aliases. The rest can be left at their defaults — t
 than the nightly's because instrumented tests already run several times longer
 than normal ones.
 
-Leaving `projects_to_test` empty selects every onboarded project. That works,
-but it instruments all of them in one build, which is the expensive way to run
-this. Name what you want measured.
+Leaving `projects_to_test` empty selects every onboarded project this workflow
+can build. That works, but it instruments all of them in one build, which is the
+expensive way to run this. Name what you want measured.
+
+`rccl` and `rocshmem` are the exception. They live in `comm-libs`, which has no
+build job here, so naming them — or `rocm_systems_all` or `all` — is rejected by
+`setup_coverage_matrix` rather than failing hours later with nothing to overlay.
+See [Adding a stage](code_coverage.md#adding-a-stage).
 
 ## The regular nightly
 
@@ -49,8 +52,9 @@ The dispatch creates a workflow run with its own id, status, and logs.
 
 `setup_coverage_matrix` runs `configure_coverage_ci.py`, which reads
 `PROJECTS_TO_TEST`, `AMDGPU_FAMILIES` and `COVERAGE_CONFIG_SOURCE` and emits the
-per-project job matrix, the family list, `coverage_cmake_options`, and the build
-plan: `generic_stages_json` and `needs_math_libs`.
+per-project job matrix, the family list, `coverage_cmake_options`, and
+`needs_math_libs`. It also rejects any selection naming a project whose stage
+this workflow has no build job for.
 
 `build_instrumented_compiler_runtime` runs first and unconditionally. Every other
 stage takes its inbound artifacts from it — all 19 of `math-libs`' inbound
@@ -58,15 +62,12 @@ artifacts are produced there — so no selection can skip it. It also receives t
 coverage flags, since several rocm-systems projects (`rocprofiler-sdk`,
 `aqlprofile`, `amdsmi`, `rocprofiler-compute`) are built in that stage.
 
-`build_instrumented_generic_stages` then fans out over `generic_stages_json`,
-the build-once stages the selection needs beyond compiler-runtime — `comm-libs`
-for rccl and rocshmem, `profiler-apps` for rocprofiler-systems. It is skipped
-entirely for a selection confined to math-libs.
-
 `build_instrumented_math_libs` fans out over the GPU families, and is skipped
-when `needs_math_libs` is false.
+when `needs_math_libs` is false. It is the only other stage built: 17 of the 19
+measurable projects live there, and the remaining two are blocked upstream, so
+phase 1 carries no job for any further stage.
 
-Every stage gets `coverage_cmake_options` appended to its configure line.
+Both stages get `coverage_cmake_options` appended to their configure line.
 `configure_coverage_ci.py` collapses a selection covering a whole group into
 that group's option, so a full run reads `-DTHEROCK_COVERAGE_ALL=ON` while a
 narrow one reads `-DHIPRAND_ENABLE_COVERAGE=ON`. `CMakeLists.txt` expands the

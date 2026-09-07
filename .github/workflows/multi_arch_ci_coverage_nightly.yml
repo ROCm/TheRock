@@ -46,7 +46,7 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
         default: ""
       amdgpu_families:
         type: string
@@ -89,7 +89,7 @@ on:
         default: ""
       projects_to_test:
         type: string
-        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
         default: ""
       amdgpu_families:
         type: string
@@ -133,8 +133,6 @@ jobs:
       dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
       families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
       coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
-      stage_wave1_json: ${{ steps.matrix.outputs.stage_wave1_json }}
-      stage_wave2_json: ${{ steps.matrix.outputs.stage_wave2_json }}
       needs_math_libs: ${{ steps.matrix.outputs.needs_math_libs }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
@@ -184,77 +182,6 @@ jobs:
       contents: read
       id-token: write
 
-  # The built-once stages the selection reaches into, in dependency order.
-  # Selecting rccl or rocshmem asks for comm-libs, which takes hipify and
-  # rocjitsu from emulation, so emulation builds first and comm-libs second.
-  # configure_coverage_ci.py derives both waves from the build topology and
-  # fails if a selection ever needs a third.
-  #
-  # A selection confined to math-libs leaves both waves empty, which has to be
-  # guarded: fromJSON('[]') produces a job with no combinations.
-  build_instrumented_stages_wave1:
-    name: Build Instrumented Stages (wave 1)
-    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        needs.setup_coverage_matrix.outputs.stage_wave1_json != '[]'
-      }}
-    strategy:
-      fail-fast: false
-      matrix:
-        stage_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.stage_wave1_json) }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: ${{ matrix.stage_info.stage_name }}
-      stage_display_name: ${{ matrix.stage_info.stage_display_name }}
-      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
-      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      extra_cmake_options: >-
-        ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
-        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
-      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
-      release_type: ci
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-    permissions:
-      contents: read
-      id-token: write
-
-  build_instrumented_stages_wave2:
-    name: Build Instrumented Stages (wave 2)
-    needs:
-      [
-        setup_coverage_matrix,
-        build_instrumented_compiler_runtime,
-        build_instrumented_stages_wave1,
-      ]
-    if: >-
-      ${{
-        !failure() && !cancelled() &&
-        needs.setup_coverage_matrix.outputs.stage_wave2_json != '[]'
-      }}
-    strategy:
-      fail-fast: false
-      matrix:
-        stage_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.stage_wave2_json) }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit
-    with:
-      stage_name: ${{ matrix.stage_info.stage_name }}
-      stage_display_name: ${{ matrix.stage_info.stage_display_name }}
-      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
-      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      extra_cmake_options: >-
-        ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
-        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
-      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
-      release_type: ci
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-    permissions:
-      contents: read
-      id-token: write
-
   # The whole stage is built, not just the onboarded projects: the test jobs
   # below need the complete dependency set, and phase 1 instruments every
   # onboarded project in one pass rather than per changed project.
@@ -297,11 +224,13 @@ jobs:
   # even though the build instrumented all of them at once.
   coverage_report:
     name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
+    # compiler-runtime is named explicitly rather than relied on through
+    # math-libs: a selection that needs no math-libs build still tests against
+    # binaries that stage produced.
     needs:
       [
         setup_coverage_matrix,
-        build_instrumented_stages_wave1,
-        build_instrumented_stages_wave2,
+        build_instrumented_compiler_runtime,
         build_instrumented_math_libs,
       ]
     # `!failure() && !cancelled()` alone would let this run when
@@ -344,8 +273,6 @@ jobs:
     needs:
       - setup_coverage_matrix
       - build_instrumented_compiler_runtime
-      - build_instrumented_stages_wave1
-      - build_instrumented_stages_wave2
       - build_instrumented_math_libs
       - coverage_report
     runs-on: ubuntu-24.04

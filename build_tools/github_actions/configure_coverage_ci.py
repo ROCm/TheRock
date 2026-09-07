@@ -37,7 +37,6 @@ sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
 
 from github_actions_api import gha_set_output
-from _therock_utils.build_topology import get_topology
 
 DEFAULT_AMDGPU_FAMILIES = "gfx94X-dcgpu"
 DEFAULT_COVERAGE_CONFIG_SOURCE = "ROCm/rocm-libraries@main"
@@ -48,24 +47,28 @@ ROCM_LIBRARIES = "rocm-libraries"
 ROCM_SYSTEMS = "rocm-systems"
 
 # Build stages that can carry an instrumented project. compiler-runtime is
-# always built because every other stage takes its inbound artifacts from it;
-# the rest are built only when the selection needs them.
+# always built because every other stage takes its inbound artifacts from it.
 STAGE_COMPILER_RUNTIME = "compiler-runtime"
 STAGE_MATH_LIBS = "math-libs"
 STAGE_COMM_LIBS = "comm-libs"
 STAGE_PROFILER_APPS = "profiler-apps"
 
-# Display names for the per-stage build jobs, so the Actions UI reads the same
-# way as the regular nightly's. Stages a project can be registered against are
-# validated against these keys; emulation is here because build_stage_plan can
-# pull it in as a dependency of comm-libs, not because a project lives there.
-STAGE_DISPLAY_NAMES: dict[str, str] = {
-    STAGE_COMPILER_RUNTIME: "Coverage Compiler Runtime",
-    STAGE_MATH_LIBS: "Coverage Math Libs",
-    STAGE_COMM_LIBS: "Coverage Comm Libs",
-    STAGE_PROFILER_APPS: "Coverage Profiler Apps",
-    "emulation": "Coverage Emulation",
-}
+# Stages a project may be registered against, validated below.
+KNOWN_STAGES = frozenset(
+    {
+        STAGE_COMPILER_RUNTIME,
+        STAGE_MATH_LIBS,
+        STAGE_COMM_LIBS,
+        STAGE_PROFILER_APPS,
+    }
+)
+
+# Phase 1 has build jobs for these two only. The jobs that built any other
+# stage were removed while their sole measurable consumers -- rccl and rocshmem
+# in comm-libs -- are blocked upstream, so a selection reaching further is
+# rejected by resolve_build_stages() rather than failing hours later on a
+# missing inbound artifact.
+BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS})
 
 
 @dataclass(frozen=True)
@@ -513,8 +516,8 @@ for _key, _proj in COVERAGE_PROJECTS.items():
     # A project in a stage the workflow cannot build would be selectable and
     # then silently tested against uninstrumented binaries.
     assert (
-        _proj.stage in STAGE_DISPLAY_NAMES
-    ), f"{_key}: stage must be one of {sorted(STAGE_DISPLAY_NAMES)}"
+        _proj.stage in KNOWN_STAGES
+    ), f"{_key}: stage must be one of {sorted(KNOWN_STAGES)}"
     # An entry with neither would be selectable and instrument nothing; one
     # with both leaves it ambiguous whether the project can be measured.
     assert bool(_proj.coverage_option) != bool(
@@ -528,6 +531,12 @@ for _key, _proj in COVERAGE_PROJECTS.items():
 
 SUPPORTED_PROJECTS: frozenset[str] = frozenset(
     k for k, v in COVERAGE_PROJECTS.items() if v.coverage_option
+)
+# What an empty selection defaults to: everything measurable that this workflow
+# also has a build job for. Naming a project outside BUILDABLE_STAGES stays an
+# error, so the narrowing applies only to the default, never to an explicit ask.
+DEFAULT_PROJECTS: frozenset[str] = frozenset(
+    k for k in SUPPORTED_PROJECTS if COVERAGE_PROJECTS[k].stage in BUILDABLE_STAGES
 )
 # Group membership is limited to what can actually be measured, so a group
 # alias never schedules a job that is guaranteed to fail for want of profiles.
@@ -557,10 +566,15 @@ def parse_projects(raw_projects: str) -> list[str]:
     Recognizes the group aliases 'rocm_libraries_all', 'rocm_systems_all', and
     'all', which expand to a whole component group and may be mixed with
     explicit project names. Matching is case-insensitive.
+
+    An empty selection means every project this workflow can build, which is
+    narrower than 'all' while comm-libs has no build job. Asking for those
+    projects by name or via a group alias still fails in
+    resolve_build_stages(), so nothing is dropped from an explicit request.
     """
     requested = [p.strip().lower() for p in raw_projects.split(",") if p.strip()]
     if not requested:
-        return sorted(SUPPORTED_PROJECTS)
+        return sorted(DEFAULT_PROJECTS)
 
     expanded: list[str] = []
     unknown: list[str] = []
@@ -690,70 +704,27 @@ def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
     return options
 
 
-def _stage_display_name(stage: str) -> str:
-    return f"Stage - {STAGE_DISPLAY_NAMES.get(stage, f'Coverage {stage}')}"
+def resolve_build_stages(project_keys: list[str]) -> set[str]:
+    """Returns the stages the selection needs, rejecting what phase 1 cannot build.
 
-
-def build_stage_plan(project_keys: list[str]) -> tuple[list[list[dict]], bool]:
-    """Works out which build stages the selection needs, and in what order.
-
-    Returns the generic (built-once) stages grouped into waves that can each
-    build in parallel, plus whether the per-architecture math-libs stage is
-    needed. compiler-runtime is excluded because it is built unconditionally:
-    every other stage takes its inbound artifacts from it, so there is no
-    selection that does not need it.
-
-    A project's own stage is not the whole answer, which is why the topology is
-    consulted rather than just the registry. Selecting rccl asks for comm-libs,
-    but comm-libs takes hipify and rocjitsu from emulation, so emulation has to
-    be built too -- and built first, hence the waves.
+    Only compiler-runtime and math-libs have build jobs. A project from any
+    other stage would have nothing built for it, and that would not surface
+    until the test job found no instrumented files to overlay, hours in, so it
+    is an error here instead.
     """
-    topology = get_topology()
-
-    def producers(stage: str) -> set[str]:
-        return {
-            topology.get_stage_for_artifact(artifact)
-            for artifact in topology.get_inbound_artifacts(stage)
-        }
-
-    selected = {COVERAGE_PROJECTS[key].stage for key in project_keys}
-    needs_math_libs = STAGE_MATH_LIBS in selected
-
-    required: set[str] = set()
-    queue = list(selected)
-    while queue:
-        stage = queue.pop()
-        if stage in required:
-            continue
-        required.add(stage)
-        queue.extend(producers(stage) - required)
-
-    # math-libs has its own per-architecture job, and compiler-runtime is
-    # always built, so neither belongs in the generic waves. Both are treated
-    # as already satisfied when ordering what is left.
-    built = {STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS}
-    remaining = required - built
-
-    waves: list[list[dict]] = []
-    while remaining:
-        wave = sorted(s for s in remaining if not (producers(s) - built - {s}))
-        if not wave:
-            # Dropping the stages silently would leave the build to fail much
-            # later, on a missing inbound artifact.
-            raise ValueError(
-                f"cannot order coverage build stages {sorted(remaining)}: "
-                "their inbound artifacts form a cycle"
-            )
-        waves.append(
-            [
-                {"stage_name": s, "stage_display_name": _stage_display_name(s)}
-                for s in wave
-            ]
+    stages = {COVERAGE_PROJECTS[key].stage for key in project_keys}
+    unbuildable = sorted(stages - BUILDABLE_STAGES)
+    if unbuildable:
+        blocked = sorted(
+            key for key in project_keys if COVERAGE_PROJECTS[key].stage in unbuildable
         )
-        built.update(wave)
-        remaining -= set(wave)
-
-    return waves, needs_math_libs
+        raise ValueError(
+            f"cannot build coverage for {', '.join(blocked)}: this workflow has "
+            f"build jobs for {', '.join(sorted(BUILDABLE_STAGES))} only, not "
+            f"{', '.join(unbuildable)}. Restore the staged build jobs in "
+            "multi_arch_ci_coverage_nightly.yml to select these projects."
+        )
+    return stages
 
 
 def emit_cmake(output_path: Path) -> None:
@@ -829,16 +800,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         project_keys, amdgpu_families, config_repository, config_ref
     )
     coverage_flags = build_coverage_cmake_options(project_keys)
-    stage_waves, needs_math_libs = build_stage_plan(project_keys)
-    # The workflow has one job per wave, and Actions cannot generate jobs, so a
-    # third wave has to be a build error here rather than a stage the workflow
-    # quietly skips.
-    if len(stage_waves) > 2:
-        raise ValueError(
-            f"build_stage_plan produced {len(stage_waves)} stage waves but "
-            "multi_arch_ci_coverage_nightly.yml only has jobs for two; add "
-            "another build_instrumented_generic_stages_* job to match"
-        )
+    needs_math_libs = STAGE_MATH_LIBS in resolve_build_stages(project_keys)
     outputs = {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),
@@ -846,8 +808,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             [{"amdgpu_family": family} for family in amdgpu_families]
         ),
         "coverage_cmake_options": " ".join(coverage_flags),
-        "stage_wave1_json": json.dumps(stage_waves[0] if stage_waves else []),
-        "stage_wave2_json": json.dumps(stage_waves[1] if len(stage_waves) > 1 else []),
         "needs_math_libs": "true" if needs_math_libs else "false",
     }
 
