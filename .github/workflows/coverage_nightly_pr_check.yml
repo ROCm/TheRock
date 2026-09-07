@@ -85,10 +85,23 @@ jobs:
       # but naming it keeps the pin and its channel in one place.
       baseline_release_type: "nightly"
       amdgpu_families: "gfx94X-dcgpu"
-      # The whole registry, which is what phase 1 specifies: instrument the
-      # stack once and report every onboarded project. Expensive on purpose --
-      # this is the case a single-project run cannot demonstrate, since the
-      # overlay only has to hold sibling instrumentation out of the install
-      # when there are instrumented siblings to hold out.
-      projects_to_test: "all"
+      # hipRAND alone while the baseline and overlay path is being proven. The
+      # phase 1 scope is the whole registry, and the workflow supports it, but
+      # run 34119302776 showed the stack is not ready to be instrumented all at
+      # once:
+      #
+      #   - libclang_rt.profile_rocm.a is linked without -ldl or -lpthread, so
+      #     any instrumented executable fails to resolve dlsym, dladdr and
+      #     pthread_once. Shared libraries tolerate the undefined symbols, so
+      #     this only bites projects that build their own binaries: rocRAND's
+      #     tools, and hipCUB's and rocPRIM's tests.
+      #   - rccl's CMake refuses coverage outside a Debug build, and TheRock
+      #     builds Release.
+      #   - rocshmem does not survive coverage together with HIP relocatable
+      #     device code ("unknown special variable with appending linkage").
+      #
+      # The rocm-systems projects (rccl, rocshmem) are out until the second and
+      # third are addressed; the rest of math-libs waits on the first. hipRAND
+      # is unaffected -- it built cleanly instrumented in run 34098007786.
+      projects_to_test: "hiprand"
       test_type: "standard"
