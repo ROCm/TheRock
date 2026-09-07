@@ -69,9 +69,8 @@ EXAMPLES = [
     },
 ]
 
-# Per-example wall-clock cap. The examples run at full benchmark sizes and the CI
-# run sets HIPTHREADS_VCORES_PER_WGP=1 (see build_environment), so they can be
-# slow; keep this comfortably under the job timeout in fetch_test_configurations.py.
+# Per-example wall-clock cap. The examples run at full benchmark sizes, so keep this
+# comfortably under the job timeout in fetch_test_configurations.py.
 RUN_TIMEOUT_SECONDS = 1800
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -113,10 +112,11 @@ def build_environment() -> dict:
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
     environ_vars["CMAKE_GENERATOR"] = "Ninja"
-    # RUNTIME setting (read via getenv in thread.cxx): dial the scheduler's
-    # per-WGP vcore count down to 1 so the example binaries don't over-subscribe a
-    # shared CI GPU and deadlock. The shipped library keeps its default (16).
-    environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "1"
+    # No HIPTHREADS_VCORES_PER_WGP override: hipThreads used to size its scheduler by
+    # multiplying a fixed vcores-per-WGP by the CU count, which over-subscribed the GPU
+    # and hung on CDNA at the shipped default (ROCM-30565). It now derives a safe grid
+    # from the device itself (occupancy-checked, clamped per architecture), so the
+    # library's own default is safe to run under here without CI dialing it down.
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
     if IS_WINDOWS:
