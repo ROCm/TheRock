@@ -8,6 +8,7 @@ import platform
 import shlex
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 
@@ -38,10 +39,19 @@ def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     ).decode()
 
 
-def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def run_command(
+    args: list[str | Path],
+    cwd: Path = FILESET_TOOL.parent,
+    env: dict[str, str] | None = None,
+):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+    child_env = None
+    if env is not None:
+        child_env = os.environ | env
+    return subprocess.check_call(
+        args, cwd=str(cwd), stdin=subprocess.DEVNULL, env=child_env
+    )
 
 
 def write_text(p: Path, text: str):
@@ -379,6 +389,114 @@ class FilesetToolTest(unittest.TestCase):
         )
         self.assertIn("Warning", output)
         self.assertIn("nonexistent_prefix", output)
+
+    def _build_doc_artifact(self, artifact_dir: Path):
+        """Builds a doc artifact holding several files, into `artifact_dir`."""
+        input_dir = self.temp_dir / "input"
+        descriptor_file = self.temp_dir / "artifact.toml"
+        write_text(descriptor_file, ARTIFACT_DESCRIPTOR_1)
+        doc_dir = input_dir / "example" / "stage" / "share" / "doc"
+        # Deliberately not in sorted order, so the archive order depends on
+        # sorting rather than on creation order.
+        write_text(doc_dir / "z_file.so.1", "z")
+        write_text(doc_dir / "a_file.so.1", "a")
+        write_text(doc_dir / "m_file.so.1", "m")
+        run_command(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact",
+                "--descriptor",
+                descriptor_file,
+                "--artifact-name",
+                "test",
+                "--root-dir",
+                input_dir,
+                "doc",
+                artifact_dir,
+            ]
+        )
+
+    def _archive_digest(
+        self, artifact_dir: Path, archive: Path, env: dict[str, str] | None = None
+    ) -> str:
+        run_command(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact-archive",
+                artifact_dir,
+                "-o",
+                archive,
+            ],
+            env=env,
+        )
+        return calculate_hash(archive, "sha256").hexdigest()
+
+    def testArchiveReproducibleDespiteMetadataChanges(self):
+        """Identical content archives identically even if mtimes differ.
+
+        Without metadata normalization the two archives differ, which lets the
+        same generic artifact upload under two different SHAs. See
+        https://github.com/ROCm/TheRock/issues/4202.
+        """
+        artifact_dir = self.temp_dir / "artifact"
+        self._build_doc_artifact(artifact_dir)
+
+        digest1 = self._archive_digest(artifact_dir, self.temp_dir / "archive1.tar.xz")
+
+        # Simulate the same content produced by a later build.
+        for p in artifact_dir.rglob("*"):
+            if p.is_file():
+                os.utime(p, (1700000000, 1700000000))
+
+        digest2 = self._archive_digest(artifact_dir, self.temp_dir / "archive2.tar.xz")
+
+        self.assertEqual(digest1, digest2)
+
+    def testArchiveMemberMetadataIsNormalized(self):
+        """Archive members carry no build-specific timestamps or ownership."""
+        artifact_dir = self.temp_dir / "artifact"
+        self._build_doc_artifact(artifact_dir)
+        archive = self.temp_dir / "archive.tar.xz"
+        self._archive_digest(
+            artifact_dir, archive, env={"SOURCE_DATE_EPOCH": "1700000000"}
+        )
+
+        with tarfile.open(archive, mode="r:xz") as tf:
+            members = tf.getmembers()
+        self.assertTrue(members)
+        for member in members:
+            self.assertEqual(member.mtime, 1700000000, member.name)
+            self.assertEqual(member.uid, 0, member.name)
+            self.assertEqual(member.gid, 0, member.name)
+            self.assertEqual(member.uname, "root", member.name)
+            self.assertEqual(member.gname, "root", member.name)
+
+        # The manifest is stored first; the rest are sorted so that directory
+        # iteration order cannot change the archive hash.
+        names = [m.name for m in members]
+        self.assertEqual(names[0], "artifact_manifest.txt")
+        self.assertEqual(names[1:], sorted(names[1:]))
+
+    def testArchiveMtimeIsNotTheEpoch(self):
+        """Unconfigured archives still get a real timestamp.
+
+        Extraction restores mtime, so an epoch timestamp would make freshly
+        installed SDK inputs look older than a downstream project's existing
+        build outputs and suppress rebuilds.
+        """
+        artifact_dir = self.temp_dir / "artifact"
+        self._build_doc_artifact(artifact_dir)
+        archive = self.temp_dir / "archive.tar.xz"
+        # No SOURCE_DATE_EPOCH: exercises the git-commit-time path.
+        self._archive_digest(artifact_dir, archive)
+
+        with tarfile.open(archive, mode="r:xz") as tf:
+            members = tf.getmembers()
+        self.assertTrue(members)
+        for member in members:
+            self.assertGreater(member.mtime, 0, member.name)
 
 
 if __name__ == "__main__":

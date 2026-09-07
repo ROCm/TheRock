@@ -161,6 +161,51 @@ Each sub-project, by default, uses a standard directory layout for its build:
 Subprojects that opt in to source file globbing even when otherwise skipped
 (e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
+### `THEROCK_SOURCE_DATE_EPOCH`
+
+Empty by default. When set to a Unix timestamp, it is exported as
+`SOURCE_DATE_EPOCH` to every subproject configure and build:
+
+```bash
+cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=1700000000 ...
+```
+
+Setting it *is* the opt-in — there is no separate switch, because exporting is
+the only thing the build does with a timestamp. The build itself writes no
+archives; the tools that do run afterwards and resolve their own value from the
+source state at that moment, so nothing is derived here. Deriving it at
+configure would only freeze a value that goes stale as soon as anything is
+pulled.
+
+To pin the build to the current source state:
+
+```bash
+cmake -B build -DTHEROCK_SOURCE_DATE_EPOCH=$(python build_tools/_therock_utils/source_date.py) ...
+```
+
+> [!WARNING]
+> This rebuilds the tree whenever the value changes — it lands in every
+> subproject's build command, and ninja re-runs a command whose text changed.
+> `SOURCE_DATE_EPOCH` is also honored by far more than archive tooling. In this
+> repository the changes that actually land are:
+>
+> - CMake's `string(TIMESTAMP)` is pinned. Most sites are cosmetic copyright
+>   years, but `ROCKE_ENGINE_VERSION` (`rocke/platform/CMakeLists.txt`) embeds a
+>   build date into a shipped version string *on purpose*, to keep successive
+>   builds distinguishable. Pinning it is a behavior change for that component.
+> - Doxygen `HTML_TIMESTAMP`/`LATEX_TIMESTAMP` output is pinned, including the
+>   hip docs target that `clr/hipamd/packaging` runs as part of `ALL`.
+> - setuptools uses it for zip entry timestamps.
+> - GCC/Clang rewrite `__DATE__`/`__TIME__`. Near-harmless here: `rocm-systems`
+>   has no real uses, and the handful in `rocm-libraries` and `openmp` are all
+>   behind default-off flags.
+> - binutils' `ar.exp` test *requires the variable to be unset* and will fail if
+>   rocgdb's test suite runs with it exported.
+> - It does **not** help `rccl`'s Debian/RPM changelog dates, which shell out to
+>   `date -R` and ignore it.
+
+See [Reproducible Archives](reproducible_archives.md) for the full picture.
+
 ## Developer Cookbook
 
 TheRock aims to not just be a CI tool but to be a daily driver for developer

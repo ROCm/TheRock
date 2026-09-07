@@ -54,6 +54,7 @@ files (e.g. ``lib/hipblaslt/library/*.co``) only for the target family.
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
+import functools
 import json
 import os
 import shlex
@@ -64,6 +65,8 @@ import time
 from pathlib import Path
 
 from zlib_ng import gzip_ng_threaded
+
+from _therock_utils import source_date
 
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
@@ -108,6 +111,51 @@ def log_command_duration(*, start_time: float, start_cpu: os.times_result) -> No
         f"++ Completed in {elapsed:.1f}s "
         f"(CPU: {cpu_user:.1f}s user, {cpu_system:.1f}s system)"
     )
+
+
+@functools.cache
+def _tar_is_gnu() -> bool:
+    """Whether `tar` on PATH is GNU tar.
+
+    The reproducibility flags below are GNU extensions. Windows ships bsdtar
+    (libarchive), which rejects `--sort` outright, so they cannot be passed
+    unconditionally.
+    """
+    try:
+        version = subprocess.run(
+            ["tar", "--version"], capture_output=True, text=True, check=False
+        ).stdout
+    except OSError:
+        return False
+    return "GNU tar" in version
+
+
+def reproducible_tar_flags(source_date_epoch: int | None) -> list[str]:
+    """Flags that make `tar` output depend only on the content.
+
+    Without these a tarball varies between builds of identical content: entry
+    order follows directory iteration, and each entry records its own build-time
+    mtime plus the building user's uid/gid. Unlike Python's `tarfile`, `tar`
+    offers no filter hook, so this has to go on the command line.
+
+    Returns an empty list when the timestamp is unknown or `tar` is not GNU, in
+    which case the tarball is simply not reproducible.
+    """
+    if source_date_epoch is None:
+        return []
+    if not _tar_is_gnu():
+        log(
+            "  Warning: tar is not GNU tar; tarball will not be reproducible "
+            "(entry order and metadata will vary between builds)"
+        )
+        return []
+    return [
+        "--sort=name",
+        f"--mtime=@{source_date_epoch}",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+    ]
 
 
 def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
@@ -189,9 +237,10 @@ def compress_with_zlib_ng(
     tarball_path: Path,
     compression_level: int,
     compression_threads: int,
+    source_date_epoch: int | None = None,
 ) -> None:
     """Stream a tar archive through zlib-ng's threaded gzip writer."""
-    command = ["tar", "cf", "-", "."]
+    command = ["tar", "cf", "-", *reproducible_tar_flags(source_date_epoch), "."]
     log(
         f"++ Exec [{source_dir}]$ {shlex.join(command)} | "
         "zlib_ng.gzip_ng_threaded.open"
@@ -238,6 +287,7 @@ def compress_tarball(
     compression_backend: str = DEFAULT_COMPRESSION_BACKEND,
     compression_level: int = DEFAULT_COMPRESSION_LEVEL,
     compression_threads: int = DEFAULT_COMPRESSION_THREADS,
+    source_date_epoch: int | None = None,
 ) -> None:
     """Compress a directory into a .tar.gz tarball.
 
@@ -254,9 +304,22 @@ def compress_tarball(
                 tarball_path=tarball_path,
                 compression_level=compression_level,
                 compression_threads=compression_threads,
+                source_date_epoch=source_date_epoch,
             )
         elif compression_backend == "system-gzip":
-            run_command(["tar", "cfz", str(tarball_path), "."], cwd=source_dir)
+            # NOTE: gzip embeds its own mtime, which `tar cfz` takes from the
+            # clock. This backend is therefore never fully reproducible; the
+            # zlib-ng path above writes a gzip header with no timestamp.
+            run_command(
+                [
+                    "tar",
+                    "cfz",
+                    str(tarball_path),
+                    *reproducible_tar_flags(source_date_epoch),
+                    ".",
+                ],
+                cwd=source_dir,
+            )
         else:
             raise ValueError(f"Unknown compression backend: {compression_backend}")
     except BaseException:
@@ -355,6 +418,15 @@ def main(argv: list[str] | None = None) -> None:
         type=int,
         default=None,
         help="Concurrent tarballs to compress (default: auto based on CPU count)",
+    )
+    parser.add_argument(
+        "--fail-on-source-drift",
+        action="store_true",
+        help=(
+            "Error instead of warning when the artifacts being packaged were "
+            "built from a different commit, or from a dirty tree, than this "
+            "checkout. Recommended for release builds."
+        ),
     )
     args = parser.parse_args(argv)
     if args.compression_threads < 1:
@@ -486,6 +558,25 @@ def main(argv: list[str] | None = None) -> None:
                 )
             )
 
+    # Resolved once for the whole release, and only now that a flattened tree
+    # exists to read therock_manifest.json out of. Every tarball in a release
+    # must carry the same timestamp, and it should describe the source the
+    # artifacts were built from rather than whatever this job checked out.
+    manifest_dir = next(
+        (
+            t.source_dir
+            for t in compress_tasks
+            if source_date.find_manifest(t.source_dir)
+        ),
+        None,
+    )
+    source_date_epoch = source_date.resolve_checked(
+        manifest_dir=manifest_dir,
+        fail_on_drift=args.fail_on_source_drift,
+        report=log,
+    )
+    log(f"Source timestamp: {source_date_epoch}")
+
     # Phase 2: Compress tarballs in parallel, with optional intra-archive
     # parallelism from zlib-ng. Start the expected largest archives first to
     # reduce the tail when there are more archives than compression workers.
@@ -516,6 +607,7 @@ def main(argv: list[str] | None = None) -> None:
                 compression_backend=args.compression_backend,
                 compression_level=args.compression_level,
                 compression_threads=args.compression_threads,
+                source_date_epoch=source_date_epoch,
             ): task.tarball_path
             for task in compress_tasks
         }

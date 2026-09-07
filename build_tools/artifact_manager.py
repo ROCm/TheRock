@@ -55,6 +55,7 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 from _therock_utils.archive_util import open_archive_for_read
+from _therock_utils import source_date
 from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.cmake_amdgpu_targets import (
     amdgpu_family_map,
@@ -637,6 +638,9 @@ class CompressRequest:
     compression_level: Optional[int] = (
         None  # None = use algorithm default (3 for zstd, 6 for xz)
     )
+    # Environment for the fileset_tool worker, carrying the source timestamp.
+    # Resolved once by the caller: see _archive_child_env().
+    child_env: Optional[dict] = None
 
 
 @dataclass
@@ -714,7 +718,9 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
             ]
         )
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, env=request.child_env
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"fileset_tool.py artifact-archive failed (returncode={result.returncode}): {result.stderr}"
@@ -846,6 +852,15 @@ def do_push(args: argparse.Namespace):
     compress_requests = []
     direct_upload_requests = []
 
+    # Resolved once here rather than per archive: it costs several git calls,
+    # and every worker must agree on it or the archives are not reproducible.
+    archive_env = source_date.child_env(
+        export_standard_var=args.export_source_date_epoch,
+        manifest_dir=artifacts_dir,
+        fail_on_drift=args.fail_on_source_drift,
+    )
+    log(f"  Source timestamp: {archive_env[source_date.ENV_VAR]}")
+
     for item in artifacts_dir.iterdir():
         if item.is_dir():
             # Exploded artifact directory - needs compression
@@ -863,6 +878,7 @@ def do_push(args: argparse.Namespace):
                     archive_path=upload_dir / archive_name,
                     compression_type=args.compression_type,
                     compression_level=args.compression_level,
+                    child_env=archive_env,
                 )
             )
         elif (item.suffix == ".xz" and item.name.endswith(".tar.xz")) or (
@@ -1388,6 +1404,7 @@ def main(argv: Optional[List[str]] = None):
         default=10,
         help="Number of concurrent uploads (default: 10)",
     )
+    source_date.add_source_date_arguments(push_parser)
     push_parser.set_defaults(func=do_push)
 
     # copy command

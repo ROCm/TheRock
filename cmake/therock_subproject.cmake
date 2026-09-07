@@ -1466,6 +1466,22 @@ function(_therock_cmake_subproject_build_env_pairs out_var)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
+  # Opt-in only, and deliberately empty by default.
+  #
+  # Anything added to this list lands verbatim in the `cmake -E env` prefix of
+  # every subproject's configure and build command, and ninja re-runs a command
+  # whose text changed. So a timestamp here rebuilds the whole tree whenever it
+  # moves. Nothing in the build graph needs one -- archives are written after
+  # the build, by tools that resolve their own -- which is why this is off
+  # unless THEROCK_SOURCE_DATE_EPOCH was set explicitly.
+  #
+  # Compared against the empty string rather than if(THEROCK_SOURCE_DATE_EPOCH):
+  # the latter is false for "0" and would drop a deliberate epoch-zero value.
+  if(NOT "${THEROCK_SOURCE_DATE_EPOCH}" STREQUAL "")
+    list(APPEND _build_env_pairs
+      "SOURCE_DATE_EPOCH=${THEROCK_SOURCE_DATE_EPOCH}")
+  endif()
+
   set("${out_var}" "${_build_env_pairs}" PARENT_SCOPE)
 endfunction()
 
