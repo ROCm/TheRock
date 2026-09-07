@@ -44,7 +44,9 @@ on:
         type: string
         default: ""
       run_full_pytorch_tests:
-        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        description: >-
+          Request full PyTorch tests for stable refs daily and the nightly ref
+          on Sundays.
         type: boolean
         default: false
       build_pytorch:
@@ -93,7 +95,9 @@ on:
         type: string
         default: "gfx110x"
       run_full_pytorch_tests:
-        description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        description: >-
+          Request full PyTorch tests for stable refs daily and the nightly ref
+          on Sundays.
         type: boolean
         default: false
       build_pytorch:
@@ -126,6 +130,7 @@ run-name: >-
   Multi-Arch Release (${{ inputs.release_type }})
   | Linux: ${{ inputs.linux_amdgpu_families || 'none' }}
   | Windows: ${{ inputs.windows_amdgpu_families || 'none' }}
+  | PyTorch full tests: ${{ inputs.run_full_pytorch_tests }}
 
 jobs:
   notify_quartz_start:

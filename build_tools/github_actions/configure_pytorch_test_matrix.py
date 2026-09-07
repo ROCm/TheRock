@@ -149,6 +149,11 @@ def format_test_summary(
             "artifact validation before any GPU tests.",
         ]
     )
+    if test_level == "full":
+        lines.append(
+            "The build workflow dispatches the additional full suite "
+            "separately from this standard GPU test matrix."
+        )
     return "\n".join(lines)
 
 
@@ -182,7 +187,7 @@ def main(argv: list[str]) -> None:
         default="standard",
         help=(
             "Test coverage level. 'none' stops after build-time wheel "
-            "validation; 'standard' runs the GPU test matrix."
+            "validation; 'standard' and 'full' run the standard GPU matrix."
         ),
     )
     parser.add_argument(

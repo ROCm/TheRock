@@ -42,7 +42,8 @@ on:
       test_level:
         description: >-
           PyTorch test coverage: 'none' stops after build-time wheel validation
-          and 'standard' runs the selected GPU suite.
+          in the build job, 'standard' runs the selected GPU suite, and 'full'
+          also dispatches the full suite when the build includes gfx94X-dcgpu.
         type: string
         default: "standard"
       python_version:
@@ -91,12 +92,6 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
-      run_full_pytorch_tests:
-        description: >-
-          Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
-        type: boolean
-        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -126,6 +121,7 @@ on:
         options:
           - none
           - standard
+          - full
         default: standard
       python_version:
         description: Python version to build wheels for (for example, "3.12").
@@ -192,12 +188,6 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
-      run_full_pytorch_tests:
-        description: >-
-          Dispatch the full PyTorch test suite after a successful build.
-          Only takes effect for gfx94X-dcgpu Python 3.12 builds.
-        type: boolean
-        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -579,14 +569,16 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
+  # Full-suite dispatch currently targets gfx94X-dcgpu because the runner
+  # inputs below are gfx942-specific. The caller controls the Python version
+  # and test level. Generalize this to a per-family runner matrix as more
+  # full-test runner configurations are enabled.
   dispatch_pytorch_wheels_full_test:
     # Keep this name static so it remains readable when the job is skipped.
     name: Dispatch PyTorch Full Tests
     if: >-
       ${{
-        inputs.run_full_pytorch_tests &&
-        inputs.python_version == '3.12' &&
+        inputs.test_level == 'full' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
     needs: [build_pytorch_wheels]
@@ -594,21 +586,8 @@ jobs:
     permissions:
       actions: write
       contents: read
-    env:
-      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
     steps:
-      - name: Check full test cadence
-        id: cadence
-        # Release branches test daily; the nightly branch tests weekly (Sunday).
-        run: |
-          if [ "${PYTORCH_GIT_REF}" != "nightly" ] || [ "$(date -u +%u)" = "7" ]; then
-            echo "dispatch=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "dispatch=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Dispatch full PyTorch test workflow
-        if: ${{ steps.cadence.outputs.dispatch == 'true' }}
         uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
           workflow: test_pytorch_wheels_full.yml
