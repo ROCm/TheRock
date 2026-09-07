@@ -73,10 +73,11 @@ jobs:
       # only installs the baseline on the test runner, where prebuilt binaries
       # are executed and no package config is read.
       #
-      # Verified before pinning that this run publishes gfx942 artifacts for
-      # every selected project -- blas, fft, hipdnn, hiptensor, prim, rand,
-      # rccl, rocshmem, rocwmma, solver and sparse, plus the _test archives the
-      # header-only projects report against.
+      # Verified before pinning that this run publishes artifacts covering
+      # every selected project: blas, fft, hipdnn, hiptensor, rand, solver and
+      # sparse. Not all are per-target -- hipdnn is generic throughout and
+      # solver's tests are generic -- so checking only for _gfx942 understates
+      # what is there.
       baseline_run_id: "34068476531"
       # The bucket lookup queries the run through the GitHub API, so it has to
       # be told where the run lives; ROCm/TheRock returns 404 for a rockrel id.
@@ -85,23 +86,30 @@ jobs:
       # but naming it keeps the pin and its channel in one place.
       baseline_release_type: "nightly"
       amdgpu_families: "gfx94X-dcgpu"
-      # hipRAND alone while the baseline and overlay path is being proven. The
-      # phase 1 scope is the whole registry, and the workflow supports it, but
-      # run 34119302776 showed the stack is not ready to be instrumented all at
-      # once:
+      # Every rocm-libraries project that builds a shared library. Run
+      # 34135220913 proved the path end to end on hipRAND -- instrumented
+      # build, baseline install, overlay, tests and a 77% report -- once
+      # libclang_rt.profile_rocm.a's own dependencies (-ldl, -lpthread) were
+      # added to the link line, which had been failing every instrumented
+      # binary before that.
       #
-      #   - libclang_rt.profile_rocm.a is linked without -ldl or -lpthread, so
-      #     any instrumented executable fails to resolve dlsym, dladdr and
-      #     pthread_once. Shared libraries tolerate the undefined symbols, so
-      #     this only bites projects that build their own binaries: rocRAND's
-      #     tools, and hipCUB's and rocPRIM's tests.
-      #   - rccl's CMake refuses coverage outside a Debug build, and TheRock
-      #     builds Release.
-      #   - rocshmem does not survive coverage together with HIP relocatable
-      #     device code ("unknown special variable with appending linkage").
+      # Named explicitly rather than using rocm_libraries_all because the four
+      # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA) are left
+      # out. They have no library of their own to instrument, so they report
+      # against instrumented test binaries instead, and their inline code is
+      # the linkonce_odr case the overlay cannot fully isolate. Worth doing,
+      # but worth doing separately.
       #
-      # The rocm-systems projects (rccl, rocshmem) are out until the second and
-      # third are addressed; the rest of math-libs waits on the first. hipRAND
-      # is unaffected -- it built cleanly instrumented in run 34098007786.
-      projects_to_test: "hiprand"
+      # rccl and rocshmem are absent because they are not selectable: they
+      # live in comm-libs, which has no build job here. Both are also blocked
+      # upstream -- rccl's CMake refuses coverage outside a Debug build, and
+      # rocshmem fails on coverage plus HIP relocatable device code.
+      #
+      # hipBLASLt is included deliberately even though it failed to link
+      # hipblaslt-test with "unable to find library -lrocroller" in run
+      # 34119302776. Whether that is coverage-related was never established,
+      # and this run is how we find out.
+      projects_to_test: >-
+        hipblas,hipblaslt,hipdnn,hipfft,hiprand,hipsolver,hipsparselt,
+        hiptensor,rocblas,rocfft,rocrand,rocsolver,rocsparse
       test_type: "standard"
