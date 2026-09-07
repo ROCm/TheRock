@@ -151,6 +151,18 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.log_stage_dir("compiler-runtime", "")
         self._assert_relative_path(loc, "99999-linux/logs/compiler-runtime")
 
+    def test_build_observability_stage_per_arch(self):
+        loc = self.root.build_observability_stage("math-libs", "gfx1151")
+        self._assert_relative_path(
+            loc, "99999-linux/logs/math-libs/gfx1151/build_observability.html"
+        )
+
+    def test_build_observability_stage_generic(self):
+        loc = self.root.build_observability_stage("compiler-runtime")
+        self._assert_relative_path(
+            loc, "99999-linux/logs/compiler-runtime/build_observability.html"
+        )
+
     # -- Manifests --
 
     def test_manifest_dir(self):

@@ -15,11 +15,40 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from _therock_utils.build_topology import get_topology
 
 # Hardcoded for now — prebuilt artifacts are always fetched from ROCm/TheRock
 # workflow runs. TODO(#3399): when baseline_run_id carries a repo qualifier,
 # pass the repo slug through from CIInputs instead of hardcoding.
 _REPO_SLUG = "ROCm/TheRock"
+
+# Stages that emit a per-stage build_observability.html report, keyed by the
+# `platform` value used to build the WorkflowOutputRoot log prefix.
+#
+# The report is produced by the "Analyze build times" step, which today only
+# lives in .github/workflows/multi_arch_build_portable_linux_artifacts.yml. Only
+# the Linux stages routed through that reusable workflow generate a report, so
+# only they get a link here. `wsl-rocdxg` (a separate reusable workflow) and the
+# Windows build workflow are not wired for the report yet and are intentionally
+# omitted to avoid permanently-404 links.
+#
+# Keep this in sync with the stage jobs in
+# .github/workflows/multi_arch_build_portable_linux.yml. Stage names must match
+# `[build_stages.*]` in BUILD_TOPOLOGY.toml (used for per-arch fan-out).
+_OBSERVABILITY_STAGES: dict[str, list[str]] = {
+    "linux": [
+        "compiler-runtime",
+        "runtime-tests",
+        "math-libs",
+        "comm-libs",
+        "storage-libs",
+        "debug-tools",
+        "dctools-core",
+        "profiler-apps",
+        "cv-libs",
+        "media-libs",
+    ],
+}
 
 
 def format_summary(
@@ -63,6 +92,8 @@ def format_summary(
     lines.append("### build-rocm")
     lines.append("")
     _append_build_rocm(lines, ci_inputs, outputs)
+
+    _append_build_observability(lines, ci_inputs, outputs)
 
     lines.append("### test-rocm")
     lines.append("")
@@ -219,6 +250,91 @@ def _append_build_rocm(
         "The report is generated after the setup job completes and the link may be "
         "unavailable until then; it is not produced on ASAN workflows."
     )
+
+
+def _append_build_observability(
+    lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
+) -> None:
+    """Append one compact horizontal list of per-stage build-observability links.
+
+    Previously each stage job appended its own `[Build Observability]` link to
+    that job's step summary, scattering ~10 links across the run and bloating the
+    aggregated summary page. This gathers them into a single line in the top-level
+    configure summary. Each entry is a short markdown link (`[stage](url)`) so the
+    rendered summary shows just the stage name instead of expanding the full S3
+    URL, and the whole set flows horizontally instead of a tall per-stage table.
+    Links are deterministic (derived from the stage log layout) so they can be
+    rendered before the stages finish; a link 404s until its stage uploads its
+    logs (i.e. a 404 means that stage has not produced a report yet).
+    """
+    linux_config = outputs.builds.linux
+    if linux_config is None:
+        return
+
+    # Stages fetched from a baseline run (prebuilt) or excluded (skipped) do not
+    # produce a fresh report in this run's output tree, so omit them.
+    omit = set(linux_config.prebuilt_stages) | set(linux_config.skip_stages)
+
+    stage_types = {s.name: s.type for s in get_topology().get_build_stages()}
+    families = [f["amdgpu_family"] for f in linux_config.per_family_info]
+
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=ci_inputs.run_id, platform="linux"
+    )
+
+    links: list[str] = []
+    for stage in _OBSERVABILITY_STAGES["linux"]:
+        if stage in omit:
+            continue
+        # Per-arch stages produce one report per family; generic stages one.
+        stage_families = families if stage_types.get(stage) == "per-arch" else [""]
+        for family in stage_families:
+            url = output_root.build_observability_stage(stage, family).https_url
+            label = f"{stage}/{family}" if family else stage
+            links.append(f"[{label}]({url})")
+
+    if not links:
+        return
+
+    profiling_on = _resource_profiling_enabled(ci_inputs)
+    status = "**ON**" if profiling_on else "**OFF**"
+
+    lines.append("## Build Observability")
+    lines.append("")
+    # One compact horizontal row of short links instead of a tall per-stage table:
+    # the link text stays short so the rendered summary does not expand the raw S3
+    # URLs, and a stage that has not produced a report yet simply 404s on click.
+    lines.append("📈 Per-stage build-time reports: " + " · ".join(links))
+    lines.append("")
+    lines.append(
+        f"> Resource profiling: {status} for this run — when ON, each report also "
+        "embeds a CPU/memory usage timeline (`resource_info.py` wraps ccache as the "
+        "compiler launcher, so ccache still caches); when OFF, reports contain ninja "
+        "build timings only. Profiling defaults ON for `nightly`/`release` builds and "
+        "OFF otherwise. Force it via the `force_resource_profiling` workflow_dispatch "
+        'input: `"true"` to force on, `"false"` to force off, empty for the default '
+        "gate. Each link 404s until its stage uploads its logs; Linux only for now; "
+        "prebuilt and skipped stages are omitted."
+    )
+    lines.append("")
+
+
+def _resource_profiling_enabled(ci_inputs: CIInputs) -> bool:
+    """Compute whether resource-usage profiling is active for this run.
+
+    Mirrors the ENABLE_RESOURCE_PROFILING gate in
+    multi_arch_build_portable_linux_artifacts.yml so the summary reports the
+    effective state:
+      force == "true"  -> on
+      force == "false" -> off
+      otherwise        -> on for release_type nightly/release, else off
+    """
+    force = (ci_inputs.force_resource_profiling or "").strip().lower()
+    if force == "true":
+        return True
+    if force == "false":
+        return False
+    return ci_inputs.release_type in ("nightly", "release")
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
