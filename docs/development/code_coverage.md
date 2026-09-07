@@ -125,20 +125,21 @@ report.
 
 ### Scheduling
 
-The regular nightly dispatches `multi_arch_ci_coverage_nightly.yml` once its
-build stage finishes, handing over its own run id as `baseline_run_id`. Coverage
-therefore has a run id of its own: a coverage failure does not colour the
-nightly's status, and the nightly's test jobs — which rarely all pass — do not
-hold coverage up. It waits on the build alone because that is the part producing
-the artifacts coverage needs.
+`multi_arch_ci_coverage_nightly.yml` is dispatched by hand. Pick a recent
+nightly run, pass its id as `baseline_run_id`, and leave
+`baseline_release_type` at `nightly`. There is no cron trigger, and the regular
+nightly does not know about this workflow.
 
-The dispatch is gated on the `COVERAGE_NIGHTLY_ENABLED` repository variable
-being `"true"`, so a repository or fork that does not want nightly coverage
-simply never sets it. Dispatching the workflow by hand and pasting in a
-`baseline_run_id` from a recent nightly does the same thing, which is the
-supported way to reproduce or re-run a nightly report.
+Coverage therefore has a run id of its own, which is what keeps a coverage
+failure from colouring the nightly's status and keeps the nightly's test jobs —
+which rarely all pass — from holding coverage up.
 
-Nightly coverage currently runs every onboarded project on one architecture
+Having the regular nightly dispatch this workflow automatically once its build
+finishes, handing over its own run id, is a later change. Nothing else has to
+move for it: `baseline_run_id` is already an input, so that change only adds the
+dispatching job.
+
+Nightly coverage runs every onboarded project on one architecture
 (gfx942, the `gfx94X-dcgpu` family). Running only what changed, and running more
 architectures, come later.
 

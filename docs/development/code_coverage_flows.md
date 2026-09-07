@@ -1,78 +1,66 @@
 # Nightly Code Coverage Flow
 
-An end-to-end walk through what happens between the regular nightly finishing
-its build and a coverage report landing in Codecov. See
-[Code Coverage](code_coverage.md) for enabling coverage on a local build, the
-CMake options, and how to onboard a project.
+An end-to-end walk through what happens between dispatching a coverage run and
+a report landing in Codecov. See [Code Coverage](code_coverage.md) for enabling
+coverage on a local build, the CMake options, and how to onboard a project.
 
-The short version: the regular nightly dispatches a separate coverage run and
-hands over its own run id. The coverage run instruments the whole stack in one
-build, then reconstructs per-project isolation at test time by installing the
-regular nightly's non-instrumented artifacts and overlaying only the project
-under test.
+The short version: a coverage run instruments the whole stack in one build, then
+reconstructs per-project isolation at test time by installing a regular
+nightly's non-instrumented artifacts and overlaying only the project under test.
 
 ```mermaid
 graph TD
-    buildArtifacts[Nightly - build_artifacts] --> trigger[trigger_coverage_nightly]
-    trigger -.->|dispatch, baseline_run_id| matrix[Coverage - setup_coverage_matrix]
+    dispatch[Manual dispatch with baseline_run_id] --> matrix[setup_coverage_matrix]
     matrix --> compilerRuntime[Build instrumented compiler-runtime]
     compilerRuntime --> mathLibs[Build instrumented math-libs]
     mathLibs --> report[Per project: configure, test, report]
-    buildArtifacts -.->|non-instrumented artifacts| report
+    nightly[Regular nightly run - baseline] -.->|non-instrumented artifacts| report
     report --> codecov[Codecov]
 ```
 
-Solid edges are job dependencies inside one workflow run. Dotted edges cross
-run boundaries: the dispatch that starts the coverage run, and the baseline
-artifacts its test jobs install.
+Solid edges are job dependencies inside the coverage run. The dotted edge
+crosses a run boundary: the baseline artifacts the test jobs install come from a
+different workflow run entirely.
 
 ## Trigger point
 
-`multi_arch_release_linux.yml` (the regular nightly) owns the
-`trigger_coverage_nightly` job. It depends on `build_artifacts` alone, not on
-the nightly's test jobs: those are dispatched asynchronously and rarely all
-pass, so waiting on them would mean coverage rarely runs, while the artifacts
-coverage actually needs are ready as soon as the build is.
+`multi_arch_ci_coverage_nightly.yml` is started by hand, from the Actions tab or
+the `gh` CLI. There is no cron trigger, and the regular nightly does not know
+about this workflow.
 
-Four conditions gate the dispatch:
+Two inputs matter for a normal run. `baseline_run_id` is the run id of a recent
+regular nightly, which supplies every non-instrumented dependency;
+`baseline_release_type` is the channel that run published to, normally
+`nightly`. The rest can be left at their defaults: every onboarded project, the
+`gfx94X-dcgpu` family, and coverage's own `standard` test type, which is
+narrower than the nightly's because instrumented tests already run several times
+longer than normal ones.
 
-| Condition                                 | Why                                                                  |
-| ----------------------------------------- | -------------------------------------------------------------------- |
-| `vars.COVERAGE_NIGHTLY_ENABLED == 'true'` | Opt-in per repository while coverage is being rolled out             |
-| `release_type` starts with `nightly`      | Dev builds are dispatched ad hoc and are not a useful baseline       |
-| `build_variant == 'release'`              | Coverage measures the shipping configuration                         |
-| Families include `gfx94X-dcgpu`           | RFC0014 phase 1 collects coverage on the single default architecture |
+Leaving `baseline_run_id` empty is supported but means something different: the
+run's own instrumented artifacts are tested as built, so a project's
+instrumented dependencies are measured alongside it.
 
-The job uses `benc-uk/workflow-dispatch` (pinned by SHA, with
-`permissions: actions: write`) to start `multi_arch_ci_coverage_nightly.yml`
-with four inputs: `baseline_run_id` set to `github.run_id`,
-`baseline_release_type` set to the nightly's release channel, `amdgpu_families`
-fixed to `gfx94X-dcgpu`, and `quartz_tracking_id`.
-
-`test_type` is deliberately not forwarded. Instrumented tests already run
-several times longer than normal ones, so coverage keeps its own narrower
-default rather than inheriting the nightly's.
-
-Dispatching `multi_arch_ci_coverage_nightly.yml` by hand and pasting in a
-`baseline_run_id` from a recent nightly does exactly the same thing, and is the
-supported way to reproduce or re-run a report.
+Having the regular nightly dispatch this workflow automatically once its build
+finishes, passing its own run id as `baseline_run_id`, is a later change. It
+only needs to add a dispatching job — everything described below already takes
+the baseline as an input.
 
 ## The normal build
 
-Nothing about the regular nightly's build changes. `build_artifacts` produces
-the ordinary non-instrumented artifacts and publishes them to the nightly
-channel bucket under its own run id. Coverage treats that run as a read-only
-input.
+Nothing about the regular nightly changes. It produces the ordinary
+non-instrumented artifacts and publishes them to the nightly channel bucket
+under its own run id. Coverage treats that run as a read-only input, and the
+nightly has no coverage-specific jobs in it.
 
 ## The instrumented build
 
-The dispatch creates a new workflow run with its own id, status, and logs. A
-coverage failure therefore does not colour the nightly's status.
+The dispatch creates a workflow run with its own id, status, and logs, entirely
+separate from the baseline nightly's.
 
 `setup_coverage_matrix` runs `configure_coverage_ci.py`, which reads
-`PROJECTS_TO_TEST` (empty from a nightly dispatch, meaning every onboarded
-project), `AMDGPU_FAMILIES`, and `COVERAGE_CONFIG_SOURCE`, and emits the job
-matrix, the family list, and `coverage_cmake_options`.
+`PROJECTS_TO_TEST` (empty by default, meaning every onboarded project),
+`AMDGPU_FAMILIES`, and `COVERAGE_CONFIG_SOURCE`, and emits the job matrix, the
+family list, and `coverage_cmake_options`.
 
 `build_instrumented_compiler_runtime` runs first. Every later stage in the run
 fetches its inbound artifacts by run id, so the run needs a compiler-runtime of
@@ -101,13 +89,13 @@ colliding.
 
 ## Run ids
 
-Neither run can know the other's id in advance, since GitHub assigns the
-coverage run's id only when the dispatch lands. The nightly already knows its
-own, so the id travels downward:
+Two runs are involved and each names the other's artifacts differently. The
+coverage run refers to its own instrumented artifacts as `github.run_id`
+throughout. The baseline is not discoverable, so it is threaded through as an
+input:
 
-1. `trigger_coverage_nightly` sends `baseline_run_id: ${{ github.run_id }}`.
-1. `multi_arch_ci_coverage_nightly.yml` receives it as a `workflow_dispatch`
-   input and forwards it, with `baseline_release_type`, to
+1. `multi_arch_ci_coverage_nightly.yml` takes `baseline_run_id` and
+   `baseline_release_type` as `workflow_dispatch` inputs and forwards them to
    `multi_arch_ci_coverage_linux.yml`.
 1. That forwards both again to `test_component.yml` as
    `coverage_baseline_run_id` and `coverage_baseline_release_type`.
@@ -115,17 +103,18 @@ own, so the id travels downward:
    `INSTALL_RELEASE_TYPE` from them, which is what `setup_test_environment`
    installs from.
 
-The coverage run refers to its own artifacts as `github.run_id` throughout.
+Because the two runs are connected only by that first input, and nothing in the
+coverage run can look the baseline up, the workflow puts it in the `run-name` so
+it is visible in the Actions list without opening the logs.
 
 The release channel travels with the run id rather than being assumed, because
 artifacts are bucketed per channel: reading the baseline under the coverage
 run's own `ci` channel would look in the wrong bucket entirely. Callers that
 leave `coverage_baseline_run_id` empty get exactly the previous behaviour.
 
-Because the two runs are only connected through this one input, the coverage
-workflow puts the baseline in its `run-name`, so it is visible in the Actions
-list without opening the logs. `quartz_tracking_id` follows the same path to
-keep the coverage run attached to its release lineage.
+`quartz_tracking_id` follows the same path. It stays empty on a manual dispatch
+and exists so a coverage run can be attached to a release lineage once the
+nightly dispatches coverage automatically.
 
 ## Test execution
 

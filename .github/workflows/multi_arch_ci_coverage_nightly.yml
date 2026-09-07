@@ -16,14 +16,16 @@
 # (gfx942, i.e. the gfx94X-dcgpu family). Change-based selection and
 # multi-architecture expansion come later.
 #
-# Scheduling follows the RFC's option C: the regular nightly dispatches this
-# workflow once its build finishes and hands over its run id as
-# `baseline_run_id`, so there is no cron here. Coverage therefore gets its own
-# run id -- a failure here leaves the nightly's status alone, and the nightly's
-# unstable test jobs do not hold coverage up -- while still being pointed at a
-# baseline that was just built from the same commit. Dispatching this workflow
-# by hand with a `baseline_run_id` copied from a nightly run is the RFC's
-# option B1 and works the same way.
+# Scheduling is the RFC's option B1 for now: dispatch this workflow by hand and
+# pass the run id of a recent nightly as `baseline_run_id`. There is no cron
+# here, and the regular nightly does not know about this workflow, so coverage
+# has a run id of its own -- a failure here leaves the nightly's status alone,
+# and the nightly's unstable test jobs do not hold coverage up.
+#
+# The RFC's option C, where the regular nightly dispatches this workflow once
+# its build finishes and hands over its own run id automatically, is a later
+# change. Everything below already takes `baseline_run_id` as an input, so that
+# change only has to add the dispatching job.
 
 name: Multi-Arch CI Coverage Nightly
 
@@ -57,8 +59,8 @@ on:
       quartz_tracking_id:
         type: string
         description: >-
-          Leave empty. Internal Quartz tracking id, set automatically by the
-          nightly that dispatched this run to link it to its release lineage.
+          Leave empty. Internal Quartz tracking id, used to link this run to a
+          release lineage once the nightly dispatches coverage automatically.
         default: ""
 
 permissions:
