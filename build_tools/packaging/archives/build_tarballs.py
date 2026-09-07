@@ -27,7 +27,7 @@ Tarball naming follows the existing release convention:
 
 Example
 -------
-    python build_tools/build_tarballs.py \\
+    python build_tools/packaging/archives/build_tarballs.py \\
         --run-id=24104028483 \\
         --dist-amdgpu-families="gfx94X-dcgpu;gfx110X-all" \\
         --platform=linux \\
@@ -64,6 +64,8 @@ import time
 from pathlib import Path
 
 from zlib_ng import gzip_ng_threaded
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2]
 
 DEFAULT_EXCLUDED_ARTIFACTS: list[str] = ["fftw3"]
 DEFAULT_EXCLUDED_COMPONENTS: list[str] = ["test"]
@@ -147,7 +149,7 @@ def fetch_and_flatten(
 
     cmd = [
         sys.executable,
-        "build_tools/artifact_manager.py",
+        _BUILD_TOOLS_DIR / "artifact_manager.py",
         "fetch",
         f"--run-id={run_id}",
         "--stage=all",

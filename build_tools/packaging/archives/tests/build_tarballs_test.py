@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for build_tarballs.py."""
+"""Unit tests for the archive tarball builder."""
 
 import json
 import os
