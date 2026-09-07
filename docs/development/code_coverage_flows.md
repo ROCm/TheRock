@@ -104,9 +104,12 @@ shard list.
 `test_coverage` then runs one `test_component.yml` job per shard with
 `coverage_enabled: true`. Three things happen in order:
 
-1. **Install this run's artifacts.** `setup_test_environment` runs against
-   `github.run_id` and the `ci` channel, exactly as it does for regular CI. No
-   coverage-specific artifact handling is involved.
+1. **Install the baseline, then overlay.** `setup_test_environment` runs against
+   `baseline_run_id` and `baseline_release_type`, installing a fully
+   non-instrumented stack. `overlay_coverage_artifacts.py` then fetches this
+   run's artifact for the project under test and copies only that project's
+   stage directories over it, so exactly one library in the install is
+   instrumented.
 1. **Point the runtime at a profile directory.** `LLVM_PROFILE_FILE` is set to
    a per-shard path using the `%p` (pid) and `%m` (binary signature)
    substitutions, so a shard that forks or loads several instrumented libraries
@@ -117,16 +120,23 @@ shard list.
 
 ### What scopes a report to one project
 
-`object_globs`, not what happens to be instrumented.
+Two mechanisms, covering different leaks.
 
-`llvm-cov export` is handed an explicit `-object` for each of the project's
-binaries and reports only the functions found in their coverage mappings.
-Counters that a sibling project wrote into the same merged profdata are never
-looked up. A selection naming several projects therefore still produces one
-report per project, from a single build and a single run.
+`object_globs` scopes the export. `llvm-cov export` is handed an explicit
+`-object` for each of the project's binaries and reports only the functions
+found in their coverage mappings, so a sibling's whole functions never appear.
+
+The overlay scopes what is instrumented at all. Globs alone would not be enough,
+because inline and template code defined in headers is emitted `linkonce_odr`
+into every binary that uses it. If a sibling library were also instrumented, its
+copies of those functions would write counters that `llvm-profdata` merges into
+this project's, and no `-object` choice could separate them again. Installing a
+non-instrumented baseline and overlaying one project keeps that from arising —
+which matters most for the header-only projects (rocPRIM, hipCUB, rocThrust,
+rocWMMA), where nearly all the measured code lives in headers.
 
 The cost of selecting more projects is build and test time — each instrumented
-library is slower to compile and slower to exercise — rather than accuracy.
+library is slower to compile and slower to exercise.
 
 ## Artifacts
 

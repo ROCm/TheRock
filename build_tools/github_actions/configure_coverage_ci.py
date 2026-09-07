@@ -34,8 +34,10 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
 
 from github_actions_api import gha_set_output
+from _therock_utils.build_topology import get_topology
 
 DEFAULT_AMDGPU_FAMILIES = "gfx94X-dcgpu"
 DEFAULT_COVERAGE_CONFIG_SOURCE = "ROCm/rocm-libraries@main"
@@ -53,16 +55,16 @@ STAGE_MATH_LIBS = "math-libs"
 STAGE_COMM_LIBS = "comm-libs"
 STAGE_PROFILER_APPS = "profiler-apps"
 
-# Only math-libs is built per GPU family; the others are built once.
-PER_ARCH_STAGES = frozenset({STAGE_MATH_LIBS})
-
 # Display names for the per-stage build jobs, so the Actions UI reads the same
-# way as the regular nightly's.
+# way as the regular nightly's. Stages a project can be registered against are
+# validated against these keys; emulation is here because build_stage_plan can
+# pull it in as a dependency of comm-libs, not because a project lives there.
 STAGE_DISPLAY_NAMES: dict[str, str] = {
     STAGE_COMPILER_RUNTIME: "Coverage Compiler Runtime",
     STAGE_MATH_LIBS: "Coverage Math Libs",
     STAGE_COMM_LIBS: "Coverage Comm Libs",
     STAGE_PROFILER_APPS: "Coverage Profiler Apps",
+    "emulation": "Coverage Emulation",
 }
 
 
@@ -85,6 +87,13 @@ class CoverageProject:
             cannot be measured by this pipeline. Such a project stays in the
             registry so the gap is recorded, but is left out of the group
             aliases and rejected if named explicitly.
+        artifact_names: BUILD_TOPOLOGY artifact(s) the instrumented project
+            ships in. These are grouped (`rand` holds both rocRAND and
+            hipRAND), which is why artifact_relpaths exists.
+        artifact_relpaths: Subproject stage directories inside those artifacts
+            that belong to this project alone. The nightly hybrid fetch copies
+            only these over the baseline install tree, so a run measuring
+            hipRAND does not also pick up an instrumented rocRAND.
         stage: Build stage that produces the project. The nightly needs a build
             job for this stage, so onboarding a project from a new stage means
             adding one.
@@ -111,6 +120,8 @@ class CoverageProject:
     coverage_config: str
     coverage_option: str = ""
     unsupported_reason: str = ""
+    artifact_names: list[str] = field(default_factory=list)
+    artifact_relpaths: list[str] = field(default_factory=list)
     object_globs: list[str] = field(default_factory=list)
     fetch_artifact_args: str = ""
     codecov_flag: str = ""
@@ -140,6 +151,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     #
     "rocrand": CoverageProject(
         cmake_target="rocRAND",
+        artifact_names=["rand"],
+        artifact_relpaths=["math-libs/rocRAND/stage"],
         coverage_option="CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocrand",
@@ -150,6 +163,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hiprand": CoverageProject(
         cmake_target="hipRAND",
+        artifact_names=["rand"],
+        artifact_relpaths=["math-libs/hipRAND/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hiprand",
@@ -160,6 +175,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocfft": CoverageProject(
         cmake_target="rocFFT",
+        artifact_names=["fft"],
+        artifact_relpaths=["math-libs/rocFFT/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocfft",
@@ -170,6 +187,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipfft": CoverageProject(
         cmake_target="hipFFT",
+        artifact_names=["fft"],
+        artifact_relpaths=["math-libs/hipFFT/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipfft",
@@ -180,6 +199,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocblas": CoverageProject(
         cmake_target="rocBLAS",
+        artifact_names=["blas"],
+        artifact_relpaths=["math-libs/BLAS/rocBLAS/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocblas",
@@ -190,6 +211,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipblas": CoverageProject(
         cmake_target="hipBLAS",
+        artifact_names=["blas"],
+        artifact_relpaths=["math-libs/BLAS/hipBLAS/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipblas",
@@ -200,6 +223,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipblaslt": CoverageProject(
         cmake_target="hipBLASLt",
+        artifact_names=["blas"],
+        artifact_relpaths=["math-libs/BLAS/hipBLASLt/stage"],
         coverage_option="HIPBLASLT_ENABLE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipblaslt",
@@ -210,6 +235,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocsparse": CoverageProject(
         cmake_target="rocSPARSE",
+        artifact_names=["sparse"],
+        artifact_relpaths=["math-libs/BLAS/rocSPARSE/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocsparse",
@@ -220,6 +247,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipsparse": CoverageProject(
         cmake_target="hipSPARSE",
+        artifact_names=["sparse"],
+        artifact_relpaths=["math-libs/BLAS/hipSPARSE/stage"],
         unsupported_reason=(
             "HIPSPARSE_ENABLE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
@@ -232,6 +261,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipsparselt": CoverageProject(
         cmake_target="hipSPARSELt",
+        artifact_names=["sparse"],
+        artifact_relpaths=["math-libs/BLAS/hipSPARSELt/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipsparselt",
@@ -242,6 +273,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocsolver": CoverageProject(
         cmake_target="rocSOLVER",
+        artifact_names=["solver"],
+        artifact_relpaths=["math-libs/BLAS/rocSOLVER/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocsolver",
@@ -252,6 +285,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipsolver": CoverageProject(
         cmake_target="hipSOLVER",
+        artifact_names=["solver"],
+        artifact_relpaths=["math-libs/BLAS/hipSOLVER/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipsolver",
@@ -262,6 +297,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocalution": CoverageProject(
         cmake_target="rocALUTION",
+        artifact_names=["rocalution"],
+        artifact_relpaths=["math-libs/rocALUTION/stage"],
         unsupported_reason=(
             "BUILD_CODE_COVERAGE selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
@@ -274,6 +311,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hiptensor": CoverageProject(
         cmake_target="hipTensor",
+        artifact_names=["hiptensor"],
+        artifact_relpaths=["math-libs/hipTensor/stage"],
         coverage_option="CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hiptensor",
@@ -284,6 +323,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "miopen": CoverageProject(
         cmake_target="MIOpen",
+        artifact_names=["miopen"],
+        artifact_relpaths=["ml-libs/MIOpen/stage"],
         unsupported_reason="no coverage option in its CMake",
         stage=STAGE_MATH_LIBS,
         test_component="miopen",
@@ -294,6 +335,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipdnn": CoverageProject(
         cmake_target="hipDNN",
+        artifact_names=["hipdnn"],
+        artifact_relpaths=["ml-libs/hipDNN/stage"],
         coverage_option="HIPDNN_ENABLE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipdnn",
@@ -307,6 +350,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     #
     "rocprim": CoverageProject(
         cmake_target="rocPRIM",
+        artifact_names=["prim"],
+        artifact_relpaths=["math-libs/rocPRIM/stage", "math-libs/rocPRIM_tests/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocprim",
@@ -320,6 +365,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "hipcub": CoverageProject(
         cmake_target="hipCUB",
+        artifact_names=["prim"],
+        artifact_relpaths=["math-libs/hipCUB/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hipcub",
@@ -330,6 +377,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocthrust": CoverageProject(
         cmake_target="rocThrust",
+        artifact_names=["prim"],
+        artifact_relpaths=["math-libs/rocThrust/stage"],
         coverage_option="CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocthrust",
@@ -340,6 +389,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocwmma": CoverageProject(
         cmake_target="rocWMMA",
+        artifact_names=["rocwmma"],
+        artifact_relpaths=["math-libs/rocWMMA/stage"],
         coverage_option="CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="rocwmma",
@@ -353,6 +404,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     #
     "rccl": CoverageProject(
         cmake_target="rccl",
+        artifact_names=["rccl"],
+        artifact_relpaths=["comm-libs/rccl/stage"],
         coverage_option="ENABLE_CODE_COVERAGE",
         stage=STAGE_COMM_LIBS,
         test_component="rccl",
@@ -364,6 +417,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocshmem": CoverageProject(
         cmake_target="rocshmem",
+        artifact_names=["rocshmem"],
+        artifact_relpaths=["comm-libs/rocshmem/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
         stage=STAGE_COMM_LIBS,
         test_component="rocshmem",
@@ -378,6 +433,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     #
     "rocprofiler-sdk": CoverageProject(
         cmake_target="rocprofiler-sdk",
+        artifact_names=["rocprofiler-sdk"],
+        artifact_relpaths=["profiler/rocprofiler-sdk/stage"],
         unsupported_reason=(
             "ROCPROFILER_BUILD_CODECOV selects gcov instrumentation, which writes .gcda files rather than the .profraw this pipeline merges"
         ),
@@ -391,6 +448,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "aqlprofile": CoverageProject(
         cmake_target="aqlprofile",
+        artifact_names=["aqlprofile"],
+        artifact_relpaths=["profiler/aqlprofile/stage"],
         unsupported_reason="no coverage option in its CMake",
         stage=STAGE_COMPILER_RUNTIME,
         test_component="aqlprofile",
@@ -402,6 +461,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "amdsmi": CoverageProject(
         cmake_target="amdsmi",
+        artifact_names=["core-amdsmi"],
+        artifact_relpaths=["core/amdsmi/stage"],
         unsupported_reason="no coverage option in its CMake",
         stage=STAGE_COMPILER_RUNTIME,
         test_component="amdsmi",
@@ -413,6 +474,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     ),
     "rocprofiler-compute": CoverageProject(
         cmake_target="rocprofiler-compute",
+        artifact_names=["rocprofiler-compute"],
+        artifact_relpaths=["profiler/rocprofiler-compute/stage"],
         unsupported_reason="a Python tool with no native instrumentation option",
         stage=STAGE_COMPILER_RUNTIME,
         test_component="rocprofiler-compute",
@@ -427,6 +490,8 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
     #
     "rocprofiler-systems": CoverageProject(
         cmake_target="rocprofiler-systems",
+        artifact_names=["rocprofiler-systems"],
+        artifact_relpaths=["profiler/rocprofiler-systems/stage"],
         unsupported_reason=(
             "no build-time coverage option; its coverage feature instruments other programs at runtime"
         ),
@@ -455,6 +520,11 @@ for _key, _proj in COVERAGE_PROJECTS.items():
     assert bool(_proj.coverage_option) != bool(
         _proj.unsupported_reason
     ), f"{_key}: set exactly one of coverage_option and unsupported_reason"
+    # Without these the nightly test job cannot tell which files belong to the
+    # project, and would measure an entirely non-instrumented install.
+    if _proj.coverage_option:
+        assert _proj.artifact_names, f"{_key}: needs artifacts to overlay"
+        assert _proj.artifact_relpaths, f"{_key}: needs relpaths to overlay"
 
 SUPPORTED_PROJECTS: frozenset[str] = frozenset(
     k for k, v in COVERAGE_PROJECTS.items() if v.coverage_option
@@ -574,6 +644,8 @@ def build_coverage_matrix(
                     "fetch_artifact_args": project.fetch_artifact_args,
                     "codecov_flag": project.codecov_flag or project_key,
                     "amdgpu_families": family,
+                    "artifact_names": ",".join(project.artifact_names),
+                    "artifact_relpaths": ",".join(project.artifact_relpaths),
                 }
             )
     return matrix
@@ -618,28 +690,70 @@ def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
     return options
 
 
-def build_stage_plan(project_keys: list[str]) -> tuple[list[dict], bool]:
-    """Works out which build stages the selection needs.
+def _stage_display_name(stage: str) -> str:
+    return f"Stage - {STAGE_DISPLAY_NAMES.get(stage, f'Coverage {stage}')}"
 
-    Returns the generic (built-once) stages other than compiler-runtime, and
-    whether the per-architecture math-libs stage is needed. compiler-runtime is
-    excluded because it is built unconditionally: every other stage takes its
-    inbound artifacts from it, so there is no selection that does not need it.
+
+def build_stage_plan(project_keys: list[str]) -> tuple[list[list[dict]], bool]:
+    """Works out which build stages the selection needs, and in what order.
+
+    Returns the generic (built-once) stages grouped into waves that can each
+    build in parallel, plus whether the per-architecture math-libs stage is
+    needed. compiler-runtime is excluded because it is built unconditionally:
+    every other stage takes its inbound artifacts from it, so there is no
+    selection that does not need it.
+
+    A project's own stage is not the whole answer, which is why the topology is
+    consulted rather than just the registry. Selecting rccl asks for comm-libs,
+    but comm-libs takes hipify and rocjitsu from emulation, so emulation has to
+    be built too -- and built first, hence the waves.
     """
-    stages = {COVERAGE_PROJECTS[key].stage for key in project_keys}
-    needs_math_libs = STAGE_MATH_LIBS in stages
+    topology = get_topology()
 
-    generic = sorted(stages - PER_ARCH_STAGES - {STAGE_COMPILER_RUNTIME})
-    return (
-        [
-            {
-                "stage_name": stage,
-                "stage_display_name": f"Stage - {STAGE_DISPLAY_NAMES[stage]}",
-            }
-            for stage in generic
-        ],
-        needs_math_libs,
-    )
+    def producers(stage: str) -> set[str]:
+        return {
+            topology.get_stage_for_artifact(artifact)
+            for artifact in topology.get_inbound_artifacts(stage)
+        }
+
+    selected = {COVERAGE_PROJECTS[key].stage for key in project_keys}
+    needs_math_libs = STAGE_MATH_LIBS in selected
+
+    required: set[str] = set()
+    queue = list(selected)
+    while queue:
+        stage = queue.pop()
+        if stage in required:
+            continue
+        required.add(stage)
+        queue.extend(producers(stage) - required)
+
+    # math-libs has its own per-architecture job, and compiler-runtime is
+    # always built, so neither belongs in the generic waves. Both are treated
+    # as already satisfied when ordering what is left.
+    built = {STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS}
+    remaining = required - built
+
+    waves: list[list[dict]] = []
+    while remaining:
+        wave = sorted(s for s in remaining if not (producers(s) - built - {s}))
+        if not wave:
+            # Dropping the stages silently would leave the build to fail much
+            # later, on a missing inbound artifact.
+            raise ValueError(
+                f"cannot order coverage build stages {sorted(remaining)}: "
+                "their inbound artifacts form a cycle"
+            )
+        waves.append(
+            [
+                {"stage_name": s, "stage_display_name": _stage_display_name(s)}
+                for s in wave
+            ]
+        )
+        built.update(wave)
+        remaining -= set(wave)
+
+    return waves, needs_math_libs
 
 
 def emit_cmake(output_path: Path) -> None:
@@ -715,7 +829,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         project_keys, amdgpu_families, config_repository, config_ref
     )
     coverage_flags = build_coverage_cmake_options(project_keys)
-    generic_stages, needs_math_libs = build_stage_plan(project_keys)
+    stage_waves, needs_math_libs = build_stage_plan(project_keys)
+    # The workflow has one job per wave, and Actions cannot generate jobs, so a
+    # third wave has to be a build error here rather than a stage the workflow
+    # quietly skips.
+    if len(stage_waves) > 2:
+        raise ValueError(
+            f"build_stage_plan produced {len(stage_waves)} stage waves but "
+            "multi_arch_ci_coverage_nightly.yml only has jobs for two; add "
+            "another build_instrumented_generic_stages_* job to match"
+        )
     outputs = {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),
@@ -723,7 +846,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             [{"amdgpu_family": family} for family in amdgpu_families]
         ),
         "coverage_cmake_options": " ".join(coverage_flags),
-        "generic_stages_json": json.dumps(generic_stages),
+        "stage_wave1_json": json.dumps(stage_waves[0] if stage_waves else []),
+        "stage_wave2_json": json.dumps(stage_waves[1] if len(stage_waves) > 1 else []),
         "needs_math_libs": "true" if needs_math_libs else "false",
     }
 

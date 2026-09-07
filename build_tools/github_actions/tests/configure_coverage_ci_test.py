@@ -11,8 +11,10 @@ from unittest import mock
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+sys.path.insert(0, os.fspath(Path(__file__).parents[2]))
 
 import configure_coverage_ci
+from _therock_utils.build_topology import get_topology
 
 
 class ParseProjectsTest(unittest.TestCase):
@@ -230,22 +232,34 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
 
 
 class BuildStagePlanTest(unittest.TestCase):
+    @staticmethod
+    def _names(waves):
+        return [[entry["stage_name"] for entry in wave] for wave in waves]
+
     def test_math_libs_only_selection_needs_no_generic_stage(self):
-        generic, needs_math_libs = configure_coverage_ci.build_stage_plan(["hiprand"])
-        self.assertEqual(generic, [])
+        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["hiprand"])
+        self.assertEqual(waves, [])
         self.assertTrue(needs_math_libs)
 
     def test_compiler_runtime_project_adds_no_stage_of_its_own(self):
         # compiler-runtime is built unconditionally, so a project living there
         # must not also appear as a generic stage to build.
-        generic, needs_math_libs = configure_coverage_ci.build_stage_plan(["amdsmi"])
-        self.assertEqual(generic, [])
+        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["amdsmi"])
+        self.assertEqual(waves, [])
         self.assertFalse(needs_math_libs)
 
-    def test_generic_stage_project_is_named_for_the_build_job(self):
-        generic, needs_math_libs = configure_coverage_ci.build_stage_plan(["rccl"])
+    def test_generic_stage_project_pulls_in_what_that_stage_consumes(self):
+        # comm-libs takes hipify and rocjitsu from emulation, so selecting rccl
+        # has to build emulation as well -- and before comm-libs, or the build
+        # fails on a missing inbound artifact.
+        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(["rccl"])
+        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
+        self.assertFalse(needs_math_libs)
+
+    def test_generic_stage_is_named_for_the_build_job(self):
+        waves, _ = configure_coverage_ci.build_stage_plan(["rccl"])
         self.assertEqual(
-            generic,
+            waves[-1],
             [
                 {
                     "stage_name": "comm-libs",
@@ -253,21 +267,44 @@ class BuildStagePlanTest(unittest.TestCase):
                 }
             ],
         )
-        self.assertFalse(needs_math_libs)
 
     def test_stages_are_deduplicated_across_projects(self):
-        generic, _ = configure_coverage_ci.build_stage_plan(["rccl", "rocshmem"])
-        self.assertEqual([entry["stage_name"] for entry in generic], ["comm-libs"])
+        waves, _ = configure_coverage_ci.build_stage_plan(["rccl", "rocshmem"])
+        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
 
     def test_selecting_everything_names_every_non_default_stage(self):
-        generic, needs_math_libs = configure_coverage_ci.build_stage_plan(
+        waves, needs_math_libs = configure_coverage_ci.build_stage_plan(
+            sorted(configure_coverage_ci.SUPPORTED_PROJECTS)
+        )
+        self.assertEqual(self._names(waves), [["emulation"], ["comm-libs"]])
+        self.assertTrue(needs_math_libs)
+
+    def test_no_selection_needs_more_waves_than_the_workflow_has_jobs(self):
+        # multi_arch_ci_coverage_nightly.yml has two wave jobs. main() raises
+        # past that, but the registry should not get there in the first place.
+        waves, _ = configure_coverage_ci.build_stage_plan(
             sorted(configure_coverage_ci.COVERAGE_PROJECTS)
         )
-        self.assertEqual(
-            [entry["stage_name"] for entry in generic],
-            ["comm-libs", "profiler-apps"],
-        )
-        self.assertTrue(needs_math_libs)
+        self.assertLessEqual(len(waves), 2)
+
+
+class RegistryMatchesBuildTopologyTest(unittest.TestCase):
+    """The registry duplicates facts the build topology already knows.
+
+    Nothing keeps the two in step at runtime, so a project moving between
+    stages upstream would otherwise show up as a stage that is never built and
+    an overlay that finds nothing, hours into a run.
+    """
+
+    def test_every_project_names_the_stage_that_builds_its_artifacts(self):
+        topology = get_topology()
+        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+            for artifact in project.artifact_names:
+                with self.subTest(project=key, artifact=artifact):
+                    self.assertEqual(
+                        topology.get_stage_for_artifact(artifact),
+                        project.stage,
+                    )
 
 
 class MainTest(unittest.TestCase):
@@ -301,7 +338,8 @@ class MainTest(unittest.TestCase):
             self.assertIn('"object_globs": "lib/libhiprand.so*"', written)
             # hipRAND is a math-libs project, so no other stage is built.
             self.assertIn("needs_math_libs=true", written)
-            self.assertIn("generic_stages_json=[]", written)
+            self.assertIn("stage_wave1_json=[]", written)
+            self.assertIn("stage_wave2_json=[]", written)
 
 
 class EmitCmakeTest(unittest.TestCase):

@@ -16,22 +16,34 @@
 # (gfx942, i.e. the gfx94X-dcgpu family). Change-based selection and
 # multi-architecture expansion come later.
 #
-# The run is self-contained. It builds every stage it needs and instruments only
-# the projects named by `projects_to_test`, so everything those projects depend
-# on is built normally in the same run and its artifacts are already the stack
-# to test against. There is no second run id to coordinate and no baseline to
-# mix in.
-#
-# Scheduling is manual for now: dispatch this workflow by hand. There is no cron
+# Scheduling is the RFC's option B1 for now: dispatch this workflow by hand and
+# pass the run id of a recent nightly as `baseline_run_id`. There is no cron
 # here, and the regular nightly does not know about this workflow, so coverage
 # has a run id of its own -- a failure here leaves the nightly's status alone,
 # and the nightly's unstable test jobs do not hold coverage up.
+#
+# The RFC's option C, where the regular nightly dispatches this workflow once
+# its build finishes and hands over its own run id automatically, is a later
+# change. Everything below already takes `baseline_run_id` as an input, so that
+# change only has to add the dispatching job.
 
 name: Multi-Arch CI Coverage Nightly
 
 on:
   workflow_dispatch:
     inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
+        default: ""
       projects_to_test:
         type: string
         description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
@@ -63,6 +75,18 @@ on:
   # Remove this trigger with the check workflow once the run has gone green.
   workflow_call:
     inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
+        default: ""
       projects_to_test:
         type: string
         description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
@@ -89,11 +113,11 @@ on:
 permissions:
   contents: read
 
-# Which projects a run measured is the thing people look for afterwards, so put
-# it in the title rather than making them open the setup job's log.
+# The two run ids are only connected through this input, so surface it in the
+# run title rather than making people open the logs to find the baseline.
 run-name: >-
   Multi-Arch CI Coverage Nightly
-  | ${{ inputs.projects_to_test || 'all onboarded projects' }}
+  | baseline: ${{ inputs.baseline_run_id || 'none (self-contained)' }}
   | ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
 
 concurrency:
@@ -109,7 +133,8 @@ jobs:
       dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
       families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
       coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
-      generic_stages_json: ${{ steps.matrix.outputs.generic_stages_json }}
+      stage_wave1_json: ${{ steps.matrix.outputs.stage_wave1_json }}
+      stage_wave2_json: ${{ steps.matrix.outputs.stage_wave2_json }}
       needs_math_libs: ${{ steps.matrix.outputs.needs_math_libs }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
@@ -138,10 +163,8 @@ jobs:
             --release-type=ci \
             --override-git-sha=${{ steps.checkout.outputs.commit }}
 
-  # Built first and unconditionally: every other stage takes its inbound
-  # artifacts from this one, so no selection can skip it. It also receives the
-  # coverage flags, because rocm-systems projects such as rocprofiler-sdk and
-  # amdsmi are built here rather than in a stage of their own.
+  # Built first so that every later stage in this run has a compiler-runtime to
+  # link against and to fetch as an inbound artifact.
   build_instrumented_compiler_runtime:
     name: Build Instrumented Compiler Runtime
     needs: setup_coverage_matrix
@@ -153,6 +176,41 @@ jobs:
       stage_display_name: "Stage - Coverage Compiler Runtime"
       timeout_minutes: 480 # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # The built-once stages the selection reaches into, in dependency order.
+  # Selecting rccl or rocshmem asks for comm-libs, which takes hipify and
+  # rocjitsu from emulation, so emulation builds first and comm-libs second.
+  # configure_coverage_ci.py derives both waves from the build topology and
+  # fails if a selection ever needs a third.
+  #
+  # A selection confined to math-libs leaves both waves empty, which has to be
+  # guarded: fromJSON('[]') produces a job with no combinations.
+  build_instrumented_stages_wave1:
+    name: Build Instrumented Stages (wave 1)
+    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.outputs.stage_wave1_json != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        stage_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.stage_wave1_json) }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: ${{ matrix.stage_info.stage_name }}
+      stage_display_name: ${{ matrix.stage_info.stage_display_name }}
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
       extra_cmake_options: >-
         ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
         -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
@@ -163,21 +221,23 @@ jobs:
       contents: read
       id-token: write
 
-  # The build-once stages the selection needs, other than compiler-runtime.
-  # Empty for a selection confined to math-libs, which is why the matrix is
-  # guarded: fromJSON('[]') produces a job with no combinations.
-  build_instrumented_generic_stages:
-    name: Build Instrumented Stages
-    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
+  build_instrumented_stages_wave2:
+    name: Build Instrumented Stages (wave 2)
+    needs:
+      [
+        setup_coverage_matrix,
+        build_instrumented_compiler_runtime,
+        build_instrumented_stages_wave1,
+      ]
     if: >-
       ${{
         !failure() && !cancelled() &&
-        needs.setup_coverage_matrix.outputs.generic_stages_json != '[]'
+        needs.setup_coverage_matrix.outputs.stage_wave2_json != '[]'
       }}
     strategy:
       fail-fast: false
       matrix:
-        stage_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.generic_stages_json) }}
+        stage_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.stage_wave2_json) }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
@@ -196,10 +256,11 @@ jobs:
       id-token: write
 
   # The whole stage is built, not just the onboarded projects: the test jobs
-  # below need the complete dependency set. `coverage_cmake_options` is the
-  # THEROCK_COVERAGE_*_ALL group option when the selection covers a whole group,
-  # and the individual project flags otherwise; everything not selected builds
-  # normally.
+  # below need the complete dependency set, and phase 1 instruments every
+  # onboarded project in one pass rather than per changed project.
+  # `coverage_cmake_options` is the THEROCK_COVERAGE_*_ALL group option when the
+  # selection covers a whole group, and the individual project flags otherwise;
+  # everything not selected builds normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
     needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
@@ -230,16 +291,19 @@ jobs:
       contents: read
       id-token: write
 
-  # One test + report job per project, all against the stack built above. A
-  # selection naming several projects instruments all of them in that one build,
-  # and each job still reports on its own: llvm-cov is given only that project's
-  # objects, so counters from the others are never looked up.
+  # One test + report job per project. The instrumented stack built above is the
+  # only thing taken from this run: each job installs `baseline_run_id` and then
+  # overlays its own project, so a project's dependencies stay non-instrumented
+  # even though the build instrumented all of them at once.
   coverage_report:
     name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
     needs:
-      - setup_coverage_matrix
-      - build_instrumented_generic_stages
-      - build_instrumented_math_libs
+      [
+        setup_coverage_matrix,
+        build_instrumented_stages_wave1,
+        build_instrumented_stages_wave2,
+        build_instrumented_math_libs,
+      ]
     # `!failure() && !cancelled()` alone would let this run when
     # setup_coverage_matrix was skipped, and fromJSON('') is a hard error, so
     # the matrix has to be checked explicitly.
@@ -262,6 +326,11 @@ jobs:
       fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
       codecov_flag: ${{ matrix.coverage.codecov_flag }}
       amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_release_type: ${{ inputs.baseline_release_type || 'nightly' }}
+      baseline_repository: ${{ inputs.baseline_repository }}
+      artifact_names: ${{ matrix.coverage.artifact_names }}
+      artifact_relpaths: ${{ matrix.coverage.artifact_relpaths }}
       test_type: ${{ inputs.test_type || 'standard' }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -275,7 +344,8 @@ jobs:
     needs:
       - setup_coverage_matrix
       - build_instrumented_compiler_runtime
-      - build_instrumented_generic_stages
+      - build_instrumented_stages_wave1
+      - build_instrumented_stages_wave2
       - build_instrumented_math_libs
       - coverage_report
     runs-on: ubuntu-24.04

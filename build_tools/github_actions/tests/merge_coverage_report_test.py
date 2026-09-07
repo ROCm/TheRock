@@ -142,9 +142,7 @@ class CommandConstructionTest(TempDirTestBase):
         command = run.call_args.args[0]
         self.assertEqual(command[:3], [str(llvm_cov), "export", str(objects[0])])
         self.assertIn("-object", command)
-        self.assertEqual(
-            command[-2:], [f"-instr-profile={profdata}", "--format=lcov"]
-        )
+        self.assertEqual(command[-2:], [f"-instr-profile={profdata}", "--format=lcov"])
 
 
 class MainTest(TempDirTestBase):

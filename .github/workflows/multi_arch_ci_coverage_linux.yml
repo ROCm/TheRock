@@ -9,14 +9,14 @@
 #   test (collect profraw) -> merge -> report
 #
 # The instrumented stack itself is built by the caller
-# (multi_arch_ci_coverage_nightly.yml). This workflow only consumes it, and it
-# consumes it from that one run: the coverage run builds every stage it needs,
-# instrumenting only the projects the selection named, so its own artifacts are
-# already the stack to test against.
+# (multi_arch_ci_coverage_nightly.yml), which instruments every onboarded
+# project in one pass. This workflow only consumes it.
 #
-# The report is scoped by `object_globs` rather than by what is instrumented.
-# llvm-cov only reports functions found in the objects it is given, so a
-# selection covering several projects still yields one report per project.
+# `baseline_run_id` drives the hybrid install: the tree comes from a regular
+# nightly run and only the project under test is overlaid from the instrumented
+# run, keeping instrumented dependencies out of the report. Without it the
+# instrumented run's own artifacts are tested as built, which measures the
+# project's dependencies alongside it.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -36,6 +36,35 @@ on:
         type: string
         default: ""
         description: "Extra install_rocm_from_artifacts.py args for the report job"
+      baseline_run_id:
+        type: string
+        default: ""
+        description: >-
+          Regular nightly run to take non-instrumented dependencies from. Set
+          by the nightly caller, which instruments the whole stack in its own
+          run; the test jobs then install that run and overlay only the project
+          under test. Empty tests the instrumented artifacts as built.
+      baseline_release_type:
+        type: string
+        default: "nightly"
+        description: >-
+          Release channel baseline_run_id published to. Artifacts are bucketed
+          by channel, so the baseline is read from its own channel rather than
+          from this run's.
+      baseline_repository:
+        type: string
+        default: ""
+        description: >-
+          Repository owning baseline_run_id, in 'owner/repo' form. Needed when
+          the baseline is a release nightly, which ROCm/rockrel publishes.
+      artifact_names:
+        type: string
+        default: ""
+        description: "Artifact names holding the instrumented project, for the hybrid fetch"
+      artifact_relpaths:
+        type: string
+        default: ""
+        description: "Subproject stage directories to overlay, for the hybrid fetch"
       codecov_flag:
         type: string
         default: ""
@@ -139,6 +168,11 @@ jobs:
       build_variant: coverage
       coverage_enabled: true
       coverage_artifact_prefix: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
+      coverage_baseline_run_id: ${{ inputs.baseline_run_id }}
+      coverage_baseline_release_type: ${{ inputs.baseline_release_type }}
+      coverage_baseline_repository: ${{ inputs.baseline_repository }}
+      coverage_artifact_names: ${{ inputs.artifact_names }}
+      coverage_artifact_relpaths: ${{ inputs.artifact_relpaths }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   aggregate_coverage:

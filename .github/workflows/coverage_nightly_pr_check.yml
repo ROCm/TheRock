@@ -32,6 +32,7 @@ on:
       - ".github/workflows/multi_arch_ci_coverage_linux.yml"
       - ".github/workflows/test_component.yml"
       - "build_tools/github_actions/configure_coverage_ci.py"
+      - "build_tools/github_actions/overlay_coverage_artifacts.py"
       - "build_tools/github_actions/merge_coverage_report.py"
       - "cmake/therock_subproject.cmake"
       - "CMakeLists.txt"
@@ -50,17 +51,44 @@ jobs:
     secrets: inherit
     # A called workflow cannot hold more than its caller, so these are granted
     # here even though the coverage workflow declares them itself: id-token for
-    # the AWS role the artifact fetches assume, actions:read for the profraw
-    # artifact downloads.
+    # the AWS role the artifact fetches assume, actions:read for the baseline
+    # run lookup.
     permissions:
       contents: read
       actions: read
       id-token: write
     with:
-      # One project, so the build instruments hipRAND and nothing else and the
-      # run's own artifacts are already an isolated stack. Naming a wider
-      # selection here would work, but each addition is another instrumented
-      # library in a build that is already the expensive part of the run.
-      projects_to_test: "hiprand"
+      # Pinned rather than resolved, so that a change in the report means a
+      # change in this branch.
+      #
+      # ROCm/rockrel run 34068476531, "Multi-Arch Release (nightly)" on main,
+      # 2026-09-07, succeeded. A real nightly rather than a CI run, because
+      # that is what a dispatched coverage run will be given in practice and
+      # the phase 1 PoC is worth exercising against the real thing.
+      #
+      # Being a rockrel run is safe here. Its artifacts embed the workspace
+      # they were built in (/__w/rockrel/rockrel), which breaks any consumer
+      # that configures CMake against them, but this workflow never does: it
+      # builds the instrumented stack from source in its own workspace and
+      # only installs the baseline on the test runner, where prebuilt binaries
+      # are executed and no package config is read.
+      #
+      # Verified before pinning that this run publishes gfx942 artifacts for
+      # every selected project -- blas, fft, hipdnn, hiptensor, prim, rand,
+      # rccl, rocshmem, rocwmma, solver and sparse, plus the _test archives the
+      # header-only projects report against.
+      baseline_run_id: "34068476531"
+      # The bucket lookup queries the run through the GitHub API, so it has to
+      # be told where the run lives; ROCm/TheRock returns 404 for a rockrel id.
+      baseline_repository: "ROCm/rockrel"
+      # That run published to therock-nightly-artifacts, which is the default,
+      # but naming it keeps the pin and its channel in one place.
+      baseline_release_type: "nightly"
       amdgpu_families: "gfx94X-dcgpu"
+      # The whole registry, which is what phase 1 specifies: instrument the
+      # stack once and report every onboarded project. Expensive on purpose --
+      # this is the case a single-project run cannot demonstrate, since the
+      # overlay only has to hold sibling instrumentation out of the install
+      # when there are instrumented siblings to hold out.
+      projects_to_test: "all"
       test_type: "standard"
