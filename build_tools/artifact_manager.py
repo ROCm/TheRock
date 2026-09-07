@@ -236,12 +236,11 @@ def parse_excluded_components(raw_components: str) -> set[str]:
     return components
 
 
-def parse_artifact_names(
+def parse_excluded_artifacts(
     raw_artifacts: str,
     valid_artifacts: set[str],
-    option_name: str,
 ) -> set[str]:
-    """Parse and validate a comma- or semicolon-separated artifact name list."""
+    """Parse and validate artifact names passed to --exclude-artifacts."""
     artifacts = {
         artifact.strip()
         for artifact in raw_artifacts.replace(";", ",").split(",")
@@ -250,7 +249,7 @@ def parse_artifact_names(
     invalid_artifacts = artifacts - valid_artifacts
     if invalid_artifacts:
         raise ValueError(
-            f"Invalid artifact name(s) for {option_name}: "
+            "Invalid artifact name(s): "
             f"{', '.join(sorted(invalid_artifacts))}. "
             f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
         )
@@ -470,23 +469,9 @@ def do_fetch(args: argparse.Namespace):
         )
 
     target_families = parse_target_families(args)
-    valid_artifacts = set(topology.artifacts.keys())
-
-    # An include list narrows the stage's inbound set; hybrid fetches use it to
-    # pull one instrumented artifact from a coverage run and everything else
-    # from a regular run.
-    included_artifacts = parse_artifact_names(
-        args.artifact_names, valid_artifacts, "--artifact-names"
-    )
-    if included_artifacts:
-        log(f"Limiting to artifacts: {', '.join(sorted(included_artifacts))}")
-        inbound &= included_artifacts
-        if not inbound:
-            log("No requested artifacts are inbound for this stage")
-            return
-
-    excluded_artifacts = parse_artifact_names(
-        args.exclude_artifacts, valid_artifacts, "--exclude-artifacts"
+    excluded_artifacts = parse_excluded_artifacts(
+        args.exclude_artifacts,
+        set(topology.artifacts.keys()),
     )
     if excluded_artifacts:
         log(f"Excluding artifacts: {', '.join(sorted(excluded_artifacts))}")
@@ -1355,13 +1340,6 @@ def main(argv: Optional[List[str]] = None):
         default="",
         help="Comma- or semicolon-separated artifact components to exclude "
         f"when fetching. Valid components: {', '.join(ARTIFACT_COMPONENTS)}",
-    )
-    fetch_parser.add_argument(
-        "--artifact-names",
-        type=str,
-        default="",
-        help="Comma- or semicolon-separated artifact names to fetch. Empty "
-        "(the default) fetches every artifact inbound to the stage.",
     )
     fetch_parser.add_argument(
         "--exclude-artifacts",
