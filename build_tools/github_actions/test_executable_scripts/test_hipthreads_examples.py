@@ -113,10 +113,11 @@ def build_environment() -> dict:
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
     environ_vars["CMAKE_GENERATOR"] = "Ninja"
-    # RUNTIME setting (read via getenv in thread.cxx): dial the scheduler's
-    # per-WGP vcore count down to 1 so the example binaries don't over-subscribe a
-    # shared CI GPU and deadlock. The shipped library keeps its default (16).
-    environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "1"
+    # TEMPORARY (ROCM-30565 validation, do not merge): the pin to 1 below is what this
+    # run exists to remove, so the examples exercise the library's own sizing on a CDNA
+    # part. HIPTHREADS_DEBUG_SIZING logs the derivation once per device.
+    # environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "1"
+    environ_vars["HIPTHREADS_DEBUG_SIZING"] = "1"
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
     if IS_WINDOWS:
