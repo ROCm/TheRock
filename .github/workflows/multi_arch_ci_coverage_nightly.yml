@@ -63,6 +63,45 @@ on:
           release lineage once the nightly dispatches coverage automatically.
         default: ""
 
+  # TEMPORARY, paired with coverage_nightly_pr_check.yml. A workflow_dispatch
+  # is only offered once the file is on the default branch, so this workflow
+  # cannot be run from a branch and cannot be shown in a PR's checks. A caller
+  # is not subject to that, so the check workflow runs this branch's copy.
+  # Actions does not expand YAML anchors, so the inputs are repeated verbatim.
+  # Remove this trigger with the check workflow once the run has gone green.
+  workflow_call:
+    inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group aliases: rocm_libraries_all, rocm_systems_all, all (combinable with explicit names). Empty = all coverage-enabled projects."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
+        default: "gfx94X-dcgpu"
+      coverage_config_source:
+        type: string
+        description: "Repository and ref holding the per-project coverage metadata."
+        default: "ROCm/rocm-libraries@main"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      quartz_tracking_id:
+        type: string
+        description: >-
+          Leave empty. Internal Quartz tracking id, used to link this run to a
+          release lineage once the nightly dispatches coverage automatically.
+        default: ""
+
 permissions:
   contents: read
 

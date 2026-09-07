@@ -1,0 +1,81 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# TEMPORARY. Delete this file, and the workflow_call trigger it relies on,
+# before merging the coverage PR.
+#
+# multi_arch_ci_coverage_nightly.yml is triggered by hand, but a
+# workflow_dispatch only appears once the file is on the default branch. There
+# is therefore no way to run it from a branch and no way to see it in a PR's
+# checks, which leaves the phase 1 work unable to demonstrate the one thing it
+# exists to demonstrate.
+#
+# A caller has no such restriction: paths under ./.github/workflows resolve
+# against the caller's own commit, so this runs the branch's copy of the
+# coverage workflow and its jobs report as checks on this PR.
+#
+# This is scaffolding, not part of the design. Coverage on presubmit is exactly
+# what the phase 1 scope rejects: one run is a multi-hour instrumented build
+# plus a full test suite, which is why coverage is a separate, manually
+# triggered workflow in the first place. Leaving this in place would charge
+# that cost to every PR touching coverage.
+
+name: Coverage Nightly PR Check
+
+on:
+  pull_request:
+    # Narrow on purpose. Every run here is a multi-hour instrumented build, so
+    # only the files carrying coverage logic are worth spending one on.
+    paths:
+      - ".github/workflows/coverage_nightly_pr_check.yml"
+      - ".github/workflows/multi_arch_ci_coverage_nightly.yml"
+      - ".github/workflows/multi_arch_ci_coverage_linux.yml"
+      - ".github/workflows/test_component.yml"
+      - "build_tools/github_actions/configure_coverage_ci.py"
+      - "build_tools/github_actions/overlay_coverage_artifacts.py"
+      - "build_tools/github_actions/merge_coverage_report.py"
+      - "cmake/therock_subproject.cmake"
+      - "CMakeLists.txt"
+
+concurrency:
+  # A later push supersedes this run. Queueing multi-hour instrumented builds
+  # behind each other, to report on code that has already been replaced, only
+  # occupies build nodes the rest of CI needs.
+  group: coverage-nightly-pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage
+    uses: ./.github/workflows/multi_arch_ci_coverage_nightly.yml
+    secrets: inherit
+    # A called workflow cannot hold more than its caller, so these are granted
+    # here even though the coverage workflow declares them itself: id-token for
+    # the AWS role the artifact fetches assume, actions:read for the baseline
+    # run lookup.
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    with:
+      # Pinned rather than resolved, so that a change in the report means a
+      # change in this branch.
+      #
+      # ROCm/TheRock Multi-Arch CI run 33990288042 (commit ab8dfcd, 2026-09-05),
+      # whose Stage - Compiler Runtime and Stage - Math Libs (gfx94X-dcgpu) both
+      # succeeded. Its own test jobs failed, which does not matter here: only
+      # the build stages are consumed.
+      #
+      # A ROCm/TheRock run rather than a rockrel release nightly. The two are
+      # interchangeable for this workflow, which only installs the baseline at
+      # test time and never configures against it, but staying in-repository
+      # keeps the embedded artifact workspace paths (/__w/TheRock/TheRock)
+      # matching this run's, which is one fewer variable while the instrumented
+      # build is still unproven.
+      baseline_run_id: "33990288042"
+      # That run published to therock-ci-artifacts, not the nightly bucket, so
+      # the baseline has to be read from the ci channel rather than the default.
+      baseline_release_type: "ci"
+      amdgpu_families: "gfx94X-dcgpu"
+      projects_to_test: "hiprand"
+      test_type: "standard"
