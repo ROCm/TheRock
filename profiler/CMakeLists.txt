@@ -340,6 +340,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       -DROCPROFSYS_BUILD_FMT=OFF
       -DROCPROFSYS_BUILD_SPDLOG=OFF
       -DROCPROFSYS_BUILD_SQLITE3=OFF
+      -DROCPROFSYS_BUILD_HIPFILE=AUTO
       -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
@@ -360,6 +361,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       aqlprofile
       hip-clr
+      hipfile
       rocprofiler-register
       rocprofiler-sdk
       ${THEROCK_BUNDLED_LIBIBERTY}
@@ -387,6 +389,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       test
     SUBPROJECT_DEPS
       amdsmi
+      hipfile
       rocprofiler-sdk
       rocprofiler-systems
     )
@@ -418,6 +421,13 @@ if(THEROCK_ENABLE_ROCPROFSYS)
         "lib"
         "lib/rocprofiler-systems"
         "lib/llvm/lib"
+      # hipfile is already provide_package'd (storage-libs is added before profiler).
+      # Without IGNORE_PACKAGES, find_package(hipfile) in examples/hipfile is a
+      # strict-provider fatal instead of the same skip-if-missing path used for
+      # rocdecode, rocJPEG, RCCL, etc. Do not declare hipfile as a RUNTIME_DEP.
+      IGNORE_PACKAGES
+        hipfile
+        HIPFILE
       RUNTIME_DEPS
         rocprofiler-systems
     )
