@@ -1,6 +1,8 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -32,14 +34,43 @@ class ParseProjectsTest(unittest.TestCase):
             configure_coverage_ci.parse_projects("")
         )
 
-    def test_default_is_narrower_than_all_while_comm_libs_has_no_build_job(self):
+    def test_default_leaves_out_what_cannot_be_built_or_is_known_broken(self):
         self.assertEqual(
             sorted(
                 configure_coverage_ci.SUPPORTED_PROJECTS
                 - configure_coverage_ci.DEFAULT_PROJECTS
             ),
-            ["rccl", "rocshmem"],
+            # rccl and rocshmem for want of a comm-libs build job, hipblaslt
+            # because its instrumented build does not link.
+            ["hipblaslt", "rccl", "rocshmem"],
         )
+
+    def test_blocked_project_is_left_out_of_every_alias(self):
+        # An alias is the caller delegating the choice, so it must not hand
+        # back a project whose build is known to fail.
+        for alias in ("all", "rocm_libraries_all", "rocm_systems_all"):
+            with self.subTest(alias=alias):
+                self.assertFalse(
+                    configure_coverage_ci.BLOCKED_PROJECTS
+                    & configure_coverage_ci._GROUP_ALIASES[alias]
+                )
+
+    def test_blocked_project_is_still_honoured_when_named(self):
+        # Retesting is the only way to notice the block has been lifted.
+        for name in sorted(configure_coverage_ci.BLOCKED_PROJECTS):
+            with self.subTest(project=name):
+                self.assertEqual(configure_coverage_ci.parse_projects(name), [name])
+
+    def test_naming_a_blocked_project_warns_with_the_reason(self):
+        for name in sorted(configure_coverage_ci.BLOCKED_PROJECTS):
+            with self.subTest(project=name):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    configure_coverage_ci.parse_projects(name)
+                self.assertIn(
+                    configure_coverage_ci.COVERAGE_PROJECTS[name].blocked_reason,
+                    stderr.getvalue(),
+                )
 
     def test_whitespace_and_case_are_normalized(self):
         self.assertEqual(configure_coverage_ci.parse_projects(" HipRand "), ["hiprand"])
@@ -57,7 +88,10 @@ class ParseProjectsTest(unittest.TestCase):
     def test_all_alias_expands_to_every_measurable_project(self):
         self.assertEqual(
             configure_coverage_ci.parse_projects("all"),
-            sorted(configure_coverage_ci.SUPPORTED_PROJECTS),
+            sorted(
+                configure_coverage_ci.SUPPORTED_PROJECTS
+                - configure_coverage_ci.BLOCKED_PROJECTS
+            ),
         )
 
     def test_rocm_libraries_all_expands_to_that_group(self):
@@ -105,7 +139,10 @@ class SourceRepoPartitionTest(unittest.TestCase):
         self.assertTrue(libraries.isdisjoint(systems))
         self.assertEqual(
             libraries | systems,
-            set(configure_coverage_ci.SUPPORTED_PROJECTS),
+            set(
+                configure_coverage_ci.SUPPORTED_PROJECTS
+                - configure_coverage_ci.BLOCKED_PROJECTS
+            ),
         )
 
 
@@ -216,9 +253,20 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
     def test_both_groups_collapse_to_the_combined_option(self):
         self.assertEqual(
             configure_coverage_ci.build_coverage_cmake_options(
-                sorted(configure_coverage_ci.SUPPORTED_PROJECTS)
+                sorted(
+                    configure_coverage_ci.SUPPORTED_PROJECTS
+                    - configure_coverage_ci.BLOCKED_PROJECTS
+                )
             ),
             ["-DTHEROCK_COVERAGE_ALL=ON"],
+        )
+
+    def test_blocked_project_is_named_rather_than_folded_into_a_group(self):
+        # It is outside the group lists, so the group flag would not reach it
+        # and the explicit ask would silently build uninstrumented.
+        self.assertEqual(
+            configure_coverage_ci.build_coverage_cmake_options(["hipblaslt"]),
+            ["-DHIPBLASLT_ENABLE_COVERAGE=ON"],
         )
 
     def test_partial_selection_names_each_project_in_upper_case(self):
@@ -367,6 +415,21 @@ class EmitCmakeTest(unittest.TestCase):
             # flag their CMake does not implement.
             self.assertNotIn("MIOpen", text)
             self.assertNotIn("hipSPARSE ", text)
+            # The CMake group lists and the Python group sets decide the same
+            # thing in two places, so a blocked project has to leave both or a
+            # group build sets the flag the Python side just declined to.
+            self.assertNotIn("hipBLASLt", libraries_line)
+
+    def test_blocked_project_keeps_its_option_mapping(self):
+        # Excluded from the group lists but still nameable, which needs the
+        # translation to its upstream option name to survive.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "therock_coverage_projects.cmake"
+            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            self.assertIn(
+                "set(THEROCK_COVERAGE_OPTION_HIPBLASLT HIPBLASLT_ENABLE_COVERAGE)",
+                out.read_text(),
+            )
 
     def test_emits_the_upstream_option_name_per_subproject(self):
         # The generic names are why this is a per-subproject map: setting

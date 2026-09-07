@@ -90,6 +90,12 @@ class CoverageProject:
             cannot be measured by this pipeline. Such a project stays in the
             registry so the gap is recorded, but is left out of the group
             aliases and rejected if named explicitly.
+        blocked_reason: Set alongside coverage_option when the project is
+            measurable in principle but its instrumented build is currently
+            broken. Unlike unsupported_reason this is expected to be
+            temporary, so the project only drops out of the default selection
+            and the group aliases; naming it still works, which is how the
+            block gets retested once the fix lands.
         artifact_names: BUILD_TOPOLOGY artifact(s) the instrumented project
             ships in. These are grouped (`rand` holds both rocRAND and
             hipRAND), which is why artifact_relpaths exists.
@@ -123,6 +129,7 @@ class CoverageProject:
     coverage_config: str
     coverage_option: str = ""
     unsupported_reason: str = ""
+    blocked_reason: str = ""
     artifact_names: list[str] = field(default_factory=list)
     artifact_relpaths: list[str] = field(default_factory=list)
     object_globs: list[str] = field(default_factory=list)
@@ -229,6 +236,17 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["blas"],
         artifact_relpaths=["math-libs/BLAS/hipBLASLt/stage"],
         coverage_option="HIPBLASLT_ENABLE_COVERAGE",
+        # The coverage-only branch of clients/CMakeLists.txt links hipblaslt-test
+        # against a bare `rocroller` while its neighbours use the imported
+        # targets. rocRoller exports as roc::rocroller, and under TheRock it is a
+        # separate subproject found via its package config, so the bare name is
+        # not a target here and reaches the linker as -lrocroller with no -L to
+        # resolve it. hipBLASLt's own build gets away with it by having rocRoller
+        # in-tree. Fix belongs upstream in ROCm/rocm-libraries.
+        blocked_reason=(
+            "hipblaslt-test fails to link with 'unable to find library "
+            "-lrocroller'; its coverage build needs roc::rocroller upstream"
+        ),
         stage=STAGE_MATH_LIBS,
         test_component="hipblaslt",
         coverage_config="projects/hipblaslt/test_categories_coverage.yaml",
@@ -532,23 +550,31 @@ for _key, _proj in COVERAGE_PROJECTS.items():
 SUPPORTED_PROJECTS: frozenset[str] = frozenset(
     k for k, v in COVERAGE_PROJECTS.items() if v.coverage_option
 )
+# Measurable, but the instrumented build is broken today. Kept selectable by
+# name so the block can be retested, and kept out of everything that picks
+# projects on the caller's behalf.
+BLOCKED_PROJECTS: frozenset[str] = frozenset(
+    k for k, v in COVERAGE_PROJECTS.items() if v.blocked_reason
+)
 # What an empty selection defaults to: everything measurable that this workflow
 # also has a build job for. Naming a project outside BUILDABLE_STAGES stays an
 # error, so the narrowing applies only to the default, never to an explicit ask.
 DEFAULT_PROJECTS: frozenset[str] = frozenset(
-    k for k in SUPPORTED_PROJECTS if COVERAGE_PROJECTS[k].stage in BUILDABLE_STAGES
+    k
+    for k in SUPPORTED_PROJECTS - BLOCKED_PROJECTS
+    if COVERAGE_PROJECTS[k].stage in BUILDABLE_STAGES
 )
 # Group membership is limited to what can actually be measured, so a group
 # alias never schedules a job that is guaranteed to fail for want of profiles.
 ROCM_LIBRARIES_PROJECTS: frozenset[str] = frozenset(
     k
     for k, v in COVERAGE_PROJECTS.items()
-    if v.source_repo == ROCM_LIBRARIES and v.coverage_option
+    if v.source_repo == ROCM_LIBRARIES and v.coverage_option and not v.blocked_reason
 )
 ROCM_SYSTEMS_PROJECTS: frozenset[str] = frozenset(
     k
     for k, v in COVERAGE_PROJECTS.items()
-    if v.source_repo == ROCM_SYSTEMS and v.coverage_option
+    if v.source_repo == ROCM_SYSTEMS and v.coverage_option and not v.blocked_reason
 )
 
 # Group-alias tokens accepted by PROJECTS_TO_TEST (and the projects_to_test CI
@@ -556,7 +582,7 @@ ROCM_SYSTEMS_PROJECTS: frozenset[str] = frozenset(
 _GROUP_ALIASES: dict[str, frozenset[str]] = {
     "rocm_libraries_all": ROCM_LIBRARIES_PROJECTS,
     "rocm_systems_all": ROCM_SYSTEMS_PROJECTS,
-    "all": SUPPORTED_PROJECTS,
+    "all": SUPPORTED_PROJECTS - BLOCKED_PROJECTS,
 }
 
 
@@ -571,6 +597,11 @@ def parse_projects(raw_projects: str) -> list[str]:
     narrower than 'all' while comm-libs has no build job. Asking for those
     projects by name or via a group alias still fails in
     resolve_build_stages(), so nothing is dropped from an explicit request.
+
+    Projects with a known-broken instrumented build are likewise left out of
+    the default and the aliases, but naming one is honoured with a warning
+    rather than an error: retesting a block is the only way to notice it has
+    been fixed.
     """
     requested = [p.strip().lower() for p in raw_projects.split(",") if p.strip()]
     if not requested:
@@ -615,7 +646,18 @@ def parse_projects(raw_projects: str) -> list[str]:
             "they emit LLVM profraw data."
         )
     # Preserve first-seen order, drop duplicates (explicit + alias overlap).
-    return list(dict.fromkeys(expanded))
+    selection = list(dict.fromkeys(expanded))
+
+    # Not fatal: the caller went out of their way to name these, and the only
+    # way to find out a block has been lifted is to run into it again.
+    for name in selection:
+        blocked_reason = COVERAGE_PROJECTS[name].blocked_reason
+        if blocked_reason:
+            print(
+                f"warning: {name} is expected to fail: {blocked_reason}",
+                file=sys.stderr,
+            )
+    return selection
 
 
 def parse_amdgpu_families(raw_families: str) -> list[str]:
@@ -732,7 +774,9 @@ def emit_cmake(output_path: Path) -> None:
 
     Two things come out of here. The group lists drive the
     THEROCK_COVERAGE_*_ALL options, and are limited to projects that can be
-    measured. The option map tells therock_subproject.cmake which flag each
+    measured and are not currently blocked. The option map is not: a blocked
+    project stays in it so that naming it explicitly still instruments it.
+    The option map tells therock_subproject.cmake which flag each
     subproject actually implements, since the names are not standardised
     upstream. CMakeLists.txt reads both so it does not hardcode either.
     """
@@ -741,6 +785,11 @@ def emit_cmake(output_path: Path) -> None:
         names: set[str] = set()
         for p in COVERAGE_PROJECTS.values():
             if p.source_repo != repo or not p.coverage_option:
+                continue
+            # Kept in step with the Python group sets: a group flag that
+            # instrumented a project whose instrumented build is known to fail
+            # would take the whole stage down with it.
+            if p.blocked_reason:
                 continue
             # extra_cmake_targets are part of the group: a group flag that
             # instrumented rocPRIM but not rocPRIM_tests would leave rocPRIM's

@@ -105,11 +105,10 @@ jobs:
       # upstream -- rccl's CMake refuses coverage outside a Debug build, and
       # rocshmem fails on coverage plus HIP relocatable device code.
       #
-      # hipBLASLt is included deliberately even though it failed to link
-      # hipblaslt-test with "unable to find library -lrocroller" in run
-      # 34119302776. Whether that is coverage-related was never established,
-      # and this run is how we find out.
+      # hipBLASLt is absent for the same reason it is absent from the default
+      # selection: its instrumented build does not link. See its
+      # blocked_reason in configure_coverage_ci.py.
       projects_to_test: >-
-        hipblas,hipblaslt,hipdnn,hipfft,hiprand,hipsolver,hipsparselt,
+        hipblas,hipdnn,hipfft,hiprand,hipsolver,hipsparselt,
         hiptensor,rocblas,rocfft,rocrand,rocsolver,rocsparse
       test_type: "standard"

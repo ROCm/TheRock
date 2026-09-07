@@ -208,6 +208,12 @@ default — and naming them, or `rocm_systems_all` or `all`, is rejected outrigh
 The narrowing applies only to the default; an explicit request is never silently
 reduced. See [Adding a stage](#adding-a-stage).
 
+`hipblaslt` is excluded from the default and the aliases too, for a different
+reason: it is measurable, but its instrumented build currently fails to link.
+Naming it is honoured with a warning rather than rejected, since rerunning it
+is how the block gets noticed as fixed. See
+[Blocked projects](#blocked-projects).
+
 The aliases are expanded to concrete project names inside
 `configure_coverage_ci.py` before the job matrix is built, so nothing downstream
 ever sees them: the coverage pipeline hands `fetch_test_configurations.py`
@@ -233,6 +239,24 @@ leak into the rest of the build.
 A project that cannot be measured yet gets an `unsupported_reason` instead. It
 stays in the registry so the gap is recorded, stays out of the group aliases,
 and is rejected with that reason if someone names it.
+
+### Blocked projects
+
+A project that is measurable but whose instrumented build is broken gets a
+`blocked_reason` alongside its `coverage_option`. Unlike `unsupported_reason`
+this is expected to be temporary, so the project is only dropped from the
+default selection and the group aliases — including the group lists
+`--emit-cmake` writes, so a group build does not set a flag the Python side
+just declined to set. Naming it still works and prints the reason as a warning.
+
+`hipblaslt` is the current example. Its coverage-only branch of
+`clients/CMakeLists.txt` links `hipblaslt-test` against a bare `rocroller`
+while the surrounding lines use imported targets. rocRoller exports as
+`roc::rocroller`, and under TheRock it is a separate subproject found through
+its package config, so the bare name is not a target here and reaches the
+linker as `-lrocroller` with no `-L` to resolve it. hipBLASLt's own build
+avoids this by having rocRoller in-tree. The fix belongs upstream in
+`ROCm/rocm-libraries`; once it lands, drop the `blocked_reason`.
 
 Confirm a local instrumented build produces a non-empty report before relying on
 a new entry. A project whose tests never load the instrumented library builds
