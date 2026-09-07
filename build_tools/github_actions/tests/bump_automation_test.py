@@ -239,13 +239,20 @@ class UpdateCiEnvFileTest(unittest.TestCase):
 
 
 class CloseStalePrsTest(unittest.TestCase):
-    def _make_pr(self, number: int, title: str) -> dict:
-        return {"number": number, "title": title}
+    def _make_pr(self, number: int, title: str, branch: str = "bump-branch") -> dict:
+        return {"number": number, "title": title, "head": {"ref": branch}}
 
     def test_closes_matching_pr(self):
-        prs = [self._make_pr(42, "Bump rocm-systems from abc1234 to xyz5678")]
-        with patch("bump_automation.gh_api", return_value=prs) as mock_api:
-            close_stale_prs("rocm-systems", "abc1234567890", "token")
+        prs = [
+            self._make_pr(
+                42,
+                "Bump rocm-systems from abc1234 to xyz5678",
+                "bump-rocm-systems-xyz5678",
+            )
+        ]
+        with patch("bump_automation.gh_api_paginate", return_value=prs):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs("rocm-systems", "abc1234567890", "token")
 
         patch_calls = [
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
@@ -256,8 +263,9 @@ class CloseStalePrsTest(unittest.TestCase):
 
     def test_skips_non_matching_pr(self):
         prs = [self._make_pr(99, "Bump rocm-libraries from def9876 to uvw5432")]
-        with patch("bump_automation.gh_api", return_value=prs) as mock_api:
-            close_stale_prs("rocm-systems", "abc1234567890", "token")
+        with patch("bump_automation.gh_api_paginate", return_value=prs):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs("rocm-systems", "abc1234567890", "token")
 
         patch_calls = [
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
@@ -265,14 +273,63 @@ class CloseStalePrsTest(unittest.TestCase):
         self.assertEqual(len(patch_calls), 0)
 
     def test_posts_comment_before_closing(self):
-        prs = [self._make_pr(42, "Bump rocm-systems from abc1234 to xyz5678")]
-        with patch("bump_automation.gh_api", return_value=prs) as mock_api:
-            close_stale_prs("rocm-systems", "abc1234567890", "token")
+        prs = [
+            self._make_pr(
+                42,
+                "Bump rocm-systems from abc1234 to xyz5678",
+                "bump-rocm-systems-xyz5678",
+            )
+        ]
+        with patch("bump_automation.gh_api_paginate", return_value=prs):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs("rocm-systems", "abc1234567890", "token")
 
         post_calls = [
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "POST"
         ]
         self.assertTrue(any("comments" in c.args[1] for c in post_calls))
+
+    def test_deletes_branch_after_closing(self):
+        prs = [
+            self._make_pr(
+                42,
+                "Bump rocm-systems from abc1234 to xyz5678",
+                "bump-rocm-systems-xyz5678",
+            )
+        ]
+        with patch("bump_automation.gh_api_paginate", return_value=prs):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs("rocm-systems", "abc1234567890", "token")
+
+        delete_calls = [
+            c for c in mock_api.call_args_list if c.kwargs.get("method") == "DELETE"
+        ]
+        self.assertEqual(len(delete_calls), 1)
+        self.assertIn(
+            "git/refs/heads/bump-rocm-systems-xyz5678", delete_calls[0].args[1]
+        )
+
+    def test_paginates_all_open_prs(self):
+        page1 = [
+            self._make_pr(i, f"Bump other from aaa to bbb{i}", f"branch-{i}")
+            for i in range(1, 31)
+        ]
+        page2 = [
+            self._make_pr(
+                99,
+                "Bump rocm-systems from abc1234 to xyz5678",
+                "bump-rocm-systems-xyz5678",
+            )
+        ]
+        with patch("bump_automation.gh_api_paginate", return_value=page1 + page2):
+            with patch("bump_automation.gh_api") as mock_api:
+                close_stale_prs("rocm-systems", "abc1234567890", "token")
+
+        patch_calls = [
+            c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(len(patch_calls), 1)
+        self.assertIn("pulls/99", patch_calls[0].args[1])
 
 
 class HandlePushTest(unittest.TestCase):
