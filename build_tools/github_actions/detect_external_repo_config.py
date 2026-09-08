@@ -71,6 +71,31 @@ def extract_source_path_from_project(project_path: str) -> Optional[str]:
     return project_path.strip() if project_path.strip() else None
 
 
+def get_artifact_for_source_path_in_stage(source_path: str, stage_name: str) -> Optional[str]:
+    """Get the artifact name that contains the given source_path in a stage.
+
+    Args:
+        source_path: Source path name (e.g., "rocprim")
+        stage_name: Build stage name (e.g., "math-libs")
+
+    Returns:
+        Artifact name if found, None otherwise
+    """
+    topology = get_topology()
+
+    stage = topology.build_stages.get(stage_name)
+    if not stage:
+        return None
+
+    for group_name in stage.artifact_groups:
+        for artifact in topology.get_artifacts_in_group(group_name):
+            artifact_sources = artifact.source_paths or [artifact.name]
+            if source_path in artifact_sources:
+                return artifact.name
+
+    return None
+
+
 def get_artifact_sibling_paths(source_path: str, stage_name: str) -> Set[str]:
     """Get all source_paths from artifacts that contain the given source_path.
 
@@ -95,13 +120,97 @@ def get_artifact_sibling_paths(source_path: str, stage_name: str) -> Set[str]:
     return sibling_paths
 
 
+def get_source_sets_for_stage(stage_name: str) -> Set[str]:
+    """Get all source_set names used by a stage."""
+    topology = get_topology()
+    source_set_names: Set[str] = set()
+
+    stage = topology.build_stages.get(stage_name)
+    if not stage:
+        return source_set_names
+
+    for group_name in stage.artifact_groups:
+        group = topology.artifact_groups.get(group_name)
+        if group:
+            source_set_names.update(group.source_sets)
+
+    return source_set_names
+
+
+def get_artifact_build_dependency_paths(
+    artifact_name: str, stage_name: str, stage_source_sets: Set[str]
+) -> Set[str]:
+    """Get source_paths from build dependencies of an artifact.
+
+    This follows artifact_deps transitively and returns source_paths only for
+    artifacts that belong to the same source_sets as the stage (i.e., artifacts
+    within the same external repo like rocm-libraries).
+
+    Args:
+        artifact_name: Name of the artifact to get dependencies for
+        stage_name: Build stage name
+        stage_source_sets: Source sets used by this stage (to filter deps)
+
+    Returns:
+        Set of source_path names from dependency artifacts in the same source_sets
+    """
+    topology = get_topology()
+    dependency_paths: Set[str] = set()
+
+    artifact = topology.artifacts.get(artifact_name)
+    if not artifact:
+        return dependency_paths
+
+    # Collect all transitive artifact dependencies
+    all_deps: Set[str] = set()
+    deps_to_process = list(artifact.artifact_deps)
+
+    while deps_to_process:
+        dep_name = deps_to_process.pop()
+        if dep_name in all_deps:
+            continue
+        all_deps.add(dep_name)
+
+        dep_artifact = topology.artifacts.get(dep_name)
+        if dep_artifact:
+            deps_to_process.extend(dep_artifact.artifact_deps)
+
+    # For each dependency, check if it's in the same source_sets as the stage
+    # and if so, include its source_paths
+    for dep_name in all_deps:
+        dep_artifact = topology.artifacts.get(dep_name)
+        if not dep_artifact:
+            continue
+
+        # Check if this artifact's group uses any of the stage's source_sets
+        dep_group = topology.artifact_groups.get(dep_artifact.artifact_group)
+        if not dep_group:
+            continue
+
+        # If the dependency's artifact_group uses any of the same source_sets,
+        # then its source_paths are in the same external repo
+        if stage_source_sets.intersection(dep_group.source_sets):
+            dep_sources = dep_artifact.source_paths or [dep_artifact.name]
+            dependency_paths.update(dep_sources)
+
+    return dependency_paths
+
+
 def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
     """Return project paths to sparse checkout for a stage, or empty list for full checkout.
 
-    When a project changes, this function expands to include all sibling projects
-    from the same artifact. For example, if projects/rocprim changes and rocprim
-    is in the 'prim' artifact with source_paths [rocprim, hipcub, rocthrust, primbench],
-    then all four project paths will be included in the sparse checkout.
+    When a project changes, this function expands to include:
+    1. All sibling projects from the same artifact (e.g., rocprim -> hipcub, rocthrust)
+    2. All source_paths from transitive build dependencies that are in the same
+       external repo (determined by shared source_sets)
+
+    For example, if projects/rocprim changes:
+    - rocprim is in the 'prim' artifact with source_paths [rocprim, hipcub, rocthrust]
+    - 'prim' has artifact_deps including 'rand' (source_paths: [rocrand, hiprand])
+    - Both are in the 'rocm-libraries' source_set
+    - So we checkout: rocprim, hipcub, rocthrust, rocrand, hiprand
+
+    This ensures the build has all necessary source code from the external repo.
     """
     if not changed_projects or not changed_projects.strip():
         return []
@@ -109,6 +218,9 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
     stage_source_paths = get_stage_source_paths(stage_name)
     if not stage_source_paths:
         return []
+
+    # Get source_sets for this stage (used to filter dependencies to same repo)
+    stage_source_sets = get_source_sets_for_stage(stage_name)
 
     # First, find which source_paths in this stage are affected
     affected_source_paths: Set[str] = set()
@@ -130,10 +242,30 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
         return []
 
     # Expand to include all sibling source_paths from affected artifacts
+    # AND their transitive build dependencies within the same source_sets
     all_needed_paths: Set[str] = set()
+    affected_artifacts: Set[str] = set()
+
     for source_path in affected_source_paths:
+        # Get sibling paths from the same artifact
         siblings = get_artifact_sibling_paths(source_path, stage_name)
         all_needed_paths.update(siblings)
+
+        # Track which artifacts are affected so we can get their dependencies
+        artifact_name = get_artifact_for_source_path_in_stage(source_path, stage_name)
+        if artifact_name:
+            affected_artifacts.add(artifact_name)
+
+    # Get transitive build dependency paths for all affected artifacts
+    for artifact_name in affected_artifacts:
+        dep_paths = get_artifact_build_dependency_paths(
+            artifact_name, stage_name, stage_source_sets
+        )
+        all_needed_paths.update(dep_paths)
+
+    # Filter to only include paths that exist in this stage's source_paths
+    # (dependencies from other stages/repos are handled by artifact fetching)
+    all_needed_paths = all_needed_paths.intersection(stage_source_paths)
 
     # Convert source_paths back to project paths using the prefix
     # Use the first known prefix for paths we haven't seen directly

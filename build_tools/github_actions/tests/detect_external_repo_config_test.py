@@ -609,6 +609,62 @@ class TestComputeStageSparseCheckout(unittest.TestCase):
         )
         self.assertEqual(paths, sorted(paths))
 
+    def test_includes_build_dependency_paths(self):
+        """Test that build dependencies from same source_set are included.
+
+        When rocprim changes, we need its artifact siblings (hipcub, rocthrust)
+        AND its build dependencies that are in the same source_set (rand).
+        The 'prim' artifact has artifact_deps=['rand', 'core-hip', ...].
+        'rand' is in rocm-libraries (source_paths: rocrand, hiprand).
+        """
+        paths = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
+
+        # Should include siblings from 'prim' artifact
+        self.assertIn("projects/rocprim", paths)
+        self.assertIn("projects/hipcub", paths)
+        self.assertIn("projects/rocthrust", paths)
+
+        # Should include dependencies from same source_set (rocm-libraries)
+        # 'prim' depends on 'rand' which has source_paths [rocrand, hiprand]
+        self.assertIn("projects/rocrand", paths)
+        self.assertIn("projects/hiprand", paths)
+
+    def test_miopen_includes_blas_and_ck_dependencies(self):
+        """Test that miopen checkout includes blas and composable-kernel deps.
+
+        miopen has artifact_deps=['blas', 'composable-kernel', 'rand', ...].
+        All of these have source_paths in rocm-libraries.
+        """
+        paths = compute_stage_sparse_checkout("math-libs", "projects/miopen")
+
+        # Should include miopen itself
+        self.assertIn("projects/miopen", paths)
+
+        # Should include composable-kernel dependency
+        self.assertIn("projects/composablekernel", paths)
+
+        # Should include blas dependencies (rocblas, hipblas, etc.)
+        self.assertIn("projects/rocblas", paths)
+        self.assertIn("projects/hipblas", paths)
+
+        # Should include rand dependency
+        self.assertIn("projects/rocrand", paths)
+
+    def test_excludes_dependencies_from_other_source_sets(self):
+        """Test that dependencies from different source_sets are NOT included.
+
+        Many artifacts depend on core-hip, core-runtime, amd-llvm, etc.
+        These are in different source_sets (rocm-systems, compilers) and
+        should NOT be included in rocm-libraries sparse checkout.
+        """
+        paths = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
+
+        # core-hip, clr, hip are in rocm-systems, not rocm-libraries
+        # They should NOT appear in the checkout paths
+        self.assertNotIn("projects/clr", paths)
+        self.assertNotIn("projects/hip", paths)
+        self.assertNotIn("projects/rocr-runtime", paths)
+
 
 class TestComputeAllStageSparseCheckouts(unittest.TestCase):
     """Tests for compute_all_stage_sparse_checkouts function."""
