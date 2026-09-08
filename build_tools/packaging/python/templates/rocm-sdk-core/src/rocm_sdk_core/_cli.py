@@ -115,9 +115,12 @@ def _exec(relpath: str, expand_devel=True):
     # override with expand_devel=False to avoid the expansion cost.
     full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
     if is_windows:
-        # https://bugs.python.org/issue19124
-        # prevent execution from occuring in the backround
-        os._exit(os.spawnv(os.P_WAIT, full_path, [str(full_path)] + sys.argv[1:]))
+        # Windows has no real exec() and subprocess is recommended instead.
+        # os.execv runs the child in the background (https://bugs.python.org/issue19124)
+        # os.spawnv has brittle argument handling (https://discuss.python.org/t/how-to-deal-with-unsafe-broken-os-spawn-arg-handling-behavior-on-windows/20829)
+        import subprocess
+
+        sys.exit(subprocess.run([str(full_path)] + sys.argv[1:]).returncode)
     os.execv(full_path, [str(full_path)] + sys.argv[1:])
 
 
@@ -179,10 +182,6 @@ def rocm_agent_enumerator():
 
 def rocm_info():
     _exec("bin/rocminfo", expand_devel=False)
-
-
-def rocm_smi():
-    _exec("bin/rocm-smi", expand_devel=False)
 
 
 def roccoremerge():

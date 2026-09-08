@@ -38,6 +38,9 @@ VALID_TEST_CATEGORIES = {
     "ffm-standard",
     "ffm-comprehensive",
     "ffm-full",
+    # emulation categories (AM/rocjitsu)
+    "emu-fast",
+    "emu-full",
 }
 # Normalize + validate TEST_TYPE once at module load so all downstream
 # consumers (apply_component_overrides at import time, main() at run
@@ -72,6 +75,7 @@ COMPONENT_DIR_MAPPING = {
     "hipcub": "hipcub",
     "hipdnn": "hipdnn",
     "hipdnn-samples": "hipdnn_samples",
+    "hipdnn-integration-tests": "hipdnn_integration_tests_ctest",
     "miopen_plugin": "miopen_legacy_plugin",
     "miopenprovider": "miopen_plugin",
     "rocsparse": "rocsparse",
@@ -82,6 +86,7 @@ COMPONENT_DIR_MAPPING = {
     "rocroller": "rocroller",
     "hipblas": "hipblas",
     "hipblasltprovider": "hipblaslt_plugin",
+    "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
     # Add more mappings as needed
 }
@@ -259,6 +264,22 @@ COMPONENT_OVERRIDES = {
                     "host-math",
                     "lib",
                 ],
+            ],
+        },
+    },
+    # rocshmem's functional/unit test wrappers run rocshmem_info to auto-detect
+    # the backend. rocshmem_info is installed via install(PROGRAMS ...) (not as a
+    # target), so it keeps its build-tree RPATH and can't find its shared libs
+    # (libamdhip64.so.7, librocm_sysdeps_numa.so.1, ...) in the relocated test
+    # artifact. Prepend the install lib dir and the bundled sysdeps lib dir to
+    # LD_LIBRARY_PATH so the probe resolves the ROCm runtime + sysdeps libs.
+    # (The test binaries themselves install to bin/ as targets and resolve libs
+    # via their relocatable RPATH, so this only fixes the backend-detection probe.)
+    "rocshmem": {
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [
+                ["lib"],
+                ["lib", "rocm_sysdeps", "lib"],
             ],
         },
     },

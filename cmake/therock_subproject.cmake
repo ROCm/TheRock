@@ -87,6 +87,15 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
+# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
+# The compile flag is spelled per compiler; the link flag goes through CMake's
+# LINKER: prefix, which handles the driver difference.
+# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
+# defaults to the latter.
+set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
+set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
+set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
+
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -196,6 +205,19 @@ function(therock_subproject_fetch target_name)
   cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
   set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
   file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
+endfunction()
+
+# Maps a COMPILER_TOOLCHAIN name to the subproject that backs it: "amd-hip" ->
+# hip-clr, "amd-llvm" -> amd-llvm, anything else (or none) -> empty. Used by both
+# the consumer-graph registration and the toolchain configuration.
+function(therock_compiler_toolchain_subproject out_var compiler_toolchain)
+  if(compiler_toolchain STREQUAL "amd-hip")
+    set("${out_var}" "hip-clr" PARENT_SCOPE)
+  elseif(compiler_toolchain STREQUAL "amd-llvm")
+    set("${out_var}" "amd-llvm" PARENT_SCOPE)
+  else()
+    set("${out_var}" "" PARENT_SCOPE)
+  endif()
 endfunction()
 
 # therock_cmake_subproject_declare
@@ -341,7 +363,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;TEST_SUBPROJECTS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -513,8 +535,6 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
-    # Optional override for test dependencies (subproject names to test when this changes).
-    THEROCK_TEST_SUBPROJECTS "${ARG_TEST_SUBPROJECTS}"
     # Include dirs that this project compiles with.
     THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
     # Include dirs that are advertised to dependents.
@@ -551,6 +571,21 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
+
+  # Record direct-consumer edges for the consumer graph emitted by
+  # therock_emit_consumer_graph(). The compiler is a dependency too, but is
+  # declared via COMPILER_TOOLCHAIN rather than BUILD_DEPS/RUNTIME_DEPS.
+  set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_SUBPROJECTS "${target_name}")
+  set(_consumer_deps ${ARG_BUILD_DEPS} ${ARG_RUNTIME_DEPS})
+  therock_compiler_toolchain_subproject(_toolchain_dep "${ARG_COMPILER_TOOLCHAIN}")
+  if(_toolchain_dep)
+    list(APPEND _consumer_deps "${_toolchain_dep}")
+  endif()
+  foreach(_dep IN LISTS _consumer_deps)
+    if(NOT _dep STREQUAL target_name)  # a project is never its own consumer
+      set_property(GLOBAL APPEND PROPERTY "THEROCK_DIRECT_CONSUMERS_OF_${_dep}" "${target_name}")
+    endif()
+  endforeach()
 
   if(ARG_ACTIVATE)
     therock_cmake_subproject_activate("${target_name}")
@@ -755,6 +790,8 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+  string(APPEND _init_contents
+    "set(ROCM_BUILD_FLAGS_STATE_FILE \"@ROCM_BUILD_FLAGS_STATE_FILE@\")\n")
 
   # Support generator expressions in install CODE
   # We rely on this for debug symbol separation and some of our very old projects
@@ -780,6 +817,20 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "list(PREPEND CMAKE_PREFIX_PATH \"@_prefix_dir@\")\n")
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
+
+  # Disable the CMake package registry within sub-projects. Correct super-project
+  # resolution goes through the dependency provider and trampoline configs on
+  # CMAKE_PREFIX_PATH, never the registry. Leaving the registry enabled lets an
+  # undeclared find_package() latch onto a stray build tree recorded by a sibling
+  # sub-project's export(PACKAGE) (see the system-fallback path in
+  # therock_subproject_dep_provider.cmake). Gated on the same switch as the safe
+  # dependency provider so that disabling it restores full stock find_package()
+  # behavior.
+  string(APPEND _init_contents "if(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY OFF)\n")
+  string(APPEND _init_contents "  set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY ON)\n")
+  string(APPEND _init_contents "endif()\n")
 
   # Include dirs.
   foreach(_private_include_dir ${_private_include_dirs})
@@ -828,6 +879,16 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
+  # Link half of the driver build options. This cannot go through
+  # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
+  # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
+  # has populated it from *_INIT, which shadows the cache value and drops
+  # whatever the toolchain set.
+  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    string(APPEND _init_contents
+      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
@@ -854,11 +915,7 @@ function(therock_cmake_subproject_activate target_name)
 
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
-
-  # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
-  # on the stage.stamp file). These are a dependency for configure.
-  set(_configure_dep_stamps)
-  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
+  list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
 
   # Target flags.
   set(_all_option)
@@ -896,6 +953,10 @@ function(therock_cmake_subproject_activate target_name)
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
     message(STATUS "  DISABLING BUILD: Marked as pre-built")
+    # For prebuilt artifacts, we need runtime deps staged before copying from them.
+    set(_runtime_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_runtime_dep_stamps stage.stamp ${_runtime_deps})
+
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
@@ -914,9 +975,15 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_prebuilt_file}"
         "${_fileset_tool}"
+        ${_runtime_dep_stamps}
     )
   else()
     # Not pre-built: normal configure/build/stage install.
+    # Transform build and run deps from target form (i.e. 'ROCR-Runtime') to a dependency
+    # on the stage.stamp file. These are a dependency for configure.
+    set(_configure_dep_stamps)
+    _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
+
     # configure target
     if(THEROCK_VERBOSE)
       message(STATUS "  CONFIGURE_DEPENDS: ${_transitive_configure_depend_files} ")
@@ -990,6 +1057,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
         "${_global_post_include}"
+        "${ROCM_BUILD_FLAGS_STATE_FILE}"
         ${_extra_depends}
         ${_dep_provider_file}
         ${_configure_dep_stamps}
@@ -1112,10 +1180,12 @@ function(therock_cmake_subproject_activate target_name)
   add_custom_target("${target_name}+dist")
 
   # expunge target
+  # The prebuilt marker sits next to the stage dir, not inside it, so it has to
+  # be deleted here too or the project stays disabled.
   add_custom_target(
     "${target_name}+expunge"
     COMMAND
-      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
+      ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}" "${_prebuilt_file}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 
@@ -1692,6 +1762,18 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
   endif()
 
+  # Compile half of the driver build options. The link half is emitted as
+  # add_link_options() in the project_init file.
+  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    if(compiler_toolchain)
+      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
+    else()
+      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
+    endif()
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
+  endif()
+
   # Customize debug info generation.
   if(THEROCK_MINIMAL_DEBUG_INFO)
     # System toolchain can be either MSVC or another system compiler.
@@ -1728,16 +1810,12 @@ function(_therock_cmake_subproject_setup_toolchain
     # we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
-    #   "amd-hip": Superset of "amd-llvm" which also includes hipcc, hip headers,
-    #     and hip version info. This has hipconfig in it.
+    #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
+    #     HIP version info.
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    if(compiler_toolchain STREQUAL "amd-hip")
-      set(_toolchain_subproject "hip-clr")
-    else()
-      set(_toolchain_subproject "amd-llvm")
-    endif()
+    therock_compiler_toolchain_subproject(_toolchain_subproject "${compiler_toolchain}")
     _therock_assert_is_cmake_subproject("${_toolchain_subproject}")
     get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_amd_llvm_stamp_dir "${_toolchain_subproject}" THEROCK_STAMP_DIR)
@@ -1799,6 +1877,7 @@ function(_therock_cmake_subproject_setup_toolchain
     list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

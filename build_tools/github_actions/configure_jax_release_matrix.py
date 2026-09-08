@@ -14,7 +14,14 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.github_actions_api import gha_set_output
 
-RELEASE_TYPES = ["ci", "dev", "nightly", "prerelease"]
+RELEASE_TYPES = [
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+]
 
 # TODO: add opt-ins for CI runs to use python versions and JAX refs normally
 #       only included in release runs.
@@ -24,23 +31,29 @@ CI_PYTHON_VERSIONS = {
 }
 
 JAX_REF_CONFIGS = {
-    "rocm-jaxlib-v0.9.1": {
-        "jax_ref": "rocm-jaxlib-v0.9.1",
-        "jax_repository": "ROCm/rocm-jax",
-        "build_mode": "native",
-        "gfx_arch": "",
-    },
-    "rocm-jaxlib-v0.10.0": {
-        "jax_ref": "rocm-jaxlib-v0.10.0",
+    "rocm-jaxlib-v0.10.1": {
+        "jax_ref": "rocm-jaxlib-v0.10.1",
         "jax_repository": "ROCm/jax",
-        "build_mode": "manylinux",
         "gfx_arch": "device-all",
     },
     "rocm-jaxlib-v0.10.2": {
         "jax_ref": "rocm-jaxlib-v0.10.2",
         "jax_repository": "ROCm/jax",
-        "build_mode": "manylinux",
         "gfx_arch": "device-all",
+    },
+    "rocm-jaxlib-v0.11.0": {
+        "jax_ref": "rocm-jaxlib-v0.11.0",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
+    "rocm-jaxlib-v0.11.1": {
+        "jax_ref": "rocm-jaxlib-v0.11.1",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
     },
 }
 
@@ -51,17 +64,19 @@ JAX_REF_CONFIGS = {
 # should differ later.
 RELEASE_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.9.1",
-        "rocm-jaxlib-v0.10.0",
+        "rocm-jaxlib-v0.10.1",
         "rocm-jaxlib-v0.10.2",
+        "rocm-jaxlib-v0.11.0",
+        "rocm-jaxlib-v0.11.1",
     ],
 }
 
-# CI uses the manylinux package path only. Exclude rocm-jaxlib-v0.9.1 because
-# it uses the legacy native/tarball flow.
+# CI builds a single, stable JAX ref to keep the CI runner load low; the base
+# CI configuration favors breadth across GPU targets/platforms/frameworks
+# rather than every release version. Additional refs can be opted in as needed.
 CI_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.10.0",
+        "rocm-jaxlib-v0.11.1",
     ],
 }
 
@@ -96,6 +111,10 @@ def generate_jax_matrix(
     for py in python_versions:
         for ref in jax_refs:
             ref_cfg = JAX_REF_CONFIGS[ref]
+            # Skip Python versions a ref explicitly excludes (declared in
+            # JAX_REF_CONFIGS, e.g. JAX 0.11.0 dropped Python 3.11).
+            if py in ref_cfg.get("exclude_python_versions", ()):
+                continue
             # These row keys are the contract with workflow files which use them
             # via matrix.<key> expressions. Empty values are allowed when the
             # workflow handles them explicitly, but undefined keys are not.
@@ -103,11 +122,12 @@ def generate_jax_matrix(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
+                    # The ref without its prefix, for job names.
+                    "jax_label": ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v"),
                     "jax_repository": ref_cfg["jax_repository"],
-                    "build_mode": ref_cfg["build_mode"],
-                    # gfx_arch is intentionally empty for native JAX builds and
-                    # non-empty for manylinux builds. This direct lookup raises
-                    # KeyError if JAX_REFS omits the key.
+                    # gfx_arch selects the ROCm device package for the manylinux
+                    # build (e.g. device-all). This direct lookup raises
+                    # KeyError if JAX_REF_CONFIGS omits the key.
                     "gfx_arch": ref_cfg["gfx_arch"],
                 }
             )

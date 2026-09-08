@@ -1,3 +1,6 @@
 {
-  "rocm-version": "7.15.0"
+  "rocm-version": "10.1.0",
+  "release-metadata": {
+    "base-date": ""
+  }
 }

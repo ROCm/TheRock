@@ -51,14 +51,17 @@ def extract_gpu_details(files):
     return sorted(list(gpu_families))
 
 
-def generate_index_s3(s3_client, bucket_name, prefix: str, upload: bool = False) -> str:
+def generate_index_s3(
+    s3_client, bucket_name, prefix: str, upload: bool = False, allow_empty: bool = False
+) -> str:
     """Generate index.html for direct-child .tar.gz files at s3://bucket_name/prefix.
 
     With upload=True the index is PUT to s3://bucket_name/<prefix>/index.html
     and the HTTPS URL is returned. Otherwise the index is written to
     ./index.html and the local path is returned.
 
-    Raises FileNotFoundError when the prefix has no .tar.gz files.
+    With allow_empty=True, an empty index is generated when the prefix
+    contains no .tar.gz files. Otherwise, FileNotFoundError is raised.
     """
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
@@ -92,19 +95,11 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload: bool = False)
                     (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
                 )
 
-    if not files:
+    if not files and not allow_empty:
         raise FileNotFoundError(f"No .tar.gz files found in bucket {bucket_name}.")
 
     # Page title
-    bucket_lower = bucket_name.lower()
-    if "dev" in bucket_lower:
-        page_title = "ROCm SDK dev tarballs"
-    elif "nightly" in bucket_lower or "nightlies" in bucket_lower:
-        page_title = "ROCm SDK nightly tarballs"
-    elif "prerelease" in bucket_lower:
-        page_title = "ROCm SDK prerelease tarballs"
-    else:
-        page_title = "ROCm SDK tarballs"
+    page_title = "Tarball index"
 
     # Prepare filter options and files array for JS
     gpu_families = extract_gpu_details(files)
@@ -147,6 +142,14 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload: bool = False)
             function renderFiles(fileList) {{
                 const ul = document.getElementById('fileList');
                 ul.innerHTML = '';
+
+                if (fileList.length === 0) {{
+                    const li = document.createElement('li');
+                    li.textContent = 'No tarballs available.';
+                    ul.appendChild(li);
+                    return;
+                }}
+
                 fileList.forEach(file => {{
                     const li = document.createElement('li');
                     const href = encodeURIComponent(file.name).replace(/%2F/g, '/');

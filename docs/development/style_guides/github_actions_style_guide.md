@@ -181,7 +181,7 @@ Benefits:
 jobs:
   build_artifacts:
     name: Build Artifacts
-    runs-on: azure-linux-scale-rocm  # Dedicated CPU runner pool for builds
+    runs-on: aws-linux-scale-rocm-prod  # Dedicated CPU runner pool for builds
     steps:
       # ...
 

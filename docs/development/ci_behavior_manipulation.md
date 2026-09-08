@@ -23,6 +23,8 @@ The following labels may be added to a pull request to modify CI behavior:
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`          | Skip all builds and tests                                                                                                                                                                         |
 | `ci:run-all-archs` | Build and test all possible architectures                                                                                                                                                         |
+| `ci:asan`          | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
+| `ci:host-asan`     | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `gfx...`           | Opt-in to building and testing the specified gfx family (e.g. `gfx120X`, `gfx950`)                                                                                                                |
 | `test:...`         | Run tests only for the specified projects (e.g. `test:rocthrust`, `test:hipblaslt`). Sets test level to `full` unless overridden by `test_filter:`. Multiple `test:` labels can be combined.      |
 | `test_runner:...`  | Run tests on only custom test machines (e.g. `test_runner:oem`). Single-arch CI only.                                                                                                             |
@@ -54,7 +56,9 @@ stage configuration.
 > This feature is under active development and will evolve as
 > automatic stage selection and baseline run lookup are added.
 >
-> See https://github.com/ROCm/TheRock/issues/3399 for details.
+> See https://github.com/ROCm/TheRock/issues/3399 for details and
+> [`stage_reuse.md`](stage_reuse.md) for the automatic stage-reuse layer
+> that builds on the manual inputs described below.
 
 The [Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
 workflow supports skipping individual build stages by copying their artifacts
@@ -97,5 +101,5 @@ For now, these are the common configurations used for testing:
 
 ```
 compiler-runtime
-compiler-runtime,runtime-tests,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,media-libs
+compiler-runtime,runtime-tests,math-libs,comm-libs,debug-tools,dctools-core,profiler-apps,cv-libs,media-libs
 ```

@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-MANIFEST_PATH = REPO_ROOT / "artifact_subprojects.json"
+MANIFEST_PATH = Path(__file__).parent / "artifact_subprojects.json"
 
 CMAKE_ARGS = [
     "-GNinja",

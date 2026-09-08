@@ -25,6 +25,7 @@ exclude = [
   "lib/cmake/hsakmt/**",
   "lib/hsa-runtime64.lib",
   "lib/hsakmt.lib",
+  "lib/hsakmt-staticdrm.lib",
   "lib/wkmi.lib",
 ]
 [components.doc."core/clr/stage"]
