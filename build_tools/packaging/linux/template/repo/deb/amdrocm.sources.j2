@@ -1,0 +1,12 @@
+X-Repo-Id: {{ repo_id }}
+Types: deb
+URIs: {{ baseurl }}
+Suites: stable
+Components: main
+Architectures: amd64
+Enabled: yes
+{% if signed %}
+Signed-By: {{ deb_keyring_path }}
+{% else %}
+Trusted: yes
+{% endif %}

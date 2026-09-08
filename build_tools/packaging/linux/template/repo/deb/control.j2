@@ -1,0 +1,14 @@
+Source: {{ pkg_name }}
+Section: admin
+Priority: optional
+Maintainer: {{ maintainer }}
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/ROCm/TheRock
+
+Package: {{ pkg_name }}
+Architecture: all
+Depends: ${misc:Depends}
+Conflicts: {{ legacy_installer_package }}
+Description: {{ description_short }}
+ {{ description_long }}
