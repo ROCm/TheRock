@@ -18,9 +18,12 @@ from bump_automation import (
     create_therock_bump,
     find_therock_workflow_files,
     generate_pr_body,
+    GITHUB_SEARCH_PAGE_SIZE,
+    GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
     handle_push,
     latest_commit,
+    search_issues,
     submodule_changed,
     update_ci_env_file,
     update_ref_in_file,
@@ -395,6 +398,60 @@ class CloseStalePrsTest(unittest.TestCase):
         self.assertTrue(any("comments" in c.args[1] for c in post_calls))
 
 
+def _search_page(numbers: range, total_count: int) -> dict:
+    return {
+        "total_count": total_count,
+        "items": [{"number": n} for n in numbers],
+    }
+
+
+class SearchIssuesTest(unittest.TestCase):
+    def test_returns_single_page_without_further_requests(self):
+        page = _search_page(range(3), total_count=3)
+        with patch("bump_automation.gh_api", return_value=page) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual(len(items), 3)
+        mock_api.assert_called_once()
+        self.assertIn("page=1", mock_api.call_args.args[1])
+
+    def test_follows_pagination_until_all_matches_are_retrieved(self):
+        total = GITHUB_SEARCH_PAGE_SIZE + 5
+        pages = [
+            _search_page(range(GITHUB_SEARCH_PAGE_SIZE), total_count=total),
+            _search_page(range(GITHUB_SEARCH_PAGE_SIZE, total), total_count=total),
+        ]
+        with patch("bump_automation.gh_api", side_effect=pages) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual([item["number"] for item in items], list(range(total)))
+        requested_pages = [call.args[1] for call in mock_api.call_args_list]
+        self.assertEqual(len(requested_pages), 2)
+        self.assertIn("page=1", requested_pages[0])
+        self.assertIn("page=2", requested_pages[1])
+
+    def test_stops_at_the_search_api_result_limit(self):
+        full_page = _search_page(range(GITHUB_SEARCH_PAGE_SIZE), total_count=10**6)
+        with patch("bump_automation.gh_api", return_value=full_page) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual(len(items), GITHUB_SEARCH_RESULT_LIMIT)
+        self.assertEqual(
+            mock_api.call_count, GITHUB_SEARCH_RESULT_LIMIT // GITHUB_SEARCH_PAGE_SIZE
+        )
+
+    def test_quotes_the_query(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_search_page(range(0), 0)
+        ) as mock_api:
+            search_issues("token", 'repo:ROCm/rocm-libraries in:title "Update"')
+
+        endpoint = mock_api.call_args.args[1]
+        self.assertTrue(endpoint.startswith("search/issues?q="))
+        self.assertNotIn(" ", endpoint)
+        self.assertNotIn('"', endpoint)
+
+
 class CloseStaleTheRockRefPrsTest(unittest.TestCase):
     NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 
@@ -486,6 +543,50 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
         endpoint = mock_api.call_args.args[1]
         self.assertTrue(endpoint.startswith("search/issues?q="))
         self.assertIn("per_page=100", endpoint)
+
+    def test_closes_stale_prs_found_beyond_the_first_search_page(self):
+        # A full first page of unrelated PRs must not hide stale bot PRs that
+        # only appear on a later page.
+        first_page = {
+            "total_count": GITHUB_SEARCH_PAGE_SIZE + 1,
+            "items": [
+                self._make_pr(
+                    number,
+                    "Update TheRock reference to (1111111)",
+                    "human-author",
+                    age=timedelta(days=3),
+                )
+                for number in range(GITHUB_SEARCH_PAGE_SIZE)
+            ],
+        }
+        second_page = {
+            "total_count": GITHUB_SEARCH_PAGE_SIZE + 1,
+            "items": [
+                self._make_pr(
+                    2000,
+                    "Update TheRock reference to (2222222)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                )
+            ],
+        }
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[first_page, second_page, {}, {}],
+        ) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/2000"])
 
 
 class HandlePushTest(unittest.TestCase):

@@ -37,6 +37,9 @@ ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
 FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
 THEROCK_REF_PR_TITLE_PREFIX = "Update TheRock reference to ("
 THEROCK_REF_PR_AUTHOR = "assistant-librarian[bot]"
+GITHUB_SEARCH_PAGE_SIZE = 100
+# The GitHub search API refuses to serve matches past the first 1000.
+GITHUB_SEARCH_RESULT_LIMIT = 1000
 # Leave recent bot pin PRs open so their CI can finish before they are closed.
 STALE_THEROCK_REF_PR_AGE = timedelta(days=2)
 
@@ -405,6 +408,34 @@ def _parse_github_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def search_issues(token: str, query: str) -> list[dict[str, Any]]:
+    """Return every issue/PR matching a search query, following pagination."""
+    items: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            f"search/issues?q={quote(query)}"
+            f"&per_page={GITHUB_SEARCH_PAGE_SIZE}&page={page}",
+        )
+        page_items = result.get("items", [])
+        items.extend(page_items)
+
+        if len(page_items) < GITHUB_SEARCH_PAGE_SIZE:
+            return items
+        if len(items) >= result.get("total_count", 0):
+            return items
+        if len(items) >= GITHUB_SEARCH_RESULT_LIMIT:
+            print(
+                f"[WARN] Search hit the {GITHUB_SEARCH_RESULT_LIMIT}-result API "
+                f"limit; some matches were not retrieved"
+            )
+            return items
+
+        page += 1
+
+
 def close_stale_therock_ref_prs(
     repo: str,
     current_pr_number: int,
@@ -417,11 +448,13 @@ def close_stale_therock_ref_prs(
     PRs younger than STALE_THEROCK_REF_PR_AGE are left open so their CI can
     finish before they are superseded.
     """
-    query = quote(f'repo:{repo} is:pr is:open in:title "{THEROCK_REF_PR_TITLE_PREFIX}"')
-    result = gh_api(token, f"search/issues?q={query}&per_page=100")
+    items = search_issues(
+        token,
+        f'repo:{repo} is:pr is:open in:title "{THEROCK_REF_PR_TITLE_PREFIX}"',
+    )
     now = now or datetime.now(timezone.utc)
 
-    for item in result.get("items", []):
+    for item in items:
         number = item["number"]
         if number == current_pr_number:
             continue
