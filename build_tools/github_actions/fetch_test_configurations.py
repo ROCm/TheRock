@@ -906,7 +906,13 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
-        "timeout_minutes": 15,
+        # Github Actions step timeout, applied to every tier (it does not vary by test_type).
+        # Must be sized for the largest tier the nightly runs (comprehensive),
+        # not quick/standard -- otherwise the step is killed mid-suite well
+        # before ctest's own per-test --timeout 7200 can take effect. See
+        # rocm-libraries/projects/hiptensor/test_categories.yaml
+        # execution_settings.category_timeouts (full: 7200s = 2h).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
