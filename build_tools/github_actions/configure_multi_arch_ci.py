@@ -248,10 +248,10 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
-    # Set by callers that are configured as an automatic presubmit gate: a
-    # scoped run cheap enough to start on every pull request. Currently this
-    # grants host-asan runs a sandbox test runner outside of nightly.
-    presubmit: bool = False
+    # Set by callers that are configured as an automatic ASAN presubmit gate: a
+    # scoped run cheap enough to start on every pull request. Grants host-asan
+    # runs a sandbox test runner outside of nightly.
+    asan_presubmit: bool = False
 
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
@@ -320,7 +320,7 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
-        presubmit = os.environ.get("PRESUBMIT", "false").lower() == "true"
+        asan_presubmit = os.environ.get("ASAN_PRESUBMIT", "false").lower() == "true"
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -404,7 +404,7 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             build_native_linux=build_native_linux,
-            presubmit=presubmit,
+            asan_presubmit=asan_presubmit,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             linux_amdgpu_families=_parse_comma_list(
@@ -1324,7 +1324,7 @@ def _expand_build_config_for_platform(
             if not (
                 ci_inputs.is_schedule
                 or ci_inputs.is_workflow_dispatch
-                or (ci_inputs.external_repo and ci_inputs.presubmit)
+                or (ci_inputs.external_repo and ci_inputs.asan_presubmit)
             ):
                 test_runs_on = ""
                 print(
