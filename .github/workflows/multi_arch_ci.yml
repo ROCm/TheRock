@@ -121,7 +121,9 @@ jobs:
       windows_test_labels: ${{ inputs.windows_test_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}
+      # Pull requests reuse the stages their diff does not affect. Pushes stay
+      # on dry-run so every main commit builds the stages a PR later reuses.
+      stage_reuse_mode: ${{ inputs.stage_reuse_mode || (github.event_name == 'pull_request' && 'reuse-stage') || 'dry-run' }}
       stage_reuse_max_age_hours: ${{ inputs.stage_reuse_max_age_hours || '72' }}
       stage_reuse_commit_history: ${{ inputs.stage_reuse_commit_history || '50' }}
       build_python_packages: ${{ github.event_name != 'workflow_dispatch' || inputs.build_python_packages }}
