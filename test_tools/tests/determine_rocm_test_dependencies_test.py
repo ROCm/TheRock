@@ -307,6 +307,10 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("hipblaslt", projects)
 
     def test_shared_blas_prefixes_mapped(self) -> None:
+        # tensilelite has no node in `graph` itself -- it is declared as a
+        # synthetic subproject below (empty consumers here; the real transitive
+        # reach through hipblaslt/rocblas/hipblas is covered by
+        # TestSyntheticSubprojects, not by this alias-expansion test).
         graph = {
             "hipblas": {"consumers": []},
             "hipblaslt": {"consumers": []},
@@ -314,7 +318,8 @@ class TestCliInputParsing(_FixtureTestCase):
             "rocblas": {"consumers": []},
             "rocroller": {"consumers": []},
         }
-        root = _make_fixture(graph=graph, policies="")
+        policies = "[synthetic.tensilelite]\nconsumers = []\n"
+        root = _make_fixture(graph=graph, policies=policies)
         try:
             cases = {
                 "shared/mxdatagenerator": {
@@ -324,19 +329,14 @@ class TestCliInputParsing(_FixtureTestCase):
                     "rocroller",
                     "tensilelite",
                 },
-                "shared/origami": {
-                    "hipblas",
-                    "hipblaslt",
-                    "origami",
-                    "rocblas",
-                    "tensilelite",
-                },
-                "shared/stinkytofu": {
-                    "hipblas",
-                    "hipblaslt",
-                    "rocblas",
-                    "tensilelite",
-                },
+                # origami/stinkytofu are intentionally short now: tensilelite is
+                # a synthetic node with level=3 in the REAL test_policies.toml,
+                # so its own walk reaches hipblaslt/rocblas/hipblas transitively
+                # without hand-duplicating them here. This --level 5 (self-only)
+                # check only exercises alias expansion, so it sees just the
+                # literal alias contents.
+                "shared/origami": {"origami", "tensilelite"},
+                "shared/stinkytofu": {"tensilelite"},
                 "shared/tensile": {"hipblas", "rocblas"},
             }
             for changed_project, expected in cases.items():
@@ -565,6 +565,106 @@ class TestCliInputParsing(_FixtureTestCase):
         lines = proc.stdout.strip().splitlines()
         self.assertIn("amdsmi", lines)
         self.assertIn("rdc", lines)
+
+
+# ---------------------------------------------------------------------------
+# Synthetic subprojects: [synthetic.<name>] promotes a project with no CMake
+# target (e.g. TensileLite) into an ordinary consumer-graph node, merged in by
+# _load_consumer_graph. Once merged it walks, validates, and lists exactly like
+# a real graph node -- these tests exercise that mechanism directly, using a
+# small graph modeling tensilelite -> hipblaslt -> rocblas -> hipblas so the
+# transitive reach can be checked end to end (mirrors the real repo's shape
+# without depending on its size or drifting with it).
+# ---------------------------------------------------------------------------
+_SYNTHETIC_GRAPH = {
+    "hipblaslt": {"consumers": ["rocblas"]},
+    "rocblas": {"consumers": ["hipblas"]},
+    "hipblas": {"consumers": []},
+    "hipsparselt": {"consumers": []},
+}
+_SYNTHETIC_POLICIES = """\
+[synthetic.tensilelite]
+consumers = ["hipblaslt", "hipsparselt"]
+
+[component.tensilelite]
+level = 3
+
+[component.hipblaslt]
+test_include = ["hipblas"]
+"""
+
+
+class TestSyntheticSubprojects(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=_SYNTHETIC_POLICIES)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_synthetic_node_appears_in_list_subprojects(self) -> None:
+        # Merged in by _load_consumer_graph, so it is a known subproject just
+        # like any CMake-derived one.
+        self.assertIn("tensilelite", list_subprojects(self.root))
+
+    def test_tensilelite_change_ripples_transitively(self) -> None:
+        # tensilelite (level=3, unbounded) -> synthetic edge to
+        # {hipblaslt, hipsparselt} -> continues into the REAL graph edges
+        # transitively: hipblaslt -> rocblas -> hipblas.
+        result = get_subprojects_to_test(["tensilelite"], self.root)
+        self.assertEqual(
+            result,
+            {"tensilelite", "hipblaslt", "hipsparselt", "rocblas", "hipblas"},
+        )
+
+    def test_tensilelite_change_does_not_warn_unrecognized(self) -> None:
+        # A synthetic node is a known graph key -- no "unrecognized project"
+        # warning, unlike a bare test-only string with no declaration.
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            get_subprojects_to_test(["tensilelite"], self.root)
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_hipblaslt_change_does_not_retest_tensilelite(self) -> None:
+        # The asymmetric coupling this mechanism exists for: hipblaslt-proper
+        # changes must NOT force a tensilelite retest (only the reverse).
+        result = get_subprojects_to_test(["hipblaslt"], self.root, level=4)
+        self.assertNotIn("tensilelite", result)
+        # The real missing edge (hipblaslt -> hipblas) is still patched via
+        # test_include, independent of the synthetic mechanism.
+        self.assertIn("hipblas", result)
+
+    def test_validate_policies_passes_with_synthetic_table(self) -> None:
+        ok, messages = validate_policies(self.root)
+        self.assertTrue(ok, "\n".join(messages))
+        self.assertTrue(any("synthetic subproject" in m for m in messages))
+
+    def test_validate_policies_catches_bad_synthetic_consumer(self) -> None:
+        # A synthetic consumer naming a nonexistent project is almost always a
+        # typo: it would silently select nothing beyond itself.
+        bad = _SYNTHETIC_POLICIES.replace(
+            'consumers = ["hipblaslt", "hipsparselt"]',
+            'consumers = ["hipblaslt", "not-a-real-project"]',
+        )
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            ok, messages = validate_policies(root)
+            self.assertFalse(ok)
+            self.assertIn("not-a-real-project", "\n".join(messages))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_merge_is_additive_not_overwriting(self) -> None:
+        # If a synthetic name ever collides with a real graph node, the merge
+        # must union consumers rather than silently drop the real edge.
+        graph = {**_SYNTHETIC_GRAPH, "hipblaslt": {"consumers": ["rocblas"]}}
+        policies = '[synthetic.hipblaslt]\nconsumers = ["hipsparselt"]\n'
+        root = _make_fixture(graph=graph, policies=policies)
+        try:
+            result = get_subprojects_to_test(["hipblaslt"], root, level=4)
+            self.assertIn("rocblas", result)  # the pre-existing real edge
+            self.assertIn("hipsparselt", result)  # the added synthetic edge
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
