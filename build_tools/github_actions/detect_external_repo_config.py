@@ -71,16 +71,10 @@ def extract_source_path_from_project(project_path: str) -> Optional[str]:
     return project_path.strip() if project_path.strip() else None
 
 
-def get_artifact_for_source_path_in_stage(source_path: str, stage_name: str) -> Optional[str]:
-    """Get the artifact name that contains the given source_path in a stage.
-
-    Args:
-        source_path: Source path name (e.g., "rocprim")
-        stage_name: Build stage name (e.g., "math-libs")
-
-    Returns:
-        Artifact name if found, None otherwise
-    """
+def get_artifact_for_source_path_in_stage(
+    source_path: str, stage_name: str
+) -> Optional[str]:
+    """Return artifact name containing source_path in stage, or None."""
     topology = get_topology()
 
     stage = topology.build_stages.get(stage_name)
@@ -140,20 +134,7 @@ def get_source_sets_for_stage(stage_name: str) -> Set[str]:
 def get_artifact_build_dependency_paths(
     artifact_name: str, stage_name: str, stage_source_sets: Set[str]
 ) -> Set[str]:
-    """Get source_paths from build dependencies of an artifact.
-
-    This follows artifact_deps transitively and returns source_paths only for
-    artifacts that belong to the same source_sets as the stage (i.e., artifacts
-    within the same external repo like rocm-libraries).
-
-    Args:
-        artifact_name: Name of the artifact to get dependencies for
-        stage_name: Build stage name
-        stage_source_sets: Source sets used by this stage (to filter deps)
-
-    Returns:
-        Set of source_path names from dependency artifacts in the same source_sets
-    """
+    """Return source_paths from transitive artifact_deps within the same source_sets."""
     topology = get_topology()
     dependency_paths: Set[str] = set()
 
@@ -197,20 +178,10 @@ def get_artifact_build_dependency_paths(
 
 
 def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
-    """Return project paths to sparse checkout for a stage, or empty list for full checkout.
+    """Return project paths to sparse checkout for a stage.
 
-    When a project changes, this function expands to include:
-    1. All sibling projects from the same artifact (e.g., rocprim -> hipcub, rocthrust)
-    2. All source_paths from transitive build dependencies that are in the same
-       external repo (determined by shared source_sets)
-
-    For example, if projects/rocprim changes:
-    - rocprim is in the 'prim' artifact with source_paths [rocprim, hipcub, rocthrust]
-    - 'prim' has artifact_deps including 'rand' (source_paths: [rocrand, hiprand])
-    - Both are in the 'rocm-libraries' source_set
-    - So we checkout: rocprim, hipcub, rocthrust, rocrand, hiprand
-
-    This ensures the build has all necessary source code from the external repo.
+    Expands changed projects to include artifact siblings and transitive build
+    dependencies within the same source_sets. Returns empty list if no paths needed.
     """
     if not changed_projects or not changed_projects.strip():
         return []
@@ -224,7 +195,9 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
 
     # First, find which source_paths in this stage are affected
     affected_source_paths: Set[str] = set()
-    project_prefixes: Dict[str, str] = {}  # source_path -> project prefix (e.g., "rocprim" -> "projects/")
+    project_prefixes: Dict[str, str] = (
+        {}
+    )  # source_path -> project prefix (e.g., "rocprim" -> "projects/")
 
     for project in changed_projects.split(","):
         project = project.strip()
@@ -325,34 +298,11 @@ def _log_warning(message: str) -> None:
 
 
 def normalize_changed_projects(changed_projects: str) -> str:
-    """Normalize changed_projects into a consistent format.
-
-    Args:
-        changed_projects: Comma-separated list of changed project paths
-            (e.g., "projects/rocprim,shared/rocroller")
-
-    Returns:
-        Comma-separated string of paths (normalized, deduplicated, sorted).
-        Empty string if changed_projects is empty.
-
-    Note: The sparse checkout paths are pre-computed for all stages using
-    compute_all_stage_sparse_checkouts() and embedded in config_json.
-    """
+    """Normalize comma-separated project paths (dedupe, sort). Returns empty string if none."""
     if not changed_projects or not changed_projects.strip():
         return ""
-
-    # Parse changed_projects into a set - just use the paths directly
-    paths = set()
-    for project in changed_projects.split(","):
-        project = project.strip()
-        if project:
-            paths.add(project)
-
-    if not paths:
-        return ""
-
-    # Return as comma-separated string (will be parsed per-stage)
-    return ",".join(sorted(paths))
+    paths = {p.strip() for p in changed_projects.split(",") if p.strip()}
+    return ",".join(sorted(paths)) if paths else ""
 
 
 def get_repo_config(repo_name: str) -> Dict[str, Any]:
