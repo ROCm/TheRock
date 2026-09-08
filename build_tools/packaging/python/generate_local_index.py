@@ -5,9 +5,11 @@
 """Generate simple HTML index files for pip --find-links from local files.
 
 This module provides utilities to generate index.html files that pip can use
-with the --find-links option. It supports both simple single-directory indexes
-and multi-arch builds where each GPU family needs its own index that includes
-both family-specific packages and generic packages from the parent directory.
+with the --find-links option. By default, the CLI generates a flat multi-arch
+index for kpack-split package layouts where host, generic, and device packages
+all live in one directory. It can also generate per-family indexes for the
+kpack-disabled multi-arch layout where each GPU family has a subdirectory that
+also needs links to generic packages from the parent directory.
 
 For generating an index from packages already in S3, see generate_s3_index.py.
 
@@ -21,12 +23,12 @@ Usage as a library:
     )
 
 Usage as a script:
+    python generate_local_index.py dist/
     python generate_local_index.py dist/ --output dist/index.html
-    python generate_local_index.py dist/gfx94X-dcgpu/ --output dist/gfx94X-dcgpu/index.html --parent-dir dist/
+    python generate_local_index.py dist/ --per-family-indexes
 """
 
 import argparse
-import sys
 from pathlib import Path
 from urllib.parse import quote
 
@@ -101,45 +103,12 @@ def generate_simple_index(
     )
 
 
-def generate_flat_index(dist_dir: Path, patterns: list[str] | None = None) -> None:
-    """Generate a single flat index.html for kpack-split builds.
-
-    In kpack-split mode all packages (core, libraries, device-per-target, devel,
-    meta) are placed directly in dist/ at the top level — there are no family
-    subdirectories. This function generates a single index.html covering all
-    top-level files so that pip --find-links can discover all wheels.
-
-    Only top-level files are scanned; subdirectories are ignored.
-
-    Args:
-        dist_dir: dist/ directory containing packages at the top level
-        patterns: File patterns to include (default: ["*.whl", "*.tar.gz"])
-    """
-    if patterns is None:
-        patterns = ["*.whl", "*.tar.gz"]
-
-    local_files = []
-    for pattern in patterns:
-        local_files.extend([f for f in dist_dir.glob(pattern) if f.is_file()])
-
-    print(
-        f"Generating flat index for kpack-split build: {len(local_files)} files in {dist_dir}"
-    )
-
-    generate_simple_index(
-        output_path=dist_dir / "index.html",
-        local_files=local_files,
-        parent_files=None,
-        title="ROCm Python Packages",
-    )
-
-
 def generate_multiarch_indexes(
     dist_dir: Path, patterns: list[str] | None = None
 ) -> None:
-    """Generate per-family index files for multi-arch builds.
+    """Generate per-family indexes for kpack-disabled multi-arch builds.
 
-    For multi-arch builds, the dist directory structure is:
+    For kpack-disabled multi-arch builds, the dist directory structure is:
         dist/
           rocm_sdk_core-*.whl              (generic, top-level)
           gfx94X-dcgpu/
@@ -199,7 +168,14 @@ def generate_multiarch_indexes(
         )
 
 
-def main():
+def _find_matching_files(directory: Path, patterns: list[str]) -> list[Path]:
+    files = []
+    for pattern in patterns:
+        files.extend(f for f in directory.glob(pattern) if f.is_file())
+    return files
+
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Generate HTML index files for pip --find-links"
     )
@@ -219,9 +195,13 @@ def main():
         help="Parent directory containing additional packages (will use ../ links)",
     )
     parser.add_argument(
-        "--multiarch",
+        "--per-family-indexes",
         action="store_true",
-        help="Multi-arch mode: generate per-family indexes in subdirectories",
+        help=(
+            "Generate indexes for a kpack-disabled per-family layout. "
+            "Creates index.html in each immediate subdirectory and links "
+            "top-level packages as parent files."
+        ),
     )
     parser.add_argument(
         "--title",
@@ -236,25 +216,25 @@ def main():
         help="File patterns to include (default: *.whl *.tar.gz)",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    if args.multiarch:
-        # Multi-arch mode: generate indexes for each family subdirectory
+    if args.per_family_indexes:
+        if args.output:
+            parser.error("--output is only supported for flat index generation")
+        if args.parent_dir:
+            parser.error("--parent-dir is only supported for flat index generation")
+        # Kpack-disabled multi-arch mode: generate indexes for each family
+        # subdirectory.
         generate_multiarch_indexes(args.directory, patterns=args.patterns)
     else:
-        # Single directory mode
+        # Flat kpack-split multi-arch mode.
         output_path = args.output or (args.directory / "index.html")
-
-        # Find local files
-        local_files = []
-        for pattern in args.patterns:
-            local_files.extend(args.directory.glob(pattern))
-
-        # Find parent files if specified
-        parent_files = []
-        if args.parent_dir:
-            for pattern in args.patterns:
-                parent_files.extend(args.parent_dir.glob(pattern))
+        local_files = _find_matching_files(args.directory, args.patterns)
+        parent_files = (
+            _find_matching_files(args.parent_dir, args.patterns)
+            if args.parent_dir
+            else []
+        )
 
         generate_simple_index(
             output_path=output_path,

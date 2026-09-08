@@ -8,6 +8,11 @@ import shutil
 import subprocess
 import sys
 
+repo_root = Path(__file__).resolve().parents[4]
+build_tools_path = repo_root / "build_tools"
+sys.path.insert(0, str(build_tools_path))
+from patch_linux_so import relativize_pc_file
+
 
 def rename_pc_files(pc_file: Path) -> None:
     """Rename a .pc file by removing the 'rocm_sysdeps_' prefix if present.
@@ -29,37 +34,6 @@ def rename_pc_files(pc_file: Path) -> None:
         new_name = pc_file.name[len(prefix) :]
         new_path = pc_file.with_name(new_name)
         pc_file.rename(new_path)
-
-
-def relativize_pc_file(pc_file: Path) -> None:
-    """Make a .pc file relocatable by using pcfiledir-relative paths.
-
-    Replaces the absolute prefix= line with a pcfiledir-relative path,
-    then replaces all other occurrences of the absolute prefix with ${prefix}.
-    Also remove the string "rocm_sysdeps_"
-    Assumes the .pc file is located at $PREFIX/lib/pkgconfig/.
-    """
-    content = pc_file.read_text()
-
-    # Find the original absolute prefix value.
-    original_prefix = None
-    for line in content.splitlines():
-        if line.startswith("prefix="):
-            original_prefix = line[len("prefix=") :]
-            break
-
-    if not original_prefix:
-        return
-
-    # Replace the prefix line with pcfiledir-relative path.
-    # .pc files are in $PREFIX/lib/pkgconfig, so go up 2 levels.
-    content = content.replace(f"prefix={original_prefix}", "prefix=${pcfiledir}/../..")
-    # Replace all other occurrences of the absolute path with ${prefix}.
-    # Use trailing / to avoid partial matches.
-    content = content.replace(f"{original_prefix}/", "${prefix}/")
-    # Remove "rocm_sysdeps_"
-    content = content.replace(f"rocm_sysdeps_", "")
-    pc_file.write_text(content)
 
 
 def symlink_or_copy(existing_path, new_link):
@@ -89,29 +63,13 @@ def symlink_or_copy(existing_path, new_link):
         shutil.copy2(existing_path, new_link)
 
 
-def link_header_files_under_dir(source_dir, dest_dir):
-    """Support applications referencing ncurses header through
-    both `<ncurses.h>` and `<ncursesw/ncurses.h>` by making
-
-    """
-    source_dir = Path(source_dir)
-    dest_dir = Path(dest_dir)
-    if not source_dir.exists():
-        return
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    for header_path in source_dir.iterdir():
-        if header_path.is_file() and header_path.suffix == ".h":
-            symlink_or_copy(header_path, dest_dir / header_path.name)
-
-
 def update_library_links(libfile: Path) -> None:
     """
     Normalize a shared library so that its real file is named exactly as its ELF SONAME,
     and ensure a canonical linker-visible symlink exists.
 
     This function is used when a library has been installed under a prefixed or
-    non‑standard filename (e.g., librocm_sysdeps_ncursesw.so).
+    non-standard filename (e.g., librocm_sysdeps_ncursesw.so).
     It performs the following operations:
     - Extracts the library's SONAME using `patchelf --print-soname`.
     - Resolves the underlying real file (following symlinks).
@@ -169,6 +127,22 @@ def update_library_links(libfile: Path) -> None:
         if symlink_path.exists():
             symlink_path.unlink()
         libfile.rename(symlink_path)
+
+
+def link_header_files_under_dir(source_dir, dest_dir):
+    """Support applications referencing ncurses header through
+    both `<ncurses.h>` and `<ncursesw/ncurses.h>` by making
+
+    """
+    source_dir = Path(source_dir)
+    dest_dir = Path(dest_dir)
+    if not source_dir.exists():
+        return
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for header_path in source_dir.iterdir():
+        if header_path.is_file() and header_path.suffix == ".h":
+            symlink_or_copy(header_path, dest_dir / header_path.name)
 
 
 # Fetch an environment variable or exit if it is not found.

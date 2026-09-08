@@ -80,8 +80,6 @@ add_custom_target(
     # Run meson from the source directory to avoid this issue.
     "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
-      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --

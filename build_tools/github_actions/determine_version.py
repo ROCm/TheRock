@@ -24,60 +24,42 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 #       together and follow a similar style.
 # TODO: Or share with JAX builds? Could use a different name in that case too.
 
-from packaging.version import parse
-
 import argparse
 import sys
+from pathlib import Path
 
-from github_actions_api import *
+from packaging.version import parse
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from github_actions.github_actions_api import gha_set_env
 
 
 def derive_version_suffix(rocm_version: str) -> str:
-    # Compute a version suffix to be used as a local version identifier:
-    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
-    #
-    # For example, torch with base version `2.9.0` built with rocm `7.10.0`
-    # support can use this suffix in its version as `2.9.0+rocm7.10.0`.
-    #
-    # We take extra care here to sort final > nightly > dev and only include
-    # a single `+` in the suffix.
-    #
-    # For example:
-    #
-    # | description | rocm version       | suffix                     |
-    # | ----------- | ------------------ | -------------------------- |
-    # | final       | 7.10.0             | +rocm7.10.0                |
-    # | nightly     | 7.10.0a20251124    | +rocm7.10.0a20251124       |
-    # | dev         | 7.10.0.dev0+efed3c | +devrocm7.10.0.dev0-efed3c |
-    #                                       ^                 ^
-    #                                       |                 |-- no `+` here
-    #                                       |
-    #                                       |--- devrocm sorts older than rocm
+    """Compute a version suffix to be used as a local version identifier.
 
-    parsed_version = parse(rocm_version)
+    See https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+
+    For example, torch with base version ``2.9.0`` built with rocm ``7.10.0``
+    support uses this suffix in its version as ``2.9.0+rocm7.10.0``.
+
+    We take extra care to sort final > nightly > dev and only include
+    a single ``+`` in the suffix.
+
+    | description | rocm version       | suffix                     |
+    | ----------- | ------------------ | -------------------------- |
+    | final       | 7.10.0             | +rocm7.10.0                |
+    | nightly     | 7.10.0a20251124    | +rocm7.10.0a20251124       |
+    | dev         | 7.10.0.dev0+efed3c | +devrocm7.10.0.dev0-efed3c |
+                                            ^                 ^
+                                            |                 |-- no ``+`` here
+                                            |
+                                            |--- devrocm sorts older than rocm
+    """
+    parsed = parse(rocm_version)
     base_name = "devrocm" if "dev" in rocm_version else "rocm"
-    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
-
-    return version_suffix
-
-
-def derive_versions(rocm_version: str, verbose_output: bool) -> str:
-    parsed_version = parse(rocm_version)
-    rocm_sdk_version = f"=={parsed_version}"
-
-    version_suffix = derive_version_suffix(rocm_version)
-
-    optional_build_prod_arguments = (
-        f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
-    )
-
-    if verbose_output:
-        print(f"ROCm version: {parsed_version}")
-        print(f"`--rocm-sdk-version`\t: {rocm_sdk_version}")
-        print(f"`--version-suffix`\t: {version_suffix}")
-        print()
-
-    return optional_build_prod_arguments
+    return f"+{base_name}{str(parsed).replace('+', '-')}"
 
 
 def main(argv: list[str]):
@@ -102,11 +84,28 @@ def main(argv: list[str]):
     )
     args = p.parse_args(argv)
 
-    optional_build_prod_arguments = derive_versions(args.rocm_version, args.verbose)
+    parsed_version = parse(args.rocm_version)
+    version_suffix = derive_version_suffix(args.rocm_version)
+    rocm_sdk_version = f"=={parsed_version}"
+    optional_build_prod_arguments = (
+        f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
+    )
+
+    if args.verbose:
+        print(f"ROCm version: {parsed_version}")
+        print(f"`--rocm-sdk-version`\t: {rocm_sdk_version}")
+        print(f"`--version-suffix`\t: {version_suffix}")
+        print()
+
     print(f"{optional_build_prod_arguments}")
 
     if args.write_env_file:
-        gha_set_env({"optional_build_prod_arguments": optional_build_prod_arguments})
+        gha_set_env(
+            {
+                "optional_build_prod_arguments": optional_build_prod_arguments,
+                "version_suffix": version_suffix,
+            }
+        )
 
 
 if __name__ == "__main__":

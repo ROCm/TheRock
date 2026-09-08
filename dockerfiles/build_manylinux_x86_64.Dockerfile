@@ -21,9 +21,6 @@ ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.46.2 && \
 pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
-######## Repo ########
-RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
-
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
@@ -42,20 +39,34 @@ RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
 ######## Ninja ########
 WORKDIR /install-ninja
-ENV CMAKE_VERSION="1.12.1"
+ENV NINJA_VERSION="1.12.1"
 COPY install_ninja.sh ./
-RUN ./install_ninja.sh "${CMAKE_VERSION}" && rm -rf /install-ninja
+RUN ./install_ninja.sh "${NINJA_VERSION}" && rm -rf /install-ninja
 
 ######## AWS CLI ######
 WORKDIR /install-awscli
 COPY install_awscli.sh ./
 RUN ./install_awscli.sh && rm -rf /install-awscli
 
+######## GitHub CLI (gh) ########
+WORKDIR /install-gh
+ENV GH_VERSION="2.97.0"
+COPY install_gh.sh ./
+RUN ./install_gh.sh "${GH_VERSION}" && rm -rf /install-gh
+
 ######## Installing Google test #######
 WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
+######## Rust (rustup) ########
+ENV RUSTUP_HOME="/usr/local/rustup"
+ENV CARGO_HOME="/usr/local/cargo"
+WORKDIR /install-rust
+ENV RUST_VERSION="1.95.0"
+COPY install_rust.sh ./
+RUN ./install_rust.sh "${RUST_VERSION}" && rm -rf /install-rust
 
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest

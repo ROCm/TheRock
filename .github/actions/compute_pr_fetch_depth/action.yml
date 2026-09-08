@@ -1,0 +1,29 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: "Compute PR-aware fetch-depth"
+
+description: >-
+  Returns the smallest `actions/checkout` fetch-depth that covers all
+  commits this workflow needs to walk.
+
+  * pull_request events: `commits + 1` (PR commits + merge-base).
+  * any other event (push, schedule, workflow_dispatch, ...): `0`
+    (full history). Use this when downstream tooling walks commit
+    history
+
+outputs:
+  value:
+    description: >-
+      String value to pass to actions/checkout fetch-depth. Already
+      coerced to a string so it composes cleanly with checkout's
+      input parser.
+    value: ${{ steps.compute.outputs.value }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Compute fetch-depth
+      id: compute
+      shell: bash
+      run: python build_tools/github_actions/compute_pr_depth.py

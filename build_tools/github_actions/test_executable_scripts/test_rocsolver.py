@@ -27,9 +27,9 @@ cmd = [
 ]
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
+# Otherwise, we run the standard test suite.
 # Test filter patterns retrieved from https://github.com/ROCm/rocm-libraries/blob/a18b17eef6c24bcd4bcf8dd6a0e36325cbcd11a7/projects/rocsolver/rtest.xml
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     quick_tests = [
         "checkin*BDSQR*",

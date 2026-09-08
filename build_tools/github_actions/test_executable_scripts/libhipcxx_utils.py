@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import subprocess
 import sys
 import logging
@@ -16,28 +17,92 @@ def prepend_env_path(env: dict, var_name: str, new_path: str):
         env[var_name] = new_path
 
 
+def _try_offload_arch(therock_build_dir: str, file_ending: str):
+    """Try offload-arch; return gfxNNNN string or None."""
+    executable = therock_build_dir + f"/lib/llvm/bin/offload-arch{file_ending}"
+    try:
+        result = subprocess.run([executable], capture_output=True, text=True)
+        lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
+        logging.info(f"DEBUG offload-arch:{lines}")
+        if lines:
+            last = lines[-1]
+            if last.startswith("gfx"):
+                if result.returncode != 0:
+                    logging.warning(
+                        f"offload-arch exited {result.returncode} but returned '{last}'; using it"
+                    )
+                return last
+        if result.returncode != 0:
+            logging.warning(
+                f"offload-arch failed (exit {result.returncode}): {result.stderr}"
+            )
+    except FileNotFoundError:
+        logging.warning("offload-arch not found")
+    return None
+
+
+def _try_rocminfo(therock_build_dir: str, file_ending: str):
+    """Try rocminfo (uses HSA runtime, works on MxGPU); return gfxNNNN or None."""
+    executable = therock_build_dir + f"/bin/rocminfo{file_ending}"
+    try:
+        result = subprocess.run([executable], capture_output=True, text=True)
+        # rocminfo output contains lines like:  Name:                    gfx1101
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("Name:"):
+                match = re.search(r"gfx\d+", line)
+                if match:
+                    arch = match.group(0)
+                    logging.info(f"DEBUG rocminfo detected: {arch}")
+                    return arch
+    except FileNotFoundError:
+        logging.warning("rocminfo not found")
+    return None
+
+
 def get_gpu_architecture_portable(therock_build_dir):
     """
-    Executes rocm_agent_enumerator for Linux and offload-arch for Windows and returns last line of the output.
+    Detect the GPU gfxNNNN architecture string.
+
+    Tries multiple detection methods in order:
+    1. offload-arch (fast, but fails on some MxGPU virtual GPUs)
+    2. rocminfo (uses HSA runtime)
+
+    If AMDGPU_TARGETS is set in the environment (as it is in CI), validates
+    the detected arch against it. MxGPU virtual GPUs can cause offload-arch
+    to return an incorrect default (e.g. gfx906) even when the actual GPU
+    is different (e.g. gfx1101). If the detected arch is not in AMDGPU_TARGETS,
+    falls back to compiling for all targets so the binary runs on whatever
+    GPU is present. If detection fails entirely (None), leaves it as None so
+    callers can apply their own fallback (e.g. --offload-arch=native).
+
+    Note: we deliberately do NOT attempt to detect the GPU by compiling
+    and running a HIP program. On MxGPU virtual GPUs, forcefully killing
+    a process that has initialized the HIP runtime (e.g. via a timeout)
+    can leave the virtual GPU context in a locked state, breaking
+    subsequent tests (e.g. rocblas) that need GPU access.
 
     Returns:
-        str: The gfx architecture of the running system, or None if not available.
+        str: The gfx architecture (or semicolon-separated list of targets),
+             or None if not available.
     """
     therock_build_dir = str(therock_build_dir)
     file_ending = ".exe" if platform.system() == "Windows" else ""
-    try:
-        executable = therock_build_dir + f"/lib/llvm/bin/offload-arch{file_ending}"
-        result = subprocess.run(
-            [executable], capture_output=True, text=True, check=True
-        )
-        lines = result.stdout.strip().split("\n")
-        logging.info(f"DEBUG:{lines}")
-        return lines[-1]
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing offload-arch: {e}", file=sys.stderr)
-        print(f"stderr: {e.stderr}", file=sys.stderr)
-        return None
-    except FileNotFoundError:
-        print("Error: offload-arch command not found", file=sys.stderr)
-        return None
+    arch = _try_offload_arch(therock_build_dir, file_ending)
+    if not arch:
+        arch = _try_rocminfo(therock_build_dir, file_ending)
+
+    # Validate against AMDGPU_TARGETS when set (authoritative in CI).
+    # Only apply when detection returned something — if arch is None,
+    # leave it for the caller to handle (e.g. via --offload-arch=native).
+    amdgpu_targets = os.getenv("AMDGPU_TARGETS")
+    if amdgpu_targets and arch is not None:
+        valid_targets = amdgpu_targets.split(",")
+        if arch not in valid_targets:
+            arch = ";".join(valid_targets)
+            logging.info(
+                f"++ GPU arch not in AMDGPU_TARGETS, compiling for all targets: {arch}"
+            )
+
+    return arch

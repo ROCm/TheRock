@@ -16,6 +16,7 @@
 {%- if exclude_libpython_requires %}
 %define __requires_exclude libpython*.*
 {%- endif %}
+%define _binary_payload w9.zstdio
 
 Name: {{ pkg_name }}
 Version: {{ version }}
@@ -62,6 +63,7 @@ mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 {% endfor %}
 
 %files
+%defattr(-, root, root, -)
 {{ install_prefix }}
 
 %clean

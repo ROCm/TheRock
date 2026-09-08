@@ -1,0 +1,1779 @@
+#!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Download prerelease packages from S3 bucket for promotion to release.
+
+This script downloads release candidate packages from the therock-prerelease-python
+S3 bucket. It discovers all architectures that contain packages matching a specific
+version pattern and downloads them into a local directory structure.
+
+In addition to downloading packages to promote, the script also allows to download
+PyPI dependencies that are part of the same S3 bucket.
+
+Selection of those packages can be done by version pattern and architecture.
+Options to just list architectures found matching the version or list all packages
+per architecture without downloading are also available. Packages that are not known
+to be either a package to promote or a PyPI dependency are also listed.
+
+Previously downloaded packages are skipped.
+
+"Structured" (--structured) downloads from the per-product repo.amd.com layout
+defined by RFC0012 instead of the flat prerelease bucket: core, PyTorch, and JAX
+wheels each live in their own bucket (therock-repo-amd-<stream>-<product>) under
+v5/rocm/<product>/<index>/<package>/. This is "product-local" in the sense that
+each product's packages are discovered independently, per-product, rather than
+scanned out of one shared bucket/prefix. The structured layout is only used from
+ROCm 10 onward; earlier releases only exist in the flat prerelease bucket.
+
+PREREQUISITES:
+  - pip install -r ./build_tools/packaging/requirements.txt
+  - AWS credentials configured
+    - read and list bucket access for therock-prerelease-python bucket
+
+TYPICAL USAGE (Command Line):
+  # Download all 7.10.0rc2 packages for all architectures:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --output-dir=./downloads
+
+  # Download only for a specific architecture:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --arch=gfx950-dcgpu \
+    --output-dir=./downloads
+
+  # Download for multiple specific architectures:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --arch=gfx1151,gfx950-dcgpu \
+    --output-dir=./downloads
+
+  # Download packages including tarballs:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --arch=gfx1151,gfx950-dcgpu \
+    --output-dir=./downloads \
+    --include-tarballs
+
+  # List available architectures without downloading:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --list-archs
+
+  # List all packages per architecture without downloading:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --list-packages-per-arch
+
+  # List all packages and tarballs per architecture with sizes:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --list-packages-per-arch \
+    --include-tarballs
+
+  # Download packages to promote and all known PyPI dependencies:
+  python ./build_tools/packaging/download_python_packages.py \
+    --version=7.10.0rc2 \
+    --output-dir=./downloads \
+    --include-dependencies
+
+  # Download multi-arch packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --output-dir=./downloads --bucket-prefix=v4/whl/
+
+  # Download multi-arch packages including tarballs
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --output-dir=./downloads --bucket-prefix=v4/whl/ --include-tarballs
+
+  # List multi-arch packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --list-multi-arch-packages --bucket-prefix=v4/whl/
+
+  # Download structured product-local whl-next packages.
+  python download_python_packages.py --version=7.13.0rc1 --structured --output-dir=./downloads
+
+  # Download only structured PyTorch whl-next packages.
+  python download_python_packages.py --version=7.13.0rc1 --structured --product=pytorch --output-dir=./downloads
+
+  # Download structured packages and normal ROCm Core tarballs.
+  python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=release --output-dir=./downloads
+
+  # Download ASAN ROCm Core tarballs with structured packages.
+  python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=asan --output-dir=./downloads
+
+DIRECTORY STRUCTURE:
+  Output directory structure will be:
+    <output-dir>/
+      <arch1>/
+        package1.whl
+        package2.whl
+        ...
+      <arch2>/
+        package1.whl
+        ...
+      tarball/              (single-arch tarballs, if --include-tarballs is specified)
+      tarball-multi-arch/   (multi-arch tarballs, if --include-tarballs is specified)
+      tarball-asan/         (ASAN tarballs, if --structured --include-tarballs --tarball-variant=asan)
+        therock-dist-linux-<arch1>-<version>.tar.gz
+        therock-dist-windows-<arch2>-<version>.tar.gz
+        ...
+
+PACKAGE CATEGORIES:
+  Packages to promote (ROCm and PyTorch):
+    - rocm (sdist)
+    - rocm-sdk-core
+    - rocm-sdk-devel
+    - rocm-sdk-libraries-*
+    - torch
+    - torchaudio
+    - torchvision
+    - triton
+
+  Known dependencies:
+    - filelock, fsspec, jinja2, markupsafe, mpmath, networkx
+    - numpy, pillow, setuptools, sympy, typing-extensions
+
+  Unknown packages:
+    - everything else that is not a package to promote or a dependency package
+"""
+
+import argparse
+import dataclasses
+import fnmatch
+import re
+import sys
+from pathlib import Path
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.python_package_paths import (
+    ACCEPTED_FILE_EXTENSIONS,
+    CORE_TARBALL_PREFIXES,
+    DEFAULT_INDEX,
+    INDEX_NAMES,
+    REPO_BUCKET_PRODUCT_NAMES,
+    REPO_STREAMS,
+    core_tarball_dir_name,
+    core_tarball_prefix,
+    repo_product_bucket,
+)
+from _therock_utils.storage_location import StorageLocation
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+except ImportError:
+    print("[ERROR]: boto3 not installed. Please run:")
+    print("  pip install boto3")
+    sys.exit(1)
+
+
+# Constants
+# Maximum number of S3 keys to check when validating architecture
+MAX_S3_KEYS_CHECK = 100
+BYTES_TO_MB = 1024 * 1024  # Conversion factor from bytes to MB
+
+# The JAX plugin/pjrt wheels embed the ROCm major version in their package name
+# (jax_rocm7_plugin for ROCm 7, jax_rocm10_plugin for ROCm 10), so they are
+# matched by pattern instead of listed once per ROCm release.
+JAX_ROCM_PACKAGE_PATTERN = re.compile(r"^jax_rocm\d+_(plugin|pjrt)$")
+
+# Package categories
+# Note: replace - in package names with _ to match the filename patterns in S3
+PACKAGES_TO_PROMOTE = {
+    "apex",
+    "jaxlib",
+    "rocm",
+    "rocm_profiler",
+    "rocm_sdk_core",
+    "rocm_sdk_devel",
+    "rocm_sdk_libraries-*",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "triton",
+}
+
+PACKAGES_TO_PROMOTE_MULTI_ARCH = {
+    "amd_torch_device",
+    "amd_torchvision_device",
+    "apex",
+    "rocm",
+    "rocm_profiler",
+    "rocm_sdk_core",
+    "rocm_sdk_devel",
+    "rocm_sdk_device",
+    "rocm_sdk_libraries",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "triton",
+    # TODO: Enable once upstream support lands
+    # Tracking: PyTorch/audio#4180
+    # "amd_torchaudio_device",
+}
+
+# copied from build_tools/third_party/s3_management/update_dependencies.py PACKAGES_PER_PROJECT
+# Note: replace - in package names with _ to match the filename patterns in S3
+DEPENDENCY_PACKAGES = {
+    # Jax
+    "dbus_python",
+    "flatbuffers",
+    "ml_dtypes",
+    "opt_einsum",
+    "tomli",
+    #
+    # Torch
+    "sympy",
+    "mpmath",
+    "pillow",
+    "networkx",
+    "numpy",
+    "jinja2",
+    "markupsafe",
+    "filelock",
+    "fsspec",
+    "typing_extensions",
+    #
+    # ROCM
+    "setuptools",
+}
+
+STRUCTURED_PRODUCTS = tuple(REPO_BUCKET_PRODUCT_NAMES.keys())
+# Thin aliases so existing choices=STRUCTURED_INDEXES call sites don't need to
+# change now that the underlying names live in _therock_utils.
+STRUCTURED_INDEXES = INDEX_NAMES
+STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
+# These build the S3 bucket/key strings for the structured (product-local)
+# repo.amd.com layout; see structured_key() in python_package_paths.py for
+# the analogous per-file key computation used on the upload side.
+STRUCTURED_S3_ROOT_PREFIX = "v5/rocm"
+
+
+@dataclasses.dataclass
+class PackageEntry:
+    """A package discovered during multi-arch/structured S3 listing."""
+
+    location: StorageLocation
+    size: int
+
+    @property
+    def bucket(self) -> str:
+        return self.location.bucket
+
+    @property
+    def key(self) -> str:
+        return self.location.relative_path
+
+
+def parse_csv_args(values: list[str] | None) -> list[str]:
+    """Parse comma-separated and repeated CLI values into a flat list."""
+    if not values:
+        return []
+
+    parsed = []
+    for value in values:
+        parsed.extend(item.strip() for item in value.split(",") if item.strip())
+    return parsed
+
+
+def structured_python_root(product: str, index: str) -> str:
+    return f"{STRUCTURED_S3_ROOT_PREFIX}/{product}/{index}/"
+
+
+def is_structured_package_key(root: str, key: str) -> bool:
+    if not key.startswith(root):
+        return False
+    relative = key[len(root) :]
+    parts = relative.split("/")
+    return len(parts) == 2 and all(parts)
+
+
+def is_python_artifact(filename: str) -> bool:
+    # Also matches ROCm Core tarball filenames (.tar.gz), not just wheels/sdists.
+    return filename.endswith(ACCEPTED_FILE_EXTENSIONS)
+
+
+def filter_package_entries(
+    packages: list[PackageEntry | tuple[str, int]],
+    include_package_globs: list[str] | None = None,
+    exclude_package_globs: list[str] | None = None,
+) -> list[PackageEntry | tuple[str, int]]:
+    """Filter package entries by filename glob patterns.
+
+    Args:
+        packages: List of PackageEntry instances (multi-arch/structured listing)
+            or plain (s3_key, size) tuples (single-arch legacy listing).
+        include_package_globs: Optional glob patterns. If set, only matching filenames are kept.
+        exclude_package_globs: Optional glob patterns. Matching filenames are removed.
+
+    Returns:
+        Filtered list of package entries, in the same shape as the input.
+    """
+    include_package_globs = include_package_globs or []
+    exclude_package_globs = exclude_package_globs or []
+
+    filtered = []
+
+    for entry in packages:
+        key = entry.key if isinstance(entry, PackageEntry) else entry[-2]
+        filename = key.split("/")[-1]
+
+        if include_package_globs and not any(
+            fnmatch.fnmatch(filename, pattern) for pattern in include_package_globs
+        ):
+            print(f"  FILTERED OUT by include filters: {filename}")
+            continue
+
+        if exclude_package_globs and any(
+            fnmatch.fnmatch(filename, pattern) for pattern in exclude_package_globs
+        ):
+            print(f"  FILTERED OUT by exclude filters: {filename}")
+            continue
+
+        filtered.append(entry)
+
+    return filtered
+
+
+def is_allowed_multi_arch_package(
+    filename: str,
+    requested_arches: list[str] | None = None,
+) -> bool:
+    """
+    Check if filename belongs to allowed packages for multi-arch flow.
+    Uses:
+      - PACKAGES_TO_PROMOTE_MULTI_ARCH
+
+    Rules:
+      - Regular packages require exact match
+      - Device packages require:
+          - package prefix match
+          - gfx target in filename
+          - optional requested arch match
+    """
+    # Extract package name from wheel/sdist filename by splitting at the
+    # beginning of the version segment (e.g. "-7", "-2").
+    # This preserves hyphenated package names like:
+    #   amd-torch-device-gfx942 -> amd_torch_device_gfx942
+    # while also correctly handling regular packages like:
+    #   torch -> torch
+    base = re.split(r"-\d", filename, maxsplit=1)[0]
+    base = base.lower().replace("-", "_")
+
+    if JAX_ROCM_PACKAGE_PATTERN.match(base):
+        return True
+
+    for pkg in PACKAGES_TO_PROMOTE_MULTI_ARCH:
+
+        # Device packages contain gfx targets
+        if "device" in pkg:
+            if not (base.startswith(pkg) and "gfx" in base):
+                continue
+
+            # If user requested specific arches,
+            # ensure one matches the filename
+            if requested_arches:
+                normalized_arches = {
+                    arch.lower().replace("-", "_").split("-")[0]
+                    for arch in requested_arches
+                }
+
+                if not any(arch in base for arch in normalized_arches):
+                    continue
+
+            return True
+
+        # Regular packages use prefix match
+        if base.startswith(pkg):
+            return True
+
+    return False
+
+
+def categorize_package(filename: str) -> str:
+    """Categorize a package file.
+
+    Returns:
+        "promote" - package that needs RC version promotion
+        "dependency" - dependency package to copy as-is
+        "unknown" - unrecognized package
+    """
+    pkg_name = filename.split("-", 1)[0]
+
+    # Check for rocm-sdk-libraries-* and jax-rocm<major>-* patterns
+    if (
+        pkg_name.startswith("rocm_sdk_libraries")
+        or JAX_ROCM_PACKAGE_PATTERN.match(pkg_name)
+        or pkg_name in PACKAGES_TO_PROMOTE
+    ):
+        return "promote"
+
+    if pkg_name in DEPENDENCY_PACKAGES:
+        return "dependency"
+
+    return "unknown"
+
+
+def list_architectures(
+    s3_client, bucket_name: str, bucket_prefix: str, version: str
+) -> list[str]:
+    """List all architectures in the bucket that have packages matching the version.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name (e.g., "therock-prerelease-python")
+        bucket_prefix: S3 bucket prefix (e.g., "v3/whl/")
+        version: Version pattern to search for (e.g., "7.10.0rc2")
+
+    Returns:
+        List of architecture names (e.g., ["gfx950-dcgpu", "gfx94X-dcgpu"])
+    """
+    print(f"Discovering architectures with version {version}...")
+
+    # List all "directories" in the bucket prefix
+    try:
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=bucket_prefix,
+            Delimiter="/",
+            MaxKeys=MAX_S3_KEYS_CHECK,
+        )
+
+        architectures = []
+        if "CommonPrefixes" in response.keys():
+            # "CommonPrefixes" is a list of prefixes that are the "directories" in the S3 bucket
+            for prefix in response["CommonPrefixes"]:
+                arch = prefix["Prefix"].replace(bucket_prefix, "").rstrip("/")
+                # Check if the arch folder contains files with the specified version
+                if exists_version_single_arch(
+                    s3_client, bucket_name, bucket_prefix, arch, version
+                ):
+                    architectures.append(arch)
+                    print(f"  Found: {arch}")
+
+        if len(architectures) == 0:
+            print(
+                f"""[ERROR]: No architecture subdirectories found in bucket prefix '{bucket_prefix}' of bucket '{bucket_name}'
+         that contain packages matching the version '{version}'"""
+            )
+            sys.exit(1)
+
+        return sorted(architectures)
+
+    except ClientError as e:
+        print(f"[ERROR]: Failed to list architectures: {e}")
+        sys.exit(1)
+    except NoCredentialsError:
+        print("[ERROR]: AWS credentials not configured")
+        print("Please configure credentials via the IAM role")
+        sys.exit(1)
+
+
+def _version_matches(filename: str, version: str) -> bool:
+    """Check whether `filename` contains an exact match of `version`, not
+    merely a substring match (so "7.13.0rc1" doesn't match "7.13.0rc10").
+    """
+    for candidate in (version, f"rocm{version}"):
+        pattern = (
+            r"(?<![A-Za-z0-9])" + re.escape(candidate) + r"(?=-|\.tar\.gz|\.zip|$)"
+        )
+        if re.search(pattern, filename):
+            return True
+    return False
+
+
+def exists_version_single_arch(
+    s3_client, bucket_name: str, bucket_prefix: str, arch: str, version: str
+) -> bool:
+    """Check if an architecture folder contains files with the specified version."""
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=f"{bucket_prefix}{arch}/")
+
+        for page in pages:
+            if "Contents" not in page:
+                continue
+
+            for obj in page["Contents"]:
+                if _version_matches(obj["Key"], version):
+                    return True
+
+        return False
+    except ClientError:
+        return False
+
+
+def exists_version_multi_arch(s3_client, bucket, prefix, directory, version):
+    """Check whether a directory contains files matching the requested version.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket: S3 bucket name
+        prefix: Base S3 prefix
+        directory: Optional subdirectory to search under
+        version: Version pattern to search for
+
+    Returns:
+        True if at least one matching file exists, otherwise False
+    """
+    paginator = s3_client.get_paginator("list_objects_v2")
+    if directory is None:
+        prefix_to_use = prefix
+    else:
+        prefix_to_use = f"{prefix}{directory}/"
+
+    pages = paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix_to_use,
+    )
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            if _version_matches(obj["Key"], version):
+                return True
+
+    return False
+
+
+def _scan_bucket_prefix(
+    s3_client,
+    bucket,
+    prefix,
+    version,
+    architectures=None,
+    extra_filter=None,
+) -> list[PackageEntry]:
+    """List every object under `bucket`/`prefix`, keep the ones that match
+    `version` (and `architectures`, if given), and return them as PackageEntry.
+
+    This is the shared core of both list_packages_multi_arch() and
+    list_packages_structured(): it pages through the S3 listing once, and for
+    each object applies (in order) `extra_filter`, then version/arch matching.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket: S3 bucket name
+        prefix: S3 prefix to paginate
+        version: Version pattern to filter packages
+        architectures: Optional list of architectures used for filtering
+        extra_filter: Optional callable(key, filename) -> bool, checked before
+            version/arch matching. list_packages_structured() uses this to
+            reject keys that aren't a direct child of the product's package
+            directory (see is_structured_package_key()); pass None to accept
+            every key (the plain multi-arch case).
+
+    Returns:
+        List of PackageEntry for matching objects.
+    """
+    paginator = s3_client.get_paginator("list_objects_v2")
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+
+    entries = []
+
+    for page in pages:
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            filename = key.split("/")[-1]
+
+            # Skip directories and generated indexes
+            if not filename or filename == "index.html":
+                continue
+
+            if extra_filter is not None and not extra_filter(key, filename):
+                continue
+
+            # Match either:
+            #   rocm_sdk_core-7.13.0rc0-...
+            # or:
+            #   torch-2.10.0+rocm7.13.0rc0-...
+            if _version_matches(filename, version) and is_allowed_multi_arch_package(
+                filename,
+                architectures,
+            ):
+                entries.append(PackageEntry(StorageLocation(bucket, key), obj["Size"]))
+
+    return entries
+
+
+def list_packages_multi_arch(
+    s3_client,
+    bucket,
+    prefix,
+    version,
+    architectures=None,
+) -> list[PackageEntry]:
+    """List multi-arch packages matching the requested version and architectures.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket: S3 bucket name
+        prefix: S3 prefix containing multi-arch packages
+        version: Version pattern to filter packages
+        architectures: Optional list of architectures used for filtering
+
+    Returns:
+        List of PackageEntry for matching packages.
+    """
+    packages_to_promote = _scan_bucket_prefix(
+        s3_client, bucket, prefix, version, architectures
+    )
+
+    if not packages_to_promote:
+        print(f"[ERROR]: No packages found for version {version}")
+        sys.exit(1)
+
+    return packages_to_promote
+
+
+def list_packages_structured(
+    s3_client,
+    stream,
+    products,
+    index,
+    version,
+    architectures=None,
+) -> list[PackageEntry]:
+    """List structured product-local packages matching version/architectures."""
+    packages_to_promote = []
+
+    for product in products:
+        bucket = repo_product_bucket(stream, product)
+        root = structured_python_root(product, index)
+        packages_to_promote.extend(
+            _scan_bucket_prefix(
+                s3_client,
+                bucket,
+                root,
+                version,
+                architectures,
+                extra_filter=lambda key, filename, root=root: is_python_artifact(
+                    filename
+                )
+                and is_structured_package_key(root, key),
+            )
+        )
+
+    if not packages_to_promote:
+        print(f"[ERROR]: No structured packages found for version {version}")
+        sys.exit(1)
+
+    return packages_to_promote
+
+
+def list_packages_for_arch(
+    s3_client, bucket_name: str, bucket_prefix: str, arch: str, version: str
+) -> tuple[list[tuple[str, int]], list[tuple[str, int]], list[tuple[str, int]]]:
+    """List all packages for an architecture matching the version.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name
+        bucket_prefix: S3 bucket prefix (e.g., "v3/whl/")
+        arch: Architecture name (e.g., "gfx950-dcgpu")
+        version: Version pattern to filter (e.g., "7.10.0rc2")
+
+    Returns:
+        Tuple of (packages_to_promote, dependencies, unknown_packages)
+        Each is a list of tuples (full_filepath_in_s3, size)
+    """
+    prefix = f"{bucket_prefix}{arch}/"
+
+    packages_to_promote = []
+    dependencies = []
+    unknown = []
+
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+
+        for page in pages:
+            if "Contents" not in page:
+                continue
+
+            for obj in page["Contents"]:
+                key = obj["Key"]
+                filename = key.split("/")[-1]
+
+                # Skip directories and index files
+                if not filename or filename == "index.html":
+                    continue
+
+                # Skip files that don't match version (for packages to promote)
+                # Dependencies don't need version matching
+                category = categorize_package(filename)
+
+                if category == "promote":
+                    if _version_matches(filename, version):
+                        packages_to_promote.append((key, obj["Size"]))
+                elif category == "dependency":
+                    dependencies.append((key, obj["Size"]))
+                else:
+                    unknown.append((key, obj["Size"]))
+
+        return packages_to_promote, dependencies, unknown
+
+    except ClientError as e:
+        print(f"[ERROR]: Failed to list packages for {arch}: {e}")
+        return [], [], []
+
+
+def list_tarball_for_package(
+    s3_client,
+    bucket_name: str,
+    bucket_prefix: str,
+    package: str | None,
+    version: str,
+) -> list[tuple[str, int]]:
+    """List tarballs and their sizes matching the requested package/version.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name
+        bucket_prefix: S3 bucket prefix (e.g., "tarball/")
+        package: Package identifier to match in tarball filename.
+                 Examples:
+                   - "gfx942"
+                   - "gfx950-dcgpu"
+                   - "multiarch"
+                 If None, all tarballs matching the version are returned.
+        version: Version pattern to filter (e.g., "7.10.0rc2")
+
+    Returns:
+        List of tuples (tarball_key, size) for matching tarballs
+    """
+    try:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(
+            Bucket=bucket_name,
+            Prefix=bucket_prefix,
+        )
+
+        tarballs = []
+
+        for page in pages:
+            if "Contents" not in page:
+                continue
+
+            for obj in page["Contents"]:
+                key = obj["Key"]
+                filename = key.split("/")[-1]
+
+                # Skip directories and index files
+                if not filename or filename == "index.html":
+                    continue
+
+                # Only tarballs for requested version
+                if (
+                    filename.startswith("therock-dist")
+                    and filename.endswith(".tar.gz")
+                    and _version_matches(filename, version)
+                ):
+                    # If package filter specified, enforce it
+                    if package is not None and not _version_matches(
+                        filename, f"{package}-{version}"
+                    ):
+                        continue
+
+                    tarballs.append((key, obj["Size"]))
+
+        return tarballs
+
+    except ClientError as e:
+        print(f"[ERROR]: Failed to list tarballs for {package}: {e}")
+        return []
+
+
+def download_file(s3_client, bucket_name: str, key: str, local_path: Path) -> bool:
+    """Download a single file from S3.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name
+        key: S3 object key
+        local_path: Local file path to save to
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        s3_client.download_file(bucket_name, key, str(local_path))
+        return True
+    except ClientError as e:
+        print(f"    [ERROR]: Failed to download {key}: {e}")
+        return False
+
+
+def handle_multi_arch_downloads(
+    s3_client,
+    version,
+    output_dir,
+    architectures,
+    bucket_name,
+    bucket_prefix,
+    include_tarballs,
+    tarball_bucket_name,
+    tarball_bucket_prefix,
+    tarball_output_dir,
+    list_multi_arch_packages,
+    structured=False,
+    products=None,
+    repo_stream="rc",
+    python_index=STRUCTURED_DEFAULT_INDEX,
+    tarball_variant="release",
+    include_package_globs=None,
+    exclude_package_globs=None,
+):
+    """Handle multi-arch package listing and downloads."""
+
+    if structured:
+        products = products or list(STRUCTURED_PRODUCTS)
+        packages_to_promote = list_packages_structured(
+            s3_client,
+            repo_stream,
+            products,
+            python_index,
+            version,
+            architectures,
+        )
+    else:
+        # Validate that packages exist
+        if not exists_version_multi_arch(
+            s3_client, bucket_name, bucket_prefix, None, version
+        ):
+            print(f"[ERROR]: No packages found for version {version}")
+            sys.exit(1)
+
+        packages_to_promote = list_packages_multi_arch(
+            s3_client,
+            bucket_name,
+            bucket_prefix,
+            version,
+            architectures,
+        )
+
+    packages_to_promote = filter_package_entries(
+        packages_to_promote,
+        include_package_globs=include_package_globs,
+        exclude_package_globs=exclude_package_globs,
+    )
+
+    if not packages_to_promote:
+        print("[ERROR]: No packages left after applying package filters")
+        sys.exit(1)
+
+    if list_multi_arch_packages:
+        print("\nPackages")
+        print("-" * 60)
+        for entry in packages_to_promote:
+            filename = entry.key.split("/")[-1]
+            print(f"  - {filename} ({entry.size / BYTES_TO_MB:.2f} MB)")
+        total_size = sum(entry.size for entry in packages_to_promote)
+        print("\n" + "=" * 60)
+        print(f"TOTAL SIZE: {total_size / BYTES_TO_MB:.2f} MB")
+        return
+
+    if include_tarballs:
+        if structured:
+            tarball_bucket_name = repo_product_bucket(repo_stream, "core")
+            tarball_bucket_prefix = core_tarball_prefix(tarball_variant)
+
+        if tarball_output_dir is None:
+            tarball_dir_name = (
+                core_tarball_dir_name(tarball_variant)
+                if structured
+                else "tarball-multi-arch"
+            )
+            tarball_output_dir = output_dir / tarball_dir_name
+        tarball_output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Tarball output directory: {tarball_output_dir.absolute()}")
+    print(f"\nOutput directory: {output_dir.absolute()}")
+
+    success, fail = download_multi_arch_packages(
+        s3_client,
+        packages_to_promote,
+        output_dir,
+    )
+
+    if include_tarballs:
+        tar_success, tar_fail = download_tarball(
+            s3_client,
+            tarball_bucket_name,
+            tarball_bucket_prefix,
+            None,
+            version,
+            tarball_output_dir,
+        )
+
+        success += tar_success
+        fail += tar_fail
+
+    print("\n" + "=" * 80)
+    print("DOWNLOAD COMPLETE (MULTI-ARCH)")
+    print("=" * 80)
+    print(f"Total successful downloads: {success}")
+    print(f"Total failed downloads: {fail}")
+    if architectures:
+        print(f"\nArchitectures downloaded: {', '.join(architectures)}")
+
+    if fail > 0:
+        print("\nWARNING: Some downloads failed!")
+        sys.exit(1)
+
+
+def download_multi_arch_packages(
+    s3_client,
+    packages_to_promote: list[PackageEntry],
+    output_dir,
+):
+    """Download multi-arch packages.
+
+    Args:
+        s3_client: boto3 S3 client
+        packages_to_promote: PackageEntry instances (each carries its own bucket)
+            to download
+        output_dir: Local output directory
+
+    Returns:
+        Tuple of (successful_downloads, failed_downloads)
+    """
+    wheels_dir = output_dir / "wheels"
+    wheels_dir.mkdir(parents=True, exist_ok=True)
+
+    total_success = 0
+    total_fail = 0
+
+    print("\nDownloading packages")
+    print("=" * 80)
+
+    for entry in packages_to_promote:
+        filename = entry.key.split("/")[-1]
+
+        local_path = wheels_dir / filename
+
+        if local_path.exists():
+            print(f"  SKIP (exists): {filename}")
+            total_success += 1
+            continue
+
+        print(f"  Downloading: {filename} " f"({entry.size / BYTES_TO_MB:.2f} MB)")
+
+        if download_file(s3_client, entry.bucket, entry.key, local_path):
+            total_success += 1
+        else:
+            total_fail += 1
+
+    return total_success, total_fail
+
+
+def download_packages(
+    s3_client,
+    bucket_name: str,
+    bucket_prefix: str,
+    arch: str,
+    version: str,
+    output_dir: Path,
+    include_dependencies: bool = False,
+    include_package_globs: list[str] | None = None,
+    exclude_package_globs: list[str] | None = None,
+) -> tuple[int, int]:
+    """Download packages for an architecture. By default, only packages to promote are downloaded.
+       Unknown packages are always skipped.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name
+        bucket_prefix: S3 bucket prefix (e.g., "v3/whl/")
+        arch: Architecture name
+        version: Version pattern
+        output_dir: Base output directory
+        include_dependencies: Include dependency packages in download (default: False)
+
+    Returns:
+        Tuple of (successful_downloads, failed_downloads)
+    """
+    print(f"\nProcessing architecture: {arch}")
+    print("=" * 80)
+
+    packages_to_promote, dependencies, unknown = list_packages_for_arch(
+        s3_client, bucket_name, bucket_prefix, arch, version
+    )
+
+    print(f"  Packages to promote: {len(packages_to_promote)}")
+    print(f"  Dependencies found: {len(dependencies)}")
+    if unknown:
+        print(f"  Unknown packages (skipped): {len(unknown)}")
+        for key in unknown:
+            print(f"    - {key[0].split('/')[-1]}")
+    print("")
+    print("-" * 80)
+
+    arch_dir = output_dir / arch
+
+    success_count = 0
+    fail_count = 0
+
+    if include_dependencies:
+        all_packages = packages_to_promote + dependencies
+        print(
+            f"  Downloading {len(all_packages)} packages to promote and their dependencies for {arch} with version {version}..."
+        )
+    else:
+        all_packages = packages_to_promote
+        print(
+            f"  Downloading {len(all_packages)} python packages to promote for {arch} with version {version}..."
+        )
+
+    all_packages = filter_package_entries(
+        all_packages,
+        include_package_globs=include_package_globs,
+        exclude_package_globs=exclude_package_globs,
+    )
+
+    if not all_packages:
+        print(
+            f"  [ERROR]: No packages left for {arch} with version {version} after applying package filters. Skipping!"
+        )
+        return 0, 0
+
+    for idx, obj in enumerate(all_packages):
+        key, size = obj
+        filename = key.split("/")[-1]
+        local_path = arch_dir / filename
+
+        # Skip if already exists
+        if local_path.exists():
+            print(
+                f"  ({idx+1}/{len(all_packages)})   \tSKIP (exists): {filename} ({size/BYTES_TO_MB:.2f} MB)"
+            )
+            success_count += 1
+            continue
+
+        print(
+            f"  ({idx+1}/{len(all_packages)})   \tDownloading: {filename} ({size/BYTES_TO_MB:.2f} MB)"
+        )
+        if download_file(s3_client, bucket_name, key, local_path):
+            success_count += 1
+        else:
+            fail_count += 1
+
+    return success_count, fail_count
+
+
+def download_tarball(
+    s3_client,
+    bucket_name: str,
+    bucket_prefix: str,
+    package: str | None,
+    version: str,
+    output_dir: Path,
+) -> tuple[int, int]:
+    """Download tarballs matching the requested package/version.
+
+    Args:
+        s3_client: boto3 S3 client
+        bucket_name: S3 bucket name
+        bucket_prefix: S3 bucket prefix
+        package: Package identifier used for tarball filtering.
+                 If None, all tarballs matching the version are downloaded.
+        version: Version pattern
+        output_dir: Base output directory
+
+    Returns:
+        Tuple of (successful_download, failed_download)
+    """
+    tarballs = list_tarball_for_package(
+        s3_client, bucket_name, bucket_prefix, package, version
+    )
+
+    if not tarballs:
+        print(
+            f"  [ERROR]: No tarball found for {package} with version {version}. Skipping!"
+        )
+        return 0, 1
+
+    success_count = 0
+    fail_count = 0
+
+    print(f"  Downloading tarball...")
+
+    for name, size in tarballs:
+        filename = name.split("/")[-1]
+        local_path = output_dir / filename
+
+        # Skip if already exists
+        if local_path.exists():
+            print(f"        \tSKIP (exists): {filename} ({size/BYTES_TO_MB:.2f} MB)")
+            success_count += 1
+            continue
+
+        print(f"        \tDownloading: {filename} ({size/BYTES_TO_MB:.2f} MB)")
+        if download_file(s3_client, bucket_name, name, local_path):
+            success_count += 1
+        else:
+            fail_count += 1
+
+    return success_count, fail_count
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(
+        description="Download prerelease packages from S3 for promotion to release",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Download all architectures for version 7.10.0rc2
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads
+
+  # Download only specific architecture
+  python download_python_packages.py --version=7.10.0rc2 --arch=gfx950-dcgpu --output-dir=./downloads
+
+  # Download multiple specific architectures and including tarballs
+  python download_python_packages.py --version=7.10.0rc2 --arch=gfx1151,gfx950-dcgpu --output-dir=./downloads --include-tarballs
+
+  # Download packages to promote AND their dependencies
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads --include-dependencies
+
+  # Use custom bucket prefix
+  python download_python_packages.py --version=7.10.0rc2 --output-dir=./downloads --bucket-prefix=v3/whl/
+
+  # List available architectures
+  python download_python_packages.py --version=7.10.0rc2 --list-archs
+
+  # List all packages per architecture with sizes
+  python download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch
+
+  # List packages and tarballs with sizes
+  python download_python_packages.py --version=7.10.0rc2 --list-packages-per-arch --include-tarballs
+
+    # Download multi-arch packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --output-dir=./downloads --bucket-prefix=v4/whl/
+
+  # Download multi-arch packages including tarballs
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --output-dir=./downloads --bucket-prefix=v4/whl/ --include-tarballs
+
+  # List multi-arch packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --list-multi-arch-packages --bucket-prefix=v4/whl/
+
+  # Download structured product-local whl-next packages.
+  python download_python_packages.py --version=7.13.0rc1 --structured --output-dir=./downloads
+
+  # Download structured packages and normal ROCm Core tarballs.
+  python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=release --output-dir=./downloads
+
+  # Download structured packages and ASAN ROCm Core tarballs.
+  python download_python_packages.py --version=7.13.0rc1 --structured --include-tarballs --tarball-variant=asan --output-dir=./downloads
+
+  # List multi-arch packages while excluding PyTorch 2.8 packages
+  python download_python_packages.py --version=7.13.0rc1 --multi-arch --list-multi-arch-packages --bucket-prefix=v4/whl/ --exclude-package-glob "torch-2.8.*"
+
+  # Download packages while excluding specific package variants
+  python download_python_packages.py --version=7.13.0rc1 --output-dir=./downloads --exclude-package-glob "torch-2.8.*" --exclude-package-glob "torchaudio-2.8.*" --exclude-package-glob "torchvision-0.23.*"
+        """,
+    )
+
+    parser.add_argument(
+        "--version",
+        required=True,
+        help="Version pattern to download (e.g., '7.10.0rc2')",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Output directory for downloaded packages (required unless --list-archs or --list-packages-per-arch)",
+    )
+
+    parser.add_argument(
+        "--arch",
+        help="Download only this specific architecture (e.g. 'gfx950-dcgpu,gfx1151') (default: all architectures)",
+    )
+
+    parser.add_argument(
+        "--bucket",
+        default="therock-prerelease-python",
+        help="S3 bucket name (default: therock-prerelease-python)",
+    )
+
+    parser.add_argument(
+        "--bucket-prefix",
+        default="v3/whl/",
+        help="S3 bucket prefix for packages (default: v3/whl/)",
+    )
+
+    parser.add_argument(
+        "--include-dependencies",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Include dependency packages in download (default: only packages to promote)",
+    )
+
+    parser.add_argument(
+        "--include-package-glob",
+        action="append",
+        default=[],
+        help=(
+            "Only include package filenames matching this glob pattern. "
+            "Can be specified multiple times. Example: --include-package-glob 'torch-2.10.*'"
+        ),
+    )
+
+    parser.add_argument(
+        "--exclude-package-glob",
+        action="append",
+        default=[],
+        help=(
+            "Exclude package filenames matching this glob pattern. "
+            "Can be specified multiple times. Example: --exclude-package-glob 'torch-2.8.*'"
+        ),
+    )
+
+    parser.add_argument(
+        "--include-tarballs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Download also tarball packages (default: False)",
+    )
+    parser.add_argument(
+        "--tarball-bucket",
+        default="therock-prerelease-tarball",
+        help="S3 bucket name for tarball packages (default: therock-prerelease-tarball)",
+    )
+    parser.add_argument(
+        "--tarball-bucket-prefix",
+        default="v3/tarball/",
+        help="S3 bucket prefix for tarball packages (default: v3/tarball/)",
+    )
+    parser.add_argument(
+        "--tarball-output-dir",
+        type=Path,
+        help="Output directory for downloaded tarball packages (default: < --output-dir >/tarball)",
+    )
+
+    parser.add_argument(
+        "--list-archs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Only list available architectures, do not download",
+    )
+
+    parser.add_argument(
+        "--list-packages-per-arch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="List all packages per architecture, do not download",
+    )
+
+    parser.add_argument(
+        "--multi-arch",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable multi-arch package handling. Requires bucket prefix compatible with multi-arch layout (e.g. v4/whl/)",
+    )
+
+    parser.add_argument(
+        "--structured",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Download from the per-product repo.amd.com layout (RFC0012) instead of "
+            "the flat prerelease bucket: each core/pytorch/jax product is discovered "
+            "in its own bucket at v5/rocm/<product>/<index>/<package>/. Forces "
+            "--multi-arch on, even if --no-multi-arch was also passed. See "
+            "--repo-stream, --python-index, and --product."
+        ),
+    )
+
+    parser.add_argument(
+        "--repo-stream",
+        default="rc",
+        choices=REPO_STREAMS,
+        help=(
+            "repo.amd.com release stream to read from with --structured: "
+            "dev, nightly, or rc. Selects the therock-repo-amd-<stream>-<product> "
+            "source buckets (default: rc)"
+        ),
+    )
+
+    parser.add_argument(
+        "--python-index",
+        default=STRUCTURED_DEFAULT_INDEX,
+        choices=STRUCTURED_INDEXES,
+        help=(
+            "Product-local aggregate index to read from with --structured: "
+            "whl is the flat pip-installable index, whl-next is the device-extra "
+            f"index used for gfx-specific builds (default: {STRUCTURED_DEFAULT_INDEX})"
+        ),
+    )
+
+    parser.add_argument(
+        "--product",
+        action="append",
+        default=[],
+        help=(
+            "Product to download with --structured: core, pytorch, or jax. "
+            "Can be repeated or comma-separated. Defaults to all products."
+        ),
+    )
+
+    parser.add_argument(
+        "--tarball-variant",
+        default="release",
+        choices=sorted(CORE_TARBALL_PREFIXES),
+        help=(
+            "Tarball prefix variant used with --structured --include-tarballs: "
+            "release -> v5/rocm/core/tarball/, "
+            "asan -> v5/rocm/core/tarball-asan/ (default: release)"
+        ),
+    )
+
+    parser.add_argument(
+        "--list-multi-arch-packages",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="List all multi-arch packages matching version",
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.arch:
+        args.arch = [arch.strip() for arch in args.arch.split(",")]
+
+    if args.structured:
+        args.multi_arch = True
+        args.product = parse_csv_args(args.product) or list(STRUCTURED_PRODUCTS)
+        invalid_products = sorted(set(args.product) - set(STRUCTURED_PRODUCTS))
+        if invalid_products:
+            parser.error(
+                f"Unsupported --product value(s): {', '.join(invalid_products)}. "
+                f"Expected one or more of: {', '.join(STRUCTURED_PRODUCTS)}"
+            )
+
+    if args.include_tarballs:
+        if (
+            args.structured
+            and args.tarball_output_dir is None
+            and args.output_dir is not None
+        ):
+            args.tarball_output_dir = args.output_dir / core_tarball_dir_name(
+                args.tarball_variant
+            )
+        elif (
+            args.tarball_output_dir is None
+            and args.output_dir is not None
+            and not args.multi_arch
+        ):
+            args.tarball_output_dir = args.output_dir / "tarball"
+        else:
+            args.tarball_output_dir = (
+                Path(args.tarball_output_dir)
+                if args.tarball_output_dir is not None
+                else None
+            )
+    if (
+        not args.list_archs
+        and not args.list_packages_per_arch
+        and not args.list_multi_arch_packages
+        and not args.output_dir
+    ):
+        parser.error(
+            "--output-dir is required unless --list-archs, --list-packages-per-arch, or --list-multi-arch-packages is specified"
+        )
+
+    return args
+
+
+def print_packages_per_arch(
+    s3_client,
+    bucket_name: str,
+    bucket_prefix: str,
+    architectures: list[str],
+    version: str,
+    include_tarballs: bool = False,
+    tarball_bucket_name: str = None,
+    tarball_bucket_prefix: str = None,
+    include_package_globs: list[str] | None = None,
+    exclude_package_globs: list[str] | None = None,
+) -> dict[str, dict[str, list[str]]]:
+    print(
+        "\n--list-packages-per-arch specified, listing packages and their sizes without download"
+    )
+    print("=" * 80)
+
+    all_packages = {}
+    total_size_promote = 0
+    total_size_deps = 0
+    total_size_unknown = 0
+    total_size_tarball = 0
+    for arch in architectures:
+        print(f"\n{arch}:")
+        print("-" * 80)
+        packages_to_promote, dependencies, unknown = list_packages_for_arch(
+            s3_client, bucket_name, bucket_prefix, arch, version
+        )
+
+        packages_to_promote = filter_package_entries(
+            packages_to_promote,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
+        )
+
+        if include_package_globs or exclude_package_globs:
+            dependencies = filter_package_entries(
+                dependencies,
+                include_package_globs=include_package_globs,
+                exclude_package_globs=exclude_package_globs,
+            )
+
+        all_packages[arch] = {
+            "packages_to_promote": packages_to_promote,
+            "dependencies": dependencies,
+            "unknown": unknown,
+        }
+
+        size_promote = 0
+        size_dependencies = 0
+        size_unknown = 0
+        size_tarball = 0
+        print(f"  Packages to promote ({len(packages_to_promote)}):")
+        for pkg in all_packages[arch]["packages_to_promote"]:
+            name, size = pkg
+            name = name.split("/")[-1]
+            size_promote += size
+            total_size_promote += size
+            print(f"    - {name} ({size/BYTES_TO_MB:.2f} MB)")
+
+        print(f"\n  Dependencies found ({len(dependencies)}):")
+        for pkg in all_packages[arch]["dependencies"]:
+            name, size = pkg
+            name = name.split("/")[-1]
+            size_dependencies += size
+            total_size_deps += size
+            print(f"    - {name} ({size/BYTES_TO_MB:.2f} MB)")
+
+        if unknown:
+            print(f"\n  Unknown packages ({len(unknown)}):")
+            for pkg in all_packages[arch]["unknown"]:
+                name, size = pkg
+                name = name.split("/")[-1]
+                size_unknown += size
+                total_size_unknown += size
+                print(f"    - {name} ({size/BYTES_TO_MB:.2f} MB)")
+
+        if include_tarballs:
+            print(f"\n  Tarball:")
+            tarballs = list_tarball_for_package(
+                s3_client, tarball_bucket_name, tarball_bucket_prefix, arch, version
+            )
+            for tarball in tarballs:
+                tarball_name, tarball_size = tarball
+                size_tarball += tarball_size
+                total_size_tarball += tarball_size
+                size_mb = tarball_size / BYTES_TO_MB
+                print(f"    - {tarball_name.split('/')[-1]} ({size_mb:.2f} MB)")
+            if not tarballs:
+                print(
+                    f"  [WARN]: No tarball found for {arch} with version {version}. Skipping!"
+                )
+
+        print("")
+        print("-" * 80)
+        print("")
+        print(f"  Space needed for {arch}:")
+        print(f"    Packages to promote:   {size_promote/BYTES_TO_MB:>12.2f} MB")
+        print(f"    Dependencies packages: {size_dependencies/BYTES_TO_MB:>12.2f} MB")
+        print(f"    Unknown packages:      {size_unknown/BYTES_TO_MB:>12.2f} MB")
+        print(f"    Tarball:               {size_tarball/BYTES_TO_MB:>12.2f} MB")
+        print("")
+        print("-" * 80)
+        print("")
+
+    print("")
+    print("-" * 80)
+    print("")
+    print("  Total space needed for all architectures:")
+    print(f"    All packages to promote:    {total_size_promote/BYTES_TO_MB:>12.2f} MB")
+    print(f"    All dependencies packages:  {total_size_deps/BYTES_TO_MB:>12.2f} MB")
+    print(f"    All unknown packages:       {total_size_unknown/BYTES_TO_MB:>12.2f} MB")
+    print(f"    All tarball:                {total_size_tarball/BYTES_TO_MB:>12.2f} MB")
+    print("")
+    if include_tarballs:
+        print(
+            f"    All packages to promote and tarballs:  {(total_size_promote + total_size_tarball)/BYTES_TO_MB:>12.2f} MB"
+        )
+    print("-" * 80)
+    print("")
+
+    return all_packages
+
+
+def download_prerelease_packages(
+    version: str,
+    output_dir: Path = None,
+    architectures: list[str] = None,
+    bucket_name: str = "therock-prerelease-python",
+    bucket_prefix: str = "v3/whl/",
+    include_dependencies: bool = False,
+    multi_arch: bool = False,
+    structured: bool = False,
+    products: list[str] | None = None,
+    repo_stream: str = "rc",
+    python_index: str = STRUCTURED_DEFAULT_INDEX,
+    list_multi_arch_packages: bool = False,
+    include_tarballs: bool = False,
+    tarball_variant: str = "release",
+    tarball_bucket_name: str = "therock-prerelease-tarball",
+    tarball_bucket_prefix: str = "v3/tarball/",
+    tarball_output_dir: Path = None,
+    list_archs: bool = False,
+    list_packages_per_arch: bool = False,
+    include_package_globs: list[str] | None = None,
+    exclude_package_globs: list[str] | None = None,
+) -> list[str] | dict[str, dict[str, list[str]]] | tuple[int, int, list[str]]:
+    """Download prerelease packages from S3 bucket for promotion to release.
+
+    Args:
+        version: Version pattern to download (e.g., '7.10.0rc2')
+        output_dir: Output directory for downloaded packages (required unless list_archs or list_packages_per_arch)
+        architectures: Download only these specific architectures (default: all architectures)
+        bucket_name: S3 bucket name (default: therock-prerelease-python)
+        bucket_prefix: S3 bucket prefix for packages (default: v3/whl/)
+        include_dependencies: Include dependency packages in download (default: False).
+                              Ignored if list_archs or list_packages_per_arch is True.
+        multi_arch: Use the flat multi-arch prerelease bucket layout instead of the
+                   single-arch legacy layout. Implied by structured=True.
+        structured: Use the per-product repo.amd.com layout (RFC0012) instead of the
+                   flat prerelease bucket. Implies multi_arch=True; see products,
+                   repo_stream, and python_index.
+        products: Structured products to include (default: all of core/pytorch/jax).
+                 Only used when structured=True.
+        repo_stream: repo.amd.com release stream selecting the destination bucket
+                    per product (dev, nightly, or rc). Only used when structured=True.
+        python_index: Structured aggregate index to read from, "whl" or "whl-next"
+                     (default: whl-next). Only used when structured=True.
+        list_multi_arch_packages: List multi-arch/structured packages and their sizes,
+                                  do not download (default: False)
+        include_tarballs: Include tarballs in download and listings (default: False).
+        tarball_variant: ROCm Core tarball variant to download, "release" or "asan"
+                         (default: release). Only used when structured=True.
+        tarball_bucket_name: S3 bucket name for tarball packages (default: therock-prerelease-tarball)
+        tarball_bucket_prefix: S3 bucket prefix for tarball packages (default: v3/tarball/)
+        tarball_output_dir: Output directory for downloaded tarball packages (default: < --output-dir >/tarballs)
+        list_archs: Only list available architectures, do not download (default: False).
+                   Set by CLI flag --list-archs
+        list_packages_per_arch: List all packages per architecture and their sizes, do not download (default: False)
+
+    Returns:
+        If list_archs=True: List of architecture names
+        If list_packages_per_arch=True: Dict mapping arch to dict of package categories
+        Otherwise: Tuple of (total_success, total_fail, architectures) of downloaded packages
+
+    Raises:
+        SystemExit: If AWS credentials are not configured, no architectures found, or downloads fail
+    """
+    if (
+        not list_archs
+        and not list_packages_per_arch
+        and not list_multi_arch_packages
+        and output_dir is None
+    ):
+        print(
+            "[ERROR]: output_dir is required unless list_archs=True, list_packages_per_arch=True, or list_multi_arch_packages=True"
+        )
+        sys.exit(1)
+
+    print("=" * 80)
+    print("Download Prerelease Packages")
+    print("=" * 80)
+    print(f"Version: {version}")
+    if structured:
+        structured_products = products or list(STRUCTURED_PRODUCTS)
+        print(f"Repo stream: {repo_stream}")
+        print(f"Python index: {python_index}")
+        print("S3 buckets:")
+        for product in structured_products:
+            print(
+                f"  {product}: s3://{repo_product_bucket(repo_stream, product)}/"
+                f"v5/rocm/{product}/{python_index}/"
+            )
+        if include_tarballs:
+            print(
+                f"Tarball variant: {tarball_variant} ({core_tarball_prefix(tarball_variant)})"
+            )
+    else:
+        print(f"Bucket: {bucket_name}")
+
+    if architectures:
+        print(f"Architectures: {architectures} (user-specified)")
+    else:
+        print("Architecture: ALL")
+    print("=" * 80)
+
+    s3_client = boto3.client("s3")
+    if structured:
+        multi_arch = True
+
+    if multi_arch:
+        return handle_multi_arch_downloads(
+            s3_client=s3_client,
+            version=version,
+            output_dir=output_dir,
+            architectures=architectures,
+            bucket_name=bucket_name,
+            bucket_prefix=bucket_prefix,
+            include_tarballs=include_tarballs,
+            tarball_bucket_name=tarball_bucket_name,
+            tarball_bucket_prefix=tarball_bucket_prefix,
+            tarball_output_dir=tarball_output_dir,
+            list_multi_arch_packages=list_multi_arch_packages,
+            structured=structured,
+            products=products,
+            repo_stream=repo_stream,
+            python_index=python_index,
+            tarball_variant=tarball_variant,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
+        )
+
+    # List architectures
+    if architectures:
+
+        # Validate they exist
+        for arch in architectures:
+            if not exists_version_single_arch(
+                s3_client, bucket_name, bucket_prefix, arch, version
+            ):
+                print(
+                    f"[ERROR]: Architecture {arch} not found or has no packages with version {version}"
+                )
+                sys.exit(1)
+        print(f"\nVerified user-specified architectures exist: {architectures}")
+    else:
+        architectures = list_architectures(
+            s3_client, bucket_name, bucket_prefix, version
+        )
+
+        print(f"\nFound {len(architectures)} architecture(s)")
+
+    if list_archs:
+        print("\n--list-archs specified, exiting without download")
+        return architectures
+
+    if list_packages_per_arch:
+        return print_packages_per_arch(
+            s3_client=s3_client,
+            bucket_name=bucket_name,
+            bucket_prefix=bucket_prefix,
+            architectures=architectures,
+            version=version,
+            include_tarballs=include_tarballs,
+            tarball_bucket_name=tarball_bucket_name,
+            tarball_bucket_prefix=tarball_bucket_prefix,
+            include_package_globs=include_package_globs,
+            exclude_package_globs=exclude_package_globs,
+        )
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nOutput directory: {output_dir.absolute()}")
+
+    if include_tarballs:
+        tarball_output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Tarball output directory: {tarball_output_dir.absolute()}")
+
+    # Download packages for each architecture
+    total_success = 0
+    total_fail = 0
+
+    for arch in architectures:
+        success_count = 0
+        fail_count = 0
+        success, fail = download_packages(
+            s3_client,
+            bucket_name,
+            bucket_prefix,
+            arch,
+            version,
+            output_dir,
+            include_dependencies,
+            include_package_globs,
+            exclude_package_globs,
+        )
+        success_count += success
+        fail_count += fail
+        total_success += success
+        total_fail += fail
+
+        if include_tarballs:
+            success, fail = download_tarball(
+                s3_client,
+                tarball_bucket_name,
+                tarball_bucket_prefix,
+                arch,
+                version,
+                tarball_output_dir,
+            )
+            success_count += success
+            fail_count += fail
+            total_success += success
+            total_fail += fail
+
+        print(f"\n  Summary for {arch}:")
+        print(f"    Successful: {success_count}")
+        print(f"    Failed: {fail_count}")
+
+    # Final summary
+    print("\n" + "=" * 80)
+    print("DOWNLOAD COMPLETE")
+    print("=" * 80)
+    print(f"Total architectures: {len(architectures)}")
+    print(f"Total successful downloads: {total_success}")
+    print(f"Total failed downloads: {total_fail}")
+
+    print(f"\nOutput directory: {output_dir.absolute()}/<arch>")
+    if include_tarballs:
+        print(f"Tarball output directory: {tarball_output_dir.absolute()}")
+
+    print(f"\nArchitectures downloaded: {architectures}")
+
+    if total_fail > 0:
+        print("\nWARNING: Some downloads failed!")
+        sys.exit(1)
+
+    print("\nFor next steps check: build_tools/packaging/how_to_do_release.md")
+    print("=" * 80)
+
+    return total_success, total_fail, architectures
+
+
+if __name__ == "__main__":
+    args = parse_arguments(sys.argv[1:])
+
+    download_prerelease_packages(
+        version=args.version,
+        output_dir=args.output_dir,
+        architectures=args.arch,
+        bucket_name=args.bucket,
+        multi_arch=args.multi_arch,
+        structured=args.structured,
+        products=args.product,
+        repo_stream=args.repo_stream,
+        python_index=args.python_index,
+        list_multi_arch_packages=args.list_multi_arch_packages,
+        bucket_prefix=args.bucket_prefix,
+        include_dependencies=args.include_dependencies,
+        include_tarballs=args.include_tarballs,
+        tarball_variant=args.tarball_variant,
+        tarball_bucket_name=args.tarball_bucket,
+        tarball_bucket_prefix=args.tarball_bucket_prefix,
+        tarball_output_dir=args.tarball_output_dir,
+        list_archs=args.list_archs,
+        list_packages_per_arch=args.list_packages_per_arch,
+        include_package_globs=args.include_package_glob,
+        exclude_package_globs=args.exclude_package_glob,
+    )

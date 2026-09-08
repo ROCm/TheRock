@@ -12,9 +12,9 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing is_asan from github_actions_api.py
+# Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -43,8 +43,8 @@ cmd = [
 ]
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
+# Otherwise, we run the standard test suite.
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     cmd += [
         "--yaml",

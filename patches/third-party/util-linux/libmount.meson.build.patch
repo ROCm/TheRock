@@ -1,0 +1,11 @@
+--- a/libmount/meson.build
++++ b/libmount/meson.build
+@@ -104,7 +104,7 @@
+ endif
+ 
+ lib_mount = library(
+-  'mount',
++  'rocm_sysdeps_mount',
+   link_whole : lib__mount,
+   include_directories : [dir_include,
+                          dir_libmount],

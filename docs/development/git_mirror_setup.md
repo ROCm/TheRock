@@ -30,22 +30,19 @@ The mirror directory layout follows the GitHub URL structure:
 
 ```text
 ~/.rocm-git-mirrors/
-├── ROCm/
-│   ├── llvm-project.git
-│   ├── rocm-libraries.git
-│   ├── rocm-systems.git
-│   ├── half.git
-│   ├── HIPIFY.git
-│   ├── rocm-cmake.git
-│   ├── SPIRV-LLVM-Translator.git
-│   ├── rocprof-trace-decoder.git
-│   ├── mesa-fork.git
-│   ├── rocm-kpack.git
-│   ├── libhipcxx.git
-│   └── rocgdb.git
-└── iree-org/
-    ├── iree.git
-    └── fusilli.git
+└── ROCm
+    ├── llvm-project.git
+    ├── rocm-libraries.git
+    ├── rocm-systems.git
+    ├── half.git
+    ├── HIPIFY.git
+    ├── rocm-cmake.git
+    ├── SPIRV-LLVM-Translator.git
+    ├── rocprof-trace-decoder.git
+    ├── mesa-fork.git
+    ├── rocm-kpack.git
+    ├── libhipcxx.git
+    └── rocgdb.git
 ```
 
 ## Quick start
@@ -265,7 +262,6 @@ repositories are:
 - `llvm-project` (~3-4 GB)
 - `rocm-libraries` (~2-3 GB)
 - `rocm-systems` (~2-3 GB)
-- `iree` (~1-2 GB)
 - `rocgdb` (~1-2 GB)
 
 ### What happens if mirrors become stale?

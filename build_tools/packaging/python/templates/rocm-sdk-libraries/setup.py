@@ -31,7 +31,12 @@ def import_dist_info():
 dist_info = import_dist_info()
 my_package = dist_info.ALL_PACKAGES["libraries"]
 print(f"Loaded dist_info package: {my_package}")
-pure_py_package = f"rocm_sdk_libraries_{dist_info.THIS_TARGET_FAMILY}"
+if dist_info.THIS_TARGET_FAMILY is None:
+    pure_py_package = my_package.pure_py_package_name
+else:
+    pure_py_package = (
+        f"{my_package.pure_py_package_name}_{dist_info.THIS_TARGET_FAMILY}"
+    )
 packages = [pure_py_package]
 platform_py_package = my_package.get_py_package_name(
     target_family=dist_info.THIS_TARGET_FAMILY

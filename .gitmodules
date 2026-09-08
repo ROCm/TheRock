@@ -27,16 +27,8 @@
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	# Branch follows the weekly format: amd-compiler-YYYY-MM-DD
 [submodule "amd-mesa"]
-	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
+	path = third-party/sysdeps/common/mesa-fork
 	url = https://github.com/ROCm/mesa-fork.git
-	branch = amd-decode-only
-[submodule "iree"]
-	path = iree-libs/iree
-	url = https://github.com/iree-org/iree.git
-	branch = main
-[submodule "fusilli"]
-	path = iree-libs/fusilli
-	url = https://github.com/iree-org/fusilli.git
 	branch = main
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
@@ -46,3 +38,7 @@
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging-rocgdb-16
+[submodule "rocm-docs"]
+	path = rocm-docs
+	url = https://github.com/ROCm/rocm-docs.git
+	branch = develop

@@ -13,7 +13,7 @@ Generally, each artifact is an extract of the top level build tree, containing a
 
 After each sub-project build stage, corresponding artifact sub-directories will be populated in the `build/artifacts` directory. As a visual-aid, consider the directory listing of the `base`, `sysdeps`, and `rand` artifacts:
 
-```
+```bash
 $ ls -1d artifacts/{base_*,sysdeps_*,rand_*}
 artifacts/base_dbg_generic
 artifacts/base_dev_generic
@@ -106,17 +106,20 @@ Artifact directories are populated as part of `all` but can be built manually vi
 
 ### Artifact Archives
 
-The build system also generates a `therock-archive-{name}` for each artifact. This will create a `.tar.xz` file and sha256sum of the artifact directory. All archives can be built with `therock-archives`. These archives are built and streamed to the CI cloud storage server for subsequent phases and packaging workflows.
+Archives of artifacts can be created as `.tar.xz` or `tar.zst` files using either:
 
-Building the artifacts is done via the `build_tools/fileset_too.py artifact-archive` command. This command always ensures that the `artifact_manifest.txt` is written to the tar file first, as this is a precondition that the `artifact-flatten` command requires in order to process them.
+- [`python build_tools/fileset_tool.py artifact-archive`](/build_tools/fileset_tool.py)
+- [`python build_tools/artifact_manager.py push`](/build_tools/artifact_manager.py) (this calls `fileset_tool.py`)
 
-Archives are not built by default as part of `all` and must be explicitly requested. CI systems typically include a `therock-archives` target in their build to ensure this.
+These artifact archives are uploaded to CI cloud storage servers for subsequent phases and packaging workflows.
+
+These commands always ensure that the `artifact_manifest.txt` is written to the tar file first, as this is a precondition that the `artifact-flatten` command requires in order to process them.
 
 ## Building Artifacts
 
 Artifacts are constructed by adding a `therock_provide_artifact()` command to a CMake file. Working forward on our sysdeps example, here is the directive to create its artifact:
 
-```
+```cmake
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
   DESCRIPTOR artifact.toml
@@ -149,7 +152,7 @@ The artifact descriptor uses a pattern based language to define what files are i
 
 Abbreviated example:
 
-```
+```toml
 # bzip2
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
@@ -316,6 +319,8 @@ These artifacts are built if any project features requiring them are enabled:
 - `MIOpen`: MIOpen kernel-select/fusion library.
 - `rocdecode`: Video decode library (Linux only).
 - `rocjpeg`: JPEG decode library (Linux only).
+- `rpp`: ROCm Performance Primitives computer vision library (built by
+  default on Linux; experimental and off by default on Windows).
 
 > [!NOTE]
 > After adding a new artifact via `therock_provide_artifact()`, you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it. <br>

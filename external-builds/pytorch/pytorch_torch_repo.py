@@ -67,14 +67,8 @@ def main(cl_args: list[str]):
         default=DEFAULT_ORIGIN,
         help="git repository url",
     )
-    checkout_p.add_argument("--depth", type=int, help="Fetch depth")
-    checkout_p.add_argument("--jobs", default=10, type=int, help="Number of fetch jobs")
-    checkout_p.add_argument(
-        "--hipify",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Run hipify",
-    )
+    repo_management.add_checkout_options(checkout_p, default_hipify=True)
+    checkout_p.set_defaults(jobs=10)
     checkout_p.set_defaults(func=repo_management.do_checkout)
 
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")

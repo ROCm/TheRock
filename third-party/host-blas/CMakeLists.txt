@@ -30,6 +30,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL_HASH SHA256=5d81882fdf45a92a190bda2be2922d3372fef19af8f4442f720c0ebc4d10eba8
       # Originally posted MD5 was recomputed as SHA256 manually:
       # URL_HASH MD5=853a0c5c0747c5943e7ef4bbb793162d
+      PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/host-blas
       TOUCH "${_download_stamp}"
     )
 

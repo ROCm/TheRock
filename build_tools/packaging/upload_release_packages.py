@@ -16,7 +16,7 @@ SAFETY FEATURES:
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
   - AWS credentials configured (IAM role)
-  - Packages must be promoted first using promote_from_rc_to_final.py
+  - Packages must be promoted first using promote_packages.py
 
 TYPICAL USAGE (Command Line):
   # Preview wheel upload (dry-run, no actual upload)
@@ -49,6 +49,23 @@ TYPICAL USAGE (Command Line):
     --execute \
     --use-release-buckets
 
+  # Upload promoted flat local artifacts to structured whl-next/core tarball paths
+  python ./build_tools/packaging/upload_release_packages.py \
+    --input-dir=./downloads \
+    --structured \
+    --upload-tarballs \
+    --execute \
+    --use-release-buckets
+
+  # Upload promoted flat local artifacts with ASAN tarballs
+  python ./build_tools/packaging/upload_release_packages.py \
+    --input-dir=./downloads \
+    --structured \
+    --upload-tarballs \
+    --tarball-variant=asan \
+    --execute \
+    --use-release-buckets
+
   # Upload single-arch wheels and tarballs to production release buckets
   python ./build_tools/packaging/upload_release_packages.py \
     --input-dir=./downloads \
@@ -71,22 +88,22 @@ DIRECTORY STRUCTURE:
         ...
 
   S3 bucket structure:
-    v3/whl/<arch>/
+    v3/rocm/whl/<arch>/
       package1.whl
       package2.whl
       ...
-    v3/tarball/
+    v3/rocm/tarball/
       therock-dist-linux-<arch1>-<version>.tar.gz
       therock-dist-windows-<arch2>-<version>.tar.gz
       ...
 
-  S3 bucket structure for mult-arch:
-    v4/whl/
+  S3 bucket structure for multi-arch:
+    v4/rocm/whl/
     package1.whl
     package2.whl
     package1.tar.gz
 
-  v4/tarball/
+  v4/rocm/tarball/
     therock-dist-linux-<arch1>-<version>.tar.gz
     therock-dist-windows-<arch2>-<version>.tar.gz
 
@@ -98,7 +115,25 @@ NOTE:
 import argparse
 import sys
 from pathlib import Path
-from typing import Tuple
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.python_package_paths import (
+    ACCEPTED_FILE_EXTENSIONS,
+    CORE_TARBALL_PREFIXES,
+    DEFAULT_INDEX,
+    INDEX_NAMES,
+    REPO_BUCKET_PRODUCT_NAMES,
+    REPO_STREAMS,
+    core_tarball_dir_name,
+    core_tarball_prefix,
+    infer_structured_product,
+    repo_product_bucket,
+    structured_key,
+)
+
+STRUCTURED_PRODUCTS = tuple(REPO_BUCKET_PRODUCT_NAMES.keys())
 
 try:
     import boto3
@@ -109,12 +144,21 @@ except ImportError:
     sys.exit(1)
 
 
+# Thin aliases so existing choices=STRUCTURED_INDEXES call sites don't need to
+# change now that the underlying names live in _therock_utils.
+STRUCTURED_INDEXES = INDEX_NAMES
+STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
+
+
 def upload_python_files(
     input_dir: Path,
     bucket_name: str,
     bucket_prefix: str,
     execute: bool,
     multi_arch: bool = False,
+    structured: bool = False,
+    python_index: str = STRUCTURED_DEFAULT_INDEX,
+    repo_stream: str = "rc",
 ) -> int:
     """Upload Python package files to S3 bucket.
 
@@ -137,18 +181,26 @@ def upload_python_files(
     s3_client = boto3.client("s3") if execute else None
     upload_count = 0
 
-    if multi_arch:
+    if structured or multi_arch:
         wheels_dir = input_dir / "wheels"
+        label = "Structured" if structured else "Multi-arch"
 
         if not wheels_dir.exists():
-            print(f"[ERROR]: Multi-arch wheels directory not found: {wheels_dir}")
+            print(f"[ERROR]: {label} wheels directory not found: {wheels_dir}")
             return 0
 
-        print("\nMulti-arch wheels")
+        print(f"\n{label} wheels")
 
-        files_to_upload = []
-        files_to_upload.extend(wheels_dir.glob("*.whl"))
-        files_to_upload.extend(wheels_dir.glob("*.tar.gz"))
+        # Structured layout also accepts sdists/zips (e.g. ROCm Core tarballs);
+        # multi-arch's flat layout is wheels/tarballs only.
+        extensions = (
+            tuple(f"*{ext}" for ext in ACCEPTED_FILE_EXTENSIONS)
+            if structured
+            else ("*.whl", "*.tar.gz")
+        )
+        files_to_upload = [
+            path for extension in extensions for path in wheels_dir.glob(extension)
+        ]
 
         upload_dirs = [(None, files_to_upload)]
 
@@ -181,24 +233,34 @@ def upload_python_files(
         print(f"  Found {len(files_to_upload)} file(s) to upload:")
 
         for file_path in sorted(files_to_upload):
-            if multi_arch:
+            if structured:
+                try:
+                    product = infer_structured_product(file_path.name)
+                except ValueError as e:
+                    print(f"    [ERROR]: {e}")
+                    sys.exit(1)
+                upload_bucket = repo_product_bucket(repo_stream, product)
+                s3_key = structured_key(product, python_index, file_path.name)
+            elif multi_arch:
+                upload_bucket = bucket_name
                 s3_key = f"{bucket_prefix}{file_path.name}"
             else:
+                upload_bucket = bucket_name
                 s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
 
             if execute:
                 try:
                     print(f"    Uploading {file_path.name} ...", end="", flush=True)
-                    s3_client.upload_file(str(file_path), bucket_name, s3_key)
+                    s3_client.upload_file(str(file_path), upload_bucket, s3_key)
                     print(" done")
                     upload_count += 1
                 except ClientError as e:
                     print(
-                        f"\n    [ERROR]: Could not upload {file_path.name} to s3://{bucket_name}/{s3_key}: {e}"
+                        f"\n    [ERROR]: Could not upload {file_path.name} to s3://{upload_bucket}/{s3_key}: {e}"
                     )
             else:
                 print(
-                    f"    [DRY-RUN] Would upload: {file_path.name} -> s3://{bucket_name}/{s3_key}"
+                    f"    [DRY-RUN] Would upload: {file_path.name} -> s3://{upload_bucket}/{s3_key}"
                 )
                 upload_count += 1
 
@@ -211,6 +273,8 @@ def upload_tarball_files(
     bucket_prefix: str,
     execute: bool,
     multi_arch: bool = False,
+    structured: bool = False,
+    tarball_variant: str = "release",
 ) -> int:
     """Upload tarball files to S3 bucket.
 
@@ -230,7 +294,9 @@ def upload_tarball_files(
         print("DRY-RUN MODE: No actual uploads will be performed")
         print("=" * 80)
 
-    if multi_arch:
+    if structured:
+        tarball_dir = input_dir / core_tarball_dir_name(tarball_variant)
+    elif multi_arch:
         tarball_dir = input_dir / "tarball-multi-arch"
     else:
         tarball_dir = input_dir / "tarball"
@@ -320,6 +386,42 @@ Safety Features:
     )
 
     parser.add_argument(
+        "--structured",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Upload to the per-product repo.amd.com layout (RFC0012) instead of the "
+            "flat testing/release bucket: routes each core/pytorch/jax wheel from "
+            "<input-dir>/wheels to its own product bucket at "
+            "v5/rocm/<product>/<index>/<package>/. Forces --multi-arch on, even if "
+            "--no-multi-arch was also passed. See --repo-stream and --python-index."
+        ),
+    )
+
+    parser.add_argument(
+        "--repo-stream",
+        default=None,
+        choices=REPO_STREAMS,
+        help=(
+            "repo.amd.com release stream to publish to with --structured: "
+            "dev, nightly, rc, or stable-staging. Selects the "
+            "therock-repo-amd-<stream>-<product> destination buckets. No default: "
+            "must be set explicitly with --structured (or pass --use-stable-staging)."
+        ),
+    )
+
+    parser.add_argument(
+        "--python-index",
+        default=STRUCTURED_DEFAULT_INDEX,
+        choices=STRUCTURED_INDEXES,
+        help=(
+            "Product-local aggregate index to publish into with --structured: "
+            "whl is the flat pip-installable index, whl-next is the device-extra "
+            f"index used for gfx-specific builds (default: {STRUCTURED_DEFAULT_INDEX})"
+        ),
+    )
+
+    parser.add_argument(
         "--bucket",
         default="therock-testing-bucket",
         help="S3 bucket name for Python packages (default: therock-testing-bucket). You probably want to use therock-release-python",
@@ -351,6 +453,17 @@ Safety Features:
     )
 
     parser.add_argument(
+        "--tarball-variant",
+        default="release",
+        choices=sorted(CORE_TARBALL_PREFIXES),
+        help=(
+            "Tarball prefix variant used with --structured --upload-tarballs: "
+            "release -> v5/rocm/core/tarball/, "
+            "asan -> v5/rocm/core/tarball-asan/ (default: release)"
+        ),
+    )
+
+    parser.add_argument(
         "--execute",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -361,23 +474,54 @@ Safety Features:
         "--use-release-buckets",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Overwrite buckets to use production release buckets: therock-release-tarball:v3/tarball and therock-release-python:v3/whl",
+        help="Overwrite buckets to use production release buckets: therock-release-tarball:v3/rocm/tarball and therock-release-python:v3/rocm/whl",
+    )
+
+    parser.add_argument(
+        "--use-stable-staging",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Overwrite --repo-stream to 'stable-staging' for structured "
+            "stable-staging release uploads. Requires --structured; independent "
+            "of --use-release-buckets, which only affects the legacy flat "
+            "bucket layout."
+        ),
     )
 
     args = parser.parse_args(argv)
 
+    if args.structured:
+        args.multi_arch = True
+        if args.use_stable_staging:
+            args.repo_stream = "stable-staging"
+        elif args.repo_stream is None:
+            parser.error(
+                "--structured requires --repo-stream to be set explicitly "
+                "(dev, nightly, rc, or stable-staging), or pass --use-stable-staging"
+            )
+    elif args.use_stable_staging:
+        parser.error("--use-stable-staging requires --structured")
+
     # Adjust testing tarball prefix for multi-arch uploads
-    if args.multi_arch and not args.use_release_buckets:
+    if args.multi_arch and not args.structured and not args.use_release_buckets:
         args.tarball_bucket_prefix = "release-upload-testing/tarball-multi-arch/"
 
     if args.use_release_buckets:
-        args.bucket = "therock-release-python"
-
-        if args.multi_arch:
+        if args.structured:
+            args.bucket = ""
+            args.bucket_prefix = ""
+            args.tarball_bucket = repo_product_bucket(args.repo_stream, "core")
+            args.tarball_bucket_prefix = core_tarball_prefix(args.tarball_variant)
+        elif args.multi_arch:
+            # Legacy flat multi-arch layout.
+            args.bucket = "therock-release-python"
             args.bucket_prefix = "v4/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
             args.tarball_bucket_prefix = "v4/rocm/tarball/"
         else:
+            # Legacy flat single-arch layout.
+            args.bucket = "therock-release-python"
             args.bucket_prefix = "v3/rocm/whl/"
             args.tarball_bucket = "therock-release-tarball"
             args.tarball_bucket_prefix = "v3/rocm/tarball/"
@@ -402,7 +546,11 @@ def upload_release_packages(
     tarball_bucket_prefix: str = "release-upload-testing/tarball/",
     execute: bool = False,
     multi_arch: bool = False,
-) -> Tuple[int, int]:
+    structured: bool = False,
+    python_index: str = STRUCTURED_DEFAULT_INDEX,
+    repo_stream: str = "rc",
+    tarball_variant: str = "release",
+) -> tuple[int, int]:
     """Upload promoted packages to S3 release bucket.
 
     Args:
@@ -425,8 +573,17 @@ def upload_release_packages(
     print("Upload Release Packages")
     print("=" * 80)
     print(f"Input directory: {input_dir.absolute()}")
-    print(f"Python bucket: {bucket_name}")
-    print(f"Python bucket prefix: {bucket_prefix}")
+    if structured:
+        print(f"Repo stream: {repo_stream}")
+        print("S3 buckets:")
+        for product in STRUCTURED_PRODUCTS:
+            print(
+                f"  {product}: {repo_product_bucket(repo_stream, product)}/"
+                f"v5/rocm/{product}/{python_index}/"
+            )
+    else:
+        print(f"Python bucket: {bucket_name}")
+        print(f"Python bucket prefix: {bucket_prefix}")
     if upload_tarballs:
         print(f"Tarball bucket: {tarball_bucket_name}")
         print(f"Tarball bucket prefix: {tarball_bucket_prefix}")
@@ -452,7 +609,7 @@ def upload_release_packages(
     for arch_dir in architectures:
         print(f"  - {arch_dir.name}")
 
-    if not architectures and not multi_arch:
+    if not architectures and not multi_arch and not structured:
         print("\n[ERROR]: No architecture directories found in input directory")
         sys.exit(1)
 
@@ -475,6 +632,9 @@ def upload_release_packages(
                 bucket_prefix,
                 execute,
                 multi_arch=multi_arch,
+                structured=structured,
+                python_index=python_index,
+                repo_stream=repo_stream,
             )
 
         if upload_tarballs:
@@ -484,6 +644,8 @@ def upload_release_packages(
                 tarball_bucket_prefix,
                 execute,
                 multi_arch=multi_arch,
+                structured=structured,
+                tarball_variant=tarball_variant,
             )
 
     except NoCredentialsError:
@@ -502,9 +664,14 @@ def upload_release_packages(
     if execute:
         print("Execution mode: EXECUTED")
         if wheels_uploaded > 0:
-            print(
-                f"\nPython packages uploaded: {wheels_uploaded} (location: s3://{bucket_name}/{bucket_prefix})"
-            )
+            if structured:
+                print(
+                    f"\nPython packages uploaded: {wheels_uploaded} (see per-product destinations above)"
+                )
+            else:
+                print(
+                    f"\nPython packages uploaded: {wheels_uploaded} (location: s3://{bucket_name}/{bucket_prefix})"
+                )
         if tarballs_uploaded > 0:
             print(
                 f"Tarballs uploaded: {tarballs_uploaded} (location: s3://{tarball_bucket_name}/{tarball_bucket_prefix})"
@@ -544,4 +711,8 @@ if __name__ == "__main__":
         tarball_bucket_prefix=args.tarball_bucket_prefix,
         execute=args.execute,
         multi_arch=args.multi_arch,
+        structured=args.structured,
+        python_index=args.python_index,
+        repo_stream=args.repo_stream,
+        tarball_variant=args.tarball_variant,
     )

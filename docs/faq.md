@@ -34,6 +34,13 @@ file.
 
 For hardware-specific notes and tuning guidance, see the [System optimization pages](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/index.html)
 
+### How do I determine my GPU family for `THEROCK_AMDGPU_FAMILIES`?
+
+See the [Discovering available targets on your system](../README.md#discovering-available-targets-on-your-system)
+section of the README. The [rocm-bootstrap](https://pypi.org/project/rocm-bootstrap/)
+package can also detect and print your GPU family automatically without needing
+a full ROCm install.
+
 ## gfx1151 (Strix Halo) specific questions
 
 Strix Halo specific notes and optimization guidance information are collected on

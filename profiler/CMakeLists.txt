@@ -6,6 +6,21 @@ if(THEROCK_ENABLE_MPI)
   set(_openmpi_optional_dep therock-openmpi)
 endif()
 
+# rocprofiler-sdk performs optional find_package(rocdecode)/find_package(rocjpeg)/
+# find_package(hipfile) to detect the rocDecode/rocJPEG/hipFILE trace features.
+# Declare them as dependencies when available so they resolve from the
+# super-project dist rather than escaping to a stray build tree.
+set(_rocprofiler_sdk_optional_deps)
+if(THEROCK_ENABLE_ROCDECODE AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocdecode)
+endif()
+if(THEROCK_ENABLE_ROCJPEG AND THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  list(APPEND _rocprofiler_sdk_optional_deps rocjpeg)
+endif()
+if(THEROCK_ENABLE_HIPFILE)
+  list(APPEND _rocprofiler_sdk_optional_deps hipfile)
+endif()
+
 if(THEROCK_ENABLE_ROCPROFV3)
 
   ##############################################################################
@@ -90,7 +105,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
-    USE_DIST_AMDGPU_TARGETS
+    # Use TEST targets (all available archs) so the _generic test artifact
+    # contains .hsaco files for all architectures, not just dist archs.
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
@@ -103,6 +120,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -118,6 +136,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprof-trace-decoder
       rocprofiler-register
+      therock-yaml-cpp
+      ${_openmpi_optional_dep}
+      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -243,6 +264,7 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${THEROCK_BUNDLED_ZLIB}
       ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
@@ -271,15 +293,7 @@ endif(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
 ##############################################################################
 # rocprofiler-systems
 ##############################################################################
-# rocprofiler-systems requires GCC, but sanitizer builds use Clang.
-# Skip enabling rocprofiler-systems when building with sanitizers.
-if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
-  # Escape semicolons in GPU targets list to prevent shell interpretation
-  if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
-    set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
-  else()
-    string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
-  endif()
+if(THEROCK_ENABLE_ROCPROFSYS)
 
   therock_detect_python_versions(_rocprofsys_detected_python_executables _rocprofsys_detected_python_versions)
   if(NOT _rocprofsys_detected_python_versions OR NOT _rocprofsys_detected_python_executables)
@@ -302,27 +316,36 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     message(STATUS "Detected Python root dirs for rocprofiler-systems: ${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}")
   endif()
 
+  # When libiberty is bundled; otherwise let rocprofiler-systems build its own.
+  if(THEROCK_BUNDLED_LIBIBERTY)
+    set(_rocprofsys_build_libiberty OFF)
+  else()
+    set(_rocprofsys_build_libiberty ON)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-systems
-    USE_TEST_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCPROFSYS_BUILD_TBB=ON
-      -DROCPROFSYS_BUILD_LIBIBERTY=ON
-      -DROCPROFSYS_BUILD_BOOST=ON
+      -DROCPROFSYS_BUILD_LIBIBERTY="${_rocprofsys_build_libiberty}"
       -DROCPROFSYS_BUILD_DYNINST=ON
-      -DROCPROFSYS_BUILD_FOR_THEROCK=ON # TODO: Will be deprecated
+      -DROCPROFSYS_BUILD_FOR_THEROCK=ON
+      -DROCPROFSYS_USE_PYTESTS=OFF
       -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
-      -DROCPROFSYS_INSTALL_EXAMPLES="${THEROCK_BUILD_TESTING}"
-      -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+      -DROCPROFSYS_BUILD_TESTING="${THEROCK_BUILD_TESTING}"
+      -DROCPROFSYS_BUILD_FMT=OFF
       -DROCPROFSYS_BUILD_SPDLOG=OFF
       -DROCPROFSYS_BUILD_SQLITE3=OFF
       -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
       "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
+    COMPILER_TOOLCHAIN
+      amd-hip
     INSTALL_RPATH_DIRS
       "lib"
       "lib/rocprofiler-systems"
@@ -339,6 +362,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       hip-clr
       rocprofiler-register
       rocprofiler-sdk
+      ${THEROCK_BUNDLED_LIBIBERTY}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
@@ -348,6 +372,7 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     SUBDIRS .
   )
 
+  therock_cmake_subproject_provide_package(rocprofiler-systems rocprofiler-systems lib/cmake/rocprofiler-systems)
   therock_cmake_subproject_activate(rocprofiler-systems)
 
   therock_provide_artifact(rocprofiler-systems
@@ -365,4 +390,49 @@ if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
       rocprofiler-sdk
       rocprofiler-systems
     )
-endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+
+
+  # TODO: This should be built as target-specific, but that's not currently possible as
+  # the artifact splitter strips per-arch HIP offload bundles out of the example binaries,
+  # preventing llvm-objdump (used in our tests) from detecting the offload architectures
+  # See https://github.com/ROCm/TheRock/issues/4848
+  if(THEROCK_BUILD_TESTING)
+    # Escape semicolons in GPU targets list to prevent shell interpretation
+    if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
+      set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
+    else()
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
+    endif()
+
+    therock_cmake_subproject_declare(rocprofiler-systems-examples
+      USE_TEST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+        -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
+      COMPILER_TOOLCHAIN
+        amd-hip
+      INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocprofiler-systems"
+        "lib/llvm/lib"
+      RUNTIME_DEPS
+        rocprofiler-systems
+    )
+    therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
+      SUBDIRS .
+    )
+    therock_cmake_subproject_activate(rocprofiler-systems-examples)
+
+    therock_provide_artifact(rocprofiler-systems-examples
+      TARGET_NEUTRAL
+      DESCRIPTOR "${CMAKE_SOURCE_DIR}/profiler/artifact-rocprofiler-systems-examples.toml"
+      COMPONENTS
+        test
+      SUBPROJECT_DEPS
+        rocprofiler-systems-examples
+    )
+  endif()
+endif(THEROCK_ENABLE_ROCPROFSYS)

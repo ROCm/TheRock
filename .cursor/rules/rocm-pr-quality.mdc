@@ -1,0 +1,23 @@
+---
+description: Use the rocm-pr-quality skill when authoring, reviewing, or pre-merge-gating a pull request in this repo
+alwaysApply: false
+---
+
+# ROCm PR Quality
+
+When the user is authoring, reviewing, or deciding whether it is safe to merge a pull request,
+read and apply [`skills/rocm-pr-quality/SKILL.md`](../../skills/rocm-pr-quality/SKILL.md) and its
+`reference.md` before proceeding. It is the library-agnostic base skill; component repositories
+layer thin overlays on top that may tighten but never weaken its MUST rules.
+
+For PRs touching TheRock's build itself — the superbuild/CMake, submodules and patches,
+`artifact-*.toml` / `BUILD_TOPOLOGY.toml`, or reusable CI workflows — also read and apply the
+TheRock overlay [`skills/therock-pr-quality/SKILL.md`](../../skills/therock-pr-quality/SKILL.md),
+which extends the base and defers to the canonical `docs/development/style_guides/`.
+
+Key behaviors the skill enforces:
+
+- One entry point, three actions: author assist, review assist, pre-merge gate.
+- Advisory and paved-road, not a compliance cop.
+- Never post PR descriptions, review comments, labels, or merges to GitHub/Jira without explicit
+  human approval — draft the text and wait.

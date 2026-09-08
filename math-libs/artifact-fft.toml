@@ -15,6 +15,7 @@ include = [
   "bin/rocfft-test*",
   "bin/rocfft-bench*",
   "bin/dyna-rocfft-bench*",
+  "bin/rocfft/**",
 ]
 
 # hipFFT
@@ -24,5 +25,7 @@ include = [
 [components.doc."math-libs/hipFFT/stage"]
 [components.test."math-libs/hipFFT/stage"]
 include = [
+  # Clients tests (test_runner runs ctest from bin/hipfft/; needs CTestTestfile.cmake)
+  "bin/hipfft/**",
   "bin/hipfft-test*",
 ]

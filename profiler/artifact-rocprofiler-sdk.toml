@@ -38,3 +38,4 @@ include = [
 
 # rocprof-trace-decoder
 [components.lib."profiler/rocprof-trace-decoder/stage"]
+[components.dev."profiler/rocprof-trace-decoder/stage"]

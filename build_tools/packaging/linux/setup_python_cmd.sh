@@ -8,10 +8,12 @@
 #
 # - ubuntu* / debian* -> apt: python3, python3-venv, python3-pip -> PYTHON_CMD=python3
 # - sles* -> zypper: python313, python313-pip (SLE/BCI; unversioned python3 / python3-pip are not valid package names) -> PYTHON_CMD=python3.13
+# - rhel8 -> dnf: python3.12, python3.12-pip -> PYTHON_CMD=python3.12
 # - else (e.g. UBI 10 / RHEL-like) -> dnf: python3, python3-pip -> PYTHON_CMD=python3
 #
 # Optional --python-version X.Y (e.g. 3.12): install that stream where supported
 # (apt + dnf). Use on UBI 9 / RHEL 9 when default python3 is older than you need.
+# rhel8 defaults to 3.12 when --python-version is omitted.
 # On SLES, --python-version is ignored (zypper names vary); distro python3 is used.
 #
 # Use --install-runtime in CI so Python install lives in this script (not the workflow
@@ -86,6 +88,11 @@ if [[ -n "$PY_MM" ]] && ! [[ "$PY_MM" =~ ^[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
+# UBI 8 / RHEL 8: default python3 may be older than CI needs; pin 3.12 unless overridden.
+if [[ -z "$PY_MM" ]] && [[ "$OS_PLC" == "rhel8" ]]; then
+    PY_MM="3.12"
+fi
+
 if [[ -n "$PY_MM" ]]; then
     PYTHON_CMD="python${PY_MM}"
 elif [[ "$OS_PLC" == sles* ]]; then
@@ -96,23 +103,17 @@ else
 fi
 
 # Install Python and pip with apt/zypper/dnf
+# SLES uses zypper names python313, not deb-style python3.13).
 install_python_runtime() {
     local os_profile="$1"
 
     if [[ "$os_profile" == ubuntu* ]] || [[ "$os_profile" == debian* ]]; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq >&2
-        if [[ -n "$PY_MM" ]]; then
-            apt-get install -y --no-install-recommends \
-                "python${PY_MM}" \
-                "python${PY_MM}-venv" \
-                "python${PY_MM}-pip" >&2
-        else
-            apt-get install -y --no-install-recommends \
-                python3 \
-                python3-venv \
-                python3-pip >&2
-        fi
+        sudo apt-get update -qq >&2
+        sudo apt-get install -y --no-install-recommends \
+            "$PYTHON_CMD" \
+            "${PYTHON_CMD}-venv" \
+            "${PYTHON_CMD}-pip" >&2
     elif [[ "$os_profile" == sles* ]]; then
         if [[ -n "$PY_MM" ]]; then
             echo "Warning: --python-version is not applied on SLES; using python313 stack" >&2
@@ -123,15 +124,9 @@ install_python_runtime() {
             python313-pip >&2
     else
         # dnf: UBI 9 / RHEL 9 default python3 may be < 3.12; use --python-version 3.12 when needed
-        if [[ -n "$PY_MM" ]]; then
-            dnf install -y --allowerasing \
-                "python${PY_MM}" \
-                "python${PY_MM}-pip" >&2
-        else
-            dnf install -y --allowerasing \
-                python3 \
-                python3-pip >&2
-        fi
+        dnf install -y --allowerasing \
+            "$PYTHON_CMD" \
+            "${PYTHON_CMD}-pip" >&2
     fi
 }
 

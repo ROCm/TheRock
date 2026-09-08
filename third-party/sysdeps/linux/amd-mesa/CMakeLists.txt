@@ -3,7 +3,7 @@
 
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # setup submodule project
-    set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
+    set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/../../common/mesa-fork")
 
     therock_cmake_subproject_declare(therock-amd-mesa
       USE_DIST_AMDGPU_TARGETS
@@ -78,7 +78,29 @@ add_custom_target(
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
-        -Damd-decode-only=true # NOTE: enable decode only for TheRock
+        -Degl=disabled
+        -Dgallium-drivers=radeonsi
+        -Dgallium-rusticl=false
+        -Dgallium-va=enabled
+        -Dgbm=disabled
+        -Dgles1=disabled
+        -Dgles2=disabled
+        -Dglvnd=disabled
+        -Dglx=disabled
+        -Dllvm=disabled
+        -Dopengl=false
+        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvulkan-drivers=
+        -Dplatforms=
+        -Dlibva:with_glx=no
+        -Dlibva:with_wayland=no
+        -Dlibva:with_x11=no
+        -Dvalgrind=disabled
+        -Dspirv-tools=disabled
+        -Dzlib=disabled
+        -Dzstd=disabled
+        -Dshader-cache=disabled
+        -Dexpat=disabled
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
   COMMAND
@@ -102,7 +124,29 @@ add_custom_target(
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
-        -Damd-decode-only=true # NOTE: enable decode only for TheRock
+        -Degl=disabled
+        -Dgallium-drivers=radeonsi
+        -Dgallium-rusticl=false
+        -Dgallium-va=enabled
+        -Dgbm=disabled
+        -Dgles1=disabled
+        -Dgles2=disabled
+        -Dglvnd=disabled
+        -Dglx=disabled
+        -Dllvm=disabled
+        -Dopengl=false
+        -Dvideo-codecs=h264dec,h265dec,av1dec,vp9dec,jpegdec
+        -Dvulkan-drivers=
+        -Dplatforms=
+        -Dlibva:with_glx=no
+        -Dlibva:with_wayland=no
+        -Dlibva:with_x11=no
+        -Dvalgrind=disabled
+        -Dspirv-tools=disabled
+        -Dzlib=disabled
+        -Dzstd=disabled
+        -Dshader-cache=disabled
+        -Dexpat=disabled
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
   COMMAND

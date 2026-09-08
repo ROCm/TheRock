@@ -1,5 +1,11 @@
 # s3_management
 
+> [!NOTE]
+> These tools manage the legacy per-family Python release buckets and indexes.
+> Current structured product indexes are generated server-side. See
+> [Legacy per-family releases](/docs/packaging/legacy_per_family_releases.md)
+> for the URLs managed here.
+
 ## Overview
 
 These scripts are forked from https://github.com/pytorch/test-infra/tree/main/s3_management.
@@ -22,7 +28,7 @@ Each bucket has `v2` and `v2-staging` top level folders at the moment. This may
 evolve with `v3` in the future. Within each folder there are subfolders for
 each index we publish, currently corresponding to each GPU family that we
 build releases for. See these other pages for more details:
-* [Index page listing in `RELEASES.md`](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#index-page-listing)
+* [Legacy per-family release index pages](/docs/packaging/legacy_per_family_releases.md#index-page-listing)
 * [Gating releases with Pytorch tests in `external-builds/pytorch/README.md`](/external-builds/pytorch/README.md#gating-releases-with-pytorch-tests)
 
 The user-facing URLs can be used with `pip install --index-url`. For example:
@@ -35,13 +41,13 @@ python -m pip install \
 
 ## Running tests
 
-`test_update_dependencies.py` contains unit tests for the wheel filtering
+`update_dependencies_test.py` contains unit tests for the wheel filtering
 logic in `update_dependencies.py`. No AWS credentials or network access
 are required.
 
 ```bash
 cd build_tools/third_party/s3_management
-python -m pytest test_update_dependencies.py -v
+python -m pytest update_dependencies_test.py -v
 ```
 
 ## Playbook for running the scripts
@@ -89,14 +95,21 @@ those changes to the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm --dry-run
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/ \
+      --dry-run
     ```
 
 1. Update dependencies in the dev bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-dev-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the dev bucket:
@@ -115,7 +128,10 @@ Finally, repeat those steps for the nightly bucket:
 
     ```bash
     export S3_BUCKET_PY=therock-nightly-python
-    python ./build_tools/third_party/s3_management/update_dependencies.py --package rocm
+    python ./build_tools/third_party/s3_management/update_dependencies.py \
+      --package rocm \
+      --auto-detect-prefixes \
+      --base-prefix v2/
     ```
 
 1. Regenerate the index pages for the nightly bucket:

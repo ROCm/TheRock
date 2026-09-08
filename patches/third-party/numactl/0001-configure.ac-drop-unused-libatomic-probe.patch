@@ -1,0 +1,24 @@
+From 1a612f4c00f21f0413d5101d16a93d2cd7421b91 Mon Sep 17 00:00:00 2001
+From: darren-amd <darren.lao@amd.com>
+Date: Tue, 2 Jun 2026 11:57:33 -0400
+Subject: [PATCH] configure.ac: drop unused libatomic probe
+
+numactl's configure unconditionally links -latomic via this probe, but on
+the toolchains we build with the compiler lowers libnuma's byte-sized
+atomics inline, so it only leaves an unused libatomic.so.1 dependency
+(ROCm/TheRock#2518). Drop it so rocminfo works with no extra runtime dep.
+---
+ configure.ac | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index 267e304..67d62c3 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -29,3 +29,2 @@ AC_CONFIG_FILES([Makefile])
+ 
+-AC_SEARCH_LIBS([__atomic_fetch_and_1], [atomic])
+ 
+-- 
+2.34.1
+

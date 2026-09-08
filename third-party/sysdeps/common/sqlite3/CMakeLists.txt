@@ -3,13 +3,18 @@
 
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
+    set(SQLITE3_VERSION "3.51.3")
+    # SQLite encodes the version in amalgamation download URLs as MMNNPP00,
+    # with zero-padded minor/patch (e.g. 3.51.3 -> 3510300).
+    set(SQLITE3_AMALGAMATION_VERSION "3510300")
+
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
     therock_subproject_fetch(therock-sqlite3-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "https://sqlite.org/2026/sqlite-amalgamation-3510300.zip"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/sqlite-amalgamation-3510300.zip"
+      # Originally mirrored from: "https://sqlite.org/2026/sqlite-amalgamation-${SQLITE3_AMALGAMATION_VERSION}.zip"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/sqlite-amalgamation-${SQLITE3_AMALGAMATION_VERSION}.zip"
       URL_HASH "SHA256=acb1e6f5d832484bf6d32b681e858c38add8b2acdfd42ac5df24b8afb46552b4"
       TOUCH "${_download_stamp}"
     )
@@ -25,6 +30,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       OUTPUT_ON_FAILURE
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
+        "-DSQLITE3_VERSION=${SQLITE3_VERSION}"
       INSTALL_DESTINATION
         lib/rocm_sysdeps
       INTERFACE_LINK_DIRS
@@ -93,4 +99,16 @@ configure_file(
   @ONLY
 )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config.cmake" DESTINATION lib/cmake/SQLite3)
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config-version.cmake"
+  VERSION "${SQLITE3_VERSION}"
+  COMPATIBILITY SameMajorVersion
+)
+
+install(
+  FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config-version.cmake"
+  DESTINATION lib/cmake/SQLite3
+)

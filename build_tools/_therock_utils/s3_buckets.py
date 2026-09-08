@@ -46,9 +46,11 @@ class S3BucketConfig:
 
 
 s3_bucket_configs = [
-    # CI (self-hosted runners include credentials for therock-ci-artifacts-external)
+    # CI (external repos use OIDC with therock-ci-external; fork PRs use runner base credentials)
     S3BucketConfig("therock-ci-artifacts", iam_role="therock-ci"),
-    S3BucketConfig("therock-ci-artifacts-external", iam_role=None),
+    S3BucketConfig("therock-ci-artifacts-external", iam_role="therock-ci-external"),
+    # Release type "{dev,nightly}-bkc"; else BKC targets product publication buckets
+    S3BucketConfig("therock-bkc-artifacts", iam_role="therock-bkc"),
     # Release type "dev"
     S3BucketConfig("therock-dev-artifacts", iam_role="therock-dev"),
     S3BucketConfig("therock-dev-packages", iam_role="therock-dev"),
@@ -74,9 +76,32 @@ s3_bucket_configs = [
 
 _BUCKET_CONFIGS_BY_NAME = {c.name: c for c in s3_bucket_configs}
 
-_ALLOWED_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
+_ALLOWED_ARTIFACT_RELEASE_TYPES = {
+    "ci",
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+}
+
+_ALLOWED_RELEASE_TYPES = {
+    "dev",
+    "dev-bkc",
+    "nightly",
+    "nightly-bkc",
+    "prerelease",
+}
 
 _ALLOWED_RELEASE_BUCKET_TYPES = {"tarball", "python", "packages"}
+_ALLOWED_RELEASE_PRODUCTS = {"core", "pytorch", "jax"}
+_RELEASE_STREAM_BY_TYPE = {
+    "dev": "dev",
+    "dev-bkc": "bkc",
+    "nightly": "nightly",
+    "nightly-bkc": "bkc",
+    "prerelease": "rc",
+}
 
 
 def get_artifacts_bucket_config(
@@ -87,25 +112,29 @@ def get_artifacts_bucket_config(
     """Look up the artifacts bucket config for a repository.
 
     Args:
-        release_type: "" for CI builds, or "dev", "nightly", "prerelease".
+        release_type: "ci", "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
         repository: GitHub repository (e.g. "ROCm/TheRock").
         is_pr_from_fork: Whether this is a PR from a fork.
 
     Raises:
         ValueError: If release_type is invalid.
     """
-    if release_type:
-        if release_type not in _ALLOWED_RELEASE_TYPES:
-            raise ValueError(
-                f"release_type={release_type!r} is invalid, "
-                f"expected empty string or one of {_ALLOWED_RELEASE_TYPES}"
-            )
-        bucket_name = f"therock-{release_type}-artifacts"
-    else:
+    if release_type not in _ALLOWED_ARTIFACT_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_ARTIFACT_RELEASE_TYPES}"
+        )
+
+    if release_type == "ci":
         if is_pr_from_fork or repository != "ROCm/TheRock":
             bucket_name = "therock-ci-artifacts-external"
         else:
             bucket_name = "therock-ci-artifacts"
+    elif release_type in ("dev-bkc", "nightly-bkc"):
+        bucket_name = "therock-bkc-artifacts"
+    else:
+        bucket_name = f"therock-{release_type}-artifacts"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
@@ -116,11 +145,13 @@ def get_release_bucket_config(
     """Look up the release bucket config for a given release type and bucket type.
 
     Args:
-        release_type: "dev", "nightly", or "prerelease".
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
         bucket_type: "tarball", "python", or "packages".
 
     Returns:
-        S3BucketConfig for the bucket ``therock-{release_type}-{bucket_type}``.
+        S3BucketConfig for the selected release bucket. BKC release types use
+        the corresponding dev or nightly bucket.
 
     Raises:
         ValueError: If release_type or bucket_type is invalid.
@@ -135,36 +166,69 @@ def get_release_bucket_config(
             f"bucket_type={bucket_type!r} is invalid, "
             f"expected one of {_ALLOWED_RELEASE_BUCKET_TYPES}"
         )
-    bucket_name = f"therock-{release_type}-{bucket_type}"
+    if release_type == "dev-bkc":
+        bucket_name = f"therock-dev-{bucket_type}"
+    elif release_type == "nightly-bkc":
+        bucket_name = f"therock-nightly-{bucket_type}"
+    else:
+        bucket_name = f"therock-{release_type}-{bucket_type}"
     return _BUCKET_CONFIGS_BY_NAME[bucket_name]
 
 
-def _is_current_run_pr_from_fork() -> bool:
-    """Check if the current workflow run is a pull request from a fork.
+def get_release_stream(release_type: str) -> str:
+    """Return the external repo.amd.com stream for an internal release type.
 
-    Reads the GitHub event payload to check the .fork property on the
-    head repo, matching the behavior of the GitHub Actions expression
-    ``github.event.pull_request.head.repo.fork``.
+    Args:
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
 
-    Returns False for non-pull_request events or if the event payload
-    is not available (e.g. local development).
+    Raises:
+        ValueError: If release_type is invalid.
     """
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if event_name != "pull_request":
-        return False
+    try:
+        return _RELEASE_STREAM_BY_TYPE[release_type]
+    except KeyError as e:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_TYPES}"
+        ) from e
 
-    if not os.environ.get("GITHUB_EVENT_PATH"):
-        return False
 
-    # Deferred import: github_actions is optional in some environments; only
-    # needed when resolving fork state from the on-disk event payload.
-    from github_actions.github_actions_api import gha_load_github_event
+def get_product_release_bucket_config(
+    release_type: str,
+    product: str,
+) -> S3BucketConfig:
+    """Look up the final repo.amd.com product publication bucket.
 
-    event = gha_load_github_event()
+    Artifact buckets and credentials are intentionally separate from this
+    product publication path. This resolver targets the cross-account product
+    buckets used for final public release outputs.
 
-    return bool(
-        event.get("pull_request", {}).get("head", {}).get("repo", {}).get("fork", False)
+    Args:
+        release_type: "dev", "dev-bkc", "nightly", "nightly-bkc", or
+            "prerelease".
+        product: "core", "pytorch", or "jax".
+
+    Raises:
+        ValueError: If release_type or product is invalid.
+    """
+    stream = get_release_stream(release_type)
+    if product not in _ALLOWED_RELEASE_PRODUCTS:
+        raise ValueError(
+            f"product={product!r} is invalid, "
+            f"expected one of {_ALLOWED_RELEASE_PRODUCTS}"
+        )
+    return S3BucketConfig(
+        name=f"therock-repo-amd-{stream}-{product}",
+        iam_account="324352301041",
+        iam_role=f"therock-repo-{stream}-{product}",
     )
+
+
+def get_release_package_index_url(release_type: str) -> str:
+    """Return the aggregate pip index URL for a final release stream."""
+    stream = get_release_stream(release_type)
+    return f"https://{stream}.repo.amd.com/rocm/whl-next/"
 
 
 def get_artifacts_bucket_config_for_workflow_run(
@@ -182,7 +246,7 @@ def get_artifacts_bucket_config_for_workflow_run(
     Args:
         github_repository: GitHub repository (e.g. "ROCm/TheRock").
         release_type: Release type override. If None, reads RELEASE_TYPE
-            from the environment (default: empty string = CI build).
+            from the environment (default: "ci").
         workflow_run_id: If set and ``workflow_run`` is None, fetches the
             workflow run from the GitHub API for fork detection.
         workflow_run: Optional workflow run dict from GitHub API. If
@@ -192,17 +256,33 @@ def get_artifacts_bucket_config_for_workflow_run(
     _log(f"  github_repository: {github_repository}")
 
     if release_type is None:
-        release_type = os.environ.get("RELEASE_TYPE", "")
-    if release_type:
-        _log(f"  release_type: {release_type}")
+        release_type = os.environ.get("RELEASE_TYPE", "ci")
+    _log(f"  release_type: {release_type}")
 
     # Fetch workflow_run from API if not provided but workflow_run_id is set.
     # Deferred import: github_actions is an optional dependency not available in
     # all environments (e.g. local dev without the GHA support package installed).
     if workflow_run is None and workflow_run_id is not None:
-        from github_actions.github_actions_api import gha_query_workflow_run_by_id
+        from github_actions.github_actions_api import (
+            GitHubAPIError,
+            gha_query_workflow_run_by_id,
+        )
 
-        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
+        try:
+            workflow_run = gha_query_workflow_run_by_id(
+                github_repository, workflow_run_id
+            )
+        except GitHubAPIError as e:
+            run_url = (
+                f"https://github.com/{github_repository}/actions/runs/{workflow_run_id}"
+            )
+            raise GitHubAPIError(
+                f"Failed to query workflow run {workflow_run_id} in repository "
+                f"{github_repository}: {run_url}\n"
+                f"  {e}\n"
+                f"Hint: Did you mean to specify a different repository with "
+                f"--run-github-repo?"
+            ) from e
 
     # Extract metadata from workflow_run if available
     if workflow_run is not None:
@@ -212,7 +292,11 @@ def get_artifacts_bucket_config_for_workflow_run(
         _log(f"  head_github_repository: {head_github_repository}")
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
     else:
-        is_pr_from_fork = _is_current_run_pr_from_fork()
+        # Deferred import: github_actions is optional in some environments;
+        # only needed when resolving fork state from the on-disk event payload.
+        from github_actions.github_actions_api import is_current_run_pr_from_fork
+
+        is_pr_from_fork = is_current_run_pr_from_fork()
         _log(f"  is_pr_from_fork: {is_pr_from_fork}")
 
     config = get_artifacts_bucket_config(
@@ -221,4 +305,18 @@ def get_artifacts_bucket_config_for_workflow_run(
         is_pr_from_fork=is_pr_from_fork,
     )
     _log(f"  bucket: {config.name}")
+
+    # For fork PRs, skip OIDC and use runner base credentials instead.
+    # Fork PRs cannot assume IAM roles via OIDC because they don't have
+    # the required trust relationship. Return a config without an IAM role
+    # so the configure-aws-credentials step is skipped.
+    if is_pr_from_fork and config.iam_role is not None:
+        _log("  Fork PR detected, skipping OIDC (using runner base credentials)")
+        config = S3BucketConfig(
+            name=config.name,
+            region=config.region,
+            iam_account=config.iam_account,
+            iam_role=None,
+        )
+
     return config

@@ -47,7 +47,7 @@ There are two CI pipeline architectures with different log layouts:
 - **Single-stage CI** (`ci.yml`) — one monolithic build per artifact group.
   Logs from all subprojects land in a single flat directory.
 - **Multi-arch CI** (`multi_arch_ci.yml`) — the build is split into stages
-  (foundation, compiler-runtime, math-libs, etc.). Each stage runs as a
+  (compiler-runtime, runtime-tests, math-libs, etc.). Each stage runs as a
   separate job and uploads its own logs, organized by stage name and GPU family.
 
 `artifact_group` is the CI matrix variant, composed of a target family plus an
@@ -97,7 +97,7 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 #### Multi-arch CI layout
 
 Logs are organized by stage, with a subdirectory per GPU family for per-arch
-stages. Generic stages (foundation, compiler-runtime) have no family
+stages. Generic stages (compiler-runtime, runtime-tests, profiler-apps) have no family
 subdirectory. Per-arch stages (e.g., math-libs) fan out across GPU
 families in parallel, producing identically-named log files (e.g.,
 `rocBLAS_build.log`) that are kept separate by the family subdirectory.
@@ -148,20 +148,19 @@ families in parallel, producing identically-named log files (e.g.,
         therock-dist-{platform}-multiarch-{version}.tar.gz  (KPACK split only)
 ```
 
-Example for a run with foundation + math-libs stages:
+Example for a run with compiler-runtime + runtime-tests + math-libs stages:
 
 ```
 12345-linux/
-    logs/foundation/
-        rocm-cmake_build.log
-        rocm-cmake_configure.log
-        rocm-cmake_install.log
-        ninja_logs.tar.gz
-
     logs/compiler-runtime/
         amd-llvm_build.log
         amd-llvm_configure.log
         amd-llvm_install.log
+        ninja_logs.tar.gz
+
+    logs/runtime-tests/
+        hip-tests_build.log
+        rocrtst_build.log
         ninja_logs.tar.gz
 
     logs/math-libs/gfx1151/
@@ -186,18 +185,19 @@ See [S3 Buckets](s3_buckets.md) for the full list of buckets and authentication
 details.
 
 ```
-RELEASE_TYPE set? ──Yes──> therock-{RELEASE_TYPE}-artifacts
+RELEASE_TYPE=dev/nightly/prerelease? ──Yes──> therock-{RELEASE_TYPE}-artifacts
+       │
+       No (RELEASE_TYPE=ci)
+       │
+ROCm/TheRock (not fork)? ─────────────Yes──> therock-ci-artifacts
        │
        No
        │
-ROCm/TheRock (not fork)? ──Yes──> therock-ci-artifacts
-       │
-       No
-       │
-       └──> therock-ci-artifacts-external
+       └──────────────────────────────────> therock-ci-artifacts-external
 ```
 
-Valid `RELEASE_TYPE` values are `dev`, `nightly`, and `prerelease`.
+Valid artifact `RELEASE_TYPE` values are `ci`, `dev`, `nightly`, and
+`prerelease`.
 
 ## Python API
 
@@ -242,7 +242,7 @@ root.artifact(filename="blas_lib_gfx94X.tar.xz")
 root.artifact_index()
 root.log_dir(artifact_group="gfx94X-dcgpu")
 root.log_stage_dir(stage_name="math-libs", amdgpu_family="gfx1151")
-root.log_stage_dir(stage_name="foundation")  # generic stage, no family
+root.log_stage_dir(stage_name="compiler-runtime")  # generic stage, no family
 root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
 root.log_index(artifact_group="gfx94X-dcgpu")
 root.build_observability(artifact_group="gfx94X-dcgpu")

@@ -48,7 +48,8 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   -DTHEROCK_ENABLE_ROCDECODE=ON \
   -DTHEROCK_ENABLE_ROCJPEG=ON \
+  -DTHEROCK_ENABLE_RPP=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   ${PYTHON_SHARED_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
+time cmake --build "$OUTPUT_DIR/build" --target therock-artifacts therock-dist
