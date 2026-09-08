@@ -412,10 +412,12 @@ def update_package_name(pkg_name, config: PackageConfig):
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
 
-    # For ASAN builds, insert the variant before the version suffix so the
-    # package name reflects the build type (e.g. amdrocm-core-asan7.15).
-    if config.build_variant == "asan":
-        pkg_suffix = f"-{config.build_variant}{pkg_suffix}"
+    # For ASan-family builds (asan, host-asan, and their "-debug" variants),
+    # insert the "asan" suffix before the version suffix so the package name
+    # reflects the build type (e.g. amdrocm-core-asan7.15). Debug variants
+    # collapse to the same "-asan" name as their non-debug counterpart.
+    if "asan" in config.build_variant:
+        pkg_suffix = f"-asan{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
     updated_pkgname = pkg_name

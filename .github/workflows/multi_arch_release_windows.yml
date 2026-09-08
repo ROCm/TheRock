@@ -167,7 +167,7 @@ jobs:
     steps:
       - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
           inputs: |
@@ -197,7 +197,7 @@ jobs:
       actions: write
     steps:
       - name: Trigger PyTorch Build
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
           inputs: |
