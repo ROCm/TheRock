@@ -71,8 +71,38 @@ def extract_source_path_from_project(project_path: str) -> Optional[str]:
     return project_path.strip() if project_path.strip() else None
 
 
+def get_artifact_sibling_paths(source_path: str, stage_name: str) -> Set[str]:
+    """Get all source_paths from artifacts that contain the given source_path.
+
+    When a project is changed, we need to checkout all sibling projects that are
+    built together in the same artifact. For example, if rocprim changes, we also
+    need hipcub, rocthrust, primbench (all in the 'prim' artifact).
+    """
+    topology = get_topology()
+    sibling_paths: Set[str] = set()
+
+    stage = topology.build_stages.get(stage_name)
+    if not stage:
+        return sibling_paths
+
+    for group_name in stage.artifact_groups:
+        for artifact in topology.get_artifacts_in_group(group_name):
+            artifact_sources = artifact.source_paths or [artifact.name]
+            if source_path in artifact_sources:
+                # Found the artifact containing this source_path, add all its siblings
+                sibling_paths.update(artifact_sources)
+
+    return sibling_paths
+
+
 def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
-    """Return project paths to sparse checkout for a stage, or empty list for full checkout."""
+    """Return project paths to sparse checkout for a stage, or empty list for full checkout.
+
+    When a project changes, this function expands to include all sibling projects
+    from the same artifact. For example, if projects/rocprim changes and rocprim
+    is in the 'prim' artifact with source_paths [rocprim, hipcub, rocthrust, primbench],
+    then all four project paths will be included in the sparse checkout.
+    """
     if not changed_projects or not changed_projects.strip():
         return []
 
@@ -80,7 +110,10 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
     if not stage_source_paths:
         return []
 
-    affected_paths: List[str] = []
+    # First, find which source_paths in this stage are affected
+    affected_source_paths: Set[str] = set()
+    project_prefixes: Dict[str, str] = {}  # source_path -> project prefix (e.g., "rocprim" -> "projects/")
+
     for project in changed_projects.split(","):
         project = project.strip()
         if not project:
@@ -88,9 +121,29 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
 
         source_path = extract_source_path_from_project(project)
         if source_path and source_path in stage_source_paths:
-            affected_paths.append(project)
+            affected_source_paths.add(source_path)
+            # Remember the prefix (e.g., "projects/" from "projects/rocprim")
+            prefix = project[: len(project) - len(source_path)]
+            project_prefixes[source_path] = prefix
 
-    return sorted(affected_paths)
+    if not affected_source_paths:
+        return []
+
+    # Expand to include all sibling source_paths from affected artifacts
+    all_needed_paths: Set[str] = set()
+    for source_path in affected_source_paths:
+        siblings = get_artifact_sibling_paths(source_path, stage_name)
+        all_needed_paths.update(siblings)
+
+    # Convert source_paths back to project paths using the prefix
+    # Use the first known prefix for paths we haven't seen directly
+    default_prefix = next(iter(project_prefixes.values()), "projects/")
+    result_paths: List[str] = []
+    for sp in all_needed_paths:
+        prefix = project_prefixes.get(sp, default_prefix)
+        result_paths.append(f"{prefix}{sp}")
+
+    return sorted(result_paths)
 
 
 def compute_all_stage_sparse_checkouts(changed_projects: str) -> Dict[str, str]:
