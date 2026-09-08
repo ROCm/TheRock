@@ -93,7 +93,13 @@ set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
 set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
 set(LLVM_EXTERNAL_SQTT_MARKER_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/sqtt-marker")
-set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator;sqtt-marker" CACHE STRING "Enable extra projects" FORCE)
+
+set(EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator")
+if(NOT WIN32)
+    # LLVM plugins do not work on Windows unless LLVM_EXPORT_SYMBOLS_FOR_PLUGINS is set.
+    list(APPEND EXTERNAL_PROJECTS "sqtt-marker")
+endif()
+set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.
