@@ -412,6 +412,7 @@ if(THEROCK_ENABLE_SPARSE)
         hipBLAS-common
         hipSPARSE
         rocSPARSE
+        stinkytofu
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
