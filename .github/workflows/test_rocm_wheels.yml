@@ -108,8 +108,7 @@ jobs:
     timeout-minutes: 30
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_url != '' && inputs.container_image_url || null }}
-      options: --ipc host
-        --group-add video
+      options: --group-add video
         --device /dev/kfd
         --device /dev/dri
         --group-add 992
