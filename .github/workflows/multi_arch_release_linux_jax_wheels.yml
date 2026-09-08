@@ -139,6 +139,7 @@ jobs:
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}
+      rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}

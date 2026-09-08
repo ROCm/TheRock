@@ -55,6 +55,20 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
+    # Upstream JAX at its moving tip, for the tip-vs-tip canary. Not in any
+    # default ref list below: a caller asks for it with --jax-refs jax-main.
+    # The manylinux Dockerfile comes from rocm-jax's default branch, since
+    # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
+    # coupling.
+    "jax-main": {
+        "jax_ref": "main",
+        "jax_repository": "jax-ml/jax",
+        "rocm_jax_ref": "rocm-jax-infra",
+        "gfx_arch": "device-all",
+        "jax_label": "tip",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
 }
 
 # Keep release behavior equivalent to the old generate_jax_matrix(None):
@@ -122,9 +136,16 @@ def generate_jax_matrix(
                 {
                     "python_version": py,
                     "jax_ref": ref_cfg["jax_ref"],
-                    # The ref without its prefix, for job names.
-                    "jax_label": ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v"),
+                    # The ref without its prefix, for job names, unless the
+                    # config names a label (a branch has no version to show).
+                    "jax_label": ref_cfg.get(
+                        "jax_label", ref_cfg["jax_ref"].removeprefix("rocm-jaxlib-v")
+                    ),
                     "jax_repository": ref_cfg["jax_repository"],
+                    # The ROCm/rocm-jax ref holding the manylinux Dockerfile. A
+                    # release tag exists under the same name in both
+                    # repositories, so this defaults to jax_ref.
+                    "rocm_jax_ref": ref_cfg.get("rocm_jax_ref", ref_cfg["jax_ref"]),
                     # gfx_arch selects the ROCm device package for the manylinux
                     # build (e.g. device-all). This direct lookup raises
                     # KeyError if JAX_REF_CONFIGS omits the key.

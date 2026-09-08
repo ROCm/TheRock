@@ -50,9 +50,17 @@ on:
         type: string
         default: ""
       jax_ref:
-        description: "rocm-jax repository ref/branch to check out"
+        description: "JAX ref to check out from jax_repository."
         required: true
         type: string
+      jax_repository:
+        description: "Repository holding the JAX checkout the test suite runs from."
+        type: string
+        default: "ROCm/jax"
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref to check out. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
       jax_version:
         description: "Built JAX version"
         required: false
@@ -152,9 +160,17 @@ on:
         type: string
         default: ""
       jax_ref:
-        description: "rocm-jax repository ref/branch to check out"
+        description: "JAX ref to check out from jax_repository."
         type: string
         default: "rocm-jaxlib-v0.11.1"
+      jax_repository:
+        description: "Repository holding the JAX checkout the test suite runs from."
+        type: string
+        default: "ROCm/jax"
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref to check out. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
       jax_version:
         description: "Built JAX version"
         type: string
@@ -266,13 +282,13 @@ jobs:
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.rocm_jax_ref || inputs.jax_ref }}
 
       - name: Checkout JAX
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: jax
-          repository: ROCm/jax
+          repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
 
       - name: Set up Python

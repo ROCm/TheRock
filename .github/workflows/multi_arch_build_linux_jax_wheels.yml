@@ -35,9 +35,13 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref."
+        description: "JAX ref to build from jax_repository."
         type: string
         required: true
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -105,9 +109,13 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref."
+        description: "JAX ref to build from jax_repository."
         type: string
         required: true
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -193,7 +201,7 @@ jobs:
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.rocm_jax_ref || inputs.jax_ref }}
 
       - name: Checkout JAX
         id: checkout_jax
@@ -364,6 +372,8 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       jax_ref: ${{ inputs.jax_ref }}
+      jax_repository: ${{ inputs.jax_repository }}
+      rocm_jax_ref: ${{ inputs.rocm_jax_ref }}
       jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
       jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
       jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
