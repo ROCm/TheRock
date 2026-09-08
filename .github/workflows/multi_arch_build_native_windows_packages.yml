@@ -30,6 +30,10 @@ on:
         description: "ROCm version to stamp on the MSI (e.g. '7.15.0'). Defaults to the repo's version.json."
         type: string
         default: ""
+      release_type:
+        description: "Release type for the destination artifacts bucket (dev, nightly, ...)."
+        type: string
+        default: dev
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -49,6 +53,9 @@ on:
       rocm_version:
         type: string
         default: ""
+      release_type:
+        type: string
+        default: dev
       repository:
         type: string
         default: ""
@@ -58,6 +65,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 run-name: Build Windows MSI packages (${{ inputs.artifacts_url }})
 
@@ -76,6 +84,7 @@ jobs:
       ARTIFACTS_URL: ${{ inputs.artifacts_url }}
       PACKAGE_VERSION: ${{ inputs.rocm_version }}
       MSI_DIR: ${{ github.workspace }}/msi-output
+      RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,3 +123,18 @@ jobs:
           name: windows-msi-${{ matrix.package }}
           path: ${{ env.MSI_DIR }}/${{ matrix.package }}.msi
           if-no-files-found: error
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ${{ inputs.release_type }}
+
+      # Upload to the current run's artifacts-bucket prefix
+      # ({run_id}-windows/packages/msi/) so a downstream publish or test
+      # workflow can consume this run's MSIs. Each matrix leg uploads its own
+      # package into the shared prefix.
+      - name: Upload MSI to artifacts bucket
+        run: |
+          python build_tools/packaging/windows/upload_msi_packages.py \
+            --run-id "${{ github.run_id }}" \
+            --package-dir "${MSI_DIR}"
