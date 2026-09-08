@@ -75,6 +75,11 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "emulation/rocjitsu": ["rocjitsu"],
     "shared/rocroller": ["rocroller"],
     "shared/amdgpu-windows-interop": ["hip-clr"],
+    # rocm-systems shared/* components that are not subtree-synced repos.
+    # machine-readable-isa ships the ISA data consumed by the rocjitsu
+    # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
+    "shared/kpack": ["rocm-kpack"],
+    "shared/machine-readable-isa": ["rocjitsu"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
