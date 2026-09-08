@@ -469,18 +469,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "True"
