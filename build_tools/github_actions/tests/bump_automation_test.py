@@ -12,7 +12,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
+    _baseline_gate_jobs_succeeded,
     _clone_url,
+    _list_run_jobs,
     close_stale_prs,
     close_stale_therock_ref_prs,
     create_therock_bump,
@@ -24,6 +26,7 @@ from bump_automation import (
     get_submodule_sha,
     handle_push,
     latest_commit,
+    LIBRARIES_BASELINE_GATE_JOB_NAME,
     search_issues,
     submodule_changed,
     update_ci_env_file,
@@ -87,6 +90,82 @@ class LatestCommitTest(unittest.TestCase):
         )
 
 
+def _gate_job(conclusion: str | None, name: str = LIBRARIES_BASELINE_GATE_JOB_NAME):
+    return {
+        "name": f"Linux::release / Build Multi-Arch Stages / {name}",
+        "conclusion": conclusion,
+    }
+
+
+def _jobs_page(jobs: list[dict], total_count: int | None = None) -> dict:
+    return {
+        "jobs": jobs,
+        "total_count": total_count if total_count is not None else len(jobs),
+    }
+
+
+class ListRunJobsTest(unittest.TestCase):
+    def test_returns_single_page_without_further_requests(self):
+        with patch(
+            "bump_automation.gh_api",
+            return_value=_jobs_page([_gate_job("success")]),
+        ) as mock_api:
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 1)
+        mock_api.assert_called_once()
+
+    def test_follows_pagination_until_all_jobs_are_retrieved(self):
+        first_page = _jobs_page([_gate_job("success")] * 100, total_count=101)
+        second_page = _jobs_page([_gate_job("success")], total_count=101)
+        with patch(
+            "bump_automation.gh_api", side_effect=[first_page, second_page]
+        ) as mock_api:
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 101)
+        self.assertEqual(mock_api.call_count, 2)
+
+
+class BaselineGateJobsSucceededTest(unittest.TestCase):
+    def test_true_when_the_single_gate_job_succeeded(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job("success")])
+        ):
+            self.assertTrue(_baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111))
+
+    def test_true_only_when_every_platform_gate_job_succeeded(self):
+        jobs = [
+            {
+                "name": f"Linux::release / Build Multi-Arch Stages / {LIBRARIES_BASELINE_GATE_JOB_NAME}",
+                "conclusion": "success",
+            },
+            {
+                "name": f"Windows::release / Build Multi-Arch Stages / {LIBRARIES_BASELINE_GATE_JOB_NAME}",
+                "conclusion": "failure",
+            },
+        ]
+        with patch("bump_automation.gh_api", return_value=_jobs_page(jobs)):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+    def test_false_when_no_gate_job_is_found(self):
+        with patch(
+            "bump_automation.gh_api",
+            return_value=_jobs_page([{"name": "setup", "conclusion": "success"}]),
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+    def test_false_when_gate_job_conclusion_is_missing(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job(None)])
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+
 class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
     MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
     HEAD_SHA = "23bc501d4b826695062a657d0b582076c354dd77"
@@ -102,12 +181,13 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
     def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
         return {"id": run_id, "name": name, "conclusion": conclusion}
 
-    def test_returns_the_successful_run_id(self):
+    def test_returns_the_run_id_when_its_gate_job_succeeded(self):
         with patch(
             "bump_automation.gh_api",
             side_effect=[
                 [self._pr()],
                 {"workflow_runs": [self._run(111, "success")]},
+                _jobs_page([_gate_job("success")]),
             ],
         ) as mock_api:
             run_id = get_baseline_run_id_from_merged_pr(
@@ -118,17 +198,37 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
         # merge commit itself.
         self.assertIn(self.HEAD_SHA, mock_api.call_args_list[1].args[1])
 
-    def test_skips_failed_and_cancelled_runs(self):
+    def test_returns_the_run_id_even_when_overall_run_conclusion_is_failure(self):
+        # This is the real scenario that motivated the gate-job check: an
+        # unrelated math-libs/compiler-runtime failure elsewhere in the
+        # matrix makes the whole run "failure" even though every stage
+        # rocm-libraries reuses succeeded.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "failure")]},
+                _jobs_page([_gate_job("success")]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
+
+    def test_skips_runs_whose_gate_job_did_not_succeed(self):
         with patch(
             "bump_automation.gh_api",
             side_effect=[
                 [self._pr()],
                 {
                     "workflow_runs": [
-                        self._run(111, "failure"),
+                        self._run(111, "success"),
                         self._run(112, "success"),
                     ]
                 },
+                _jobs_page([_gate_job("failure")]),  # run 111's gate job
+                _jobs_page([_gate_job("success")]),  # run 112's gate job
             ],
         ):
             run_id = get_baseline_run_id_from_merged_pr(
@@ -136,7 +236,7 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             )
         self.assertEqual(run_id, "112")
 
-    def test_returns_none_when_no_run_succeeded(self):
+    def test_returns_none_when_no_run_gate_job_succeeded(self):
         with patch(
             "bump_automation.gh_api",
             side_effect=[
@@ -147,6 +247,8 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
                         self._run(112, "cancelled"),
                     ]
                 },
+                _jobs_page([_gate_job("failure")]),
+                _jobs_page([_gate_job("cancelled")]),
             ],
         ):
             run_id = get_baseline_run_id_from_merged_pr(
@@ -154,14 +256,15 @@ class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
             )
         self.assertIsNone(run_id)
 
-    def test_returns_none_when_a_completed_run_has_no_conclusion_yet(self):
-        # Defensive: a "completed" run should always carry a conclusion, but
-        # don't treat a missing/null one as implicitly successful.
+    def test_returns_none_when_gate_job_is_missing(self):
+        # A run that predates the gate job (or is otherwise structurally
+        # different) must not be treated as a usable baseline.
         with patch(
             "bump_automation.gh_api",
             side_effect=[
                 [self._pr()],
-                {"workflow_runs": [self._run(111, None)]},
+                {"workflow_runs": [self._run(111, "success")]},
+                _jobs_page([{"name": "setup", "conclusion": "success"}]),
             ],
         ):
             run_id = get_baseline_run_id_from_merged_pr(

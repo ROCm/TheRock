@@ -146,20 +146,68 @@ def gh_api(
     return response.json()
 
 
+LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
+
+
+def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
+    """Return every job in a workflow run, following pagination."""
+    jobs: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}",
+        )
+        page_jobs = result.get("jobs", [])
+        jobs.extend(page_jobs)
+
+        if len(page_jobs) < 100 or len(jobs) >= result.get("total_count", 0):
+            return jobs
+
+        page += 1
+
+
+def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> bool:
+    """Return whether every "Libraries Baseline Ready" job in this run succeeded.
+
+    That job (defined in multi_arch_build_portable_linux.yml and
+    multi_arch_build_windows.yml) depends on exactly the stages rocm-libraries
+    reuses via `baseline_run_id`. Checking it instead of the whole run's
+    `conclusion` means an unrelated math-libs/compiler-runtime failure
+    elsewhere in the matrix does not block a baseline that is otherwise fine
+    to reuse. If no such job is found at all, treat the run as unsafe to use;
+    that should only happen for a run that predates this gate.
+    """
+    gate_jobs = [
+        job
+        for job in _list_run_jobs(repo, token, run_id)
+        if job["name"].endswith(LIBRARIES_BASELINE_GATE_JOB_NAME)
+    ]
+    if not gate_jobs:
+        print(f"[WARN] Run {run_id} has no '{LIBRARIES_BASELINE_GATE_JOB_NAME}' job")
+        return False
+    return all(job.get("conclusion") == "success" for job in gate_jobs)
+
+
 def get_baseline_run_id_from_merged_pr(
     repo: str, token: str, merge_commit_sha: str, workflow_name: str = "Multi-Arch CI"
 ) -> str | None:
     """Get the baseline run ID from the PR that was just merged.
 
     Downstream repos reuse this run's build-stage artifacts directly (via
-    `baseline_run_id`), so only a run that actually finished successfully is
-    safe to hand out. `status=completed` alone is not enough: a completed run
-    can still have `conclusion` of "failure" or "cancelled", and picking one
-    of those would silently point rocm-libraries at broken or missing
-    artifacts. If the newest matching run did not succeed, we deliberately do
-    not fall back to an older one on a different commit; the caller treats a
-    `None` return as "no baseline", which forces a full rebuild instead of a
-    plausible-looking but wrong artifact reuse.
+    `baseline_run_id`), so only a run where those specific stages actually
+    succeeded is safe to hand out. We check the "Libraries Baseline Ready"
+    gate job rather than the whole run's `conclusion`: an unrelated
+    math-libs/compiler-runtime failure elsewhere in the matrix makes the
+    overall run "failure" even when every stage rocm-libraries needs
+    succeeded, and rejecting on that basis would throw away perfectly good
+    baselines. `status=completed` still filters candidate runs to ones that
+    have finished; their overall `conclusion` no longer decides usability. If
+    the newest matching run's gate job did not succeed (or does not exist),
+    we deliberately do not fall back to an older run on a different commit;
+    the caller treats a `None` return as "no baseline", which forces a full
+    rebuild instead of a plausible-looking but wrong artifact reuse.
     """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
@@ -185,20 +233,21 @@ def get_baseline_run_id_from_merged_pr(
     ]
 
     for run in matching_runs:
-        if run.get("conclusion") == "success":
+        if _baseline_gate_jobs_succeeded(repo, token, run["id"]):
             print(
-                f"[INFO] Found successful {workflow_name} run {run['id']} "
-                f"for PR #{pr['number']}"
+                f"[INFO] Found {workflow_name} run {run['id']} with all reused "
+                f"stages succeeded for PR #{pr['number']}"
             )
             return str(run["id"])
+        print(
+            f"[WARN] Run {run['id']} (conclusion={run.get('conclusion')}) does not "
+            f"have all reused stages succeeded; skipping"
+        )
 
     if matching_runs:
-        found = ", ".join(
-            f"#{run['id']} ({run.get('conclusion')})" for run in matching_runs
-        )
         print(
-            f"[WARN] No successful {workflow_name} run found for PR #{pr['number']} "
-            f"(found: {found})"
+            f"[WARN] No {workflow_name} run with all reused stages succeeded "
+            f"found for PR #{pr['number']}"
         )
     else:
         print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
