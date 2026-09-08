@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -210,6 +211,33 @@ class BuildEnvironmentTest(unittest.TestCase):
 
         self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+    def test_ld_library_path_includes_all_llvm_triple_dirs(self):
+        # All triple subdirs must be on LD_LIBRARY_PATH in a deterministic order —
+        # not an arbitrary glob[0] that breaks when a new triple is added.
+        for var in ("PYTHONPATH", "LD_LIBRARY_PATH", "PATH"):
+            os.environ.pop(var, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            rocm = Path(tmp)
+            llvm_lib = rocm / "lib" / "llvm" / "lib"
+            triple_aarch64 = llvm_lib / "aarch64-unknown-linux-gnu"
+            triple_x86 = llvm_lib / "x86_64-unknown-linux-gnu"
+            sysdeps = rocm / "lib" / "rocm_sysdeps" / "lib"
+            for d in (triple_aarch64, triple_x86, sysdeps):
+                d.mkdir(parents=True)
+
+            env = pytest_runner.build_environment(rocm, "tensilelite")
+            ld = env["LD_LIBRARY_PATH"].split(os.pathsep)
+
+            # All triple dirs present (not just one), in sorted order regardless
+            # of filesystem glob order.
+            self.assertIn(str(triple_aarch64), ld)
+            self.assertIn(str(triple_x86), ld)
+            self.assertLess(ld.index(str(triple_aarch64)), ld.index(str(triple_x86)))
+            # rocm_sysdeps and the base lib dirs are included too.
+            self.assertIn(str(sysdeps), ld)
+            self.assertIn(str(rocm / "lib"), ld)
+            self.assertIn(str(llvm_lib), ld)
 
 
 class RunPytestTest(unittest.TestCase):

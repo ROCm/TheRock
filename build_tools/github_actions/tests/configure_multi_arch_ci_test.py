@@ -831,6 +831,8 @@ class TestSelectTargets(unittest.TestCase):
         result = cm.select_targets(inputs)
         # gfx950 is postsubmit-only, should be present for push
         self.assertIn("gfx950", result.linux_families)
+        # gfx125x is build-only, but should still be covered by default builds.
+        self.assertIn("gfx125x", result.linux_families)
 
     def test_schedule_returns_all_families(self):
         """Schedule trigger selects all families (presubmit+postsubmit+nightly)."""
@@ -895,6 +897,8 @@ class TestSelectTargets(unittest.TestCase):
         )
         result = cm.select_targets(inputs)
         self.assertGreater(len(result.linux_families), 0)
+        # gfx125x is build-only, but should still be covered by default builds.
+        self.assertIn("gfx125x", result.linux_families)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
 
@@ -1515,16 +1519,16 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
     def test_push_asan_excludes_families_without_host_asan_support(self):
-        """Push ASAN: gfx950 supports asan but not host-asan, so it must be excluded.
+        """Push ASAN: gfx110x only supports release, so it must be excluded.
 
         When build_variant=asan on push events, the effective variant becomes
         host-asan. Families must be filtered using this effective variant, not
-        the original asan variant. gfx950 supports asan but not host-asan, so
-        it should be excluded from the result.
+        the original asan variant. gfx110x only supports release (not host-asan),
+        so it should be excluded from the result.
         """
-        # gfx94x supports host-asan, gfx950 only supports asan (not host-asan)
+        # gfx94x supports host-asan, gfx110x only supports release (not host-asan)
         targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx950"],
+            linux_families=["gfx94x", "gfx110x"],
         )
         ci_inputs = cm.CIInputs(
             run_id="12345",
@@ -1544,10 +1548,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(
             result.linux.build_variant_cmake_preset, "linux-release-host-asan"
         )
-        # Only gfx94x should survive (it supports host-asan), gfx950 should be excluded
+        # Only gfx94x should survive (it supports host-asan), gfx110x should be excluded
         family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
         self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertNotIn("gfx950-dcgpu", family_names)
+        self.assertNotIn("gfx110X-all", family_names)
         self.assertEqual(len(result.linux.per_family_info), 1)
 
     def test_test_runner_kernel_overrides_runner_label(self):
