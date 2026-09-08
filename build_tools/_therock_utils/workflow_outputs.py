@@ -229,6 +229,21 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
 
+    def native_windows_packages(self, pkg_type: str = "msi") -> StorageLocation:
+        """Location for the native Windows package directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-windows/packages/{pkg_type}``
+        (e.g. ``12345678901-windows/packages/msi``).
+
+        Unlike the Linux deb/rpm repositories, the contents are loose installer
+        files (one ``.msi`` per package). See ``upload_msi_packages.py`` for the
+        upload side.
+
+        Args:
+            pkg_type: Package type (currently only 'msi').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
     def native_linux_packages_log_dir(self, pkg_type: str) -> StorageLocation:
         """Location for native Linux packaging logs directory.
 
