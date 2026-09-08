@@ -206,9 +206,49 @@ jobs:
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
+  # Driver-variant setup. Windows only; families opt in via "driver" in their
+  # build_variants list, so this produces an empty build config (and the build
+  # below is skipped) until a family declares it.
+  setup_driver:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "driver"
+      release_type: ${{ inputs.release_type }}
+      prerelease_version: ${{ inputs.prerelease_version }}
+      build_pytorch: false
+      build_jax: false
+      python_version: ${{ inputs.python_version }}
+      linux_amdgpu_families: "none"
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+    secrets: inherit
+
+  windows_driver_release:
+    name: Windows::${{ fromJSON(needs.setup_driver.outputs.windows_build_config || '{}').build_variant_label || 'skip' }}
+    needs: setup_driver
+    if: ${{ needs.setup_driver.outputs.windows_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_release_windows.yml
+    secrets: inherit
+    with:
+      build_config: ${{ needs.setup_driver.outputs.windows_build_config }}
+      rocm_package_version: ${{ needs.setup_driver.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup_driver.outputs.test_type }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ needs.setup_driver.outputs.ref }}
+      build_pytorch: false
+      python_version: ${{ inputs.python_version }}
+      quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
+    permissions:
+      contents: read
+      actions: write  # Added permission to trigger workflows
+      id-token: write  # Added permission for AWS S3 upload
+
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [setup, linux_release, windows_release]
+    needs: [setup, linux_release, windows_release, windows_driver_release]
     name: "Quartz - completed - release"
     runs-on: ubuntu-24.04
     timeout-minutes: 10

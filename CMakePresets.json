@@ -168,6 +168,17 @@
       "inherits": [
         "windows-base"
       ]
+    },
+    {
+      "name": "windows-release-driver",
+      "displayName": "Windows driver-package release build",
+      "description": "Windows release plus THEROCK_FLAG_WINDOWS_DRIVER_BUILD (Control Flow Guard, driver comgr DLL name).",
+      "cacheVariables": {
+        "THEROCK_FLAG_WINDOWS_DRIVER_BUILD": "ON"
+      },
+      "inherits": [
+        "windows-release"
+      ]
     }
   ]
 }
