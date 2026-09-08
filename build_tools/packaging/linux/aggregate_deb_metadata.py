@@ -19,7 +19,7 @@ Limitations:
 
 Usage:
     python aggregate_deb_metadata.py \\
-        --source "core,https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404,dists,pool/core" \\
+        --source "core,https://nightly.repo.amd.com/rocm/core/packages/deb/20260823-12345678,dists,pool/core" \\
         --source "rvs,https://d22tya8uodfbu6.cloudfront.net/nightly/rvs/deb,flat,pool/rvs" \\
         [--output-dir /tmp/deb-metadata] \\
         [--output-bucket therock-deb-rpm-test] \\
@@ -138,8 +138,11 @@ def fetch_packages(
             compressed = fetch_bytes(url)
             return decompress(compressed)
         except urllib.error.HTTPError as e:
-            if e.code == 404:
-                print(f"  Not found: {url} — trying next format")
+            # Treat 404 (not found) and 403 (forbidden/not available) as
+            # "this format is not served — try the next one". Some servers
+            # return 403 for non-existent resources instead of 404.
+            if e.code in (403, 404):
+                print(f"  Not found ({e.code}): {url} — trying next format")
                 continue
             raise
 

@@ -16,7 +16,12 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from build_tarballs import compress_tarball, is_kpack_split, main
+from build_tarballs import (
+    compress_tarball,
+    determine_compress_workers,
+    is_kpack_split,
+    main,
+)
 
 
 class MainMocks(NamedTuple):
@@ -96,6 +101,52 @@ class TestCompressTarball(unittest.TestCase):
                 names = tf.getnames()
                 self.assertIn("./bin/hello", names)
                 self.assertIn("./lib/libfoo.so", names)
+                hello_file = tf.extractfile("./bin/hello")
+                self.assertIsNotNone(hello_file)
+                self.assertEqual(hello_file.read(), b"hello world")
+
+    def test_creates_tarball_with_system_gzip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            src = tmpdir / "src"
+            src.mkdir()
+            (src / "hello").write_text("hello world")
+
+            tarball_path = tmpdir / "test.tar.gz"
+            compress_tarball(
+                source_dir=src,
+                tarball_path=tarball_path,
+                compression_backend="system-gzip",
+            )
+
+            with tarfile.open(tarball_path, "r:gz") as tf:
+                self.assertIn("./hello", tf.getnames())
+
+
+class TestDetermineCompressWorkers(unittest.TestCase):
+    @mock.patch("build_tarballs.available_cpu_count", return_value=32)
+    def test_zlib_ng_reserves_cpus_per_archive(self, _: mock.Mock) -> None:
+        self.assertEqual(
+            determine_compress_workers(
+                task_count=10,
+                requested_workers=None,
+                compression_backend="zlib-ng",
+                compression_threads=8,
+            ),
+            3,
+        )
+
+    @mock.patch("build_tarballs.available_cpu_count", return_value=32)
+    def test_requested_workers_are_capped_by_task_count(self, _: mock.Mock) -> None:
+        self.assertEqual(
+            determine_compress_workers(
+                task_count=4,
+                requested_workers=8,
+                compression_backend="zlib-ng",
+                compression_threads=8,
+            ),
+            4,
+        )
 
 
 class TestMain(unittest.TestCase):
@@ -142,6 +193,11 @@ class TestMain(unittest.TestCase):
             compressed_names,
             ["therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz"],
         )
+        self.assertEqual(
+            compress_mock.call_args.kwargs["compression_backend"], "zlib-ng"
+        )
+        self.assertEqual(compress_mock.call_args.kwargs["compression_level"], 9)
+        self.assertEqual(compress_mock.call_args.kwargs["compression_threads"], 8)
 
     def test_kpack_builds_common_tarball_with_one_family(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -163,10 +219,10 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-multiarch-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
             ],
         )
 
@@ -198,10 +254,10 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
             ],
         )
 
@@ -234,14 +290,14 @@ class TestMain(unittest.TestCase):
             call.kwargs["tarball_path"].name for call in compress_mock.call_args_list
         ]
         self.assertEqual(
-            sorted(compressed_names),
+            compressed_names,
             [
-                "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
+                "therock-dist-linux-multiarch-7.13.0.tar.gz",
+                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx110X-all-tests-7.13.0.tar.gz",
                 "therock-dist-linux-gfx94X-dcgpu-7.13.0.tar.gz",
-                "therock-dist-linux-gfx94X-dcgpu-tests-7.13.0.tar.gz",
-                "therock-dist-linux-multiarch-7.13.0.tar.gz",
-                "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
+                "therock-dist-linux-gfx110X-all-7.13.0.tar.gz",
             ],
         )
 

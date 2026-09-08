@@ -8,31 +8,43 @@
 create RPM and DEB packages and upload to artifactory server
 
 ```
-# With explicit target specification:
+# Standard release build (auto-detection of targets from artifact directory):
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
-        --target gfx94X-dcgpu \
         --dest-dir ./OUTPUT_PKGDIR \
-        --rocm-version 7.1.0 \
+        --rocm-version 7.15.0 \
         --pkg-type deb (or rpm) \
-        --version-suffix build_type (daily/master/nightly/release)
+        --version-suffix 28484694006
 
-# With auto-detection of targets from artifact directory:
+# ASAN build — package name gets -asan suffix, install prefix gets -asan-MAJOR.MINOR:
+#   Package:        amdrocm-core-asan7.15
+#   Install prefix: /opt/rocm/core-asan-7.15
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
         --dest-dir ./OUTPUT_PKGDIR \
-        --rocm-version 7.1.0 \
+        --rocm-version 7.15.0 \
         --pkg-type deb (or rpm) \
-        --version-suffix build_type (daily/master/nightly/release)
+        --version-suffix 28484694006 \
+        --build-variant asan
 ```
+
+--version-suffix: CI run ID appended to the DEB/RPM version field
+  (e.g. '7.15.0-28484694006' for DEB, release='28484694006' for RPM).
+  Does not affect the package name or install prefix.
+
+--build-variant: Build type that modifies both the package name and
+  install prefix. Currently supports 'asan'.
 """
 
 import argparse
 import json
 import os
+import shutil
 import sys
-import traceback
+import tempfile
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -57,6 +69,14 @@ logger = TheRockLogger(__name__)
 
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
+
+
+class BuildTask(NamedTuple):
+    """Task for parallel package building via ProcessPoolExecutor."""
+
+    pkg_name: str
+    config: PackageConfig
+    logs_dir: Path
 
 
 def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
@@ -210,7 +230,6 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
-    cleanup_build_directory(config)
     return built_packages
 
 
@@ -244,7 +263,6 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     if pkg:
         built_packages.extend(pkg)
 
-    cleanup_build_directory(config)
     return built_packages
 
 
@@ -295,7 +313,6 @@ def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
     except Exception as e:
         logger.error(f"Failed to build non-versioned package for {pkg_name}: {e}")
 
-    cleanup_build_directory(config)
     return built_packages
 
 
@@ -430,9 +447,6 @@ def build_nonversioned_package(pkg_name, config: PackageConfig) -> list:
 
 def cleanup_build_directory(config: PackageConfig):
     """Clean up build directory after all package variants are built.
-
-    This should only be called after all variants for a package are complete.
-    Defers cleanup to allow parallel builds of variants in the future.
 
     Parameters:
     config: Configuration object containing dest_dir and pkg_type
@@ -577,10 +591,17 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
-    # Append version to default install prefix
+    # Append version (and build variant for ASan-family builds) to default
+    # install prefix. Debug variants (asan-debug, host-asan-debug) collapse to
+    # the same "-asan" prefix as their non-debug counterpart.
+    # Release:  /opt/rocm/core-7.15
+    # ASAN:     /opt/rocm/core-asan-7.15
     prefix = args.install_prefix
     if prefix == DEFAULT_INSTALL_PREFIX:
-        prefix = f"{prefix}-{modified_rocm_version}"
+        if "asan" in args.build_variant:
+            prefix = f"{prefix}-asan-{modified_rocm_version}"
+        else:
+            prefix = f"{prefix}-{modified_rocm_version}"
 
     # Validate package type
     pkg_type = (args.pkg_type or "").lower()
@@ -600,7 +621,37 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         gfx_arch=default_gfx_arch,
         enable_kpack=args.enable_kpack,
         gfxarch_list=tuple(gfxarch_list),
+        build_variant=args.build_variant,
     )
+
+
+def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
+    """Build a single package in isolated process. Used by ProcessPoolExecutor."""
+    pkg_log_file = task.logs_dir / f"{task.config.pkg_type}-{task.pkg_name}.log"
+    with tempfile.TemporaryDirectory(
+        prefix=f"pkg_{task.pkg_name}_", ignore_cleanup_errors=True
+    ) as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
+        try:
+            pkg_config = replace(task.config, dest_dir=temp_dir)
+            with capture_console(pkg_log_file):
+                output_list = build_package_variants(task.pkg_name, pkg_config)
+            # Move packages from temp_dir to final dest_dir.
+            # output_list contains plain filenames (e.g., "amdrocm-core-7.1.1.deb"), not paths.
+            # This is guaranteed by move_packages_to_destination() which appends file_path.name.
+            result: list[str] = []
+            task.config.dest_dir.mkdir(parents=True, exist_ok=True)
+            for f in output_list:
+                src = temp_dir / f
+                if src.exists():
+                    dst = task.config.dest_dir / f
+                    shutil.move(str(src), str(dst))
+                    result.append(f)
+            return (task.pkg_name, result, None)
+        except SystemExit as e:
+            return (task.pkg_name, [], f"SystemExit: exited with code {e.code}")
+        except Exception as e:
+            return (task.pkg_name, [], f"{type(e).__name__}: {e}")
 
 
 def run(args: argparse.Namespace):
@@ -623,68 +674,53 @@ def run(args: argparse.Namespace):
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    current_pkg_idx = 0
-    try:
-        built_pkglist = []
-        failed_pkglist = []
+    logs_dir = Path(config.dest_dir).parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
-        for current_pkg_idx, pkg_name in enumerate(pkg_list):
-            logger.info(f"Creating {config.pkg_type} package: {pkg_name}")
+    built_pkglist = []
+    failed_pkglist = []
 
-            # Build all package variants for this package
-            # Capture per-package logs
-            logs_dir = Path(config.dest_dir) / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            pkg_log_file = logs_dir / f"{config.pkg_type}-{pkg_name}.log"
-            with capture_console(pkg_log_file):
-                output_list = build_package_variants(pkg_name, config)
+    with ProcessPoolExecutor(max_workers=args.parallel) as executor:
+        futures = {
+            executor.submit(build_pkg, BuildTask(pkg, config, logs_dir)): pkg
+            for pkg in pkg_list
+        }
+        for future in as_completed(futures):
+            pkg_name = futures[future]
+            try:
+                _, output_list, error = future.result()
+            except Exception as e:
+                logger.error(f"Package {pkg_name} failed: {e}")
+                failed_pkglist.append(pkg_name)
+                continue
 
-            if output_list:
+            if error:
+                logger.error(f"Package {pkg_name} failed: {error}")
+                failed_pkglist.append(pkg_name)
+            elif output_list:
                 built_pkglist.extend(output_list)
                 logger.info(
                     f"Successfully built {len(output_list)} variant(s) for {pkg_name}"
                 )
             else:
-                # Package failed to build
                 failed_pkglist.append(pkg_name)
                 logger.error(f"Failed to build any variants for {pkg_name}")
 
-        # Clean the build directories
-        cleanup_packaging_environment(config)
+    # Clean the build directories
+    cleanup_packaging_environment(config)
 
-        if built_pkglist:
-            logger.info(f"Built packages: {built_pkglist}")
+    if built_pkglist:
+        logger.info(f"Built packages: {built_pkglist}")
 
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
+    pkglist_status = PackageList(
+        total=pkg_list,
+        built=built_pkglist,
+        skipped=skipped_list,
+        failed=failed_pkglist,
+    )
 
-        # Print build summary
-        print_build_summary(config, pkglist_status)
-    except SystemExit as e:
-        # Build aborted somewhere inside create_* functions
-        tb = traceback.extract_tb(sys.exc_info()[2])
-        if tb:
-            filename, line_no, func, text = tb[-1]
-            logger.error(f"Build aborted due to an error at {filename}:{line_no}: {e}")
-        else:
-            logger.error(f"Build aborted due to an error: {e}")
-        # Record failed package and all pending packages
-        failed_pkglist.append(pkg_list[current_pkg_idx])
-        pending_pkgs = pkg_list[current_pkg_idx + 1 :]
-        failed_pkglist.extend(pending_pkgs)
-        pkglist_status = PackageList(
-            total=pkg_list,
-            built=built_pkglist,
-            skipped=skipped_list,
-            failed=failed_pkglist,
-        )
-        print_build_summary(config, pkglist_status)
-        # Stop the program
-        raise
+    # Print build summary
+    print_build_summary(config, pkglist_status)
 
 
 def main(argv: list[str]):
@@ -735,13 +771,30 @@ def main(argv: list[str]):
         "--version-suffix",
         type=str,
         nargs="?",
-        help="Version suffix to append to package names",
+        help=(
+            "Release identifier appended to the package version field in DEB/RPM "
+            "metadata (e.g. a CI run ID like '28484694006'). "
+            "For DEB this becomes the debian revision (e.g. '7.15.0-28484694006'); "
+            "for RPM this sets the release field. "
+            "Does not affect the package name or install prefix."
+        ),
     )
 
     p.add_argument(
         "--install-prefix",
         default=f"{DEFAULT_INSTALL_PREFIX}",
         help="Base directory where package will be installed",
+    )
+
+    p.add_argument(
+        "--build-variant",
+        default="",
+        help=(
+            "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', "
+            "'host-asan-debug'). When it contains 'asan', the install prefix "
+            "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
+            "(e.g. /opt/rocm/core-asan-7.15)."
+        ),
     )
 
     p.add_argument(
@@ -766,6 +819,14 @@ def main(argv: list[str]):
         "--pkg-names",
         nargs="+",
         help="Specify the packages to be created",
+    )
+
+    p.add_argument(
+        "-j",
+        "--parallel",
+        type=int,
+        default=min(8, os.cpu_count() or 1),
+        help="Number of parallel package builds (default: min(8, cpu_count))",
     )
 
     args = p.parse_args(argv)

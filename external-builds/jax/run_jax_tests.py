@@ -4,21 +4,24 @@
 
 """Runs the JAX test suite against installed JAX ROCm wheels.
 
-The suite script in the ROCm/jax checkout (ci/run_pytest_rocm.sh) stays the source
-of truth for how the tests run. This adds only what is ours:
+The suite scripts in the ROCm/jax checkout stay the source of truth for how the
+tests run: ci/run_pytest_rocm.sh for a whole run, and ci/run_pytest_rocm_multi.sh
+for the multi-accelerator subset on its own. This adds only what is ours:
 
   * the ROCm runtime workarounds this repository needs;
   * the known-bad tests from skip_tests/, as a pytest -k expression;
+  * an optional --test-list, described under "Selecting a subset" below;
   * two layers of retry, described under "Retries" below;
   * holding the run to the CPUs the pod was given, described under "Resources".
 
-Nothing the suite script decides is repeated here. Its environment is read back
-out of the script, so a version that changes its allocator or its XLA flags,
-including behind a conditional, needs no change in this file. Reading it is
-required rather than best-effort: the retry pass decides the result, so running
-it under a different environment than the suite would make that verdict
-meaningless. A script whose section markers have been renamed fails the run with
-an error naming them.
+Nothing the suite decides is repeated here. Its environment is read back out of
+ci/utilities/rocm_test_env.sh, which both scripts source, or out of the marked
+section of the suite script in a checkout from before that file existed, so a
+version that changes its allocator or its XLA flags, including behind a
+conditional, needs no change in this file. Reading it is required rather than
+best-effort: the retry pass decides the result, so running it under a different
+environment than the suite would make that verdict meaningless. A checkout that
+holds neither fails the run with an error naming both.
 
 Retries
 -------
@@ -33,6 +36,16 @@ clear. It only speaks for the suite when the suite's own pytest sessions ran to
 the end, which their reported exit codes are what say.
 
 --no-retries turns off both, running the suite exactly as the script does.
+
+Selecting a subset
+------------------
+
+--test-list names a file of test paths to run instead of the whole suite, which
+is how CI gets a PR-sized run out of the same suite the nightly runs. It is
+applied by ignoring everything under tests/ the list does not name, rather than
+by passing the list to pytest, so that the suite script still decides how the
+tests run. -k would leave the modules left out imported anyway, and importing
+them is most of what a short run has time for.
 
 Resources
 ---------
@@ -61,10 +74,15 @@ Example usage:
 
     # Run only the tests the skip list would have skipped.
     python run_jax_tests.py --jax-dir jax --jax-version 0.10.2 --debug
+
+    # The subset PR CI runs.
+    python run_jax_tests.py --jax-dir jax \\
+        --test-list external-builds/jax/test_selection/small_tests.txt
 """
 
 import argparse
 import dataclasses
+import fnmatch
 import json
 import os
 import platform
@@ -90,9 +108,21 @@ JAX_REF_PREFIX = "rocm-jaxlib-v"
 # from.
 RELATIVE_SUITE_SCRIPT = Path("ci") / "run_pytest_rocm.sh"
 
+# The multi-accelerator tests on their own, which is the only subset that needs
+# more than one GPU. Absent from a jax ref older than the split.
+RELATIVE_MULTI_SUITE_SCRIPT = Path("ci") / "run_pytest_rocm_multi.sh"
+
 # Sourced by the suite script for the JAXCI_* defaults the section below reads,
 # and safe to source here too: it only assigns variables.
 RELATIVE_SUITE_ENV_FILE = Path("ci") / "envs" / "default.env"
+
+# The tree the suite script collects, so a selection names paths inside it and
+# nothing outside it is ever ignored.
+RELATIVE_TESTS_DIR = Path("tests")
+
+# What pytest collects by default, which JAX does not override. Everything else
+# under tests/ is data the suite reads, so leave it alone.
+TEST_FILE_PATTERNS = ("test_*.py", "*_test.py")
 
 # One report per pytest invocation the suite script makes, matched by pattern so
 # that a version splitting the suite differently needs no change here.
@@ -104,18 +134,34 @@ REPORT_GLOB = "logs/pytest_results*.json"
 PYTEST_EXIT_ALL_PASSED = 0
 PYTEST_EXIT_TESTS_FAILED = 1
 
-# The section of the suite script that only computes the environment: exports,
-# echoes and device queries, with the installs above it and the test run below it.
-# Evaluating it is how the per-version environment reaches the retry pass, which
-# has to match the run it is checking. Sourcing the script itself would run the
-# tests, and copying its values here would be a second source of truth.
+# What both suite scripts source for their environment: exports, echoes and
+# device queries, and nothing that installs or tests. Evaluating it is how the
+# per-version environment reaches the retry pass, which has to match the run it
+# is checking. Sourcing a suite script itself would run the tests, and copying
+# its values here would be a second source of truth.
+RELATIVE_SUITE_ENV_SCRIPT = Path("ci") / "utilities" / "rocm_test_env.sh"
+
+# Where that environment lived before it moved into the file above, as a section
+# of the one suite script there was, with the installs above it and the test run
+# below it.
 ENV_SECTION_START = "# Set up the generic test environment variables"
 ENV_SECTION_END = "# Run tests"
 
-# The section exports its own scratch variables, lowercase by convention, next to
-# the configuration worth keeping. The xdist worker count is for the parallel run
-# and would contradict the serial retry.
+# The environment carries the suite's own scratch variables, lowercase by
+# convention, next to the configuration worth keeping. The xdist worker count is
+# for the parallel run and would contradict the serial retry.
 SUITE_ENV_EXCLUDES = ["JAX_ENABLE_ROCM_XDIST"]
+
+# Which suite script a run invokes, so that the subset needing one GPU and the
+# subset needing several can go to different runners. "all" is the whole suite,
+# which leaves out what the host has no GPUs for, and "multi" is the
+# multi-accelerator tests alone, which a 1-GPU host would skip entirely.
+TEST_SUBSET_ALL = "all"
+TEST_SUBSET_MULTI = "multi"
+SUITE_SCRIPTS = {
+    TEST_SUBSET_ALL: RELATIVE_SUITE_SCRIPT,
+    TEST_SUBSET_MULTI: RELATIVE_MULTI_SUITE_SCRIPT,
+}
 
 # ROCm/HIP runtime tuning that avoids a pytest slowdown and hang. Ours rather than
 # the suite's, so it belongs here.
@@ -144,7 +190,7 @@ CPU_REQUEST_VAR = "KUBE_CPU_REQUEST"
 MEMORY_REQUEST_VAR = "KUBE_MEMORY_REQUEST"
 
 # The most pytest workers the suite starts in parallel, see the num_processes
-# cap in ci/run_pytest_rocm.sh. Each one loads its own copy of every library.
+# cap in the suite's environment. Each one loads its own copy of every library.
 SUITE_MAX_WORKERS = 16
 
 # Set by the plugin build. Installed wheels carry their own bitcode and linker, so
@@ -162,14 +208,82 @@ def jax_version_from_ref(jax_ref: str) -> str:
     return jax_ref.removeprefix(JAX_REF_PREFIX) if jax_ref else ""
 
 
+class TestListError(Exception):
+    """The subset a --test-list names cannot be run."""
+
+
+def read_test_list(path: Path) -> list[Path]:
+    """The test paths one selection file names, relative to the JAX checkout."""
+    lines = path.read_text().splitlines()
+    stripped = (line.partition("#")[0].strip() for line in lines)
+    return [Path(line) for line in stripped if line]
+
+
+def _collects_tests(path: Path) -> bool:
+    return path.is_dir() or any(
+        fnmatch.fnmatch(path.name, pattern) for pattern in TEST_FILE_PATTERNS
+    )
+
+
+def ignore_arguments(jax_dir: Path, selected: list[Path]) -> list[str]:
+    """--ignore for every test path under tests/ the selection leaves out.
+
+    Ignoring the complement is what lets the suite script keep its own pytest
+    invocation. Walking the checkout rather than the list also settles what the
+    list cannot know: a version that has since renamed or dropped a test simply
+    has nothing there to ignore.
+
+    Raises:
+        TestListError: if the selection names a path outside tests/, or if the
+            checkout has none of the tests it names. Silently running the whole
+            suite, or none of it, would both pass for a subset.
+    """
+    tests_dir = (jax_dir / RELATIVE_TESTS_DIR).resolve()
+    wanted = set()
+    for path in selected:
+        # Resolved, because "tests/../benchmarks/x_test.py" is under tests/ by
+        # spelling only, and a symlink leading out of it is not under it at all.
+        outside = not (jax_dir / path).resolve().is_relative_to(tests_dir)
+        if path.is_absolute() or outside:
+            raise TestListError(f"{path} is not under {RELATIVE_TESTS_DIR}/")
+        wanted.add(jax_dir / path)
+
+    missing = sorted(path for path in wanted if not path.exists())
+    if missing:
+        log(
+            f"::warning::{len(missing)} selected test(s) are not in this JAX"
+            f" checkout and will not run: {', '.join(p.name for p in missing)}"
+        )
+    if len(missing) == len(wanted):
+        raise TestListError(
+            f"none of the {len(wanted)} selected tests exist under"
+            f" {jax_dir / RELATIVE_TESTS_DIR}"
+        )
+
+    ignored: list[Path] = []
+    directories = [jax_dir / RELATIVE_TESTS_DIR]
+    while directories:
+        for child in sorted(directories.pop().iterdir()):
+            if child in wanted or not _collects_tests(child):
+                continue
+            if child.is_dir() and any(path.is_relative_to(child) for path in wanted):
+                directories.append(child)
+            else:
+                ignored.append(child)
+
+    log(f"=== Running {len(wanted) - len(missing)} of the suite's tests")
+    return [f"--ignore={path.relative_to(jax_dir).as_posix()}" for path in ignored]
+
+
 def pytest_addopts(
     jax_version: str,
     amdgpu_family: str,
     in_process_reruns: int,
     debug: bool = False,
+    ignore: list[str] | None = None,
 ) -> str:
     """The PYTEST_ADDOPTS value for one configuration."""
-    opts = []
+    opts = list(ignore or [])
     if in_process_reruns:
         # Crashed workers are retried regardless of --only-rerun. Everything else
         # is left to the fresh-process pass.
@@ -209,28 +323,51 @@ def _read_env_dump(path: Path) -> dict[str, str]:
     return {name: value for name, separator, value in pairs if separator}
 
 
-def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
-    """What the suite script's environment section exports.
+def suite_env_program(jax_dir: Path) -> tuple[str, Path]:
+    """The shell that computes the suite's environment, and the file it came from.
 
-    Evaluated in a shell that dumps its environment on either side of the section,
-    so the result is what the section itself changed rather than a guess at which
-    names look interesting.
+    A checkout from before the environment moved out of the suite script keeps it
+    in a marked section there, which is what gets evaluated instead. The caller
+    reports failures against the file this picked, since either can be the one at
+    fault.
 
     Raises:
-        SuiteEnvironmentError: if the section cannot be found or evaluated. This
-            fails the run by design, because the retry pass decides the result and
-            a wrong environment there would decide it wrongly.
+        SuiteEnvironmentError: if the checkout holds neither.
     """
-    section = env_section((jax_dir / RELATIVE_SUITE_SCRIPT).read_text())
+    if (jax_dir / RELATIVE_SUITE_ENV_SCRIPT).exists():
+        program = f"source {shlex.quote(os.fspath(RELATIVE_SUITE_ENV_SCRIPT))}"
+        return program, RELATIVE_SUITE_ENV_SCRIPT
+
+    older = jax_dir / RELATIVE_SUITE_SCRIPT
+    section = env_section(older.read_text()) if older.exists() else ""
     if not section:
         raise SuiteEnvironmentError(
-            f"{RELATIVE_SUITE_SCRIPT} has no section between '{ENV_SECTION_START}' and"
-            f" '{ENV_SECTION_END}'. The script most likely renamed them, so update"
-            " ENV_SECTION_START and ENV_SECTION_END to match it."
+            f"{jax_dir / RELATIVE_SUITE_ENV_SCRIPT} does not exist and"
+            f" {RELATIVE_SUITE_SCRIPT} has no section between"
+            f" '{ENV_SECTION_START}' and '{ENV_SECTION_END}', so there is nothing"
+            " to read the suite's environment from. Update"
+            " RELATIVE_SUITE_ENV_SCRIPT, or ENV_SECTION_START and"
+            " ENV_SECTION_END, to match what the checkout has."
         )
+    return section, RELATIVE_SUITE_SCRIPT
+
+
+def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
+    """What the suite exports before it runs anything.
+
+    Evaluated in a shell that dumps its environment on either side, so the result
+    is what the suite itself changed rather than a guess at which names look
+    interesting.
+
+    Raises:
+        SuiteEnvironmentError: if it cannot be found or evaluated. This fails the
+            run by design, because the retry pass decides the result and a wrong
+            environment there would decide it wrongly.
+    """
+    program, source = suite_env_program(jax_dir)
     if not (jax_dir / RELATIVE_SUITE_ENV_FILE).exists():
         raise SuiteEnvironmentError(
-            f"{RELATIVE_SUITE_ENV_FILE} is missing, and the section reads its defaults."
+            f"{RELATIVE_SUITE_ENV_FILE} is missing, and {source} reads its defaults."
             f" Is {jax_dir} a complete ROCm/jax checkout?"
         )
 
@@ -238,16 +375,16 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         before = Path(tmp) / "before"
         after = Path(tmp) / "after"
         dump = "env -0 > {}".format
-        # The section's own status, kept across the dump that follows it, which
+        # The program's own status, kept across the dump that follows it, which
         # would otherwise be the status of the shell and always zero.
         script = "\n".join(
             [
                 f"source {shlex.quote(os.fspath(RELATIVE_SUITE_ENV_FILE))}",
                 dump(shlex.quote(os.fspath(before))),
-                section,
-                "section_status=$?",
+                program,
+                "program_status=$?",
                 dump(shlex.quote(os.fspath(after))),
-                "exit ${section_status}",
+                "exit ${program_status}",
             ]
         )
         proc = subprocess.run(
@@ -260,16 +397,16 @@ def suite_environment(jax_dir: Path, env: dict[str, str]) -> dict[str, str]:
         )
         if not (before.exists() and after.exists()):
             raise SuiteEnvironmentError(
-                f"Evaluating the section of {RELATIVE_SUITE_SCRIPT} produced no environment:"
+                f"Evaluating the environment {source} sets produced none:"
                 f" {proc.stderr.strip()}"
             )
         if proc.returncode != 0:
             # It exports and queries devices, so a failure means some of what it
             # exported was computed from a command that did not work.
             raise SuiteEnvironmentError(
-                f"The section of {RELATIVE_SUITE_SCRIPT} exited"
-                f" {proc.returncode}, so the environment it exported is only"
-                f" partly what the suite will run under: {proc.stderr.strip()}"
+                f"The environment {source} sets exited {proc.returncode}, so what"
+                f" it exported is only partly what the suite will run under:"
+                f" {proc.stderr.strip()}"
             )
         baseline, exported = _read_env_dump(before), _read_env_dump(after)
 
@@ -381,6 +518,7 @@ def test_environment(
     in_process_reruns: int,
     debug: bool = False,
     cpus: int | None = None,
+    ignore: list[str] | None = None,
 ) -> dict[str, str]:
     """The environment variables the suite and the retry pass need."""
     env = {**suite_env, **THEROCK_ENV}
@@ -388,7 +526,9 @@ def test_environment(
         env["OPENBLAS_NUM_THREADS"] = str(openblas_threads(cpus))
     # Left alone when there is nothing to add, so that --no-retries does not wipe
     # options the caller set.
-    addopts = pytest_addopts(jax_version, amdgpu_family, in_process_reruns, debug)
+    addopts = pytest_addopts(
+        jax_version, amdgpu_family, in_process_reruns, debug, ignore
+    )
     if addopts:
         env["PYTEST_ADDOPTS"] = addopts
     return env
@@ -500,6 +640,20 @@ def cmd_arguments(argv: list[str]) -> argparse.Namespace:
         help="GPU family under test (e.g. gfx94X-dcgpu), selects skip lists",
     )
     p.add_argument(
+        "--test-subset",
+        choices=sorted(SUITE_SCRIPTS),
+        default=os.getenv("JAX_TEST_SUBSET", TEST_SUBSET_ALL),
+        help="Accelerator subset to run; 'multi' needs more than one GPU",
+    )
+    p.add_argument(
+        "--test-list",
+        type=Path,
+        default=(
+            Path(os.environ["JAX_TEST_LIST"]) if os.getenv("JAX_TEST_LIST") else None
+        ),
+        help="File of tests/ paths, one per line, to run instead of the whole suite",
+    )
+    p.add_argument(
         "--retries",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -556,10 +710,21 @@ def main(argv: list[str]) -> int:
     jax_version = args.jax_version or jax_version_from_ref(args.jax_ref)
 
     jax_dir = args.jax_dir.resolve()
-    suite = jax_dir / RELATIVE_SUITE_SCRIPT
-    if not suite.exists() and not args.dry_run:
-        log(f"::error::{suite} not found. Is --jax-dir a ROCm/jax checkout?")
-        return 1
+    suite_script = SUITE_SCRIPTS[args.test_subset]
+    suite = jax_dir / suite_script
+    if not suite.exists():
+        if args.test_subset != TEST_SUBSET_ALL:
+            # Whether it would have run is worth knowing before a runner is
+            # taken for it, so this holds for a dry run too.
+            log(
+                f"::error::{suite} not found, so this jax ref cannot run the"
+                f" '{args.test_subset}' subset on its own. Use a ref that has"
+                " that script, or --test-subset all."
+            )
+            return 1
+        if not args.dry_run:
+            log(f"::error::{suite} not found. Is --jax-dir a ROCm/jax checkout?")
+            return 1
 
     env = dict(os.environ)
     for name in UNSET_VARS:
@@ -569,7 +734,12 @@ def main(argv: list[str]) -> int:
 
     try:
         suite_env = suite_environment(jax_dir, env) if suite.exists() else {}
-    except SuiteEnvironmentError as e:
+        ignore = (
+            ignore_arguments(jax_dir, read_test_list(args.test_list))
+            if args.test_list
+            else []
+        )
+    except (SuiteEnvironmentError, TestListError, OSError) as e:
         log(f"::error::{e}")
         return 1
     overrides = test_environment(
@@ -579,11 +749,13 @@ def main(argv: list[str]) -> int:
         args.in_process_reruns,
         args.debug,
         cpus,
+        ignore,
     )
     env.update(overrides)
 
     log(f"=== Testing JAX {jax_version or '(unknown version)'} in {jax_dir}")
     log(f"  host={platform.node()}")
+    log(f"  subset={args.test_subset}")
     for name in GPU_VISIBILITY_ENV_VARS:
         log(f"  {name}={env.get(name, 'unset')}")
     for name, value in sorted(overrides.items()):
@@ -593,7 +765,7 @@ def main(argv: list[str]) -> int:
     if not args.dry_run:
         (jax_dir / "dist").mkdir(parents=True, exist_ok=True)
 
-    suite_command = ["bash", os.fspath(RELATIVE_SUITE_SCRIPT)]
+    suite_command = ["bash", os.fspath(suite_script)]
     if args.dry_run:
         log(f"++ Would exec [{jax_dir}]$ {shlex.join(preflight_command())}")
         log(f"++ Would exec [{jax_dir}]$ {shlex.join(suite_command)}")

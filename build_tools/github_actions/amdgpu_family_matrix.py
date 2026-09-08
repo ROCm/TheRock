@@ -103,14 +103,14 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 # Build runner configuration for Linux builds
 # Uses weight-based distribution (0.0-1.0 probability)
-# Sanitizer builds (asan/tsan) use ramdisk variants (Azure only, no AWS yet)
+# Sanitizer builds (asan/tsan) use large runners with ramdisk support
 BUILD_RUNNER_LABELS = {
     "linux": {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
         "sanitizer": [
-            {"label": "azure-linux-scale-rocm-heavy-ramdisk", "weight": 1.0},
+            {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
     },
     "windows": {
@@ -165,6 +165,18 @@ all_build_variants = {
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
         },
+        # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
+        # Used for nightly and release ASAN builds where stack traces need source line info.
+        "asan-debug": {
+            "build_variant_label": "asan-debug",
+            "build_variant_suffix": "asan",
+            "build_variant_cmake_preset": "linux-release-asan-debug",
+        },
+        "host-asan-debug": {
+            "build_variant_label": "host-asan-debug",
+            "build_variant_suffix": "host-asan",
+            "build_variant_cmake_preset": "linux-release-host-asan-debug",
+        },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
@@ -199,6 +211,7 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
+- skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -215,7 +228,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # ccs-csp
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+            "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
@@ -226,7 +239,14 @@ amdgpu_family_info_matrix_presubmit = {
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
             "fetch-gfx-targets": ["gfx942"],
-            "build_variants": ["release", "asan", "host-asan", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
         }
     },
     "gfx110x": {
@@ -298,8 +318,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            "skip_tests_on_submodule_bump": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -311,10 +330,11 @@ amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "tsan"],
+            "build_variants": ["release", "asan", "asan-debug", "tsan"],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }

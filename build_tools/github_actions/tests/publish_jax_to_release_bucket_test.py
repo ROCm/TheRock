@@ -164,18 +164,17 @@ class TestPublishJaxToReleaseBucket(unittest.TestCase):
         self.assertNotIn("index.html", dest_by_name)
         self.assertEqual(
             dest_by_name["jax-0.4.35-py3-none-any.whl"],
-            "v5/rocm/jax/whl/jax/jax-0.4.35-py3-none-any.whl",
+            "v5/rocm/jax/whl-next/jax/jax-0.4.35-py3-none-any.whl",
         )
         self.assertEqual(
             dest_by_name["jax_rocm7_plugin-0.4.35-cp312-cp312-linux_x86_64.whl"],
-            "v5/rocm/jax/whl/jax-rocm7-plugin/"
+            "v5/rocm/jax/whl-next/jax-rocm7-plugin/"
             "jax_rocm7_plugin-0.4.35-cp312-cp312-linux_x86_64.whl",
         )
         for _source, dest in uploads:
-            self.assertEqual(dest.bucket, "therock-dev-python")
-        # The index-URL output is unchanged under structured publishing.
+            self.assertEqual(dest.bucket, "therock-repo-amd-dev-jax")
         mock_set_output.assert_called_once_with(
-            {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
+            {"package_index_url": "https://dev.repo.amd.com/rocm/whl-next/"}
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")

@@ -13,7 +13,58 @@
 
 cmake_minimum_required(VERSION 3.25)
 
-project(therock-aux-overlay)
+project(therock-aux-overlay LANGUAGES C CXX)
+
+# This is the canonical example of consuming ROCm build flags from either a
+# super-repository provider or project-specific standalone cache variables.
+# ROCm projects include their super-repository's verbatim helper copy through
+# its root variable (for example, ROCM_LIBRARIES_ROOT). This project uses
+# THEROCK_SOURCE_DIR because its containing repository is TheRock.
+include("${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake")
+
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_FALSE
+  TYPE BOOL
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_BOOL_FALSE
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Standalone false-value build flag conformance canary"
+  OUTPUT_VARIABLE _canary_bool_false
+)
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_BOOL_TRUE
+  TYPE BOOL
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_BOOL_TRUE
+  DEFAULT_VALUE ON
+  DESCRIPTION "Standalone true-value build flag conformance canary"
+  OUTPUT_VARIABLE _canary_bool_true
+)
+rocm_resolve_build_flag(
+  NAME ROCM_BUILD_FLAGS_CANARY_INTEGER_NEGATIVE
+  TYPE INTEGER
+  CACHE_VARIABLE THEROCK_AUX_OVERLAY_CANARY_INTEGER_NEGATIVE
+  DEFAULT_VALUE -17
+  VALID_VALUES -17
+  DESCRIPTION "Standalone integer build flag conformance canary"
+  OUTPUT_VARIABLE _canary_integer_negative
+)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/aux_overlay_build_flags.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/aux_overlay_build_flags.h"
+  @ONLY
+)
+add_library(aux-overlay-build-flags-conformance OBJECT
+  build_flags_conformance.c
+  build_flags_conformance.cpp
+)
+set_target_properties(aux-overlay-build-flags-conformance PROPERTIES
+  C_STANDARD 11
+  C_STANDARD_REQUIRED YES
+  C_EXTENSIONS NO
+)
+target_include_directories(aux-overlay-build-flags-conformance PRIVATE
+  "${CMAKE_CURRENT_BINARY_DIR}"
+)
 
 if(NOT WIN32)
   add_custom_target(symlinks ALL

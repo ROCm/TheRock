@@ -16,32 +16,32 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     tarballs:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
-      -> s3://therock-dev-tarball/v4/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0.tar.gz
 
-    python (kpack split enabled, multi-arch):
+    python (kpack split enabled, multi-arch, structured):
 
     s3://therock-dev-artifacts/12345-linux/python/rocm-7.13.0.tar.gz
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
     s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl/rocm-7.13.0.tar.gz
-      -> s3://therock-dev-python/v4/whl/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
-      -> s3://therock-dev-python/v4/whl/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next/rocm/rocm-7.13.0.tar.gz
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next/rocm-sdk-device-gfx1100/rocm_sdk_device_gfx1100-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next/rocm-sdk-libraries/rocm_sdk_libraries-7.13.0-py3-none-linux_x86_64.whl
 
     native linux packages (dev/nightly):
 
     s3://therock-dev-artifacts/12345-linux/packages/deb/
-      -> s3://therock-dev-packages/v4/deb/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
-      -> s3://therock-dev-packages/v4/rpm/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/rpm/20250101-12345/
 
     native linux packages (prerelease):
 
     s3://therock-prerelease-artifacts/12345-linux/packages/deb/
-      -> s3://therock-prerelease-packages/v4/packages/deb/
+      -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/deb/
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
-      -> s3://therock-prerelease-packages/v4/packages/rpm/
+      -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
 ASAN build variant:
 
@@ -49,11 +49,11 @@ ASAN build variant:
     tarballs/native packages are published to separate paths:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
-      -> s3://therock-dev-tarball/v4/tarball-asan/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
     s3://therock-dev-artifacts/12345-linux/packages/deb/
-      -> s3://therock-dev-packages/v4/packages-asan/deb/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
-      -> s3://therock-dev-packages/v4/packages-asan/rpm/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/rpm/20250101-12345/
 
 Test usage:
     python build_tools/github_actions/publish_rocm_to_release_buckets.py \\
@@ -70,13 +70,24 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from _therock_utils.s3_buckets import get_release_bucket_config
+from _therock_utils.s3_buckets import (
+    get_product_release_bucket_config,
+    get_release_bucket_config,
+)
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.python_package_paths import plan_key_copies
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
+
+
+def _is_asan_variant(build_variant: str) -> bool:
+    """True if build_variant is any ASAN-family variant: "asan", "host-asan",
+    "asan-debug" (RelWithDebInfo + line-number debug info, see
+    amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
+    """
+    return "asan" in build_variant
 
 
 def publish_tarballs(
@@ -89,18 +100,22 @@ def publish_tarballs(
 
     Example:
         s3://therock-dev-artifacts/12345-linux/tarballs/
-          -> s3://therock-dev-tarball/v4/tarball/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball/
 
     ASAN example:
         s3://therock-dev-artifacts/12345-linux/tarballs/
-          -> s3://therock-dev-tarball/v4/tarball-asan/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
 
     Returns:
         Number of tarballs copied.
     """
     source = artifacts_root.tarballs()
-    dest_bucket = get_release_bucket_config(release_type, "tarball")
-    dest_path = "v4/tarball-asan" if build_variant == "asan" else "v4/tarball"
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    dest_path = (
+        "v5/rocm/core/tarball-asan"
+        if _is_asan_variant(build_variant)
+        else "v5/rocm/core/tarball"
+    )
     dest = StorageLocation(dest_bucket.name, dest_path)
 
     logger.info("Tarballs: %s -> %s", source.s3_uri, dest.s3_uri)
@@ -116,7 +131,7 @@ def publish_python_packages(
     backend: StorageBackend,
     kpack_split: bool,
     structured: bool = False,
-    index: str = "whl",
+    index: str = "whl-next",
 ) -> None:
     """Copy python packages from the artifacts bucket to the release python bucket.
 
@@ -142,12 +157,11 @@ def publish_python_packages(
     product-local package directories instead of the flat v4/whl prefix:
 
         s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-...whl
-          -> s3://therock-dev-python/v5/rocm/core/<index>/rocm-sdk-core/rocm_sdk_core-...whl
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/<index>/rocm-sdk-core/rocm_sdk_core-...whl
     """
     source = artifacts_root.python_packages()
-    dest_bucket = get_release_bucket_config(release_type, "python")
-
     if structured:
+        dest_bucket = get_product_release_bucket_config(release_type, "core")
         _publish_python_packages_structured(
             source=source,
             dest_bucket=dest_bucket.name,
@@ -155,6 +169,8 @@ def publish_python_packages(
             index=index,
         )
         return
+
+    dest_bucket = get_release_bucket_config(release_type, "python")
 
     if kpack_split:
         # Multi-arch: publish directly (no staging index).
@@ -215,21 +231,21 @@ def publish_native_linux_packages(
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-linux/packages/deb/
-          -> s3://therock-dev-packages/v4/deb/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/deb/20250101-12345/
         s3://therock-dev-artifacts/12345-linux/packages/rpm/
-          -> s3://therock-dev-packages/v4/rpm/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/rpm/20250101-12345/
 
     prerelease example:
         s3://therock-prerelease-artifacts/12345-linux/packages/deb/
-          -> s3://therock-prerelease-packages/v4/packages/deb/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/deb/
         s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
-          -> s3://therock-prerelease-packages/v4/packages/rpm/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
     asan example:
         s3://therock-dev-artifacts/12345-linux/packages/deb/
-          -> s3://therock-dev-packages/v4/packages-asan/deb/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/deb/20250101-12345/
         s3://therock-dev-artifacts/12345-linux/packages/rpm/
-          -> s3://therock-dev-packages/v4/packages-asan/rpm/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/rpm/20250101-12345/
 
     Note (prerelease): This is a plain copy — the repodata already present in the
     packages bucket is overwritten with the repodata from this run. If multiple
@@ -238,20 +254,14 @@ def publish_native_linux_packages(
     TODO: Implement a proper repodata merge for the prerelease case, similar to
     the merge logic in upload_package_repo.py (regenerate_repo_metadata_from_s3).
     """
-    dest_bucket = get_release_bucket_config(release_type, "packages")
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
-    is_asan = build_variant == "asan"
+    is_asan = _is_asan_variant(build_variant)
 
     for pkg_type in ["deb", "rpm"]:
         source = artifacts_root.native_linux_packages(pkg_type)
 
-        # Determine base path (asan vs non-asan, prerelease vs dated)
-        # prerelease: v4/packages/{pkg_type} or v4/packages-asan/{pkg_type}
-        # non-prerelease: v4/{pkg_type}/{dated} or v4/packages-asan/{pkg_type}/{dated}
-        if is_asan:
-            base_path = "v4/packages-asan"
-        else:
-            base_path = "v4/packages" if release_type == "prerelease" else "v4"
+        base_path = "v5/rocm/core/packages-asan" if is_asan else "v5/rocm/core/packages"
 
         if release_type == "prerelease":
             dest_prefix = f"{base_path}/{pkg_type}"
@@ -282,7 +292,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--release-type",
         required=True,
-        choices=["dev", "nightly", "prerelease"],
+        choices=["dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         help="Release type (determines source and destination buckets)",
     )
     # String "true"/"false" because GitHub Actions outputs are strings.
@@ -300,10 +310,10 @@ def main(argv: list[str]) -> None:
     )
     parser.add_argument(
         "--python-index",
-        default="whl",
+        default="whl-next",
         choices=["whl", "whl-next"],
         help="Product-local index name for structured Python publishing "
-        "(default: whl). Selects the v5/rocm/core/<index>/ path segment.",
+        "(default: whl-next). Selects the v5/rocm/core/<index>/ path segment.",
     )
     parser.add_argument(
         "--skip-native-packages",
@@ -316,9 +326,11 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan"],
+        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
         help="Build variant (default: release). ASAN builds skip python packages "
-        "and publish native packages to separate paths.",
+        "and publish native packages to separate paths. The '-debug' variants "
+        "(RelWithDebInfo + line-number debug info) publish to the same paths "
+        "as their non-debug counterpart.",
     )
     args = parser.parse_args(argv)
 
@@ -330,7 +342,7 @@ def main(argv: list[str]) -> None:
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
     )
     backend = create_storage_backend(dry_run=args.dry_run)
-    is_asan = args.build_variant == "asan"
+    is_asan = _is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
     if not is_asan:

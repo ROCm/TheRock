@@ -96,6 +96,7 @@ class PackageConfig:
     versioned_pkg: bool = True
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
+    build_variant: str = ""
 
 
 def read_package_json_file():
@@ -410,6 +411,13 @@ def update_package_name(pkg_name, config: PackageConfig):
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
+
+    # For ASan-family builds (asan, host-asan, and their "-debug" variants),
+    # insert the "asan" suffix before the version suffix so the package name
+    # reflects the build type (e.g. amdrocm-core-asan7.15). Debug variants
+    # collapse to the same "-asan" name as their non-debug counterpart.
+    if "asan" in config.build_variant:
+        pkg_suffix = f"-asan{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
     updated_pkgname = pkg_name

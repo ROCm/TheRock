@@ -91,7 +91,7 @@ First, build TheRock as usual but requesting only a certain component. This is d
 
 The `hipify` sources are in the `compiler/hipify` directory and the outer build target and CMake flags are contained in the `compiler/CMakeLists.txt` file. Once the initial configure is done, you will see a corresponding directory in your build directory. At the time of writing, this directory looks something like this:
 
-```
+```bash
 $ ls -lh
 total 8.0K
 drwxrwxr-x 1 stella stella  272 Mar 11 19:38 build
@@ -133,7 +133,7 @@ If not doing deep development on the component, it is often effective to just us
 
 This can be done (using `hipify` as the example component name) with commands like this:
 
-```
+```bash
 ninja hipify+expunge && ninja hipify
 ```
 
@@ -161,6 +161,17 @@ The following CMake flags are mirrored to component projects (see `THEROCK_DEFAU
 - `THEROCK_SOURCE_DIR`
 - `THEROCK_BINARY_DIR`
 - `ROCM_SYMLINK_LIBS`
+
+#### Feature availability by platform and processor
+
+Some features are not available on all platforms or CPU architectures. Features
+may be hard-disabled on certain OS platforms (cannot be overridden) or
+soft-disabled on certain CPU processors (defaults to OFF but can be overridden
+with `-DTHEROCK_ENABLE_<feature>=ON`).
+
+See [Build Topology — Conditional Availability](./build_system.md#conditional-availability)
+for details on how `disable_platforms` and `disable_processors` work in
+`BUILD_TOPOLOGY.toml`.
 
 In addition, if a component is using the host toolchain, the following are mirrored:
 

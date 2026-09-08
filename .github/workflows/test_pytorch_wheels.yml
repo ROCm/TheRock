@@ -17,10 +17,10 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically nightly/dev URL with a "whl-multi-arch" subdir
+        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/whl-multi-arch/"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
       python_version:
         required: true
         type: string
@@ -52,6 +52,13 @@ on:
           - "single"
           - "all"
         default: "single"
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -91,6 +98,9 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      quartz_tracking_id:
+        type: string
+        default: ""
 
 permissions:
   contents: read

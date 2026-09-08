@@ -1217,6 +1217,23 @@ class RestrictFamiliesTest(TmpDirTestCase):
             sorted(params.dist_info.AVAILABLE_TARGET_FAMILIES),
         )
 
+        meta = PopulatedDistPackage(params, logical_name="meta")
+        env = os.environ.copy()
+        env["ROCM_SDK_TARGET_FAMILY"] = "gfx942"
+        subprocess.run(
+            [sys.executable, "setup.py", "egg_info"],
+            cwd=meta.path,
+            env=env,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        pkg_info = (meta.path / "src" / "rocm.egg-info" / "PKG-INFO").read_text()
+        self.assertNotIn("Requires-Dist: rocm==7.0.0\n", pkg_info)
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.0.0\n", pkg_info)
+
 
 # ---------------------------------------------------------------------------
 # Tests for cross-platform family awareness in the rocm sdist

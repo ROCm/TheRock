@@ -27,7 +27,9 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_directory")
     @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
-    def test_dev_uploads_to_v4_whl_in_dev_python(self, mock_set_output, mock_upload):
+    def test_dev_flat_uploads_to_v4_whl_in_dev_python(
+        self, mock_set_output, mock_upload
+    ):
         mock_upload.return_value = 3
         main(
             [
@@ -156,18 +158,18 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         self.assertNotIn("index.html", dest_by_name)
         self.assertEqual(
             dest_by_name["torch-2.10.0-cp312-cp312-linux_x86_64.whl"],
-            "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+            "v5/rocm/pytorch/whl-next/torch/"
+            "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
         )
         self.assertEqual(
             dest_by_name["amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl"],
-            "v5/rocm/pytorch/whl/amd-torch-device-gfx942/"
+            "v5/rocm/pytorch/whl-next/amd-torch-device-gfx942/"
             "amd_torch_device_gfx942-2.10.0-py3-none-linux_x86_64.whl",
         )
         for _source, dest in uploads:
-            self.assertEqual(dest.bucket, "therock-dev-python")
-        # The index-URL output is unchanged under structured publishing.
+            self.assertEqual(dest.bucket, "therock-repo-amd-dev-pytorch")
         mock_set_output.assert_called_once_with(
-            {"package_index_url": "https://rocm.devreleases.amd.com/whl-multi-arch/"}
+            {"package_index_url": "https://dev.repo.amd.com/rocm/whl-next/"}
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
