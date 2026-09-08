@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
@@ -13,7 +14,9 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
     _clone_url,
     close_stale_prs,
+    close_stale_therock_ref_prs,
     create_therock_bump,
+    find_therock_workflow_files,
     generate_pr_body,
     get_submodule_sha,
     handle_push,
@@ -21,6 +24,7 @@ from bump_automation import (
     submodule_changed,
     update_ci_env_file,
     update_ref_in_file,
+    update_therock_workflow_file,
 )
 
 
@@ -238,6 +242,122 @@ class UpdateCiEnvFileTest(unittest.TestCase):
         self.assertIn("oldsha1234567", result)
 
 
+class UpdateTheRockWorkflowFileTest(unittest.TestCase):
+    OLD_SHA = "1" * 40
+    OTHER_SHA = "2" * 40
+    NEW_SHA = "3" * 40
+    STALE_COMMENT_SHA = "4" * 40
+
+    def _run(self, content: str) -> str:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            update_therock_workflow_file(path, self.NEW_SHA)
+            return Path(path).read_text()
+        finally:
+            os.unlink(path)
+
+    def test_updates_reusable_workflow_and_matching_source_refs(self):
+        content = textwrap.dedent(
+            f"""\
+            # TheRock ref: pinned to ROCm/TheRock commit {self.STALE_COMMENT_SHA}.
+            jobs:
+              setup:
+                uses: ROCm/TheRock/.github/workflows/setup_multi_arch.yml@{self.OLD_SHA} # 2026-01-02
+                with:
+                  repository: ROCm/TheRock
+                  ref: {self.OLD_SHA} # 2026-01-02
+            """
+        )
+        result = self._run(content)
+        self.assertEqual(result.count(self.NEW_SHA), 3)
+        self.assertNotIn(self.OLD_SHA, result)
+        self.assertNotIn(self.STALE_COMMENT_SHA, result)
+        self.assertNotIn("2026-01-02", result)
+
+    def test_updates_therock_checkout_without_reusable_workflow(self):
+        content = textwrap.dedent(
+            f"""\
+            steps:
+              - uses: actions/checkout@{self.OTHER_SHA}
+                with:
+                  repository: "ROCm/TheRock"
+                  ref: {self.OLD_SHA} # 2026-01-02
+            """
+        )
+        result = self._run(content)
+        self.assertIn(f"actions/checkout@{self.OTHER_SHA}", result)
+        self.assertIn(f"ref: {self.NEW_SHA}", result)
+        self.assertNotIn(self.OLD_SHA, result)
+
+    def test_updates_therock_ref_override_default(self):
+        content = textwrap.dedent(
+            f"""\
+            steps:
+              - uses: actions/checkout@{self.OTHER_SHA}
+                with:
+                  repository: "ROCm/TheRock"
+                  ref: ${{{{ inputs.therock_ref_override || '{self.OLD_SHA}' }}}}
+            """
+        )
+        result = self._run(content)
+        self.assertIn(self.NEW_SHA, result)
+        self.assertNotIn(self.OLD_SHA, result)
+
+    def test_fails_when_workflow_has_no_pinned_therock_ref(self):
+        with self.assertRaisesRegex(RuntimeError, "No pinned TheRock refs"):
+            self._run("name: unrelated workflow\n")
+
+
+class FindTheRockWorkflowFilesTest(unittest.TestCase):
+    def test_discovers_all_yaml_extensions_with_pinned_refs(self):
+        old_sha = "1" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / "workflows"
+            actions = root / "actions"
+            workflows.mkdir()
+            actions.mkdir()
+            (workflows / "reusable.yml").write_text(
+                f"uses: ROCm/TheRock/.github/workflows/ci.yml@{old_sha}\n",
+                encoding="utf-8",
+            )
+            (actions / "checkout.yaml").write_text(
+                textwrap.dedent(
+                    f"""\
+                    repository: ROCm/TheRock
+                    ref: {old_sha}
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (workflows / "unrelated.yml").write_text(
+                "uses: actions/checkout@v4\n", encoding="utf-8"
+            )
+
+            result = find_therock_workflow_files(root)
+
+        self.assertEqual(
+            result,
+            [
+                (actions / "checkout.yaml").as_posix(),
+                (workflows / "reusable.yml").as_posix(),
+            ],
+        )
+
+    def test_fails_when_no_pinned_workflows_are_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "unrelated.yml").write_text(
+                "uses: actions/checkout@v4\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                RuntimeError, "No pinned TheRock workflow files"
+            ):
+                find_therock_workflow_files(root)
+
+
 class CloseStalePrsTest(unittest.TestCase):
     def _make_pr(self, number: int, title: str) -> dict:
         return {"number": number, "title": title}
@@ -273,6 +393,99 @@ class CloseStalePrsTest(unittest.TestCase):
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "POST"
         ]
         self.assertTrue(any("comments" in c.args[1] for c in post_calls))
+
+
+class CloseStaleTheRockRefPrsTest(unittest.TestCase):
+    NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+
+    def _make_pr(self, number: int, title: str, author: str, *, age: timedelta) -> dict:
+        created = self.NOW - age
+        return {
+            "number": number,
+            "title": title,
+            "user": {"login": author},
+            "created_at": created.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+    def test_closes_older_bot_reference_prs_only(self):
+        search_result = {
+            "items": [
+                self._make_pr(
+                    10,
+                    "Update TheRock reference to (1111111)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                ),
+                self._make_pr(
+                    20,
+                    "Update TheRock reference to (2222222)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                ),
+                self._make_pr(
+                    30,
+                    "Update TheRock reference to (3333333)",
+                    "human-author",
+                    age=timedelta(days=3),
+                ),
+            ]
+        }
+        with patch("bump_automation.gh_api", return_value=search_result) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/10"])
+
+    def test_leaves_recent_bot_reference_prs_open(self):
+        search_result = {
+            "items": [
+                self._make_pr(
+                    10,
+                    "Update TheRock reference to (1111111)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=1, hours=23),
+                ),
+                self._make_pr(
+                    11,
+                    "Update TheRock reference to (aaaaaaa)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=2),
+                ),
+            ]
+        }
+        with patch("bump_automation.gh_api", return_value=search_result) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/11"])
+
+    def test_searches_all_open_reference_prs(self):
+        with patch("bump_automation.gh_api", return_value={"items": []}) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries", current_pr_number=20, token="token"
+            )
+
+        endpoint = mock_api.call_args.args[1]
+        self.assertTrue(endpoint.startswith("search/issues?q="))
+        self.assertIn("per_page=100", endpoint)
 
 
 class HandlePushTest(unittest.TestCase):

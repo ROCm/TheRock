@@ -3,11 +3,15 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import os
+import re
 import subprocess
 import tempfile
-import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
+
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
@@ -28,9 +32,13 @@ ROCM_SYSTEMS_FILES = [
     ".github/workflows/therock-test-packages.yml",
 ]
 
-ROCM_LIBRARIES_FILES = [
-    ".github/actions/ci-env/action.yml",
-]
+ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
+
+FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
+THEROCK_REF_PR_TITLE_PREFIX = "Update TheRock reference to ("
+THEROCK_REF_PR_AUTHOR = "assistant-librarian[bot]"
+# Leave recent bot pin PRs open so their CI can finish before they are closed.
+STALE_THEROCK_REF_PR_AGE = timedelta(days=2)
 
 SUBMODULE_CONFIG = {
     "rocm-systems": {
@@ -46,7 +54,7 @@ SUBMODULE_CONFIG = {
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
-        "files": ROCM_LIBRARIES_FILES,
+        "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
         "token_key": "libraries",
         # Changes to rocm-libraries should run the full matrix of CI jobs:
@@ -298,6 +306,73 @@ def update_ci_env_file(
         print(f"[INFO] Set baseline-run-id to {baseline_run_id}")
 
 
+def _find_therock_workflow_refs(content: str) -> set[str]:
+    """Find pinned TheRock SHAs in a rocm-libraries workflow."""
+    refs = set()
+    therock_checkout_indent = None
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+
+        if therock_checkout_indent is not None:
+            if stripped and indent < therock_checkout_indent:
+                therock_checkout_indent = None
+            elif stripped.startswith("ref:"):
+                refs.update(FULL_COMMIT_SHA_PATTERN.findall(line))
+                therock_checkout_indent = None
+
+        if re.fullmatch(r"""repository:\s*["']?ROCm/TheRock["']?""", stripped):
+            therock_checkout_indent = indent
+
+        if "ROCm/TheRock" in line or "therock_ref_override" in line:
+            refs.update(FULL_COMMIT_SHA_PATTERN.findall(line))
+
+    return refs
+
+
+def update_therock_workflow_file(file_path: str, new_sha: str) -> None:
+    """Update every pinned TheRock workflow/source SHA in one workflow file."""
+    path = Path(file_path)
+    content = path.read_text(encoding="utf-8")
+    old_refs = _find_therock_workflow_refs(content)
+    if not old_refs:
+        raise RuntimeError(f"No pinned TheRock refs found in {file_path}")
+
+    updated_content = content
+    for old_ref in old_refs:
+        updated_content = updated_content.replace(old_ref, new_sha)
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    updated_content = re.sub(
+        rf"({re.escape(new_sha)}\s+#\s+)\d{{4}}-\d{{2}}-\d{{2}}",
+        rf"\g<1>{date}",
+        updated_content,
+    )
+
+    remaining_refs = _find_therock_workflow_refs(updated_content) - {new_sha}
+    if remaining_refs:
+        raise RuntimeError(
+            f"Stale TheRock refs remain in {file_path}: {sorted(remaining_refs)}"
+        )
+
+    path.write_text(updated_content, encoding="utf-8")
+    print(f"[INFO] Updated {file_path}")
+
+
+def find_therock_workflow_files(root: Path = Path(".github")) -> list[str]:
+    """Find YAML files under root that contain pinned TheRock refs."""
+    candidates = sorted([*root.rglob("*.yml"), *root.rglob("*.yaml")])
+    files = [
+        path.as_posix()
+        for path in candidates
+        if _find_therock_workflow_refs(path.read_text(encoding="utf-8"))
+    ]
+    if not files:
+        raise RuntimeError(f"No pinned TheRock workflow files found under {root}")
+    return files
+
+
 def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
     """Close all open PRs on TheRock that originated from old submodule SHA."""
     old_short = old_sha[:7]
@@ -323,6 +398,69 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
                 method="PATCH",
                 data={"state": "closed"},
             )
+
+
+def _parse_github_datetime(value: str) -> datetime:
+    """Parse a GitHub API timestamp into an aware UTC datetime."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def close_stale_therock_ref_prs(
+    repo: str,
+    current_pr_number: int,
+    token: str,
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Close older automated TheRock reference PRs in an upstream repository.
+
+    PRs younger than STALE_THEROCK_REF_PR_AGE are left open so their CI can
+    finish before they are superseded.
+    """
+    query = quote(f'repo:{repo} is:pr is:open in:title "{THEROCK_REF_PR_TITLE_PREFIX}"')
+    result = gh_api(token, f"search/issues?q={query}&per_page=100")
+    now = now or datetime.now(timezone.utc)
+
+    for item in result.get("items", []):
+        number = item["number"]
+        if number == current_pr_number:
+            continue
+        if item["user"]["login"] != THEROCK_REF_PR_AUTHOR:
+            continue
+        if not item["title"].startswith(THEROCK_REF_PR_TITLE_PREFIX):
+            continue
+
+        created_at = item.get("created_at")
+        if not created_at:
+            print(f"[WARN] Skipping PR #{number}: missing created_at")
+            continue
+        age = now - _parse_github_datetime(created_at)
+        if age < STALE_THEROCK_REF_PR_AGE:
+            age_hours = int(age.total_seconds() // 3600)
+            print(
+                f"[INFO] Leaving TheRock reference PR #{number} open "
+                f"({age_hours}h old; close after {STALE_THEROCK_REF_PR_AGE.days}d)"
+            )
+            continue
+
+        print(f"[INFO] Closing stale TheRock reference PR #{number}")
+        gh_api(
+            token,
+            f"repos/{repo}/issues/{number}/comments",
+            method="POST",
+            data={
+                "body": (
+                    f"Closing stale PR superseded by automated update "
+                    f"#{current_pr_number}."
+                )
+            },
+        )
+        gh_api(
+            token,
+            f"repos/{repo}/pulls/{number}",
+            method="PATCH",
+            data={"state": "closed"},
+        )
 
 
 def _git_commit(title: str) -> None:
@@ -504,13 +642,18 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         run(["git", "checkout", "-b", branch])
 
         updater = config.get("updater")
-        for f in config["files"]:
-            if updater == "ci-env":
-                update_ci_env_file(f, after, baseline_run_id)
-            else:
+        files_to_update = list(config["files"])
+        if updater == "ci-env":
+            update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
+            workflow_files = find_therock_workflow_files()
+            for f in workflow_files:
+                update_therock_workflow_file(f, after)
+            files_to_update.extend(workflow_files)
+        else:
+            for f in files_to_update:
                 update_ref_in_file(f, after)
 
-        run(["git", "add"] + config["files"])
+        run(["git", "add"] + files_to_update)
 
         commit_msg = f"Update TheRock ref to {after[:7]}"
         if baseline_run_id:
@@ -519,11 +662,14 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
 
         run(["git", "push", "origin", branch])
 
-        pr_body = f"Updated TheRock ref to `{after[:7]}` due to submodule bump"
+        pr_body = (
+            f"Updated all pinned TheRock workflow and source refs to "
+            f"`{after[:7]}` due to submodule bump"
+        )
         if baseline_run_id:
             pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
 
-        gh_api(
+        pr = gh_api(
             token,
             f"repos/{repo_name}/pulls",
             method="POST",
@@ -534,6 +680,7 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
                 "body": pr_body,
             },
         )
+        close_stale_therock_ref_prs(repo_name, pr["number"], token)
 
     os.chdir(original_cwd)
 
