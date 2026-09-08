@@ -449,7 +449,7 @@
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
-    "License": "MIT AND GPL",
+    "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
@@ -466,19 +466,6 @@
             "Name": "hipFFT",
             "Components": [
               "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib",
-              "dev"
             ]
           }
         ]
