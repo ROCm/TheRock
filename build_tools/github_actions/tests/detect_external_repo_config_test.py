@@ -15,11 +15,15 @@ from unittest.mock import patch, MagicMock, mock_open
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from detect_external_repo_config import (
+    compute_all_stage_sparse_checkouts,
+    compute_stage_sparse_checkout,
+    extract_source_path_from_project,
     get_repo_config,
     get_external_repo_path,
-    import_external_repo_module,
     get_skip_patterns,
+    get_stage_source_paths,
     get_test_list,
+    import_external_repo_module,
     main as detect_external_repo_config_main,
     output_github_actions_vars,
     REPO_CONFIGS,
@@ -515,6 +519,184 @@ class TestNormalizeChangedProjects(unittest.TestCase):
 
         self.assertIn("projects/rocprim", paths)
         self.assertIn("shared/rocroller", paths)
+
+
+class TestExtractSourcePathFromProject(unittest.TestCase):
+    """Tests for extract_source_path_from_project function."""
+
+    def test_projects_path(self):
+        """Test extraction from projects/ path."""
+        self.assertEqual(
+            extract_source_path_from_project("projects/rocprim"), "rocprim"
+        )
+
+    def test_shared_path(self):
+        """Test extraction from shared/ path."""
+        self.assertEqual(
+            extract_source_path_from_project("shared/rocroller"), "rocroller"
+        )
+
+    def test_dnn_providers_path(self):
+        """Test extraction from dnn-providers/ path."""
+        result = extract_source_path_from_project("dnn-providers/miopen-provider")
+        self.assertEqual(result, "miopen-provider")
+
+    def test_simple_path(self):
+        """Test extraction from simple path without prefix."""
+        self.assertEqual(extract_source_path_from_project("rocprim"), "rocprim")
+
+    def test_empty_path(self):
+        """Test extraction from empty path."""
+        self.assertIsNone(extract_source_path_from_project(""))
+        self.assertIsNone(extract_source_path_from_project("  "))
+
+
+class TestGetStageSourcePaths(unittest.TestCase):
+    """Tests for get_stage_source_paths function."""
+
+    def test_math_libs_includes_expected(self):
+        """Test math-libs stage includes expected source paths."""
+        source_paths = get_stage_source_paths("math-libs")
+        self.assertIn("rocprim", source_paths)
+        self.assertIn("rocblas", source_paths)
+        self.assertIn("rocroller", source_paths)
+
+    def test_cv_libs_includes_rpp(self):
+        """Test cv-libs stage includes rpp."""
+        source_paths = get_stage_source_paths("cv-libs")
+        self.assertIn("rpp", source_paths)
+
+    def test_unknown_stage_returns_empty(self):
+        """Test unknown stage returns empty set."""
+        source_paths = get_stage_source_paths("unknown-stage")
+        self.assertEqual(source_paths, set())
+
+
+class TestComputeStageSparseCheckout(unittest.TestCase):
+    """Tests for compute_stage_sparse_checkout function."""
+
+    def test_affected_stage(self):
+        """Test stage that is affected by changed projects."""
+        paths = compute_stage_sparse_checkout(
+            "math-libs", "projects/rocprim,shared/rocroller"
+        )
+        self.assertIn("projects/rocprim", paths)
+        self.assertIn("shared/rocroller", paths)
+
+    def test_unaffected_stage(self):
+        """Test stage that is NOT affected by changed projects."""
+        paths = compute_stage_sparse_checkout("cv-libs", "projects/rocprim")
+        self.assertEqual(paths, [])
+
+    def test_empty_changed_projects(self):
+        """Test with empty changed_projects."""
+        paths = compute_stage_sparse_checkout("math-libs", "")
+        self.assertEqual(paths, [])
+
+    def test_partial_affect(self):
+        """Test when only some changed projects affect the stage."""
+        paths = compute_stage_sparse_checkout(
+            "math-libs", "projects/rocprim,projects/rpp"
+        )
+        # rocprim affects math-libs, rpp does not
+        self.assertIn("projects/rocprim", paths)
+        self.assertNotIn("projects/rpp", paths)
+
+    def test_paths_are_sorted(self):
+        """Test that returned paths are sorted."""
+        paths = compute_stage_sparse_checkout(
+            "math-libs", "shared/rocroller,projects/rocprim"
+        )
+        self.assertEqual(paths, sorted(paths))
+
+
+class TestComputeAllStageSparseCheckouts(unittest.TestCase):
+    """Tests for compute_all_stage_sparse_checkouts function."""
+
+    def test_returns_dict_for_all_stages(self):
+        """Test that result contains entries for all stages in topology."""
+        result = compute_all_stage_sparse_checkouts("projects/rocprim")
+        # Should have entries for math-libs since rocprim affects it
+        self.assertIn("math-libs", result)
+        # The result should be a newline-separated string for affected stages
+        self.assertIn("projects/rocprim", result["math-libs"])
+
+    def test_empty_changed_projects_returns_empty_dict(self):
+        """Test that empty changed_projects returns empty dict."""
+        result = compute_all_stage_sparse_checkouts("")
+        self.assertEqual(result, {})
+
+    def test_unaffected_stages_have_empty_string(self):
+        """Test that unaffected stages have empty string values."""
+        result = compute_all_stage_sparse_checkouts("projects/rocprim")
+        # cv-libs should not be affected by rocprim
+        self.assertIn("cv-libs", result)
+        self.assertEqual(result["cv-libs"], "")
+
+    def test_affected_stages_have_newline_separated_paths(self):
+        """Test that affected stages have newline-separated paths."""
+        result = compute_all_stage_sparse_checkouts("projects/rocprim,shared/rocroller")
+        # math-libs should be affected by both
+        paths = result["math-libs"]
+        self.assertIn("projects/rocprim", paths)
+        self.assertIn("shared/rocroller", paths)
+        # Paths should be newline-separated
+        self.assertIn("\n", paths)
+
+
+class TestConfigJsonSparseCheckout(unittest.TestCase):
+    """Tests that sparse_checkout_by_stage is included in config_json output."""
+
+    def setUp(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            self.temp_file = f.name
+        os.environ["GITHUB_OUTPUT"] = self.temp_file
+
+    def tearDown(self):
+        if "GITHUB_OUTPUT" in os.environ:
+            del os.environ["GITHUB_OUTPUT"]
+        if hasattr(self, "temp_file") and os.path.exists(self.temp_file):
+            os.unlink(self.temp_file)
+
+    def test_sparse_checkout_by_stage_in_config_json(self):
+        """Test that sparse_checkout_by_stage is included in config_json."""
+        rc = detect_external_repo_config_main(
+            [
+                "--repository",
+                "rocm-libraries",
+                "--changed-projects",
+                "projects/rocprim",
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        self.assertIn("config_json=", output)
+        self.assertIn("sparse_checkout_by_stage", output)
+
+    def test_sparse_checkout_empty_when_no_changed_projects(self):
+        """Test that sparse_checkout_by_stage is empty when no changed_projects."""
+        rc = detect_external_repo_config_main(
+            [
+                "--repository",
+                "rocm-libraries",
+            ]
+        )
+        self.assertEqual(rc, 0)
+
+        with open(self.temp_file, "r") as f:
+            output = f.read()
+
+        # Parse the config_json from output
+        import json
+        import re
+
+        match = re.search(r"config_json=(.+)", output)
+        self.assertIsNotNone(match)
+        config_json = json.loads(match.group(1))
+        self.assertEqual(config_json["sparse_checkout_by_stage"], {})
 
 
 if __name__ == "__main__":

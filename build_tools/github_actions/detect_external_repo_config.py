@@ -35,9 +35,126 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional, Set
 
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
+
+
+# --- Sparse checkout computation functions ---
+# These functions compute which project paths should be checked out for each
+# build stage, enabling sparse checkout of external repositories to reduce
+# checkout time for large monorepos like rocm-libraries.
+
+
+def get_stage_source_paths(stage_name: str) -> Set[str]:
+    """Get all source_paths that map to artifacts built in this stage.
+
+    Returns a set of source_path values (e.g., {"rocprim", "hipcub", "rocthrust"})
+    """
+    topology = get_topology()
+    source_paths: Set[str] = set()
+
+    stage = topology.build_stages.get(stage_name)
+    if not stage:
+        return source_paths
+
+    for group_name in stage.artifact_groups:
+        for artifact in topology.get_artifacts_in_group(group_name):
+            if artifact.source_paths:
+                source_paths.update(artifact.source_paths)
+            else:
+                # Default: use artifact name as source_path
+                source_paths.add(artifact.name)
+
+    return source_paths
+
+
+def extract_source_path_from_project(project_path: str) -> Optional[str]:
+    """Extract the source_path name from a project path.
+
+    E.g., "projects/rocprim" -> "rocprim"
+         "shared/rocroller" -> "rocroller"
+         "dnn-providers/miopen-provider" -> "miopen-provider"
+    """
+    parts = project_path.strip().split("/")
+    if len(parts) >= 2:
+        return parts[-1]
+    return project_path.strip() if project_path.strip() else None
+
+
+def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
+    """Compute sparse checkout paths for a stage based on changed projects.
+
+    Args:
+        stage_name: Build stage name (e.g., "math-libs")
+        changed_projects: Comma-separated list of changed project paths
+
+    Returns:
+        List of project paths to sparse checkout, or empty list if stage
+        is not affected (signals full checkout should be used).
+    """
+    if not changed_projects or not changed_projects.strip():
+        return []
+
+    # Get source_paths that this stage builds
+    stage_source_paths = get_stage_source_paths(stage_name)
+    if not stage_source_paths:
+        # Unknown stage or stage with no source_paths - do full checkout
+        return []
+
+    # Find which changed projects affect this stage
+    affected_paths: List[str] = []
+    for project in changed_projects.split(","):
+        project = project.strip()
+        if not project:
+            continue
+
+        source_path = extract_source_path_from_project(project)
+        if source_path and source_path in stage_source_paths:
+            affected_paths.append(project)
+
+    return sorted(affected_paths)
+
+
+def compute_all_stage_sparse_checkouts(changed_projects: str) -> Dict[str, str]:
+    """Pre-compute sparse checkout paths for all build stages.
+
+    This function is called once during setup to compute sparse checkout paths
+    for all stages, which are then embedded in config_json for use by individual
+    build stage workflows.
+
+    Args:
+        changed_projects: Comma-separated list of changed project paths
+            (e.g., "projects/rocprim,shared/rocroller")
+
+    Returns:
+        Dict mapping stage_name -> newline-separated sparse paths (or empty string).
+        Empty string signals that stage should use full checkout.
+
+    Example output:
+        {
+            "compiler-runtime": "",  # not affected, use full checkout
+            "math-libs": "projects/rocprim\\nshared/rocroller",  # sparse checkout
+            "cv-libs": "",  # not affected, use full checkout
+            ...
+        }
+    """
+    if not changed_projects or not changed_projects.strip():
+        return {}
+
+    topology = get_topology()
+    result: Dict[str, str] = {}
+
+    for stage_name in topology.build_stages:
+        paths = compute_stage_sparse_checkout(stage_name, changed_projects)
+        # Convert list to newline-separated string for actions/checkout sparse-checkout
+        result[stage_name] = "\n".join(paths)
+
+    return result
 
 
 # Repository configuration map
@@ -81,9 +198,8 @@ def normalize_changed_projects(changed_projects: str) -> str:
         Comma-separated string of paths (normalized, deduplicated, sorted).
         Empty string if changed_projects is empty.
 
-    Note: The sparse checkout paths are computed per-stage in the workflow
-    using compute_stage_sparse_checkout.py, which checks if the stage is
-    affected by any of these paths.
+    Note: The sparse checkout paths are pre-computed for all stages using
+    compute_all_stage_sparse_checkouts() and embedded in config_json.
     """
     if not changed_projects or not changed_projects.strip():
         return ""
@@ -499,14 +615,25 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
-        # Normalize changed_projects for per-stage sparse checkout computation
-        # The actual sparse checkout paths are determined per-stage based on
-        # which projects affect which stages (via BUILD_TOPOLOGY.toml)
+        # Normalize changed_projects for sparse checkout computation
         changed_projects_normalized = normalize_changed_projects(args.changed_projects)
         print(
             f"Changed projects (normalized): {changed_projects_normalized}",
             file=sys.stderr,
         )
+
+        # Pre-compute sparse checkout paths for all stages
+        # This enables per-stage sparse checkout without calling a separate script
+        sparse_checkout_by_stage = compute_all_stage_sparse_checkouts(
+            changed_projects_normalized
+        )
+        if sparse_checkout_by_stage:
+            affected_stages = [s for s, p in sparse_checkout_by_stage.items() if p]
+            print(
+                f"Sparse checkout computed for {len(sparse_checkout_by_stage)} stages, "
+                f"{len(affected_stages)} affected: {affected_stages}",
+                file=sys.stderr,
+            )
 
         config_json = {
             "repository": final_source_repo,
@@ -518,6 +645,7 @@ def main(argv=None):
             "projects": projects,
             "family_overrides": family_overrides,
             "changed_projects": changed_projects_normalized,
+            "sparse_checkout_by_stage": sparse_checkout_by_stage,
         }
         config["config_json"] = json.dumps(config_json)
         print(
