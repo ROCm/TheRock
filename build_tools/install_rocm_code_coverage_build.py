@@ -23,6 +23,7 @@ import platform
 from pathlib import Path, PurePosixPath
 
 from install_rocm_from_artifacts import main as install_from_artifacts_main
+from install_rocm_from_artifacts import log as log
 from artifact_manager import (
     DownloadRequest,
     create_backend_from_env,
@@ -37,20 +38,13 @@ from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_famili
 # that ships the instrumented library. rocBLAS is packaged in the 'blas'
 # artifact and rocSOLVER in the 'solver' artifact (see BUILD_TOPOLOGY.toml).
 COMPONENT_MAP = {
-    # option: (artifact_prefix, library_folder),
-    "replace_rocblas": ("blas", "rocBLAS"),
-    "replace_rocsolver": ("solver", "rocSOLVER"),
+    # component: (artifact_name, library_folder),
+    "rocblas": ("blas", "rocBLAS"),
+    "rocsolver": ("solver", "rocSOLVER"),
+    "hipblaslt": ("blas", "hipBLASLt"),
+    "hipsolver": ("solver", "hipSOLVER"),
+    "hiprand": ("rand", "hipRAND"),
 }
-# The 'blas' and 'solver' artifacts ship more than one library (e.g. blas also
-# carries hipBLAS). Map each artifact to the library-name substring so only the
-# instrumented rocBLAS/rocSOLVER paths are replaced, leaving the rest untouched.
-ARTIFACT_LIBRARY_KEYWORD = {
-    name: dest for option, (name, dest) in COMPONENT_MAP.items()
-}
-
-def log(*args, **kwargs):
-    print(*args, **kwargs)
-    sys.stdout.flush()
 
 
 def _read_passthrough_options(passthrough_argv):
@@ -103,11 +97,10 @@ def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
 
     matched = find_available_artifacts(artifact_names, target_families, available)
     if not matched:
-        log(
+        raise IOError(
             f"ERROR: No replacement artifacts {sorted(artifact_names)} found in "
             f"{backend.base_uri} for families {target_families}"
         )
-        sys.exit(1)
 
     dest_dir = opts.output_dir / "code-coverage-replacements"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -122,8 +115,7 @@ def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
             )
         )
         if result is None:
-            log(f"ERROR: Failed to download {filename}")
-            sys.exit(1)
+            raise IOError(f"ERROR: Failed to download {filename}")
 
     return dest_dir
 
@@ -168,13 +160,13 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
         raise IOError(f"Unhandled tar member: {member}")
 
 
-def replace_instrumented_libraries(dest_dir, output_dir):
+def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
     """Extract instrumented libs from downloaded archives into the install tree.
 
     For every replacement archive under dest_dir, read its artifact_manifest.txt
     to learn the relpath prefixes, then flatten (strip prefix) each member into
     output_dir -- but only members whose scoped path matches the artifact's
-    library keyword (rocblas/rocsolver), so unrelated files are left in place.
+    library folder (rocBLAS/rocSOLVER), so unrelated files are left in place.
     """
     archives = sorted(
         p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
@@ -185,36 +177,41 @@ def replace_instrumented_libraries(dest_dir, output_dir):
 
     for archive in archives:
         an = ArtifactName.from_filename(archive.name)
-        keyword = ARTIFACT_LIBRARY_KEYWORD.get(an.name) if an else None
-        if not keyword:
-            log(f"Skipping {archive.name}: no library keyword mapping")
+        folders = artifacts.get(an.name) if an else None
+        if not folders:
+            log(f"Skipping {archive.name}: no library folder mapping")
             continue
+        for folder in folders:
+            log(f"Replacing '{folder}' paths from {archive.name} into {output_dir}")
+            replaced = 0
+            with open_archive_for_read(archive) as tf:
+                manifest_member = tf.next()
+                if (
+                    manifest_member is None
+                    or manifest_member.name != "artifact_manifest.txt"
+                ):
+                    raise IOError(
+                        f"Artifact archive {archive} must have artifact_manifest.txt "
+                        "as its first member"
+                    )
+                with tf.extractfile(manifest_member) as mf_file:
+                    relpaths = [r for r in mf_file.read().decode().splitlines() if r]
 
-        log(f"Replacing '{keyword}' paths from {archive.name} into {output_dir}")
-        replaced = 0
-        with open_archive_for_read(archive) as tf:
-            manifest_member = tf.next()
-            if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
-                raise IOError(
-                    f"Artifact archive {archive} must have artifact_manifest.txt "
-                    "as its first member"
-                )
-            with tf.extractfile(manifest_member) as mf_file:
-                relpaths = [r for r in mf_file.read().decode().splitlines() if r]
-
-            while member := tf.next():
-                for prefix in relpaths:
-                    prefix_slash = prefix + "/"
-                    if not member.name.startswith(prefix_slash):
-                        continue
-                    scoped_path = member.name[len(prefix_slash) :]
-                    if keyword.lower() not in scoped_path.lower():
+                while member := tf.next():
+                    for prefix in relpaths:
+                        prefix_slash = prefix + "/"
+                        if not member.name.startswith(prefix_slash):
+                            continue
+                        scoped_path = member.name[len(prefix_slash) :]
+                        if folder.lower() not in scoped_path.lower():
+                            break
+                        dest_path = output_dir / PurePosixPath(scoped_path)
+                        _replace_scoped_member(
+                            tf, member, dest_path, output_dir, relpaths
+                        )
+                        replaced += 1
                         break
-                    dest_path = output_dir / PurePosixPath(scoped_path)
-                    _replace_scoped_member(tf, member, dest_path, output_dir, relpaths)
-                    replaced += 1
-                    break
-        log(f"  Replaced {replaced} '{keyword}' path(s) from {archive.name}")
+            log(f"  Replaced {replaced} '{folder}' path(s) from {archive.name}")
 
 
 def main(argv):
@@ -224,43 +221,43 @@ def main(argv):
         type=str,
         help="run id of the build from which instrumental components needs to be replaced",
     )
-
     artifacts_group = parser.add_argument_group("replace_comps")
-    artifacts_group.add_argument(
-        "--replace-rocblas",
-        default=False,
-        help="Replace 'blas' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--replace-rocsolver",
-        default=False,
-        help="Replace 'solver' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
+    for comp in COMPONENT_MAP.keys():
+        artifacts_group.add_argument(
+            f"--replace-{comp}",
+            default=False,
+            help=f"Replace '{comp}' artifacts",
+            action=argparse.BooleanOptionalAction,
+        )
     args, extra_args = parser.parse_known_args(argv)
+    opts = _read_passthrough_options(extra_args)
 
     # install generic build from --run-id artifacts
-#    install_from_artifacts_main(extra_args)
+    install_from_artifacts_main(extra_args)
 
-    # Resolve which artifacts to replace from the --replace-* flags.
-    artifact_names = {
-        name[0] for dest, name in COMPONENT_MAP.items() if getattr(args, dest)
-    }
-    if not artifact_names:
+    # collect artifacts details as per the user options
+    artifacts = {}
+    for comp, (name, folder) in COMPONENT_MAP.items():
+        if not getattr(args, f"replace_{comp}"):
+            continue  # skip for non-selected components
+        artifacts.setdefault(name, []).append(folder)
+
+    if not artifacts:
         log("No --replace-* components specified; nothing to download.")
         return
 
     if not args.code_coverage_run_id:
-        parser.error("--code-coverage-run-id is required when using --replace-* options")
+        parser.error(
+            "--code-coverage-run-id is required when using --replace-* options"
+        )
 
-    opts = _read_passthrough_options(extra_args)
+    # download selected component artifacts
     dest_dir = download_replacement_artifacts(
-        args.code_coverage_run_id, artifact_names, opts
+        args.code_coverage_run_id, artifacts.keys(), opts
     )
-    replace_instrumented_libraries(dest_dir, opts.output_dir)
+
+    # replace selected library folder paths in selected component artifacts
+    replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
 
 
 if __name__ == "__main__":
