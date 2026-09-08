@@ -334,7 +334,10 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         cmake_target="hipTensor",
         artifact_names=["hiptensor"],
         artifact_relpaths=["math-libs/hipTensor/stage"],
-        coverage_option="CODE_COVERAGE",
+        # Prefixed, unlike rocALUTION's bare CODE_COVERAGE just above. Getting
+        # this wrong is silent: the option is simply never read, the library
+        # builds uninstrumented, and the tests pass having written no profile.
+        coverage_option="HIPTENSOR_CODE_COVERAGE",
         stage=STAGE_MATH_LIBS,
         test_component="hiptensor",
         coverage_config="projects/hiptensor/test_categories_coverage.yaml",
@@ -362,7 +365,9 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         stage=STAGE_MATH_LIBS,
         test_component="hipdnn",
         coverage_config="projects/hipdnn/test_categories_coverage.yaml",
-        object_globs=["lib/libhipdnn.so*"],
+        # Not libhipdnn.so: hipDNN's shared library is the backend, which is
+        # also the name TheRock's own packaging metadata records for it.
+        object_globs=["lib/libhipdnn_backend.so*"],
         fetch_artifact_args="--hipdnn",
         codecov_flag="hipDNN",
     ),

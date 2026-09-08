@@ -23,11 +23,25 @@ is responsible for translating it into compiler flags (usually
 `-fprofile-instr-generate -fcoverage-mapping`). Passing the flag for a project
 that does not implement it has no effect.
 
-Device side profiling relies on the ROCm profiling runtime
-(`libclang_rt.profile_rocm`) being present in the compiler build. TheRock does
-not configure that from the top level; it comes from how amd-llvm's compiler-rt
-is built. If a report shows host coverage only, check that the runtime is in the
-compiler you built against.
+This pipeline measures host code only, and deliberately keeps the
+instrumentation off the GPU. The upstream coverage options pass
+`-fprofile-instr-generate` and `-fcoverage-mapping` unqualified and the HIP
+driver forwards both to the device compilation, so kernels would be
+instrumented too. That does not survive contact with the runtime: the device
+image gains a per-translation-unit `__llvm_profile_sections_` symbol that
+`libclang_rt.profile_rocm` looks up with `hipModuleGetGlobal` at exit, plus a
+`__profd_` for every kernel. A symbol the runtime cannot resolve aborts the
+process after the tests have already passed, and where the readback succeeds it
+writes a second profile named after the device
+(`gfx942:sramecc+:xnack-.0.<host name>`) that cannot be uploaded as a CI
+artifact because of the colons.
+
+`therock_subproject.cmake` therefore appends `-Xarch_device
+-fno-profile-instr-generate -Xarch_device -fno-coverage-mapping` to the compile
+rule of any subproject it enables coverage for. It has to be the compile rule
+rather than `CMAKE_<LANG>_FLAGS`: the last of a `-f`/`-fno-` pair wins, and the
+project's own flags arrive later, as `COMPILE_OPTIONS`. Measuring GPU code
+would mean undoing this and solving the two problems above.
 
 That runtime calls `dlsym`, `dladdr` and `pthread_once`, and the driver does not
 put `-ldl` or `-lpthread` on the link line for it. On the manylinux base those
@@ -73,6 +87,32 @@ so a group only ever contains onboarded projects; selecting a group with none
 > regenerated from `COVERAGE_PROJECTS` on every configure (a small scripted step;
 > it also means editing `configure_coverage_ci.py` triggers a reconfigure), but
 > it only changes the build when one of the options is `ON`.
+
+### Host code only
+
+What gets measured is host code. The upstream coverage options pass
+`-fprofile-instr-generate` and `-fcoverage-mapping` unqualified and the HIP
+driver forwards both to the device compilation, so kernels would be instrumented
+too. `therock_subproject.cmake` cancels that with `-Xarch_device`, which is
+scoped to the device compilation and leaves the host instrumentation alone.
+
+This is not just a matter of scope. An instrumented device image carries a
+per-translation-unit `__llvm_profile_sections_` symbol that
+`libclang_rt.profile_rocm.a` looks up through `hipModuleGetGlobal` when the
+process exits, plus a `__profd_` for every kernel. A symbol the runtime cannot
+resolve aborts the process *after* the tests have passed — rocSPARSE hit this on
+an inlined rocPRIM kernel — and where the readback does succeed the runtime
+writes an extra profile named after the device
+(`gfx942:sramecc+:xnack-.0.<host name>`), which cannot be uploaded as a CI
+artifact because of the colons.
+
+The cancellation has to be the last coverage flag on the compile line, since the
+later of a `-f`/`-fno-` pair wins and the project's own flags arrive through
+`COMPILE_OPTIONS`, after `CMAKE_<LANG>_FLAGS`. It is therefore appended to
+`CMAKE_<LANG>_COMPILE_OBJECT` from a generated file passed as
+`CMAKE_PROJECT_INCLUDE`, rather than to the flags variables; the compile rule
+does not exist yet in `CMAKE_PROJECT_TOP_LEVEL_INCLUDES`, which runs before any
+language is enabled.
 
 ## Producing a report locally
 
@@ -131,6 +171,15 @@ The test jobs run through the same `test_component.yml` as regular CI, with
 workspace and uploading the resulting profiles as an artifact. The aggregation
 job downloads the profiles from every shard, merges them, and uploads the lcov
 report.
+
+`coverage_enabled` also puts a floor under the per-component test timeout.
+Instrumented libraries are built `-O0 -g` and count every branch, so a suite
+takes much longer than its usual budget assumes: rocRAND tests that normally
+finish in milliseconds took 25 to 60 seconds each and ran out of their 15
+minutes. It is a floor rather than a multiplier because the budgets are not on a
+common scale — rocBLAS asks for 288 minutes, past the job's own cap, while
+rocRAND asks for 15 — so scaling would stretch the generous ones and still leave
+the tight ones tight.
 
 ### Scheduling
 

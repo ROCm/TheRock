@@ -140,6 +140,17 @@ jobs:
       # artifacts are bucketed by channel.
       INSTALL_ARTIFACT_RUN_ID: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_run_id || (inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id) }}"
       INSTALL_RELEASE_TYPE: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_release_type || inputs.release_type }}"
+      # Instrumented libraries are built -O0 -g and counted on every branch, so
+      # the same suite takes far longer than the per-component budget assumes:
+      # rocRAND tests that normally run in milliseconds took 25 to 60 seconds
+      # each, and the shard hit its 15 minute wall a long way from finishing.
+      #
+      # A floor rather than a multiplier, because the budgets are not written to
+      # a common scale -- rocBLAS asks for 288 minutes, past the job's own cap,
+      # while rocRAND asks for 15 -- so multiplying stretches the ones that were
+      # already generous and still leaves the tight ones tight. Only the floor
+      # moves, and only for coverage.
+      TEST_TIMEOUT_MINUTES: "${{ (inputs.coverage_enabled && fromJSON(inputs.component).timeout_minutes < 60) && 60 || fromJSON(inputs.component).timeout_minutes }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -280,7 +291,7 @@ jobs:
 
       - name: Test
         id: test
-        timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
+        timeout-minutes: ${{ env.TEST_TIMEOUT_MINUTES }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
@@ -297,7 +308,7 @@ jobs:
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
-          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+          STEP_TIMEOUT_MINUTES: ${{ env.TEST_TIMEOUT_MINUTES }}
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})

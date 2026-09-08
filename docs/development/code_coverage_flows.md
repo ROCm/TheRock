@@ -88,8 +88,9 @@ full `multi_arch_build_portable_linux.yml` pipeline. Naming the stages coverage
 needs keeps the shared pipeline free of coverage-specific stage filtering.
 
 They also pass `-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF`: split kernel
-packaging would move instrumented device code out of the library `llvm-cov` is
-later pointed at.
+packaging rearranges the code objects embedded in the library `llvm-cov` is
+later pointed at. Coverage is host-only, so this may no longer be load bearing,
+but it has not been retested since and the flag is cheap to keep.
 
 The artifacts publish under `release_type: ci`, under this run's id.
 
