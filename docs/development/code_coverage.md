@@ -7,6 +7,10 @@ project: instrumentation slows a library down substantially, and the report is
 only worth producing for projects whose test suites are thorough enough to give
 a meaningful signal.
 
+This page is the reference. For a plain-language walkthrough of a single run,
+start with
+[Nightly Coverage Implementation](nightly_coverage_implementation.md).
+
 ## Enabling coverage for a local build
 
 Pass `-D<PROJECT>_ENABLE_COVERAGE=ON` at the top level configure. The project

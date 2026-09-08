@@ -11,6 +11,7 @@
 - [Artifacts](artifacts.md)
 - [Build System](build_system.md)
 - [Code Coverage](code_coverage.md)
+- [Nightly Coverage Implementation](nightly_coverage_implementation.md) - a plain-language walkthrough of how a coverage report is produced
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
 - [Installing Artifacts](installing_artifacts.md)
