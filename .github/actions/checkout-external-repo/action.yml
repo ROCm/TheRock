@@ -22,6 +22,21 @@ inputs:
 runs:
   using: composite
   steps:
+    # Debug: show what values we're working with
+    - name: Debug checkout decision
+      shell: bash
+      run: |
+        echo "Stage name: ${{ inputs.stage_name }}"
+        echo "Changed projects: ${{ fromJSON(inputs.external_repo_config).changed_projects }}"
+        echo "Sparse checkout for this stage: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] }}"
+        if [[ -n "${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] }}" ]]; then
+          echo "Decision: SPARSE checkout"
+        elif [[ -n "${{ fromJSON(inputs.external_repo_config).changed_projects }}" ]]; then
+          echo "Decision: SKIP checkout (stage not affected)"
+        else
+          echo "Decision: FULL checkout (changed_projects unknown)"
+        fi
+
     # Sparse checkout: stage has affected projects
     - name: Checkout external repository (sparse)
       if: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] != '' }}
