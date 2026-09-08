@@ -162,6 +162,11 @@ def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
     for name, consumers in _load_synthetic_subprojects(therock_dir).items():
         node = graph.setdefault(name, {})
         existing = node.get("consumers", [])
+        if not isinstance(existing, list):
+            raise ValueError(
+                f"{graph_path}: node '{name}' has non-list 'consumers' "
+                f"({existing!r}); cannot merge synthetic edges into it."
+            )
         node["consumers"] = existing + [c for c in consumers if c not in existing]
 
     return graph
@@ -244,7 +249,20 @@ def _load_synthetic_subprojects(
         )
     result: dict[str, list[str]] = {}
     for name, body in synthetic.items():
-        result[name.lower()] = [c.lower() for c in body.get("consumers", [])]
+        if not isinstance(body, dict):
+            raise ValueError(
+                f"test_policies.toml: [synthetic.{name}] must be a table, not "
+                f"{type(body).__name__}"
+            )
+        consumers = body.get("consumers", [])
+        if not isinstance(consumers, list) or not all(
+            isinstance(c, str) for c in consumers
+        ):
+            raise ValueError(
+                f"test_policies.toml: [synthetic.{name}] consumers must be a "
+                f"list of strings, not {consumers!r}"
+            )
+        result[name.lower()] = [c.lower() for c in consumers]
     return result
 
 

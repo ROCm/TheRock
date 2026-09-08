@@ -666,6 +666,49 @@ class TestSyntheticSubprojects(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
+    def test_synthetic_consumers_must_be_a_list(self) -> None:
+        # consumers = "hipblaslt" (a bare string, not a list) would otherwise
+        # silently iterate characters instead of failing loudly.
+        bad = '[synthetic.tensilelite]\nconsumers = "hipblaslt"\n'
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a list of strings"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_consumers_must_be_strings(self) -> None:
+        bad = "[synthetic.tensilelite]\nconsumers = [1, 2]\n"
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a list of strings"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_entry_must_be_a_table(self) -> None:
+        bad = '[synthetic]\ntensilelite = "not-a-table"\n'
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a table"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_graph_node_with_non_list_consumers_raises_on_merge(self) -> None:
+        # A corrupt/future-schema graph node ("consumers": null or similar)
+        # must fail loudly at merge time, not with a confusing TypeError --
+        # exercised via a synthetic name colliding with that corrupt node
+        # (the merge only ever touches the node named by the synthetic table).
+        graph = {**_SYNTHETIC_GRAPH, "hipblaslt": {"consumers": None}}
+        policies = '[synthetic.hipblaslt]\nconsumers = ["hipsparselt"]\n'
+        root = _make_fixture(graph=graph, policies=policies)
+        try:
+            with self.assertRaisesRegex(ValueError, "non-list 'consumers'"):
+                get_subprojects_to_test(["hipblaslt"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
 
 # ---------------------------------------------------------------------------
 # Unknown changed project warns and selects only itself.
