@@ -1429,8 +1429,7 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    # Driver builds feed downstream driver packaging only, so they skip Python
-    # packages too.
+    # Driver builds skip them too: partial tree, not a distribution.
     is_asan = suffix in ("asan", "host-asan")
     is_driver = suffix == "driver"
     build_python_packages = (

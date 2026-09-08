@@ -99,8 +99,7 @@ jobs:
 
   build_python_packages:
     needs: [build_artifacts]
-    # Driver builds are a reduced component set consumed by driver packaging;
-    # they are not a ROCm distribution, so no wheels and no release publishing.
+    # Driver builds are a partial tree, not a ROCm distribution.
     if: ${{ fromJSON(inputs.build_config).build_variant_suffix != 'driver' }}
     name: Build Python Packages
     uses: ./.github/workflows/build_windows_python_packages.yml
@@ -160,8 +159,7 @@ jobs:
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
-    # Skipped for driver builds: the standard test matrix assumes the full
-    # component set. See the PR discussion for what coverage should replace it.
+    # Driver builds get full validation downstream; this matrix assumes components they don't build.
     if: ${{ !failure() && !cancelled() && fromJSON(inputs.build_config).build_variant_suffix != 'driver' }}
     runs-on: ubuntu-24.04
     permissions:

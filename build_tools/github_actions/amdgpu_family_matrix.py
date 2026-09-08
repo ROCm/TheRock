@@ -189,9 +189,7 @@ all_build_variants = {
             "build_variant_suffix": "",
             "build_variant_cmake_preset": "windows-release",
         },
-        # Driver-package builds are run on nightly. Same sources as release, but
-        # built with Control Flow Guard and the driver comgr DLL name so the
-        # artifacts can be consumed by downstream driver packaging.
+        # Release sources built with CFG and the driver comgr DLL name.
         "driver": {
             "build_variant_label": "driver",
             "build_variant_suffix": "driver",

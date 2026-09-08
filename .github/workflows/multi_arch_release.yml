@@ -206,9 +206,7 @@ jobs:
       actions: write  # Added permission to trigger workflows
       id-token: write  # Added permission for AWS S3 upload
 
-  # Driver-variant setup. Windows only; families opt in via "driver" in their
-  # build_variants list, so this produces an empty build config (and the build
-  # below is skipped) until a family declares it.
+  # Windows only. Emits an empty build config until a family opts in, skipping both jobs.
   setup_driver:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
