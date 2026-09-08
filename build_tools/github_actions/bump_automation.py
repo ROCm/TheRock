@@ -35,8 +35,10 @@ ROCM_SYSTEMS_FILES = [
 ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
 
 FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
+# Title convention we generate below; not tied to any one downstream repo, so
+# it stays a shared constant even though the PR author does not (see
+# SUBMODULE_CONFIG["bot_author"]).
 THEROCK_REF_PR_TITLE_PREFIX = "Update TheRock reference to ("
-THEROCK_REF_PR_AUTHOR = "assistant-librarian[bot]"
 GITHUB_SEARCH_PAGE_SIZE = 100
 # The GitHub search API refuses to serve matches past the first 1000.
 GITHUB_SEARCH_RESULT_LIMIT = 1000
@@ -49,6 +51,8 @@ SUBMODULE_CONFIG = {
         "files": ROCM_SYSTEMS_FILES,
         "updater": "ref",
         "token_key": "systems",
+        # See the "rocm-libraries" entry below for why this is per-repo.
+        "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
         #   * Build for all gfx archs
         #   * Build for all variants (asan)
@@ -60,6 +64,12 @@ SUBMODULE_CONFIG = {
         "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
         "token_key": "libraries",
+        # GitHub App bot identity that opens "Update TheRock reference to
+        # (...)" PRs on this repo; only used by the "ci-env" updater's stale
+        # pin-PR cleanup. Each downstream repo has its own GitHub App (see
+        # ROCM_LIBRARIES_APP_ID / ROCM_SYSTEMS_APP_ID in bump_submodules.yml),
+        # so this must not be hardcoded as a single module-wide constant.
+        "bot_author": "assistant-librarian[bot]",
         # Changes to rocm-libraries should run the full matrix of CI jobs:
         #   * Build for all gfx archs
         #   * Build for all variants (asan)
@@ -465,10 +475,17 @@ def close_stale_therock_ref_prs(
     repo: str,
     current_pr_number: int,
     token: str,
+    bot_author: str,
     *,
     now: datetime | None = None,
 ) -> None:
     """Close older automated TheRock reference PRs in an upstream repository.
+
+    `bot_author` is the GitHub App bot identity that opens these PRs on
+    `repo` (SUBMODULE_CONFIG["bot_author"] for the relevant entry); it is not
+    a single global value because each downstream repo has its own GitHub
+    App, and matching the wrong one would silently close nothing (or, if
+    reused carelessly, PRs that were never ours to close).
 
     PRs younger than STALE_THEROCK_REF_PR_AGE are left open so their CI can
     finish before they are superseded.
@@ -483,7 +500,7 @@ def close_stale_therock_ref_prs(
         number = item["number"]
         if number == current_pr_number:
             continue
-        if item["user"]["login"] != THEROCK_REF_PR_AUTHOR:
+        if item["user"]["login"] != bot_author:
             continue
         if not item["title"].startswith(THEROCK_REF_PR_TITLE_PREFIX):
             continue
@@ -738,7 +755,9 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
                 "body": pr_body,
             },
         )
-        close_stale_therock_ref_prs(repo_name, pr["number"], token)
+        close_stale_therock_ref_prs(
+            repo_name, pr["number"], token, config["bot_author"]
+        )
 
     os.chdir(original_cwd)
 

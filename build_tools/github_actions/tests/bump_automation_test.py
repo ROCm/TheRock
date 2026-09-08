@@ -597,6 +597,7 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
                 token="token",
+                bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )
 
@@ -629,6 +630,7 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
                 token="token",
+                bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )
 
@@ -642,7 +644,10 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
     def test_searches_all_open_reference_prs(self):
         with patch("bump_automation.gh_api", return_value={"items": []}) as mock_api:
             close_stale_therock_ref_prs(
-                "ROCm/rocm-libraries", current_pr_number=20, token="token"
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                bot_author="assistant-librarian[bot]",
             )
 
         endpoint = mock_api.call_args.args[1]
@@ -683,6 +688,7 @@ class CloseStaleTheRockRefPrsTest(unittest.TestCase):
                 "ROCm/rocm-libraries",
                 current_pr_number=20,
                 token="token",
+                bot_author="assistant-librarian[bot]",
                 now=self.NOW,
             )
 
@@ -761,6 +767,99 @@ class HandlePushTest(unittest.TestCase):
         self.assertEqual(mock_close.call_args.args[2], "systems-token")
         # submodule-only: must not clone any upstream repo.
         mock_tmp.assert_not_called()
+
+    def test_ref_updater_closes_stale_prs_with_its_own_bot_author(self):
+        """rocm-systems' bump PRs are opened by "systems-assistant[bot]", a
+        different GitHub App than rocm-libraries' "assistant-librarian[bot]".
+        handle_push must pass each repo's own bot identity through to
+        close_stale_therock_ref_prs rather than a single hardcoded value."""
+
+        def changed(before, after, path):
+            return path == "rocm-systems"
+
+        with patch("bump_automation.submodule_changed", side_effect=changed):
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs"):
+                    with patch("bump_automation.run"):
+                        with patch("bump_automation.os.chdir"):
+                            with patch(
+                                "bump_automation.os.path.exists", return_value=True
+                            ):
+                                with patch("bump_automation.update_ref_in_file"):
+                                    with patch(
+                                        "bump_automation.gh_api",
+                                        return_value={"number": 1},
+                                    ):
+                                        with patch(
+                                            "bump_automation.close_stale_therock_ref_prs"
+                                        ) as mock_close_ref:
+                                            with patch(
+                                                "bump_automation.create_therock_bump"
+                                            ):
+                                                handle_push(
+                                                    "before",
+                                                    "after",
+                                                    {
+                                                        "systems": "systems-token",
+                                                        "libraries": "libraries-token",
+                                                    },
+                                                )
+
+        mock_close_ref.assert_called_once()
+        self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-systems")
+        self.assertEqual(mock_close_ref.call_args.args[3], "systems-assistant[bot]")
+
+    def test_ci_env_updater_closes_stale_prs_with_its_own_bot_author(self):
+        """rocm-libraries must keep using its own "assistant-librarian[bot]"
+        identity, not rocm-systems'."""
+
+        def changed(before, after, path):
+            return path == "rocm-libraries"
+
+        with patch("bump_automation.submodule_changed", side_effect=changed):
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs"):
+                    with patch(
+                        "bump_automation.get_baseline_run_id_from_merged_pr",
+                        return_value=None,
+                    ):
+                        with patch("bump_automation.run"):
+                            with patch("bump_automation.os.chdir"):
+                                with patch(
+                                    "bump_automation.os.path.exists",
+                                    return_value=True,
+                                ):
+                                    with patch("bump_automation.update_ci_env_file"):
+                                        with patch(
+                                            "bump_automation.find_therock_workflow_files",
+                                            return_value=[],
+                                        ):
+                                            with patch(
+                                                "bump_automation.gh_api",
+                                                return_value={"number": 1},
+                                            ):
+                                                with patch(
+                                                    "bump_automation.close_stale_therock_ref_prs"
+                                                ) as mock_close_ref:
+                                                    with patch(
+                                                        "bump_automation.create_therock_bump"
+                                                    ):
+                                                        handle_push(
+                                                            "before",
+                                                            "after",
+                                                            {
+                                                                "systems": "systems-token",
+                                                                "libraries": "libraries-token",
+                                                            },
+                                                        )
+
+        mock_close_ref.assert_called_once()
+        self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-libraries")
+        self.assertEqual(mock_close_ref.call_args.args[3], "assistant-librarian[bot]")
 
 
 class CreateTheRockBumpTest(unittest.TestCase):
