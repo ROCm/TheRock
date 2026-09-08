@@ -260,6 +260,90 @@ therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)
 
+###############################################################################
+# Generic GFX target support.
+#
+# LLVM defines "generic" AMDGPU processor targets that produce code objects
+# compatible with all specific targets in a family. These require Code Object
+# V6 (FeatureRequiresCOV6). When enabled, groups of specific targets are
+# replaced with a single generic target, reducing build time and package size.
+#
+# Only families where ALL specific targets share the same LLVM FeatureSet
+# (i.e., the generic is a strict superset adding only COV6) are registered
+# here. Families with feature divergence (e.g., gfx11-generic loses
+# FeatureSALUFloatInsts for gfx115x) must NOT be added without benchmarking.
+###############################################################################
+
+option(THEROCK_USE_GENERIC_GFX_TARGETS
+  "Replace specific gfx targets with LLVM generic equivalents for opted-in subprojects"
+  OFF)
+
+# Registry: family name -> generic target name.
+# Each entry also stores the list of specific targets it replaces (read from
+# the family property at replacement time).
+set_property(GLOBAL PROPERTY THEROCK_AMDGPU_GENERIC_FAMILIES
+  gfx103X-all
+  gfx120X-all
+)
+set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_GENERIC_TARGET_gfx103X-all" "gfx10-3-generic")
+set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_GENERIC_TARGET_gfx120X-all" "gfx12-generic")
+
+# Future additions (uncomment after validation):
+# set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_GENERIC_FAMILIES gfx101X-all)
+# set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_GENERIC_TARGET_gfx101X-all" "gfx10-1-generic")
+
+# Replaces groups of specific gfx targets with their LLVM generic equivalent.
+#
+# For each registered generic-capable family, if ALL member targets of that
+# family are present in the input list, they are replaced with the single
+# generic target. Partial families and non-family targets pass through unchanged.
+#
+# Args:
+#   out_var: Variable name to store the result in the caller's scope.
+#   (remaining args): Semicolon-separated list of specific gfx targets.
+#
+# Example:
+#   therock_replace_with_generic_targets(_result
+#     "gfx1030;gfx1031;gfx1032;gfx1033;gfx1034;gfx1035;gfx1036;gfx1100")
+#   # _result = "gfx10-3-generic;gfx1100"
+function(therock_replace_with_generic_targets out_var)
+  set(_targets ${ARGN})
+  if(NOT _targets)
+    set(${out_var} "" PARENT_SCOPE)
+    return()
+  endif()
+
+  get_property(_generic_families GLOBAL PROPERTY THEROCK_AMDGPU_GENERIC_FAMILIES)
+
+  foreach(_family IN LISTS _generic_families)
+    get_property(_generic_target GLOBAL PROPERTY "THEROCK_AMDGPU_GENERIC_TARGET_${_family}")
+    get_property(_family_members GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_FAMILY_${_family}")
+
+    if(NOT _family_members OR NOT _generic_target)
+      continue()
+    endif()
+
+    # Check if ALL members of this family are present in the target list.
+    set(_all_present TRUE)
+    foreach(_member IN LISTS _family_members)
+      if(NOT "${_member}" IN_LIST _targets)
+        set(_all_present FALSE)
+        break()
+      endif()
+    endforeach()
+
+    if(_all_present)
+      # Remove all specific members and append the generic.
+      foreach(_member IN LISTS _family_members)
+        list(REMOVE_ITEM _targets "${_member}")
+      endforeach()
+      list(APPEND _targets "${_generic_target}")
+    endif()
+  endforeach()
+
+  set(${out_var} "${_targets}" PARENT_SCOPE)
+endfunction()
+
 # Validates and normalizes AMDGPU target selection cache variables.
 #
 # This function handles three separate target lists:
