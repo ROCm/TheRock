@@ -64,7 +64,10 @@ on:
       changed_projects:
         type: string
         default: ""
-        description: "Comma-separated list of changed projects to filter tests (empty = run all tests)"
+        description: >-
+          Comma-separated list of changed project paths (e.g., 'projects/rocprim').
+          Mapped to artifacts via BUILD_TOPOLOGY.toml source_paths for granular
+          reuse and test filtering (empty = run all tests).
       build_python_packages:
         type: boolean
         default: true
