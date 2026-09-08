@@ -47,13 +47,20 @@ function(therock_sanitizer_configure
       # Avoids: (1) -Woption-ignored on gfx942 without :xnack+ (MIOpen failure due to -Werror)
       #         (2) handleSanitizeOption dropping all device -I/-D with -fno-gpu-sanitize (Bug in Driver)
       # TODO: If this is indeed a Driver bug, then this can be replaced with -fno-gpu-sanitize when that is fixed.
+      # CMAKE_HIP_FLAGS_INIT is set alongside CMAKE_CXX_FLAGS_INIT/CMAKE_C_FLAGS_INIT:
+      # projects that call project(... LANGUAGES ... HIP) compile .hip sources
+      # via CMake's native HIP language support, which reads CMAKE_HIP_FLAGS
+      # (seeded from CMAKE_HIP_FLAGS_INIT), not CMAKE_CXX_FLAGS. Without this,
+      # such .hip sources silently get zero sanitizer instrumentation.
       string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
     else()
       # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
       # so make the sanitizer imply shared linkage.
       string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer\")\n")
       string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" -fsanitize=${_sanitizer_string} -fno-omit-frame-pointer\")\n")
     endif()
 
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
