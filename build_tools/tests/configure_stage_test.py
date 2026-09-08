@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
 from configure_stage import (
+    filter_artifacts_for_stage,
     generate_cmake_args,
     get_artifact_features,
 )
@@ -94,6 +95,26 @@ class RocmSystemsMappingTest(unittest.TestCase):
         """Canonical artifact names should not be overridden."""
         alias_map = self.topology.get_alias_to_artifact_map()
         self.assertEqual(alias_map.get("rocprofiler-compute"), "rocprofiler-compute")
+
+
+class StageArtifactFilteringTest(unittest.TestCase):
+    """Tests for filtering artifacts by stage."""
+
+    def test_artifacts_filtered_to_stage(self):
+        """Artifacts not belonging to a stage are filtered out in cmake args."""
+        topology = get_topology()
+        # RPP is in cv-libs, blas is in math-libs - passing both to math-libs
+        # should only enable blas
+        args = generate_cmake_args(
+            stage_name="math-libs",
+            amdgpu_families="gfx1100",
+            dist_amdgpu_families="",
+            topology=topology,
+            artifact_names=["rpp", "blas"],
+            platform_name="linux",
+        )
+        self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
+        self.assertNotIn("-DTHEROCK_ENABLE_RPP=ON", args)
 
 
 class ManifestValidationTest(unittest.TestCase):

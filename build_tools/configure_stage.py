@@ -143,6 +143,31 @@ def get_artifact_features(
     )
 
 
+def filter_artifacts_for_stage(
+    topology: BuildTopology,
+    stage_name: str,
+    artifact_names: List[str],
+    build_dir: Path = None,
+) -> List[str]:
+    """Filter artifacts to only those produced by or dependencies of the stage."""
+    # Get all artifacts that are valid for this stage
+    produced = topology.get_produced_artifacts(stage_name)
+    inbound = topology.get_inbound_artifacts(stage_name)
+    stage_artifacts = produced | inbound
+
+    # Build alias map to resolve artifact names/aliases to canonical names
+    alias_map = topology.get_alias_to_artifact_map(build_dir)
+
+    # Filter: keep only artifacts that resolve to stage artifacts
+    filtered = []
+    for name in artifact_names:
+        canonical = alias_map.get(name.lower())
+        if canonical and canonical in stage_artifacts:
+            filtered.append(name)
+
+    return filtered
+
+
 def generate_cmake_args(
     stage_name: str,
     amdgpu_families: str,
@@ -157,8 +182,17 @@ def generate_cmake_args(
     """Generate CMake arguments for building a specific stage or artifacts."""
     args = []
 
+    # When both stage and artifacts are specified, filter artifacts to only
+    # those relevant to the stage. This prevents enabling features for artifacts
+    # that don't exist in the stage (e.g., enabling RPP in math-libs on Windows).
     if stage_name and artifact_names:
-        desc = f"stage {stage_name} + artifacts: {', '.join(artifact_names)}"
+        artifact_names = filter_artifacts_for_stage(
+            topology, stage_name, artifact_names, build_dir
+        )
+        if artifact_names:
+            desc = f"stage {stage_name} + artifacts: {', '.join(artifact_names)}"
+        else:
+            desc = stage_name
     elif stage_name:
         desc = stage_name
     elif artifact_names:
