@@ -7,9 +7,9 @@ endif()
 
 cmake_minimum_required(VERSION 3.25)  # Also update in alternative_os_setup.md
 
-# Set the default build type to Release if not specified
+# Set the default build type to Debug if not specified
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
 project(THEROCK)
