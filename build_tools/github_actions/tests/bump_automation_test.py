@@ -18,6 +18,7 @@ from bump_automation import (
     create_therock_bump,
     find_therock_workflow_files,
     generate_pr_body,
+    get_baseline_run_id_from_merged_pr,
     GITHUB_SEARCH_PAGE_SIZE,
     GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
@@ -84,6 +85,110 @@ class LatestCommitTest(unittest.TestCase):
             mock_api.call_args.args[1],
             "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-16",
         )
+
+
+class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
+    MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
+    HEAD_SHA = "23bc501d4b826695062a657d0b582076c354dd77"
+
+    def _pr(self, number: int = 7999) -> dict:
+        return {
+            "number": number,
+            "merged_at": "2026-09-08T20:33:17Z",
+            "merge_commit_sha": self.MERGE_SHA,
+            "head": {"sha": self.HEAD_SHA},
+        }
+
+    def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
+        return {"id": run_id, "name": name, "conclusion": conclusion}
+
+    def test_returns_the_successful_run_id(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "success")]},
+            ],
+        ) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
+        # The run lookup must key off the PR's pre-merge head SHA, not the
+        # merge commit itself.
+        self.assertIn(self.HEAD_SHA, mock_api.call_args_list[1].args[1])
+
+    def test_skips_failed_and_cancelled_runs(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "failure"),
+                        self._run(112, "success"),
+                    ]
+                },
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "112")
+
+    def test_returns_none_when_no_run_succeeded(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "failure"),
+                        self._run(112, "cancelled"),
+                    ]
+                },
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_a_completed_run_has_no_conclusion_yet(self):
+        # Defensive: a "completed" run should always carry a conclusion, but
+        # don't treat a missing/null one as implicitly successful.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, None)]},
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_no_matching_workflow_name(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "success", name="pre-commit")]},
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_no_merged_pr_found(self):
+        with patch("bump_automation.gh_api", return_value=[]) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+        mock_api.assert_called_once()
 
 
 class SubmoduleChangedTest(unittest.TestCase):

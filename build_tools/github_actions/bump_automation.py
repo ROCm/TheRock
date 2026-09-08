@@ -139,7 +139,18 @@ def gh_api(
 def get_baseline_run_id_from_merged_pr(
     repo: str, token: str, merge_commit_sha: str, workflow_name: str = "Multi-Arch CI"
 ) -> str | None:
-    """Get the baseline run ID from the PR that was just merged."""
+    """Get the baseline run ID from the PR that was just merged.
+
+    Downstream repos reuse this run's build-stage artifacts directly (via
+    `baseline_run_id`), so only a run that actually finished successfully is
+    safe to hand out. `status=completed` alone is not enough: a completed run
+    can still have `conclusion` of "failure" or "cancelled", and picking one
+    of those would silently point rocm-libraries at broken or missing
+    artifacts. If the newest matching run did not succeed, we deliberately do
+    not fall back to an older one on a different commit; the caller treats a
+    `None` return as "no baseline", which forces a full rebuild instead of a
+    plausible-looking but wrong artifact reuse.
+    """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
     pr = next(
@@ -159,14 +170,28 @@ def get_baseline_run_id_from_merged_pr(
     runs = gh_api(
         token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
     )
-    for run in runs.get("workflow_runs", []):
-        if run["name"] == workflow_name:
+    matching_runs = [
+        run for run in runs.get("workflow_runs", []) if run["name"] == workflow_name
+    ]
+
+    for run in matching_runs:
+        if run.get("conclusion") == "success":
             print(
-                f"[INFO] Found {workflow_name} run {run['id']} for PR #{pr['number']}"
+                f"[INFO] Found successful {workflow_name} run {run['id']} "
+                f"for PR #{pr['number']}"
             )
             return str(run["id"])
 
-    print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
+    if matching_runs:
+        found = ", ".join(
+            f"#{run['id']} ({run.get('conclusion')})" for run in matching_runs
+        )
+        print(
+            f"[WARN] No successful {workflow_name} run found for PR #{pr['number']} "
+            f"(found: {found})"
+        )
+    else:
+        print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
     return None
 
 
