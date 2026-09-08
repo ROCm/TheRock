@@ -1,0 +1,38 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Checkout External Repository
+description: Checkout external repo with sparse checkout when stage is affected, full checkout otherwise.
+
+inputs:
+  external_repo_config:
+    description: JSON config from detect_external_repo_config.py
+    required: true
+  stage_name:
+    description: Build stage name (e.g., math-libs, cv-libs)
+    required: true
+  timeout_minutes:
+    description: Checkout timeout in minutes
+    required: false
+    default: "10"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout external repository (sparse)
+      if: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] != '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+        ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+        path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+        sparse-checkout: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] }}
+        sparse-checkout-cone-mode: true
+
+    - name: Checkout external repository (full)
+      if: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] == '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+        ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+        path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}

@@ -44,17 +44,8 @@ from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
 
 
-# --- Sparse checkout computation functions ---
-# These functions compute which project paths should be checked out for each
-# build stage, enabling sparse checkout of external repositories to reduce
-# checkout time for large monorepos like rocm-libraries.
-
-
 def get_stage_source_paths(stage_name: str) -> Set[str]:
-    """Get all source_paths that map to artifacts built in this stage.
-
-    Returns a set of source_path values (e.g., {"rocprim", "hipcub", "rocthrust"})
-    """
+    """Get all source_paths that map to artifacts built in this stage."""
     topology = get_topology()
     source_paths: Set[str] = set()
 
@@ -67,19 +58,13 @@ def get_stage_source_paths(stage_name: str) -> Set[str]:
             if artifact.source_paths:
                 source_paths.update(artifact.source_paths)
             else:
-                # Default: use artifact name as source_path
                 source_paths.add(artifact.name)
 
     return source_paths
 
 
 def extract_source_path_from_project(project_path: str) -> Optional[str]:
-    """Extract the source_path name from a project path.
-
-    E.g., "projects/rocprim" -> "rocprim"
-         "shared/rocroller" -> "rocroller"
-         "dnn-providers/miopen-provider" -> "miopen-provider"
-    """
+    """Extract the last component from a project path (e.g., "projects/rocprim" -> "rocprim")."""
     parts = project_path.strip().split("/")
     if len(parts) >= 2:
         return parts[-1]
@@ -87,26 +72,14 @@ def extract_source_path_from_project(project_path: str) -> Optional[str]:
 
 
 def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
-    """Compute sparse checkout paths for a stage based on changed projects.
-
-    Args:
-        stage_name: Build stage name (e.g., "math-libs")
-        changed_projects: Comma-separated list of changed project paths
-
-    Returns:
-        List of project paths to sparse checkout, or empty list if stage
-        is not affected (signals full checkout should be used).
-    """
+    """Return project paths to sparse checkout for a stage, or empty list for full checkout."""
     if not changed_projects or not changed_projects.strip():
         return []
 
-    # Get source_paths that this stage builds
     stage_source_paths = get_stage_source_paths(stage_name)
     if not stage_source_paths:
-        # Unknown stage or stage with no source_paths - do full checkout
         return []
 
-    # Find which changed projects affect this stage
     affected_paths: List[str] = []
     for project in changed_projects.split(","):
         project = project.strip()
@@ -121,28 +94,7 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
 
 
 def compute_all_stage_sparse_checkouts(changed_projects: str) -> Dict[str, str]:
-    """Pre-compute sparse checkout paths for all build stages.
-
-    This function is called once during setup to compute sparse checkout paths
-    for all stages, which are then embedded in config_json for use by individual
-    build stage workflows.
-
-    Args:
-        changed_projects: Comma-separated list of changed project paths
-            (e.g., "projects/rocprim,shared/rocroller")
-
-    Returns:
-        Dict mapping stage_name -> newline-separated sparse paths (or empty string).
-        Empty string signals that stage should use full checkout.
-
-    Example output:
-        {
-            "compiler-runtime": "",  # not affected, use full checkout
-            "math-libs": "projects/rocprim\\nshared/rocroller",  # sparse checkout
-            "cv-libs": "",  # not affected, use full checkout
-            ...
-        }
-    """
+    """Pre-compute sparse checkout paths for all stages (stage_name -> newline-separated paths)."""
     if not changed_projects or not changed_projects.strip():
         return {}
 
