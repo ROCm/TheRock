@@ -262,10 +262,10 @@ default — and naming them, or `rocm_systems_all` or `all`, is rejected outrigh
 The narrowing applies only to the default; an explicit request is never silently
 reduced. See [Adding a stage](#adding-a-stage).
 
-`hipblaslt` is excluded from the default and the aliases too, for a different
-reason: it is measurable, but its instrumented build currently fails to link.
-Naming it is honoured with a warning rather than rejected, since rerunning it
-is how the block gets noticed as fixed. See
+`hipblaslt` and `hiptensor` are excluded from the default and the aliases too,
+for a different reason: both are measurable, but their instrumented builds
+currently fail to link. Naming one is honoured with a warning rather than
+rejected, since rerunning it is how the block gets noticed as fixed. See
 [Blocked projects](#blocked-projects).
 
 The aliases are expanded to concrete project names inside
@@ -303,14 +303,29 @@ default selection and the group aliases — including the group lists
 `--emit-cmake` writes, so a group build does not set a flag the Python side
 just declined to set. Naming it still works and prints the reason as a warning.
 
-`hipblaslt` is the current example. Its coverage-only branch of
+There are two examples today, and both fixes belong upstream in
+`ROCm/rocm-libraries`; once either lands, drop that project's
+`blocked_reason`.
+
+`hipblaslt` fails at link. Its coverage-only branch of
 `clients/CMakeLists.txt` links `hipblaslt-test` against a bare `rocroller`
 while the surrounding lines use imported targets. rocRoller exports as
 `roc::rocroller`, and under TheRock it is a separate subproject found through
 its package config, so the bare name is not a target here and reaches the
 linker as `-lrocroller` with no `-L` to resolve it. hipBLASLt's own build
-avoids this by having rocRoller in-tree. The fix belongs upstream in
-`ROCm/rocm-libraries`; once it lands, drop the `blocked_reason`.
+avoids this by having rocRoller in-tree.
+
+`hiptensor` outgrows the small code model. Upstream enables coverage as a
+blanket `add_compile_options(-fprofile-instr-generate -fcoverage-mapping)`, and
+hipTensor is built on composable_kernel, so the coverage mapping and name data
+scale with an already very large amount of instantiated template code. The
+result pushes `libhiptensor.so` past 2GB and the link fails on out-of-range
+`R_X86_64_PC32` relocations from `.rodata` into `.text`. Building it with a
+larger code model is the likely fix.
+
+Blocking matters more than it looks here, because a stage is built as a unit: a
+single project whose instrumented build fails takes the whole stage with it, and
+every other project's report along with it.
 
 Confirm a local instrumented build produces a non-empty report before relying on
 a new entry. A project whose tests never load the instrumented library builds

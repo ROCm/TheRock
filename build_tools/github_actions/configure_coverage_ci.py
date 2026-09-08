@@ -338,6 +338,20 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         # this wrong is silent: the option is simply never read, the library
         # builds uninstrumented, and the tests pass having written no profile.
         coverage_option="HIPTENSOR_CODE_COVERAGE",
+        # Instrumenting hipTensor pushes libhiptensor.so past the 2GB that the
+        # small code model allows, and the link dies on out-of-range
+        # R_X86_64_PC32 relocations from .rodata into .text. Upstream applies
+        # coverage as a blanket add_compile_options(-fprofile-instr-generate
+        # -fcoverage-mapping), and hipTensor is built on composable_kernel, so
+        # the coverage mapping and name data scale with an already enormous
+        # amount of instantiated template code. Building it with a larger code
+        # model is the likely fix and belongs upstream. Blocked meanwhile
+        # because the failure takes the whole math-libs stage with it, and
+        # every other project in the stage along with it.
+        blocked_reason=(
+            "libhiptensor.so exceeds the small code model when instrumented; "
+            "the link fails on out-of-range R_X86_64_PC32 relocations"
+        ),
         stage=STAGE_MATH_LIBS,
         test_component="hiptensor",
         coverage_config="projects/hiptensor/test_categories_coverage.yaml",

@@ -74,7 +74,7 @@ jobs:
       # are executed and no package config is read.
       #
       # Verified before pinning that this run publishes artifacts covering
-      # every selected project: blas, fft, hipdnn, hiptensor, rand, solver and
+      # every selected project: blas, fft, hipdnn, rand, solver and
       # sparse. Not all are per-target -- hipdnn is generic throughout and
       # solver's tests are generic -- so checking only for _gfx942 understates
       # what is there.
@@ -108,10 +108,14 @@ jobs:
       # upstream -- rccl's CMake refuses coverage outside a Debug build, and
       # rocshmem fails on coverage plus HIP relocatable device code.
       #
-      # hipBLASLt is absent for the same reason it is absent from the default
-      # selection: its instrumented build does not link. See its
-      # blocked_reason in configure_coverage_ci.py.
+      # hipBLASLt and hipTensor are absent for the same reason they are absent
+      # from the default selection: neither instrumented build links. See their
+      # blocked_reason in configure_coverage_ci.py. hipTensor was still in this
+      # list for run 34201973090, which is how its failure was found: the two
+      # registry corrections meant it was instrumented for the first time, and
+      # a stage is built as a unit, so its link error failed math-libs and
+      # skipped the report for all twelve.
       projects_to_test: >-
-        hipblas,hipdnn,hipfft,hiprand,hipsolver,hipsparselt,
-        hiptensor,rocblas,rocfft,rocrand,rocsolver,rocsparse
+        hipblas,hipdnn,hipfft,hiprand,hipsolver,
+        hipsparselt,rocblas,rocfft,rocrand,rocsolver,rocsparse
       test_type: "standard"

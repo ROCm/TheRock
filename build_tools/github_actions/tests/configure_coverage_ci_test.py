@@ -41,8 +41,8 @@ class ParseProjectsTest(unittest.TestCase):
                 - configure_coverage_ci.DEFAULT_PROJECTS
             ),
             # rccl and rocshmem for want of a comm-libs build job, hipblaslt
-            # because its instrumented build does not link.
-            ["hipblaslt", "rccl", "rocshmem"],
+            # and hiptensor because their instrumented builds do not link.
+            ["hipblaslt", "hiptensor", "rccl", "rocshmem"],
         )
 
     def test_blocked_project_is_left_out_of_every_alias(self):
