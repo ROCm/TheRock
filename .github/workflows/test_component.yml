@@ -291,7 +291,8 @@ jobs:
 
       - name: Test
         id: test
-        timeout-minutes: ${{ env.TEST_TIMEOUT_MINUTES }}
+        # fromJSON because env values are strings and this wants a number.
+        timeout-minutes: ${{ fromJSON(env.TEST_TIMEOUT_MINUTES) }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}

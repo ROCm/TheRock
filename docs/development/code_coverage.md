@@ -36,12 +36,17 @@ writes a second profile named after the device
 (`gfx942:sramecc+:xnack-.0.<host name>`) that cannot be uploaded as a CI
 artifact because of the colons.
 
-`therock_subproject.cmake` therefore appends `-Xarch_device
--fno-profile-instr-generate -Xarch_device -fno-coverage-mapping` to the compile
-rule of any subproject it enables coverage for. It has to be the compile rule
-rather than `CMAKE_<LANG>_FLAGS`: the last of a `-f`/`-fno-` pair wins, and the
-project's own flags arrive later, as `COMPILE_OPTIONS`. Measuring GPU code
-would mean undoing this and solving the two problems above.
+`therock_subproject.cmake` therefore appends the negation, scoped to the device
+compilation, for any subproject it enables coverage for:
+
+```
+-Xarch_device -fno-profile-instr-generate -Xarch_device -fno-coverage-mapping
+```
+
+It has to go on the compile rule rather than in `CMAKE_<LANG>_FLAGS`: the last
+of a `-f`/`-fno-` pair wins, and the project's own flags arrive later, as
+`COMPILE_OPTIONS`. Measuring GPU code would mean undoing this and solving the
+two problems above.
 
 That runtime calls `dlsym`, `dladdr` and `pthread_once`, and the driver does not
 put `-ldl` or `-lpthread` on the link line for it. On the manylinux base those

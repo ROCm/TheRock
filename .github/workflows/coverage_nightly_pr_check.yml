@@ -91,7 +91,10 @@ jobs:
       # build, baseline install, overlay, tests and a 77% report -- once
       # libclang_rt.profile_rocm.a's own dependencies (-ldl, -lpthread) were
       # added to the link line, which had been failing every instrumented
-      # binary before that.
+      # binary before that. Run 34164420766 then took the instrumented build
+      # of all twelve green and reported six of them; the six that failed are
+      # what the host-only scoping, the timeout floor and the two registry
+      # corrections in this branch are for.
       #
       # Named explicitly rather than using rocm_libraries_all because the four
       # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA) are left
