@@ -329,12 +329,13 @@ class TestCliInputParsing(_FixtureTestCase):
                     "rocroller",
                     "tensilelite",
                 },
-                # origami/stinkytofu are intentionally short now: tensilelite is
-                # a synthetic node with level=3 in the REAL test_policies.toml,
-                # so its own walk reaches hipblaslt/rocblas/hipblas transitively
-                # without hand-duplicating them here. This --level 5 (self-only)
-                # check only exercises alias expansion, so it sees just the
-                # literal alias contents.
+                # origami/stinkytofu intentionally list only the literal
+                # alias-seed names: tensilelite is a synthetic node with
+                # level=3 in the REAL test_policies.toml, so its own walk
+                # reaches hipblaslt/rocblas/hipblas transitively without
+                # hand-duplicating them here. This --level 5 (self-only) check
+                # only exercises alias expansion, so it sees just the literal
+                # alias contents.
                 "shared/origami": {"origami", "tensilelite"},
                 "shared/stinkytofu": {"tensilelite"},
                 "shared/tensile": {"hipblas", "rocblas"},

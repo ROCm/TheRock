@@ -87,9 +87,9 @@ _EXTERNAL_SUBTREE_ALIASES = {
         "tensilelite",
     ],
     # hipblaslt/rocblas/hipblas are reachable transitively from "tensilelite"
-    # itself now that TensileLite is a synthetic consumer-graph node (see
+    # itself: TensileLite is a synthetic consumer-graph node (see
     # _load_synthetic_subprojects below) with level 3 (unbounded) in
-    # test_policies.toml -- no need to hand-list them here too.
+    # test_policies.toml, so they don't need to be hand-listed here too.
     "shared/origami": ["origami", "tensilelite"],
     "shared/stinkytofu": ["tensilelite"],
     "shared/tensile": ["hipblas", "rocblas"],
