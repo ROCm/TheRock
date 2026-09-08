@@ -35,6 +35,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+        # Explicitly unset (rather than relying on the ambient shell): most
+        # tests exercise today's default (no GPU-scarcity gate active).
+        os.environ.pop("TEST_RUNS_ON", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -308,6 +311,59 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
         os.environ["AMDGPU_FAMILIES"] = "gfx1150"
         self.assertNotIn("rocgdb-corefile", self._selected_names())
+
+    # -----------------------
+    # cpu_only_mode (CPU_ONLY_TEST_RUNS_ON sentinel): when a family's GPU test
+    # runner is disabled (e.g. submodule_bump_tests_only), only
+    # linux_cpu_runner components may still run.
+    # -----------------------
+
+    def test_gated_family_without_cpu_only_mode_selects_everything(self):
+        # Regression check: today's behavior (TEST_RUNS_ON unset) must be
+        # completely unaffected -- both GPU and CPU-only jobs are selected.
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        self._inject_job("gpu-job")
+        self._inject_job("cpu-job", linux_cpu_runner=True)
+        # _inject_job overwrites PROJECTS_TO_TEST to isolate a single job;
+        # widen back out so both injected jobs are candidates.
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        names = self._selected_names()
+        self.assertIn("gpu-job", names)
+        self.assertIn("cpu-job", names)
+
+    def test_cpu_only_mode_excludes_gpu_components(self):
+        os.environ["TEST_RUNS_ON"] = fetch_test_configurations.CPU_ONLY_TEST_RUNS_ON
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        self._inject_job("gpu-job")
+        self._inject_job("cpu-job", linux_cpu_runner=True)
+        # _inject_job overwrites PROJECTS_TO_TEST to isolate a single job;
+        # widen back out so both injected jobs are candidates.
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        names = self._selected_names()
+        self.assertNotIn("gpu-job", names)
+        self.assertIn("cpu-job", names)
+
+    def test_cpu_only_mode_excludes_sanity(self):
+        os.environ["TEST_RUNS_ON"] = fetch_test_configurations.CPU_ONLY_TEST_RUNS_ON
+
+        fetch_test_configurations.run()
+
+        sanity_component = json.loads(self.gha_output["sanity_component"])
+        self.assertEqual(sanity_component["test_runner"], "")
+
+    def test_non_sentinel_test_runs_on_does_not_trigger_cpu_only_mode(self):
+        # A real GPU runner label (not the sentinel) must not be mistaken for
+        # cpu_only_mode.
+        os.environ["TEST_RUNS_ON"] = "linux-gfx942-1gpu-ccs-ossci-rocm"
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        self._inject_job("gpu-job")
+        self._inject_job("cpu-job", linux_cpu_runner=True)
+        # _inject_job overwrites PROJECTS_TO_TEST to isolate a single job;
+        # widen back out so both injected jobs are candidates.
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        names = self._selected_names()
+        self.assertIn("gpu-job", names)
+        self.assertIn("cpu-job", names)
 
     # -----------------------
     # Functional test merging via run_extended_tests

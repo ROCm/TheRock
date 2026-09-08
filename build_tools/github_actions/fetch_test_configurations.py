@@ -36,6 +36,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
 )
+from configure_multi_arch_ci import CPU_ONLY_TEST_RUNS_ON
 
 logging.basicConfig(level=logging.INFO)
 
@@ -945,6 +946,10 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    # Set by configure_multi_arch_ci.py (CPU_ONLY_TEST_RUNS_ON) when a
+    # GPU-scarcity gate (e.g. submodule_bump_tests_only) disabled this family's
+    # GPU test runner. Only linux_cpu_runner components may run in that case.
+    cpu_only_mode = os.getenv("TEST_RUNS_ON") == CPU_ONLY_TEST_RUNS_ON
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -1034,6 +1039,19 @@ def run():
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
+            continue
+
+        # When the family's GPU test runner is disabled (cpu_only_mode -- see
+        # CPU_ONLY_TEST_RUNS_ON), only linux_cpu_runner components may run:
+        # they never touch the GPU hardware the gate protects. Sanity requires
+        # a real GPU runner, so it's excluded too in this mode.
+        if cpu_only_mode and (
+            key == "sanity" or not selected_matrix[key].get("linux_cpu_runner", False)
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform}: GPU tests "
+                f"disabled for family {amdgpu_families} (not linux_cpu_runner)"
             )
             continue
 
@@ -1205,8 +1223,13 @@ def run():
     ]
 
     # Separate sanity (always a prerequisite) from the regular component matrix.
+    # Falls back to an explicit empty test_runner (rather than a bare `None` ->
+    # JSON `null`) so `fromJSON(...).test_runner != ''` in test_artifacts.yml
+    # evaluates cleanly when sanity was excluded (e.g. cpu_only_mode, where
+    # sanity has no GPU runner to run on).
     sanity_component = next(
-        (c for c in all_components if c.get("job_name") == "sanity"), None
+        (c for c in all_components if c.get("job_name") == "sanity"),
+        {"test_runner": ""},
     )
     output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 

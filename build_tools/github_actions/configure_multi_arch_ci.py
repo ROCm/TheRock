@@ -86,6 +86,14 @@ from stage_reuse_decision import (
 
 _NULL_GIT_SHA = "0" * 40
 
+# Sentinel written to a family's "test-runs-on" when submodule_bump_tests_only
+# disables its GPU test runner. Kept non-empty (instead of "") so downstream
+# workflow gates that check `test_runs_on != ''` still fire, letting
+# fetch_test_configurations.py's linux_cpu_runner-only components (which never
+# touch the gated GPU hardware this flag protects) continue to run. Read by
+# fetch_test_configurations.py to filter its component selection accordingly.
+CPU_ONLY_TEST_RUNS_ON = "cpu-only"
+
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
@@ -1349,17 +1357,21 @@ def _expand_build_config_for_platform(
                 f"disabling test runner for non-scheduled/non-dispatch runs"
             )
 
-        # If submodule_bump_tests_only is set, only run tests when submodule changes
-        # are detected or on workflow_dispatch (manual triggers).
+        # If submodule_bump_tests_only is set, only run GPU tests when submodule
+        # changes are detected or on workflow_dispatch (manual triggers). Use the
+        # CPU_ONLY_TEST_RUNS_ON sentinel rather than "": this flag exists to
+        # protect scarce GPU hardware, not to block CPU-only (linux_cpu_runner)
+        # test components, which never touch it.
         if (
             platform_info.get("submodule_bump_tests_only", False)
             and not ci_inputs.is_workflow_dispatch
             and git_context.has_submodule_changes is not True
         ):
-            test_runs_on = ""
+            test_runs_on = CPU_ONLY_TEST_RUNS_ON
             print(
                 f"  {family_name}: submodule_bump_tests_only flag set, "
-                f"disabling tests (no submodule changes detected)"
+                f"disabling GPU tests (no submodule changes detected); "
+                f"linux_cpu_runner components still run"
             )
 
         # If skip_tests_on_submodule_bump is set, skip tests when submodule changes

@@ -180,6 +180,11 @@ jobs:
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          # Passed through so the script can detect the CPU_ONLY_TEST_RUNS_ON
+          # sentinel (see configure_multi_arch_ci.py) and filter to
+          # linux_cpu_runner components only when the family's GPU test
+          # runner has been disabled by a GPU-scarcity gate.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}

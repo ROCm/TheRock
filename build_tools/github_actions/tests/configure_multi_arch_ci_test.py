@@ -2028,7 +2028,13 @@ class TestFamilyTestFilters(unittest.TestCase):
         self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
     def test_submodule_bump_tests_only_disables_tests_without_submodule_changes(self):
-        """gfx950 tests should be disabled on push without submodule changes."""
+        """gfx950 GPU tests should be disabled on push without submodule changes.
+
+        The family's GPU runner is disabled via the CPU_ONLY_TEST_RUNS_ON
+        sentinel rather than "", so linux_cpu_runner-only test components
+        (which never touch gfx950 GPU hardware) can still run -- see
+        fetch_test_configurations.py's cpu_only_mode filtering.
+        """
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
@@ -2052,8 +2058,10 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx950_info)
-        # Tests should be disabled (empty runner)
-        self.assertEqual(gfx950_info["test-runs-on"], "")
+        # GPU tests should be disabled via the CPU-only sentinel, not a real
+        # GPU runner label, but still non-empty so downstream `!= ''` gates
+        # still invoke the test stage (for CPU-only components).
+        self.assertEqual(gfx950_info["test-runs-on"], cm.CPU_ONLY_TEST_RUNS_ON)
 
     def test_submodule_bump_tests_only_enables_tests_on_workflow_dispatch(self):
         """gfx950 tests should be enabled on workflow_dispatch regardless of submodule changes."""
