@@ -11,13 +11,19 @@ It is intentionally conservative:
 - Otherwise, changed paths are mapped to top-level submodule names, then to
   source sets, artifact groups, and build stages.
 
+Granular Artifact Analysis:
+For monorepo submodules like rocm-libraries, this module also supports
+artifact-level impact analysis. When enabled, it can identify specific
+artifacts (e.g., "blas", "fft") that are impacted by changes, allowing
+unaffected artifacts within the same stage to be reused from a baseline run.
+
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Dict, List, Optional, Sequence, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
 
 from _therock_utils.build_topology import BuildTopology, SourceSet
 
@@ -56,6 +62,9 @@ class StageImpactResult:
         full_rebuild_required: Whether conservative fallback was triggered.
         reasons: Why full CI or a broader rebuild was selected.
         unmatched_inputs: Inputs that could not be mapped to a source set.
+        impacted_artifacts: Specific artifacts that are impacted (granular analysis).
+        reusable_artifacts: Artifacts that can be reused from baseline (granular analysis).
+        artifact_level_analysis: True if granular artifact analysis was performed.
     """
 
     changed_inputs: Tuple[str, ...]
@@ -66,6 +75,10 @@ class StageImpactResult:
     full_rebuild_required: bool
     reasons: Tuple[str, ...] = ()
     unmatched_inputs: Tuple[str, ...] = ()
+    # Granular artifact-level analysis fields
+    impacted_artifacts: Tuple[str, ...] = ()
+    reusable_artifacts: Tuple[str, ...] = ()
+    artifact_level_analysis: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -77,6 +90,9 @@ class StageImpactResult:
             "full_rebuild_required": self.full_rebuild_required,
             "reasons": self.reasons,
             "unmatched_inputs": self.unmatched_inputs,
+            "impacted_artifacts": self.impacted_artifacts,
+            "reusable_artifacts": self.reusable_artifacts,
+            "artifact_level_analysis": self.artifact_level_analysis,
         }
 
 
@@ -145,6 +161,25 @@ class StageImpactAnalyzer:
                 if stage_name not in rebuild_set
             )
 
+        # Granular artifact-level analysis for monorepo submodules
+        impacted_artifacts: Tuple[str, ...] = ()
+        reusable_artifacts: Tuple[str, ...] = ()
+        artifact_level_analysis = False
+
+        if not full_rebuild_required and self._can_do_artifact_analysis(
+            normalized_inputs, matched_source_sets
+        ):
+            impacted_set, conservative = self._resolve_impacted_artifacts(
+                normalized_inputs
+            )
+            if not conservative and impacted_set:
+                # Get all artifacts in the impacted stages
+                stage_artifacts = self._get_stage_artifacts(impacted_stages)
+                reusable_set = stage_artifacts - impacted_set
+                impacted_artifacts = tuple(sorted(impacted_set))
+                reusable_artifacts = tuple(sorted(reusable_set))
+                artifact_level_analysis = True
+
         return StageImpactResult(
             changed_inputs=normalized_inputs,
             matched_source_sets=tuple(sorted(matched_source_sets)),
@@ -154,6 +189,9 @@ class StageImpactAnalyzer:
             full_rebuild_required=full_rebuild_required,
             reasons=tuple(reasons),
             unmatched_inputs=tuple(sorted(set(unmatched_inputs))),
+            impacted_artifacts=impacted_artifacts,
+            reusable_artifacts=reusable_artifacts,
+            artifact_level_analysis=artifact_level_analysis,
         )
 
     def _normalize_input(self, item: str) -> str:
@@ -274,6 +312,77 @@ class StageImpactAnalyzer:
 
         return expanded
 
+    def _can_do_artifact_analysis(
+        self, normalized_inputs: Sequence[str], matched_source_sets: Set[str]
+    ) -> bool:
+        """Check if granular artifact-level analysis is possible.
+
+        Granular analysis is supported for source sets that have artifacts
+        with source_paths mappings defined in BUILD_TOPOLOGY.toml.
+        """
+        # Get source sets that support granular analysis
+        granular_source_sets = set(self.topology.get_source_sets_with_source_paths())
+
+        # Check if any matched source set supports granular analysis
+        if not matched_source_sets.intersection(granular_source_sets):
+            return False
+
+        # Check if any inputs are in source sets with source_paths
+        for source_set in granular_source_sets:
+            if any(
+                item.startswith(f"{source_set}/") or item == source_set
+                for item in normalized_inputs
+            ):
+                return True
+
+        return False
+
+    def _resolve_impacted_artifacts(
+        self, normalized_inputs: Sequence[str]
+    ) -> Tuple[Set[str], bool]:
+        """Map changed paths to specific artifacts.
+
+        Returns (impacted_artifacts, is_conservative) where is_conservative
+        is True if any path triggered a fallback to rebuilding all artifacts.
+        """
+        impacted: Set[str] = set()
+        is_conservative = False
+
+        # Get source sets that support granular analysis
+        granular_source_sets = set(self.topology.get_source_sets_with_source_paths())
+
+        for path in normalized_inputs:
+            submodule, subpath = self.topology.parse_changed_path(path)
+            if submodule is None or submodule not in granular_source_sets:
+                continue
+
+            # get_artifacts_for_path handles both project and shared paths:
+            # - For project paths, returns the single artifact that owns the path
+            # - For shared paths, returns all artifacts that declare this shared_dep
+            artifacts = self.topology.get_artifacts_for_path(subpath)
+            if artifacts:
+                impacted.update(artifacts)
+            else:
+                # Path affects all artifacts in this source set
+                is_conservative = True
+                impacted.update(
+                    self.topology.get_all_artifacts_for_source_set(submodule)
+                )
+
+        return (impacted, is_conservative)
+
+    def _get_stage_artifacts(self, stage_names: Set[str]) -> Set[str]:
+        """Get all artifacts produced by a set of stages."""
+        artifacts: Set[str] = set()
+        for stage_name in stage_names:
+            stage = self.topology.build_stages.get(stage_name)
+            if stage is None:
+                continue
+            for group_name in stage.artifact_groups:
+                for artifact in self.topology.get_artifacts_in_group(group_name):
+                    artifacts.add(artifact.name)
+        return artifacts
+
 
 def analyze_stage_impact(
     changed_inputs: Sequence[str],
@@ -289,3 +398,52 @@ def analyze_stage_impact(
 
     analyzer = StageImpactAnalyzer(topology=topology, rules=rules)
     return analyzer.analyze(changed_inputs=changed_inputs, platform=platform)
+
+
+def analyze_artifact_impact_from_projects(
+    changed_projects: Sequence[str],
+    topology: Optional[BuildTopology] = None,
+) -> Tuple[List[str], List[str]]:
+    """Compute rebuild/reusable artifacts from external repo changed_projects.
+
+    Maps project paths (e.g., "projects/rocprim") to artifact names (e.g., "prim")
+    using BUILD_TOPOLOGY.toml source_paths mappings. This enables granular CI
+    artifact reuse: when only specific source paths change in an external repo,
+    only affected artifacts rebuild while others reuse baseline artifacts.
+
+    Args:
+        changed_projects: List of changed project paths from external repo
+            (e.g., ["projects/rocprim", "projects/hipcub"]).
+        topology: BuildTopology instance (loaded from BUILD_TOPOLOGY.toml if None).
+
+    Returns:
+        (rebuild_artifacts, reusable_artifacts) tuple of sorted artifact name lists.
+    """
+    if topology is None:
+        from _therock_utils.build_topology import get_topology
+
+        topology = get_topology()
+
+    # Collect artifacts with source_paths mappings (derived from topology)
+    granular_source_sets = set(topology.get_source_sets_with_source_paths())
+    all_stage_artifacts: Set[str] = set()
+    for stage in topology.get_build_stages():
+        for group_name in stage.artifact_groups:
+            group = topology.artifact_groups.get(group_name)
+            if group and set(group.source_sets) & granular_source_sets:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    if artifact.source_paths:
+                        all_stage_artifacts.add(artifact.name)
+
+    # Map changed projects to artifacts
+    rebuild_artifacts: Set[str] = set()
+    alias_map = topology.get_alias_to_artifact_map()
+    for project in changed_projects:
+        normalized = project.split("/")[-1].lower()
+        if normalized in alias_map:
+            rebuild_artifacts.add(alias_map[normalized])
+
+    # Artifacts not in rebuild set are reusable
+    reusable_artifacts = all_stage_artifacts - rebuild_artifacts
+
+    return sorted(rebuild_artifacts), sorted(reusable_artifacts)
