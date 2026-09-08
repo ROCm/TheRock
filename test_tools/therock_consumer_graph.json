@@ -118,7 +118,8 @@
       "rocthrust",
       "roctracer",
       "rocwmma",
-      "rpp"
+      "rpp",
+      "stinkytofu"
     ]
   },
   "hip-tests": {
