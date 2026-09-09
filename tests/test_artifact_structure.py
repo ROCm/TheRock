@@ -69,6 +69,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
     ("fftw3", "doc"),
     ("fftw3", "run"),
+    ("fftw3", "lib"),
     ("hipkernelprovider", "lib"),
     ("hipkernelprovider", "test"),
     ("hipthreads", "dev"),
