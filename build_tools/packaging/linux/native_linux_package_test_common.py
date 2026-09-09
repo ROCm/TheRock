@@ -36,7 +36,24 @@ VERIFY_KEY_COMPONENTS = [
     "lib/libamdhip64.so",
 ]
 
-_NAMED_VARIANTS = frozenset({"asan"})
+
+def metapackage_variant_suffix(build_variant: str) -> str:
+    """Return the metapackage name variant segment for a CI build-variant label.
+
+    ASan-family labels (``asan``, ``host-asan``, ``asan-debug``, ``host-asan-debug``)
+    all collapse to ``-asan``, matching ``packaging_utils.update_package_name``.
+    Other labels (e.g. ``release``) return an empty string.
+
+    Args:
+        build_variant: Build variant from CLI or ``BUILD_VARIANT`` env.
+
+    Returns:
+        ``-asan`` when the variant is ASan-family; otherwise ``""``.
+    """
+    variant = build_variant.strip().lower()
+    if "asan" in variant:
+        return "-asan"
+    return ""
 
 
 def derive_package_type(os_profile: str) -> str:
@@ -108,21 +125,22 @@ def build_metapackage_names(
     - With ``rocm_version`` only: ``amdrocm{variant}{ver}`` and
       ``amdrocm-core-sdk{variant}{ver}``.
     - With neither: unversioned ``amdrocm{variant}`` and ``amdrocm-core-sdk{variant}``.
-    - Named build variants (currently ``asan``) insert ``-{variant}`` before the
-      version suffix (e.g. ``amdrocm-asan7.13-gfx94x``).
+    - ASan-family build variants (``asan``, ``host-asan``, ``asan-debug``,
+      ``host-asan-debug``) insert ``-asan`` before the version suffix
+      (e.g. ``amdrocm-asan7.13-gfx94x``). Labels such as ``release`` do not
+      alter names.
 
     Args:
         gfx_arch: GPU architecture(s); normalized via ``normalize_target_list``.
         rocm_version: ROCm release for versioned names; major.minor is used.
-        build_variant: Optional variant suffix (e.g. ``asan``).
+        build_variant: Optional CI build-variant label (ASan-family collapses to ``-asan``).
 
     Returns:
         Ordered list of metapackage names to install or remove.
     """
     gfx_arch_list = normalize_target_list(gfx_arch, lowercase=True, dedupe=True)
     rocm_version_major_minor = major_minor_rocm_version_from_input(rocm_version)
-    variant = build_variant.strip().lower()
-    variant_sep = f"-{variant}" if variant in _NAMED_VARIANTS else ""
+    variant_sep = metapackage_variant_suffix(build_variant)
     ver = rocm_version_major_minor
 
     if gfx_arch_list and ver:
