@@ -165,7 +165,18 @@ jobs:
         run: |
           echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
           echo "HSA_XNACK=1" >> $GITHUB_ENV
-          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+          # Absolute path: this is exported job-wide and read by processes that
+          # run from other working directories (hip_check runs from build/bin),
+          # where a relative path resolves to nothing and ASAN falls back to
+          # unsymbolized frames.
+          SYMBOLIZER_BIN="${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer"
+          if [[ -x "${SYMBOLIZER_BIN}" ]]; then
+            SYMBOLIZER_PATH="$(cd "$(dirname "${SYMBOLIZER_BIN}")" && pwd)/llvm-symbolizer"
+            echo "ASAN_SYMBOLIZER_PATH=${SYMBOLIZER_PATH}" >> $GITHUB_ENV
+            echo "Resolved ASAN symbolizer: ${SYMBOLIZER_PATH}"
+          else
+            echo "Warning: llvm-symbolizer not found at ${SYMBOLIZER_BIN}, ASAN reports will be unsymbolized"
+          fi
           # Resolve ASAN runtime path for steps that need LD_PRELOAD (e.g., sanity check).
           # Non-instrumented executables like Python need LD_PRELOAD to load ASAN-instrumented
           # libraries (e.g., libamdhip64). We don't set LD_PRELOAD globally to avoid false
