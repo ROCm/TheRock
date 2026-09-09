@@ -35,12 +35,14 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
                 {
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
             ],
@@ -64,6 +66,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
             ],
@@ -85,6 +88,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.13",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
             ],
@@ -109,6 +113,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
                             "amdgpu_families": "gfx125X-dcgpu",
+                            "test_level": "standard",
                             "test_amdgpu_families": "auto",
                         }
                     ],
@@ -130,6 +135,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "users/alice/gfx125x-bringup",
                     "amdgpu_families": "gfx125X-dcgpu",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
             ],
@@ -152,6 +158,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.14",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx110X-all",
+                    "test_level": "standard",
                     "test_amdgpu_families": "none",
                 }
             ],
@@ -176,6 +183,30 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
                 self.assertEqual(len(matrix), 1)
                 self.assertEqual(matrix[0]["test_amdgpu_families"], "auto")
+
+    def test_summary_lists_generated_rows_and_test_levels(self):
+        matrix = m.generate_pytorch_matrix_for_release_type(
+            release_type="dev",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        summary = m.format_matrix_summary(
+            release_type="dev",
+            platform="linux",
+            python_versions=["3.12"],
+            pytorch_git_refs=["release/2.12", "nightly"],
+            amdgpu_families="gfx94X-dcgpu",
+            matrix=matrix,
+        )
+
+        self.assertIn("| Generated rows | 2 (`standard`: 2) |", summary)
+        self.assertIn(
+            "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `standard` |",
+            summary,
+        )
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
