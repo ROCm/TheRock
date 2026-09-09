@@ -5,11 +5,34 @@
 # docs/rfcs/RFC0013-Consumer-Based-Test-Selection.md.
 #
 # Each table:
-#   [component.<name>]  <name> must be a graph key (validated).
+#   [component.<name>]  <name> must be a graph key, real or synthetic (validated).
 #   level = <1-5>       Walk depth. Default 4 (self + direct consumers). 5 = self
 #                       only; 3 = self + all transitive consumers.
 #   test_include        Extra targets to test; values need not be graph keys.
 #   test_exclude        Targets to drop after the walk and includes.
+#
+#   [synthetic.<name>]  <name> need not be (and typically is not) a graph key --
+#                       that's the point. Promotes <name> into the in-memory
+#                       consumer graph as an ordinary node so it walks like any
+#                       CMake-derived project. Use this instead of test_include
+#                       when the changed project itself has no graph node but
+#                       DOES have real downstream consumers worth walking
+#                       transitively (test_include alone cannot do that: it
+#                       unions in the listed names but does not continue the
+#                       walk past them).
+#     consumers          Projects that consume <name>; must be real graph keys
+#                        or other synthetic keys (validated).
+
+# --- Synthetic subprojects -----------------------------------------------------
+# Projects with no CMake target (no consumer-graph node) but with real test
+# couplings the graph cannot express.
+
+[synthetic.tensilelite]
+# TensileLite is a kernel-generator tool + YAML corpus bundled inside hipblaslt
+# (and a variant inside hipsparselt), not tracked as an independent build
+# target in the consumer graph. hipblaslt and hipsparselt are its real
+# consumers; see [component.tensilelite] below for the walk depth.
+consumers = ["hipblaslt", "hipsparselt"]
 
 # --- Foundational runtimes ----------------------------------------------------
 # Used by most of the tree, so they test their full transitive downstream.
@@ -62,6 +85,18 @@ test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
 
 [component.hipblas]
 test_include = ["hipsolver"]
+
+[component.hipblaslt]
+# The generated graph does not yet declare hipblas as a hipblaslt consumer,
+# even though a hipblaslt change can break hipblas. test_include patches the
+# one missing edge (hipblaslt is a real graph node otherwise).
+test_include = ["hipblas"]
+
+[component.tensilelite]
+# Unbounded: a TensileLite-only change should retest hipblaslt/hipsparselt
+# (its synthetic consumers, declared above), then ripple transitively through
+# their own real consumers (rocblas, hipblas, ...) via the normal graph walk.
+level = 3
 
 [component.hiprand]
 test_include = ["miopen", "rocprim"]

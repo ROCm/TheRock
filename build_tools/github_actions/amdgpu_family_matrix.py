@@ -228,7 +228,7 @@ amdgpu_family_info_matrix_presubmit = {
                 },  # ccs-csp
             ],
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+            "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
@@ -307,6 +307,16 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds can be triggered manually via workflow_dispatch.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+        },
+    },
 }
 
 
@@ -330,10 +340,18 @@ amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "asan-debug", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
@@ -478,18 +496,6 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx125x": {
-        "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds are included — workflow_dispatch can be used
-            # to trigger manually; nightly schedule runs both ROCm stack
-            # and PyTorch builds.
-            "test-runs-on": "",
-            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
