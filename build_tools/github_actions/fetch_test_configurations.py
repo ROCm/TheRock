@@ -583,12 +583,7 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
-        # Only schedule on tiers that define multigpu_<tier> labels in hipfft's
-        # test_categories.yaml (multigpu_comprehensive/full). This keeps the scarce
-        # 8-GPU runner from being claimed by "quick"/"standard" runs that have no
-        # multi-GPU tests.
         "run_for_test_types": ["comprehensive", "full"],
-        # Architectures that we have multi GPU setup for testing.
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
     },
     # rocFFT multi-GPU subset: mirror of hipfft-multi-gpu for rocFFT. Selects only
