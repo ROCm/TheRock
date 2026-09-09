@@ -247,6 +247,8 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "ffm-standard",
                 "ffm-comprehensive",
                 "ffm-full",
+                "emu-fast",
+                "emu-full",
             },
         )
 
