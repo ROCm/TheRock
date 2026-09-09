@@ -19,11 +19,17 @@ BOT_EMAIL = "therockbot@amd.com"
 COMMON_CI_LABELS = ["ci:run-all-archs"]
 
 ROCM_SYSTEMS_FILES = [
+    ".github/workflows/therock-build-linux.yml",
     ".github/workflows/therock-ci-linux.yml",
     ".github/workflows/therock-ci-windows.yml",
+    ".github/workflows/therock-ci.yml",
     ".github/workflows/therock-rccl-ci-linux.yml",
+    ".github/workflows/therock-rccl-test-jax-collective.yml",
+    ".github/workflows/therock-rccl-test-madengine.yml",
     ".github/workflows/therock-rccl-test-packages-multi-node.yml",
     ".github/workflows/therock-rccl-test-packages-single-node.yml",
+    ".github/workflows/therock-rccl-test-pytorch-distributed.yml",
+    ".github/workflows/therock-rccl-test-rocprof.yml",
     ".github/workflows/therock-test-component.yml",
     ".github/workflows/therock-test-packages.yml",
 ]
