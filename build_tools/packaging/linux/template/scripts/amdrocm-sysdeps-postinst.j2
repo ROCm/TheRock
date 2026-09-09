@@ -1,0 +1,14 @@
+#!/bin/bash
+{% include "template/scripts/_alternatives_lib.j2" %}
+{% if target == "deb" %}
+# deb: register on configure and on the dpkg trigger (fires after payload unpack).
+case "$1" in
+    (configure|triggered) alt_install ;;
+    (abort-upgrade|abort-remove|abort-deconfigure) : ;;
+    (*) : ;;
+esac
+{% else %}
+# rpm: registration is done by %transfiletriggerin after payload is unpacked.
+:
+{% endif %}
+exit 0
