@@ -505,7 +505,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         names = {job["job_name"] for job in components}
+        # Both multi-GPU jobs should be included for standard tier
         self.assertIn("rccl", names)
+        self.assertIn("rocshmem", names)
 
     # -----------------------
     # Output contract
