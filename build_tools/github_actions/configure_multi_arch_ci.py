@@ -1289,24 +1289,7 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant in ("asan", "asan-debug"):
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif build_variant in ("host-asan", "host-asan-debug"):
+        if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
             # due to limited ASAN runner capacity and stability concerns.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
@@ -1324,6 +1307,23 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no host-asan sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif "asan" in build_variant:
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no ASAN sandbox runner available, "
                     f"disabling tests"
                 )
 
