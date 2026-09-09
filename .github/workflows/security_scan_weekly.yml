@@ -8,7 +8,7 @@
 # anything it doesn't list. See the PR-time counterpart
 # (security_scan_pr.yml) for the human-readable, non-elevated variant.
 
-name: Weekly security scan
+name: Security scan (Weekly)
 
 on:
   schedule:
