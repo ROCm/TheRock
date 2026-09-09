@@ -31,9 +31,9 @@ on:
         type: string
         default: ""
       release_type:
-        description: "Release type for the destination artifacts bucket (dev, nightly, ...)."
+        description: "Release type for the destination artifacts bucket. Developer-triggered runs should use the default."
         type: string
-        default: dev
+        default: ci
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -55,7 +55,7 @@ on:
         default: ""
       release_type:
         type: string
-        default: dev
+        default: ci
       repository:
         type: string
         default: ""
