@@ -106,6 +106,38 @@ jobs:
       - name: Install WiX Toolset v4
         run: dotnet tool install --global wix --version "4.*"
 
+      # The legacy System32 DLLs (amdhip64_6.dll, amd_comgr_2.dll) are tracked
+      # by DVC under rocm-systems/shared/amdgpu-windows-interop/legacy/. The
+      # outer checkout uses submodules: false for speed, so sparse-fetch only
+      # that directory — the generator then pulls the actual DLLs over
+      # anonymous HTTPS from the DVC remote. A full submodule init would clone
+      # the multi-GB rocm-systems repo needlessly.
+      #
+      # CRITICAL: the rocm-systems SHA must match the commit the *artifacts*
+      # were built from (or the legacy DLLs would be version-skewed against the
+      # rest of the MSI), so read pin_sha from the artifact set's own manifest
+      # rather than from this checkout's submodule gitlink.
+      #
+      # TODO(#1987): this belongs in generate_msi_wxs.py — in --artifacts-url
+      # mode the generator already fetches the manifest and should self-pin the
+      # legacy DVC fetch. Wiring it here keeps this PR scoped to the workflow;
+      # a follow-up will move the logic into the generator and drop this step.
+      - name: Sparse-checkout rocm-systems legacy DVC pointers
+        run: |
+          manifest_url="${ARTIFACTS_URL%/}/manifests/therock_manifest.json"
+          echo "Reading rocm-systems pin from ${manifest_url}"
+          rocm_systems_sha="$(
+            curl -fsSL "${manifest_url}" \
+              | python -c "import json,sys; m=json.load(sys.stdin); print(next(s['pin_sha'] for s in m['submodules'] if s['submodule_name']=='rocm-systems'))"
+          )"
+          echo "rocm-systems pin_sha=${rocm_systems_sha}"
+          git clone --no-checkout --filter=blob:none --depth=1 \
+            https://github.com/ROCm/rocm-systems.git rocm-systems
+          git -C rocm-systems sparse-checkout set --no-cone \
+            shared/amdgpu-windows-interop/legacy
+          git -C rocm-systems fetch --depth=1 origin "${rocm_systems_sha}"
+          git -C rocm-systems checkout "${rocm_systems_sha}"
+
       - name: Generate WiX source and build MSI
         run: |
           python build_tools/packaging/windows/generate_msi_wxs.py \
