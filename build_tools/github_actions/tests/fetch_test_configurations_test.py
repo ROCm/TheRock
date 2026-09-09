@@ -471,6 +471,42 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
 
+    def test_multi_gpu_job_excluded_for_quick_tests(self):
+        """Multi-GPU tests are skipped on quick runs (temporary capacity constraint)."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        # Multi-GPU jobs like rccl/rocshmem should be excluded for quick runs
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("rocshmem", names)
+
+    def test_multi_gpu_job_included_for_standard_tests(self):
+        """Multi-GPU tests run on standard (and higher) tiers."""
+        os.environ["TEST_TYPE"] = "standard"
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rccl", names)
+
     # -----------------------
     # Output contract
     # -----------------------
