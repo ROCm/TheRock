@@ -232,7 +232,6 @@ jobs:
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       TEST_TYPE: ${{ inputs.test_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
-      RUN_UNINSTALL: ${{ inputs.run_uninstall || '' }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -306,6 +305,13 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+      - name: Package Uninstall Test
+        # Gated by workflow input only; no RUN_UNINSTALL env (reuses job env from install step).
+        if: ${{ inputs.run_uninstall && inputs.test_type != 'install' }}
+        run: |
+          echo "UNINSTALL TEST - OS:${{ inputs.os_profile }} Prefix:${{ env.INSTALL_PREFIX }}"
+          $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_uninstall_test.py -vv --tb=long -s
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

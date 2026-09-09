@@ -20,15 +20,6 @@ Test modes (--test-type):
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
-  4. Uninstall (optional, ``--with-uninstall`` / ``RUN_UNINSTALL=1``): after install
-     verification succeeds, remove installed metapackages in reverse install order
-     and assert no ROCm packages remain. Step 4a uninstall commands: deb uses
-     ``apt remove`` then ``apt autoremove``; RHEL-family rpm uses ``dnf remove``
-     (dependency cleanup is automatic); SLES uses ``zypper remove --clean-deps``
-     (required so dependency packages are removed). Step 4b queries the package
-     manager and fails if any installed package name contains ``rocm`` or
-     ``amdrocm``. Runs only for ``sanity`` and ``full`` test types; ignored for
-     ``simulate`` and ``install``.
 - comprehensive: CI alias for full.
 - install: Repo-based install only (step 1). No rocminfo or component checks.
   Used by release workflows that dispatch install tests off the critical path.
@@ -63,7 +54,6 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
 For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
 For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
-Optional Step 4 uninstall: set ``RUN_UNINSTALL`` to ``1`` (or ``true``/``yes``) in CI, or pass ``--with-uninstall`` on the CLI (``sanity``/``full`` only). Use ``0``/``false``/``no`` to disable; any other non-empty value is a configuration error.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
@@ -107,21 +97,6 @@ Example invocations:
          --os-profile ubuntu2404 \\
          --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
-
- # --with-uninstall (Step 4): after sanity/full succeed, remove metapackages and verify clean teardown
- python3 native_linux_package_install_test.py --test-type sanity \\
-         --os-profile ubuntu2404 \\
-         --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core \\
-         --with-uninstall
-
- # SLES: zypper remove --clean-deps is required for dependency cleanup during Step 4
- python3 native_linux_package_install_test.py --test-type sanity \\
-         --os-profile sles16 \\
-         --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
-         --release-type prerelease --install-prefix /opt/rocm/core \\
-         --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
-         --with-uninstall
 
  # --test-type install: repo install only (no verification)
  python3 native_linux_package_install_test.py --test-type install \\
@@ -171,6 +146,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from packaging_utils import normalize_target_list
+from native_linux_package_test_common import (
+    ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    VERIFY_KEY_COMPONENTS,
+    build_metapackage_names,
+    derive_package_type,
+    is_sles,
+    major_minor_rocm_version_from_input,
+    run_streaming as _run_streaming,
+)
 
 
 def _env(key: str, default: str) -> str:
@@ -195,24 +179,8 @@ APT_SOURCES_LIST = _env(
 APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
-VERIFY_KEY_COMPONENTS = [
-    "bin/rocminfo",
-    "bin/hipcc",
-    "bin/clinfo",
-    "include/hip/hip_runtime.h",
-    "lib/libamdhip64.so",
-]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
-
-# Pytest/CI only: becomes ``--rocm-version``.
-ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
-# Pytest/CI only: workflow ``run_uninstall: true`` sets this env (typically ``true``),
-# which adds ``--with-uninstall`` (Step 4). Accepted: 1/true/yes (enable), 0/false/no (disable),
-# unset (disable). Any other non-empty value raises ValueError (fail-fast).
-ENV_RUN_UNINSTALL = "RUN_UNINSTALL"
-_RUN_UNINSTALL_ENABLE = frozenset({"1", "true", "yes"})
-_RUN_UNINSTALL_DISABLE = frozenset({"0", "false", "no"})
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -222,7 +190,6 @@ ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
-UNINSTALL_TIMEOUT_SEC = 600  # 10 minutes; large stacks may install hundreds of packages
 ROCMINFO_TIMEOUT_SEC = 30
 # rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
 # short in container CI (timeouts under load). Optional cluster checks are skipped
@@ -239,26 +206,6 @@ _TEST_TYPE_MAP = {
     "sanity": "sanity",
     "simulate": "simulate",
 }
-
-
-def _parse_run_uninstall_ci_env() -> bool:
-    """Return whether CI env enables Step 4 uninstall.
-
-    Raises:
-        ValueError: If ``RUN_UNINSTALL`` is set to an unrecognized value.
-    """
-    raw = (os.environ.get(ENV_RUN_UNINSTALL) or "").strip()
-    if not raw:
-        return False
-    normalized = raw.lower()
-    if normalized in _RUN_UNINSTALL_ENABLE:
-        return True
-    if normalized in _RUN_UNINSTALL_DISABLE:
-        return False
-    raise ValueError(
-        f"Invalid RUN_UNINSTALL value: {raw!r}. "
-        "Expected: 1/true/yes (enable) or 0/false/no (disable)."
-    )
 
 
 def _normalize_test_type(test_type: str | None) -> str:
@@ -330,100 +277,22 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         return False
 
 
-def _is_rocm_related_package_name(name: str) -> bool:
-    """Return True if ``name`` looks like a native Linux ROCm package.
-
-    Matches TheRock metapackage and component naming (``amdrocm*``, ``rocm*``).
-    Used when filtering ``dpkg -l`` / ``rpm -qa`` output during uninstall
-    verification.
-    """
-    lower = name.lower()
-    return "rocm" in lower or "amdrocm" in lower
-
-
-def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
-    """Run a command with streaming stdout/stderr and return its exit code.
-
-    Lines are printed as they are produced. Raises subprocess.TimeoutExpired
-    (after killing the process) or OSError on failure.
-    """
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    try:
-        for line in process.stdout:
-            print(line.rstrip())
-            sys.stdout.flush()
-        return process.wait(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        raise
-
-
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
-        """Derive package type from OS profile.
-
-        Args:
-        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
-
-        Returns:
-        Package type ('deb' or 'rpm')
-        """
-        os_profile_lower = os_profile.lower()
-        if os_profile_lower.startswith(("ubuntu", "debian")):
-            return "deb"
-        elif os_profile_lower.startswith(
-            ("rhel", "sles", "almalinux", "centos", "azl")
-        ):
-            return "rpm"
-        else:
-            raise ValueError(
-                f"Unable to derive package type from OS profile: {os_profile}. "
-                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
-            )
+        """Derive package type from OS profile (delegates to shared helper)."""
+        return derive_package_type(os_profile)
 
     @staticmethod
     def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
-        """Parse ROCm version for arch-specific package names: major.minor only.
-
-        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``,
-        ``7.14.0~20260520`` / ``7.14.0~rc1-123456`` → ``7.14``. Used when forming
-        names like ``amdrocm7.13-gfx1100``. Returns ``None`` if input is absent
-        or blank.
-
-        Raises:
-        ValueError: Non-empty input that does not start with a major.minor pattern.
-        """
-        if rocm_version is None:
-            return None
-        s = str(rocm_version).strip()
-        if not s:
-            return None
-        if s.lower().startswith("v"):
-            s = s[1:].lstrip()
-        m = re.match(r"^(\d+)\.(\d+)", s)
-        if not m:
-            raise ValueError(
-                "Invalid ROCm version "
-                f"{rocm_version!r}: expected major.minor (e.g. 7.13 or 7.13.1)."
-            )
-        return f"{int(m.group(1))}.{int(m.group(2))}"
+        """Parse ROCm version for metapackage names (delegates to shared helper)."""
+        return major_minor_rocm_version_from_input(rocm_version)
 
     def _is_sles(self) -> bool:
-        """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
-
-        Returns:
-        True if SLES, False otherwise
-        """
-        return self.os_profile.lower().startswith("sles")
+        """Return True when the OS profile is SLES (delegates to shared helper)."""
+        return is_sles(self.os_profile)
 
     def __init__(
         self,
@@ -477,37 +346,11 @@ class NativeLinuxPackageInstallTest:
         )
         self.gpg_key_url = gpg_key_url
         self.build_variant = build_variant.strip().lower()
-
-        # Metapackage install targets (four combinations of optional inputs).
-        # For ASan-family builds (asan, host-asan, and their "-debug" variants),
-        # '-asan' is inserted before the version suffix. 'release' is the
-        # default build and does NOT alter the package name (amdrocm7.15, not
-        # amdrocm-release7.15):
-        #   gfx_arch + rocm_version -> amdrocm-asan{major.minor}-{arch} per arch
-        #   gfx_arch only           -> amdrocm-asan / amdrocm-core-sdk-asan
-        #   rocm_version only       -> amdrocm-asan{major.minor} / amdrocm-core-sdk-asan{major.minor}
-        #   neither                 -> amdrocm-asan / amdrocm-core-sdk-asan
-        ver = self.rocm_version_major_minor
-        variant_sep = "-asan" if "asan" in self.build_variant else ""
-        if self.gfx_arch_list and ver:
-            self.package_names = []
-            for arch in self.gfx_arch_list:
-                self.package_names.extend(
-                    [
-                        f"amdrocm{variant_sep}{ver}-{arch}",
-                        f"amdrocm-core-sdk{variant_sep}{ver}-{arch}",
-                    ]
-                )
-        elif ver:
-            self.package_names = [
-                f"amdrocm{variant_sep}{ver}",
-                f"amdrocm-core-sdk{variant_sep}{ver}",
-            ]
-        else:
-            self.package_names = [
-                f"amdrocm{variant_sep}",
-                f"amdrocm-core-sdk{variant_sep}",
-            ]
+        self.package_names = build_metapackage_names(
+            gfx_arch=self.gfx_arch_list,
+            rocm_version=rocm_version,
+            build_variant=self.build_variant,
+        )
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -1331,195 +1174,6 @@ gpgcheck=0
         print("=" * 80)
         return self.test_rdhc()
 
-    def list_installed_rocm_packages(self) -> list[str]:
-        """Query the system package manager for installed ROCm packages.
-
-        deb: parses ``dpkg -l`` lines in installed (``ii``) state.
-        rpm: parses ``rpm -qa`` output (NEVRA strings; matched by substring).
-
-        Returns:
-            Sorted list of matching entries. Empty on query failure.
-        """
-        try:
-            if self.package_type == "deb":
-                result = subprocess.run(
-                    ["dpkg", "-l"],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                names: list[str] = []
-                for line in result.stdout.splitlines():
-                    if not line.startswith("ii"):
-                        continue
-                    parts = line.split()
-                    if len(parts) >= 2 and _is_rocm_related_package_name(parts[1]):
-                        names.append(parts[1])
-                return sorted(names)
-
-            result = subprocess.run(
-                ["rpm", "-qa"],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            return sorted(
-                line.strip()
-                for line in result.stdout.splitlines()
-                if line.strip() and _is_rocm_related_package_name(line.strip())
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"[WARN] Could not query installed packages: {e}")
-            return []
-        except OSError as e:
-            print(f"[WARN] Could not query installed packages: {e}")
-            return []
-
-    def uninstall_packages(self) -> bool:
-        """Step 4a: remove installed metapackages in reverse install order.
-
-        deb: ``sudo apt remove -y`` then ``sudo apt autoremove -y``.
-        RHEL-family rpm: ``dnf remove -y`` (unused dependencies are removed
-        automatically).
-        SLES: ``zypper --non-interactive remove -y --clean-deps`` — ``--clean-deps``
-        is required; without it only the metapackages are removed and hundreds of
-        dependency packages can remain installed.
-
-        Returns:
-            True if uninstall commands succeeded, False otherwise.
-        """
-        print("\n" + "=" * 80)
-        print("STEP 4a: UNINSTALL PACKAGES")
-        print("=" * 80)
-
-        packages_to_remove = list(reversed(self.package_names))
-        if not packages_to_remove:
-            print("[WARN] No package names configured for uninstall")
-            return True
-
-        print(f"\nPackages to remove (reverse install order): {packages_to_remove}")
-
-        if self.package_type == "deb":
-            remove_cmd = ["sudo", "apt", "remove", "-y"] + packages_to_remove
-            autoremove_cmd = ["sudo", "apt", "autoremove", "-y"]
-        elif self._is_sles():
-            # SLES has no apt-style autoremove; --clean-deps removes unneeded deps.
-            remove_cmd = [
-                "zypper",
-                "--non-interactive",
-                "remove",
-                "-y",
-                "--clean-deps",
-            ] + packages_to_remove
-            autoremove_cmd = None
-        else:
-            remove_cmd = ["dnf", "remove", "-y"] + packages_to_remove
-            autoremove_cmd = None
-
-        print(f"\nRunning: {' '.join(remove_cmd)}")
-        print("=" * 80)
-        print("Uninstall progress (streaming output):\n")
-
-        try:
-            return_code = _run_streaming(remove_cmd, UNINSTALL_TIMEOUT_SEC)
-            if return_code != 0:
-                print("\n" + "=" * 80)
-                print(f"[FAIL] Failed to remove packages (exit code: {return_code})")
-                return False
-
-            if autoremove_cmd:
-                print(f"\nRunning: {' '.join(autoremove_cmd)}")
-                print("=" * 80)
-                print("Autoremove progress (streaming output):\n")
-                return_code = _run_streaming(autoremove_cmd, UNINSTALL_TIMEOUT_SEC)
-                if return_code != 0:
-                    print("\n" + "=" * 80)
-                    print(f"[FAIL] apt autoremove failed (exit code: {return_code})")
-                    return False
-
-            print("\n" + "=" * 80)
-            print("[PASS] Package uninstall completed successfully")
-            return True
-        except subprocess.TimeoutExpired:
-            print("\n" + "=" * 80)
-            print(
-                f"[FAIL] Uninstall timed out after {UNINSTALL_TIMEOUT_SEC // 60} minutes"
-            )
-            return False
-        except OSError as e:
-            print(f"\n[FAIL] Error during uninstall: {e}")
-            return False
-
-    def run_uninstall_verification(self) -> bool:
-        """Step 4b: verify no ROCm packages remain after uninstall.
-
-        Pass/fail is determined solely by the package-manager query in
-        ``list_installed_rocm_packages()``. Install-prefix directory checks are
-        informational only (the prefix directory may remain empty after removal).
-
-        Returns:
-            True if zero ROCm-related packages remain installed.
-        """
-        print("\n" + "=" * 80)
-        print("STEP 4b: UNINSTALL VERIFICATION")
-        print("=" * 80)
-
-        remaining = self.list_installed_rocm_packages()
-        if remaining:
-            print(f"\n[FAIL] {len(remaining)} ROCm package(s) still installed:")
-            for pkg in remaining[:10]:
-                print(f"  {pkg}")
-            if len(remaining) > 10:
-                print(f"  ... and {len(remaining) - 10} more")
-            return False
-
-        print("\n[PASS] No ROCm packages remain installed")
-
-        install_path = Path(self.install_prefix)
-        if not install_path.exists():
-            print(f"[PASS] Install prefix removed: {self.install_prefix}")
-        else:
-            leftover = [
-                component
-                for component in VERIFY_KEY_COMPONENTS
-                if (install_path / component).exists()
-            ]
-            if leftover:
-                print(
-                    f"[WARN] Install prefix still contains key components: {leftover}"
-                )
-            else:
-                print(
-                    f"[INFO] Install prefix exists but key ROCm components are gone: "
-                    f"{self.install_prefix}"
-                )
-
-        print("\n[PASS] Uninstall verification PASSED")
-        return True
-
-    def run_uninstall_and_verify(self) -> bool:
-        """Step 4: orchestrate uninstall (4a) and post-uninstall verification (4b).
-
-        Returns:
-            True if both uninstall and verification succeeded.
-        """
-        print("\n" + "=" * 80)
-        print("STEP 4: UNINSTALL AND VERIFY")
-        print("=" * 80)
-
-        before = self.list_installed_rocm_packages()
-        print(f"\nROCm packages before uninstall: {len(before)}")
-        if before:
-            print(" Sample packages (first 5):")
-            for pkg in before[:5]:
-                print(f"  {pkg}")
-
-        if not self.uninstall_packages():
-            return False
-        return self.run_uninstall_verification()
-
     def test_rdhc(self) -> bool:
         """Test rdhc.py binary in libexec/rocm-core/.
 
@@ -1740,19 +1394,6 @@ Examples:
  --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --with-uninstall (Step 4): after sanity/full succeed, remove metapackages and verify clean teardown
- python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core \\
- --with-uninstall
-
- # SLES: zypper remove --clean-deps is required for dependency cleanup during Step 4
- python native_linux_package_install_test.py --test-type sanity --os-profile sles16 \\
- --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
- --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
- --with-uninstall
-
  # --test-type install: install only
  python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
  --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
@@ -1871,16 +1512,6 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
-        "--with-uninstall",
-        action="store_true",
-        help=(
-            "After install verification succeeds (sanity or full), run Step 4: "
-            "remove metapackages and verify no ROCm packages remain. deb: apt "
-            "remove + autoremove; RHEL: dnf remove; SLES: zypper remove "
-            "--clean-deps. Ignored for simulate and install test types."
-        ),
-    )
-    parser.add_argument(
         "--packages-dir",
         type=str,
         metavar="DIR",
@@ -1955,8 +1586,7 @@ def parse_cli_arguments(
 def run_tests(args: Namespace) -> int:
     """Run simulate or repo-based install test from parsed CLI args.
 
-    Repo-based flows run Steps 1–2 (sanity) or 1–3 (full). When
-    ``args.with_uninstall`` is set, Step 4 runs after those steps succeed.
+    Repo-based flows run Steps 1–2 (sanity) or 1–3 (full).
 
     Returns:
         Exit code (0 success).
@@ -2024,8 +1654,6 @@ def run_tests(args: Namespace) -> int:
         print("ROCm version (for package names): (not set)")
     print(f"Install Prefix: {args.install_prefix}")
     print(f"Test Type: {args.test_type}")
-    if args.with_uninstall:
-        print("With Uninstall: yes")
     if args.gpg_key_url:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
@@ -2066,22 +1694,12 @@ def run_tests(args: Namespace) -> int:
             if not test_runner.run_full_verification():
                 print("\n[FAIL] Step 3 (full verification) failed.")
                 return 1
-        if args.with_uninstall and args.test_type in ("sanity", "full"):
-            if not test_runner.run_uninstall_and_verify():
-                print("\n[FAIL] Step 4 (uninstall and verify) failed.")
-                return 1
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            msg = "(sanity: basic verification completed"
-            if args.with_uninstall:
-                msg += " + uninstall verified"
-            print(msg + ")")
+            print("(sanity: basic verification completed)")
         elif args.test_type == "full":
-            msg = "ROCm has been successfully installed from repository and verified"
-            if args.with_uninstall:
-                msg += " and uninstalled cleanly"
-            print(msg + "!")
+            print("ROCm has been successfully installed from repository and verified!")
         else:
             print("ROCm has been successfully installed from repository and verified!")
         print("=" * 80 + "\n")
@@ -2101,7 +1719,6 @@ def _argv_from_ci_env() -> list[str] | None:
     ``RUN_UNINSTALL`` (1/true/yes) maps to ``--with-uninstall`` for Step 4;
     0/false/no disables; any other non-empty value raises ``ValueError``.
     """
-    with_uninstall = _parse_run_uninstall_ci_env()
     test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
 
     if test_type == "simulate":
@@ -2160,8 +1777,6 @@ def _argv_from_ci_env() -> list[str] | None:
     build_variant = (os.environ.get("BUILD_VARIANT") or "").strip()
     if build_variant:
         argv.extend(["--build-variant", build_variant])
-    if with_uninstall:
-        argv.append("--with-uninstall")
     return argv
 
 
@@ -2176,13 +1791,13 @@ def test_native_linux_package_install() -> None:
                 "Missing required environment variables for native install test "
                 "(expected OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX; "
                 "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
-                "NATIVE_LINUX_INSTALL_ROCM_VERSION, RUN_UNINSTALL; "
+                "NATIVE_LINUX_INSTALL_ROCM_VERSION; "
                 "or for simulate: PACKAGES_DIR)."
             )
         pytest.skip(
             "Set workflow env vars (OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX); "
             "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
-            "NATIVE_LINUX_INSTALL_ROCM_VERSION, RUN_UNINSTALL."
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION."
         )
 
     args = parse_cli_arguments(argv, raise_instead_of_exit=True)
