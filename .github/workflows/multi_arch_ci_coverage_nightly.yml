@@ -253,6 +253,7 @@ jobs:
       test_component: ${{ matrix.coverage.test_component }}
       object_globs: ${{ matrix.coverage.object_globs }}
       fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
+      build_stage: ${{ matrix.coverage.build_stage }}
       codecov_flag: ${{ matrix.coverage.codecov_flag }}
       amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
       baseline_run_id: ${{ inputs.baseline_run_id }}

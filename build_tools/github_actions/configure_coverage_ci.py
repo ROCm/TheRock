@@ -717,6 +717,9 @@ def build_coverage_matrix(
                     "coverage_config_ref": config_ref,
                     "object_globs": ",".join(project.object_globs),
                     "fetch_artifact_args": project.fetch_artifact_args,
+                    # The report job fetches this stage's sources so the HTML
+                    # rendering has something to annotate.
+                    "build_stage": project.stage,
                     "codecov_flag": project.codecov_flag or project_key,
                     "amdgpu_families": family,
                     "artifact_names": ",".join(project.artifact_names),

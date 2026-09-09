@@ -36,6 +36,13 @@ on:
         type: string
         default: ""
         description: "Extra install_rocm_from_artifacts.py args for the report job"
+      build_stage:
+        type: string
+        default: ""
+        description: >-
+          Build stage owning the project. The report job fetches this stage's
+          sources so the HTML rendering has something to annotate; the lcov and
+          text outputs do not need them. Empty skips the fetch and the HTML.
       baseline_run_id:
         type: string
         default: ""
@@ -230,21 +237,75 @@ jobs:
             --output-dir=${OUTPUT_ARTIFACTS_DIR} \
             ${FETCH_ARTIFACT_ARGS}
 
-      - name: Merge profraw and generate lcov report
+      # Only the HTML rendering reads source, so this runs after the artifacts
+      # are already down: a failure here, including running the runner out of
+      # disk, costs the annotated view and leaves lcov and the text table.
+      - name: Fetch sources for the annotated report
+        if: ${{ inputs.build_stage != '' }}
+        id: fetch_sources
+        timeout-minutes: 30
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE_NAME: ${{ inputs.build_stage }}
         run: |
+          gh auth setup-git --hostname github.com
+          ./build_tools/fetch_sources.py --stage "${STAGE_NAME}" --jobs 12 --depth 1
+
+      - name: Merge profraw and generate reports
+        env:
+          # Sources are recorded at the path the build container used, which is
+          # not where they sit here, so llvm-cov is told how to get from one to
+          # the other. Generated files under build/ are in neither and are
+          # reported as uncovered; the text summary still counts them.
+          BUILD_WORKSPACE: /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
+          HTML_ENABLED: ${{ steps.fetch_sources.outcome == 'success' }}
+        run: |
+          html_args=()
+          if [[ "${HTML_ENABLED}" == "true" ]]; then
+            html_args=(
+              --html-output="${REPORT_DIR}/html"
+              --project-title="${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
+            )
+          else
+            echo "::warning::Sources unavailable; skipping the annotated HTML report."
+          fi
+
           python ./build_tools/github_actions/merge_coverage_report.py \
             --profraw-dir="${PROFRAW_DIR}" \
             --rocm-dir="${OUTPUT_ARTIFACTS_DIR}" \
             --object-globs="${{ inputs.object_globs }}" \
             --profdata-output="${REPORT_DIR}/coverage.profdata" \
-            --lcov-output="${REPORT_DIR}/coverage.info"
+            --lcov-output="${REPORT_DIR}/coverage.info" \
+            --summary-output="${REPORT_DIR}/coverage_summary.txt" \
+            --path-equivalence="${BUILD_WORKSPACE},${GITHUB_WORKSPACE}" \
+            "${html_args[@]}"
+
+      # Puts the totals on the run's summary page, so the number is readable
+      # without downloading anything.
+      - name: Publish the summary to the job page
+        if: ${{ always() }}
+        run: |
+          summary="${REPORT_DIR}/coverage_summary.txt"
+          [[ -f "${summary}" ]] || exit 0
+          {
+            echo "## Coverage: ${{ inputs.project_name }} (${{ inputs.amdgpu_families }})"
+            echo '```'
+            tail -n 3 "${summary}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload coverage report
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-          path: ${{ env.REPORT_DIR }}/coverage.info
+          # The whole directory: coverage.info for Codecov, coverage_summary.txt
+          # for the numbers, and html/index.html for the annotated report.
+          path: |
+            ${{ env.REPORT_DIR }}/coverage.info
+            ${{ env.REPORT_DIR }}/coverage_summary.txt
+            ${{ env.REPORT_DIR }}/html
           if-no-files-found: warn
 
       # Skipped rather than failed when the repository has no Codecov token,

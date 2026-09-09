@@ -144,6 +144,25 @@ that built the instrumented objects, so the script prefers the copies under
 `<rocm-dir>/lib/llvm/bin`. A version mismatch surfaces as an unhelpfully
 generic "malformed instrumentation profile data" error.
 
+`--summary-output` adds the per-file table as plain text and `--html-output`
+the browsable report, entry point `index.html`:
+
+```bash
+python build_tools/github_actions/merge_coverage_report.py \
+  --profraw-dir coverage-report/profraw \
+  --rocm-dir build/dist/rocm \
+  --object-globs "lib/libhiprand.so*" \
+  --summary-output coverage-report/coverage_summary.txt \
+  --html-output coverage-report/html
+```
+
+Only the HTML reads the source files; lcov and the text table are produced
+from the coverage mappings alone and are complete wherever they run. Source
+paths are recorded as they were at build time, so if the tree has moved
+since, `--path-equivalence <from>,<to>` tells `llvm-cov` how to get from one
+to the other. Files generated into the build tree are in no source checkout
+and are reported as uncovered in the HTML; the text table still counts them.
+
 ## Coverage CI
 
 A coverage run builds the stages its selection needs, instruments only the
@@ -333,15 +352,35 @@ profiles.
 `merge_coverage_report.py` then collects the profiles recursively, expands the
 project's `object_globs` and deduplicates them by real path (a versioned
 symlink family resolves to one file), runs `llvm-profdata merge -sparse` into a
-single profdata index, and exports lcov. Two conditions are fatal rather than
-reported as zero coverage: finding no profraw files at all, which means the
-tests never ran or the instrumented libraries were not the ones loaded at
-runtime; and matching no objects, which means `object_globs` does not describe
-what the project actually installs.
+single profdata index, and renders it three ways. Two conditions are fatal
+rather than reported as zero coverage: finding no profraw files at all, which
+means the tests never ran or the instrumented libraries were not the ones
+loaded at runtime; and matching no objects, which means `object_globs` does not
+describe what the project actually installs.
 
-The lcov report uploads as a workflow artifact and goes to Codecov under the
-project's flag. The Codecov step is skipped rather than failed when no
-`CODECOV_TOKEN` is configured, so forks still get the lcov artifact.
+The `coverage-report-<project>-<family>` artifact holds all three:
+
+| File                   | What it is                                            |
+| ---------------------- | ----------------------------------------------------- |
+| `coverage.info`        | lcov, the format Codecov consumes                     |
+| `coverage_summary.txt` | The per-file table, with the totals on the final line |
+| `html/index.html`      | The browsable report, source annotated line by line   |
+
+The totals are also written to the job's summary page, so the number is
+readable without downloading anything.
+
+Only the HTML rendering opens source files, and the report job checks out
+TheRock rather than the projects it measures, so it first runs
+`fetch_sources.py` for the stage that built the project. Source paths are
+recorded as the build container saw them, and `--path-equivalence` maps that
+prefix onto the workspace. That step is `continue-on-error`: losing it costs
+the annotated view and nothing else, since lcov and the text table come from
+the coverage mappings. Files generated into the build tree — version headers
+and the like — exist in no checkout and show as uncovered in the HTML while
+the text table still counts them.
+
+The Codecov step is skipped rather than failed when no `CODECOV_TOKEN` is
+configured, so forks still get the artifact.
 
 ## Selecting projects to run
 

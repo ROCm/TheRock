@@ -144,6 +144,64 @@ class CommandConstructionTest(TempDirTestBase):
         self.assertIn("-object", command)
         self.assertEqual(command[-2:], [f"-instr-profile={profdata}", "--format=lcov"])
 
+    def test_summary_reports_and_captures_the_table(self):
+        objects = [self.touch("lib/a.so")]
+        output = self.root / "out" / "coverage_summary.txt"
+        table = "Filename  Cover\nTOTAL     77.78%\n"
+
+        with mock.patch("subprocess.run", return_value=mock.Mock(stdout=table)) as run:
+            merge_coverage_report.write_summary(
+                Path("/llvm/llvm-cov"), Path("/tmp/c.profdata"), objects, output
+            )
+
+        self.assertEqual(run.call_args.args[0][1], "report")
+        self.assertEqual(output.read_text(), table)
+
+    def test_html_renders_into_a_directory(self):
+        objects = [self.touch("lib/a.so")]
+        output_dir = self.root / "out" / "html"
+
+        with mock.patch("subprocess.run") as run:
+            merge_coverage_report.write_html(
+                Path("/llvm/llvm-cov"),
+                Path("/tmp/c.profdata"),
+                objects,
+                output_dir,
+                project_title="hiprand",
+                demangler=Path("/llvm/llvm-cxxfilt"),
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[1], "show")
+        self.assertIn("--format=html", command)
+        self.assertIn(f"-output-dir={output_dir}", command)
+        self.assertIn("--project-title=hiprand", command)
+        self.assertIn("-Xdemangler=/llvm/llvm-cxxfilt", command)
+
+    def test_path_equivalence_reaches_every_rendering(self):
+        objects = [self.touch("lib/a.so")]
+        remap = "/__w/TheRock/TheRock,/home/runner/work"
+
+        for build in (
+            lambda: merge_coverage_report.export_lcov(
+                Path("/llvm/llvm-cov"),
+                Path("/tmp/c.profdata"),
+                objects,
+                self.root / "out" / "coverage.info",
+                remap,
+            ),
+            lambda: merge_coverage_report.write_html(
+                Path("/llvm/llvm-cov"),
+                Path("/tmp/c.profdata"),
+                objects,
+                self.root / "out" / "html",
+                remap,
+            ),
+        ):
+            with mock.patch("subprocess.run") as run:
+                build()
+            self.assertIn(f"-path-equivalence={remap}", run.call_args.args[0])
+
 
 class MainTest(TempDirTestBase):
     def _argv(self, *extra: str) -> list[str]:
@@ -204,6 +262,33 @@ class MainTest(TempDirTestBase):
                 f"llvm-cov{merge_coverage_report.EXECUTABLE_SUFFIX}",
             ],
         )
+
+    def test_summary_and_html_are_opt_in(self):
+        self.touch("profraw/shard0/a.profraw")
+        self.touch("rocm/lib/libhiprand.so")
+        llvm_bin_dir = self.root / "rocm" / "lib" / "llvm" / "bin"
+        llvm_bin_dir.mkdir(parents=True)
+        for tool in ("llvm-profdata", "llvm-cov"):
+            (llvm_bin_dir / f"{tool}{merge_coverage_report.EXECUTABLE_SUFFIX}").touch()
+
+        with mock.patch("subprocess.run", return_value=mock.Mock(stdout="")) as run:
+            exit_code = merge_coverage_report.main(
+                self._argv(
+                    "--profdata-output",
+                    os.fspath(self.root / "out" / "coverage.profdata"),
+                    "--lcov-output",
+                    os.fspath(self.root / "out" / "coverage.info"),
+                    "--summary-output",
+                    os.fspath(self.root / "out" / "coverage_summary.txt"),
+                    "--html-output",
+                    os.fspath(self.root / "out" / "html"),
+                )
+            )
+
+        self.assertEqual(exit_code, 0)
+        # merge, then export, report and show off the one index.
+        subcommands = [call.args[0][1] for call in run.call_args_list]
+        self.assertEqual(subcommands, ["merge", "export", "report", "show"])
 
 
 if __name__ == "__main__":
