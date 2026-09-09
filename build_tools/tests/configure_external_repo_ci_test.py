@@ -99,6 +99,37 @@ class FindMatchedSubtreesTest(unittest.TestCase):
         result = find_matched_subtrees(files, prefixes)
         self.assertEqual(result, [])
 
+    def test_nested_subtree_wins_over_parent(self):
+        # A file inside a registered nested subtree (e.g. hipblaslt/tensilelite)
+        # must match the longer, more specific prefix, not collapse to its
+        # 2-segment parent -- a fixed-length truncation would make the two
+        # indistinguishable and silently lose the more specific match.
+        files = ["projects/hipblaslt/tensilelite/Tensile/KernelWriter.py"]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/hipblaslt/tensilelite"])
+
+    def test_parent_only_change_does_not_match_nested_subtree(self):
+        # A change outside the nested subtree still matches the parent, not the
+        # (unrelated) nested prefix.
+        files = ["projects/hipblaslt/library/src/Handle.cpp"]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/hipblaslt"])
+
+    def test_mixed_nested_and_parent_changes_match_both(self):
+        # Changes to both areas in the same PR attribute independently: one
+        # file matches the nested subtree, the other matches the parent.
+        files = [
+            "projects/hipblaslt/tensilelite/Tensile/KernelWriter.py",
+            "projects/hipblaslt/library/src/Handle.cpp",
+        ]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(
+            result, ["projects/hipblaslt", "projects/hipblaslt/tensilelite"]
+        )
+
 
 class GetValidPrefixesTest(unittest.TestCase):
     """Tests for get_valid_prefixes()."""

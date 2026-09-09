@@ -671,6 +671,57 @@ class CreatePackageConfigTest(BuildPackageTestCase):
                 _args(self.temp_dir, rocm_version="7"),
             )
 
+    def test_asan_family_variants_get_asan_install_prefix(self) -> None:
+        """asan, host-asan, and their "-debug" counterparts must all get the
+        same "-asan-MAJOR.MINOR" install prefix suffix as full asan."""
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                cfg = build_package.create_package_config(
+                    _args(
+                        self.temp_dir,
+                        build_variant=build_variant,
+                        install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
+                    )
+                )
+                self.assertTrue(cfg.install_prefix.endswith("-asan-7.1"))
+
+    def test_release_variant_gets_plain_install_prefix(self) -> None:
+        cfg = build_package.create_package_config(
+            _args(
+                self.temp_dir,
+                build_variant="release",
+                install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
+            )
+        )
+        self.assertFalse("asan" in cfg.install_prefix)
+        self.assertTrue(cfg.install_prefix.endswith("-7.1"))
+
+
+# ---------------------------------------------------------------------------
+# update_package_name
+# ---------------------------------------------------------------------------
+class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
+    """``update_package_name`` must add the "-asan" suffix for every ASan-family
+    build_variant, including the "-debug" variants."""
+
+    def test_asan_family_variants_get_asan_name_suffix(self) -> None:
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                cfg = build_package.create_package_config(
+                    _args(self.temp_dir, build_variant=build_variant)
+                )
+                updated = update_package_name(
+                    "amdrocm-core", replace(cfg, versioned_pkg=True)
+                )
+                self.assertEqual(updated, f"amdrocm-core-asan7.1-{TEST_GFX_TARGET}")
+
+    def test_release_variant_gets_plain_name(self) -> None:
+        cfg = build_package.create_package_config(
+            _args(self.temp_dir, build_variant="release")
+        )
+        updated = update_package_name("amdrocm-core", replace(cfg, versioned_pkg=True))
+        self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
+
 
 # ---------------------------------------------------------------------------
 # load_kpack_from_manifest
