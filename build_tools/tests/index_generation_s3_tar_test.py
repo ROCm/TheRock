@@ -51,6 +51,31 @@ class IndexGenerationS3TarTest(unittest.TestCase):
         )
         self.s3_client.put_object.assert_not_called()
 
+    def test_index_offers_multiarch_filter(self) -> None:
+        """Combined archives must be selectable separately from GPU archives."""
+        self._set_contents(
+            [
+                {
+                    "Key": f"{self.prefix}/therock-dist-linux-{target}-10.1.0.tar.gz",
+                    "LastModified": datetime(2026, 8, 7, tzinfo=timezone.utc),
+                }
+                for target in ("multiarch", "gfx90a", "gfx1100")
+            ]
+        )
+
+        index_generation_s3_tar.generate_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=self.prefix,
+            upload=True,
+        )
+
+        html = self._uploaded_html()
+        self.assertIn('<option value="all">All</option>', html)
+        self.assertIn('<option value="multiarch">Multiarch</option>', html)
+        self.assertIn('<option value="gfx90a">gfx90a</option>', html)
+        self.assertIn('<option value="gfx1100">gfx1100</option>', html)
+
     def test_deleting_last_tarball_uploads_empty_index_when_allowed(self) -> None:
         """Removing the last tarball must replace the stale index."""
         tarball_key = f"{self.prefix}/test-rvs.tar.gz"
