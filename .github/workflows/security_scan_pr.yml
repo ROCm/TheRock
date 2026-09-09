@@ -18,7 +18,7 @@ permissions:
 jobs:
   security:
     name: Security scan
-    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@cc668a725f81b3bc5af72e47ebecabf92f25066d # v1.0.1
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@31ec6f8dd59194dc8a94436865342fd00dea73fd # v1.0.0
     with:
       report_formats: human
       bandit_config_path: build_tools/scan_tools/bandit.yaml
