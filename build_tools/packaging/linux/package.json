@@ -48,8 +48,8 @@
     "DEBDepends": [
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -124,8 +124,8 @@
       "python3",
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -469,18 +469,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "True"
@@ -540,10 +528,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-fft"
+      "amdrocm-fft",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-fft"
+      "amdrocm-fft",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT development headers and build configuration files",
@@ -643,14 +633,6 @@
               "run",
               "doc"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
           }
         ]
       },
@@ -693,7 +675,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -737,7 +719,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "hipSPARSELt",
@@ -844,10 +826,14 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-blas"
+      "amdrocm-blas",
+      "amdrocm-runtime-devel",
+      "amdrocm-hipblas-common-devel"
     ],
     "RPMRequires": [
-      "amdrocm-blas"
+      "amdrocm-blas",
+      "amdrocm-runtime-devel",
+      "amdrocm-hipblas-common-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm BLAS development headers and static libraries",
@@ -876,12 +862,6 @@
           },
           {
             "Name": "hipBLASLt",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "hipSPARSELt",
             "Components": [
               "dev"
             ]
@@ -918,7 +898,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -930,6 +910,14 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "lib",
               "run",
@@ -948,10 +936,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-sparse"
+      "amdrocm-sparse",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-sparse"
+      "amdrocm-sparse",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm sparse matrix library development headers and build files",
@@ -964,7 +954,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -974,6 +964,12 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "dev"
             ]
@@ -1010,7 +1006,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -1041,10 +1037,14 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-solver"
+      "amdrocm-solver",
+      "amdrocm-runtime-devel",
+      "amdrocm-blas-devel"
     ],
     "RPMRequires": [
-      "amdrocm-solver"
+      "amdrocm-solver",
+      "amdrocm-runtime-devel",
+      "amdrocm-blas-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm solver library development headers and configuration",
@@ -1057,7 +1057,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -1124,10 +1124,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-rocalution"
+      "amdrocm-rocalution",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-rocalution"
+      "amdrocm-rocalution",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "rocALUTION development headers and build configuration files",
@@ -1230,10 +1232,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-hiptensor"
+      "amdrocm-hiptensor",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-hiptensor"
+      "amdrocm-hiptensor",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "hipTensor development headers and build configuration files",
@@ -1389,10 +1393,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-rand"
+      "amdrocm-rand",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-rand"
+      "amdrocm-rand",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm random number generation development headers and build configuration files",
@@ -1501,10 +1507,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "python3"
+      "python3",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm parallel primitive development headers and templates",
@@ -2428,11 +2436,13 @@
     "DEBDepends": [
       "python3",
       "libc6",
-      "amdrocm-rccl"
+      "amdrocm-rccl",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
       "python3",
-      "amdrocm-rccl"
+      "amdrocm-rccl",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "RCCL development headers and build configuration files",
@@ -2732,10 +2742,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-dnn"
+      "amdrocm-dnn",
+      "amdrocm-runtime-devel"
     ],
     "RPMRequires": [
-      "amdrocm-dnn"
+      "amdrocm-dnn",
+      "amdrocm-runtime-devel"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "Development headers and build files for hipDNN and MIOpen",
@@ -3328,7 +3340,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile",
     "Version": "",
@@ -3822,6 +3833,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {

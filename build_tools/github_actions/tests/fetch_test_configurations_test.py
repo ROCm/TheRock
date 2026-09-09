@@ -173,6 +173,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
 
     # -----------------------
+    # tensilelite ctest-stage gating (AIHPBLAS-4410)
+    # -----------------------
+
+    def test_tensilelite_standard_appends_ctest_stage(self):
+        """TEST_TYPE=standard should append the ctest stage and extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "standard"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertIn("test_runner.py", tensilelite["test_script"])
+        self.assertEqual(tensilelite["timeout_minutes"], 30)
+
+    def test_tensilelite_quick_omits_ctest_stage(self):
+        """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertNotIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertEqual(tensilelite["timeout_minutes"], 15)
+
+    # -----------------------
     # Exclude-family logic
     # -----------------------
 
@@ -442,26 +475,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # Output contract
     # -----------------------
 
-    def test_windows_hip_tests_default_emits_pal_only(self):
-        """On Windows, hip-tests emits only PAL by default (WINDOWS_HIP_ROCR_TESTS off)."""
-        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
-        os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        hip_jobs = [j for j in components if "hip-tests" in j["job_name"]]
-        self.assertEqual(len(hip_jobs), 1, "Expected only hip-tests (PAL)")
-        self.assertEqual(hip_jobs[0]["job_name"], "hip-tests (PAL)")
-        self.assertNotIn("expect_failure", hip_jobs[0])
-        self.assertEqual(hip_jobs[0]["total_shards"], 4)
-        self.assertEqual(hip_jobs[0]["shard_arr"], [1, 2, 3, 4])
-
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
-        """On Windows with WINDOWS_HIP_ROCR_TESTS=true, hip-tests runs PAL and ROCR."""
+        """On Windows, hip-tests runs with both PAL and ROCR backends."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
-        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -479,16 +496,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(pal["shard_arr"], [1, 2, 3, 4])
 
         rocr = next(j for j in hip_jobs if j["job_name"] == "hip-tests (ROCR)")
-        self.assertTrue(rocr["expect_failure"])
         self.assertEqual(rocr["total_shards"], 4)
         self.assertEqual(rocr["shard_arr"], [1, 2, 3, 4])
 
     def test_windows_hip_tests_quick_uses_single_shard(self):
-        """On Windows with test_type=quick and ROCR enabled, PAL/ROCR each use 1 shard."""
+        """On Windows with test_type=quick, PAL/ROCR each use 1 shard."""
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         os.environ["TEST_LABELS"] = json.dumps(["hip-tests"])
         os.environ["TEST_TYPE"] = "quick"
-        os.environ["WINDOWS_HIP_ROCR_TESTS"] = "true"
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -525,59 +540,37 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # ASAN sandbox runner selection
     # -----------------------
 
-    def test_asan_build_uses_sandbox_runner(self):
-        """ASAN builds should use test-runs-on-sandbox when available."""
-        os.environ["BUILD_VARIANT"] = "asan"
-        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+    def test_asan_family_builds_use_sandbox_runner(self):
+        """ASAN-family builds should use test-runs-on-sandbox when available.
 
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-labels": [
-                            {"label": "linux-gfx942-a", "count": 5},
-                            {"label": "linux-gfx942-b", "count": 5},
-                        ],
-                        "test-runs-on-sandbox": "linux-mi325-gpu-rocm-cpu-sandbox",
+        Covers "asan", "host-asan", and their "-debug" (RelWithDebInfo +
+        line-number debug info) counterparts — all route to the sandbox
+        runner, not the regular runner pool.
+        """
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                os.environ["BUILD_VARIANT"] = build_variant
+                os.environ["PROJECTS_TO_TEST"] = "hipblas"
+
+                def fake_get_all_families(_):
+                    return {
+                        "gfx94x": {
+                            "linux": {
+                                "test-runs-on": "linux-gfx942-prod",
+                                "test-runs-on-sandbox": "linux-sandbox-runner",
+                            }
+                        }
                     }
-                }
-            }
 
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
+                fetch_test_configurations.get_all_families_for_trigger_types = (
+                    fake_get_all_families
+                )
 
-        fetch_test_configurations.run()
-        components = self._get_components()
+                fetch_test_configurations.run()
+                components = self._get_components()
 
-        rocblas = next(j for j in components if j["job_name"] == "rocblas")
-        self.assertEqual(rocblas["test_runner"], "linux-mi325-gpu-rocm-cpu-sandbox")
-
-    def test_host_asan_build_uses_sandbox_runner(self):
-        """host-asan builds should also use test-runs-on-sandbox."""
-        os.environ["BUILD_VARIANT"] = "host-asan"
-        os.environ["PROJECTS_TO_TEST"] = "hipblas"
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-prod",
-                        "test-runs-on-sandbox": "linux-sandbox-runner",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        hipblas = next(j for j in components if j["job_name"] == "hipblas")
-        self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
+                hipblas = next(j for j in components if j["job_name"] == "hipblas")
+                self.assertEqual(hipblas["test_runner"], "linux-sandbox-runner")
 
     def test_release_build_uses_count_runner(self):
         """Release builds should use count-based runner labels, not sandbox."""

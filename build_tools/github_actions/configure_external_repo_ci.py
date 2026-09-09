@@ -203,13 +203,32 @@ def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
 def find_matched_subtrees(
     changed_files: Iterable[str], valid_prefixes: Set[str]
 ) -> List[str]:
-    """Find subtrees matching changed files."""
-    changed_subtrees = {
-        "/".join(path.split("/", 2)[:2])
-        for path in changed_files
-        if len(path.split("/")) >= 2
-    }
-    return sorted(changed_subtrees & valid_prefixes)
+    """Find subtrees matching changed files via longest-prefix match.
+
+    A changed file's subtree is the LONGEST registered prefix (`category/name`,
+    or a nested `category/name/subname`) that matches its path -- checked from
+    most to least specific -- not a fixed 2-segment truncation. A fixed
+    2-segment truncation would make a nested subtree registered in
+    repos-config.json (e.g. `hipblaslt/tensilelite`, nested inside `hipblaslt`)
+    indistinguishable from a change to its parent: both collapse to
+    `projects/hipblaslt`, silently losing the more specific match. Matching
+    longest-prefix-first, and attributing each changed file to exactly one
+    subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
+    (potentially different) test selection.
+    """
+    # Longest prefixes first, so a nested subtree wins over its parent.
+    prefixes_by_specificity = sorted(
+        valid_prefixes, key=lambda p: p.count("/"), reverse=True
+    )
+    matched: Set[str] = set()
+    for path in changed_files:
+        segments = path.split("/")
+        for prefix in prefixes_by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
 
 
 def set_github_output(outputs: Mapping[str, str]) -> None:

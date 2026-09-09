@@ -167,7 +167,7 @@ jobs:
     steps:
       - name: Trigger test_artifacts
         if: ${{ matrix.family_info.test-runs-on != '' }}
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
           inputs: |
@@ -183,10 +183,13 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  # TODO: Consider switch pulling ROCm packages from the CDN instead of the artifact
-  #   bucket if the job order is not altered.
+  # The PyTorch release workflow publishes its wheels to the release index, then
+  # tests from that index. Wait for the corresponding ROCm release to be published
+  # before triggering the downstream release.
+  # TODO: Consider pulling ROCm packages from the published release index instead
+  #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_pytorch_wheels:
-    needs: [build_artifacts, build_python_packages]
+    needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
     if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
     runs-on: ubuntu-24.04
@@ -194,7 +197,7 @@ jobs:
       actions: write
     steps:
       - name: Trigger PyTorch Build
-        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: multi_arch_release_windows_pytorch_wheels.yml
           inputs: |
