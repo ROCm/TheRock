@@ -304,6 +304,12 @@ def main(argv: List[str] = None):
         help="Output comma-separated list of stages to skip based on --projects. "
         "Stages not needed to build the specified projects will be listed.",
     )
+    parser.add_argument(
+        "--artifacts",
+        type=str,
+        default="",
+        help="Comma-separated artifact names (accepted for compatibility, ignored).",
+    )
 
     args = parser.parse_args(argv)
 
