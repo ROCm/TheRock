@@ -187,8 +187,13 @@ jobs:
 
       - name: Configure
         run: |
+          SUBPROJECT_TEST_JOBS="$(( $(nproc) / 2 ))"
+          if ((SUBPROJECT_TEST_JOBS > 16)); then
+            SUBPROJECT_TEST_JOBS=16
+          fi
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
