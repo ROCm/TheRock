@@ -40,4 +40,3 @@ if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
 else()
   message(STATUS "LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF, skipping backwards compatible symlinks.")
 endif()
-
