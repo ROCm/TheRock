@@ -1633,6 +1633,20 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertIn("sandbox", entry["test-runs-on"])
 
+    def test_host_asan_debug_uses_sandbox_runner(self):
+        """host-asan-debug variant uses sandbox runner like host-asan."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="schedule", build_variant="host-asan-debug"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertIn("sandbox", entry["test-runs-on"])
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
