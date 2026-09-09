@@ -55,6 +55,7 @@ import argparse
 import os
 import platform
 import subprocess
+import sysconfig
 import sys
 import tempfile
 from pathlib import Path
@@ -140,8 +141,20 @@ INDUCTOR_UNIT_TESTS = [
 ]
 
 
+def config_libpython_ld_path() -> None:
+    libpython_dir = sysconfig.get_config_var("LIBDIR") or os.path.join(
+        sys.prefix, "lib"
+    )
+    if libpython_dir and os.path.isdir(libpython_dir):
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = (
+            f"{libpython_dir}:{existing}" if existing else libpython_dir
+        )
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     reconcile_agent_visibility_env()
+    config_libpython_ld_path()
 
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
