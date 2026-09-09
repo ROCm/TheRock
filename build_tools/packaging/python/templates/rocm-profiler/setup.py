@@ -32,11 +32,39 @@ def _load_local_dist_info():
     return module
 
 
+def _read_compute_requirements(platform_package_name: str) -> list[str]:
+    """Read rocprof-compute's analyze deps from the staged wheel payload.
+
+    Reading rocprofiler-compute's installed requirements.txt rather than
+    duplicating the list keeps it the single source of truth.
+    """
+    requirements_path = (
+        THIS_DIR
+        / "platform"
+        / platform_package_name
+        / "libexec"
+        / "rocprofiler-compute"
+        / "requirements.txt"
+    )
+    if not requirements_path.exists():
+        return []
+
+    requirements = []
+    for raw_line in requirements_path.read_text().splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        # pip options such as `-r other.txt` are not valid PEP 508 requirements.
+        if not line or line.startswith("-"):
+            continue
+        requirements.append(line)
+    return requirements
+
+
 dist_info = _load_local_dist_info()
 my_package = dist_info.ALL_PACKAGES["profiler"]
 packages = find_packages(where="./src")
 platform_package_name = my_package.get_py_package_name()
 packages.append(platform_package_name)
+extras_require = {"compute-analyze": _read_compute_requirements(platform_package_name)}
 
 version = os.environ.get("ROCM_SDK_VERSION")
 if version is None:
@@ -57,6 +85,7 @@ setup(
     },
     include_package_data=True,
     zip_safe=False,
+    extras_require=extras_require,
     options={
         "bdist_wheel": {
             "plat_name": os.getenv(
