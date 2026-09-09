@@ -140,21 +140,31 @@ jobs:
 
       - name: Generate WiX source and build MSI
         run: |
+          # The distributable filename is the package's output_stem
+          # (e.g. amdrocm-runtime), not the --package selector (runtime). Read
+          # it from the generator's PACKAGES table so there is a single source
+          # of truth for the name.
+          # TODO(#1987): follow-up PR to add a --output-dir flag to
+          # generate_msi_wxs.py so it writes <dir>/<output_stem>.wxs itself and
+          # the workflow no longer needs to know the filename.
+          stem="$(python -c "import sys; sys.path.insert(0, 'build_tools/packaging/windows'); from generate_msi_wxs import PACKAGES; print(PACKAGES['${{ matrix.package }}'].output_stem)")"
+          echo "MSI_STEM=${stem}" >> "${GITHUB_ENV}"
+
           python build_tools/packaging/windows/generate_msi_wxs.py \
             --package "${{ matrix.package }}" \
             --artifacts-url "${ARTIFACTS_URL}" \
             ${PACKAGE_VERSION:+--package-version "${PACKAGE_VERSION}"} \
-            --output "${MSI_DIR}/${{ matrix.package }}.wxs"
+            --output "${MSI_DIR}/${stem}.wxs"
 
-          wix build "${MSI_DIR}/${{ matrix.package }}.wxs" \
+          wix build "${MSI_DIR}/${stem}.wxs" \
             -arch x64 \
-            -o "${MSI_DIR}/${{ matrix.package }}.msi"
+            -o "${MSI_DIR}/${stem}.msi"
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-msi-${{ matrix.package }}
-          path: ${{ env.MSI_DIR }}/${{ matrix.package }}.msi
+          path: ${{ env.MSI_DIR }}/${{ env.MSI_STEM }}.msi
           if-no-files-found: error
 
       # The S3 upload requires OIDC credentials whose IAM role trust is scoped
