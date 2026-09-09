@@ -110,6 +110,14 @@ on:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
         type: string
         default: ""
+      changed_projects:
+        description: >-
+          Comma-separated list of changed project paths from external repos
+          (e.g., 'projects/rocprim'). These project directory names are mapped
+          to artifact names via BUILD_TOPOLOGY.toml source_paths for granular
+          artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
+        type: string
+        default: ""
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -245,6 +253,8 @@ jobs:
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
+          # Changed projects from external repos for granular artifact-level reuse
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.

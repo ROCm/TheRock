@@ -173,6 +173,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
 
     # -----------------------
+    # tensilelite ctest-stage gating (AIHPBLAS-4410)
+    # -----------------------
+
+    def test_tensilelite_standard_appends_ctest_stage(self):
+        """TEST_TYPE=standard should append the ctest stage and extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "standard"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertIn("test_runner.py", tensilelite["test_script"])
+        self.assertEqual(tensilelite["timeout_minutes"], 30)
+
+    def test_tensilelite_quick_omits_ctest_stage(self):
+        """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        os.environ["TEST_TYPE"] = "quick"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        tensilelite = next(j for j in components if j["job_name"] == "tensilelite")
+        self.assertNotIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
+        self.assertEqual(tensilelite["timeout_minutes"], 15)
+
+    # -----------------------
     # Exclude-family logic
     # -----------------------
 

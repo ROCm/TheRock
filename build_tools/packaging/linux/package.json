@@ -48,8 +48,8 @@
     "DEBDepends": [
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -124,8 +124,8 @@
       "python3",
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -469,18 +469,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "True"
@@ -645,14 +633,6 @@
               "run",
               "doc"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
           }
         ]
       },
@@ -695,7 +675,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -739,7 +719,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "hipSPARSELt",
@@ -885,12 +865,6 @@
             "Components": [
               "dev"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "dev"
-            ]
           }
         ]
       }
@@ -924,7 +898,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -936,6 +910,14 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "lib",
               "run",
@@ -972,7 +954,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -982,6 +964,12 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "dev"
             ]
@@ -1018,7 +1006,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -1069,7 +1057,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -3352,7 +3340,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile",
     "Version": "",
@@ -3846,6 +3833,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {

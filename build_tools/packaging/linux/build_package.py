@@ -591,13 +591,15 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
-    # Append version (and build variant for ASAN) to default install prefix.
+    # Append version (and build variant for ASan-family builds) to default
+    # install prefix. Debug variants (asan-debug, host-asan-debug) collapse to
+    # the same "-asan" prefix as their non-debug counterpart.
     # Release:  /opt/rocm/core-7.15
     # ASAN:     /opt/rocm/core-asan-7.15
     prefix = args.install_prefix
     if prefix == DEFAULT_INSTALL_PREFIX:
-        if args.build_variant == "asan":
-            prefix = f"{prefix}-{args.build_variant}-{modified_rocm_version}"
+        if "asan" in args.build_variant:
+            prefix = f"{prefix}-asan-{modified_rocm_version}"
         else:
             prefix = f"{prefix}-{modified_rocm_version}"
 
@@ -672,7 +674,7 @@ def run(args: argparse.Namespace):
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    logs_dir = Path(config.dest_dir) / "logs"
+    logs_dir = Path(config.dest_dir).parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     built_pkglist = []
@@ -788,7 +790,8 @@ def main(argv: list[str]):
         "--build-variant",
         default="",
         help=(
-            "Build variant (e.g. 'asan'). When set to 'asan', the install prefix "
+            "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', "
+            "'host-asan-debug'). When it contains 'asan', the install prefix "
             "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
             "(e.g. /opt/rocm/core-asan-7.15)."
         ),
