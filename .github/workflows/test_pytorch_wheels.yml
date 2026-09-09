@@ -25,9 +25,9 @@ on:
         description: >-
           Optional additional package index (pip --extra-index-url) used to
           resolve ROCm runtime deps (e.g. rocm==7.14.0) that are not published
-          to package_index_url. Set to a released ROCm index (e.g.
-          https://repo.amd.com/rocm/manylinux/rocm-rel-7.14/) when testing
-          wheels built against a released ROCm.
+          to package_index_url. Set to a deps-only index such as
+          https://stable.repo.amd.com/rocm/core/whl-next/ when testing wheels
+          built against a released ROCm.
         type: string
         default: ""
       python_version:
