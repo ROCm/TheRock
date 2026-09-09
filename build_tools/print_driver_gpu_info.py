@@ -60,12 +60,18 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
+def run_command(
+    args: List[str | Path], cwd: Optional[Path] = None, env: Optional[dict] = None
+) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
 
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
 
     try:
         proc = subprocess.run(
@@ -76,8 +82,15 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
             text=True,
             check=True,
             stdin=subprocess.DEVNULL,
+            env=run_env,
         )
         log(proc.stdout.rstrip())
+    except subprocess.CalledProcessError as e:
+        # Print the captured output before propagating, otherwise the command's
+        # own diagnostics are lost and only the traceback survives.
+        if e.stdout:
+            log(e.stdout.rstrip())
+        raise
     except FileNotFoundError:
         log(f"{args[0]}: command not found")
 
@@ -87,6 +100,7 @@ def run_command_with_search(
     command: str,
     args: List[str],
     extra_command_search_paths: List[Path],
+    env: Optional[dict] = None,
 ) -> None:
     """
     Run a command, searching in extra paths first, then PATH.
@@ -104,14 +118,14 @@ def run_command_with_search(
         candidate = base / command
         if candidate.exists():
             log(f"\n=== {label} ===")
-            run_command([candidate] + args)
+            run_command([candidate] + args, env=env)
             return
 
     # Then fall back to PATH
     resolved = shutil.which(command)
     if resolved:
         log(f"\n=== {label} ===")
-        run_command([resolved] + args)
+        run_command([resolved] + args, env=env)
         return
 
     # Nothing found
@@ -125,6 +139,21 @@ def run_sanity(os_name: str) -> int:
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
 
     log("=== Sanity check: driver / GPU info ===")
+
+    # The driver probes below load ASAN-instrumented ROCm libraries, so on an
+    # instrumented build LeakSanitizer reports whatever those libraries leak at
+    # exit and the probe returns non-zero. This check answers "is the driver
+    # and GPU functional", not "is the runtime leak-free", so leak detection is
+    # turned off here only. Component tests still run with it enabled.
+    asan_env: Optional[dict] = None
+    if os.getenv("BUILD_VARIANT", "") in ("asan", "host-asan"):
+        asan_options = os.getenv("ASAN_OPTIONS", "")
+        asan_env = {
+            "ASAN_OPTIONS": (
+                f"{asan_options}:detect_leaks=0" if asan_options else "detect_leaks=0"
+            )
+        }
+        log(f"ASAN instrumented build, sanity probes use {asan_env['ASAN_OPTIONS']}")
 
     if os_name.lower() == "windows":
         # Windows: only hipInfo.exe
@@ -141,12 +170,14 @@ def run_sanity(os_name: str) -> int:
             command="amd-smi",
             args=["static"],
             extra_command_search_paths=[bin_dir],
+            env=asan_env,
         )
         run_command_with_search(
             label="rocminfo",
             command="rocminfo",
             args=[],
             extra_command_search_paths=[bin_dir],
+            env=asan_env,
         )
         run_command_with_search(
             label="Kernel version",
