@@ -47,9 +47,7 @@ _spec = importlib.util.spec_from_file_location(
     _module_path,
 )
 native_linux_package_uninstall_test = importlib.util.module_from_spec(_spec)
-sys.modules["native_linux_package_uninstall_test"] = (
-    native_linux_package_uninstall_test
-)
+sys.modules["native_linux_package_uninstall_test"] = native_linux_package_uninstall_test
 _spec.loader.exec_module(native_linux_package_uninstall_test)
 
 

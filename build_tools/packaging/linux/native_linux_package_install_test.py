@@ -1715,9 +1715,7 @@ def _argv_from_ci_env() -> list[str] | None:
 
     Required for sanity/full: OS_PROFILE, REPO_URL, RELEASE_TYPE, INSTALL_PREFIX.
     Optional: GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT; ``NATIVE_LINUX_INSTALL_ROCM_VERSION``
-    maps to ``--rocm-version`` when versioned package names are needed;
-    ``RUN_UNINSTALL`` (1/true/yes) maps to ``--with-uninstall`` for Step 4;
-    0/false/no disables; any other non-empty value raises ``ValueError``.
+    maps to ``--rocm-version`` when versioned package names are needed.
     """
     test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
 
