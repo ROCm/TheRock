@@ -232,7 +232,7 @@ ______________________________________________________________________
 We use [GitHub Actions](https://github.com/features/actions) in the
 [`.github/workflows`](/.github/workflows/) directory for a variety of workflows:
 
-- Lightweight checks: codeql.yml, gitleaks.yml, pre-commit.yml, unit_tests.yml, therock-pr-bot.yml, etc.
+- Lightweight checks: codeql.yml, security_scan_pr.yml, pre-commit.yml, unit_tests.yml, therock-pr-bot.yml, etc.
 - CI/CD workflows: multi_arch_ci.yml, multi_arch_release.yml, etc.
 - Other automation: bump_submodules.yml, copy_release.yml, publish_build_manylinux_x86_64.yml
 

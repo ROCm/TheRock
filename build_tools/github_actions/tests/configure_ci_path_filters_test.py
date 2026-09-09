@@ -36,7 +36,12 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_skipped_files_edited(self):
-        paths = ["gitleaks.toml", "build_tools/scan_tools/script.py"]
+        paths = [
+            "build_tools/scan_tools/gitleaks.toml",
+            "build_tools/scan_tools/bandit.yaml",
+            "build_tools/scan_tools/trivy.yaml",
+            "build_tools/scan_tools/zizmor.yaml",
+        ]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
@@ -75,7 +80,6 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             "build_tools/packaging/linux/tests/example_test.py",
             "build_tools/packaging/python/tests/example_test.py",
             "build_tools/third_party/s3_management/tests/example_test.py",
-            "build_tools/scan_tools/github_actions/tests/example_test.py",
             "test_tools/tests/example_test.py",
         ]
 

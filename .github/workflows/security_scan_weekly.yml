@@ -24,7 +24,11 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@4b25e6bc1cb0b9bbc3c278b2f1c70d8f2f406e20 # v1.0.0
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@cc668a725f81b3bc5af72e47ebecabf92f25066d # v1.0.1
     with:
       scan_mode: all
       report_formats: sarif
+      bandit_config_path: build_tools/scan_tools/bandit.yaml
+      gitleaks_config_path: build_tools/scan_tools/gitleaks.toml
+      trivy_config_path: build_tools/scan_tools/trivy.yaml
+      zizmor_config_path: build_tools/scan_tools/zizmor.yaml
