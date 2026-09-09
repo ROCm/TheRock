@@ -133,7 +133,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_windows_skips_native_packages(self, mock_copy):
+    def test_windows_copies_native_msi_packages(self, mock_copy):
         mock_copy.return_value = 1
         main(
             [
@@ -146,8 +146,16 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "--dry-run",
             ]
         )
-        # Only tarballs + python x2 (3 calls) — native packages skipped for windows
-        self.assertEqual(mock_copy.call_count, 3)
+        # Calls: tarballs, python x2, msi (4 calls)
+        self.assertEqual(mock_copy.call_count, 4)
+        # msi packages are the last call
+        msi_source, msi_dest = mock_copy.call_args_list[3].args
+        self.assertEqual(msi_source.bucket, "therock-nightly-artifacts")
+        self.assertEqual(msi_source.relative_path, "99-windows/packages/msi")
+        self.assertEqual(msi_dest.bucket, "therock-repo-amd-nightly-core")
+        self.assertRegex(
+            msi_dest.relative_path, r"^v5/rocm/core/packages/msi/\d{8}-99$"
+        )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_raises_when_no_tarballs_found(self, mock_copy):
