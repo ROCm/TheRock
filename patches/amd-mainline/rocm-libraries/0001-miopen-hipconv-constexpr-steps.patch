@@ -1,0 +1,36 @@
+From 91cb6dd288cea6d63c5fa98f2903940634fd0d8c Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Wed, 9 Sep 2026 19:49:05 +0000
+Subject: [PATCH] miopen/hipconv: raise constexpr step limit for GCC 14+
+ libstdc++
+
+GCC 14 and later ship a std::array whose constexpr paths require
+significantly more evaluation steps. The hipconv TransposeSwizzle
+bank-conflict validation in lds_layout.h calls rounds_are_rungs()
+which iterates through all swizzle combinations, exceeding the
+default constexpr step limit when compiled with GCC 14+ headers.
+
+Raise -fconstexpr-steps to 2097152 so the static_assert evaluations
+complete.
+---
+ projects/miopen/src/hipconv/CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/projects/miopen/src/hipconv/CMakeLists.txt b/projects/miopen/src/hipconv/CMakeLists.txt
+index e60987b7b51..79e98ca4c7a 100644
+--- a/projects/miopen/src/hipconv/CMakeLists.txt
++++ b/projects/miopen/src/hipconv/CMakeLists.txt
+@@ -32,6 +32,10 @@ endif()
+ 
+ project(hipconv LANGUAGES CXX HIP)
+ 
++# GCC 14+ libstdc++ std::array constexpr evaluation requires more steps
++# than the default limit when evaluating TransposeSwizzle bank-conflict checks.
++add_compile_options(-fconstexpr-steps=2097152)
++
+ set(HIPCONV_NUM_SHARDS 8 CACHE STRING "Number of shards for parallel kernel compilation")
+ if(NOT HIPCONV_NUM_SHARDS MATCHES "^[1-9][0-9]*$")
+     message(FATAL_ERROR
+-- 
+2.52.0
+

@@ -1,0 +1,32 @@
+From 5d9320465b88285928e216d3025a958f6eacf10a Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Thu, 10 Sep 2026 13:12:26 +0000
+Subject: [PATCH] rccl: add netTransport stub for ppc64le linker compatibility
+
+On ppc64le, the TOC (Table of Contents) entry for netTransport survives
+--gc-sections even though the code section referencing it is dead. This
+causes an undefined symbol error at link time for the MicroEnqueue host
+test. Add a zero-initialized stub definition so the symbol resolves.
+
+The x86 build is unaffected because its relocation model allows
+--gc-sections to eliminate the reference entirely.
+---
+ projects/rccl/test/host/fakes/transport_stubs.cc | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/projects/rccl/test/host/fakes/transport_stubs.cc b/projects/rccl/test/host/fakes/transport_stubs.cc
+index 7f312e4e721..6c3aa729cfb 100644
+--- a/projects/rccl/test/host/fakes/transport_stubs.cc
++++ b/projects/rccl/test/host/fakes/transport_stubs.cc
+@@ -61,3 +61,8 @@ ncclResult_t ncclTreeBasePostset(struct ncclComm* comm, struct ncclTopoGraph* tr
+ ncclResult_t ncclTransportCheckP2pType(struct ncclComm*, bool*, bool*, bool*) { ::abort(); }
+ ncclResult_t ncclTransportP2pConnect(struct ncclComm*, int, int, int*, int, int*, int) { ::abort(); }
+ ncclResult_t ncclTransportP2pSetup(struct ncclComm*, struct ncclTopoGraph*, int, bool*) { ::abort(); }
++
++// ppc64le TOC references survive --gc-sections, so netTransport must have
++// a definition even though the code path that uses it is dead.
++#include "transport.h"
++struct ncclTransport netTransport = {};
+-- 
+2.52.0
+
