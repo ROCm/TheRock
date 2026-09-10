@@ -35,7 +35,7 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -63,12 +63,64 @@ def get_stage_source_paths(stage_name: str) -> Set[str]:
     return source_paths
 
 
-def extract_source_path_from_project(project_path: str) -> Optional[str]:
-    """Extract the last component from a project path (e.g., "projects/rocprim" -> "rocprim")."""
-    parts = project_path.strip().split("/")
-    if len(parts) >= 2:
-        return parts[-1]
-    return project_path.strip() if project_path.strip() else None
+def get_all_topology_source_paths() -> Set[str]:
+    """Get all source_paths defined across all artifacts in the topology."""
+    topology = get_topology()
+    all_source_paths: Set[str] = set()
+
+    for artifact in topology.artifacts.values():
+        if artifact.source_paths:
+            all_source_paths.update(artifact.source_paths)
+        else:
+            all_source_paths.add(artifact.name)
+
+    return all_source_paths
+
+
+def extract_source_path_from_project(
+    project_path: str, topology_source_paths: Optional[Set[str]] = None
+) -> Optional[str]:
+    """Extract the topology source_path from a project path.
+
+    For nested projects like "projects/hipblaslt/tensilelite", finds the owning
+    topology source_path by checking path segments from most specific to least.
+    This ensures nested subtrees (e.g., tensilelite inside hipblaslt) map to
+    their parent's topology entry.
+
+    Args:
+        project_path: Full project path (e.g., "projects/rocprim", "projects/hipblaslt/tensilelite")
+        topology_source_paths: Set of valid source_paths from topology. If None, loads from topology.
+
+    Returns:
+        The topology source_path, or None if not found.
+
+    Examples:
+        "projects/rocprim" -> "rocprim"
+        "projects/hipblaslt/tensilelite" -> "hipblaslt" (tensilelite is nested under hipblaslt)
+        "shared/rocroller" -> "rocroller"
+    """
+    project_path = project_path.strip()
+    if not project_path:
+        return None
+
+    parts = project_path.split("/")
+    if len(parts) < 2:
+        return project_path if project_path else None
+
+    # Load topology source_paths if not provided
+    if topology_source_paths is None:
+        topology_source_paths = get_all_topology_source_paths()
+
+    # Check segments from position 1 onwards (skip "projects" or "shared" prefix)
+    # Check from least specific to most specific, return first match found in topology
+    # For "projects/hipblaslt/tensilelite": check "hipblaslt" first, then "tensilelite"
+    for i in range(1, len(parts)):
+        segment = parts[i]
+        if segment in topology_source_paths:
+            return segment
+
+    # Fallback: return the last component if nothing matched
+    return parts[-1]
 
 
 def get_artifact_for_source_path_in_stage(
@@ -177,42 +229,99 @@ def get_artifact_build_dependency_paths(
     return dependency_paths
 
 
-def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> List[str]:
-    """Return project paths to sparse checkout for a stage.
+def build_source_path_prefix_map(changed_projects: str) -> Dict[str, str]:
+    """Build a mapping from source_path to its project prefix.
 
-    Expands changed projects to include artifact siblings and transitive build
-    dependencies within the same source_sets. Returns empty list if no paths needed.
+    This creates a mapping based on the actual project paths provided, so we can
+    correctly reconstruct paths for artifact siblings that may be in different
+    prefix directories (e.g., projects/ vs shared/).
+
+    Args:
+        changed_projects: Comma-separated list of changed project paths.
+
+    Returns:
+        Dict mapping source_path -> prefix (e.g., {"rocroller": "shared/", "rocblas": "projects/"})
     """
-    if not changed_projects or not changed_projects.strip():
-        return []
-
-    stage_source_paths = get_stage_source_paths(stage_name)
-    if not stage_source_paths:
-        return []
-
-    # Get source_sets for this stage (used to filter dependencies to same repo)
-    stage_source_sets = get_source_sets_for_stage(stage_name)
-
-    # First, find which source_paths in this stage are affected
-    affected_source_paths: Set[str] = set()
-    project_prefixes: Dict[str, str] = (
-        {}
-    )  # source_path -> project prefix (e.g., "rocprim" -> "projects/")
+    topology_source_paths = get_all_topology_source_paths()
+    prefix_map: Dict[str, str] = {}
 
     for project in changed_projects.split(","):
         project = project.strip()
         if not project:
             continue
 
-        source_path = extract_source_path_from_project(project)
+        source_path = extract_source_path_from_project(project, topology_source_paths)
+        if source_path:
+            # Extract prefix: everything before the source_path
+            # For "projects/hipblaslt/tensilelite" with source_path "hipblaslt",
+            # find where "hipblaslt" starts and take everything before it
+            idx = project.find(f"/{source_path}")
+            if idx >= 0:
+                prefix = project[: idx + 1]  # Include the trailing slash
+            else:
+                # Fallback: source_path is at the start or no slash found
+                prefix = ""
+            prefix_map[source_path] = prefix
+
+    return prefix_map
+
+
+def compute_stage_sparse_checkout(
+    stage_name: str, changed_projects: str
+) -> Tuple[List[str], List[str]]:
+    """Return project paths to sparse checkout for a stage.
+
+    Expands changed projects to include artifact siblings and transitive build
+    dependencies within the same source_sets.
+
+    Args:
+        stage_name: Name of the build stage.
+        changed_projects: Comma-separated list of changed project paths.
+
+    Returns:
+        Tuple of (checkout_paths, unmapped_projects):
+        - checkout_paths: List of project paths to sparse checkout
+        - unmapped_projects: List of projects that couldn't be mapped to topology
+    """
+    if not changed_projects or not changed_projects.strip():
+        return [], []
+
+    stage_source_paths = get_stage_source_paths(stage_name)
+    if not stage_source_paths:
+        return [], []
+
+    # Get source_sets for this stage (used to filter dependencies to same repo)
+    stage_source_sets = get_source_sets_for_stage(stage_name)
+
+    # Load all topology source paths for mapping
+    all_topology_source_paths = get_all_topology_source_paths()
+
+    # Build prefix map from all changed projects
+    project_prefix_map = build_source_path_prefix_map(changed_projects)
+
+    # Find which source_paths in this stage are affected, track unmapped projects
+    affected_source_paths: Set[str] = set()
+    unmapped_projects: List[str] = []
+
+    for project in changed_projects.split(","):
+        project = project.strip()
+        if not project:
+            continue
+
+        source_path = extract_source_path_from_project(
+            project, all_topology_source_paths
+        )
         if source_path and source_path in stage_source_paths:
             affected_source_paths.add(source_path)
-            # Remember the prefix (e.g., "projects/" from "projects/rocprim")
-            prefix = project[: len(project) - len(source_path)]
-            project_prefixes[source_path] = prefix
+        elif source_path and source_path in all_topology_source_paths:
+            # Mapped to topology but not in this stage - that's expected
+            pass
+        else:
+            # Couldn't map to any topology source_path
+            unmapped_projects.append(project)
 
     if not affected_source_paths:
-        return []
+        return [], unmapped_projects
 
     # Expand to include all sibling source_paths from affected artifacts
     # AND their transitive build dependencies within the same source_sets
@@ -240,31 +349,52 @@ def compute_stage_sparse_checkout(stage_name: str, changed_projects: str) -> Lis
     # (dependencies from other stages/repos are handled by artifact fetching)
     all_needed_paths = all_needed_paths.intersection(stage_source_paths)
 
-    # Convert source_paths back to project paths using the prefix
-    # Use the first known prefix for paths we haven't seen directly
-    default_prefix = next(iter(project_prefixes.values()), "projects/")
+    # Convert source_paths back to project paths using the prefix map
+    # For siblings not in the original changed_projects, use "projects/" as default
+    # since that's the most common case in rocm-libraries
     result_paths: List[str] = []
     for sp in all_needed_paths:
-        prefix = project_prefixes.get(sp, default_prefix)
+        prefix = project_prefix_map.get(sp, "projects/")
         result_paths.append(f"{prefix}{sp}")
 
-    return sorted(result_paths)
+    return sorted(result_paths), unmapped_projects
 
 
-def compute_all_stage_sparse_checkouts(changed_projects: str) -> Dict[str, str]:
-    """Pre-compute sparse checkout paths for all stages (stage_name -> newline-separated paths)."""
+def compute_all_stage_sparse_checkouts(
+    changed_projects: str,
+) -> Tuple[Dict[str, str], bool]:
+    """Pre-compute sparse checkout paths for all stages.
+
+    Args:
+        changed_projects: Comma-separated list of changed project paths.
+
+    Returns:
+        Tuple of (stage_paths, has_unmapped):
+        - stage_paths: Dict mapping stage_name -> newline-separated paths
+        - has_unmapped: True if any projects couldn't be mapped to topology,
+          signaling that a full checkout should be used instead
+    """
     if not changed_projects or not changed_projects.strip():
-        return {}
+        return {}, False
 
     topology = get_topology()
     result: Dict[str, str] = {}
+    all_unmapped: Set[str] = set()
 
     for stage_name in topology.build_stages:
-        paths = compute_stage_sparse_checkout(stage_name, changed_projects)
+        paths, unmapped = compute_stage_sparse_checkout(stage_name, changed_projects)
         # Convert list to newline-separated string for actions/checkout sparse-checkout
         result[stage_name] = "\n".join(paths)
+        all_unmapped.update(unmapped)
 
-    return result
+    if all_unmapped:
+        print(
+            f"WARNING: {len(all_unmapped)} projects could not be mapped to topology: "
+            f"{sorted(all_unmapped)}",
+            file=sys.stderr,
+        )
+
+    return result, bool(all_unmapped)
 
 
 # Repository configuration map
@@ -711,14 +841,20 @@ def main(argv=None):
 
         # Pre-compute sparse checkout paths for all stages
         # This enables per-stage sparse checkout without calling a separate script
-        sparse_checkout_by_stage = compute_all_stage_sparse_checkouts(
-            changed_projects_normalized
+        sparse_checkout_by_stage, has_unmapped_projects = (
+            compute_all_stage_sparse_checkouts(changed_projects_normalized)
         )
         if sparse_checkout_by_stage:
             affected_stages = [s for s, p in sparse_checkout_by_stage.items() if p]
             print(
                 f"Sparse checkout computed for {len(sparse_checkout_by_stage)} stages, "
                 f"{len(affected_stages)} affected: {affected_stages}",
+                file=sys.stderr,
+            )
+        if has_unmapped_projects:
+            print(
+                "WARNING: Some projects could not be mapped. "
+                "Stages should fall back to full checkout.",
                 file=sys.stderr,
             )
 
@@ -733,6 +869,7 @@ def main(argv=None):
             "family_overrides": family_overrides,
             "changed_projects": changed_projects_normalized,
             "sparse_checkout_by_stage": sparse_checkout_by_stage,
+            "sparse_checkout_fallback_full": has_unmapped_projects,
         }
         config["config_json"] = json.dumps(config_json)
         print(

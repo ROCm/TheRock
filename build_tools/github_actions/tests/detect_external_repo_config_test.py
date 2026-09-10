@@ -15,9 +15,11 @@ from unittest.mock import patch, MagicMock, mock_open
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from detect_external_repo_config import (
+    build_source_path_prefix_map,
     compute_all_stage_sparse_checkouts,
     compute_stage_sparse_checkout,
     extract_source_path_from_project,
+    get_all_topology_source_paths,
     get_repo_config,
     get_external_repo_path,
     get_stage_source_paths,
@@ -509,6 +511,26 @@ class TestExtractSourcePathFromProject(unittest.TestCase):
         """Test extraction from empty path."""
         self.assertIsNone(extract_source_path_from_project(""))
 
+    def test_nested_project_maps_to_parent(self):
+        """Nested projects like tensilelite should map to parent hipblaslt.
+
+        The build topology defines hipblaslt as a source_path for the blas artifact,
+        but tensilelite is a nested subtree inside hipblaslt in rocm-libraries.
+        This should correctly map to hipblaslt.
+        """
+        result = extract_source_path_from_project("projects/hipblaslt/tensilelite")
+        self.assertEqual(result, "hipblaslt")
+
+    def test_single_component(self):
+        """Single component paths should return as-is."""
+        result = extract_source_path_from_project("rocblas")
+        self.assertEqual(result, "rocblas")
+
+    def test_unknown_nested_project_returns_last(self):
+        """Unknown nested paths should return the last component as fallback."""
+        result = extract_source_path_from_project("projects/unknown/nested")
+        self.assertEqual(result, "nested")
+
 
 class TestGetStageSourcePaths(unittest.TestCase):
     """Tests for get_stage_source_paths function."""
@@ -529,39 +551,69 @@ class TestComputeStageSparseCheckout(unittest.TestCase):
 
     def test_affected_stage(self):
         """Test stage that is affected by changed projects."""
-        paths = compute_stage_sparse_checkout(
+        paths, unmapped = compute_stage_sparse_checkout(
             "math-libs", "projects/rocprim,shared/rocroller"
         )
         self.assertIn("projects/rocprim", paths)
         self.assertIn("shared/rocroller", paths)
+        self.assertEqual(unmapped, [])
 
     def test_unaffected_stage(self):
         """Test stage that is NOT affected by changed projects."""
-        paths = compute_stage_sparse_checkout("cv-libs", "projects/rocprim")
+        paths, unmapped = compute_stage_sparse_checkout("cv-libs", "projects/rocprim")
         self.assertEqual(paths, [])
 
     def test_empty_changed_projects(self):
         """Test with empty changed_projects."""
-        self.assertEqual(compute_stage_sparse_checkout("math-libs", ""), [])
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "")
+        self.assertEqual(paths, [])
+        self.assertEqual(unmapped, [])
 
     def test_includes_artifact_siblings(self):
         """rocprim should include hipcub, rocthrust (same artifact)."""
-        paths = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
         self.assertIn("projects/rocprim", paths)
         self.assertIn("projects/hipcub", paths)
         self.assertIn("projects/rocthrust", paths)
+        self.assertEqual(unmapped, [])
 
     def test_includes_build_deps_from_same_source_set(self):
         """rocprim's 'prim' artifact depends on 'rand' (rocrand, hiprand)."""
-        paths = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
         self.assertIn("projects/rocrand", paths)
         self.assertIn("projects/hiprand", paths)
 
     def test_excludes_deps_from_other_source_sets(self):
         """Dependencies in rocm-systems (clr, hip) should NOT appear."""
-        paths = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "projects/rocprim")
         self.assertNotIn("projects/clr", paths)
         self.assertNotIn("projects/hip", paths)
+
+    def test_hipblaslt_tensilelite_maps_correctly(self):
+        """Nested tensilelite path should map to hipblaslt and include blas siblings."""
+        paths, unmapped = compute_stage_sparse_checkout(
+            "math-libs", "projects/hipblaslt/tensilelite"
+        )
+        # tensilelite -> hipblaslt -> blas artifact
+        self.assertIn("projects/hipblaslt", paths)
+        self.assertIn("projects/rocblas", paths)
+        self.assertIn("projects/hipblas", paths)
+        self.assertEqual(unmapped, [])
+
+    def test_unmapped_project_is_tracked(self):
+        """Projects that can't be mapped to topology should be in unmapped list."""
+        paths, unmapped = compute_stage_sparse_checkout(
+            "math-libs", "projects/totally_unknown_project"
+        )
+        self.assertIn("projects/totally_unknown_project", unmapped)
+
+    def test_mixed_mapped_and_unmapped(self):
+        """Mix of mapped and unmapped projects should work correctly."""
+        paths, unmapped = compute_stage_sparse_checkout(
+            "math-libs", "projects/rocprim,projects/unknown_project"
+        )
+        self.assertIn("projects/rocprim", paths)
+        self.assertIn("projects/unknown_project", unmapped)
 
 
 class TestComputeAllStageSparseCheckouts(unittest.TestCase):
@@ -569,18 +621,79 @@ class TestComputeAllStageSparseCheckouts(unittest.TestCase):
 
     def test_returns_dict_for_all_stages(self):
         """Test that result contains entries for affected stages."""
-        result = compute_all_stage_sparse_checkouts("projects/rocprim")
+        result, has_unmapped = compute_all_stage_sparse_checkouts("projects/rocprim")
         self.assertIn("math-libs", result)
         self.assertIn("projects/rocprim", result["math-libs"])
+        self.assertFalse(has_unmapped)
 
     def test_empty_changed_projects_returns_empty_dict(self):
         """Test that empty changed_projects returns empty dict."""
-        self.assertEqual(compute_all_stage_sparse_checkouts(""), {})
+        result, has_unmapped = compute_all_stage_sparse_checkouts("")
+        self.assertEqual(result, {})
+        self.assertFalse(has_unmapped)
 
     def test_unaffected_stages_have_empty_string(self):
         """Test that unaffected stages have empty string values."""
-        result = compute_all_stage_sparse_checkouts("projects/rocprim")
+        result, has_unmapped = compute_all_stage_sparse_checkouts("projects/rocprim")
         self.assertEqual(result["cv-libs"], "")
+
+    def test_unmapped_projects_signal_fallback(self):
+        """Test that unmapped projects set has_unmapped to True."""
+        result, has_unmapped = compute_all_stage_sparse_checkouts(
+            "projects/rocprim,projects/totally_unknown"
+        )
+        self.assertTrue(has_unmapped)
+
+
+class TestBuildSourcePathPrefixMap(unittest.TestCase):
+    """Tests for build_source_path_prefix_map function."""
+
+    def test_projects_prefix(self):
+        """Standard project paths should have 'projects/' prefix."""
+        result = build_source_path_prefix_map("projects/rocblas,projects/hipblas")
+        self.assertEqual(result.get("rocblas"), "projects/")
+        self.assertEqual(result.get("hipblas"), "projects/")
+
+    def test_shared_prefix(self):
+        """Shared paths should have 'shared/' prefix."""
+        result = build_source_path_prefix_map("shared/rocroller")
+        self.assertEqual(result.get("rocroller"), "shared/")
+
+    def test_mixed_prefixes(self):
+        """Mixed prefixes should be correctly extracted."""
+        result = build_source_path_prefix_map(
+            "projects/rocblas,shared/rocroller,projects/hipblaslt"
+        )
+        self.assertEqual(result.get("rocblas"), "projects/")
+        self.assertEqual(result.get("rocroller"), "shared/")
+        self.assertEqual(result.get("hipblaslt"), "projects/")
+
+    def test_nested_project_extracts_parent_prefix(self):
+        """Nested projects should extract the prefix to the parent."""
+        result = build_source_path_prefix_map("projects/hipblaslt/tensilelite")
+        self.assertEqual(result.get("hipblaslt"), "projects/")
+
+    def test_empty_string(self):
+        """Empty string should return empty dict."""
+        result = build_source_path_prefix_map("")
+        self.assertEqual(result, {})
+
+
+class TestGetAllTopologySourcePaths(unittest.TestCase):
+    """Tests for get_all_topology_source_paths function."""
+
+    def test_returns_known_source_paths(self):
+        """Should return known source_paths from topology."""
+        result = get_all_topology_source_paths()
+        self.assertIn("rocblas", result)
+        self.assertIn("hipblaslt", result)
+        self.assertIn("rocprim", result)
+        self.assertIn("miopen", result)
+
+    def test_returns_set(self):
+        """Should return a set."""
+        result = get_all_topology_source_paths()
+        self.assertIsInstance(result, set)
 
 
 if __name__ == "__main__":
