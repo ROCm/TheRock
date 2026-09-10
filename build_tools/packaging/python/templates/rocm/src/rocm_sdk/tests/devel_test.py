@@ -153,6 +153,7 @@ class ROCmDevelTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
