@@ -170,9 +170,13 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
           CLANG_PATH="${{ env.THEROCK_BIN_DIR }}/../lib/llvm/bin/clang++"
-          ASAN_LIB="$("${CLANG_PATH}" --print-file-name="libclang_rt.asan-$(uname -m).so")"
-          echo "++ Resolved ASan runtime: ${ASAN_LIB}"
-          echo "LD_PRELOAD=${ASAN_LIB}" >> $GITHUB_ENV
+          ASAN_LIB="$("${CLANG_PATH}" --print-file-name="libclang_rt.asan.so")"
+          if [[ -f "${ASAN_LIB}" ]]; then
+            echo "++ Resolved ASan runtime: ${ASAN_LIB}"
+            echo "LD_PRELOAD=${ASAN_LIB}" >> $GITHUB_ENV
+          else
+            echo "!! Could not resolve ASan runtime at '${ASAN_LIB}'; LD_PRELOAD not set"
+          fi
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
