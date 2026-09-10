@@ -165,6 +165,10 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
     run_command(
         [
             "git",
+            "-c",
+            "user.name=therockbot",
+            "-c",
+            "user.email=therockbot@amd.com",
             "am",
             "--whitespace=nowarn",
             "--committer-date-is-author-date",
