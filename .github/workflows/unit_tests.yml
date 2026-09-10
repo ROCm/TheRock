@@ -66,6 +66,40 @@ jobs:
         name: coverage-report-${{ matrix.runs-on }}
         path: build/coverage-html/
 
+    # Report-only: statically parse the super-project CMake (no configure, no
+    # submodules) and compare the generated consumer graph to the committed
+    # test_tools/therock_consumer_graph.json; the matrix also exercises Windows.
+    # `continue-on-error` keeps it non-blocking — remove it to make this a required
+    # gate. The parity summary is echoed to the job summary so a failure stays
+    # visible even while the step is non-blocking.
+    - name: "Consumer graph parity (report-only)"
+      continue-on-error: true
+      run: |
+        set +e
+        PYTHONPATH=build_tools/consumer_graph python -m cmake_consumer_graph.cli \
+          --therock-dir . \
+          --output-dir build/consumer_graph_report
+        status=$?
+        {
+          echo "### Consumer graph parity (report-only)"
+          if [ -f build/consumer_graph_report/comparison.json ]; then
+            echo '```json'
+            python -c "import json, sys; json.dump(json.load(open('build/consumer_graph_report/comparison.json'))['summary'], sys.stdout, indent=2)"
+            echo
+            echo '```'
+          else
+            echo ":warning: no comparison.json produced — the parser step failed (exit ${status}). See logs."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+        exit "${status}"
+
+    - name: "Upload consumer graph parity report"
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: consumer-graph-parity-${{ matrix.runs-on }}
+        path: build/consumer_graph_report/
+
   unit_tests_summary:
     name: Unit Tests Summary
     if: always()

@@ -37,3 +37,11 @@ toml>=0.10.2
 # which pulls this in via deb_package.py and rpm_package.py.
 # Keep the specifier in sync with requirements.txt.
 jinja2>=3.0.0
+
+# build_tools/consumer_graph: the vendored cmake-parser
+# (build_tools/consumer_graph/_vendor/cmake_parser) imports `attrs` but does not
+# declare it, so it must be listed here explicitly. Vendoring is therefore NOT
+# hermetic — the parser keeps a live PyPI dependency on attrs. Use a floor rather
+# than an exact pin to avoid conflicts on this ubiquitous library; cmake-parser
+# only needs attrs' long-stable `define`.
+attrs>=23.2.0
