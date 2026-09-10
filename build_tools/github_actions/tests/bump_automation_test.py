@@ -964,6 +964,97 @@ class HandlePushTest(unittest.TestCase):
         self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-libraries")
         self.assertEqual(mock_close_ref.call_args.args[3], "assistant-librarian[bot]")
 
+    def test_only_submodule_bypasses_auto_detection(self):
+        """The manual workflow_dispatch replay path (bump_submodules.yml's
+        pin_before/pin_after inputs) passes only_submodule to target one
+        submodule directly; submodule_changed must never be consulted."""
+        with patch("bump_automation.submodule_changed") as mock_changed:
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs"):
+                    with patch(
+                        "bump_automation.get_baseline_run_id_from_merged_pr",
+                        return_value=None,
+                    ):
+                        with patch("bump_automation.run"):
+                            with patch("bump_automation.os.chdir"):
+                                with patch(
+                                    "bump_automation.os.path.exists",
+                                    return_value=True,
+                                ):
+                                    with patch("bump_automation.update_ci_env_file"):
+                                        with patch(
+                                            "bump_automation.find_therock_workflow_files",
+                                            return_value=[],
+                                        ):
+                                            with patch(
+                                                "bump_automation.gh_api",
+                                                return_value={"number": 1},
+                                            ):
+                                                with patch(
+                                                    "bump_automation.close_stale_therock_ref_prs"
+                                                ):
+                                                    with patch(
+                                                        "bump_automation.create_therock_bump"
+                                                    ) as mock_bump:
+                                                        handle_push(
+                                                            "before",
+                                                            "after",
+                                                            {
+                                                                "systems": "systems-token",
+                                                                "libraries": "libraries-token",
+                                                            },
+                                                            only_submodule="rocm-libraries",
+                                                        )
+
+        mock_changed.assert_not_called()
+        mock_bump.assert_called_once_with("rocm-libraries", "libraries-token")
+
+    def test_skip_next_bump_does_not_queue_next_bump(self):
+        """The manual replay path sets skip_next_bump so it never opens a new
+        Bump <submodule> PR in TheRock after updating the downstream pin,
+        unlike a real push event which always queues the next bump."""
+        with patch("bump_automation.get_submodule_sha", return_value="oldsha1234567"):
+            with patch("bump_automation.close_stale_prs"):
+                with patch(
+                    "bump_automation.get_baseline_run_id_from_merged_pr",
+                    return_value=None,
+                ):
+                    with patch("bump_automation.run"):
+                        with patch("bump_automation.os.chdir"):
+                            with patch(
+                                "bump_automation.os.path.exists",
+                                return_value=True,
+                            ):
+                                with patch("bump_automation.update_ci_env_file"):
+                                    with patch(
+                                        "bump_automation.find_therock_workflow_files",
+                                        return_value=[],
+                                    ):
+                                        with patch(
+                                            "bump_automation.gh_api",
+                                            return_value={"number": 1},
+                                        ):
+                                            with patch(
+                                                "bump_automation.close_stale_therock_ref_prs"
+                                            ):
+                                                with patch(
+                                                    "bump_automation.create_therock_bump"
+                                                ) as mock_bump:
+                                                    handle_push(
+                                                        "before",
+                                                        "after",
+                                                        {
+                                                            "systems": "systems-token",
+                                                            "libraries": "libraries-token",
+                                                        },
+                                                        only_submodule="rocm-libraries",
+                                                        skip_next_bump=True,
+                                                    )
+
+        mock_bump.assert_not_called()
+
 
 class CreateTheRockBumpTest(unittest.TestCase):
     def test_skips_when_pr_already_open(self):
