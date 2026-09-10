@@ -15,7 +15,7 @@ These policies apply to all forms of activity and engagement in this project.
 ### Project governance
 
 See
-[ROCm Project Governance](https://github.com/ROCm/ROCm/blob/develop/GOVERNANCE.md),
+[ROCm Project Governance](GOVERNANCE.md),
 which also defines the code of conduct.
 
 ### Licensing

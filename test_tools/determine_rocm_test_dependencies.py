@@ -11,7 +11,11 @@ that directly depend on it.
 
 Algorithm
 ---------
-1. Load the consumer graph.
+1. Load the consumer graph, merging in any synthetic subprojects declared in
+   test_policies.toml's `[synthetic.<name>]` tables -- projects with no CMake
+   target (e.g. TensileLite) but real test couplings the graph cannot express.
+   Once merged, a synthetic subproject is an ordinary node: same BFS walk, same
+   validation, no special-casing elsewhere in this module.
 2. For each changed subproject, walk its `consumers` edges to a depth set by the
    component's policy level (see the level ladder below).
 3. UNION the per-subproject walk results across all changed subprojects.
@@ -70,6 +74,52 @@ _TEST_POLICIES_NAME = "test_policies.toml"
 # them script-relative lets selection work from a clean checkout with no build/.
 _TEST_TOOLS_DIR = Path(__file__).resolve().parent
 
+_EXTERNAL_SUBTREE_ALIASES = {
+    "emulation/mirage": ["mirage"],
+    "emulation/rocjitsu": ["rocjitsu"],
+    "shared/rocroller": ["rocroller"],
+    "shared/amdgpu-windows-interop": ["hip-clr"],
+    # rocm-systems shared/* components that are not subtree-synced repos.
+    # machine-readable-isa ships the ISA data consumed by the rocjitsu
+    # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
+    "shared/kpack": ["rocm-kpack"],
+    "shared/machine-readable-isa": ["rocjitsu"],
+    "shared/mxdatagenerator": [
+        "hipblas",
+        "hipblaslt",
+        "rocblas",
+        "rocroller",
+        "tensilelite",
+    ],
+    # hipblaslt/rocblas/hipblas are reachable transitively from "tensilelite"
+    # itself: TensileLite is a synthetic consumer-graph node (see
+    # _load_synthetic_subprojects below) with level 3 (unbounded) in
+    # test_policies.toml, so they don't need to be hand-listed here too.
+    "shared/origami": ["origami", "tensilelite"],
+    "shared/stinkytofu": ["tensilelite"],
+    "shared/tensile": ["hipblas", "rocblas"],
+    "dnn-providers/cmake": ["hipdnn_integration_tests"],
+    "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
+    "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
+    "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
+    "dnn-providers/miopen-provider": ["miopenprovider"],
+    "projects/clr": ["hip-clr"],
+    "projects/composablekernel": ["composable_kernel"],
+    "projects/cuid": ["rdc"],
+    "projects/hip": ["hip-clr"],
+    "projects/hipother": ["hip-clr"],
+    "projects/rocdbgapi": ["amd-dbgapi"],
+    "projects/rocm-smi-lib": ["rocm_smi_lib"],
+    "projects/rocprofiler": ["rocprofiler-sdk"],
+}
+
+_EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
+
+_CI_TEST_SELECTOR_ALIASES = {
+    "hipdnn_integration_tests": ["hipdnn-integration-tests"],
+    "hipdnn_samples": ["hipdnn-samples"],
+}
+
 
 def _test_tools_file(name: str, therock_dir: Path | None) -> Path:
     """Resolve a committed file under test_tools/.
@@ -89,10 +139,19 @@ def _consumer_graph_path(therock_dir: Path | None) -> Path:
 
 
 def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
-    """Load the committed consumer graph JSON.
+    """Load the committed consumer graph JSON, plus synthetic subprojects.
 
     Read directly from test_tools/ — no configure, no source fetch. Freshness is
     enforced by the test_consumer_graph_drift.yml CI job.
+
+    Synthetic subprojects declared in test_policies.toml's `[synthetic.<name>]`
+    tables (see `_load_synthetic_subprojects`) are merged in here as ordinary
+    nodes, so every caller of this function -- the BFS walk, the "unrecognized
+    project" check, `validate_policies()`, `list_subprojects()` -- sees them
+    exactly like any CMake-derived project, with no special-casing elsewhere in
+    this module. The merge is additive (union of consumers) so it cannot
+    silently drop a real edge if a synthetic name ever collides with one added
+    to the real graph later.
     """
     graph_path = _consumer_graph_path(therock_dir)
     if not graph_path.exists():
@@ -103,7 +162,19 @@ def _load_consumer_graph(therock_dir: Path | None = None) -> dict:
             "...`) and copy build/therock_consumer_graph.json to "
             "test_tools/therock_consumer_graph.json."
         )
-    return json.loads(graph_path.read_text())
+    graph = json.loads(graph_path.read_text())
+
+    for name, consumers in _load_synthetic_subprojects(therock_dir).items():
+        node = graph.setdefault(name, {})
+        existing = node.get("consumers", [])
+        if not isinstance(existing, list):
+            raise ValueError(
+                f"{graph_path}: node '{name}' has non-list 'consumers' "
+                f"({existing!r}); cannot merge synthetic edges into it."
+            )
+        node["consumers"] = existing + [c for c in consumers if c not in existing]
+
+    return graph
 
 
 def _test_policies_path(therock_dir: Path | None) -> Path:
@@ -151,6 +222,53 @@ def _load_policies(therock_dir: Path | None = None) -> dict[str, dict]:
             "test_exclude": [c.lower() for c in body.get("test_exclude", [])],
         }
     return policies
+
+
+def _load_synthetic_subprojects(
+    therock_dir: Path | None = None,
+) -> dict[str, list[str]]:
+    """Return { name: [consumers] } for `[synthetic.<name>]` tables.
+
+    Synthetic subprojects have no CMake target (no consumer-graph node) but have
+    real test couplings the graph cannot express -- e.g. TensileLite, a kernel
+    generator + YAML corpus bundled inside hipblaslt (and a variant inside
+    hipsparselt) with no build target of its own. Declaring one here promotes it
+    into a normal graph node (merged in by `_load_consumer_graph`), so it
+    participates in the same BFS walk as every CMake-derived project. `consumers`
+    values are validated by `validate_policies()` against the merged graph, same
+    as any other cross-reference in this file.
+    """
+    policies_path = _test_policies_path(therock_dir)
+    if not policies_path.exists():
+        raise FileNotFoundError(
+            f"Test policy file not found at {policies_path}.\n"
+            "It is a committed file expected to be present in every checkout."
+        )
+    raw = tomllib.loads(policies_path.read_text())
+    synthetic = raw.get("synthetic", {})
+    if not isinstance(synthetic, dict):
+        raise ValueError(
+            "test_policies.toml: [synthetic] must be a table of "
+            "[synthetic.<name>] entries, not "
+            f"{type(synthetic).__name__}"
+        )
+    result: dict[str, list[str]] = {}
+    for name, body in synthetic.items():
+        if not isinstance(body, dict):
+            raise ValueError(
+                f"test_policies.toml: [synthetic.{name}] must be a table, not "
+                f"{type(body).__name__}"
+            )
+        consumers = body.get("consumers", [])
+        if not isinstance(consumers, list) or not all(
+            isinstance(c, str) for c in consumers
+        ):
+            raise ValueError(
+                f"test_policies.toml: [synthetic.{name}] consumers must be a "
+                f"list of strings, not {consumers!r}"
+            )
+        result[name.lower()] = [c.lower() for c in consumers]
+    return result
 
 
 def _level_for(policies: dict[str, dict], proj: str) -> int:
@@ -214,19 +332,20 @@ def get_subprojects_to_test(
     selection works from a clean checkout with no build/ directory.
 
     Inputs and outputs are consumer-graph keys (the lowercased subproject names in
-    therock_consumer_graph.json). This function only lowercases; the CLI also
-    strips a leading `projects/`. Callers holding other identifiers must map them
-    to graph keys first — notably, subtree paths like `projects/clr` (-> `hip-clr`)
-    or `shared/rocroller`, and the hyphenated CI test-matrix keys
-    (`hipdnn-integration-tests` vs the graph's `hipdnn_integration_tests`). That
-    mapping is tracked separately.
+    therock_consumer_graph.json). This function only lowercases; the CLI handles
+    the external-repo subtree identifiers it receives from GitHub Actions by
+    stripping a leading `projects/` and mapping known non-project subtree paths
+    to graph keys. Callers holding other identifiers must map them to graph keys
+    first — notably, subtree paths like `projects/clr` (-> `hip-clr`). The CLI
+    output path translates graph keys that have different CI test selector names.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
 
     changed_lower = [p.lower() for p in changed_subprojects]
 
-    # Warn on unrecognized projects (typo guard).
+    # Warn on unrecognized projects (typo guard). `known` includes synthetic
+    # subprojects (e.g. tensilelite) since _load_consumer_graph merges them in.
     known = set(graph.keys())
     unknown = [p for p in changed_lower if p not in known]
     if unknown:
@@ -257,7 +376,8 @@ def explain_component(component: str, therock_dir: Path | None = None) -> str:
     The final set is computed by calling the real selection function
     (`get_subprojects_to_test`) so `--explain` can never drift from what selection
     actually computes. The graph-walk line is shown separately for insight into
-    how that final set was reached.
+    how that final set was reached, and the CI selector line shows the final
+    names emitted to GitHub Actions after output-only selector translation.
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
@@ -293,7 +413,10 @@ def explain_component(component: str, therock_dir: Path | None = None) -> str:
         lines.append("\ttest_exclude:\t" + ", ".join(sorted(exclude)))
     else:
         lines.append("\ttest_exclude:\t(none)")
+    ci_selectors = _to_ci_test_selectors(final)
     lines.append("\tfinal:\t" + ", ".join(sorted(final)))
+    if ci_selectors != final:
+        lines.append("\tci selectors:\t" + ", ".join(sorted(ci_selectors)))
     return "\n".join(lines)
 
 
@@ -306,10 +429,16 @@ def validate_policies(therock_dir: Path | None = None) -> tuple[bool, list[str]]
     FAILS (ok is False) if:
       * any `[component.<name>]` KEY is not a consumer-graph key — a stale /
         renamed / removed component that could never fire the selection. Each
-        offending key is listed.
+        offending key is listed. (`graph_keys` includes synthetic subprojects,
+        since `_load_consumer_graph` merges them in, so `[component.tensilelite]`
+        validates like any real component.)
       * any `level` is not an implemented level (a key of `_LEVEL_TO_DEPTH`).
         The range is derived from the engine, so validation can never bless a
         level the walk would silently coerce to the default.
+      * any `[synthetic.<name>]`'s `consumers` value is not itself a
+        consumer-graph key (real or another synthetic name) — almost always a
+        typo, since a synthetic edge to a nonexistent project silently walks
+        nowhere.
 
     Does NOT fail on `test_include` / `test_exclude` VALUES absent from the graph:
     those are legitimately test-only targets (ctest suites / tool targets like
@@ -318,6 +447,7 @@ def validate_policies(therock_dir: Path | None = None) -> tuple[bool, list[str]]
     """
     graph = _load_consumer_graph(therock_dir)
     policies = _load_policies(therock_dir)
+    synthetic = _load_synthetic_subprojects(therock_dir)
     graph_keys = set(graph.keys())
 
     errors: list[str] = []
@@ -327,6 +457,14 @@ def validate_policies(therock_dir: Path | None = None) -> tuple[bool, list[str]]
             f"stale component key '{key}': not a consumer-graph key "
             "(renamed/removed component? it can never trigger selection)"
         )
+
+    for name, consumers in sorted(synthetic.items()):
+        for consumer in consumers:
+            if consumer not in graph_keys:
+                errors.append(
+                    f"synthetic subproject '{name}': consumer '{consumer}' is not "
+                    "a consumer-graph key (real or synthetic) -- typo?"
+                )
 
     valid_levels = sorted(_LEVEL_TO_DEPTH)
     lo, hi = valid_levels[0], valid_levels[-1]
@@ -355,9 +493,15 @@ def validate_policies(therock_dir: Path | None = None) -> tuple[bool, list[str]]
             f"; {len(test_only_values)} test-only value(s) noted (not graph keys): "
             + ", ".join(sorted(test_only_values))
         )
+    synthetic_note = ""
+    if synthetic:
+        synthetic_note = (
+            f"; {len(synthetic)} synthetic subproject(s) merged in: "
+            + ", ".join(sorted(synthetic))
+        )
     messages.append(
         f"OK: {len(policies)} component key(s) validated against "
-        f"{len(graph_keys)} graph node(s){note}"
+        f"{len(graph_keys)} graph node(s){note}{synthetic_note}"
     )
     return True, messages
 
@@ -378,6 +522,27 @@ def list_subprojects(therock_dir: Path | None = None, show_deps: bool = False):
     return sorted(graph.keys())
 
 
+def _normalize_changed_project(project: str) -> list[str]:
+    """Normalize CI subtree identifiers to consumer-graph keys for the CLI."""
+    project_lower = project.lower()
+    if project_lower in _EXTERNAL_SUBTREE_ALIASES:
+        return _EXTERNAL_SUBTREE_ALIASES[project_lower]
+    if project_lower.startswith(_EXTERNAL_ONLY_NAMESPACES):
+        raise ValueError(
+            f"'{project}' has no entry in _EXTERNAL_SUBTREE_ALIASES. Add one "
+            "before merging; this namespace has no valid self-select fallback."
+        )
+    return [project_lower.removeprefix("projects/")]
+
+
+def _to_ci_test_selectors(projects: set[str]) -> set[str]:
+    """Translate graph keys to CI test-matrix selector names for CLI output."""
+    result: set[str] = set()
+    for project in projects:
+        result.update(_CI_TEST_SELECTOR_ALIASES.get(project, [project]))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compute subproject test dependencies from the consumer graph"
@@ -396,7 +561,8 @@ def main():
         nargs="*",
         metavar="PROJECT",
         help="Project(s) that changed. Accepts space- or comma-separated list. "
-        "Supports 'rocblas' or 'projects/rocblas' format.",
+        "Supports graph keys, 'projects/<name>', and known external subtree "
+        "paths such as 'shared/rocroller'.",
     )
     parser.add_argument(
         "--level",
@@ -469,7 +635,13 @@ def main():
         changed = flattened
 
     if changed:
-        changed = [p.removeprefix("projects/") for p in changed]
+        normalized = []
+        for project in changed:
+            try:
+                normalized.extend(_normalize_changed_project(project))
+            except ValueError as e:
+                raise SystemExit(str(e)) from e
+        changed = normalized
 
     # No projects specified → all tests
     if not changed:
@@ -480,14 +652,15 @@ def main():
         return
 
     result = get_subprojects_to_test(changed, therock_dir, level=args.level)
-    projects_to_test = ",".join(sorted(result))
+    ci_test_selectors = _to_ci_test_selectors(result)
+    projects_to_test = ",".join(sorted(ci_test_selectors))
 
     if args.gha_output:
         gha_set_output({"projects_to_test": projects_to_test})
     elif args.format == "json":
-        print(json.dumps(sorted(result)))
+        print(json.dumps(sorted(ci_test_selectors)))
     else:
-        for item in sorted(result):
+        for item in sorted(ci_test_selectors):
             print(item)
 
 

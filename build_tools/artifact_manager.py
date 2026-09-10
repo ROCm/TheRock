@@ -1025,28 +1025,38 @@ def do_copy(args: argparse.Namespace):
     """Copy produced artifacts for one or more stages from one run to another."""
     topology = get_topology(args.topology)
 
-    # Parse and validate stages (comma-separated). Unlike fetch/push which
-    # operate on a single stage, copy accepts multiple stages at once so that
-    # a single setup job can copy all prebuilt stages in one invocation.
-    stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
-    available_stages = topology.build_stages.keys()
-    for stage_name in stage_names:
-        if stage_name not in available_stages:
-            log(f"ERROR: Stage '{stage_name}' not found")
-            log(f"Available stages: {', '.join(available_stages)}")
-            sys.exit(1)
-
-    # Union produced artifacts across all specified stages
     produced: Set[str] = set()
-    for stage_name in stage_names:
-        stage_produced = topology.get_produced_artifacts(stage_name)
-        log(
-            f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
-        )
-        produced.update(stage_produced)
+
+    # Support --artifacts for granular artifact-level copying
+    if args.artifacts:
+        artifact_names = [a.strip() for a in args.artifacts.split(",") if a.strip()]
+        available_artifacts = set(topology.artifacts.keys())
+        for artifact_name in artifact_names:
+            if artifact_name not in available_artifacts:
+                log(f"ERROR: Artifact '{artifact_name}' not found")
+                log(f"Available artifacts: {', '.join(sorted(available_artifacts))}")
+                sys.exit(1)
+        produced.update(artifact_names)
+        log(f"Copying {len(produced)} artifacts: {', '.join(sorted(produced))}")
+
+    # Support --stage for stage-level copying
+    if args.stage:
+        stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
+        available_stages = topology.build_stages.keys()
+        for stage_name in stage_names:
+            if stage_name not in available_stages:
+                log(f"ERROR: Stage '{stage_name}' not found")
+                log(f"Available stages: {', '.join(available_stages)}")
+                sys.exit(1)
+        for stage_name in stage_names:
+            stage_produced = topology.get_produced_artifacts(stage_name)
+            log(
+                f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
+            )
+            produced.update(stage_produced)
 
     if not produced:
-        log("Specified stages produce no artifacts")
+        log("No artifacts specified (use --stage and/or --artifacts)")
         return
 
     target_families = parse_target_families(args)
@@ -1383,7 +1393,7 @@ def main(argv: Optional[List[str]] = None):
     # copy command
     copy_parser = subparsers.add_parser(
         "copy",
-        help="Copy produced artifacts for a stage from one run to another",
+        help="Copy artifacts from one run to another (by stage or artifact name)",
     )
     _add_backend_args(copy_parser)
     copy_parser.add_argument(
@@ -1402,8 +1412,14 @@ def main(argv: Optional[List[str]] = None):
     copy_parser.add_argument(
         "--stage",
         type=str,
-        required=True,
-        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,runtime-tests,math-libs')",
+        default="",
+        help="Build stage name(s), comma-separated (e.g., 'compiler-runtime,math-libs')",
+    )
+    copy_parser.add_argument(
+        "--artifacts",
+        type=str,
+        default="",
+        help="Artifact name(s), comma-separated (e.g., 'rand,fft,sparse')",
     )
     _add_target_args(copy_parser)
     copy_parser.add_argument(

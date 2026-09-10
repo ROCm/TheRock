@@ -389,10 +389,13 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
-        build_variant: Build variant (e.g. 'asan'). When set, '-{variant}' is
-        inserted before the version suffix in package names so that variant
-        packages are tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
-        ``amdrocm7.15-gfx942``).
+        build_variant: Build variant (e.g. 'asan', 'host-asan', 'asan-debug',
+        'host-asan-debug'). When it contains 'asan', '-asan' is inserted before
+        the version suffix in package names so that variant packages are
+        tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
+        ``amdrocm7.15-gfx942``). Debug variants collapse to the same '-asan'
+        name as their non-debug counterpart — there is no separate
+        amdrocm-asan-debug package.
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
@@ -412,22 +415,17 @@ class NativeLinuxPackageInstallTest:
         self.gpg_key_url = gpg_key_url
         self.build_variant = build_variant.strip().lower()
 
-        # Build variants that produce distinct package names with a '-{variant}'
-        # suffix inserted before the version. 'release' is the default build and
-        # does NOT alter the package name (amdrocm7.15, not amdrocm-release7.15).
-        _NAMED_VARIANTS = {"asan"}
-
         # Metapackage install targets (four combinations of optional inputs).
-        # When build_variant is a named variant (e.g. 'asan'), '-{variant}' is
-        # inserted before the version suffix:
+        # For ASan-family builds (asan, host-asan, and their "-debug" variants),
+        # '-asan' is inserted before the version suffix. 'release' is the
+        # default build and does NOT alter the package name (amdrocm7.15, not
+        # amdrocm-release7.15):
         #   gfx_arch + rocm_version -> amdrocm-asan{major.minor}-{arch} per arch
         #   gfx_arch only           -> amdrocm-asan / amdrocm-core-sdk-asan
         #   rocm_version only       -> amdrocm-asan{major.minor} / amdrocm-core-sdk-asan{major.minor}
         #   neither                 -> amdrocm-asan / amdrocm-core-sdk-asan
         ver = self.rocm_version_major_minor
-        variant_sep = (
-            f"-{self.build_variant}" if self.build_variant in _NAMED_VARIANTS else ""
-        )
+        variant_sep = "-asan" if "asan" in self.build_variant else ""
         if self.gfx_arch_list and ver:
             self.package_names = []
             for arch in self.gfx_arch_list:
@@ -1598,7 +1596,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--build-variant",
         type=str,
         default="",
-        help="Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages.",
+        help="Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). "
+        "Changes expected package names to match variant-suffixed packages.",
     )
     parser.add_argument(
         "--test-type",
