@@ -32,7 +32,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_api import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from extended_tests.functional.functional_test_matrix import functional_matrix
-import emulation
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     select_weighted_label,
@@ -290,6 +289,10 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
+        # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
+        # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
+        # see the "tensilelite" special-case in the component loop
+        # (AIHPBLAS-4410).
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -898,32 +901,18 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
-        # Also run these against an emulated GPU, pinned to a cheap category
-        # and told it is emulated. See docs/development/adding_tests.md.
-        "emulate": "rocjitsu",
-        "emulate_test_type": "quick",
-        "emulate_env": {"ROCRTST_PLATFORM_OVERRIDE": "EMULATOR"},
-    },
-    # Checks that mirage, rocjitsu and the ROCr runtime in the artifacts agree.
-    # When this fails, every other emulated job is expected to fail too.
-    "emulation": {
-        "job_name": "emulation",
-        "fetch_artifact_args": "--base-only",
-        "timeout_minutes": 3,
-        "test_script": f"python {_get_script_path('test_emulation.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-        "linux_cpu_runner": True,
-        "emulate": "rocjitsu",
-        "emulate_only": True,
     },
     # hipTensor tests
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
-        "timeout_minutes": 15,
+        # Github Actions step timeout, applied to every tier (it does not vary by test_type).
+        # Must be sized for the largest tier the nightly runs (comprehensive),
+        # not quick/standard -- otherwise the step is killed mid-suite well
+        # before ctest's own per-test --timeout 7200 can take effect. See
+        # rocm-libraries/projects/hiptensor/test_categories.yaml
+        # execution_settings.category_timeouts (full: 7200s = 2h).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -984,11 +973,6 @@ def run():
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
-    # The mirage profile for this family, or None if we do not emulate it.
-    emulate_profile = emulation.get_emulated_profile(amdgpu_families, platform)
-    if emulate_profile:
-        logging.info(f"Emulating {amdgpu_families} with profile {emulate_profile}")
-
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
@@ -1017,17 +1001,6 @@ def run():
     all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
-        emulator = selected_matrix[key].get("emulate")
-        emulate_only = selected_matrix[key].get("emulate_only", False)
-
-        # Components that only make sense under an emulator are skipped
-        # wholesale on families we do not emulate.
-        if emulate_only and not (emulator and emulate_profile):
-            logging.info(
-                f"Excluding job {job_name} since it only runs emulated and "
-                f"family {amdgpu_families} is not emulated on {platform}"
-            )
-            continue
 
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
@@ -1082,11 +1055,7 @@ def run():
         if platform in selected_matrix[key]["platform"] and (
             key == "sanity" or key in project_array or "*" in project_array
         ):
-            if emulate_only:
-                # This entry is only a template for the emulated variant below.
-                logging.info(f"Including job {job_name} emulated only")
-            else:
-                logging.info(f"Including job {job_name} with test_type {test_type}")
+            logging.info(f"Including job {job_name} with test_type {test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
@@ -1129,6 +1098,30 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # tensilelite: append the tensilelite/tests C++ gtest suite (run via
+            # ctest -L <test_type>, driven by the shared test_runner.py) after
+            # the existing pytest stage, for every tier except quick -- that
+            # component's test_categories.yaml only defines standard/
+            # comprehensive/full so far (promote to quick once the standard
+            # tier proves stable). See AIHPBLAS-4410.
+            #
+            # TODO(#7851): this is a temporary special-case. test_runner.py
+            # only knows how to run the C++/ctest suite today, so the pytest
+            # and ctest stages have to be chained here instead. Fold both
+            # into test_runner.py's own dual-mode support and drop this
+            # branch once that lands.
+            if key == "tensilelite" and test_type != "quick":
+                job_config_data["test_script"] = (
+                    job_config_data["test_script"]
+                    + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
+                )
+                # +15 min over the pytest-only baseline for the added ctest
+                # stage; re-measure once CI timing is observed and adjust.
+                job_config_data["timeout_minutes"] = (
+                    job_config_data["timeout_minutes"] + 15
+                )
+
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
@@ -1143,23 +1136,19 @@ def run():
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
-            # Derived *before* the multi-GPU block below, which `continue`s
-            # when the family has no multi-GPU pool -- an emulated variant needs
-            # no GPU at all.
-            if emulator and emulate_profile:
-                emulated_job = emulation.build_emulated_job(
-                    job_config_data, emulator, emulate_profile
-                )
-                logging.info(
-                    f"Including job {emulated_job['job_name']} on the CPU runner "
-                    f"(timeout {emulated_job['timeout_minutes']} min)"
-                )
-                all_components.append(emulated_job)
-
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
+                # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
+                # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
+                # only run on standard, comprehensive, or full tiers.
+                if test_type == "quick":
+                    logging.info(
+                        f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
+                    )
+                    continue
+
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
@@ -1177,10 +1166,7 @@ def run():
                     )
                     continue
 
-            if not emulate_only:
-                for emulation_key in emulation.MATRIX_KEYS:
-                    job_config_data.pop(emulation_key, None)
-                all_components.append(job_config_data)
+            all_components.append(job_config_data)
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
