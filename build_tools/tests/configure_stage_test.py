@@ -100,21 +100,81 @@ class RocmSystemsMappingTest(unittest.TestCase):
 class StageArtifactFilteringTest(unittest.TestCase):
     """Tests for filtering artifacts by stage."""
 
+    def setUp(self):
+        self.topology = get_topology()
+
     def test_artifacts_filtered_to_stage(self):
         """Artifacts not belonging to a stage are filtered out in cmake args."""
-        topology = get_topology()
         # RPP is in cv-libs, blas is in math-libs - passing both to math-libs
         # should only enable blas
         args = generate_cmake_args(
             stage_name="math-libs",
             amdgpu_families="gfx1100",
             dist_amdgpu_families="",
-            topology=topology,
+            topology=self.topology,
             artifact_names=["rpp", "blas"],
             platform_name="linux",
         )
         self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
         self.assertNotIn("-DTHEROCK_ENABLE_RPP=ON", args)
+
+    def test_filter_returns_other_stage_artifacts(self):
+        """filter_artifacts_for_stage returns artifacts from other stages."""
+        filtered, other_stage, unknown = filter_artifacts_for_stage(
+            self.topology, "math-libs", ["rpp", "blas", "miopen"]
+        )
+        # blas is in math-libs, miopen is in ml-libs (built in same stage), rpp is cv-libs
+        self.assertIn("blas", filtered)
+        self.assertIn("miopen", filtered)
+        self.assertIn("rpp", other_stage)
+        self.assertNotIn("blas", other_stage)
+        self.assertEqual(unknown, [])
+
+    def test_filter_returns_unknown_artifacts(self):
+        """filter_artifacts_for_stage returns unknown artifact names."""
+        filtered, other_stage, unknown = filter_artifacts_for_stage(
+            self.topology, "math-libs", ["blas", "not-a-real-artifact", "also-fake"]
+        )
+        self.assertIn("blas", filtered)
+        self.assertEqual(other_stage, [])
+        self.assertIn("not-a-real-artifact", unknown)
+        self.assertIn("also-fake", unknown)
+
+    def test_sparse_subprojects_resolve_to_sparse_feature(self):
+        """hipSPARSE/rocSPARSE resolve to SPARSE, not BLAS."""
+        # These subprojects are in the blas artifact's source paths but should
+        # enable SPARSE feature via project_mappings.json
+        args = generate_cmake_args(
+            stage_name="math-libs",
+            amdgpu_families="gfx1100",
+            dist_amdgpu_families="",
+            topology=self.topology,
+            artifact_names=["hipSPARSE"],
+            platform_name="linux",
+        )
+        self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", args)
+        self.assertNotIn("-DTHEROCK_ENABLE_BLAS=ON", args)
+
+    def test_hipsparse_and_rocsparse_both_sparse(self):
+        """Both hipSPARSE and rocSPARSE map to SPARSE feature."""
+        for subproject in ["hipSPARSE", "rocSPARSE", "hipSPARSELt"]:
+            features = self.topology.resolve_artifacts_to_features([subproject])
+            self.assertIn("SPARSE", features, f"{subproject} should map to SPARSE")
+            self.assertNotIn("BLAS", features, f"{subproject} should not map to BLAS")
+
+    def test_hipsparselt_resolves_to_sparse(self):
+        """hipSPARSELt is a split_database in sparse and resolves to SPARSE."""
+        # hipsparselt is listed in sparse artifact's split_databases
+        args = generate_cmake_args(
+            stage_name="math-libs",
+            amdgpu_families="gfx1100",
+            dist_amdgpu_families="",
+            topology=self.topology,
+            artifact_names=["hipsparselt"],
+            platform_name="linux",
+        )
+        self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", args)
+        self.assertNotIn("-DTHEROCK_ENABLE_BLAS=ON", args)
 
 
 class ManifestValidationTest(unittest.TestCase):

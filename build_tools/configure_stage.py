@@ -148,8 +148,15 @@ def filter_artifacts_for_stage(
     stage_name: str,
     artifact_names: List[str],
     build_dir: Path = None,
-) -> List[str]:
-    """Filter artifacts to only those produced by or dependencies of the stage."""
+) -> tuple[List[str], List[str], List[str]]:
+    """Filter artifacts to only those produced by or dependencies of the stage.
+
+    Returns:
+        A tuple of (filtered_artifacts, other_stage_artifacts, unknown_artifacts) where:
+        - filtered_artifacts: artifacts that belong to this stage
+        - other_stage_artifacts: valid artifacts that belong to a different stage
+        - unknown_artifacts: artifact names that don't resolve to any known artifact
+    """
     # Get all artifacts that are valid for this stage
     produced = topology.get_produced_artifacts(stage_name)
     inbound = topology.get_inbound_artifacts(stage_name)
@@ -160,12 +167,21 @@ def filter_artifacts_for_stage(
 
     # Filter: keep only artifacts that resolve to stage artifacts
     filtered = []
+    other_stage = []
+    unknown = []
     for name in artifact_names:
         canonical = alias_map.get(name.lower())
-        if canonical and canonical in stage_artifacts:
-            filtered.append(name)
+        if canonical:
+            if canonical in stage_artifacts:
+                filtered.append(name)
+            else:
+                # Valid artifact but belongs to a different stage
+                other_stage.append(name)
+        else:
+            # Unknown artifact name
+            unknown.append(name)
 
-    return filtered
+    return filtered, other_stage, unknown
 
 
 def generate_cmake_args(
@@ -186,9 +202,19 @@ def generate_cmake_args(
     # those relevant to the stage. This prevents enabling features for artifacts
     # that don't exist in the stage (e.g., enabling RPP in math-libs on Windows).
     if stage_name and artifact_names:
-        artifact_names = filter_artifacts_for_stage(
-            topology, stage_name, artifact_names, build_dir
+        artifact_names, other_stage_artifacts, unknown_artifacts = (
+            filter_artifacts_for_stage(topology, stage_name, artifact_names, build_dir)
         )
+        if other_stage_artifacts:
+            log(
+                f"[{stage_name}] Skipping artifacts from other stages: "
+                f"{', '.join(other_stage_artifacts)}"
+            )
+        if unknown_artifacts:
+            log(
+                f"[{stage_name}] Skipping unknown artifacts: "
+                f"{', '.join(unknown_artifacts)}"
+            )
         if artifact_names:
             desc = f"stage {stage_name} + artifacts: {', '.join(artifact_names)}"
         else:
