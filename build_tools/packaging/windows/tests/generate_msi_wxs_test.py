@@ -8,6 +8,7 @@ import argparse
 import sys
 import tempfile
 import unittest
+import unittest.mock
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from generate_msi_wxs import (
     collect_files_from_catalog,
     make_id,
     build_wxs,
+    parse_args,
     create_wix_document,
     resolve_install_layout,
     add_install_directory_tree,
@@ -318,7 +320,7 @@ class TestBuildWxs(unittest.TestCase):
             package=package,
             build_root=build,
             output=out,
-            install_root="ProgramFilesFolder",
+            install_root="ProgramFiles64Folder",
             product_dir="AMD",
             version_dir="ROCm",
             package_version="1.2.3",
@@ -410,7 +412,7 @@ class TestBuildWxs(unittest.TestCase):
                 package="runtime",
                 build_root=empty_build,
                 output=out,
-                install_root="ProgramFilesFolder",
+                install_root="ProgramFiles64Folder",
                 product_dir="AMD",
                 version_dir="ROCm",
                 package_version="1.2.3",
@@ -572,7 +574,7 @@ class TestBuildWxsHelpers(unittest.TestCase):
     def _args(self, **overrides):
         defaults = dict(
             package="runtime",
-            install_root="ProgramFilesFolder",
+            install_root="ProgramFiles64Folder",
             product_dir="AMD",
             version_dir="ROCm",
         )
@@ -594,11 +596,20 @@ class TestBuildWxsHelpers(unittest.TestCase):
 
     def test_install_layout_uses_standard_dir(self):
         std = resolve_install_layout(
-            self._args(install_root="ProgramFilesFolder"), "1.2.3"
+            self._args(install_root="ProgramFiles64Folder"), "1.2.3"
         )
         self.assertTrue(std.uses_standard_dir)
         custom = resolve_install_layout(self._args(install_root="C:\\AMD"), "1.2.3")
         self.assertFalse(custom.uses_standard_dir)
+
+    def test_default_install_root_is_64bit_program_files(self):
+        # ProgramFilesFolder resolves to C:\Program Files (x86) even in an x64
+        # package; ROCm is 64-bit, so the default must be ProgramFiles64Folder
+        # (C:\Program Files). Guards against regressing to the 32-bit token.
+        argv = ["generate_msi_wxs.py", "--package", "runtime"]
+        with unittest.mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+        self.assertEqual(args.install_root, "ProgramFiles64Folder")
 
     def test_stable_guid_is_deterministic_and_upper(self):
         a = _stable_guid("System32", "amdhip64_7.dll")

@@ -553,12 +553,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--install-root",
-        default="ProgramFilesFolder",
+        default="ProgramFiles64Folder",
         metavar="ROOT",
         help=(
             "Where to root the install tree. Accepts a Windows Installer "
-            "standard-directory token (e.g. ProgramFilesFolder) or an "
-            "absolute path (e.g. C:\\AMD). Default: ProgramFilesFolder"
+            "standard-directory token (e.g. ProgramFiles64Folder) or an "
+            "absolute path (e.g. C:\\AMD). Default: ProgramFiles64Folder "
+            "(64-bit C:\\Program Files; ProgramFilesFolder is the 32-bit "
+            "C:\\Program Files (x86) and is wrong for x64 ROCm)."
         ),
     )
     parser.add_argument(
