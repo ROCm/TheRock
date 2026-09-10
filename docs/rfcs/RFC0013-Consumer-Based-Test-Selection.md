@@ -1,7 +1,7 @@
 ---
 author: Abhilash Reddy Endurthi (endurthiabhilash)
 created: 2026-07-28
-modified: 2026-08-04
+modified: 2026-09-09
 status: draft
 ---
 
@@ -271,10 +271,13 @@ rather than each regenerating its own — they do not have the full source tree
 present at configure time anyway, so a checked-in graph is strictly better for
 them.
 
-A later refinement: each build stage could emit the slice of the graph it knows
-and a downstream step could merge them, avoiding the single `ENABLE_ALL` full-tree
-configure in the drift job. Sequenced after the committed-graph + drift-check
-lands.
+A later refinement avoids the drift job's `ENABLE_ALL` configure entirely: rather than configuring the build to
+run `therock_emit_consumer_graph()`, a Python analyzer *parses* the super-project CMake with a real parser,
+requiring no submodules and no configure (~0.3s versus ~6 min) and running on Windows and inside
+`unit_tests.yml`. It computes a conservative *may-depend* graph — both sides of each `if()` are unioned — that
+must be a superset of any real configure's graph, so the committed-graph and drift contract is unchanged and only
+the generator changes. This is preferred over the earlier idea of having each build stage emit the slice of the
+graph it knows for a downstream merge.
 
 ## Generalizing to the full level ladder
 
@@ -357,6 +360,13 @@ committed-graph choice does add a regenerate-and-recommit step on dependency edi
 but the drift check turns that from *silent* staleness into a *loud* CI failure —
 the same contract `BUILD_TOPOLOGY.toml` already carries.
 
+The later refinement described under CI integration — parsing the super-project CMake instead of configuring it —
+narrows the basis for this rejection. The cost objection assumed the emit requires a full `ENABLE_ALL` configure;
+parsing removes that cost (~0.3s, no configure), so "regenerate every run and never commit" becomes viable. This
+RFC still keeps the committed graph — for reviewability and for external-repo consumers that have no full source
+tree — but on-the-fly regeneration is then a real fallback rather than a rejected option: cost is no longer the
+deciding factor, reviewability and external reuse are.
+
 ### C: Cut selection at the build-stage boundary
 
 An earlier draft of this RFC selected only consumers in the *same*
@@ -389,6 +399,10 @@ blowing the per-PR SLA. Transitive closure is retained, but as the opt-in **leve
 - **CI:** the per-PR change-detection job reads the committed graph directly and
   validates `test_policies.toml` against it; a low-frequency drift-check job
   regenerates the graph from a configure and fails on mismatch.
+- **Generator:** a later refinement replaces `cmake/therock_emit_consumer_graph.cmake` and the drift job's
+  `ENABLE_ALL` configure with a Python CMake-parser generator (adding a pinned/vendored `cmake-parser`
+  dependency; the drift check moves into `unit_tests.yml` and runs cross-platform). Only the generator changes —
+  the committed-graph and drift contract is unchanged.
 - **Behavioral parity:** existing couplings (e.g. rocGDB → rocgdb-cpu/gpu,
   hipCUB/rocThrust → rocPRIM, amdsmi → hip-tests/rocrtst) are preserved — as
   direct graph consumers or migrated `test_include` overrides — so selection
@@ -424,10 +438,12 @@ unknown component fails) and the `--explain` output.
 - **Drift-check trigger scope.** The drift job regenerates the graph only when
   graph-affecting files change. Is the trigger path set (`**/CMakeLists.txt`, the
   emit/registration cmake, the committed graph) sufficient, or can an edge change
-  slip past it?
+  slip past it? **Resolved:** with the parser running on every PR in `unit_tests.yml` (cheap, no
+  configure), the drift check can run *always* rather than only on graph-affecting paths — closing the gap.
 - **Cross-repo selection.** How should the graph interact with external-repo CI
   (rocm-systems / rocm-libraries) where only a subset of source is present at
-  configure time?
+  configure time? **Resolved:** external repos consume TheRock's committed graph directly (they have no full
+  source tree at configure time); the parser keeps that committed graph cheap to regenerate and drift-check.
 - **Identifier-space mapping.** Selection uses three identifier spaces that do
   not currently share an authoritative mapping: external-repo *subtree paths*
   (`projects/clr`, `shared/rocroller`), the *consumer-graph keys* the selector
@@ -437,7 +453,10 @@ unknown component fails) and the `--explain` output.
   expects graph keys and only strips a leading `projects/`, so unmapped inputs
   select nothing beyond themselves and underscore/hyphen skew drops matrix jobs.
   A normalization layer (subtree path -> graph key -> matrix key) is needed; it is
-  sequenced with the external-repo CI work rather than this change.
+  sequenced with the external-repo CI work rather than this change. **Resolved:** the
+  mapping is generated from `EXTERNAL_SOURCE_DIR` — `subtree_map` (subtree path -> graph key(s)) plus a generated
+  matrix-key layer — replacing the interim hand-maintained `_EXTERNAL_SUBTREE_ALIASES` and
+  `_CI_TEST_SELECTOR_ALIASES` dicts, so `get_subprojects_to_test` no longer merely strips `projects/`.
 - **Test tiers for levels 1/2/5.** The depth ladder covers levels 3-5 by
   selection radius, but true level 5 (unit-only) and level 1 (full QA / nightly)
   need a per-project `test_tier` output the test-runner job honors. Should that
