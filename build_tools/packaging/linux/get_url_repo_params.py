@@ -239,7 +239,7 @@ def get_gpg_key_url_from_release_type(
         if rt == "prerelease":
             return "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg"
         if rt == "release":
-            return "https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg"
+            return "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
         raise ValueError(
             f"GPG key URL not defined for release_type={release_type!r} "
             f"with layout={layout!r}"
