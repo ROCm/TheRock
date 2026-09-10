@@ -160,11 +160,16 @@ jobs:
             -arch x64 \
             -o "${MSI_DIR}/${stem}.msi"
 
-      - name: Upload MSI artifact
+      # Publish both the compiled MSI and the generated WiX source (.wxs) so the
+      # exact source that produced the installer is available for inspection and
+      # reproducible rebuilds.
+      - name: Upload MSI and WiX source artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-msi-${{ matrix.package }}
-          path: ${{ env.MSI_DIR }}/${{ env.MSI_STEM }}.msi
+          path: |
+            ${{ env.MSI_DIR }}/${{ env.MSI_STEM }}.msi
+            ${{ env.MSI_DIR }}/${{ env.MSI_STEM }}.wxs
           if-no-files-found: error
 
       # The S3 upload requires OIDC credentials whose IAM role trust is scoped
