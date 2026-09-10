@@ -162,15 +162,8 @@ jobs:
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         env:
-          # install_rocm_from_artifacts.py only extracts artifacts, it never
-          # sets LD_LIBRARY_PATH. amd-smi's drm_amdgpu backend needs
-          # librocm_sysdeps_drm_amdgpu.so.1 (part of the sysdeps_lib artifact,
-          # included in the sanity check's --base-only fetch, present on disk)
-          # but the sanity check bypasses the test harness's own
-          # LD_LIBRARY_PATH setup (test_hiptests.py::setup_env()), so the
-          # linker can't find it and amd-smi/rocminfo report incomplete data.
-          # Append to (not replace) the existing value - python itself needs
-          # its own entry here (e.g. libpython3.12.so.1.0) or it won't start.
+          # Must append to (not replace) the existing value - python needs its
+          # own entry here (e.g. libpython3.12.so.1.0) or it won't start.
           LD_LIBRARY_PATH: >-
             ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}
         run: |
