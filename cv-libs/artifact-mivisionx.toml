@@ -1,0 +1,13 @@
+# mivisionx
+[components.lib."cv-libs/mivisionx/stage"]
+[components.dbg."cv-libs/mivisionx/stage"]
+[components.dev."cv-libs/mivisionx/stage"]
+[components.doc."cv-libs/mivisionx/stage"]
+[components.run."cv-libs/mivisionx/stage"]
+include = [
+  "bin/runvx",
+]
+[components.test."cv-libs/mivisionx/stage"]
+include = [
+  "share/mivisionx/**",
+]

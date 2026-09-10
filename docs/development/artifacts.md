@@ -321,6 +321,7 @@ These artifacts are built if any project features requiring them are enabled:
 - `rocjpeg`: JPEG decode library (Linux only).
 - `rpp`: ROCm Performance Primitives computer vision library (built by
   default on Linux; experimental and off by default on Windows).
+- `mivisionx`: MIVisionX computer vision toolkit built on AMD OpenVX (Linux only).
 
 > [!NOTE]
 > After adding a new artifact via `therock_provide_artifact()`, you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it. <br>

@@ -38,6 +38,10 @@
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging-rocgdb-16
+[submodule "mivisionx"]
+	path = cv-libs/mivisionx
+	url = https://github.com/ROCm/MIVisionX.git
+	branch = develop
 [submodule "rocm-docs"]
 	path = rocm-docs
 	url = https://github.com/ROCm/rocm-docs.git

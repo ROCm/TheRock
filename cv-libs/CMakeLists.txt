@@ -60,3 +60,54 @@ if(THEROCK_ENABLE_RPP)
       rpp
   )
 endif(THEROCK_ENABLE_RPP)
+
+if(THEROCK_ENABLE_MIVISIONX)
+  ##############################################################################
+  # mivisionx (MIVisionX computer vision toolkit built on AMD OpenVX)
+  ##############################################################################
+  therock_cmake_subproject_declare(mivisionx
+    USE_DIST_AMDGPU_TARGETS
+    BACKGROUND_BUILD
+    EXCLUDE_FROM_ALL
+    NO_MERGE_COMPILE_COMMANDS
+    OUTPUT_ON_FAILURE
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/cv-libs/mivisionx"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mivisionx"
+    COMPILER_TOOLCHAIN
+      amd-hip
+    RUNTIME_DEPS
+      hip-clr
+      rpp
+    BUILD_DEPS
+      rocm-half
+    CMAKE_ARGS
+      -DROCM_PATH=
+      -DBACKEND=HIP
+      -DGPU_SUPPORT=ON
+      -DMIN_DEPS_MODE=ON
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    INTERFACE_LINK_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_glob_c_sources(mivisionx
+    SUBDIRS
+    .
+  )
+  therock_cmake_subproject_provide_package(mivisionx mivisionx lib/cmake/mivisionx)
+  therock_cmake_subproject_activate(mivisionx)
+  therock_provide_artifact(mivisionx
+    TARGET_NEUTRAL
+    DESCRIPTOR
+      artifact-mivisionx.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      mivisionx
+  )
+endif(THEROCK_ENABLE_MIVISIONX)

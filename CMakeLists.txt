@@ -221,14 +221,18 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
 option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
-# Computer vision libraries (RPP) build on Linux by default. On Windows they are
+# Computer vision libraries build on Linux by default. On Windows they are
 # experimental and disabled by default, but can be opted into explicitly with
-# -DTHEROCK_ENABLE_CV_LIBS=ON (or -DTHEROCK_ENABLE_RPP=ON).
+# -DTHEROCK_ENABLE_CV_LIBS=ON (or per-library flags like -DTHEROCK_ENABLE_RPP=ON).
 if(WIN32)
   option(THEROCK_ENABLE_CV_LIBS "Enable building of computer vision libraries" OFF)
 else()
   option(THEROCK_ENABLE_CV_LIBS "Enable building of computer vision libraries" "${THEROCK_ENABLE_ALL}")
 endif()
+# MIVisionX is an opt-in extension built on top of RPP/ROCm, not part of the
+# default ROCm distribution. It is disabled by default and must be explicitly
+# requested (analogous to the HPC SDK libraries like rocalution/hiptensor).
+option(THEROCK_ENABLE_MIVISIONX "Enable building MIVisionX computer vision toolkit" OFF)
 option(THEROCK_ENABLE_STORAGE_LIBS "Enable building of storage libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DEBUG_TOOLS "Enable building the ROCm debug tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")

@@ -121,6 +121,10 @@ submodules = ["rocm-libraries"]
 description = "Additional math library submodules"
 submodules = ["libhipcxx"]
 
+[source_sets.cv-libs]
+description = "Computer vision library submodules (standalone repos)"
+submodules = ["mivisionx"]
+
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
 submodules = []
@@ -348,7 +352,7 @@ source_sets = ["rocm-systems"]
 description = "Computer Vision Libraries"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
-source_sets = ["rocm-libraries"]
+source_sets = ["rocm-libraries", "cv-libs"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -756,6 +760,17 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
 feature_group = "CV_LIBS"
 disable_platforms = ["windows"]
+
+[artifacts.mivisionx]
+artifact_group = "cv-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "rpp"]
+# Opt-in extension: use its own feature group so THEROCK_RESET_FEATURES derives
+# the default from THEROCK_ENABLE_MIVISIONX (OFF) rather than from CV_LIBS (ON
+# on Linux), which would unexpectedly enable MIVisionX on feature reset.
+feature_group = "MIVISIONX"
+disable_platforms = ["windows"]
+
 
 # --- Media Integration ---
 
