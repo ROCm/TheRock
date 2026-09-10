@@ -159,10 +159,13 @@ def _mock_s3_client(
 class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[str, dict[str, object]] = {}
+        self.head_bucket_calls: list[dict[str, object]] = []
+        self.head_object_calls: list[dict[str, object]] = []
         self.get_calls: list[dict[str, object]] = []
         self.put_calls: list[dict[str, object]] = []
         self.copy_calls: list[dict[str, object]] = []
         self.now = datetime(2026, 8, 25, tzinfo=timezone.utc)
+        self.fail_head_bucket = False
         self.fail_copy_precondition = False
         self.corrupt_copy_checksum = False
         self.corrupt_put_checksum = False
@@ -178,6 +181,15 @@ class FakeS3Client:
         if not include_checksum:
             del self.objects[key]["ChecksumSHA256"]
 
+    def head_bucket(self, **kwargs: object) -> dict[str, object]:
+        self.head_bucket_calls.append(kwargs)
+        if self.fail_head_bucket:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadBucket",
+            )
+        return {}
+
     def _object(self, body: bytes) -> dict[str, object]:
         return {
             "body": body,
@@ -192,6 +204,7 @@ class FakeS3Client:
         }
 
     def head_object(self, **kwargs: object) -> dict[str, object]:
+        self.head_object_calls.append(kwargs)
         key = str(kwargs["Key"])
         if key not in self.objects:
             raise ClientError(
@@ -631,6 +644,27 @@ def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
         s3_client=client,
     )
     assert summary.uploaded == 1
+    assert client.head_bucket_calls == [{"Bucket": "test-bucket"}]
+    assert not client.put_calls
+    assert not client.copy_calls
+
+
+def test_publish_dry_run_rejects_inaccessible_bucket(tmp_path: Path) -> None:
+    _write_snapshot(tmp_path)
+    client = FakeS3Client()
+    client.fail_head_bucket = True
+
+    with pytest.raises(ClientError):
+        mirror.publish_snapshot(
+            snapshot_dir=tmp_path,
+            bucket="misspelled-bucket",
+            refresh_existing=False,
+            dry_run=True,
+            s3_client=client,
+        )
+
+    assert client.head_bucket_calls == [{"Bucket": "misspelled-bucket"}]
+    assert not client.head_object_calls
     assert not client.put_calls
     assert not client.copy_calls
 

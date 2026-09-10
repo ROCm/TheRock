@@ -124,6 +124,8 @@ class PublishSummary:
 class S3Client(Protocol):
     """Subset of the boto3 S3 client used by this tool."""
 
+    def head_bucket(self, **kwargs: object) -> dict[str, object]: ...
+
     def head_object(self, **kwargs: object) -> dict[str, object]: ...
 
     def get_object(self, **kwargs: object) -> dict[str, object]: ...
@@ -698,6 +700,7 @@ def publish_snapshot(
     """Publish one validated local snapshot into one S3 bucket."""
     snapshot = load_snapshot(snapshot_dir)
     client = s3_client if s3_client is not None else boto3.client("s3")
+    client.head_bucket(Bucket=bucket)
     uploaded = 0
     refreshed = 0
     skipped = 0
