@@ -1,0 +1,289 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Multi-Arch CI Coverage - Nightly
+#
+# Builds one fully instrumented stack covering every coverage-enabled project,
+# then runs each project's tests against it and reports separately. Paying for a
+# single large build rather than one build per project is what keeps the cost
+# flat as more projects are onboarded.
+#
+# The stack is assembled by naming the stages coverage needs and calling the
+# shared per-stage build workflow for each, rather than running the whole
+# multi_arch_build_portable_linux.yml pipeline and filtering stages out of it.
+#
+# RFC0014 phase 1 runs every enabled component on one default architecture
+# (gfx942, i.e. the gfx94X-dcgpu family). Change-based selection and
+# multi-architecture expansion come later.
+#
+# Scheduling is the RFC's option B1 for now: dispatch this workflow by hand and
+# pass the run id of a recent nightly as `baseline_run_id`. There is no cron
+# here, and the regular nightly does not know about this workflow, so coverage
+# has a run id of its own -- a failure here leaves the nightly's status alone,
+# and the nightly's unstable test jobs do not hold coverage up.
+#
+# The RFC's option C, where the regular nightly dispatches this workflow once
+# its build finishes and hands over its own run id automatically, is a later
+# change. Everything below already takes `baseline_run_id` as an input, so that
+# change only has to add the dispatching job.
+
+name: Multi-Arch CI Coverage Nightly
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
+        default: ""
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
+        default: "gfx94X-dcgpu"
+      coverage_config_source:
+        type: string
+        description: "Repository and ref holding the per-project coverage metadata."
+        default: "ROCm/rocm-libraries@main"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      quartz_tracking_id:
+        type: string
+        description: >-
+          Leave empty. Internal Quartz tracking id, used to link this run to a
+          release lineage once the nightly dispatches coverage automatically.
+        default: ""
+
+  # TEMPORARY, paired with coverage_nightly_pr_check.yml. A workflow_dispatch
+  # is only offered once the file is on the default branch, so this workflow
+  # cannot be run from a branch and cannot be shown in a PR's checks. A caller
+  # is not subject to that, so the check workflow runs this branch's copy.
+  # Actions does not expand YAML anchors, so the inputs are repeated verbatim.
+  # Remove this trigger with the check workflow once the run has gone green.
+  workflow_call:
+    inputs:
+      baseline_run_id:
+        type: string
+        description: "Regular nightly run id supplying the non-instrumented dependencies. Empty tests this run's own instrumented stack end to end."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to; artifacts are bucketed by channel."
+        default: "nightly"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Release nightlies come from ROCm/rockrel; empty means this repository."
+        default: ""
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects (e.g. hiprand); case-insensitive. Group alias: rocm_libraries_all. Empty = every project this workflow can build. rccl and rocshmem need the comm-libs build job, which phase 1 does not have, so naming them (or rocm_systems_all / all) is rejected."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on. Phase 1 uses the single default architecture."
+        default: "gfx94X-dcgpu"
+      coverage_config_source:
+        type: string
+        description: "Repository and ref holding the per-project coverage metadata."
+        default: "ROCm/rocm-libraries@main"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      quartz_tracking_id:
+        type: string
+        description: >-
+          Leave empty. Internal Quartz tracking id, used to link this run to a
+          release lineage once the nightly dispatches coverage automatically.
+        default: ""
+
+permissions:
+  contents: read
+
+# The two run ids are only connected through this input, so surface it in the
+# run title rather than making people open the logs to find the baseline.
+run-name: >-
+  Multi-Arch CI Coverage Nightly
+  | baseline: ${{ inputs.baseline_run_id || 'none (self-contained)' }}
+  | ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  setup_coverage_matrix:
+    name: Setup Coverage Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      coverage_matrix: ${{ steps.matrix.outputs.coverage_matrix }}
+      dist_amdgpu_families: ${{ steps.matrix.outputs.dist_amdgpu_families }}
+      families_matrix_json: ${{ steps.matrix.outputs.families_matrix_json }}
+      coverage_cmake_options: ${{ steps.matrix.outputs.coverage_cmake_options }}
+      needs_math_libs: ${{ steps.matrix.outputs.needs_math_libs }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+    steps:
+      - name: Checking out repository
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Generate coverage matrix
+        id: matrix
+        env:
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test || '' }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          COVERAGE_CONFIG_SOURCE: ${{ inputs.coverage_config_source || 'ROCm/rocm-libraries@main' }}
+        run: python ./build_tools/github_actions/configure_coverage_ci.py
+
+      - name: Compute package version
+        id: rocm_package_version
+        run: |
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=ci \
+            --override-git-sha=${{ steps.checkout.outputs.commit }}
+
+  # Built first so that every later stage in this run has a compiler-runtime to
+  # link against and to fetch as an inbound artifact.
+  build_instrumented_compiler_runtime:
+    name: Build Instrumented Compiler Runtime
+    needs: setup_coverage_matrix
+    if: ${{ needs.setup_coverage_matrix.outputs.coverage_matrix != '[]' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: compiler-runtime
+      stage_display_name: "Stage - Coverage Compiler Runtime"
+      timeout_minutes: 480 # 8 hours (compiler is big)
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # The whole stage is built, not just the onboarded projects: the test jobs
+  # below need the complete dependency set, and phase 1 instruments every
+  # onboarded project in one pass rather than per changed project.
+  # `coverage_cmake_options` is the THEROCK_COVERAGE_*_ALL group option when the
+  # selection covers a whole group, and the individual project flags otherwise;
+  # everything not selected builds normally.
+  build_instrumented_math_libs:
+    name: Build Instrumented Math Libs
+    needs: [setup_coverage_matrix, build_instrumented_compiler_runtime]
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.outputs.needs_math_libs == 'true'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(needs.setup_coverage_matrix.outputs.families_matrix_json) }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit
+    with:
+      stage_name: math-libs
+      stage_display_name: "Stage - Coverage Math Libs (${{ matrix.family_info.amdgpu_family }})"
+      timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
+      extra_cmake_options: >-
+        ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
+      release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # One test + report job per project. The instrumented stack built above is the
+  # only thing taken from this run: each job installs `baseline_run_id` and then
+  # overlays its own project, so a project's dependencies stay non-instrumented
+  # even though the build instrumented all of them at once.
+  coverage_report:
+    name: Coverage::${{ matrix.coverage.project_name }} (${{ matrix.coverage.amdgpu_families }})
+    # compiler-runtime is named explicitly rather than relied on through
+    # math-libs: a selection that needs no math-libs build still tests against
+    # binaries that stage produced.
+    needs:
+      [
+        setup_coverage_matrix,
+        build_instrumented_compiler_runtime,
+        build_instrumented_math_libs,
+      ]
+    # `!failure() && !cancelled()` alone would let this run when
+    # setup_coverage_matrix was skipped, and fromJSON('') is a hard error, so
+    # the matrix has to be checked explicitly.
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.result == 'success' &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        coverage: ${{ fromJSON(needs.setup_coverage_matrix.outputs.coverage_matrix) }}
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    secrets: inherit
+    with:
+      project_name: ${{ matrix.coverage.project_name }}
+      test_component: ${{ matrix.coverage.test_component }}
+      object_globs: ${{ matrix.coverage.object_globs }}
+      fetch_artifact_args: ${{ matrix.coverage.fetch_artifact_args }}
+      build_stage: ${{ matrix.coverage.build_stage }}
+      codecov_flag: ${{ matrix.coverage.codecov_flag }}
+      amdgpu_families: ${{ matrix.coverage.amdgpu_families }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      baseline_release_type: ${{ inputs.baseline_release_type || 'nightly' }}
+      baseline_repository: ${{ inputs.baseline_repository }}
+      artifact_names: ${{ matrix.coverage.artifact_names }}
+      artifact_relpaths: ${{ matrix.coverage.artifact_relpaths }}
+      test_type: ${{ inputs.test_type || 'standard' }}
+      release_type: ci
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  ci_summary:
+    name: Nightly Coverage Summary
+    if: always()
+    needs:
+      - setup_coverage_matrix
+      - build_instrumented_compiler_runtime
+      - build_instrumented_math_libs
+      - coverage_report
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'
