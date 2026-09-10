@@ -181,6 +181,13 @@ jobs:
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
+        # TEMP(safaizal-asan-testing): install_rocm_from_artifacts.py only
+        # extracts artifacts, it never sets LD_LIBRARY_PATH - amd-smi couldn't
+        # find librocm_sysdeps_drm_amdgpu.so.1 (part of the sysdeps_lib
+        # artifact, present on disk, just not on the linker search path).
+        env:
+          LD_LIBRARY_PATH: >-
+            ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
