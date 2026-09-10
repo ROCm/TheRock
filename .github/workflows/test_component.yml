@@ -186,8 +186,10 @@ jobs:
         # find librocm_sysdeps_drm_amdgpu.so.1 (part of the sysdeps_lib
         # artifact, present on disk, just not on the linker search path).
         env:
+          # Append to (not replace) the existing LD_LIBRARY_PATH - python itself
+          # needs its own entry here (e.g. libpython3.12.so.1.0) or it won't start.
           LD_LIBRARY_PATH: >-
-            ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib
+            ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
