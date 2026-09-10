@@ -67,11 +67,9 @@ jobs:
         path: build/coverage-html/
 
     # Report-only: statically parse the super-project CMake (no configure, no
-    # submodules) and compare the generated consumer graph to the committed
-    # test_tools/therock_consumer_graph.json; the matrix also exercises Windows.
-    # `continue-on-error` keeps it non-blocking — remove it to make this a required
-    # gate. The parity summary is echoed to the job summary so a failure stays
-    # visible even while the step is non-blocking.
+    # submodules) and compare the generated graph to the committed one; the matrix
+    # also exercises Windows. `continue-on-error` keeps it non-blocking (remove to
+    # gate); the parity summary is echoed to the job summary so failures stay visible.
     - name: "Consumer graph parity (report-only)"
       continue-on-error: true
       run: |

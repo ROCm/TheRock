@@ -1,12 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Pytest bootstrap for the consumer-graph package.
+"""Pytest bootstrap: put the package and vendored ``cmake_parser`` on sys.path.
 
-Makes the package (``cmake_consumer_graph``) and the vendored ``cmake_parser``
-importable without an install, so the tests exercise the checked-in bytes.
-pytest loads this conftest before collecting the test modules, so imports like
-``from cmake_parser import ...`` in the test files resolve to the vendored copy.
+Runs before collection so ``from cmake_parser import ...`` in the tests resolves
+to the vendored copy without an install.
 """
 
 import sys

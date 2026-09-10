@@ -220,12 +220,9 @@ def test_subtree_map_covers_known_subtrees_on_real_tree() -> None:
 
 
 def test_subtree_map_covers_all_direct_external_source_dirs() -> None:
-    # Coverage cross-check: independently derive, by regex over the tracked CMake,
-    # every EXTERNAL_SOURCE_DIR written directly under a source root, and assert the
-    # parser's subtree_map covers each. Catches a silently-shrinking map, which the
-    # anchor test above would miss. Variable-sourced dirs (indirect, via
-    # therock_enable_external_source) are not matched here — they are the documented,
-    # intentionally-skipped residue. Skips outside a git checkout.
+    # Coverage cross-check: regex the tracked CMake for every EXTERNAL_SOURCE_DIR
+    # written directly under a source root and assert subtree_map covers each,
+    # catching a silently-shrinking map. Variable-sourced dirs are not matched.
     repo_root = Path(__file__).resolve().parents[3]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")

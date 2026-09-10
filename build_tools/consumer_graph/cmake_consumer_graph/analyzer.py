@@ -65,10 +65,8 @@ _DECLARATION_KEYWORDS = (
     | _DECLARATION_MULTI_VALUE_ARGS
 )
 
-# TODO: this 2-entry map mirrors CMake's therock_compiler_toolchain_subproject()
-# (cmake/therock_subproject.cmake, already the single CMake-side source). Sharing one
-# definition across CMake and here requires a data file both read; deferred until a
-# third toolchain makes that cross-language indirection worthwhile.
+# TODO: mirrors CMake's therock_compiler_toolchain_subproject() (the CMake-side
+# source); share one definition via a data file if a third toolchain is added.
 _TOOLCHAIN_SUBPROJECTS = {
     "amd-hip": "hip-clr",
     "amd-llvm": "amd-llvm",
@@ -172,15 +170,10 @@ class AnalysisResult:
     def build_subtree_map(self) -> dict[str, list[str]]:
         """Map each external-repo source subtree to the graph key(s) built from it.
 
-        A subproject's EXTERNAL_SOURCE_DIR is made relative to the rocm-libraries /
-        rocm-systems source roots (`<repository_root>/rocm-libraries` and
-        `.../rocm-systems`, per the top-level CMakeLists), yielding a
-        `category/name` subtree path (e.g. `projects/clr`, `shared/rocroller`). One
-        subtree can back several keys (e.g. `projects/clr` -> `hip-clr`, `ocl-clr`),
-        so keys accumulate. Subprojects whose source is outside those roots — or
-        whose EXTERNAL_SOURCE_DIR did not resolve (routed through
-        `therock_enable_external_source()`, which this parser does not model; see
-        RepositoryAnalyzer._resolve_source_dir_section) — get no entry.
+        EXTERNAL_SOURCE_DIR is made relative to the rocm-libraries / rocm-systems
+        roots to yield a `category/name` subtree (e.g. `projects/clr`); one subtree
+        may back several keys. Sources outside those roots, or that did not resolve
+        (see _resolve_source_dir_section), get no entry.
         """
         roots = (
             self.repository_root / "rocm-libraries",
@@ -189,15 +182,12 @@ class AnalysisResult:
         subtree_to_keys: dict[str, set[str]] = {}
         for subproject in self.subprojects.values():
             key = subproject.name.lower()
-            # external_source_dirs is a union across (conditional) declarations, so a
-            # subproject with more than one source dir fans into each subtree — the
-            # conservative direction.
+            # A subproject with several (conditional) source dirs fans into each.
             for source_dir in subproject.external_source_dirs:
                 source_path = Path(source_dir)
                 for root in roots:
-                    # Lexical relativization: source_dir and root both derive from the
-                    # same resolved THEROCK_SOURCE_DIR string, so a textual relative_to
-                    # suffices; the coverage cross-check test guards against drops.
+                    # source_dir and root share the resolved THEROCK_SOURCE_DIR
+                    # prefix, so a textual relative_to is enough.
                     try:
                         relative = source_path.relative_to(root)
                     except ValueError:
@@ -483,9 +473,8 @@ class RepositoryAnalyzer:
             loop_values, _ = _expand_tokens(node.args[1:], environment)
             loop_environment[loop_variable] = loop_values
         self._execute_nodes(node.body, loop_environment, relative_path)
-        # Deliberately over-approximate: merge the loop environment back, including
-        # the loop variable. This can leave a stale value in the loop variable, but it
-        # only ever adds possible values (never drops) — the safe direction.
+        # Deliberately over-approximate: merge the loop environment back (loop
+        # variable included). Only ever adds values, never drops — the safe direction.
         for variable_name, values in loop_environment.items():
             environment.setdefault(variable_name, set()).update(values)
 
@@ -678,11 +667,9 @@ class RepositoryAnalyzer:
     def _resolve_source_dir_section(
         self, tokens: list[Token], environment: Environment
     ) -> set[str]:
-        # Unlike dependency args (which fail loud when unresolved), an unresolved
-        # EXTERNAL_SOURCE_DIR is skipped silently. Some sources are wired through
-        # therock_enable_external_source(), a function this parser does not model,
-        # so their source dir cannot be resolved statically; those subprojects get
-        # no subtree_map entry and are handled as overrides on the reader side.
+        """Resolve an EXTERNAL_SOURCE_DIR value; unresolved -> {} (skipped silently)."""
+        # Sources wired through therock_enable_external_source() do not resolve
+        # statically and get no subtree_map entry (handled as reader-side overrides).
         values, unresolved = _expand_tokens(tokens, environment)
         if unresolved:
             return set()
@@ -728,10 +715,9 @@ def _expand_token(
     for variable_name in references:
         replacements = environment.get(variable_name, set())
         if not replacements:
-            # A variable that is *defined* but expands to nothing is not flagged
-            # unresolved, so in a dependency arg its edge is dropped silently — an
-            # under-selection. The differential-configure superset check is the guard
-            # for this; a unit test characterizes the behavior.
+            # A variable that is *defined* but empty is not flagged unresolved, so in
+            # a dependency arg its edge drops silently (an under-selection). The
+            # differential-configure superset check is the guard; a unit test pins it.
             return set(), set()
         next_values = set()
         reference = "${" + variable_name + "}"

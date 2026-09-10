@@ -6,7 +6,7 @@
 - **License:** Apache-2.0 — see `cmake_parser/LICENSE`.
 - **Why vendored:** it is a sub-1.0 dependency on a CI-critical path (the consumer-graph drift check runs in
   `unit_tests.yml` on every PR). Vendoring pins the exact bytes so a yanked or changed upstream release cannot
-  break every PR. See issue #7782.
+  break every PR.
 
 ### How to update
 
