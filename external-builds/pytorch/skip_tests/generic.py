@@ -197,7 +197,7 @@ skip_tests = {
     #     That is likely related to processes not terminating on their own:
     #     https://github.com/ROCm/TheRock/issues/999. Note that even if
     #     _test cases_ themselves terminate, the parent process still
-    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
+    #     hangs though. In run_pytorch_tests.py we exit with `os._exit()` to
     #     force termination.
     #   * Linux has substantial testing on datacenter GPUs while Windows support
     #     is newer and skews towards consumer GPUs with lower specs. We disable
