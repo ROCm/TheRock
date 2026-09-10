@@ -172,7 +172,7 @@ To keep the scope sharp, the following are explicitly out of scope for this RFC.
 
 - **Windows.** The target is Linux HPC. ROCm's existing Fortran clients are already gated off on Windows in-tree (rocBLAS, hipBLAS, hipSOLVER, and rocSPARSE all condition Fortran on `NOT WIN32` / `UNIX`), so a Windows Fortran product is not a goal.
 - **Fortran under sanitizers.** The ASAN and coverage build variants ship no Fortran, since Fortran linking is unsupported under ROCm's sanitizer configuration.
-- **Fortran 77, and any consumer below Fortran 2003.** The bindings are modules built on `iso_c_binding`, which is F2003, so a translation unit compiled below Fortran 90 has no `use` statement and cannot consume them (see Language standard). This is a property of the standard level, not of the source form: fixed-form sources compiled by a current compiler consume the bindings normally.
+- **Fortran 77, and any consumer below Fortran 2003.** The bindings are modules built on `iso_c_binding`, which is F2003, so a translation unit compiled below Fortran 90 has no `use` statement and cannot consume them (see Language standard). hipfort never shipped such a path either, so nothing available today is being removed. This is a property of the standard level, not of the source form: fixed-form sources compiled by a current compiler consume the bindings normally. Out of scope here is a statement about this RFC, not a judgement on the need: Language standard records what an F77-callable path would look like and what it would cost.
 - **The generator as a runtime or shipped product.** `rocm-fortran` is build-time tooling; no Julia, Clang.jl, or generator code reaches a consumer, the compiler build, or the deliverable.
 - **Non-CMake consumer tooling as a first-class path.** CMake `find_package` is the supported integration; a `pkg-config` file or a flags script is a convenience, not a guarantee.
 - **A new build system or test framework.** This RFC defines where the bindings live and how they stay in sync, reusing the monorepo's existing CMake, CODEOWNERS, and CI substrate rather than introducing a parallel one.
@@ -227,8 +227,20 @@ See the appendix for why a `.mod` cannot be shared across compilers, or even acr
 
 Fortran 77 is therefore out of scope for the bindings: `iso_c_binding` is F2003, and below Fortran 90 the language has no modules, so there is no `use` statement to write and nothing to bind to.
 Note that this is a property of the standard level and not of the source form: a fixed-form source compiled by a current compiler consumes the bindings like any other caller.
-Reaching the API from below Fortran 90 would need a separate artifact, a C shim library with F77 linkage plus an include file for the constants.
-That is not planned, and would be generated for a specific set of entry points if industrial demand appeared.
+Reaching the API from below Fortran 90 would need a separate artifact, a C shim library with F77 linkage plus an include file holding the constants as `PARAMETER` values.
+The useful answer here is a cost rather than a refusal, so it is worth being precise about what that artifact is and is not.
+
+It is deliverable.
+"Impossible" would be inaccurate: what cannot exist is an F77 *module* binding, since modules do not exist below Fortran 90.
+A C shim needs nothing from the Fortran standard, its shape is well understood, and the cost is bounded because it is another emitter on the same generator, reusing the same parsed C declarations and the same curated metadata that already records which parameters are pointers and which are scalars.
+
+It is also a project of its own rather than an increment of this one.
+Only the generator front end carries over; the emitter, the tests, the packaging, and the per-compiler symbol mangling conventions are all new, and the tested surface roughly doubles.
+It would serve a disjoint audience, since no F2003 or later caller would route through an untyped shim when the modules are available, and it would add nothing to the F2003 track, which stands unchanged whether or not the shim is ever built.
+
+hipfort never shipped one, so this is not a capability the split removes: it has never existed in either generation.
+It is therefore out of scope for this RFC, whose subject is moving the existing bindings into `rocm-systems` and `rocm-libraries`, and not a statement that the need is illegitimate.
+If demand appears, it belongs in its own RFC, scoped to that application's entry points rather than the full API, and it can be taken up without reopening anything decided here.
 
 ### CUDA backend
 
@@ -667,6 +679,7 @@ Several points are still open.
   Assumed-rank would also shrink the generated sources and their build time (for example the ~24k-line `hipfort_hipmalloc` on today's hipfort).
 - **The Fortran 2003 floor: settled for the standard, open for the compiler version.** The design sets F2003 as the minimum (see Language standard), and no consuming application in view needs less than Fortran 90.
   What remains is the version axis rather than the standard axis: the raw `type(c_ptr)` surface is already the smallest interoperable subset, and nothing below F2003 can express a standard-conforming C binding at all, so the question worth asking the large HPC sites is which compiler versions they pin, not which standard they target.
+  Should a pre-F2003 caller ever have to be served, the answer is the separate C shim costed in Language standard, taken up under its own RFC, and not a lower floor for these bindings: the floor and the fallback are independent decisions.
 - **Where the generator ultimately lives, and whether it opens up.** It stays a standalone repository (P3), and that is the part this RFC settles.
   What is not settled is whether it eventually moves next to the Fortran toolchain that consumes its output, and whether the repository becomes public.
   Today it is internal, which bounds who can reproduce a regeneration from scratch; it does not bound who can read, review, or build the result, since the emitted `.F90` are committed in the library repositories and compile with any Fortran compiler.
