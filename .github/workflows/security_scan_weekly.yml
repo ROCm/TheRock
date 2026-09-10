@@ -28,7 +28,8 @@ jobs:
     with:
       scan_mode: all
       report_formats: sarif
-      bandit_config_path: build_tools/scan_tools/bandit.yaml
+      bandit_config_path: build_tools/scan_tools/bandit.yml
+      codeql_config_path: build_tools/scan_tools/codeql.yml
       gitleaks_config_path: build_tools/scan_tools/gitleaks.toml
-      trivy_config_path: build_tools/scan_tools/trivy.yaml
-      zizmor_config_path: build_tools/scan_tools/zizmor.yaml
+      trivy_config_path: build_tools/scan_tools/trivy.yml
+      zizmor_config_path: build_tools/scan_tools/zizmor.yml
