@@ -29,10 +29,10 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None, env=None):
+def run_command(command: list[str], cwd=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, env=env, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -154,20 +154,7 @@ class TestROCmSanity:
         # Running and checking the executable
         platform_executable_prefix = "./" if not is_windows() else ""
         hip_check_executable = f"{platform_executable_prefix}hip_check"
-        # hip_check is deliberately compiled without -fsanitize=address, so it
-        # needs the runtime preloaded to link against instrumented ROCm
-        # libraries. Instrumenting it instead would pull in device-side
-        # instrumentation that the host-asan variant exists to avoid. CI does
-        # not export LD_PRELOAD globally, to keep third-party libraries from
-        # producing spurious leak reports.
-        env = None
-        asan_runtime_path = os.getenv("ASAN_RUNTIME_PATH", "")
-        if asan_runtime_path and os.getenv("BUILD_VARIANT", "") in (
-            "asan",
-            "host-asan",
-        ):
-            env = {**os.environ, "LD_PRELOAD": asan_runtime_path}
-        process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR), env=env)
+        process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR))
         check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hip_check_executable_file)), 0

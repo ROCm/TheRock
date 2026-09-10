@@ -177,10 +177,12 @@ jobs:
           else
             echo "Warning: llvm-symbolizer not found at ${SYMBOLIZER_BIN}, ASAN reports will be unsymbolized"
           fi
-          # Resolve ASAN runtime path for steps that need LD_PRELOAD (e.g., sanity check).
-          # Non-instrumented executables like Python need LD_PRELOAD to load ASAN-instrumented
-          # libraries (e.g., libamdhip64). We don't set LD_PRELOAD globally to avoid false
-          # leak reports from third-party libraries.
+          # Resolve the ASAN runtime path for anything that needs LD_PRELOAD:
+          # executables built without -fsanitize=address abort when they load
+          # instrumented ROCm libraries unless the runtime is preloaded. Exported
+          # here so consumers can opt in per process; not set as LD_PRELOAD
+          # job-wide, which would run the non-instrumented Python driving the
+          # tests under LeakSanitizer and report CPython's own allocations.
           CLANG_BIN="${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/clang"
           if [[ -x "${CLANG_BIN}" ]]; then
             ASAN_RT_PATH=$("${CLANG_BIN}" -print-file-name=libclang_rt.asan.so)
@@ -200,6 +202,12 @@ jobs:
         env:
           # Preload ASAN runtime so Python can load ASAN-instrumented libraries
           LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          # The probes load instrumented ROCm libraries, so LeakSanitizer reports
+          # whatever those leak at exit and the probe returns non-zero. This step
+          # answers "is the driver and GPU functional", not "is the runtime
+          # leak-free". Extends rather than replaces, to keep the options set
+          # above.
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
