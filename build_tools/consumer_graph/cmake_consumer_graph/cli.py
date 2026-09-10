@@ -95,11 +95,17 @@ def main(argv: list[str]) -> int:
         },
     )
 
+    # subtree_map is emitted as a separate report-only artifact (not merged into
+    # the consumer graph) so the node/edge parity comparison stays unaffected.
+    subtree_map = result.build_subtree_map()
+    _write_json(args.output_dir / "subtree_map.json", subtree_map)
+
     summary = comparison.to_json_data()["summary"]
     print(
         f"Parsed {len(result.parsed_cmake_files)}/"
         f"{len(result.tracked_cmake_files)} tracked CMake files."
     )
+    print(f"Mapped {len(subtree_map)} source subtrees to graph keys.")
     print(
         f"Reached {len(result.reachable_cmake_files)} files and discovered "
         f"{result.declaration_count} declarations for "

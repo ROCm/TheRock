@@ -3,6 +3,7 @@
 
 """Tests for conservative CMake repository analysis."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from cmake_consumer_graph.analyzer import (
     AnalysisError,
     RepositoryAnalyzer,
     compare_graphs,
+    list_tracked_cmake_files,
     load_consumer_graph,
 )
 
@@ -168,3 +170,82 @@ def test_static_graph_is_superset_of_committed_graph() -> None:
     assert comparison.reference_only_edges == []
     assert result.unreachable_declaration_files == set()
     assert result.dangling_dependencies() == {}
+
+
+def test_subtree_map_relativizes_and_fans_out(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-libraries")
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
+therock_cmake_subproject_declare(hip-clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
+therock_cmake_subproject_declare(ocl-clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
+therock_cmake_subproject_declare(rocroller
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller)
+therock_cmake_subproject_declare(variable-sourced
+  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    subtree_map = result.build_subtree_map()
+
+    # One subtree fans out to several keys; a non-projects/ prefix resolves.
+    assert subtree_map == {
+        "projects/clr": ["hip-clr", "ocl-clr"],
+        "shared/rocroller": ["rocroller"],
+    }
+    # The declaration whose EXTERNAL_SOURCE_DIR did not resolve is still a
+    # subproject, but is silently absent from the subtree map.
+    assert "variable-sourced" in result.subprojects
+
+
+def test_subtree_map_covers_known_subtrees_on_real_tree() -> None:
+    # Real-tree anchors: fan-out, name skew, and a non-projects/ prefix all resolve;
+    # a variable-sourced (therock_enable_external_source) subtree is skipped. Skips
+    # outside a git checkout.
+    repo_root = Path(__file__).resolve().parents[3]
+    if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
+        pytest.skip("not a TheRock git checkout")
+
+    subtree_map = RepositoryAnalyzer(repo_root).analyze().build_subtree_map()
+
+    assert subtree_map.get("projects/clr") == ["hip-clr", "ocl-clr"]
+    assert subtree_map.get("projects/composablekernel") == ["composable_kernel"]
+    assert "shared/rocroller" in subtree_map
+    assert "projects/rocdbgapi" not in subtree_map
+
+
+def test_subtree_map_covers_all_direct_external_source_dirs() -> None:
+    # Coverage cross-check: independently derive, by regex over the tracked CMake,
+    # every EXTERNAL_SOURCE_DIR written directly under a source root, and assert the
+    # parser's subtree_map covers each. Catches a silently-shrinking map, which the
+    # anchor test above would miss. Variable-sourced dirs (indirect, via
+    # therock_enable_external_source) are not matched here — they are the documented,
+    # intentionally-skipped residue. Skips outside a git checkout.
+    repo_root = Path(__file__).resolve().parents[3]
+    if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
+        pytest.skip("not a TheRock git checkout")
+
+    pattern = re.compile(
+        r"EXTERNAL_SOURCE_DIR\s+\"?\$\{THEROCK_ROCM_(?:LIBRARIES|SYSTEMS)_SOURCE_DIR\}"
+        r"/([^\"\s)]+)"
+    )
+    expected: set[str] = set()
+    for relative_path in list_tracked_cmake_files(repo_root):
+        text = (repo_root / relative_path).read_text(encoding="utf-8", errors="ignore")
+        for line in text.splitlines():
+            # Drop CMake line comments so a commented-out EXTERNAL_SOURCE_DIR (e.g.
+            # math-libs/CMakeLists.txt has one) is not treated as a live declaration.
+            code = line.split("#", 1)[0]
+            expected.update(m.rstrip("/") for m in pattern.findall(code))
+
+    subtree_map = RepositoryAnalyzer(repo_root).analyze().build_subtree_map()
+
+    assert expected, "regex found no direct EXTERNAL_SOURCE_DIR declarations"
+    missing = sorted(s for s in expected if s not in subtree_map)
+    assert missing == [], f"subtree_map missing direct subtrees: {missing}"
+    assert len(subtree_map) >= len(expected)
