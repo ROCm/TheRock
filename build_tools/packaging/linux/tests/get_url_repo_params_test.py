@@ -149,7 +149,7 @@ class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
             (
                 "stable",
                 "multiarch",
-                "https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
+                "https://stable.repo.amd.com/rocm/gpg/packages.gpg",
             ),
         ]
         for release_type, layout, expected in cases:

@@ -230,7 +230,7 @@ def get_gpg_key_url_from_release_type(
         prerelease + multi_arch
             → https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
         stable + multi_arch
-            → https://stable.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
+            → https://stable.repo.amd.com/rocm/gpg/packages.gpg
     """
     rt = _normalize_release_type(release_type)
     layout_norm = normalize_layout(layout)
