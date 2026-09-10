@@ -234,6 +234,25 @@ jobs:
       contents: read
       id-token: write
 
+  # ==========================================================================
+  # GATE: libraries_baseline_ready
+  # See multi_arch_build_portable_linux.yml for why this job exists. Windows
+  # only builds a subset of the stages rocm-libraries reuses (the rest are
+  # Linux-only), so `needs:` here is narrower than the Linux copy.
+  # ==========================================================================
+  libraries_baseline_ready:
+    name: "Libraries Baseline Ready"
+    if: always()
+    needs: [runtime-tests, debug-tools, media-libs]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require reused stages to have succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "One or more stages rocm-libraries reuses via baseline_run_id did not succeed:"
+          echo '${{ toJSON(needs) }}'
+          exit 1
+
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, runtime-tests, math-libs, debug-tools, media-libs]
