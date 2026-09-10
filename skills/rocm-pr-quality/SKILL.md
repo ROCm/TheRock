@@ -144,6 +144,15 @@ reverse edges (GitHub back-references; Jira dev-panel auto-linking when the issu
 branch/PR title). M5 makes the core links mandatory; broader context (design docs, loosely
 related PRs) is a SHOULD.
 
+### Review attestation (approvals only)
+
+When Action 2 concludes `APPROVED`, append the machine-checkable attestation block (see
+`reference.md`) to the drafted approval comment. Never attach it to `CHANGES REQUESTED` / `REJECTED`,
+and never to a PR description. It is part of the text the human posts; the skill still never posts
+on its own (operating principle 2). Explain the block in plain language when you add it: what it is,
+that pushing new commits invalidates it, and that a pre-review gate can key on it. If an approval was
+already posted without a block, hand the user the one-line paste form instead of the full block.
+
 ______________________________________________________________________
 
 ## Action 1 — Author assist
@@ -238,7 +247,11 @@ and add cross-cutting testing/reuse passes; otherwise do a single-pass review.
 
 **Output:** the overall assessment + the four answers + a severity-ordered findings list + a
 `BLOCKING`-items list. Only on request, and only after the user approves the wording, produce a
-draft request-changes comment. Never post it yourself.
+draft request-changes comment. Never post it yourself. When the assessment is `APPROVED`, also
+produce the attestation block (see "Review attestation"). Drafting the approval comment itself is
+on request, like the request-changes comment above; when you draft it, include the block as its
+trailer, otherwise hand the block to the user directly. Briefly explain it; if the user already
+approved without it, give them the one-line paste form. Never post either yourself.
 
 ______________________________________________________________________
 
