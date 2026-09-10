@@ -7,8 +7,10 @@
 Tests stage artifact trees by walking ``package.json`` via ``get_package_info()`` and
 the same ``{Artifact}_{Component}_{suffix}`` layout consumed by
 ``filter_components_fromartifactory``. Config is built via ``create_package_config()``.
-DEB generation runs through real ``create_versioned_deb_package()``; RPM generation
-runs through real ``create_versioned_rpm_package()``; only ``package_with_dpkg_build`` /
+DEB generation runs through real ``create_versioned_deb_package()`` and
+``create_nonversioned_deb_package()``; RPM generation runs through real
+``create_versioned_rpm_package()`` and ``create_nonversioned_rpm_package()``;
+only ``package_with_dpkg_build`` /
 ``package_with_rpmbuild`` and ``move_packages_to_destination`` are mocked.
 
 Run::
@@ -50,17 +52,35 @@ PKG_DEVELOPER_TOOLS = "amdrocm-developer-tools"
 PKG_RUNTIME = "amdrocm-runtime"
 PKG_DEBUGGER = "amdrocm-debugger"
 PKG_CK = "amdrocm-ck"
+PKG_BLAS = "amdrocm-blas"
+PKG_BLAS_DEVEL = "amdrocm-blas-devel"
+PKG_DNN_TEST = "amdrocm-dnn-test"
+PKG_RAND = "amdrocm-rand"
 
+# Expected versioned package names and BLAS devel sub-projects (#6391).
 FFT_HOST_PACKAGE = "amdrocm-fft-host7.1"
 FFT_DEVICE_PACKAGE = "amdrocm-fft7.1-gfx1100"
 FFT_META_PACKAGE = "amdrocm-fft7.1"
 CORE_SDK_DEVICE_PACKAGE = "amdrocm-core-sdk7.1-gfx1100"
 DEVELOPER_TOOLS_PACKAGE = "amdrocm-developer-tools7.1"
+BLAS_DEVEL_DEB_PACKAGE = "amdrocm-blas-dev7.1"
+BLAS_DEVEL_RPM_PACKAGE = "amdrocm-blas-devel7.1"
+DNN_TEST_DEB_PACKAGE = "amdrocm-dnn-test7.1"
+BLAS_DEVEL_SUBPROJECTS = (
+    "hipBLAS",
+    "rocBLAS",
+    "hipBLASLt",
+)
 
 STAGING_PAYLOAD_NAME = "libdummy.so"
 STAGING_PAYLOAD_BYTES = b"\x00"
+STAGING_HEADER_BYTES = b"/* stub */\n"
+STAGING_TEXT_BYTES = b"stub\n"
 
 
+# ---------------------------------------------------------------------------
+# Module bootstrap
+# ---------------------------------------------------------------------------
 def _setup_import_path() -> None:
     """Add packaging paths so modules resolve from any working directory."""
     for path in (BUILD_TOOLS_DIR, LINUX_DIR):
@@ -119,6 +139,9 @@ class BuildPackageTestCase(unittest.TestCase):
         return artifacts
 
 
+# ---------------------------------------------------------------------------
+# CLI and kpack manifest helpers
+# ---------------------------------------------------------------------------
 def _args(tmp: Path, **overrides: object) -> Namespace:
     """Build an ``argparse.Namespace`` mirroring ``build_package.py`` CLI flags."""
     artifacts = tmp / "artifacts"
@@ -154,6 +177,9 @@ def _write_kpack_manifest(artifacts_dir: Path) -> None:
         raise RuntimeError(f"Failed to write kpack manifest: {manifest_path}")
 
 
+# ---------------------------------------------------------------------------
+# DEB / RPM metadata field helpers
+# ---------------------------------------------------------------------------
 def _metadata_field(metadata_text: str, field: str) -> str:
     """Return the value of a DEB control or RPM spec field (e.g. ``Package`` / ``Name``)."""
     prefix = f"{field}:"
@@ -175,6 +201,9 @@ def _spec_field(spec_text: str, field: str) -> str:
     return _metadata_field(spec_text, field)
 
 
+# ---------------------------------------------------------------------------
+# Artifact staging — suffix routing and stub layout (PR6233)
+# ---------------------------------------------------------------------------
 def _artifact_suffix_for_staging(
     pkg_info: dict[str, object],
     artifact: dict[str, object],
@@ -198,9 +227,12 @@ def _artifact_suffix_for_staging(
             dir_suffix = "generic"
         elif is_gfxarch_package(pkg_info, enable_kpack, artifacts_dir):
             dir_suffix = gfx_arch
-        elif is_key_defined(pkg_info, "Gfxarch"):
-            # Staging device trees before gfx dirs exist: Gfxarch metadata still
-            # implies arch-specific suffixes once kpack splits are in play.
+        elif (
+            is_key_defined(pkg_info, "Gfxarch")
+            and gfx_arch
+            and gfx_arch not in (GFX_HOST, GFX_META)
+        ):
+            # Staging device trees before gfx dirs exist (#5874).
             dir_suffix = gfx_arch
         else:
             dir_suffix = "generic"
@@ -240,6 +272,8 @@ def _stage_package_artifacts(
     if not isinstance(artifactory, list):
         return created
 
+    pending_manifests: dict[Path, list[str]] = {}
+
     for artifact in artifactory:
         if not isinstance(artifact, dict):
             continue
@@ -272,14 +306,128 @@ def _stage_package_artifacts(
                 payload = artifact_dir / rel_path
                 payload.parent.mkdir(parents=True, exist_ok=True)
                 payload.write_bytes(STAGING_PAYLOAD_BYTES)
-                manifest = artifact_dir / "artifact_manifest.txt"
-                manifest.write_text(f"{rel_path}\n", encoding="utf-8")
-                if not manifest.exists():
-                    raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
-                created.append(artifact_dir)
+                lines = pending_manifests.setdefault(artifact_dir, [])
+                if rel_path not in lines:
+                    lines.append(rel_path)
+
+    for artifact_dir, manifest_lines in pending_manifests.items():
+        manifest = artifact_dir / "artifact_manifest.txt"
+        manifest.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+        if not manifest.exists():
+            raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
+        created.append(artifact_dir)
     return created
 
 
+# ---------------------------------------------------------------------------
+# Artifact staging — build/stage layout (docs/development/artifacts.md)
+# ---------------------------------------------------------------------------
+def _stub_library_name(subdir_name: str) -> str:
+    """Return a plausible shared-library filename for a staged BLAS sub-project."""
+    return f"lib{subdir_name.lower()}.so"
+
+
+def _write_staged_payload(payload_path: Path) -> None:
+    """Write minimal bytes for a leaf file under a staged artifact tree."""
+    payload_path.parent.mkdir(parents=True, exist_ok=True)
+    if payload_path.suffix == ".so":
+        payload_path.write_bytes(STAGING_PAYLOAD_BYTES)
+    elif payload_path.suffix == ".h":
+        payload_path.write_bytes(STAGING_HEADER_BYTES)
+    else:
+        payload_path.write_bytes(STAGING_TEXT_BYTES)
+
+
+def _build_stage_paths(subdir_name: str, component: str) -> tuple[str, list[str]]:
+    """Return manifest entry and payload paths using production ``build/stage`` layout."""
+    stage_root = f"{subdir_name}/build/stage"
+    payloads: list[str] = []
+    if component in ("lib", "dev", "run", "doc", "test", "dbg"):
+        payloads.append(f"{stage_root}/lib/{_stub_library_name(subdir_name)}")
+    if component == "dev":
+        payloads.append(
+            f"{stage_root}/include/{subdir_name.lower()}/{subdir_name.lower()}.h"
+        )
+    if component == "run":
+        payloads.append(f"{stage_root}/bin/{subdir_name.lower()}-client")
+    if component == "doc":
+        payloads.append(f"{stage_root}/share/doc/{subdir_name}/README")
+    return stage_root, payloads
+
+
+def _stage_package_build_stage_artifacts(
+    pkg_name: str,
+    artifacts_dir: Path,
+    gfx_arch: str,
+    *,
+    enable_kpack: bool = True,
+    subprojects: set[str] | frozenset[str] | None = None,
+) -> list[Path]:
+    """Stage artifacts using ``{subdir}/build/stage`` paths from ``artifacts.md``."""
+    pkg_info = get_package_info(pkg_name)
+    if enable_kpack and gfx_arch == GFX_META:
+        return []
+
+    created: list[Path] = []
+    artifactory = pkg_info.get("Artifactory", [])
+    if not isinstance(artifactory, list):
+        return created
+
+    pending_manifests: dict[Path, list[str]] = {}
+
+    for artifact in artifactory:
+        if not isinstance(artifact, dict):
+            continue
+        suffix = _artifact_suffix_for_staging(
+            pkg_info,
+            artifact,
+            gfx_arch,
+            enable_kpack=enable_kpack,
+            artifacts_dir=artifacts_dir,
+        )
+        if suffix is None:
+            continue
+
+        prefix = artifact["Artifact"]
+        subdirs = artifact.get("Artifact_Subdir", [])
+        if not isinstance(subdirs, list):
+            continue
+
+        for subdir in subdirs:
+            if not isinstance(subdir, dict):
+                continue
+            subdir_name = subdir["Name"]
+            if subprojects is not None and subdir_name not in subprojects:
+                continue
+
+            components = subdir.get("Components", [])
+            if not isinstance(components, list):
+                continue
+
+            for component in components:
+                artifact_dir = artifacts_dir / f"{prefix}_{component}_{suffix}"
+                manifest_line, payload_paths = _build_stage_paths(
+                    subdir_name,
+                    component,
+                )
+                lines = pending_manifests.setdefault(artifact_dir, [])
+                if manifest_line not in lines:
+                    lines.append(manifest_line)
+                for rel_path in payload_paths:
+                    _write_staged_payload(artifact_dir / rel_path)
+
+    for artifact_dir, manifest_lines in pending_manifests.items():
+        manifest = artifact_dir / "artifact_manifest.txt"
+        manifest.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+        if not manifest.exists():
+            raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
+        created.append(artifact_dir)
+    return created
+
+
+# ---------------------------------------------------------------------------
+# Config and generated control/spec path helpers
+# ---------------------------------------------------------------------------
 def _kpack_config(tmp: Path, **overrides: object) -> PackageConfig:
     """Build kpack ``PackageConfig`` via ``create_package_config`` (not hand-built)."""
     root = Path(tmp)
@@ -288,34 +436,51 @@ def _kpack_config(tmp: Path, **overrides: object) -> PackageConfig:
     return build_package.create_package_config(args)
 
 
-def _control_path(pkg_name: str, config: PackageConfig) -> Path:
-    """Return path to generated ``debian/control`` for a versioned DEB build."""
-    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+def _control_path(
+    pkg_name: str, config: PackageConfig, *, versioned_pkg: bool = True
+) -> Path:
+    """Return path to generated ``debian/control`` for a DEB build."""
+    updated = update_package_name(
+        pkg_name, replace(config, versioned_pkg=versioned_pkg)
+    )
     return Path(config.dest_dir) / config.pkg_type / updated / "debian" / "control"
 
 
-def _read_control_file(pkg_name: str, config: PackageConfig) -> str:
+def _read_control_file(
+    pkg_name: str, config: PackageConfig, *, versioned_pkg: bool = True
+) -> str:
     """Read generated ``debian/control`` after validating it was created."""
-    control_path = _control_path(pkg_name=pkg_name, config=config)
+    control_path = _control_path(
+        pkg_name=pkg_name, config=config, versioned_pkg=versioned_pkg
+    )
     if not control_path.exists():
         raise AssertionError(f"Expected control file was not created: {control_path}")
     return control_path.read_text(encoding="utf-8")
 
 
-def _spec_path(pkg_name: str, config: PackageConfig) -> Path:
-    """Return path to generated RPM ``specfile`` for a versioned RPM build."""
-    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+def _spec_path(
+    pkg_name: str, config: PackageConfig, *, versioned_pkg: bool = True
+) -> Path:
+    """Return path to generated RPM ``specfile`` for an RPM build."""
+    updated = update_package_name(
+        pkg_name, replace(config, versioned_pkg=versioned_pkg)
+    )
     return Path(config.dest_dir) / config.pkg_type / updated / "specfile"
 
 
-def _read_spec_file(pkg_name: str, config: PackageConfig) -> str:
+def _read_spec_file(
+    pkg_name: str, config: PackageConfig, *, versioned_pkg: bool = True
+) -> str:
     """Read generated RPM ``specfile`` after validating it was created."""
-    spec_path = _spec_path(pkg_name=pkg_name, config=config)
+    spec_path = _spec_path(pkg_name=pkg_name, config=config, versioned_pkg=versioned_pkg)
     if not spec_path.exists():
         raise AssertionError(f"Expected spec file was not created: {spec_path}")
     return spec_path.read_text(encoding="utf-8")
 
 
+# ---------------------------------------------------------------------------
+# Package-specific artifact fixtures
+# ---------------------------------------------------------------------------
 def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) -> None:
     """Stage FFT artifacts for kpack tests; optionally include host/generic tree."""
     _stage_package_artifacts(
@@ -331,6 +496,47 @@ def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) ->
             gfx_arch=GFX_HOST,
             enable_kpack=True,
         )
+
+
+def _stage_blas_devel_kpack_fixtures(artifacts_dir: Path) -> None:
+    """Stage blas runtime + devel stubs for kpack dependency and routing tests (#6391)."""
+    _stage_package_artifacts(
+        pkg_name=PKG_BLAS,
+        artifacts_dir=artifacts_dir,
+        gfx_arch=TEST_GFX_TARGET,
+        enable_kpack=True,
+    )
+    _stage_package_artifacts(
+        pkg_name=PKG_BLAS_DEVEL,
+        artifacts_dir=artifacts_dir,
+        gfx_arch=EMPTY_GFX_ARCH,
+        enable_kpack=True,
+    )
+
+
+def _stage_blas_devel_build_stage_fixtures(
+    artifacts_dir: Path,
+    *,
+    subprojects: set[str] | frozenset[str] | None = None,
+) -> None:
+    """Stage ``amdrocm-blas-devel`` with production-style ``build/stage`` trees."""
+    _stage_package_build_stage_artifacts(
+        pkg_name=PKG_BLAS_DEVEL,
+        artifacts_dir=artifacts_dir,
+        gfx_arch=EMPTY_GFX_ARCH,
+        enable_kpack=True,
+        subprojects=subprojects,
+    )
+
+
+def _stage_blas_runtime_build_stage_fixtures(artifacts_dir: Path) -> None:
+    """Stage ``amdrocm-blas`` runtime ``build/stage`` trees for a gfx arch variant."""
+    _stage_package_build_stage_artifacts(
+        pkg_name=PKG_BLAS,
+        artifacts_dir=artifacts_dir,
+        gfx_arch=TEST_GFX_TARGET,
+        enable_kpack=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +583,69 @@ class ArtifactStagingTest(BuildPackageTestCase):
                 artifacts_dir=artifacts,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# Blas devel/runtime staging — layout and discovery (#6391)
+# ---------------------------------------------------------------------------
+class BlasDevelArtifactStagingTest(BuildPackageTestCase):
+    """Staging layout and discovery for ``amdrocm-blas`` / ``amdrocm-blas-devel``."""
+
+    def test_blas_devel_build_stage_manifest_lists_stage_roots(self) -> None:
+        """Manifest lists ``build/stage`` directory roots per ``artifacts.md``."""
+        artifacts = self.artifacts_dir()
+        _stage_blas_devel_build_stage_fixtures(
+            artifacts,
+            subprojects={"hipBLAS"},
+        )
+        manifest = artifacts / "blas_dev_generic" / "artifact_manifest.txt"
+        self.assertTrue(manifest.exists())
+        text = manifest.read_text(encoding="utf-8")
+        self.assertIn("hipBLAS/build/stage\n", text)
+        lib_stub = artifacts / "blas_dev_generic/hipBLAS/build/stage/lib/libhipblas.so"
+        header_stub = (
+            artifacts / "blas_dev_generic/hipBLAS/build/stage/include/hipblas/hipblas.h"
+        )
+        self.assertTrue(lib_stub.is_file())
+        self.assertTrue(header_stub.is_file())
+
+    def test_blas_devel_build_stage_includes_all_subprojects(self) -> None:
+        """All four devel sub-projects from ``package.json`` appear in the manifest."""
+        artifacts = self.artifacts_dir()
+        _stage_blas_devel_build_stage_fixtures(artifacts)
+        text = (artifacts / "blas_dev_generic" / "artifact_manifest.txt").read_text(
+            encoding="utf-8"
+        )
+        for subproject in BLAS_DEVEL_SUBPROJECTS:
+            self.assertIn(f"{subproject}/build/stage\n", text)
+        self.assertEqual(text.count("/build/stage\n"), len(BLAS_DEVEL_SUBPROJECTS))
+
+    def test_blas_devel_filter_components_discovers_all_subprojects(self) -> None:
+        """``filter_components_fromartifactory`` finds every staged devel sub-project."""
+        artifacts = self.artifacts_dir()
+        _stage_blas_devel_build_stage_fixtures(artifacts)
+        sourcedirs = filter_components_fromartifactory(
+            pkg_name=PKG_BLAS_DEVEL,
+            artifacts_dir=artifacts,
+            gfx_arch=EMPTY_GFX_ARCH,
+            enable_kpack=True,
+        )
+        self.assertEqual(len(sourcedirs), len(BLAS_DEVEL_SUBPROJECTS))
+        for path in sourcedirs:
+            self.assertEqual(path.name, "stage")
+            self.assertEqual(path.parent.name, "build")
+
+    def test_blas_runtime_build_stage_includes_multiple_subprojects(self) -> None:
+        """Runtime package staging includes multiple BLAS sub-project stage trees."""
+        artifacts = self.artifacts_dir()
+        _stage_blas_runtime_build_stage_fixtures(artifacts)
+        text = (
+            artifacts / f"blas_lib_{TEST_GFX_TARGET}" / "artifact_manifest.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("hipBLAS/build/stage\n", text)
+        self.assertIn("rocBLAS/build/stage\n", text)
+        self.assertIn("hipBLASLt/build/stage\n", text)
+        self.assertGreaterEqual(text.count("/build/stage\n"), 4)
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +763,101 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         self.assertEqual(_control_field(control, "Package"), DEVELOPER_TOOLS_PACKAGE)
         self.assertIn("amdrocm-debugger", _control_field(control, "Depends"))
 
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_blas_devel_kpack_depends_on_full_meta(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """Kpack devel package depends on full runtime meta, not host (#6391)."""
+        cfg = _kpack_config(self.temp_dir)
+        _stage_blas_devel_kpack_fixtures(cfg.artifacts_dir)
+
+        deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS_DEVEL, config=cfg)
+
+        control = _read_control_file(pkg_name=PKG_BLAS_DEVEL, config=cfg)
+        self.assertEqual(_control_field(control, "Package"), BLAS_DEVEL_DEB_PACKAGE)
+        depends = _control_field(control, "Depends")
+        self.assertIn("amdrocm-blas7.1", depends)
+        self.assertNotIn("amdrocm-blas-host", depends)
+        self.assertIn("libc6", depends)
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_generic_gfx_package_does_not_emit_empty_arch_dependencies(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """Generic-only package must not emit ``amdrocm-foo7.1-`` dependencies."""
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            pkg_name=PKG_DNN_TEST,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=EMPTY_GFX_ARCH,
+            enable_kpack=True,
+        )
+        for pkg_name in (PKG_BLAS, PKG_RAND):
+            _stage_package_artifacts(
+                pkg_name=pkg_name,
+                artifacts_dir=cfg.artifacts_dir,
+                gfx_arch=TEST_GFX_TARGET,
+                enable_kpack=True,
+            )
+        versioned_cfg = replace(cfg, gfx_arch=EMPTY_GFX_ARCH)
+
+        deb_package.create_versioned_deb_package(
+            pkg_name=PKG_DNN_TEST, config=versioned_cfg
+        )
+
+        control = _read_control_file(pkg_name=PKG_DNN_TEST, config=versioned_cfg)
+        self.assertEqual(_control_field(control, "Package"), DNN_TEST_DEB_PACKAGE)
+        depends = _control_field(control, "Depends")
+        self.assertNotIn(f"{TEST_ROCM_VERSION[:3]}-", depends)
+        self.assertNotIn("amdrocm-blas7.1-", depends)
+        self.assertNotIn("amdrocm-rand7.1-", depends)
+
+
+# ---------------------------------------------------------------------------
+# create_nonversioned_deb_package — user-facing metapackage control files
+# ---------------------------------------------------------------------------
+class CreateNonversionedDebPackageTest(BuildPackageTestCase):
+    """Real ``create_nonversioned_deb_package`` with dependency-only payloads."""
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_fft_nonversioned_generates_control_file(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """Gfxarch user-facing metapackage depends on versioned meta (#6233)."""
+        cfg = _kpack_config(self.temp_dir)
+
+        deb_package.create_nonversioned_deb_package(pkg_name=PKG_FFT, config=cfg)
+
+        control = _read_control_file(
+            pkg_name=PKG_FFT, config=cfg, versioned_pkg=False
+        )
+        self.assertEqual(_control_field(control, "Package"), PKG_FFT)
+        self.assertEqual(_control_field(control, "Architecture"), "amd64")
+        self.assertIn(FFT_META_PACKAGE, _control_field(control, "Depends"))
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_developer_tools_nonversioned_metapackage_control(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """Simple kpack metapackage pins versioned counterpart (#6233)."""
+        cfg = _kpack_config(self.temp_dir)
+
+        deb_package.create_nonversioned_deb_package(
+            pkg_name=PKG_DEVELOPER_TOOLS, config=cfg
+        )
+
+        control = _read_control_file(
+            pkg_name=PKG_DEVELOPER_TOOLS, config=cfg, versioned_pkg=False
+        )
+        self.assertEqual(_control_field(control, "Package"), PKG_DEVELOPER_TOOLS)
+        depends = _control_field(control, "Depends")
+        self.assertIn(DEVELOPER_TOOLS_PACKAGE, depends)
+        self.assertIn("( = 7.1.0-daily)", depends)
+
 
 # ---------------------------------------------------------------------------
 # create_versioned_rpm_package — real spec file generation
@@ -584,6 +948,65 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
         # RPM keeps -devel naming (no debian_replace_devel_name mapping).
         self.assertIn("amdrocm-core-devel", _spec_field(spec, "Requires"))
 
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_blas_devel_kpack_requires_full_meta(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Kpack devel RPM requires full runtime meta, not host (#6391)."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_blas_devel_kpack_fixtures(cfg.artifacts_dir)
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS_DEVEL, config=cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_BLAS_DEVEL, config=cfg)
+        self.assertEqual(_spec_field(spec, "Name"), BLAS_DEVEL_RPM_PACKAGE)
+        requires = _spec_field(spec, "Requires")
+        self.assertIn("amdrocm-blas7.1", requires)
+        self.assertNotIn("amdrocm-blas-host", requires)
+
+
+# ---------------------------------------------------------------------------
+# create_nonversioned_rpm_package — user-facing metapackage spec files
+# ---------------------------------------------------------------------------
+class CreateNonversionedRpmPackageTest(BuildPackageTestCase):
+    """Real ``create_nonversioned_rpm_package`` with dependency-only payloads."""
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_fft_nonversioned_generates_spec_file(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Gfxarch user-facing metapackage requires versioned meta (#6233)."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+
+        rpm_package.create_nonversioned_rpm_package(pkg_name=PKG_FFT, config=cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_FFT, config=cfg, versioned_pkg=False)
+        self.assertEqual(_spec_field(spec, "Name"), PKG_FFT)
+        self.assertEqual(_spec_field(spec, "BuildArch"), TEST_BUILD_ARCH)
+        self.assertIn(FFT_META_PACKAGE, _spec_field(spec, "Requires"))
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_developer_tools_nonversioned_metapackage_spec(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Simple kpack metapackage pins versioned counterpart (#6233)."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+
+        rpm_package.create_nonversioned_rpm_package(
+            pkg_name=PKG_DEVELOPER_TOOLS, config=cfg
+        )
+
+        spec = _read_spec_file(
+            pkg_name=PKG_DEVELOPER_TOOLS, config=cfg, versioned_pkg=False
+        )
+        self.assertEqual(_spec_field(spec, "Name"), PKG_DEVELOPER_TOOLS)
+        requires = _spec_field(spec, "Requires")
+        self.assertIn(DEVELOPER_TOOLS_PACKAGE, requires)
+        self.assertIn("= 7.1.0-daily", requires)
+
 
 # ---------------------------------------------------------------------------
 # build_package_variants — routing with real artifact detection (#5874)
@@ -640,6 +1063,26 @@ class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
         cfg = _kpack_config(self.temp_dir)
         build_package.build_package_variants(pkg_name=PKG_DEVELOPER_TOOLS, config=cfg)
         mock_simple.assert_called_once_with(PKG_DEVELOPER_TOOLS, cfg)
+        mock_gfxarch.assert_not_called()
+
+    @patch.object(build_package, "build_gfxarch_package_variants")
+    @patch.object(build_package, "build_simple_package_variants", return_value=[])
+    def test_blas_devel_routes_to_simple_in_kpack(
+        self, mock_simple: object, mock_gfxarch: object
+    ) -> None:
+        """Gfxarch devel packages use simple kpack builder, not host/device split (#6391)."""
+        cfg = _kpack_config(self.temp_dir)
+        _stage_blas_devel_kpack_fixtures(cfg.artifacts_dir)
+        pkg_info = get_package_info(PKG_BLAS_DEVEL)
+        self.assertFalse(
+            is_gfxarch_package(
+                pkg_info=pkg_info,
+                enable_kpack=True,
+                artifacts_dir=cfg.artifacts_dir,
+            )
+        )
+        build_package.build_package_variants(pkg_name=PKG_BLAS_DEVEL, config=cfg)
+        mock_simple.assert_called_once_with(PKG_BLAS_DEVEL, cfg)
         mock_gfxarch.assert_not_called()
 
 

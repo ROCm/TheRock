@@ -753,9 +753,12 @@ def process_devel_dependencies_kpack(
     pkg_name = pkg_info.get("Package")
     dep_list = list(pkg_info.get(field_key, []) or [])
 
-    # Filter deps without artifacts
+    # Devel packages are built without a gfx_arch, but their runtime
+    # dependencies target the full kpack meta package. Use GFX_META explicitly
+    # so the generic empty-arch path does not retain gfx dependencies that
+    # cannot be named without an architecture.
     dep_list = filter_dependencies_by_artifacts(
-        dep_list, config.artifacts_dir, config.gfx_arch
+        dep_list, config.artifacts_dir, GFX_META
     )
 
     if is_meta:
@@ -1187,10 +1190,11 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     if is_meta_package(pkg_info):
         return True
 
-    # For GFX_META or empty gfx_arch, check if ANY arch artifacts exist
-    # (regular GfxArch packages have gfx942, gfx1100, etc. but not gfx_meta)
-    # Empty gfx_arch is used for devel packages - they just need deps to exist
-    if gfx_arch in (GFX_META, ""):
+    # For GFX_META, check if ANY arch artifacts exist (regular GfxArch packages
+    # have gfx942, gfx1100, etc. but not gfx_meta). An empty gfx_arch is not a
+    # valid target for a gfx package: retaining it would later generate a
+    # malformed package name with a trailing hyphen.
+    if gfx_arch == GFX_META:
         return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
 
     artifactory = pkg_info.get("Artifactory")
