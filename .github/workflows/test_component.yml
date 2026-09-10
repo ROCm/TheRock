@@ -162,8 +162,6 @@ jobs:
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         env:
-          # Must append to (not replace) the existing value - python needs its
-          # own entry here (e.g. libpython3.12.so.1.0) or it won't start.
           LD_LIBRARY_PATH: >-
             ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}
         run: |
