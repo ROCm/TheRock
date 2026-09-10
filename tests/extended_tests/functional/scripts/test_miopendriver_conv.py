@@ -9,7 +9,9 @@ correct functionality across different GPU architectures.
 """
 
 import json
+import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -19,7 +21,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
 from functional_base import FunctionalBase, run_functional_main
 from utils.logger import log
 from utils.exceptions import TestExecutionError
-from github_actions_api import get_first_gpu_architecture
+
+
+def _get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> str:
+    """Return the first visible GPU architecture (e.g. 'gfx942') from rocminfo."""
+    rocminfo = Path(therock_bin_dir) / "rocminfo"
+    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
+
+    result = subprocess.run(
+        [rocminfo_cmd],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=True,
+    )
+
+    pattern = re.compile(r"^\s*Name:\s+(gfx[0-9a-z]+)$", re.IGNORECASE)
+    for line in result.stdout.splitlines():
+        m = pattern.match(line.strip())
+        if m:
+            gpu_arch = m.group(1).lower()
+            log.info(f"Detected GPU architecture: {gpu_arch}")
+            return gpu_arch
+    raise RuntimeError("No GPU architecture found in rocminfo output")
 
 
 class MIOpenDriverConvTest(FunctionalBase):
@@ -52,7 +77,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         log.info(f"Running {self.display_name} Tests")
 
         # Detect GPU architecture
-        gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
+        gfx_id = _get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
 
         miopen_driver = Path(self.therock_bin_dir) / "MIOpenDriver"
         if not miopen_driver.exists():
