@@ -25,12 +25,22 @@ include(therock_detect_python_versions)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
+include(therock_control_flow_guard)
 include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+
+################################################################################
+# Exploit mitigations.
+# Declares THEROCK_ENABLE_CONTROL_FLOW_GUARD and sets the effective
+# THEROCK_CONTROL_FLOW_GUARD_ACTIVE. Must run before any sub-project is
+# declared, since sub-projects capture it when their toolchain is generated.
+################################################################################
+
+therock_configure_control_flow_guard()
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.

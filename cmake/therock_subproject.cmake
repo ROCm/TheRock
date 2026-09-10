@@ -9,6 +9,7 @@
 # development flow.
 
 include(ExternalProject)
+include(therock_control_flow_guard)
 
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
@@ -36,6 +37,10 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 
   # Debug info handling.
   THEROCK_SPLIT_DEBUG_INFO
+
+  # Exploit mitigations. Sub-projects that drive a nested configure need this
+  # to decide whether to forward the mitigation flags along.
+  THEROCK_CONTROL_FLOW_GUARD_ACTIVE
 )
 
 # Whenever a new package is advertised by the super-project, it is added here.
@@ -86,15 +91,6 @@ if(WIN32)
   #     duplicate 'static' declaration specifier
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
-
-# Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
-# The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
-# /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
-# defaults to the latter.
-set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
 
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
@@ -879,14 +875,20 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
-  # Link half of the driver build options. This cannot go through
+  # Link half of Control Flow Guard. This cannot go through
   # CMAKE_<TYPE>_LINKER_FLAGS_INIT in the toolchain file: the private link dir
   # handling above appends to CMAKE_<TYPE>_LINKER_FLAGS before enable_language()
   # has populated it from *_INIT, which shadows the cache value and drops
   # whatever the toolchain set.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  # THEROCK_CONTROL_FLOW_GUARD_SUPPORTED is set by the toolchain file, which
+  # probes the sub-project's actual compiler. Skipping the link flag when the
+  # compile flag was rejected keeps the image from advertising guard tables
+  # that were never emitted.
+  if(THEROCK_CONTROL_FLOW_GUARD_ACTIVE)
+    string(APPEND _init_contents "if(THEROCK_CONTROL_FLOW_GUARD_SUPPORTED)\n")
     string(APPEND _init_contents
-      "add_link_options(\"LINKER:${THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS}\")\n")
+      "  add_link_options(\"LINKER:${THEROCK_CONTROL_FLOW_GUARD_LINK_FLAGS}\")\n")
+    string(APPEND _init_contents "endif()\n")
   endif()
 
   if(_dep_provider_file)
@@ -1762,18 +1764,6 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
   endif()
 
-  # Compile half of the driver build options. The link half is emitted as
-  # add_link_options() in the project_init file.
-  if(MSVC AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-    if(compiler_toolchain)
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS}")
-    else()
-      set(_driver_build_compile_flags "${THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS}")
-    endif()
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_driver_build_compile_flags}\")\n")
-  endif()
-
   # Customize debug info generation.
   if(THEROCK_MINIMAL_DEBUG_INFO)
     # System toolchain can be either MSVC or another system compiler.
@@ -1884,6 +1874,31 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   string(APPEND _toolchain_contents "${_sanitizer_stanza}")
+
+  # Compile half of Control Flow Guard. The link half is emitted as
+  # add_link_options() in the project_init file.
+  #
+  # This has to come last: the emitted code probes CMAKE_CXX_COMPILER, so the
+  # compiler-toolchain handling above must already have selected it. The probe
+  # runs in the sub-project rather than here because a COMPILER_TOOLCHAIN
+  # sub-project uses the amd-llvm clang we build, which does not exist yet at
+  # super-project configure time.
+  if(THEROCK_CONTROL_FLOW_GUARD_ACTIVE)
+    set(_control_flow_guard_module
+      "${THEROCK_SOURCE_DIR}/cmake/therock_control_flow_guard.cmake")
+    if(compiler_toolchain)
+      set(_control_flow_guard_compile_flags
+        "${THEROCK_CONTROL_FLOW_GUARD_CLANG_COMPILE_FLAGS}")
+    else()
+      set(_control_flow_guard_compile_flags
+        "${THEROCK_CONTROL_FLOW_GUARD_MSVC_COMPILE_FLAGS}")
+    endif()
+    string(APPEND _toolchain_contents "include(\"@_control_flow_guard_module@\")\n")
+    string(APPEND _toolchain_contents
+      "therock_toolchain_enable_control_flow_guard("
+      "\"${_control_flow_guard_compile_flags}\" \"${target_name}\")\n")
+  endif()
+
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)

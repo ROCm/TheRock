@@ -144,7 +144,9 @@ therock_declare_flag(
 therock_declare_flag(
   NAME WINDOWS_DRIVER_BUILD
   DEFAULT_VALUE OFF
-  DESCRIPTION "Windows: build for the AMD driver package (Control Flow Guard, driver comgr DLL name)"
+  # Control Flow Guard used to live here. It is now on by default for every
+  # Windows build; see THEROCK_ENABLE_CONTROL_FLOW_GUARD.
+  DESCRIPTION "Windows: build for the AMD driver package (driver comgr DLL name)"
   GLOBAL_PROPAGATE_FLAG
   CMAKE_VARS
     COMGR_DLL_NAME=amd_comgr_drivers.dll
