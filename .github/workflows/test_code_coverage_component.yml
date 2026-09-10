@@ -149,7 +149,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      #- name: Install Non-Instrumental TheRock Build with Replaced Instrumental Component
       - name: Install TheRock Code Coverage Build
         timeout-minutes: 15
         env:
@@ -164,6 +163,7 @@ jobs:
             --amdgpu-targets=${{ inputs.amdgpu_targets }} \
             --tests \
             --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
+            --replace-${{ fromJSON(inputs.component).job_name }} \
             ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status
@@ -260,21 +260,6 @@ jobs:
           path: ${{ github.workspace }}/coverage-report/profraw/*.profraw
           if-no-files-found: warn
           retention-days: 3
-
-      - name: Print test reproduction command
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
-        run: |
-          python ./build_tools/github_actions/reproduce_test_failure.py \
-            --run-id "${{ env.CODE_COVERAGE_RUN_ID }}" \
-            --repository "${{ github.repository }}" \
-            --amdgpu-family "${{ inputs.amdgpu_families }}" \
-            --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
-            --test-script "${{ fromJSON(inputs.component).test_script }}" \
-            --shard-index "${{ matrix.shard }}" \
-            --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
-            --test-type "${{ fromJSON(inputs.component).test_type }}" \
-            --print-cmd \
-            ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}

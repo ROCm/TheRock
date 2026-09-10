@@ -39,11 +39,29 @@ from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_famili
 # artifact and rocSOLVER in the 'solver' artifact (see BUILD_TOPOLOGY.toml).
 COMPONENT_MAP = {
     # component: (artifact_name, library_folder),
+    "rocfft": ("fft", "rocFFT"),
+    "hipfft": ("fft", "hipFFT"),
+    "hipblas": ("blas", "hipBLAS"),
     "rocblas": ("blas", "rocBLAS"),
-    "rocsolver": ("solver", "rocSOLVER"),
     "hipblaslt": ("blas", "hipBLASLt"),
-    "hipsolver": ("solver", "hipSOLVER"),
+    "hipdnn": ("hipdnn", "hipDNN"),
     "hiprand": ("rand", "hipRAND"),
+    "rocrand": ("rand", "rocRAND"),
+    "hipsolver": ("solver", "hipSOLVER"),
+    "rocsolver": ("solver", "rocSOLVER"),
+    "hipsparse": ("sparse", "hipSPARSE"),
+    "rocsparse": ("sparse", "rocSPARSE"),
+    "hipsparselt": ("sparse", "hipSPARSELt"),
+    "hiptensor": ("hiptensor", "hipTensor"),
+    "hipthreads": ("hipthreads", "hipthreads"),
+    "miopen": ("miopen", "MIOpen"),
+    "rocalution": ("rocalution", "rocALUTION"),
+    "hipcub": ("prim", "hipCUB"),
+    "rocprim": ("prim", "rocPRIM"),
+    "rocthrust": ("prim", "rocThrust"),
+    "rocwmma": ("rocwmma", "rocWMMA"),
+    "rpp": ("rpp", "rpp"),
+    "composablekernel": ("composable-kernel", "composable_kernel"),
 }
 
 
@@ -244,7 +262,7 @@ def main(argv):
 
     if not artifacts:
         log("No --replace-* components specified; nothing to download.")
-        return
+        return -1
 
     if not args.code_coverage_run_id:
         parser.error(
