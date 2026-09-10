@@ -189,7 +189,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
         )
         self.assertIn("test_runner.py", tensilelite["test_script"])
-        self.assertEqual(tensilelite["timeout_minutes"], 150)
+        self.assertEqual(tensilelite["timeout_minutes"], 30)
 
     def test_tensilelite_quick_omits_ctest_stage(self):
         """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""

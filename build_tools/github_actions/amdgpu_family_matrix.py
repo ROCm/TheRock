@@ -309,13 +309,11 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx125x": {
         "linux": {
-            # No hardware available for testing yet; build-only on every PR.
-            # gfx1250 targets + nightly/dispatch-only gate are pre-staged so
-            # enabling tests later is a one-line `test-runs-on` flip.
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds can be triggered manually via workflow_dispatch.
             "test-runs-on": "",
             "family": "gfx125X-dcgpu",
-            "fetch-gfx-targets": ["gfx1250"],
-            "nightly_check_only_for_family": True,
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },

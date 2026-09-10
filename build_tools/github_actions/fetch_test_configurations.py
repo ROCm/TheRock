@@ -1116,12 +1116,10 @@ def run():
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
                 )
-                # +135 min over the pytest-only baseline: the standard tier now
-                # runs GPU-integrated common GEMM tests (xdist) in the pytest
-                # stage plus the appended ctest stage (15 base -> 150 total).
-                # Re-measure once CI timing is observed and adjust.
+                # +15 min over the pytest-only baseline for the added ctest
+                # stage; re-measure once CI timing is observed and adjust.
                 job_config_data["timeout_minutes"] = (
-                    job_config_data["timeout_minutes"] + 135
+                    job_config_data["timeout_minutes"] + 15
                 )
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
