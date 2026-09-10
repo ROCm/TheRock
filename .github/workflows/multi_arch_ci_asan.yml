@@ -4,10 +4,9 @@
 name: Multi-Arch CI ASAN
 
 on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:

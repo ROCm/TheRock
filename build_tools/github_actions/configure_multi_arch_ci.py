@@ -1188,13 +1188,19 @@ def decide_jobs(
 
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
+    #
+    # ASAN test scheduling:
+    # - pull_request: skip tests (presubmit) - builds only
+    # - push: run tests (postsubmit) - host-asan build + tests
+    # - schedule/workflow_dispatch: run tests (nightly) - full asan
     if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+        # Skip ASAN tests only for presubmit (pull_request).
+        # Postsubmit (push), schedule, and workflow_dispatch all run tests.
+        if ci_inputs.is_pull_request:
             test_rocm = TestRocmDecision(
                 action=JobAction.SKIP,
                 test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
+                test_type_reason="ASAN tests skipped for presubmit",
             )
 
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
@@ -1290,12 +1296,12 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Run host-asan tests on push (postsubmit), schedule, and workflow_dispatch.
+            # Skip only for pull_request to avoid impacting presubmit.
+            if not (ci_inputs.is_push or ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
+                    f"  {family_name}: host-asan tests skipped for presubmit, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
@@ -1310,11 +1316,12 @@ def _expand_build_config_for_platform(
                     f"disabling tests"
                 )
         elif "asan" in build_variant:
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
+            # Full ASAN tests run only on nightly (schedule/workflow_dispatch).
+            # Postsubmit uses host-asan, which is handled above.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"  {family_name}: full ASAN tests only run on nightly, "
                     f"disabling tests"
                 )
             elif "test-runs-on-sandbox" in platform_info:
