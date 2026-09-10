@@ -80,6 +80,9 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
         log(proc.stdout.rstrip())
     except FileNotFoundError:
         log(f"{args[0]}: command not found")
+    except subprocess.CalledProcessError as e:
+        log(e.stdout.rstrip() if e.stdout else "(no output captured)")
+        raise
 
 
 def run_command_with_search(
