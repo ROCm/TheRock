@@ -9,9 +9,6 @@ on:
       generic_run_id:
         type: string
         default: ""
-      code_coverage_run_id:
-        type: string
-        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -100,7 +97,7 @@ jobs:
       QUARTZ_REPORTING_WORKFLOW: test_component.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
       VENV_DIR: ${{ github.workspace }}/.venv
-      CODE_COVERAGE_RUN_ID: "${{ inputs.code_coverage_run_id != '' && inputs.code_coverage_run_id || github.run_id }}"
+      CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
