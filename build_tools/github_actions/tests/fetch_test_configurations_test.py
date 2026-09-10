@@ -787,6 +787,77 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocdecode", names)
         self.assertIn("rocjpeg", names)
 
+    # -----------------------------------
+    # Test exclusion (EXCLUDE_TEST_OWNERS / EXCLUDE_PROJECTS_TO_TEST)
+    # -----------------------------------
+
+    def test_owner_map_values_are_matrix_keys(self):
+        """Every owned component must be a real test_matrix key."""
+        owned = set().union(
+            *fetch_test_configurations.TEST_COMPONENTS_BY_OWNER.values()
+        )
+        missing = owned - set(fetch_test_configurations.test_matrix)
+        self.assertEqual(missing, set(), f"stale owned names: {sorted(missing)}")
+
+    def test_rocm_systems_included_by_default_under_star(self):
+        """Without any exclusion, the full ('*') set still includes rocm-systems."""
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ.pop("EXCLUDE_TEST_OWNERS", None)
+        os.environ.pop("EXCLUDE_PROJECTS_TO_TEST", None)
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertIn("rccl", names)
+        self.assertIn("amdsmi", names)
+
+    def test_exclude_owner_drops_rocm_systems_tests(self):
+        """EXCLUDE_TEST_OWNERS=rocm-systems removes every rocm-systems component
+        from the '*' set while keeping library jobs (e.g. rocblas)."""
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["EXCLUDE_TEST_OWNERS"] = "rocm-systems"
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        systems = fetch_test_configurations.TEST_COMPONENTS_BY_OWNER["rocm-systems"]
+        self.assertEqual(names & systems, set(), f"leaked: {sorted(names & systems)}")
+        self.assertIn("rocblas", names)
+
+    def test_exclude_explicit_projects_list(self):
+        """EXCLUDE_PROJECTS_TO_TEST drops the named components directly."""
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["EXCLUDE_PROJECTS_TO_TEST"] = "rccl, amdsmi"
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertNotIn("rccl", names)
+        self.assertNotIn("amdsmi", names)
+        self.assertIn("rocshmem", names)
+
+    def test_exclude_owner_and_explicit_are_unioned(self):
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["EXCLUDE_TEST_OWNERS"] = "rocm-systems"
+        os.environ["EXCLUDE_PROJECTS_TO_TEST"] = "rocblas"
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        systems = fetch_test_configurations.TEST_COMPONENTS_BY_OWNER["rocm-systems"]
+        self.assertEqual(names & systems, set())
+        self.assertNotIn("rocblas", names)
+        self.assertIn("hipblas", names)
+
+    def test_exclude_owner_is_noop_for_library_target(self):
+        """A targeted library run never selects rocm-systems, so the exclusion is
+        a no-op there."""
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+        os.environ["EXCLUDE_TEST_OWNERS"] = "rocm-systems"
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertEqual(names, {"rocblas"})
+
+    def test_unknown_owner_is_ignored_with_warning(self):
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["EXCLUDE_TEST_OWNERS"] = "does-not-exist"
+        fetch_test_configurations.run()
+        names = {job["job_name"] for job in self._get_components()}
+        self.assertIn("rccl", names)
+        self.assertIn("rocblas", names)
+
 
 if __name__ == "__main__":
     unittest.main()
