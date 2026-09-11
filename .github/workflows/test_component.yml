@@ -162,10 +162,12 @@ jobs:
         # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
       - name: Enable sanitizer-specific test flags
         if: ${{ contains(inputs.artifact_group, 'asan') }}
+        env:
+          LD_LIBRARY_PATH: >-
+            ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}
         run: |
           python ./build_tools/github_actions/configure_asan_env.py \
             --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
-          echo "LD_LIBRARY_PATH=${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}" >> $GITHUB_ENV
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
