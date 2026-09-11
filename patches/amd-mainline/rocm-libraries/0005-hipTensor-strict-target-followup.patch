@@ -1,0 +1,38 @@
+From 881dec41841ad3cf520a40a204bb7b6fe3372673 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 15:15:19 -0500
+Subject: [PATCH] hipTensor: classify the gfx1250-strict device pass
+
+Clang defines __gfx1250_strict__ for the strict target. Classify it as GFX1250 instead of falling through to HIPTENSOR_ARCH_HOST. Keep default architectures unchanged.
+---
+ .../cmake/Functions/hiptensorSupportedArchitectures.cmake     | 1 +
+ .../hiptensor/library/include/hiptensor/internal/config.hpp   | 4 ++--
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hiptensor/cmake/Functions/hiptensorSupportedArchitectures.cmake b/projects/hiptensor/cmake/Functions/hiptensorSupportedArchitectures.cmake
+index 2ebb3b0f..0078da30 100644
+--- a/projects/hiptensor/cmake/Functions/hiptensorSupportedArchitectures.cmake
++++ b/projects/hiptensor/cmake/Functions/hiptensorSupportedArchitectures.cmake
+@@ -15,6 +15,7 @@ set(SUPPORTED_ARCHITECTURES
+     gfx1200
+     gfx1201
+     gfx1250
++    gfx1250-strict
+     gfx12-generic
+ )
+ 
+diff --git a/projects/hiptensor/library/include/hiptensor/internal/config.hpp b/projects/hiptensor/library/include/hiptensor/internal/config.hpp
+index c4f22f75..ef51c94f 100644
+--- a/projects/hiptensor/library/include/hiptensor/internal/config.hpp
++++ b/projects/hiptensor/library/include/hiptensor/internal/config.hpp
+@@ -74,8 +74,8 @@ namespace hiptensor
+ #define HIPTENSOR_ARCH_GFX1200 __gfx1200__
+ #elif defined(__gfx1201__)
+ #define HIPTENSOR_ARCH_GFX1201 __gfx1201__
+-#elif defined(__gfx1250__)
+-#define HIPTENSOR_ARCH_GFX1250 __gfx1250__
++#elif defined(__gfx1250__) || defined(__gfx1250_strict__)
++#define HIPTENSOR_ARCH_GFX1250 1
+ #else
+ #define HIPTENSOR_ARCH_HOST 1
+ #endif

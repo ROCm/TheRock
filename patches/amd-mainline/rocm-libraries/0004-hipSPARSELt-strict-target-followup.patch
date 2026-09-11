@@ -1,0 +1,24 @@
+From ae394f2e229c2ec5b8edb783c0c1a584b0494758 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 15:15:18 -0500
+Subject: [PATCH] hipSPARSELt: accept explicit gfx1250-strict targets
+
+Preserve default target lists and allow the strict companion through the exact-name validator. Device-library generation also needs the separate TensileLite strict-target work; this allowlist change alone does not establish support.
+---
+ .../cmake/hipsparselt_supported_architectures.cmake            | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake b/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake
+index abe3c1f1..af97f0df 100644
+--- a/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake
++++ b/projects/hipsparselt/cmake/hipsparselt_supported_architectures.cmake
+@@ -20,6 +20,9 @@ else()
+     )
+ endif()
+ 
++# Accept explicit strict compilation without changing the default all list.
++list(APPEND SUPPORTED_ARCHITECTURES "gfx1250-strict")
++
+ # .rst: Validates that all specified GPU targets are supported.
+ #
+ # ``hipsparselt_validate_gpu_targets(<targets>)``

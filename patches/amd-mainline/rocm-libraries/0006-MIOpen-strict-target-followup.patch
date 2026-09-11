@@ -1,0 +1,36 @@
+From 47b534dbe97a95cf62f72d3d4df7cc3fea3baa15 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 15:15:19 -0500
+Subject: [PATCH] MIOpen: retain strict targets in per-architecture builds
+
+Preserve gfx1250-strict in CK grouped-convolution filtering and the CDNA5 hipconv target intersection. Both previously admitted only the regular target. No runtime GPU identity or tuning database names are changed.
+---
+ projects/miopen/src/ck_impl/CMakeLists.txt                | 2 +-
+ projects/miopen/src/hipconv/src/arch/cdna5/CMakeLists.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/projects/miopen/src/ck_impl/CMakeLists.txt b/projects/miopen/src/ck_impl/CMakeLists.txt
+index 8b2ac19a..018696ca 100644
+--- a/projects/miopen/src/ck_impl/CMakeLists.txt
++++ b/projects/miopen/src/ck_impl/CMakeLists.txt
+@@ -31,7 +31,7 @@ set(_CK_SUPPORTED_ARCHS
+     gfx908 gfx90a gfx942 gfx950
+     gfx1100 gfx1101 gfx1102
+     gfx1150 gfx1151 gfx1152 gfx1153
+-    gfx1200 gfx1201 gfx1250
++    gfx1200 gfx1201 gfx1250 gfx1250-strict
+ )
+ 
+ # Filter GPU_TARGETS to only those with MIOpen CK grouped conv support.
+diff --git a/projects/miopen/src/hipconv/src/arch/cdna5/CMakeLists.txt b/projects/miopen/src/hipconv/src/arch/cdna5/CMakeLists.txt
+index 0bba8793..321352b3 100644
+--- a/projects/miopen/src/hipconv/src/arch/cdna5/CMakeLists.txt
++++ b/projects/miopen/src/hipconv/src/arch/cdna5/CMakeLists.txt
+@@ -1,6 +1,6 @@
+ include(GpuArch)
+ 
+-hipconv_add_arch_lib(cdna5 TARGETS gfx1250)
++hipconv_add_arch_lib(cdna5 TARGETS gfx1250 gfx1250-strict)
+ hipconv_autoshard(ARCH         cdna5
+                   NAMESPACE    direct
+                   KERNEL_CLASS Direct_F16_ConvKernel
