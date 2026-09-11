@@ -105,7 +105,7 @@ on:
       - synchronize
 
 run-name: >-
-  Multi-Arch CI [linux:azure-linux-scale-rocm-nosmt176core-tmp]
+  Multi-Arch CI [linux:azure-linux-scale-rocm-hb120rsv3-tmp]
 
 permissions:
   contents: read
@@ -163,8 +163,8 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
       force_resource_profiling: ${{ inputs.force_resource_profiling || '' }}
-      # Linux performance run: pin the CPU build onto the Azure nosmt176core test pool.
-      aws_linux_cpu_build_label: azure-linux-scale-rocm-nosmt176core-tmp
+      # Linux performance run: pin the CPU build onto the Azure hb120rsv3 test pool.
+      aws_linux_cpu_build_label: azure-linux-scale-rocm-hb120rsv3-tmp
       skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
