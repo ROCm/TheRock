@@ -17,6 +17,21 @@ on:
           - rocm-libraries
           - rocgdb
           - mesa-fork
+      pin_before:
+        description: >-
+          Manual pin-bump replay only (leave empty otherwise): a TheRock SHA
+          where `submodule`'s pinned commit differs from pin_after. Required
+          together with pin_after to replay the push-event ref/pin update for
+          `submodule` (e.g. rocm-libraries) without opening a new "Bump
+          <submodule>" submodule PR.
+        required: false
+        default: ''
+      pin_after:
+        description: >-
+          Manual pin-bump replay only (leave empty otherwise): the TheRock
+          SHA to pin `submodule`'s CI to. Required together with pin_before.
+        required: false
+        default: ''
   schedule:
     - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
   push:
@@ -73,11 +88,37 @@ jobs:
           pip install requests
 
       - name: Run scheduled bump automation
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: >-
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' &&
+           github.event.inputs.pin_before == '' &&
+           github.event.inputs.pin_after == '')
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
             --submodule "${{ github.event.inputs.submodule || 'all' }}" \
+            --systems_token "${{ steps.systems-token.outputs.token }}" \
+            --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+            --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
+            --mesa_token "${{ steps.systems-token.outputs.token }}"
+
+      # Manually replays the push-event ref/pin update for one submodule
+      # (operator-supplied pin_before/pin_after) without opening a new "Bump
+      # <submodule>" PR in TheRock. Useful for re-running a bump_automation.py
+      # fix against an already-landed submodule bump instead of waiting for
+      # the next real one.
+      - name: Run manual pin-only bump automation
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.pin_before != '' &&
+          github.event.inputs.pin_after != ''
+        run: |
+          python3 build_tools/github_actions/bump_automation.py \
+            --event_type "push" \
+            --before "${{ github.event.inputs.pin_before }}" \
+            --after "${{ github.event.inputs.pin_after }}" \
+            --only_submodule "${{ github.event.inputs.submodule }}" \
+            --skip_next_bump \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
             --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
