@@ -412,6 +412,43 @@ jobs:
       contents: read
       id-token: write
 
+  # ==========================================================================
+  # GATE: libraries_baseline_ready
+  # rocm-libraries reuses exactly these stages from this run via
+  # `baseline_run_id` when a submodule bump PR is opened (see
+  # ROCm/rocm-libraries' therock-multi-arch-ci.yml `prebuilt_stages` input;
+  # math-libs and compiler-runtime are rebuilt by rocm-libraries itself and
+  # deliberately excluded here). TheRock's bump automation
+  # (build_tools/github_actions/bump_automation.py) checks this job's
+  # conclusion instead of the whole run's, so an unrelated math-libs failure
+  # elsewhere in the matrix does not block a baseline that is otherwise fine
+  # to reuse. If rocm-libraries' reused-stage list changes, update `needs:`
+  # below (and the matching job in multi_arch_build_windows.yml) to match.
+  # ==========================================================================
+  libraries_baseline_ready:
+    name: "Libraries Baseline Ready"
+    if: always()
+    needs:
+      [
+        runtime-tests,
+        comm-libs,
+        storage-libs,
+        debug-tools,
+        dctools-core,
+        profiler-apps,
+        cv-libs,
+        media-libs,
+        wsl-rocdxg,
+      ]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require reused stages to have succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "One or more stages rocm-libraries reuses via baseline_run_id did not succeed:"
+          echo '${{ toJSON(needs) }}'
+          exit 1
+
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]

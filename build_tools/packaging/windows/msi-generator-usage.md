@@ -87,19 +87,19 @@ The default install path is assembled as:
 
 For example: `C:\Program Files\AMD\ROCm\core-7.15\`
 
-| Flag                      | Default              | Description                                                                                                         |
-| ------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `--install-root ROOT`     | `ProgramFilesFolder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path (e.g. `C:\AMD`). |
-| `--product-dir NAME`      | `AMD`                | First subdirectory under `--install-root`.                                                                          |
-| `--version-dir NAME`      | `ROCm`               | Second subdirectory under `--product-dir`.                                                                          |
-| `--package-version X.Y.Z` | From `version.json`  | MSI version string. Auto-detected from the repo's `version.json`.                                                   |
+| Flag                      | Default                | Description                                                                                                         |
+| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--install-root ROOT`     | `ProgramFiles64Folder` | Root of the install tree. Accepts a Windows Installer standard-directory token or an absolute path (e.g. `C:\AMD`). |
+| `--product-dir NAME`      | `AMD`                  | First subdirectory under `--install-root`.                                                                          |
+| `--version-dir NAME`      | `ROCm`                 | Second subdirectory under `--product-dir`.                                                                          |
+| `--package-version X.Y.Z` | From `version.json`    | MSI version string. Auto-detected from the repo's `version.json`.                                                   |
 
 **Standard-directory tokens** resolve at install time on the target machine:
 
-| Token                            | Resolves to                              |
-| -------------------------------- | ---------------------------------------- |
-| `ProgramFilesFolder` *(default)* | `C:\Program Files\`                      |
-| `ProgramFiles64Folder`           | `C:\Program Files\` (always 64-bit view) |
+| Token                              | Resolves to                                          |
+| ---------------------------------- | ---------------------------------------------------- |
+| `ProgramFiles64Folder` *(default)* | `C:\Program Files\` (64-bit; correct for x64 ROCm)   |
+| `ProgramFilesFolder`               | `C:\Program Files (x86)\` (32-bit; not for x64 ROCm) |
 
 **Absolute paths** (e.g. `C:\AMD`) bake a fixed default into the MSI.
 
