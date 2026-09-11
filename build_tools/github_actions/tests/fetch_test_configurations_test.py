@@ -108,6 +108,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             self.assertNotIn("/dev/kfd", job["container_options"])
             self.assertNotIn("/dev/dri", job["container_options"])
 
+    def test_host_asan_matrix_ignores_regular_test_labels(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["TEST_LABELS"] = '["test:rocrand", "test:hiprand", "test:rocsparse"]'
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(
+            {job["job_name"] for job in components},
+            {
+                "rocroller",
+                "tensilelite",
+                "origami",
+                "hipdnn",
+                "hipkernelprovider",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "stinkytofu",
+            },
+        )
+
     def test_host_asan_phase1_intersects_changed_projects(self):
         os.environ["HOST_ONLY_TESTS"] = "true"
         os.environ["BUILD_VARIANT"] = "host-asan"
