@@ -159,17 +159,27 @@ jobs:
           python ./build_tools/health_status.py
 
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
       - name: Enable sanitizer-specific test flags
         if: ${{ contains(inputs.artifact_group, 'asan') }}
         run: |
-          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
-          echo "HSA_XNACK=1" >> $GITHUB_ENV
-          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+          python ./build_tools/github_actions/configure_asan_env.py \
+            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
           echo "LD_LIBRARY_PATH=${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}" >> $GITHUB_ENV
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
+        env:
+          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          # The probes load instrumented ROCm libraries, so LeakSanitizer reports
+          # whatever those leak at exit and the probe returns non-zero. This step
+          # answers "is the driver and GPU functional", not "is the runtime
+          # leak-free". Extends rather than replaces, to keep the options set by
+          # configure_asan_env.py; scoped here so component tests still run with
+          # leak detection enabled.
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
