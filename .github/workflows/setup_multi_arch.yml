@@ -282,7 +282,8 @@ jobs:
         if: ${{ inputs.external_repo != '' }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json='${{ inputs.external_repo }}' \
+            --changed-projects='${{ inputs.changed_projects }}'
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

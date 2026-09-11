@@ -125,12 +125,10 @@ jobs:
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
-        timeout-minutes: 10
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: ./.github/actions/checkout-external-repo
         with:
-          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
-          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
-          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+          external_repo_config: ${{ inputs.external_repo_config }}
+          stage_name: ${{ env.STAGE_NAME }}
 
       - name: Install python deps
         run: pip install -r requirements.txt
