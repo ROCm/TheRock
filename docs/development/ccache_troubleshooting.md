@@ -42,6 +42,27 @@ remote cache, accessed via ccache's `remote_storage` option with
 Both servers are on the Kubernetes cluster, accessible without
 authentication from any pod in the cluster.
 
+The JAX wheel build does not use ccache. It compiles jaxlib, the ROCm plugin
+and the XLA ROCm backend with Bazel, and reads Bazel's own remote cache on the
+EngFlow cluster that ROCm's JAX CI already uses. `configure_jax_bazel_cache.py`
+runs inside the manylinux build container, completes an mTLS handshake with the
+cache, and prints no Bazel options at all when the credentials are absent, the
+release type may not read shared entries, or the endpoint does not answer, so a
+cache that cannot help leaves the build command unchanged.
+
+The client credentials come from the `RBE_CI_CERT` and `RBE_CI_KEY` secrets
+(PEM or base64-encoded PEM). The workflow decodes them under `RUNNER_TEMP` and
+mounts that directory read only at `/data`, the path `build/rocm/rocm.bazelrc`
+expects. Fork pull requests receive no secrets and therefore no cache. Set the
+repository variable `JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a
+different cache.
+
+Only the cache is shared: the build runs `--config=rocm_release_wheel` rather
+than `rocm_rbe`, so it never picks up that config's `--remote_executor` and
+every action still runs on the runner. Pull requests read the cache without
+writing to it, so no proposed change can place an entry in front of a later
+build; pushes fill it.
+
 ### Namespace version
 
 `CCACHE_NAMESPACE_VERSION` in `setup_ccache.py` controls the cache

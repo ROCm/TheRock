@@ -212,16 +212,70 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version "${{ inputs.rocm_version }}"
 
+      # Fork pull requests receive no secrets. That is not an error: the build
+      # step mounts nothing and Bazel runs without a remote cache.
+      - name: Write Bazel remote cache credentials
+        id: cache_credentials
+        env:
+          RBE_CI_CERT: ${{ secrets.RBE_CI_CERT }}
+          RBE_CI_KEY: ${{ secrets.RBE_CI_KEY }}
+        run: |
+          if [[ -z "${RBE_CI_CERT}" || -z "${RBE_CI_KEY}" ]]; then
+            echo "No cache credentials available; building without a remote cache."
+            exit 0
+          fi
+
+          # Written outside the workspace: that tree is published as artifacts.
+          credentials_dir="${RUNNER_TEMP}/bazel-cache-credentials"
+          umask 077
+          mkdir -p "${credentials_dir}"
+
+          # The secrets may hold PEM or base64-encoded PEM. Try decoding and
+          # keep whichever form yields a PEM block, rather than guessing from
+          # the leading characters.
+          write_credential() {
+            if ! printf '%s' "$1" | base64 -d > "$2" 2>/dev/null ||
+               ! grep -q -- "-----BEGIN" "$2"; then
+              printf '%s\n' "$1" > "$2"
+            fi
+            grep -q -- "-----BEGIN" "$2"
+          }
+
+          # Unusable credentials leave the mount absent so the build runs
+          # without a cache. Failing here would fail the wheel build itself.
+          if write_credential "${RBE_CI_CERT}" "${credentials_dir}/ci-cert.crt" &&
+             write_credential "${RBE_CI_KEY}" "${credentials_dir}/ci-cert.key"; then
+            echo "credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Cache credentials are not usable PEM; building without a remote cache."
+            rm -rf "${credentials_dir}"
+          fi
+
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          # Pull requests read the cache without writing to it, so no proposed
+          # change can put an entry in front of a later build. Pushes fill it.
+          JAX_BAZEL_CACHE_ALLOW_UPLOAD: ${{ github.event_name != 'pull_request' }}
+          JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
+          CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
+          # rocm.bazelrc reads the client credentials from /data.
+          credentials_mount=""
+          if [[ -n "${CACHE_CREDENTIALS_DIR}" ]]; then
+            credentials_mount="--volume ${CACHE_CREDENTIALS_DIR}:/data:ro"
+          fi
+
           docker run --rm \
             --user root \
+            ${credentials_mount} \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env RELEASE_TYPE="${RELEASE_TYPE}" \
+            --env JAX_BAZEL_CACHE_ALLOW_UPLOAD="${JAX_BAZEL_CACHE_ALLOW_UPLOAD}" \
+            --env JAX_BAZEL_REMOTE_CACHE_URL="${JAX_BAZEL_REMOTE_CACHE_URL}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
@@ -229,6 +283,7 @@ jobs:
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
               ROCM_ROOT="$(rocm-sdk path --root)"
+              bazel_cache_options="$(python /workspace/build_tools/github_actions/configure_jax_bazel_cache.py)"
               python build/build.py build \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
@@ -238,6 +293,7 @@ jobs:
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
+                ${bazel_cache_options} \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"
