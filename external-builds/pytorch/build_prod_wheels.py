@@ -160,6 +160,8 @@ import tempfile
 import textwrap
 import urllib.request
 
+from pytorch_torch_repo import apply_strict_target_patches
+
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
@@ -1091,6 +1093,8 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
+    apply_strict_target_patches(pytorch_dir, env.get("PYTORCH_ROCM_ARCH", ""))
+
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
         pytorch_dir, args.version_suffix, args.release_type

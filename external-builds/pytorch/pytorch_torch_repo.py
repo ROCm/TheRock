@@ -28,6 +28,7 @@ The checkout process combines the following activities:
 import argparse
 from pathlib import Path
 import sys
+import subprocess
 
 import repo_management
 
@@ -36,6 +37,45 @@ THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
 DEFAULT_HASHTAG = "nightly"
+
+
+def apply_strict_target_patches(checkout_dir: Path, targets: str):
+    if "gfx1250-strict" not in targets.replace(",", ";").split(";"):
+        return
+    # PyTorch's private CK source excludes gfx1250. Its compiler variant must
+    # share that exclusion, while global PyTorch compilation keeps both targets.
+    patch_dir = THIS_DIR / "patches" / "pytorch"
+    patches = [
+        patch_dir / "gfx1250-strict-ck.patch",
+        patch_dir / "gfx1250-strict-ck-2.12.patch",
+    ]
+    for patch in patches:
+        command = ["git", "apply", "--check", str(patch)]
+        if (
+            subprocess.run(
+                command + ["--reverse"],
+                cwd=checkout_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            ).returncode
+            == 0
+        ):
+            return
+        if (
+            subprocess.run(
+                command,
+                cwd=checkout_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            ).returncode
+            == 0
+        ):
+            subprocess.run(["git", "apply", str(patch)], cwd=checkout_dir, check=True)
+            print(f"Applied strict target CK exclusion: {patch.name}")
+            return
+    raise RuntimeError(
+        "PyTorch source does not match the gfx1250-strict CK exclusion patches"
+    )
 
 
 def main(cl_args: list[str]):

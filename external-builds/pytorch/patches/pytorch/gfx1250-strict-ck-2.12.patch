@@ -1,0 +1,30 @@
+--- a/cmake/Dependencies.cmake
++++ b/cmake/Dependencies.cmake
+@@ -1025,6 +1025,16 @@
+     if(HIPBLASLT_VEC_EXT)
+       list(APPEND HIP_CXX_FLAGS -DHIPBLASLT_VEC_EXT)
+     endif()
++    # The strict target shares gfx1250's existing CK GEMM exclusion.
++    if(USE_ROCM_CK_GEMM AND "gfx1250-strict" IN_LIST PYTORCH_ROCM_ARCH)
++      set(_ck_gemm_supported_arches ${PYTORCH_ROCM_ARCH})
++      list(REMOVE_ITEM _ck_gemm_supported_arches "gfx1250" "gfx1250-strict")
++      if(_ck_gemm_supported_arches STREQUAL "")
++        message(STATUS "USE_ROCM_CK_GEMM disabled: PYTORCH_ROCM_ARCH (${PYTORCH_ROCM_ARCH}) has no arch supported by composable_kernel")
++        caffe2_update_option(USE_ROCM_CK_GEMM OFF)
++      endif()
++      unset(_ck_gemm_supported_arches)
++    endif()
+     if(USE_ROCM_CK_GEMM)
+       list(APPEND HIP_CXX_FLAGS -DUSE_ROCM_CK_GEMM)
+     endif()
+--- a/aten/src/ATen/CMakeLists.txt
++++ b/aten/src/ATen/CMakeLists.txt
+@@ -695,7 +695,7 @@
+     exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
+       ${native_hip_bgemm} ${native_hip_ck})
+     set(_ck_gemm_hip_arches ${PYTORCH_ROCM_ARCH})
+-    list(REMOVE_ITEM _ck_gemm_hip_arches "gfx1250")
++    list(REMOVE_ITEM _ck_gemm_hip_arches "gfx1250" "gfx1250-strict")
+     set_source_files_properties(${native_hip_bgemm} ${native_hip_ck} PROPERTIES LANGUAGE HIP)
+     add_library(ck_gemm STATIC ${native_hip_bgemm} ${native_hip_ck})
+     set_target_properties(ck_gemm PROPERTIES
