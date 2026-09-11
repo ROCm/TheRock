@@ -78,6 +78,62 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_host_asan_phase1_matrix_is_explicit_and_cpu_only(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+        sanity = json.loads(self.gha_output["sanity_component"])
+
+        self.assertEqual(
+            {job["job_name"] for job in components},
+            {"rocroller", "tensilelite", "origami", "hipdnn", "hipkernelprovider"},
+        )
+        for job in [sanity, *components]:
+            self.assertTrue(job["linux_cpu_runner"])
+            self.assertEqual(job["test_type"], "host-asan")
+            self.assertEqual(job["total_shards"], 1)
+            self.assertEqual(job["test_runner"], "host-only")
+            self.assertNotIn("/dev/kfd", job["container_options"])
+            self.assertNotIn("/dev/dri", job["container_options"])
+
+    def test_host_asan_phase1_intersects_changed_projects(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocroller,rocblas"
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual([job["job_name"] for job in components], ["rocroller"])
+
+    def test_host_asan_tensilelite_does_not_append_gpu_ctest(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+
+        fetch_test_configurations.run()
+        tensilelite = self._get_components()[0]
+
+        self.assertIn("detect_leaks=0", tensilelite["test_script"])
+        self.assertNotIn("TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"])
+
+    def test_host_only_rejects_windows(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        with self.assertRaisesRegex(ValueError, "only on Linux"):
+            fetch_test_configurations.run()
+
+    def test_host_only_requires_host_asan_variant(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        with self.assertRaisesRegex(ValueError, "requires a host-asan"):
+            fetch_test_configurations.run()
+
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
 

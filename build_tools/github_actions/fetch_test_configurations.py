@@ -928,6 +928,53 @@ test_matrix = {
     },
 }
 
+# Phase 1 CPU-only host-ASAN admission list. This is deliberately separate from
+# the regular depth tiers: a normal component command may include GPU coverage,
+# and a new regular test must never be admitted here implicitly.
+HOST_ASAN_PHASE1_COMPONENTS = {
+    "sanity": {
+        "test_script": f"python {_get_script_path('test_host_asan_sanity.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocroller": {"timeout_minutes": 15},
+    "tensilelite": {
+        # Scope the known Python/PyYAML shutdown leak workaround to this process;
+        # native Phase 1 suites retain LeakSanitizer coverage.
+        "test_script": (
+            'ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" '
+            f"python {_get_script_path('pytest_runner.py')}"
+        ),
+        "timeout_minutes": 15,
+    },
+    "origami": {
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipdnn": {"timeout_minutes": 30},
+    "hipkernelprovider": {"timeout_minutes": 10},
+}
+
+
+def _host_asan_phase1_matrix() -> dict:
+    """Return the explicit Phase 1 host-ASAN matrix.
+
+    Each entry inherits artifact-fetching and wrapper details from the regular
+    matrix, then receives a host-only command/timeout overlay. All entries run
+    once on Linux CPU infrastructure with no GPU container devices.
+    """
+    result = {}
+    for key, overrides in HOST_ASAN_PHASE1_COMPONENTS.items():
+        entry = deepcopy(test_matrix[key])
+        entry.update(overrides)
+        entry["platform"] = ["linux"]
+        entry["linux_cpu_runner"] = True
+        entry["total_shards_dict"] = {"linux": 1}
+        entry.pop("multi_gpu", None)
+        entry.pop("include_family", None)
+        entry.pop("exclude_family", None)
+        result[key] = entry
+    return result
+
 
 def run():
     parser = argparse.ArgumentParser()
@@ -945,6 +992,12 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    host_only_tests = str2bool(os.getenv("HOST_ONLY_TESTS", "false"))
+
+    if host_only_tests and platform != "linux":
+        raise ValueError("HOST_ONLY_TESTS is supported only on Linux")
+    if host_only_tests and not build_variant.startswith("host-asan"):
+        raise ValueError("HOST_ONLY_TESTS requires a host-asan build variant")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -976,8 +1029,16 @@ def run():
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
-    selected_matrix: dict = deepcopy(test_matrix)
-    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
+    if host_only_tests:
+        selected_matrix = _host_asan_phase1_matrix()
+        test_type = "host-asan"
+        run_extended_tests = False
+        logging.info(
+            f"Using Phase 1 host-ASAN matrix ({len(selected_matrix)} test(s))"
+        )
+    else:
+        selected_matrix = deepcopy(test_matrix)
+        logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
     if run_extended_tests and functional_matrix:
         logging.info(
@@ -1111,7 +1172,7 @@ def run():
             # and ctest stages have to be chained here instead. Fold both
             # into test_runner.py's own dual-mode support and drop this
             # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
+            if key == "tensilelite" and test_type not in ("quick", "host-asan"):
                 job_config_data["test_script"] = (
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
@@ -1177,7 +1238,11 @@ def run():
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
-        if "multi_gpu_runner" in component:
+        if host_only_tests:
+            # Non-empty sentinel for the reusable workflow's sanity prerequisite.
+            # test_artifacts.yml routes the job to its build-runner input.
+            component["test_runner"] = "host-only"
+        elif "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels
             if test_runs_on_multi_gpu_labels:
                 component["multi_gpu_runner"] = select_weighted_label(
