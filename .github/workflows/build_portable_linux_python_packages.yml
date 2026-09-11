@@ -181,6 +181,22 @@ jobs:
             --linux-amdgpu-families="${{ inputs.linux_amdgpu_families }}" \
             --windows-amdgpu-families="${{ inputs.windows_amdgpu_families }}"
 
+      - name: Collect rocshmem4py wheel
+        run: |
+          shopt -s nullglob
+          artifact_dir="${{ env.ARTIFACTS_DIR }}/rocshmem4py_lib_generic"
+          if [ ! -d "$artifact_dir" ]; then
+            echo "Expected rocshmem4py artifact was not fetched: $artifact_dir"
+            exit 1
+          fi
+          wheels=("$artifact_dir"/comm-libs/rocshmem4py/stage/share/rocshmem4py/wheels/*.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
+            echo "rocshmem4py artifact contains no wheels"
+            exit 1
+          fi
+          mkdir -p "${{ env.PACKAGES_DIR }}/dist"
+          cp -v "${wheels[@]}" "${{ env.PACKAGES_DIR }}/dist/"
+
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
