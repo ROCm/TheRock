@@ -1950,10 +1950,14 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
+        # small_build_runs_on and medium_build_runs_on are Linux-only runner
+        # pool labels; Windows CI has no equivalent small/medium pools.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
+            "small_build_runs_on",
+            "medium_build_runs_on",
         }
         self.assertEqual(
             yaml_fields,
