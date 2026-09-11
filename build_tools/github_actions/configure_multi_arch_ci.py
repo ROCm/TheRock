@@ -67,6 +67,7 @@ from configure_ci_path_filters import (
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    is_external_repo_ci_required,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -766,18 +767,60 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+    - ASAN builds on PRs without ci:asan or ci:host-asan labels
 
-    For external repo builds, path filtering is skipped since the external repo
-    name is used for stage reuse analysis, not for CI skip decisions.
+    For external repo builds, path filtering uses changed_files and
+    skip_ci_patterns from the external_repo JSON (both must be provided).
+    Schedule and workflow_dispatch runs always run CI.
     """
+    # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # 2. Path filter skipping - check before ASAN label logic so we don't print
+    #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
+
+    # 2a. External repo builds: evaluate changed_files from the external repo JSON.
+    # This allows external repos to skip TheRock CI when only docs/metadata
+    # files are changed.
+    if ci_inputs.external_repo:
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(
+                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
+            ) from e
+
+        # Check changed_files and skip_ci_patterns from external repo if provided.
+        # External repos provide their own skip patterns, allowing them to define
+        # skippable paths without updating TheRock.
+        changed_files = external_repo.get("changed_files")
+        skip_ci_patterns = external_repo.get("skip_ci_patterns")
+        if changed_files is not None and skip_ci_patterns is not None:
+            repo_name = external_repo.get("repository", "").split("/")[-1]
+            if not is_external_repo_ci_required(
+                changed_files, skip_ci_patterns, repo_name
+            ):
+                print("  External repo build: only skippable files changed")
+                return True
+        # If we reach here, either:
+        # - changed_files/skip_ci_patterns not provided: continue to ASAN checks
+        # - CI is required: continue to ASAN checks
+        # Stage reuse will optimize builds regardless.
+
+    # 2b. Local repo: If we have a list of changed files (push/pull_request events),
+    # check if CI should run for that set of changed files.
+    if not ci_inputs.external_repo and git_context.changed_files is not None:
+        print(
+            f"  Checking {len(git_context.changed_files)} changed file(s) "
+            f"against path filters..."
+        )
+        if not is_ci_run_required(git_context.changed_files):
+            print("  Skipping: no CI-relevant files changed")
+            return True
+
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -793,28 +836,6 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
-
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
-    if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
-        return False
-
-    # If we have a list of changed files (push/pull_request events), check if
-    # CI should run for that set of changed files. For example: if only .md
-    # files are changed, skip CI.
-    if git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
-        if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
-            return True
-        else:
-            print("  CI-relevant files changed, running CI")
 
     return False
 
