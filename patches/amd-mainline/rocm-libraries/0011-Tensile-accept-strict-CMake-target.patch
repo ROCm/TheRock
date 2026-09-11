@@ -1,0 +1,26 @@
+From 584f089a22a4417b3f330b974cf208262619ab80 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 17:19:37 -0500
+Subject: [PATCH] Tensile: accept gfx1250-strict in CMake target validation
+
+---
+ .../Tensile/Source/cmake/TensileSupportedArchitectures.cmake   | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake b/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
+index 56e3057d..073eaf60 100644
+--- a/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
++++ b/shared/tensile/Tensile/Source/cmake/TensileSupportedArchitectures.cmake
+@@ -58,7 +58,8 @@ if(NOT BUILD_ADDRESS_SANITIZER)
+         "gfx1153"
+         "gfx1200"
+         "gfx1201"
+-        "gfx1250")
++        "gfx1250"
++        "gfx1250-strict")
+ 
+     set(SUPPORTED_ARCHITECTURES ${BASE_ARCHITECTURES})
+     list(APPEND SUPPORTED_ARCHITECTURES
+-- 
+2.43.0
+
