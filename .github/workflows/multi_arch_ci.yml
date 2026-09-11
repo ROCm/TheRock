@@ -88,6 +88,12 @@ on:
         type: string
         default: ""
         description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      build_flags:
+        type: string
+        default: ""
+        description: >-
+          Comma-separated FLAGS.cmake overrides as NAME=VALUE. Applied as
+          -DTHEROCK_FLAG_<NAME>=<VALUE>. See docs/development/flags.md.
   pull_request:
     types:
       - labeled
@@ -129,6 +135,7 @@ jobs:
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_stages: ${{ inputs.build_stages || '' }}
+      build_flags: ${{ inputs.build_flags || '' }}
     secrets: inherit
 
   linux_build_and_test:

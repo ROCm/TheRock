@@ -70,6 +70,12 @@ on:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
         type: string
         default: ""
+      build_flags:
+        description: >-
+          Comma-separated FLAGS.cmake overrides as NAME=VALUE. Applied as
+          -DTHEROCK_FLAG_<NAME>=<VALUE>. See docs/development/flags.md.
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -216,6 +222,13 @@ jobs:
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
         run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Resolve build flag CMake args
+        id: build_flags
+        env:
+          BUILD_FLAGS: ${{ inputs.build_flags }}
+        run: |
+          python build_tools/github_actions/therock_build_flags.py --gha-output
+
       - name: Configure
         run: |
           cmake -B "${BUILD_DIR}" -S . -GNinja \
@@ -225,7 +238,8 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            ${{ steps.build_flags.outputs.cmake_args }}
 
       - name: Build stage
         run: |

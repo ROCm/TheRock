@@ -50,6 +50,12 @@ Actions workflow page:
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
 
+## Build flags
+
+The `build_flags` dispatch input sets non-default values for flags declared in
+[`FLAGS.cmake`](../../FLAGS.cmake), without committing to the branch. See
+[`flags.md`](flags.md#selecting-flags-in-ci).
+
 ## Prebuilt stages
 
 > [!NOTE]

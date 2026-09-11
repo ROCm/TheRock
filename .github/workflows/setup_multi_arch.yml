@@ -48,6 +48,12 @@ on:
           default) builds every stage.
         type: string
         default: ""
+      build_flags:
+        description: >-
+          Comma-separated FLAGS.cmake overrides as NAME=VALUE. Applied as
+          -DTHEROCK_FLAG_<NAME>=<VALUE>. See docs/development/flags.md.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
         type: string
@@ -234,6 +240,7 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
+          BUILD_FLAGS: ${{ inputs.build_flags }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
           BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}

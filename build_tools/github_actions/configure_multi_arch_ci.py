@@ -77,6 +77,12 @@ from github_actions_api import (
     gha_set_output,
 )
 from stage_impact import analyze_artifact_impact_from_projects
+from therock_build_flags import (
+    BuildFlagError,
+    build_flags_suffix,
+    format_build_flags,
+    parse_build_flags,
+)
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -248,6 +254,9 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Validated FLAGS.cmake overrides for this run, e.g. {"HIPDNN_ENABLE_SDPA": "ON"}.
+    build_flags: dict[str, str] = field(default_factory=dict)
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -416,6 +425,8 @@ class CIInputs:
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            # Validated here so a bad flag fails the run before any build starts.
+            build_flags=parse_build_flags(os.environ.get("BUILD_FLAGS", "")),
         )
         inputs.validate()
         return inputs
@@ -700,6 +711,9 @@ class BuildConfig:
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    # FLAGS.cmake overrides as a "NAME=VALUE,..." string. Build workflows turn
+    # these into -DTHEROCK_FLAG_<NAME>=<VALUE> options.
+    build_flags: str = ""
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -1458,12 +1472,23 @@ def _expand_build_config_for_platform(
         jax_build_matrix = []
         test_python_packages_matrix = []
 
+    # Requested flags are part of the run's identity, so a flag build does not
+    # reuse or overwrite default-build artifacts. The suffix namespaces artifacts
+    # and uploads; the label shows up in job names.
+    build_flags = format_build_flags(ci_inputs.build_flags)
+    flags_suffix = build_flags_suffix(ci_inputs.build_flags)
+    identity_suffix = "-".join(p for p in (suffix, flags_suffix) if p)
+    build_variant_label = variant_config["build_variant_label"]
+    if build_flags:
+        build_variant_label = f"{build_variant_label} [flags: {build_flags}]"
+
     return BuildConfig(
         per_family_info=per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
-        artifact_group=f"multi-arch-{suffix or 'release'}",
-        build_variant_label=variant_config["build_variant_label"],
-        build_variant_suffix=suffix,
+        artifact_group=f"multi-arch-{identity_suffix or 'release'}",
+        build_variant_label=build_variant_label,
+        build_variant_suffix=identity_suffix,
+        build_flags=build_flags,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=build_native_linux,
         build_python_packages=build_python_packages,

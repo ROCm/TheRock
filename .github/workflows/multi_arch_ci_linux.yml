@@ -15,7 +15,7 @@ on:
           build_variant_suffix, build_pytorch, build_jax,
           build_native_linux, test_python_packages_matrix,
           pytorch_build_matrix, jax_build_matrix,
-          prebuilt_stages, baseline_run_id.
+          prebuilt_stages, baseline_run_id, build_flags.
       test_labels:
         type: string
       rocm_package_version:
@@ -107,6 +107,7 @@ jobs:
       rebuild_artifacts: ${{ fromJSON(inputs.build_config).rebuild_artifacts }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      build_flags: ${{ fromJSON(inputs.build_config).build_flags }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       external_repo_config: ${{ inputs.external_repo_config }}
