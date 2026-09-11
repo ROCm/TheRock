@@ -38,6 +38,10 @@ _KFD_DEVICE = "/dev/kfd"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
+# Sanitizer test jobs are only ever allowed on the dedicated ASAN sandbox
+# runner pools (see check_sanitizer_runner_policy).
+_ASAN_SANDBOX_MARKER = "asan-sandbox-rocm"
+
 
 def _get_kfd_version() -> Tuple[int, int]:
     # fcntl is a Unix-only stdlib module and is only needed for this Linux
@@ -122,12 +126,72 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+def check_sanitizer_runner_policy() -> int:
+    """Enforce that sanitizer builds only ever run on the ASAN sandbox pools.
+
+    Sanitizer test jobs must run on a ``*-asan-sandbox-rocm`` runner. They leak,
+    crash and hang by design, so they are isolated from the shared ``ossci``
+    pools that serve the rest of CI.
+
+    There are at least two independent ways a sanitizer job can end up on a
+    non-sandbox runner, which is why this check lives here — on the runner
+    itself — rather than in the matrix-configuration scripts:
+
+    1. ``fetch_test_configurations.py`` selects ``test-runs-on-sandbox`` only
+       when that key is present; otherwise it falls through to
+       ``test-runs-on``, which is an ``ossci`` label for every family that
+       currently has ASAN variants.
+    2. ``test_artifacts.yml`` honours a caller-supplied ``test_runs_on`` input
+       over the computed matrix value, so a wrong label passed by an automated
+       dispatch (or typed by hand) bypasses the matrix logic entirely.
+
+    Placing the assertion in the job means it fires regardless of which path
+    produced the label. There is deliberately no override env var: the
+    isolation requirement is absolute.
+    """
+    build_variant = os.getenv("BUILD_VARIANT", "release")
+    if "asan" not in build_variant and "tsan" not in build_variant:
+        return 0
+
+    # THEROCK_TEST_RUNNER_LABEL is the label the workflow asked for;
+    # RUNNER_NAME is what GitHub actually assigned (label + scale-set suffix).
+    runner = os.getenv("THEROCK_TEST_RUNNER_LABEL") or os.getenv("RUNNER_NAME", "")
+    if not runner:
+        # Don't hard-fail on a missing env var — that would break local runs
+        # and any context where the runner identity isn't exposed.
+        log(
+            f"warning: build variant '{build_variant}' is a sanitizer build but "
+            "neither THEROCK_TEST_RUNNER_LABEL nor RUNNER_NAME is set; "
+            "cannot verify sandbox-pool policy"
+        )
+        return 0
+
+    if _ASAN_SANDBOX_MARKER not in runner:
+        log(
+            f"error: sanitizer build variant '{build_variant}' is running on "
+            f"'{runner}', which is not an ASAN sandbox runner.\n"
+            f"       Sanitizer tests must run on a '*-{_ASAN_SANDBOX_MARKER}' "
+            "pool and must never be scheduled onto shared 'ossci' pools.\n"
+            "       Check 'test-runs-on-sandbox' for this family in "
+            "build_tools/github_actions/amdgpu_family_matrix.py, and the "
+            "'test_runs_on' input passed to test_artifacts.yml."
+        )
+        return 1
+
+    log(f"Sanitizer build '{build_variant}' on sandbox runner '{runner}': OK")
+    return 0
+
+
 def run_sanity(os_name: str) -> int:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
 
     log("=== Sanity check: driver / GPU info ===")
+
+    log("\n=== Sanitizer runner-pool policy ===")
+    if check_sanitizer_runner_policy() != 0:
+        return 1
 
     if os_name.lower() == "windows":
         # Windows: only hipInfo.exe
