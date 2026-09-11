@@ -1,0 +1,173 @@
+From 36d51d73585444f557fc243c6f9bc7913efb72ce Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 16:42:40 -0500
+Subject: [PATCH] Tensile: preserve gfx1250-strict targets and catalogs
+
+---
+ shared/tensile/Tensile/Common.py              | 23 ++++++++--
+ shared/tensile/Tensile/Hardware.py            |  4 +-
+ .../tensile/Tensile/TensileCreateLibrary.py   |  6 ++-
+ .../tensile/Tensile/cmake/TensileConfig.cmake | 42 +++++++++++++++++++
+ 4 files changed, 69 insertions(+), 6 deletions(-)
+
+diff --git a/shared/tensile/Tensile/Common.py b/shared/tensile/Tensile/Common.py
+index cc721bd7..45f35b19 100644
+--- a/shared/tensile/Tensile/Common.py
++++ b/shared/tensile/Tensile/Common.py
+@@ -332,7 +332,8 @@ architectureMap = {
+   'gfx1150':'strixpoint', 'gfx1151':'strixhalo', 'gfx1152':'gfx1152', 'gfx1153':'gfx1153',
+   'gfx1200':'gfx1200',
+   'gfx1201':'gfx1201',
+-  'gfx1250':'gfx1250'
++  'gfx1250':'gfx1250',
++  'gfx1250-strict':'gfx1250'
+ }
+ 
+ def getArchitectureName(gfxName: str) -> Optional[str]:
+@@ -2115,7 +2116,7 @@ def GetAsmCaps(isaVersion: IsaVersion, hipVersion: SemanticVersion, cachedAsmCap
+ 
+     derivedAsmCaps["SupportedSource"] = True
+ 
+-    ignoreCacheCheck = globalParameters["IgnoreAsmCapCache"]
++    ignoreCacheCheck = globalParameters["IgnoreAsmCapCache"] or compilerTarget("gfx1250") == "gfx1250-strict"
+ 
+     # disable cache checking for < rocm 5.3
+     if len(hipVersion) >= 2:
+@@ -2220,10 +2221,26 @@ def gfxArch(name: str) -> Optional[IsaVersion]:
+ 
+     return rv
+ 
++def configureCompilerTarget(architecture):
++    targets = architecture.replace("_", ";").split(";")
++    if "gfx1250-strict" in targets:
++        if any(a in targets for a in ("gfx1250", "all")):
++            raise ValueError("gfx1250-strict requires a separate generator invocation")
++        os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    else:
++        os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++
++
++def compilerTarget(name):
++    if name == "gfx1250" and os.environ.get("TENSILE_GFX1250_COMPILER_TARGET") == "gfx1250-strict":
++        return "gfx1250-strict"
++    return name
++
++
+ def gfxName(arch):
+     # convert last digit to hex because reasons
+     name = str(arch[0]) + str(arch[1]) + ('%x' % arch[2])
+-    return 'gfx' + ''.join(map(str,name))
++    return compilerTarget('gfx' + ''.join(map(str,name)))
+ 
+ 
+ def detectIsaWindows(output):
+diff --git a/shared/tensile/Tensile/Hardware.py b/shared/tensile/Tensile/Hardware.py
+index 01a591af..d04a6a92 100644
+--- a/shared/tensile/Tensile/Hardware.py
++++ b/shared/tensile/Tensile/Hardware.py
+@@ -29,12 +29,12 @@ import copy
+ class HardwarePredicate(Properties.Predicate):
+     @classmethod
+     def FromISA(cls, isa):
+-        gfxArch = Common.gfxName(isa)
++        gfxArch = Common.gfxName(isa).removesuffix("-strict")
+         return cls("AMDGPU", value=cls("Processor", value=gfxArch))
+ 
+     @classmethod
+     def FromHardware(cls, isa, cuCount=None, isAPU=None):
+-        gfxArch = Common.gfxName(isa)
++        gfxArch = Common.gfxName(isa).removesuffix("-strict")
+         if cuCount == None and isAPU == None:
+             return cls("AMDGPU", value=cls("Processor", value=gfxArch))
+         elif cuCount == None:
+diff --git a/shared/tensile/Tensile/TensileCreateLibrary.py b/shared/tensile/Tensile/TensileCreateLibrary.py
+index 0da417e9..e5014d71 100644
+--- a/shared/tensile/Tensile/TensileCreateLibrary.py
++++ b/shared/tensile/Tensile/TensileCreateLibrary.py
+@@ -967,6 +967,7 @@ def makeMasterLibraries(
+ 
+     for logic in logicList:
+         (_, architectureName, _, solutionsForSchedule, _, newLibrary) = logic
++        architectureName = Common.compilerTarget(architectureName)
+         if separate:
+             if architectureName in masterLibraries:
+                 nextSolIndex[architectureName] = masterLibraries[architectureName].merge(
+@@ -1001,7 +1002,7 @@ def addFallback(masterLibraries: Dict[str, MasterSolutionLibrary]) -> None:
+             value.insert(masterLibraries["fallback"])
+ 
+     for archName in archs:
+-        archName = archName.split("-", 1)[0]
++        archName = archName.split("-xnack", 1)[0]
+         if archName not in masterLibraries:
+             tPrint(1, "Using fallback for arch: " + archName)
+             masterLibraries[archName] = masterLibraries["fallback"]
+@@ -1474,6 +1475,9 @@ def TensileCreateLibrary():
+ 
+     # Library generation does not benchmark assembly kernels, so a GPU-less
+     # host (e.g. CI) is expected; suppress the "no ISA detected" warning.
++    Common.configureCompilerTarget(args["Architecture"])
++    if Common.compilerTarget("gfx1250") == "gfx1250-strict":
++        args["CacheAsmCaps"] = False
+     assignGlobalParameters(args, warnOnMissingIsa=False)
+ 
+     supportedArchs = [
+diff --git a/shared/tensile/Tensile/cmake/TensileConfig.cmake b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+index 0a078ab7..9a77dde9 100644
+--- a/shared/tensile/Tensile/cmake/TensileConfig.cmake
++++ b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+@@ -130,6 +130,44 @@ function(TensileCreateLibraryFiles
+     message(WARNING "Malformed arguments: ${Tensile_KEYWORDS_MISSING_VALUES}")
+   endif()
+ 
++  # Each generator process owns one variant of an ISA-keyed capability map.
++  set(_strict_target "")
++  if("gfx1250-strict" IN_LIST Tensile_ARCHITECTURE AND NOT _tensile_strict_child)
++    set(_strict_args)
++    foreach(_option IN LISTS options)
++      if(Tensile_${_option})
++        list(APPEND _strict_args ${_option})
++      endif()
++    endforeach()
++    foreach(_option IN LISTS oneValueArgs)
++      if(DEFINED Tensile_${_option} AND NOT _option STREQUAL "VAR_PREFIX")
++        list(APPEND _strict_args ${_option} "${Tensile_${_option}}")
++      endif()
++    endforeach()
++    if(NOT Tensile_VAR_PREFIX)
++      set(Tensile_VAR_PREFIX TENSILE)
++    endif()
++    set(_strict_prefix "${Tensile_VAR_PREFIX}_STRICT")
++    set(_strict_target "${_strict_prefix}_LIBRARY_TARGET")
++    # The child flag prevents recursion; compiler selection remains the target
++    # name, not a workflow option or a second logical GPU family.
++    set(_tensile_strict_child ON)
++    list(REMOVE_ITEM Tensile_ARCHITECTURE gfx1250-strict)
++    TensileCreateLibraryFiles(
++      "${Tensile_LOGIC_PATH}" "${Tensile_OUTPUT_PATH}-strict"
++      ${_strict_args} ARCHITECTURE gfx1250-strict VAR_PREFIX "${_strict_prefix}")
++    unset(_tensile_strict_child)
++    add_custom_command(TARGET ${_strict_target} POST_BUILD
++      COMMAND ${CMAKE_COMMAND} -E copy_directory
++        "${Tensile_OUTPUT_PATH}-strict/library/gfx1250-strict"
++        "${Tensile_OUTPUT_PATH}/library/gfx1250-strict"
++      VERBATIM)
++    if(NOT Tensile_ARCHITECTURE)
++      add_custom_target(${Tensile_VAR_PREFIX}_LIBRARY_TARGET DEPENDS ${_strict_target})
++      return()
++    endif()
++  endif()
++
+   # Parse incoming options
+   if(Tensile_TENSILE_ROOT)
+     set(Script "${Tensile_TENSILE_ROOT}/bin/TensileCreateLibrary")
+@@ -309,6 +347,10 @@ function(TensileCreateLibraryFiles
+          VERBATIM)
+   endif()
+ 
++  if(_strict_target)
++    add_dependencies(${Tensile_VAR_PREFIX}_LIBRARY_TARGET ${_strict_target})
++  endif()
++
+   if(Tensile_EMBED_LIBRARY)
+ 
+       set_source_files_properties(${Tensile_EMBED_LIBRARY_SOURCE} PROPERTIES GENERATED TRUE)

@@ -1,0 +1,102 @@
+From 51266c28fb1b2fab304b0582b053d47ac8bd2230 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 16:42:40 -0500
+Subject: [PATCH] hipSPARSELt: isolate gfx1250-strict device library generation
+
+---
+ projects/hipsparselt/CMakeLists.txt           | 51 ++++++++++++++-----
+ .../rocsparselt/src/tensile_host.cpp          |  6 ++-
+ 2 files changed, 43 insertions(+), 14 deletions(-)
+
+diff --git a/projects/hipsparselt/CMakeLists.txt b/projects/hipsparselt/CMakeLists.txt
+index 6dd986e6..4f14e62b 100644
+--- a/projects/hipsparselt/CMakeLists.txt
++++ b/projects/hipsparselt/CMakeLists.txt
+@@ -207,25 +207,50 @@ if(HIPSPARSELT_ENABLE_HIP)
+         if(Tensile_NO_LAZY_LIBRARY_LOADING)
+             list(APPEND _hipsparselt_codegen_product_args LAZY_LOAD OFF)
+         endif()
+-        create_device_library(
+-            LOGIC_PATH "${TENSILELITE_LIBLOGIC_PATH}"
+-            OUTPUT_DIR "${_hipsparselt_tensile_out}"
+-            CODEGEN_ROOT "${HIPBLASLT_TENSILELITE_PATH}"
+-            PYTHON_EXECUTABLE "${Python_EXECUTABLE}"
+-            ${_hipsparselt_codegen_host_sanitizer_args}
+-            ${_hipsparselt_codegen_product_args}
+-        )
++        # ISA-keyed generator state must not mix regular and strict variants.
++        set(_hipsparselt_arches ${GPU_TARGETS})
++        list(REMOVE_ITEM _hipsparselt_arches gfx1250-strict)
++        if(_hipsparselt_arches)
++            create_device_library(
++                LOGIC_PATH "${TENSILELITE_LIBLOGIC_PATH}"
++                OUTPUT_DIR "${_hipsparselt_tensile_out}"
++                ARCHES ${_hipsparselt_arches}
++                CODEGEN_ROOT "${HIPBLASLT_TENSILELITE_PATH}"
++                PYTHON_EXECUTABLE "${Python_EXECUTABLE}"
++                ${_hipsparselt_codegen_host_sanitizer_args}
++                ${_hipsparselt_codegen_product_args}
++            )
++        endif()
++        if("gfx1250-strict" IN_LIST GPU_TARGETS)
++            create_device_library(
++                TARGET tensilelite-device-libraries-strict
++                LOGIC_PATH "${TENSILELITE_LIBLOGIC_PATH}"
++                OUTPUT_DIR "${_hipsparselt_tensile_out}-strict"
++                ARCHES gfx1250-strict
++                CODEGEN_ROOT "${HIPBLASLT_TENSILELITE_PATH}"
++                PYTHON_EXECUTABLE "${Python_EXECUTABLE}"
++                ${_hipsparselt_codegen_host_sanitizer_args}
++                ${_hipsparselt_codegen_product_args}
++            )
++        endif()
+ 
+         if(WIN32)
+             set(_hipsparselt_tensile_install_dir "${CMAKE_INSTALL_BINDIR}/hipsparselt")
+         else()
+             set(_hipsparselt_tensile_install_dir "${CMAKE_INSTALL_LIBDIR}/hipsparselt")
+         endif()
+-        install(
+-            DIRECTORY "${_hipsparselt_tensile_out}/library"
+-            DESTINATION "${_hipsparselt_tensile_install_dir}"
+-            COMPONENT runtime
+-        )
++        if("gfx1250-strict" IN_LIST GPU_TARGETS)
++            install(DIRECTORY "${_hipsparselt_tensile_out}-strict/library/"
++                DESTINATION "${_hipsparselt_tensile_install_dir}/library"
++                COMPONENT runtime)
++        endif()
++        if(_hipsparselt_arches)
++            install(
++                DIRECTORY "${_hipsparselt_tensile_out}/library"
++                DESTINATION "${_hipsparselt_tensile_install_dir}"
++                COMPONENT runtime
++            )
++        endif()
+     endif()
+ endif()
+ 
+diff --git a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/tensile_host.cpp b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/tensile_host.cpp
+index 6ed888b1..43265a79 100644
+--- a/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/tensile_host.cpp
++++ b/projects/hipsparselt/library/src/hcc_detail/rocsparselt/src/tensile_host.cpp
+@@ -664,6 +664,10 @@ namespace
+                     path += "/" + processor;
+             }
+ 
++            // The directory retains the compiler target; metadata uses the numeric ISA.
++            if(processor == "gfx1250-strict")
++                processor = "gfx1250";
++
+             // only load modules for the current architecture
+             auto dir = path + "/*" + processor + "*co";
+ #if ROCSPARSELT_TENSILE_LAZY_LOAD == 0
+@@ -789,7 +793,7 @@ namespace
+                 return 0;
+             }();
+ 
+-            static_cast<void>(adapter.initializeLazyLoading(processor, path));
++            static_cast<void>(adapter.initializeLazyLoading(rocsparselt_internal_get_arch_name(), path));
+ 
+ 
+             if(!m_library && once != 0)

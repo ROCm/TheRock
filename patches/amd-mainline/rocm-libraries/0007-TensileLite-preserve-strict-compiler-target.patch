@@ -1,0 +1,639 @@
+From 81e46b48e098807359469a602a8fe91428abf500 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 16:42:40 -0500
+Subject: [PATCH] TensileLite: preserve gfx1250-strict through code generation
+
+---
+ projects/hipblaslt/CMakeLists.txt             |  8 ++++
+ .../hipblaslt/cmake/hipblaslt_codegen.cmake   | 10 ++++-
+ .../hipblaslt/device-library/CMakeLists.txt   | 37 +++++++++++++++----
+ .../device-library/extops/CMakeLists.txt      |  4 +-
+ .../matrix-transform/CMakeLists.txt           |  2 +-
+ .../include/hipblaslt/hipblaslt_bfloat6.h     |  2 +-
+ .../include/hipblaslt/hipblaslt_e5m3.h        |  2 +-
+ .../include/hipblaslt/hipblaslt_float4.h      |  2 +-
+ .../include/hipblaslt/hipblaslt_float6.h      |  2 +-
+ .../amd_detail/rocblaslt/src/tensile_host.cpp |  7 +++-
+ .../hipblaslt/tensilelite/AMaxGenerator.py    |  5 ++-
+ .../tensilelite/LayerNormGenerator.py         |  5 ++-
+ .../hipblaslt/tensilelite/SoftmaxGenerator.py |  3 +-
+ .../Tensile/Common/Architectures.py           | 22 ++++++++++-
+ .../tensilelite/Tensile/Source/memory_gfx.h   |  4 +-
+ .../Tensile/TensileCreateLibrary/Run.py       | 18 +++++++--
+ .../tensilelite/Tensile/Toolchain/Assembly.py |  4 +-
+ .../include/Tensile/DataTypes_E5M3.hpp        |  2 +-
+ .../rocisa/rocisa/include/code.hpp            |  2 +-
+ .../rocisa/rocisa/include/hardware_caps.hpp   |  5 ++-
+ .../rocisa/rocisa/include/helper.hpp          | 10 +++++
+ .../rocisa_stinkytofu_adaptor/code.py         |  6 ++-
+ .../mxDataGenerator/DataGeneratorGPU_impl.hpp |  2 +-
+ .../stinkytofu/src/ir/asm/StinkySignature.cpp |  8 +++-
+ 24 files changed, 135 insertions(+), 37 deletions(-)
+
+diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
+index 4082c1df..21752833 100644
+--- a/projects/hipblaslt/CMakeLists.txt
++++ b/projects/hipblaslt/CMakeLists.txt
+@@ -571,6 +571,14 @@ if(HIPBLASLT_ENABLE_DEVICE OR HIPBLASLT_ENABLE_ROCROLLER)
+         DESTINATION ${HIPBLASLT_TENSILE_LIBRARY_DIR}
+         COMPONENT runtime
+     )
++    get_property(_strict_library_dir GLOBAL PROPERTY HIPBLASLT_STRICT_LIBRARY_DIR)
++    if(_strict_library_dir)
++        rocm_install(
++            DIRECTORY "${_strict_library_dir}"
++            DESTINATION "${HIPBLASLT_TENSILE_LIBRARY_DIR}/library"
++            COMPONENT runtime
++        )
++    endif()
+     # The gfx1250 v0 GEMM tree builds into its own directory (see
+     # device-library/CMakeLists.txt) but installs as one more subdir of the same
+     # library/ root. The property is only set when that tree is built.
+diff --git a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
+index 50031dcf..cc437595 100644
+--- a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
++++ b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
+@@ -291,10 +291,18 @@ function(create_device_library)
+         list(APPEND _opts_list "--disable-asm-comments")
+     endif()
+ 
++    set(_logic_arches "${_arches_semi}")
++    if("gfx1250-strict" IN_LIST _cdl_ARCHES)
++        if(_cdl_REQUIRE_GFX1250V0_OVERLAY)
++            set(_logic_arches gfx1250v0)
++        else()
++            set(_logic_arches gfx1250)
++        endif()
++    endif()
+     set(_tensile_logic_args
+         "${_cdl_LOGIC_PATH}"
+         --architecture
+-        "${_arches_semi}"
++        "${_logic_arches}"
+         --use-bundled-known-bugs
+         --check-all
+     )
+diff --git a/projects/hipblaslt/device-library/CMakeLists.txt b/projects/hipblaslt/device-library/CMakeLists.txt
+index b1529e38..0115dd30 100644
+--- a/projects/hipblaslt/device-library/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/CMakeLists.txt
+@@ -74,6 +74,7 @@ endif()
+ # only prunes which. GPU_TARGETS is untouched (it also feeds extops/transform/
+ # validation on the base name); only the bare gfx1250 reaches here.
+ set(_main_arches ${GPU_TARGETS})
++list(REMOVE_ITEM _main_arches gfx1250-strict)
+ set(_build_gfx1250v0 OFF)
+ set(_main_requires_gfx1250v0_overlay OFF)
+ if("gfx1250" IN_LIST GPU_TARGETS)
+@@ -92,14 +93,34 @@ elseif(HIPBLASLT_ASIC_REVISION STREQUAL "v0")
+                     "(${GPU_TARGETS}); nothing in this build is for the v0 revision.")
+ endif()
+ 
+-create_device_library(
+-    LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
+-    OUTPUT_DIR "${HIPBLASLT_TENSILE_LIBPATH}"
+-    ARCHES ${_main_arches}
+-    REQUIRE_GFX1250V0_OVERLAY ${_main_requires_gfx1250v0_overlay}
+-    ${_codegen_host_sanitizer_args}
+-    ${_codegen_product_args}
+-)
++if(_main_arches)
++    create_device_library(
++        LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
++        OUTPUT_DIR "${HIPBLASLT_TENSILE_LIBPATH}"
++        ARCHES ${_main_arches}
++        REQUIRE_GFX1250V0_OVERLAY ${_main_requires_gfx1250v0_overlay}
++        ${_codegen_host_sanitizer_args}
++        ${_codegen_product_args}
++    )
++
++endif()
++
++if("gfx1250-strict" IN_LIST GPU_TARGETS)
++    # Isolate ISA-keyed generator caches, temporary objects, and output trees.
++    set(_strict_output_dir "${HIPBLASLT_TENSILE_LIBPATH}-strict")
++    file(MAKE_DIRECTORY "${_strict_output_dir}/library/gfx1250-strict")
++    set_property(GLOBAL PROPERTY HIPBLASLT_STRICT_LIBRARY_DIR
++                 "${_strict_output_dir}/library/gfx1250-strict")
++    create_device_library(
++        TARGET tensilelite-device-libraries-strict
++        LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
++        OUTPUT_DIR "${_strict_output_dir}"
++        ARCHES gfx1250-strict
++        REQUIRE_GFX1250V0_OVERLAY ${HIPBLASLT_REQUIRE_GFX1250V0_OVERLAY}
++        ${_codegen_host_sanitizer_args}
++        ${_codegen_product_args}
++    )
++endif()
+ 
+ if(_build_gfx1250v0)
+     # Needs its own OUTPUT_DIR: the two runs share a compiler target and each
+diff --git a/projects/hipblaslt/device-library/extops/CMakeLists.txt b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+index 27cba450..a5d176a7 100644
+--- a/projects/hipblaslt/device-library/extops/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/extops/CMakeLists.txt
+@@ -3,7 +3,7 @@
+ 
+ set(ops_dir "${CMAKE_CURRENT_SOURCE_DIR}/../../tensilelite")
+ set(output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+-string(REGEX MATCHALL "gfx[a-z0-9]+" archs "${GPU_TARGETS}")
++string(REGEX MATCHALL "gfx[a-z0-9]+(-strict)?" archs "${GPU_TARGETS}")
+ list(REMOVE_DUPLICATES archs)
+ message(STATUS "Architectures to process: ${archs}")
+ 
+@@ -17,7 +17,7 @@ foreach(arch IN LISTS archs)
+         set(extop_xnack_args --xnack)
+     endif()
+     set(WAVEFRONT "-mwavefrontsize64")
+-    if(arch MATCHES "^gfx1[12][0-9][0-9]$")
++    if(arch MATCHES "^gfx1[12][0-9][0-9](-strict)?$")
+         set(WAVEFRONT "-mno-wavefrontsize64")
+     endif()
+     add_library(extop-obj-${arch} OBJECT)
+diff --git a/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt b/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
+index 95046e56..8cba14e7 100644
+--- a/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
++++ b/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
+@@ -23,7 +23,7 @@
+ 
+ # Need to support Release/Debug
+ 
+-string(REGEX MATCHALL "gfx[a-z0-9]+" archs "${GPU_TARGETS}")
++string(REGEX MATCHALL "gfx[a-z0-9]+(-strict)?" archs "${GPU_TARGETS}")
+ list(REMOVE_DUPLICATES archs)
+ 
+ set(matrix_transform_cpp "${CMAKE_CURRENT_SOURCE_DIR}/matrix_transform.cpp")
+diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
+index 822bd06f..0f3786f0 100644
+--- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
++++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
+@@ -30,7 +30,7 @@
+ // Workaround: ROCm's amd_hip_ocp_host.hpp has a static_assert size mismatch
+ // (fp6x32_packed vs __amd_fp6x32_storage_t) in its host-fallback path, which
+ // is taken for all non-gfx950/gfx1250 device targets.
+-#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__)) && !defined(WIN32) && !defined(_WIN32)
++#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__) || defined(__gfx1250_strict__)) && !defined(WIN32) && !defined(_WIN32)
+ #define HIPBLASLT_USE_BF6
+ #endif
+ 
+diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
+index 9b3f149b..2ee6fafa 100644
+--- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
++++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
+@@ -33,7 +33,7 @@
+ #define HIP_HOST __host__
+ #define HIP_DEVICE __device__
+ 
+-#if defined(__gfx1250__) && __HIP_DEVICE_COMPILE__
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __HIP_DEVICE_COMPILE__
+ #define HIP_E5M3_CVT_FAST_PATH 1
+ #else
+ #define HIP_E5M3_CVT_FAST_PATH 0
+diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
+index 6d1ff408..7acb4854 100644
+--- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
++++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
+@@ -30,7 +30,7 @@
+ // Workaround: ROCm's amd_hip_ocp_host.hpp has a static_assert size mismatch
+ // (fp6x32_packed vs __amd_fp6x32_storage_t) in its host-fallback path, which
+ // is taken for all non-gfx950/gfx1250 device targets.
+-#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__)) && !defined(WIN32) && !defined(_WIN32)
++#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__) || defined(__gfx1250_strict__)) && !defined(WIN32) && !defined(_WIN32)
+ #define HIPBLASLT_USE_FP4
+ #endif
+ 
+diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
+index ace50087..7a8ee3dd 100644
+--- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
++++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
+@@ -30,7 +30,7 @@
+ // Workaround: ROCm's amd_hip_ocp_host.hpp has a static_assert size mismatch
+ // (fp6x32_packed vs __amd_fp6x32_storage_t) in its host-fallback path, which
+ // is taken for all non-gfx950/gfx1250 device targets.
+-#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__)) && !defined(WIN32) && !defined(_WIN32)
++#if (!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx950__) || defined(__gfx1250__) || defined(__gfx1250_strict__)) && !defined(WIN32) && !defined(_WIN32)
+ #define HIPBLASLT_USE_FP6
+ #endif
+ 
+diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+index 675214d8..9771950e 100644
+--- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
++++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+@@ -2814,6 +2814,11 @@ namespace
+ 
+             // The name of the current GPU platform
+             std::string processor = rocblaslt_internal_get_arch_name();
++            // Library metadata is keyed by logical ISA. The directory below
++            // still comes from the exact device target, so strict devices only
++            // load the separately compiled strict code objects.
++            if(processor == "gfx1250-strict")
++                processor = "gfx1250";
+ 
+             // ROCM-26729 / SEC-00896: use the privilege-aware accessor so a
+             // process in a secure execution context cannot be redirected to an
+@@ -3022,7 +3027,7 @@ namespace
+                 return 0;
+             }();
+ 
+-            static_cast<void>(adapter.initializeLazyLoading(processor, path.string()));
++            static_cast<void>(adapter.initializeLazyLoading(rocblaslt_internal_get_arch_name(), path.string()));
+ 
+             if(!m_library && once != 0)
+             {
+diff --git a/projects/hipblaslt/tensilelite/AMaxGenerator.py b/projects/hipblaslt/tensilelite/AMaxGenerator.py
+index 169eba95..30de7815 100644
+--- a/projects/hipblaslt/tensilelite/AMaxGenerator.py
++++ b/projects/hipblaslt/tensilelite/AMaxGenerator.py
+@@ -36,7 +36,7 @@ import json
+ import collections
+ from contextlib import contextmanager
+ from Tensile.Common.Utilities import _global_ti
+-from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa
++from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa, configureCompilerTarget
+ from Tensile.Common.DataType import DataType
+ from Tensile.Common.GlobalParameters import restoreDefaultGlobalParameters, assignGlobalParameters
+ from Tensile.Common.Types import IsaVersion
+@@ -59,7 +59,7 @@ def kernel_header(name: str, gfx_arch: str, vgpr: int, sgpr: int, lds: int, xnac
+     header += f'.p2align 6\n'
+     header += f'.amdhsa_kernel {name}\n'
+     header += f'  .amdhsa_user_sgpr_kernarg_segment_ptr 1\n'
+-    if (gfx_arch not in ("gfx900", "gfx908", "gfx1030", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1152", "gfx1153", "gfx1200", "gfx1201", "gfx1250")):
++    if (gfx_arch not in ("gfx900", "gfx908", "gfx1030", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1152", "gfx1153", "gfx1200", "gfx1201", "gfx1250", "gfx1250-strict")):
+         header += f'  .amdhsa_accum_offset {vgpr} // accvgpr offset\n'
+     header += f'  .amdhsa_next_free_vgpr {vgpr} // vgprs\n'
+     header += f'  .amdhsa_next_free_sgpr {sgpr} // sgprs\n'
+@@ -888,6 +888,7 @@ if __name__ == '__main__':
+         arch = isaToGfx(isa)
+         toolchain_path = validateToolchain(ToolchainDefaults.CXX_COMPILER)
+ 
++    configureCompilerTarget([arch])
+     _global_ti.init(isa, toolchain_path, False)
+     waveFrontSize = 32 if isa[0] in [11, 12] else 64
+     _global_ti.setKernel(isa, waveFrontSize)
+diff --git a/projects/hipblaslt/tensilelite/LayerNormGenerator.py b/projects/hipblaslt/tensilelite/LayerNormGenerator.py
+index 6a55c1dc..2247ee4b 100644
+--- a/projects/hipblaslt/tensilelite/LayerNormGenerator.py
++++ b/projects/hipblaslt/tensilelite/LayerNormGenerator.py
+@@ -37,7 +37,7 @@ import json
+ import collections
+ from contextlib import contextmanager
+ from Tensile.Common.Utilities import _global_ti
+-from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa
++from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa, configureCompilerTarget
+ from Tensile.Common.DataType import DataType
+ from Tensile.Common.GlobalParameters import assignGlobalParameters, restoreDefaultGlobalParameters
+ from Tensile.Common.Types import IsaVersion
+@@ -60,7 +60,7 @@ def kernel_header(name: str, gfx_arch: str, vgpr: int, sgpr: int, lds: int, xnac
+     header += f'.p2align 6\n'
+     header += f'.amdhsa_kernel {name}\n'
+     header += f'  .amdhsa_user_sgpr_kernarg_segment_ptr 1\n'
+-    if (gfx_arch not in ("gfx900", "gfx908", "gfx1030", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1152", "gfx1153", "gfx1200", "gfx1201", "gfx1250")):
++    if (gfx_arch not in ("gfx900", "gfx908", "gfx1030", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1152", "gfx1153", "gfx1200", "gfx1201", "gfx1250", "gfx1250-strict")):
+         header += f'  .amdhsa_accum_offset {vgpr} // accvgpr offset\n'
+     header += f'  .amdhsa_next_free_vgpr {vgpr} // vgprs\n'
+     header += f'  .amdhsa_next_free_sgpr {sgpr} // sgprs\n'
+@@ -969,6 +969,7 @@ if __name__ == '__main__':
+         arch = isaToGfx(isa)
+         toolchain_path = validateToolchain(ToolchainDefaults.CXX_COMPILER)
+ 
++    configureCompilerTarget([arch])
+     _global_ti.init(isa, toolchain_path, False)
+     waveFrontSize = 32 if isa[0] in [11, 12] else 64
+     _global_ti.setKernel(isa, waveFrontSize)
+diff --git a/projects/hipblaslt/tensilelite/SoftmaxGenerator.py b/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
+index 0046e317..37b16284 100644
+--- a/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
++++ b/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
+@@ -39,7 +39,7 @@ from contextlib import contextmanager
+ import os.path
+ 
+ from Tensile.Common.Utilities import _global_ti
+-from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa
++from Tensile.Common.Architectures import detectGlobalCurrentISA, isaToGfx, gfxToIsa, configureCompilerTarget
+ from Tensile.Common.DataType import DataType
+ from Tensile.Common.GlobalParameters import restoreDefaultGlobalParameters, assignGlobalParameters
+ from Tensile.Common.RegisterPool import allocTmpGpr
+@@ -739,6 +739,7 @@ if __name__ == '__main__':
+         arch = isaToGfx(isa)
+         toolchain_path = validateToolchain(ToolchainDefaults.CXX_COMPILER)
+ 
++    configureCompilerTarget([arch])
+     _global_ti.init(isa, toolchain_path, False)
+     waveFrontSize = 32 if isa[0] in [11, 12] else 64
+     _global_ti.setKernel(isa, waveFrontSize)
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+index da06f12c..0b36eed3 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
+@@ -21,6 +21,7 @@
+ ################################################################################
+ 
+ import re
++import os
+ import collections
+ 
+ from pathlib import Path
+@@ -72,6 +73,7 @@ architectureMap = {
+     # shares gfx1250's ISA, so `all` -- built from SUPPORTED_ISA -- cannot name
+     # it and it has to be asked for explicitly.
+     "gfx1250v0": "gfx1250v0",
++    "gfx1250-strict": "gfx1250v0",
+ }
+ 
+ gfxVariantMap = {
+@@ -102,6 +104,10 @@ ARCH_CAP_OVERRIDES = {
+     },
+ }
+ 
++# Strict uses the same A0 scheduling restrictions, but probes and compiles
++# against the distinct compiler target in its own generator process.
++ARCH_CAP_OVERRIDES["gfx1250-strict"] = ARCH_CAP_OVERRIDES["gfx1250v0"]
++
+ # Compiler target for names that are not themselves valid targets. The compiler
+ # does not model steppings, so gfx1250v0 has to reach `-mcpu` / `--offload-arch`
+ # as gfx1250; otherwise clang fails with `unsupported HIP gpu architecture`.
+@@ -200,6 +206,17 @@ def isaToGfx(arch: IsaVersion) -> str:
+ SUPPORTED_GFX = [isaToGfx(isa) for isa in SUPPORTED_ISA]
+ 
+ 
++def configureCompilerTarget(archs):
++    """Keep ISA-keyed capability caches confined to a single compiler variant."""
++    strict = "gfx1250-strict" in archs
++    if strict and any(a in archs for a in ("gfx1250", "gfx1250v0")):
++        raise ValueError("gfx1250-strict requires a separate generator invocation")
++    if strict:
++        os.environ["TENSILE_GFX1250_COMPILER_TARGET"] = "gfx1250-strict"
++    else:
++        os.environ.pop("TENSILE_GFX1250_COMPILER_TARGET", None)
++
++
+ def gfxToCompilerTarget(name: str) -> str:
+     """The target to compile an architecture name with.
+ 
+@@ -214,7 +231,10 @@ def gfxToCompilerTarget(name: str) -> str:
+     Returns:
+         The target for ``-mcpu`` / ``--offload-arch`` (e.g. 'gfx1250').
+     """
+-    return ARCH_COMPILER_TARGET.get(name, name)
++    target = ARCH_COMPILER_TARGET.get(name, name)
++    if target == "gfx1250" and os.environ.get("TENSILE_GFX1250_COMPILER_TARGET") == "gfx1250-strict":
++        return "gfx1250-strict"
++    return target
+ 
+ 
+ def expandAllArchitectures(archs: List[str]) -> List[str]:
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h b/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
+index beeb9004..3bc1793b 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
++++ b/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
+@@ -53,7 +53,7 @@
+ #elif defined(__gfx1200__) || defined(__gfx1201__)
+ #define USE_GFX_BUFFER_INTRINSIC
+ #define BUFFER_RESOURCE_3RD_DWORD 0x30020000
+-#elif defined(__gfx1250__)
++#elif defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define USE_GFX_BUFFER_INTRINSIC
+ #define BUFFER_RESOURCE_3RD_DWORD 0x00000000
+ #else // not support
+@@ -112,7 +112,7 @@ struct alignas(16) BufferResource
+         //      base address bits [47:0] (47 bits)
+         //      num_records bits [95:64] (32 bits)
+ 
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         uint64_t addr = reinterpret_cast<uint64_t>(const_cast<void*>(base_addr));
+ 
+         // bits [56:0] - base address (57 bits)
+diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+index 92f76cd4..984fc6eb 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
++++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
+@@ -54,7 +54,7 @@ from Tensile.Common import (
+     setVerbosity,
+     getVerbosity,
+ )
+-from Tensile.Common.Architectures import ARCH_COMPILER_TARGET, baseArchName, gfxToIsa, isaToGfx, SUPPORTED_GFX, splitArchsFromPredicates, filterLogicFilesByPredicates, expandAllArchitectures, gfxToCompilerTarget
++from Tensile.Common.Architectures import ARCH_COMPILER_TARGET, baseArchName, gfxToIsa, isaToGfx, SUPPORTED_GFX, splitArchsFromPredicates, filterLogicFilesByPredicates, expandAllArchitectures, gfxToCompilerTarget, configureCompilerTarget
+ from Tensile.Common.Capabilities import applyArchCapOverrides, makeIsaInfoMap
+ from Tensile.Common.GlobalParameters import assignGlobalParameters, globalParameters
+ from Tensile.Common.TimingInstrumentation import timing_context
+@@ -524,7 +524,7 @@ def writeSolutionsAndKernels(
+         p, isa, wavefrontsize, _ = ret
+         o_path = p.with_suffix(".o")
+         try:
+-            asmToolchain.assembler(isaToGfx(isa), wavefrontsize, str(p), str(o_path))
++            asmToolchain.assembler(gfxToCompilerTarget(isaToGfx(isa)), wavefrontsize, str(p), str(o_path))
+         except RuntimeError as e:
+             printWarning(f"Failed to assemble {p}: {e}")
+             return
+@@ -645,7 +645,7 @@ def writeSolutionsAndKernelsTCL(
+     def assemble(ret, removeTemporaries: bool):
+         asmPath, isa, wavefrontsize, result = ret
+         o_path = asmPath.with_suffix(".o")
+-        asmToolchain.assembler(isaToGfx(isa), wavefrontsize, str(asmPath), str(o_path))
++        asmToolchain.assembler(gfxToCompilerTarget(isaToGfx(isa)), wavefrontsize, str(asmPath), str(o_path))
+         if _stinky_asm_verify_wanted(isa):
+             _verify_stinky_asm_comment_vs_elf_text(asmPath, o_path, asmPath.stem)
+         if removeTemporaries:
+@@ -1031,6 +1031,7 @@ def run():
+     archs = expandAllArchitectures(archs)
+     archs, requestedPredicateMap = splitArchsFromPredicates(archs)
+ 
++    configureCompilerTarget(archs)
+     targetIsas = [gfxToIsa(a) for a in archs]
+     isaInfoMap = makeIsaInfoMap(targetIsas, cxxCompiler)
+     applyArchCapOverrides(isaInfoMap, archs)
+@@ -1043,7 +1044,7 @@ def run():
+     assignGlobalParameters(arguments, isaInfoMap)
+ 
+     # gfx1250 v0/v1 share ISA (12,5,0); pass the concrete stepping name so StinkyTofu picks the right cost table.
+-    globalParameters["StinkyTofuArchName"] = "gfx1250v0" if any(baseArchName(a) == "gfx1250v0" for a in archs) else ""
++    globalParameters["StinkyTofuArchName"] = "gfx1250v0" if any(baseArchName(a) in ("gfx1250v0", "gfx1250-strict") for a in archs) else ""
+ 
+     asmToolchain = makeAssemblyToolchain(
+         cxxCompiler,
+@@ -1086,6 +1087,8 @@ def run():
+         for a in map(baseArchName, archs)
+         if a in ARCH_COMPILER_TARGET
+     }
++    if "gfx1250-strict" in archs:
++        requestedRevision["gfx1250"] = "gfx1250v0"
+     revisionedLogic = {}
+     droppedByRevision = {}
+ 
+@@ -1110,6 +1113,13 @@ def run():
+         file for file in glob.iglob(globPattern, recursive=True)
+     ]
+ 
++    # hipSPARSELt embeds this generator with an unsplit logic corpus.
++    # Use the A0 overlay when present; otherwise probe and compile its base
++    # corpus with the strict compiler. No regular code objects are reused.
++    if "gfx1250-strict" in archs and not any(
++        load_logic_schedule_name(Path(f)) == "gfx1250v0" for f in logicFiles
++    ):
++        requestedRevision.pop("gfx1250", None)
+     logicFiles = [file for file in logicFiles if validLogicFile(Path(file))]
+ 
+     print1(f"# Experimental:      {arguments['Experimental']}")
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
+index 92b34ca6..70c275bc 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
+@@ -31,7 +31,7 @@ from pathlib import Path
+ from typing import Dict, List, Optional, Union, NamedTuple
+ 
+ from Tensile.Common import ensurePath, print2
+-from Tensile.Common.Architectures import isaToGfx
++from Tensile.Common.Architectures import isaToGfx, gfxToCompilerTarget
+ from ..SolutionStructs import Solution
+ 
+ from .Component import Assembler, Linker, Bundler
+@@ -105,7 +105,7 @@ def buildAssemblyCodeObjectFiles(
+         linker(sorted(objFiles), str(coFileRaw))
+         coFile = destDir / coFileRaw.name.replace(extCoRaw, extCo)
+         if compress:
+-          bundler.compress(str(coFileRaw), str(coFile), gfx)
++          bundler.compress(str(coFileRaw), str(coFile), gfxToCompilerTarget(gfx))
+         else:
+           shutil.move(coFileRaw, coFile)
+         coFiles.append(coFile)
+diff --git a/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp b/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
+index 40f4afa7..6fd1a03e 100644
+--- a/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
++++ b/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
+@@ -34,7 +34,7 @@
+ #define HIP_HOST __host__
+ #define HIP_DEVICE __device__
+ 
+-#if defined(__gfx1250__) && __HIP_DEVICE_COMPILE__
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __HIP_DEVICE_COMPILE__
+ #define HIP_E5M3_CVT_FAST_PATH 1
+ #else
+ #define HIP_E5M3_CVT_FAST_PATH 0
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
+index 8f34ae27..d313b6ca 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
+@@ -1413,7 +1413,7 @@ namespace rocisa
+         {
+             std::string kdIndent = "  ";
+             std::string kStr;
+-            kStr += ".amdgcn_target \"amdgcn-amd-amdhsa--" + isaToGfx(kernel().isaVersion) + "\"\n";
++            kStr += ".amdgcn_target \"amdgcn-amd-amdhsa--" + getCompilerTarget(kernel().isaVersion) + "\"\n";
+             kStr += ".text\n";
+             kStr += ".protected " + name + "\n";
+             kStr += ".globl " + name + "\n";
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
+index d73a5b4e..d2977d40 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
+@@ -40,7 +40,7 @@ inline bool tryAssembler(const IsaVersion&  isaVersion,
+     if(!isWave32 && isaVersion[0] >= 10)
+         options.push_back("-mwavefrontsize64");
+ 
+-    std::string isastr = getGfxNameTuple(isaVersion);
++    std::string isastr = getCompilerTarget(isaVersion);
+ 
+     std::vector<std::string> cmd
+         = {assemblerPath, "-x", "assembler", "-target", "amdgcn-amdhsa", "-mcpu=" + isastr};
+@@ -225,6 +225,9 @@ inline std::map<std::string, int>
+                                         "v_wmma_f32_16x16x128_f8f6f4 v[0:7], v[16:31], v[16:31], v[0:7]",
+                                         isDebug);
+ 
++    rv["HasWMMA_f4_32x16"] = tryAssembler(isaVersion, assemblerPath,
++        "v_wmma_f32_32x16x128_f4 v[0:15], v[8:23], v[0:7], v[0:15]", isDebug);
++
+     // InitCIterWmma replaces the v_mov initC with a WMMA using src C = immediate 0
+     rv["HasWMMA_AccImmZero"] = tryAssembler(isaVersion,
+                                             assemblerPath,
+diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
+index 5acdc3eb..49e95e7c 100644
+--- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
++++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
+@@ -23,6 +23,7 @@
+ #pragma once
+ #include <algorithm>
+ #include <array>
++#include <cstdlib>
+ #include <stdexcept>
+ #include <string>
+ #include <vector>
+@@ -48,6 +49,15 @@ inline std::string getGfxNameTuple(const IsaVersion& isaVersion)
+            + int_to_hex[isaVersion[2]];
+ }
+ 
++inline std::string getCompilerTarget(const IsaVersion& isaVersion)
++{
++    const char* target = std::getenv("TENSILE_GFX1250_COMPILER_TARGET");
++    if(isaVersion == IsaVersion{12, 5, 0} && target
++       && std::string(target) == "gfx1250-strict")
++        return "gfx1250-strict";
++    return getGfxNameTuple(isaVersion);
++}
++
+ template <typename T>
+ bool checkInList(const T& a, const std::vector<T> b)
+ {
+diff --git a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
+index 7bf73277..b0b41ede 100644
+--- a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
++++ b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
+@@ -9,6 +9,7 @@ builds a LogicalModule, and routes through lower_logical_module for emission.
+ from __future__ import annotations
+ 
+ import copy as _copy
++import os as _os
+ import re as _re
+ from typing import Any, Iterable, List, Optional, Sequence
+ 
+@@ -2047,7 +2048,10 @@ class _SignatureKernelDescriptor(Item):
+         if isa is None:
+             raise RuntimeError("kernel ISA is not set")
+         out = _sig_block3line("Begin Kernel")
+-        out += f'.amdgcn_target "amdgcn-amd-amdhsa--{_isa_to_gfx(isa)}"\n'
++        compiler_target = _isa_to_gfx(isa)
++        if compiler_target == "gfx1250" and _os.environ.get("TENSILE_GFX1250_COMPILER_TARGET") == "gfx1250-strict":
++            compiler_target = "gfx1250-strict"
++        out += f'.amdgcn_target "amdgcn-amd-amdhsa--{compiler_target}"\n'
+         out += ".text\n"
+         out += f".protected {self.name}\n"
+         out += f".globl {self.name}\n"
+diff --git a/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp b/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
+index 8407e4cb..f4d93eb9 100644
+--- a/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
++++ b/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
+@@ -853,7 +853,7 @@ namespace DGen
+             __amd_fp6x32_storage_t out
+                 = __amd_cvt_floatx32_to_fp6x32_scale(in, Interp, scaleExp);
+             int const outLen = blockSize * 6 / 8;
+-#if defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx950__) || defined(__gfx1250__) || defined(__gfx1250_strict__)
+             for(int b = 0; b < outLen; ++b)
+                 outBytes[b] = 0;
+             __amd_floatx32_storage_t decoded
+diff --git a/shared/stinkytofu/src/ir/asm/StinkySignature.cpp b/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
+index f3f9ecb6..93bdcd77 100644
+--- a/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
++++ b/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
+@@ -25,6 +25,7 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <cstdint>
++#include <cstdlib>
+ #include <iomanip>
+ #include <sstream>
+ #include <stdexcept>
+@@ -392,7 +393,12 @@ std::string SignatureKernelDescriptor::toString() const {
+     if (totalInstructionBytes >= 0) {
+         kStr += "/* STINKY_TOTAL_INST_BYTES: " + std::to_string(totalInstructionBytes) + " */\n";
+     }
+-    kStr += ".amdgcn_target \"amdgcn-amd-amdhsa--" + isaVersionToGfx(isaVersion) + "\"\n";
++    auto compilerTarget = isaVersionToGfx(isaVersion);
++    const char* requestedTarget = std::getenv("TENSILE_GFX1250_COMPILER_TARGET");
++    if(compilerTarget == "gfx1250" && requestedTarget
++       && std::string(requestedTarget) == "gfx1250-strict")
++        compilerTarget = requestedTarget;
++    kStr += ".amdgcn_target \"amdgcn-amd-amdhsa--" + compilerTarget + "\"\n";
+     kStr += ".text\n";
+     kStr += ".protected " + kernelName + "\n";
+     kStr += ".globl " + kernelName + "\n";

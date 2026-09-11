@@ -1,0 +1,464 @@
+From d35edb91948ce7532e78f52ff06af09ceb0f9d92 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 16:42:40 -0500
+Subject: [PATCH] CK Tile: support gfx1250-strict compiler restrictions
+
+---
+ .../ck_tile/core/arch/amd_cluster_load.hpp    | 14 +++++++-------
+ .../include/ck_tile/core/config.hpp           |  6 +++---
+ .../include/ck_tile/core/numeric/e4m3.hpp     |  2 +-
+ .../include/ck_tile/core/numeric/e5m3.hpp     |  2 +-
+ .../ck_tile/core/numeric/float8_ext.hpp       | 14 +++++++++++---
+ .../ck_tile/core/numeric/mxfp_scale.hpp       | 19 +++++++++++++++++++
+ .../include/ck_tile/core/numeric/pk_f6.hpp    | 10 +++++++++-
+ .../include/ck_tile/core/numeric/pk_fp4.hpp   | 18 +++++++++++-------
+ .../ck_tile/core/tensor/buffer_view.hpp       |  2 +-
+ ...mm_pipeline_agmem_bgmem_creg_v1_policy.hpp |  8 ++++----
+ .../gemm_pipeline_ag_bg_cr_comp_v3.hpp        |  2 +-
+ ...p_gemm_attribute_wmma_impl_8bit_traits.hpp | 13 +++++++++----
+ ...ped_convolution_backward_weight_kernel.hpp |  2 +-
+ 13 files changed, 78 insertions(+), 34 deletions(-)
+
+diff --git a/projects/composablekernel/include/ck_tile/core/arch/amd_cluster_load.hpp b/projects/composablekernel/include/ck_tile/core/arch/amd_cluster_load.hpp
+index 893d2d73..09846adc 100644
+--- a/projects/composablekernel/include/ck_tile/core/arch/amd_cluster_load.hpp
++++ b/projects/composablekernel/include/ck_tile/core/arch/amd_cluster_load.hpp
+@@ -10,7 +10,7 @@
+ 
+ namespace ck_tile {
+ 
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ template <typename T>
+ CK_TILE_DEVICE __attribute__((address_space(1))) T* to_global(const T* ptr)
+ {
+@@ -51,7 +51,7 @@ struct cluster_load<4>
+     CK_TILE_DEVICE T operator()(const T* addr, int mask)
+     {
+         static_assert(sizeof(T) == 4, "cluster_load<4> requires a 4-byte type");
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         return ck_tile::bit_cast<T>(__builtin_amdgcn_cluster_load_b32(
+             to_global<int>(reinterpret_cast<const int*>(addr)), 0, mask));
+ #else
+@@ -70,7 +70,7 @@ struct cluster_load<8>
+     CK_TILE_DEVICE T operator()(const T* addr, int mask)
+     {
+         static_assert(sizeof(T) == 8, "cluster_load<8> requires an 8-byte type");
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         // Builtin requires LLVM native vector, not HIP int2.
+         using vec2i_t = __attribute__((vector_size(8))) int;
+         return ck_tile::bit_cast<T>(__builtin_amdgcn_cluster_load_b64(
+@@ -91,7 +91,7 @@ struct cluster_load<16>
+     CK_TILE_DEVICE T operator()(const T* addr, int mask)
+     {
+         static_assert(sizeof(T) == 16, "cluster_load<16> requires a 16-byte type");
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         // Builtin requires LLVM native vector, not HIP int4.
+         using vec4i_t = __attribute__((vector_size(16))) int;
+         return ck_tile::bit_cast<T>(__builtin_amdgcn_cluster_load_b128(
+@@ -138,7 +138,7 @@ struct cluster_load_async_to_lds<4, inst_offset>
+     CK_TILE_DEVICE void
+     operator()(const int* src, __attribute__((address_space(3))) int* lds_dst, int mask)
+     {
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         __attribute__((address_space(1))) int* g_src = to_global(src);
+         __builtin_amdgcn_cluster_load_async_to_lds_b32(g_src, lds_dst, inst_offset, 0, mask);
+ #else
+@@ -155,7 +155,7 @@ struct cluster_load_async_to_lds<8, inst_offset>
+     CK_TILE_DEVICE void
+     operator()(const int* src, __attribute__((address_space(3))) int* lds_dst, int mask)
+     {
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         using vec2i_t = __attribute__((vector_size(8))) int;
+         __attribute__((address_space(1))) vec2i_t* g_src =
+             to_global(reinterpret_cast<const vec2i_t*>(src));
+@@ -176,7 +176,7 @@ struct cluster_load_async_to_lds<16, inst_offset>
+     CK_TILE_DEVICE void
+     operator()(const int* src, __attribute__((address_space(3))) int* lds_dst, int mask)
+     {
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         using vec4i_t = __attribute__((vector_size(16))) int;
+         __attribute__((address_space(1))) vec4i_t* g_src =
+             to_global(reinterpret_cast<const vec4i_t*>(src));
+diff --git a/projects/composablekernel/include/ck_tile/core/config.hpp b/projects/composablekernel/include/ck_tile/core/config.hpp
+index e7edaf72..023a3721 100644
+--- a/projects/composablekernel/include/ck_tile/core/config.hpp
++++ b/projects/composablekernel/include/ck_tile/core/config.hpp
+@@ -37,13 +37,13 @@
+ #define __gfx115__
+ #endif
+ #if defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx12_generic__) || \
+-    defined(__gfx1250__)
++    (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define __gfx12__
+ #endif
+ #if defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx12_generic__)
+ #define __gfx120__
+ #endif
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define __gfx125__
+ #endif
+ #if defined(__gfx120__) || defined(__gfx125__)
+@@ -617,7 +617,7 @@ struct amdgcn_compiler_target_state
+ #endif // __gfx12_generic__
+ 
+     // GFX12.5
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     static constexpr bool CK_TILE_ARCH_GFX1250 = true;
+ #else
+     static constexpr bool CK_TILE_ARCH_GFX1250 = false;
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/e4m3.hpp b/projects/composablekernel/include/ck_tile/core/numeric/e4m3.hpp
+index 715cb80f..cff5b05a 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/e4m3.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/e4m3.hpp
+@@ -75,7 +75,7 @@ struct numeric<e4m3_t>
+ 
+ CK_TILE_HOST_DEVICE e4m3_bexp_t::operator float() const
+ {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     union
+     {
+         unsigned int i32val;
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/e5m3.hpp b/projects/composablekernel/include/ck_tile/core/numeric/e5m3.hpp
+index daf799da..9f682592 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/e5m3.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/e5m3.hpp
+@@ -81,7 +81,7 @@ struct numeric<e5m3_t>
+ 
+ CK_TILE_HOST_DEVICE e5m3_bexp_t::operator float() const
+ {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     union
+     {
+         unsigned int i32val;
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/float8_ext.hpp b/projects/composablekernel/include/ck_tile/core/numeric/float8_ext.hpp
+index 9eb50036..a6997f32 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/float8_ext.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/float8_ext.hpp
+@@ -154,7 +154,7 @@ CK_TILE_DEVICE fp8x2_storage_t cast_to_f8x2_scaled_rtn(VSrcT v, float scale)
+ 
+     return ret.v8f8[0];
+ }
+-#elif defined(__gfx125__)
++#elif defined(__gfx125__) && !defined(__gfx1250_strict__)
+ // fp8 -> fp32 packed 8 vector instruction
+ template <typename VDstT, fp8_interpretation interpret, int Opsel = 0>
+ CK_TILE_DEVICE VDstT cast_from_f8x8_scaled(fp8x8_storage_t v, uint32_t scale)
+@@ -285,7 +285,7 @@ CK_TILE_HOST_DEVICE VDstT from_float8x8(fp8x8_storage_t x, float scale)
+             impl::cast_from_f8x2_scaled<V2DstT, interpret>(fp8x2_storage_t{x[6], x[7]}, scale);
+ 
+     return res.v8;
+-#elif defined(__gfx125__)
++#elif defined(__gfx125__) && !defined(__gfx1250_strict__)
+     Packed4Scale_E8M0 pkscale(0, 0, 0, scale);
+     return impl::cast_from_f8x8_scaled<VDstT, interpret>(x, pkscale.data());
+ #else
+@@ -362,7 +362,7 @@ CK_TILE_HOST_DEVICE fp8x8_storage_t to_float8x8(VSrcT x, [[maybe_unused]] float
+             res.v2[3] = impl::cast_to_f8x2_scaled_rtn<V2SrcT, interpret>(in.v2[3], scale);
+     }
+     return res.v8;
+-#elif defined(__gfx125__)
++#elif defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return impl::cast_to_f8x8_scaled<interpret, stochastic_rounding>(x, scale);
+ #else
+     using SrcT         = typename vector_traits<VSrcT>::scalar_type;
+@@ -601,8 +601,12 @@ struct pk4scaled_type_convert_impl<Y, fp8x8_t, Scale_sel>
+ {
+     CK_TILE_DEVICE static Y run(fp8x8_t x, Packed4Scale_E8M0 scale)
+     {
++#if defined(__gfx1250_strict__)
++        return scaled_type_convert<Y>(x, strict_packed_scale<Scale_sel, true>(scale));
++#else
+         return impl::cast_from_f8x8_scaled<Y, numeric_traits<fp8_t>::f8_interpret, Scale_sel>(
+             bit_cast<impl::fp8x8_storage_t>(x), scale.data());
++#endif
+     }
+ };
+ template <typename Y, int Scale_sel>
+@@ -610,8 +614,12 @@ struct pk4scaled_type_convert_impl<Y, bf8x8_t, Scale_sel>
+ {
+     CK_TILE_DEVICE static Y run(bf8x8_t x, Packed4Scale_E8M0 scale)
+     {
++#if defined(__gfx1250_strict__)
++        return scaled_type_convert<Y>(x, strict_packed_scale<Scale_sel, true>(scale));
++#else
+         return impl::cast_from_f8x8_scaled<Y, numeric_traits<bf8_t>::f8_interpret, Scale_sel>(
+             bit_cast<impl::fp8x8_storage_t>(x), scale.data());
++#endif
+     }
+ };
+ #endif
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/mxfp_scale.hpp b/projects/composablekernel/include/ck_tile/core/numeric/mxfp_scale.hpp
+index 54687e60..0ad63d9a 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/mxfp_scale.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/mxfp_scale.hpp
+@@ -198,6 +198,25 @@ struct Packed8Scale
+ 
+ // Type alias for e8m0_t scales
+ using Packed4Scale_E8M0 = Packed4Scale<e8m0_t>;
++
++#if defined(__gfx1250_strict__)
++// Preserve the packed-conversion lane/byte selection using scalar conversions
++// on targets without the block16 conversion instructions.
++template <int ScaleSel, bool FP8>
++CK_TILE_DEVICE float strict_packed_scale(Packed4Scale_E8M0 scale)
++{
++    static_assert(ScaleSel >= 0 && ScaleSel < (FP8 ? 12 : 8));
++    const unsigned lane = __lane_id();
++    const unsigned source_lane = (lane & 15) + 16 * (ScaleSel & 1);
++    const auto packed = __shfl(scale.data(), source_lane, 32);
++    const unsigned byte = FP8
++        ? ((ScaleSel & 2) + (ScaleSel < 8 ? ((ScaleSel >> 2) & 1) : lane / 16))
++        : (ScaleSel < 4 ? (ScaleSel & 2) + lane / 16
++                        : ((ScaleSel >> 1) & 1) + 2 * (lane / 16));
++    return Packed4Scale_E8M0(packed).unpack_to_float(byte);
++}
++#endif
++
+ using Packed8Scale_E8M0 = Packed8Scale<e8m0_t>;
+ 
+ } // namespace ck_tile
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/pk_f6.hpp b/projects/composablekernel/include/ck_tile/core/numeric/pk_f6.hpp
+index aa2ba1e9..80d5e14a 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/pk_f6.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/pk_f6.hpp
+@@ -19,7 +19,7 @@
+ #include <cmath>
+ #include <type_traits>
+ 
+-#if defined(__HIP_DEVICE_COMPILE__) && defined(__gfx125__)
++#if defined(__HIP_DEVICE_COMPILE__) && defined(__gfx125__) && !defined(__gfx1250_strict__)
+ #define CK_TILE_FP6_CVT_DEVICE 1
+ #else
+ #define CK_TILE_FP6_CVT_DEVICE 0
+@@ -1431,7 +1431,11 @@ struct pk6scaled_type_convert_impl<Y, pk_fp6_t, Scale_sel>
+ {
+     CK_TILE_DEVICE static Y run(pk_fp6_t x, Packed4Scale_E8M0 scale)
+     {
++#if defined(__gfx1250_strict__)
++        return scaled_type_convert<Y>(x, strict_packed_scale<Scale_sel, false>(scale));
++#else
+         return impl::_from_fp6x16_pkscale<Y, Scale_sel>(x.get(), scale.data());
++#endif
+     }
+ };
+ 
+@@ -1440,7 +1444,11 @@ struct pk6scaled_type_convert_impl<Y, pk_bf6_t, Scale_sel>
+ {
+     CK_TILE_DEVICE static Y run(pk_bf6_t x, Packed4Scale_E8M0 scale)
+     {
++#if defined(__gfx1250_strict__)
++        return scaled_type_convert<Y>(x, strict_packed_scale<Scale_sel, false>(scale));
++#else
+         return impl::_from_bf6x16_pkscale<Y, Scale_sel>(x.get(), scale.data());
++#endif
+     }
+ };
+ #endif
+diff --git a/projects/composablekernel/include/ck_tile/core/numeric/pk_fp4.hpp b/projects/composablekernel/include/ck_tile/core/numeric/pk_fp4.hpp
+index 52fa86ea..d21d6d81 100644
+--- a/projects/composablekernel/include/ck_tile/core/numeric/pk_fp4.hpp
++++ b/projects/composablekernel/include/ck_tile/core/numeric/pk_fp4.hpp
+@@ -19,7 +19,7 @@
+ 
+ #include <type_traits>
+ 
+-#if defined(__gfx950__) || defined(__gfx125__)
++#if defined(__gfx950__) || (defined(__gfx125__) && !defined(__gfx1250_strict__))
+ #define CK_TILE_FP4_CVT_DEVICE 1
+ #else
+ #define CK_TILE_FP4_CVT_DEVICE 0
+@@ -559,7 +559,7 @@ CK_TILE_HOST_DEVICE constexpr bf16_t pk_fp4_to_bf16(const pk_fp4_t& x, float sca
+ }
+ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t fp32x8_to_pk_fp4(const fp32x8_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return bit_cast<pk_fp4x4_t>(impl::_to_f4(x, scale));
+ #else
+     // Pack 8 floats into 4 pk_fp4_t values using fp32x2_to_pk_fp4
+@@ -573,7 +573,7 @@ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t fp32x8_to_pk_fp4(const fp32x8_t& x, flo
+ }
+ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t fp16x8_to_pk_fp4(const fp16x8_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return bit_cast<pk_fp4x4_t>(impl::_to_f4(x, scale));
+ #else
+     // Pack 8 fp16 values into 4 pk_fp4_t values using fp16x2_to_pk_fp4
+@@ -586,7 +586,7 @@ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t fp16x8_to_pk_fp4(const fp16x8_t& x, flo
+ }
+ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t bf16x8_to_pk_fp4(const bf16x8_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return bit_cast<pk_fp4x4_t>(impl::_to_f4(x, scale));
+ #else
+     // Pack 8 bf16 values into 4 pk_fp4_t values using bf16x2_to_pk_fp4
+@@ -599,7 +599,7 @@ CK_TILE_HOST_DEVICE constexpr pk_fp4x4_t bf16x8_to_pk_fp4(const bf16x8_t& x, flo
+ }
+ CK_TILE_HOST_DEVICE constexpr fp32x8_t pk_fp4_to_fp32x8(const pk_fp4x4_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return impl::_from_f4<fp32x8_t>(x, scale);
+ #else
+     auto v0 = pk_fp4_to_fp32x2(pk_fp4_t{x[0]}, scale);
+@@ -611,7 +611,7 @@ CK_TILE_HOST_DEVICE constexpr fp32x8_t pk_fp4_to_fp32x8(const pk_fp4x4_t& x, flo
+ }
+ CK_TILE_HOST_DEVICE constexpr fp16x8_t pk_fp4_to_fp16x8(const pk_fp4x4_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return impl::_from_f4<fp16x8_t>(x, scale);
+ #else
+     auto v0 = pk_fp4_to_fp16x2(pk_fp4_t{x[0]}, scale);
+@@ -623,7 +623,7 @@ CK_TILE_HOST_DEVICE constexpr fp16x8_t pk_fp4_to_fp16x8(const pk_fp4x4_t& x, flo
+ }
+ CK_TILE_HOST_DEVICE constexpr bf16x8_t pk_fp4_to_bf16x8(const pk_fp4x4_t& x, float scale)
+ {
+-#if defined(__gfx125__)
++#if defined(__gfx125__) && !defined(__gfx1250_strict__)
+     return impl::_from_f4<bf16x8_t>(x, scale);
+ #else
+     auto v0 = pk_fp4_to_bf16x2(pk_fp4_t{x[0]}, scale);
+@@ -809,7 +809,11 @@ struct pk4scaled_type_convert_impl<Y, pk_fp4x4_t, Scale_sel>
+ {
+     CK_TILE_DEVICE static Y run(pk_fp4x4_t x, Packed4Scale_E8M0 scale)
+     {
++#if defined(__gfx1250_strict__)
++        return scaled_type_convert<Y>(x, strict_packed_scale<Scale_sel, false>(scale));
++#else
+         return impl::_from_f4x8_pkscale<Y, Scale_sel>(bit_cast<uint32_t>(x), scale.data());
++#endif
+     }
+ };
+ #endif
+diff --git a/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp b/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
+index 20d6d88e..2b812a1a 100644
+--- a/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
++++ b/projects/composablekernel/include/ck_tile/core/tensor/buffer_view.hpp
+@@ -501,7 +501,7 @@ struct buffer_view<address_space_enum::global,
+         static_assert(scalar_per_x_vector % scalar_per_t_vector == 0,
+                       "wrong! X should contain multiple T");
+ 
+-#ifdef __gfx1250__
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+         auto p_uniform_ptr = amd_wave_read_first_lane(p_data_);
+ 
+         const remove_cvref_t<X>* g_src =
+diff --git a/projects/composablekernel/include/ck_tile/ops/flatmm/pipeline/mx_flatmm_pipeline_agmem_bgmem_creg_v1_policy.hpp b/projects/composablekernel/include/ck_tile/ops/flatmm/pipeline/mx_flatmm_pipeline_agmem_bgmem_creg_v1_policy.hpp
+index 9d6b5bff..64af4133 100644
+--- a/projects/composablekernel/include/ck_tile/ops/flatmm/pipeline/mx_flatmm_pipeline_agmem_bgmem_creg_v1_policy.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/flatmm/pipeline/mx_flatmm_pipeline_agmem_bgmem_creg_v1_policy.hpp
+@@ -245,7 +245,7 @@ struct MXFlatmmPipelineAgBgCrPolicy : UniversalFlatmmPipelineAgBgCrPolicy
+ 
+         if constexpr(std::is_same_v<ADataType, pk_fp4_t>)
+         {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+             return make_static_tile_distribution(
+                 tile_distribution_encoding<
+                     sequence<NWarps>,
+@@ -285,7 +285,7 @@ struct MXFlatmmPipelineAgBgCrPolicy : UniversalFlatmmPipelineAgBgCrPolicy
+                     sequence<0, 2>>{});
+         else if constexpr(std::is_same_v<ADataType, pk_fp6x16_t>)
+         {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+             // gfx1250: 4-element K-tuple <K_Lane, block-parity, sub-slot, DWORDx3>
+             //          = <2, 2, 2, 12>.
+             // Warp lane (P1) spans block-parity x MPerXdl = 2 x 16 = 32.
+@@ -342,7 +342,7 @@ struct MXFlatmmPipelineAgBgCrPolicy : UniversalFlatmmPipelineAgBgCrPolicy
+ 
+         if constexpr(std::is_same_v<BDataType, pk_fp4_t>)
+         {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+             return make_static_tile_distribution(
+                 tile_distribution_encoding<
+                     //           1
+@@ -389,7 +389,7 @@ struct MXFlatmmPipelineAgBgCrPolicy : UniversalFlatmmPipelineAgBgCrPolicy
+         }
+         else if constexpr(std::is_same_v<ADataType, pk_fp6x16_t>)
+         {
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+             // Use a 5-element K-tuple <2, 1, 32, 2, 12> so the warp lane (P1) can
+             // span (K0=1) x (K1=32) = 32 cleanly, and per-thread Y dims cover the
+             // three remaining K-tuple positions (0, 3, 4) sized <2, 2, 12> = 48 B.
+diff --git a/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp b/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
+index 832cb8d0..316e5ce8 100644
+--- a/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v3.hpp
+@@ -33,7 +33,7 @@ struct BaseGemmPipelineAgBgCrCompV3
+     // operator() and the grouped/persistent kernel launchers), and TailHandler's
+     // scenarios[] compiles in the same device pass, so this __gfx1250__/__GFX12__
+     // guard is host/device consistent.
+-#if defined(__gfx1250__) || defined(__GFX12__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) || defined(__GFX12__)
+     static constexpr bool Use8WarpSchedule = false;
+ #else
+     static constexpr bool Use8WarpSchedule = (Problem::BlockGemmShape::NumWarps == 8);
+diff --git a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+index c2416a1c..e78f5001 100644
+--- a/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/gemm/warp/warp_gemm_attribute_wmma_impl_8bit_traits.hpp
+@@ -810,6 +810,7 @@ struct WmmaTraits<gfx125_t, bf8_t, fp8_t, float, 16, 16, 128, WmmaScale16Tag>
+     }
+ };
+ 
++#if !defined(__gfx1250_strict__)
+ // 32x16x128 f4 specialization - GFX125
+ template <>
+ struct WmmaTraits<gfx125_t, pk_fp4_t, pk_fp4_t, float, 32, 16, 128>
+@@ -950,6 +951,8 @@ struct WmmaTraits<gfx125_t, pk_fp4_t, pk_fp4_t, float, 32, 32, 128, WmmaScale16T
+ {
+ };
+ 
++#endif
++
+ // Unified WmmaTraits for f8f6f4 combinations
+ template <typename AType, typename BType>
+ struct WmmaTraits<
+@@ -1095,11 +1098,13 @@ struct WmmaTraits<gfx125_t, fp8_t, fp8_t, float, 16, 16, 128>
+     }
+ };
+ 
+-template <typename AType, typename BType>
+-struct WmmaTraits<gfx125_t, AType, BType, float, 32, 32, 128>
+-    : WmmaTraitsBase<gfx12_t, AType, BType, float, 128, true, 32, 32>
++// Strict uses the supported 16x16 f8f6f4 instructions for FP4 as well.
++template <typename AType, typename BType, index_t N>
++struct WmmaTraits<gfx125_t, AType, BType, float, 32, N, 128>
++    : WmmaTraitsBase<gfx12_t, AType, BType, float, 128, true, 32, N>
+ {
+-    using Base     = WmmaTraitsBase<gfx12_t, AType, BType, float, 128, true, 32, 32>;
++    static_assert(N == 16 || N == 32);
++    using Base     = WmmaTraitsBase<gfx12_t, AType, BType, float, 128, true, 32, N>;
+     using ArchType = gfx125_t;
+ 
+     using AVecType = typename Base::AVecType;
+diff --git a/projects/composablekernel/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp b/projects/composablekernel/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp
+index c91bdfae..0d43e9dc 100644
+--- a/projects/composablekernel/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp
++++ b/projects/composablekernel/include/ck_tile/ops/grouped_convolution/kernel/grouped_convolution_backward_weight_kernel.hpp
+@@ -1368,7 +1368,7 @@ struct GroupedConvolutionBackwardWeightKernel
+     {
+         if constexpr(IsStreamK)
+         {
+-#if !defined(__gfx1250__)
++#if !(defined(__gfx1250__) || defined(__gfx1250_strict__))
+             if constexpr(GemmPipeline_::Async)
+             {
+ #if defined(__gfx950__)
