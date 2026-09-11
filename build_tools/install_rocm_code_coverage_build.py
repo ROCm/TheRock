@@ -17,6 +17,7 @@ python build_tools/install_rocm_code_coverage_build.py
 
 """
 import os
+import re
 import sys
 import argparse
 import platform
@@ -221,7 +222,9 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         if not member.name.startswith(prefix_slash):
                             continue
                         scoped_path = member.name[len(prefix_slash) :]
-                        if folder.lower() not in scoped_path.lower():
+                        if not re.search(
+                            rf"{folder}[^a-zA-Z]", scoped_path, flags=re.IGNORECASE
+                        ):
                             break
                         dest_path = output_dir / PurePosixPath(scoped_path)
                         _replace_scoped_member(

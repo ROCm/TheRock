@@ -96,7 +96,6 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_component.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
-      VENV_DIR: ${{ github.workspace }}/.venv
       CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
