@@ -211,7 +211,7 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
-- strict_submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected. Does not run on workflow_dispatch or nightlies.
+- strict_submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected. Only applies to pull_request events - push, schedule, and workflow_dispatch are not affected.
 - skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
 - test_type_for_family (optional): list of allowed test_type values for this family (e.g., ["quick"]). If the global test_type is not in this list, tests are skipped for this family.
 """

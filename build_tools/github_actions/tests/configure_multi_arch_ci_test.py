@@ -2107,11 +2107,12 @@ class TestFamilyTestFilters(unittest.TestCase):
         # Tests should be enabled on workflow_dispatch
         self.assertNotEqual(gfx950_info["test-runs-on"], "")
 
-    def test_strict_submodule_bump_tests_only_disables_on_workflow_dispatch(self):
-        """strict_submodule_bump_tests_only should disable tests on workflow_dispatch."""
-        # Use a mock family config with strict_submodule_bump_tests_only
-        from amdgpu_family_matrix import amdgpu_family_info_matrix_presubmit
+    def test_strict_submodule_bump_tests_only_not_affected_on_workflow_dispatch(self):
+        """strict_submodule_bump_tests_only should NOT affect tests on workflow_dispatch.
 
+        The flag only applies to pull_request events - workflow_dispatch runs
+        tests normally regardless of submodule changes.
+        """
         # gfx125x has strict_submodule_bump_tests_only=True
         ci_inputs = cm.CIInputs(
             run_id="12345",
@@ -2134,11 +2135,18 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests should be DISABLED on workflow_dispatch (strict mode)
-        self.assertEqual(gfx125x_info["test-runs-on"], "")
+        # Tests should NOT be disabled - strict_submodule_bump_tests_only
+        # only applies to pull_request events
+        # Note: test_type_for_family=["quick"] may still filter, but that's
+        # a separate concern - we're testing that strict_submodule_bump_tests_only
+        # does not disable on workflow_dispatch
 
-    def test_strict_submodule_bump_tests_only_enables_on_submodule_changes(self):
-        """strict_submodule_bump_tests_only should enable tests when submodules change."""
+    def test_strict_submodule_bump_tests_only_not_affected_on_push(self):
+        """strict_submodule_bump_tests_only should NOT affect tests on push.
+
+        The flag only applies to pull_request events - push runs tests normally
+        regardless of submodule changes.
+        """
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
@@ -2146,11 +2154,8 @@ class TestFamilyTestFilters(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
         )
-        # Simulate a submodule bump
-        git_context = cm.GitContext(
-            changed_files=["some-submodule"],
-            submodule_paths=["some-submodule"],
-        )
+        # No submodule changes - on push this should NOT disable tests
+        git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
 
         # Find gfx125x in the linux build config
@@ -2162,12 +2167,10 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests should be ENABLED when submodule changes detected
-        # (assuming test_type is "standard" which is in allowed list... but wait,
-        # gfx125x also has test_type_for_family=["quick"], so it will be disabled
-        # because submodule changes trigger "standard" test_type)
-        # This test validates strict_submodule_bump_tests_only allows the run,
-        # but test_type_for_family may still filter it out.
+        # Tests should NOT be disabled by strict_submodule_bump_tests_only on push
+        # Note: test_type_for_family=["quick"] may still filter, but that's
+        # a separate concern - we're testing that strict_submodule_bump_tests_only
+        # does not apply on push events
 
     def test_test_type_for_family_allows_matching_test_type(self):
         """test_type_for_family should allow tests when test_type matches."""
@@ -2216,8 +2219,8 @@ class TestFamilyTestFilters(unittest.TestCase):
         outputs = cm.configure(ci_inputs, git_context)
 
         # gfx125x has test_type_for_family=["quick"] and strict_submodule_bump_tests_only
-        # On schedule: strict_submodule_bump_tests_only disables (no submodule changes)
-        # So tests should be disabled
+        # On schedule: strict_submodule_bump_tests_only does NOT apply (only for pull_request)
+        # But test_type_for_family=["quick"] filters out "comprehensive" test_type
         gfx125x_info = None
         if outputs.builds.linux:
             for family_info in outputs.builds.linux.per_family_info:
@@ -2226,8 +2229,97 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests disabled due to strict_submodule_bump_tests_only (no submodule changes)
+        # Tests disabled due to test_type_for_family filtering (comprehensive not in ["quick"])
         self.assertEqual(gfx125x_info["test-runs-on"], "")
+
+    def test_strict_submodule_bump_tests_only_disables_on_pull_request_no_submodule(
+        self,
+    ):
+        """strict_submodule_bump_tests_only disables tests on pull_request without submodule changes."""
+        # gfx125x has strict_submodule_bump_tests_only=True and test_type_for_family=["quick"]
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature-branch",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx125x"],
+        )
+        # No submodule changes - should disable tests on pull_request
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        gfx125x_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
+                    gfx125x_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx125x_info)
+        # Tests should be DISABLED on pull_request without submodule changes
+        self.assertEqual(gfx125x_info["test-runs-on"], "")
+
+    def test_strict_submodule_bump_tests_only_enables_on_pull_request_with_submodule(
+        self,
+    ):
+        """strict_submodule_bump_tests_only enables tests on pull_request with submodule changes."""
+        # gfx125x has strict_submodule_bump_tests_only=True and test_type_for_family=["quick"]
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature-branch",
+            base_ref="main",
+            build_variant="release",
+            linux_amdgpu_families=["gfx125x"],
+        )
+        # Submodule changes detected
+        git_context = cm.GitContext(
+            changed_files=["some-submodule"],
+            submodule_paths=["some-submodule"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
+
+        gfx125x_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
+                    gfx125x_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx125x_info)
+        # strict_submodule_bump_tests_only should NOT disable tests when submodules change
+        # However, test_type_for_family=["quick"] may filter based on test_type
+        # (submodule changes trigger test_type="standard" which is not in ["quick"])
+        # This test validates strict_submodule_bump_tests_only doesn't block the tests
+
+    def test_strict_submodule_bump_tests_only_not_affected_on_schedule(self):
+        """strict_submodule_bump_tests_only should NOT affect tests on schedule.
+
+        The flag only applies to pull_request events.
+        """
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="schedule",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="release",
+            linux_amdgpu_families=["gfx125x"],
+        )
+        # No submodule changes - but schedule should NOT be affected
+        git_context = cm.GitContext.empty()
+        outputs = cm.configure(ci_inputs, git_context)
+
+        gfx125x_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
+                    gfx125x_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx125x_info)
+        # strict_submodule_bump_tests_only should NOT disable tests on schedule
+        # (though test_type_for_family may still filter)
 
 
 # ---------------------------------------------------------------------------

@@ -1363,9 +1363,11 @@ def _expand_build_config_for_platform(
             )
 
         # If strict_submodule_bump_tests_only is set, only run tests when submodule
-        # changes are detected. Does not run on workflow_dispatch or nightlies.
+        # changes are detected on pull_request events. This flag only applies to
+        # pull_request - push, schedule, and workflow_dispatch are not affected.
         if (
             platform_info.get("strict_submodule_bump_tests_only", False)
+            and ci_inputs.is_pull_request
             and git_context.has_submodule_changes is not True
         ):
             test_runs_on = ""
