@@ -1697,11 +1697,9 @@ def run_tests(args: Namespace) -> int:
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            print("(sanity: basic verification completed)")
+            print("(sanity: repo install and basic verification completed)")
         elif args.test_type == "full":
-            print("ROCm has been successfully installed from repository and verified!")
-        else:
-            print("ROCm has been successfully installed from repository and verified!")
+            print("(full: repo install, basic verification, and RDHC completed)")
         print("=" * 80 + "\n")
         return 0
     except Exception as e:

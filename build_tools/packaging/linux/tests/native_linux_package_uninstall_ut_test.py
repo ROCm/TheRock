@@ -121,21 +121,22 @@ class ListInstalledRocmPackagesTest(unittest.TestCase):
         self.assertEqual(names, ["amdrocm-7.13-1.x86_64"])
 
     @patch("native_linux_package_uninstall_test.subprocess.run")
-    def test_returns_empty_list_on_query_failure(self, mock_run):
+    def test_returns_none_on_query_failure(self, mock_run):
         import subprocess
 
         mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
         t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
             os_profile="ubuntu2404",
         )
-        self.assertEqual(t.list_installed_rocm_packages(), [])
+        with _suppress_script_output():
+            self.assertIsNone(t.list_installed_rocm_packages())
 
 
 class UninstallDebPackagesTest(unittest.TestCase):
-    """Tests for ``uninstall_packages()`` on deb (apt remove + autoremove)."""
+    """Tests for ``uninstall_packages()`` on deb (``apt autoremove`` with metapackages)."""
 
     @patch("native_linux_package_uninstall_test.run_streaming")
-    def test_remove_and_autoremove_in_reverse_order(self, mock_streaming):
+    def test_autoremove_with_metapackages_in_reverse_order(self, mock_streaming):
         mock_streaming.return_value = 0
         t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
             os_profile="ubuntu2404",
@@ -144,10 +145,9 @@ class UninstallDebPackagesTest(unittest.TestCase):
         )
         with _suppress_script_output():
             self.assertTrue(t.uninstall_packages())
-        self.assertEqual(mock_streaming.call_count, 2)
-        remove_cmd = mock_streaming.call_args_list[0][0][0]
-        autoremove_cmd = mock_streaming.call_args_list[1][0][0]
-        self.assertEqual(remove_cmd[:4], ["sudo", "apt", "remove", "-y"])
+        self.assertEqual(mock_streaming.call_count, 1)
+        remove_cmd = mock_streaming.call_args[0][0]
+        self.assertEqual(remove_cmd[:4], ["sudo", "apt", "autoremove", "-y"])
         self.assertEqual(
             remove_cmd[4:],
             [
@@ -157,7 +157,6 @@ class UninstallDebPackagesTest(unittest.TestCase):
                 "amdrocm7.13-gfx94x",
             ],
         )
-        self.assertEqual(autoremove_cmd, ["sudo", "apt", "autoremove", "-y"])
 
     @patch("native_linux_package_uninstall_test.run_streaming")
     def test_returns_false_when_remove_fails(self, mock_streaming):
@@ -210,16 +209,22 @@ class RunUninstallVerificationTest(unittest.TestCase):
 
     @patch.object(
         native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "_verify_install_prefix_empty",
+        return_value=True,
+    )
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
         "list_installed_rocm_packages",
         return_value=[],
     )
-    def test_passes_when_no_packages_remain(self, mock_list):
+    def test_passes_when_no_packages_remain(self, mock_list, mock_prefix):
         t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
             os_profile="ubuntu2404",
             install_prefix="/nonexistent/prefix",
         )
         with _suppress_script_output():
             self.assertTrue(t.run_uninstall_verification())
+        mock_prefix.assert_called_once()
 
     @patch.object(
         native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
@@ -229,6 +234,36 @@ class RunUninstallVerificationTest(unittest.TestCase):
     def test_fails_when_packages_remain(self, mock_list):
         t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
             os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.run_uninstall_verification())
+
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "list_installed_rocm_packages",
+        return_value=None,
+    )
+    def test_fails_when_package_query_fails(self, mock_list):
+        t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
+            os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.run_uninstall_verification())
+
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "_verify_install_prefix_empty",
+        return_value=False,
+    )
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "list_installed_rocm_packages",
+        return_value=[],
+    )
+    def test_fails_when_install_prefix_not_empty(self, mock_list, mock_prefix):
+        t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
+            os_profile="ubuntu2404",
+            install_prefix="/opt/rocm/core",
         )
         with _suppress_script_output():
             self.assertFalse(t.run_uninstall_verification())
@@ -287,6 +322,25 @@ class RunUninstallAndVerifyTest(unittest.TestCase):
         with _suppress_script_output():
             self.assertFalse(t.run_uninstall_and_verify())
         mock_verify.assert_not_called()
+
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "uninstall_packages",
+    )
+    @patch.object(
+        native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest,
+        "list_installed_rocm_packages",
+        return_value=None,
+    )
+    def test_returns_false_when_pre_uninstall_query_fails(
+        self, mock_list, mock_uninstall
+    ):
+        t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
+            os_profile="ubuntu2404",
+        )
+        with _suppress_script_output():
+            self.assertFalse(t.run_uninstall_and_verify())
+        mock_uninstall.assert_not_called()
 
 
 if __name__ == "__main__":

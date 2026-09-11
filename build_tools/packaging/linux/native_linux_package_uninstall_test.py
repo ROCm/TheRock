@@ -10,10 +10,10 @@ installed by ``native_linux_package_install_test.py`` and assert clean teardown.
 
 Steps:
   4a. Uninstall: remove metapackages in reverse install order.
-      deb: ``apt remove`` + ``apt autoremove``; RHEL: ``dnf remove``;
-      SLES: ``zypper remove --clean-deps`` (required for dependency cleanup).
-  4b. Verify: query the package manager; fail if any ``rocm``/``amdrocm`` packages
-      remain. Install-prefix checks are informational only (warn, do not fail).
+      deb: ``sudo apt autoremove -y <metapackages>`` (matches public install docs);
+      RHEL: ``dnf remove``; SLES: ``zypper remove --clean-deps``.
+  4b. Verify: fail if the package-manager query fails, any ``rocm``/``amdrocm``
+      packages remain, or any files remain under the install prefix.
 
 Prerequisites:
 - Run inside the same container/VM as the install test (packages must still be
@@ -63,7 +63,6 @@ if str(_SCRIPT_DIR) not in sys.path:
 from native_linux_package_test_common import (
     ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
     UNINSTALL_TIMEOUT_SEC,
-    VERIFY_KEY_COMPONENTS,
     build_metapackage_names,
     derive_package_type,
     is_rocm_related_package_name,
@@ -94,8 +93,8 @@ class NativeLinuxPackageUninstallTest:
 
         Args:
             os_profile: OS profile (e.g. ``ubuntu2404``, ``rhel8``, ``sles16``).
-            install_prefix: Install prefix from the install test; used for
-                informational prefix checks in Step 4b (default: ``/opt/rocm/core``).
+            install_prefix: Install prefix from the install test; Step 4b fails if
+                any files remain under this path (default: ``/opt/rocm/core``).
             gfx_arch: GPU architecture(s) from the install test; must match install
                 flags when arch-suffixed metapackages were installed.
             rocm_version: ROCm release from the install test (major.minor used in
@@ -118,7 +117,7 @@ class NativeLinuxPackageUninstallTest:
             build_variant=self.build_variant,
         )
 
-    def list_installed_rocm_packages(self) -> list[str]:
+    def list_installed_rocm_packages(self) -> list[str] | None:
         """Query the system package manager for installed ROCm-related packages.
 
         deb: parses ``dpkg -l`` lines with status ``ii``. rpm/SLES: parses
@@ -126,8 +125,8 @@ class NativeLinuxPackageUninstallTest:
         are collected.
 
         Returns:
-            Sorted list of installed package names, or an empty list when the query
-            fails (warns and continues; callers treat empty as "none found").
+            Sorted list of installed package names, ``[]`` when none match, or
+            ``None`` when the query fails (distinct from a clean empty result).
         """
         try:
             if self.package_type == "deb":
@@ -160,18 +159,18 @@ class NativeLinuxPackageUninstallTest:
                 if line.strip() and is_rocm_related_package_name(line.strip())
             )
         except subprocess.CalledProcessError as e:
-            print(f"[WARN] Could not query installed packages: {e}")
-            return []
+            stderr = e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr
+            print(f"[FAIL] Could not query installed packages: {stderr or e}")
+            return None
         except OSError as e:
-            print(f"[WARN] Could not query installed packages: {e}")
-            return []
+            print(f"[FAIL] Could not query installed packages: {e}")
+            return None
 
     def uninstall_packages(self) -> bool:
         """Step 4a: remove configured metapackages in reverse install order.
 
-        deb runs ``apt remove`` followed by ``apt autoremove``. RHEL runs
-        ``dnf remove``. SLES runs ``zypper remove --clean-deps`` (no separate
-        autoremove pass).
+        deb runs ``sudo apt autoremove -y`` with metapackage names (public docs).
+        RHEL runs ``dnf remove``. SLES runs ``zypper remove --clean-deps``.
 
         Returns:
             True when all remove commands succeed; False on non-zero exit,
@@ -189,8 +188,7 @@ class NativeLinuxPackageUninstallTest:
         print(f"\nPackages to remove (reverse install order): {packages_to_remove}")
 
         if self.package_type == "deb":
-            remove_cmd = ["sudo", "apt", "remove", "-y"] + packages_to_remove
-            autoremove_cmd = ["sudo", "apt", "autoremove", "-y"]
+            remove_cmd = ["sudo", "apt", "autoremove", "-y"] + packages_to_remove
         elif is_sles(self.os_profile):
             remove_cmd = [
                 "zypper",
@@ -199,10 +197,8 @@ class NativeLinuxPackageUninstallTest:
                 "-y",
                 "--clean-deps",
             ] + packages_to_remove
-            autoremove_cmd = None
         else:
             remove_cmd = ["dnf", "remove", "-y"] + packages_to_remove
-            autoremove_cmd = None
 
         print(f"\nRunning: {' '.join(remove_cmd)}")
         print("=" * 80)
@@ -214,16 +210,6 @@ class NativeLinuxPackageUninstallTest:
                 print("\n" + "=" * 80)
                 print(f"[FAIL] Failed to remove packages (exit code: {return_code})")
                 return False
-
-            if autoremove_cmd:
-                print(f"\nRunning: {' '.join(autoremove_cmd)}")
-                print("=" * 80)
-                print("Autoremove progress (streaming output):\n")
-                return_code = run_streaming(autoremove_cmd, UNINSTALL_TIMEOUT_SEC)
-                if return_code != 0:
-                    print("\n" + "=" * 80)
-                    print(f"[FAIL] apt autoremove failed (exit code: {return_code})")
-                    return False
 
             print("\n" + "=" * 80)
             print("[PASS] Package uninstall completed successfully")
@@ -238,21 +224,45 @@ class NativeLinuxPackageUninstallTest:
             print(f"\n[FAIL] Error during uninstall: {e}")
             return False
 
-    def run_uninstall_verification(self) -> bool:
-        """Step 4b: verify no ROCm packages remain after uninstall.
+    def _verify_install_prefix_empty(self, install_path: Path) -> bool:
+        """Return True when the install prefix is gone or contains no files."""
+        if not install_path.exists():
+            print(f"[PASS] Install prefix removed: {self.install_prefix}")
+            return True
 
-        Pass/fail is determined solely by the package-manager query. If the install
-        prefix still exists, key components from ``VERIFY_KEY_COMPONENTS`` are
-        reported as warnings only.
+        leftover_paths = sorted(
+            p.relative_to(install_path)
+            for p in install_path.rglob("*")
+            if p.is_file() or p.is_symlink()
+        )
+        if leftover_paths:
+            print(f"\n[FAIL] Install prefix not empty: {self.install_prefix}")
+            for rel_path in leftover_paths[:10]:
+                print(f"  {rel_path}")
+            if len(leftover_paths) > 10:
+                print(f"  ... and {len(leftover_paths) - 10} more")
+            return False
+
+        print(f"[PASS] Install prefix is empty: {self.install_prefix}")
+        return True
+
+    def run_uninstall_verification(self) -> bool:
+        """Step 4b: verify clean uninstall teardown.
+
+        Fails when the package-manager query fails, any ROCm-related packages
+        remain, or any files remain under the install prefix.
 
         Returns:
-            True when no ROCm-related packages remain installed; False otherwise.
+            True when package query succeeds, no ROCm packages remain, and the
+            install prefix is gone or empty; False otherwise.
         """
         print("\n" + "=" * 80)
         print("STEP 4b: UNINSTALL VERIFICATION")
         print("=" * 80)
 
         remaining = self.list_installed_rocm_packages()
+        if remaining is None:
+            return False
         if remaining:
             print(f"\n[FAIL] {len(remaining)} ROCm package(s) still installed:")
             for pkg in remaining[:10]:
@@ -263,24 +273,8 @@ class NativeLinuxPackageUninstallTest:
 
         print("\n[PASS] No ROCm packages remain installed")
 
-        install_path = Path(self.install_prefix)
-        if not install_path.exists():
-            print(f"[PASS] Install prefix removed: {self.install_prefix}")
-        else:
-            leftover = [
-                component
-                for component in VERIFY_KEY_COMPONENTS
-                if (install_path / component).exists()
-            ]
-            if leftover:
-                print(
-                    f"[WARN] Install prefix still contains key components: {leftover}"
-                )
-            else:
-                print(
-                    f"[INFO] Install prefix exists but key ROCm components are gone: "
-                    f"{self.install_prefix}"
-                )
+        if not self._verify_install_prefix_empty(Path(self.install_prefix)):
+            return False
 
         print("\n[PASS] Uninstall verification PASSED")
         return True
@@ -299,6 +293,9 @@ class NativeLinuxPackageUninstallTest:
         print("=" * 80)
 
         before = self.list_installed_rocm_packages()
+        if before is None:
+            print("\n[FAIL] Could not query installed packages before uninstall")
+            return False
         print(f"\nROCm packages before uninstall: {len(before)}")
         if before:
             print(" Sample packages (first 5):")
@@ -532,7 +529,7 @@ def test_native_linux_package_uninstall() -> None:
     """Pytest entry: same run as CLI, driven by workflow env vars in CI.
 
     Skips locally when env is unset; fails in GitHub Actions when required env
-    is missing. Asserts :func:`run_tests` returns exit code 0.
+    is missing. Failures are reported via :func:`run_tests` exit codes.
     """
     import pytest
 
@@ -551,7 +548,8 @@ def test_native_linux_package_uninstall() -> None:
 
     args = parse_cli_arguments(argv, raise_instead_of_exit=True)
     rc = run_tests(args)
-    assert rc == 0, f"run_tests exited with code {rc}"
+    if rc != 0:
+        pytest.fail(f"Native Linux package uninstall test failed (exit code {rc})")
 
 
 def main() -> None:
