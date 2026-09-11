@@ -3,11 +3,15 @@
 # SPDX-License-Identifier: MIT
 
 import argparse
+import os
+import re
 import subprocess
 import tempfile
-import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
+
 import requests
 
 THEROCK_REPO = "ROCm/TheRock"
@@ -19,18 +23,33 @@ BOT_EMAIL = "therockbot@amd.com"
 COMMON_CI_LABELS = ["ci:run-all-archs"]
 
 ROCM_SYSTEMS_FILES = [
+    ".github/workflows/therock-build-linux.yml",
     ".github/workflows/therock-ci-linux.yml",
     ".github/workflows/therock-ci-windows.yml",
+    ".github/workflows/therock-ci.yml",
     ".github/workflows/therock-rccl-ci-linux.yml",
+    ".github/workflows/therock-rccl-test-jax-collective.yml",
+    ".github/workflows/therock-rccl-test-madengine.yml",
     ".github/workflows/therock-rccl-test-packages-multi-node.yml",
     ".github/workflows/therock-rccl-test-packages-single-node.yml",
+    ".github/workflows/therock-rccl-test-pytorch-distributed.yml",
+    ".github/workflows/therock-rccl-test-rocprof.yml",
     ".github/workflows/therock-test-component.yml",
     ".github/workflows/therock-test-packages.yml",
 ]
 
-ROCM_LIBRARIES_FILES = [
-    ".github/actions/ci-env/action.yml",
-]
+ROCM_LIBRARIES_CI_ENV_FILE = ".github/actions/ci-env/action.yml"
+
+FULL_COMMIT_SHA_PATTERN = re.compile(r"\b[0-9a-f]{40}\b")
+# Title convention we generate below; not tied to any one downstream repo, so
+# it stays a shared constant even though the PR author does not (see
+# SUBMODULE_CONFIG["bot_author"]).
+THEROCK_REF_PR_TITLE_PREFIX = "Update TheRock reference to ("
+GITHUB_SEARCH_PAGE_SIZE = 100
+# The GitHub search API refuses to serve matches past the first 1000.
+GITHUB_SEARCH_RESULT_LIMIT = 1000
+# Leave recent bot pin PRs open so their CI can finish before they are closed.
+STALE_THEROCK_REF_PR_AGE = timedelta(days=2)
 
 SUBMODULE_CONFIG = {
     "rocm-systems": {
@@ -38,6 +57,8 @@ SUBMODULE_CONFIG = {
         "files": ROCM_SYSTEMS_FILES,
         "updater": "ref",
         "token_key": "systems",
+        # See the "rocm-libraries" entry below for why this is per-repo.
+        "bot_author": "systems-assistant[bot]",
         # Changes to rocm-systems should run the full matrix of CI jobs:
         #   * Build for all gfx archs
         #   * Build for all variants (asan)
@@ -46,9 +67,15 @@ SUBMODULE_CONFIG = {
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
-        "files": ROCM_LIBRARIES_FILES,
+        "files": [ROCM_LIBRARIES_CI_ENV_FILE],
         "updater": "ci-env",
         "token_key": "libraries",
+        # GitHub App bot identity that opens "Update TheRock reference to
+        # (...)" PRs on this repo; only used by the "ci-env" updater's stale
+        # pin-PR cleanup. Each downstream repo has its own GitHub App (see
+        # ROCM_LIBRARIES_APP_ID / ROCM_SYSTEMS_APP_ID in bump_submodules.yml),
+        # so this must not be hardcoded as a single module-wide constant.
+        "bot_author": "assistant-librarian[bot]",
         # Changes to rocm-libraries should run the full matrix of CI jobs:
         #   * Build for all gfx archs
         #   * Build for all variants (asan)
@@ -125,10 +152,69 @@ def gh_api(
     return response.json()
 
 
+LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
+
+
+def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
+    """Return every job in a workflow run, following pagination."""
+    jobs: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}",
+        )
+        page_jobs = result.get("jobs", [])
+        jobs.extend(page_jobs)
+
+        if len(page_jobs) < 100 or len(jobs) >= result.get("total_count", 0):
+            return jobs
+
+        page += 1
+
+
+def _baseline_gate_jobs_succeeded(repo: str, token: str, run_id: str | int) -> bool:
+    """Return whether every "Libraries Baseline Ready" job in this run succeeded.
+
+    That job (defined in multi_arch_build_portable_linux.yml and
+    multi_arch_build_windows.yml) depends on exactly the stages rocm-libraries
+    reuses via `baseline_run_id`. Checking it instead of the whole run's
+    `conclusion` means an unrelated math-libs/compiler-runtime failure
+    elsewhere in the matrix does not block a baseline that is otherwise fine
+    to reuse. If no such job is found at all, treat the run as unsafe to use;
+    that should only happen for a run that predates this gate.
+    """
+    gate_jobs = [
+        job
+        for job in _list_run_jobs(repo, token, run_id)
+        if job["name"].endswith(LIBRARIES_BASELINE_GATE_JOB_NAME)
+    ]
+    if not gate_jobs:
+        print(f"[WARN] Run {run_id} has no '{LIBRARIES_BASELINE_GATE_JOB_NAME}' job")
+        return False
+    return all(job.get("conclusion") == "success" for job in gate_jobs)
+
+
 def get_baseline_run_id_from_merged_pr(
     repo: str, token: str, merge_commit_sha: str, workflow_name: str = "Multi-Arch CI"
 ) -> str | None:
-    """Get the baseline run ID from the PR that was just merged."""
+    """Get the baseline run ID from the PR that was just merged.
+
+    Downstream repos reuse this run's build-stage artifacts directly (via
+    `baseline_run_id`), so only a run where those specific stages actually
+    succeeded is safe to hand out. We check the "Libraries Baseline Ready"
+    gate job rather than the whole run's `conclusion`: an unrelated
+    math-libs/compiler-runtime failure elsewhere in the matrix makes the
+    overall run "failure" even when every stage rocm-libraries needs
+    succeeded, and rejecting on that basis would throw away perfectly good
+    baselines. `status=completed` still filters candidate runs to ones that
+    have finished; their overall `conclusion` no longer decides usability. If
+    the newest matching run's gate job did not succeed (or does not exist),
+    we deliberately do not fall back to an older run on a different commit;
+    the caller treats a `None` return as "no baseline", which forces a full
+    rebuild instead of a plausible-looking but wrong artifact reuse.
+    """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
     pr = next(
@@ -148,14 +234,29 @@ def get_baseline_run_id_from_merged_pr(
     runs = gh_api(
         token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
     )
-    for run in runs.get("workflow_runs", []):
-        if run["name"] == workflow_name:
+    matching_runs = [
+        run for run in runs.get("workflow_runs", []) if run["name"] == workflow_name
+    ]
+
+    for run in matching_runs:
+        if _baseline_gate_jobs_succeeded(repo, token, run["id"]):
             print(
-                f"[INFO] Found {workflow_name} run {run['id']} for PR #{pr['number']}"
+                f"[INFO] Found {workflow_name} run {run['id']} with all reused "
+                f"stages succeeded for PR #{pr['number']}"
             )
             return str(run["id"])
+        print(
+            f"[WARN] Run {run['id']} (conclusion={run.get('conclusion')}) does not "
+            f"have all reused stages succeeded; skipping"
+        )
 
-    print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
+    if matching_runs:
+        print(
+            f"[WARN] No {workflow_name} run with all reused stages succeeded "
+            f"found for PR #{pr['number']}"
+        )
+    else:
+        print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
     return None
 
 
@@ -298,6 +399,73 @@ def update_ci_env_file(
         print(f"[INFO] Set baseline-run-id to {baseline_run_id}")
 
 
+def _find_therock_workflow_refs(content: str) -> set[str]:
+    """Find pinned TheRock SHAs in a rocm-libraries workflow."""
+    refs = set()
+    therock_checkout_indent = None
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+
+        if therock_checkout_indent is not None:
+            if stripped and indent < therock_checkout_indent:
+                therock_checkout_indent = None
+            elif stripped.startswith("ref:"):
+                refs.update(FULL_COMMIT_SHA_PATTERN.findall(line))
+                therock_checkout_indent = None
+
+        if re.fullmatch(r"""repository:\s*["']?ROCm/TheRock["']?""", stripped):
+            therock_checkout_indent = indent
+
+        if "ROCm/TheRock" in line or "therock_ref_override" in line:
+            refs.update(FULL_COMMIT_SHA_PATTERN.findall(line))
+
+    return refs
+
+
+def update_therock_workflow_file(file_path: str, new_sha: str) -> None:
+    """Update every pinned TheRock workflow/source SHA in one workflow file."""
+    path = Path(file_path)
+    content = path.read_text(encoding="utf-8")
+    old_refs = _find_therock_workflow_refs(content)
+    if not old_refs:
+        raise RuntimeError(f"No pinned TheRock refs found in {file_path}")
+
+    updated_content = content
+    for old_ref in old_refs:
+        updated_content = updated_content.replace(old_ref, new_sha)
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    updated_content = re.sub(
+        rf"({re.escape(new_sha)}\s+#\s+)\d{{4}}-\d{{2}}-\d{{2}}",
+        rf"\g<1>{date}",
+        updated_content,
+    )
+
+    remaining_refs = _find_therock_workflow_refs(updated_content) - {new_sha}
+    if remaining_refs:
+        raise RuntimeError(
+            f"Stale TheRock refs remain in {file_path}: {sorted(remaining_refs)}"
+        )
+
+    path.write_text(updated_content, encoding="utf-8")
+    print(f"[INFO] Updated {file_path}")
+
+
+def find_therock_workflow_files(root: Path = Path(".github")) -> list[str]:
+    """Find YAML files under root that contain pinned TheRock refs."""
+    candidates = sorted([*root.rglob("*.yml"), *root.rglob("*.yaml")])
+    files = [
+        path.as_posix()
+        for path in candidates
+        if _find_therock_workflow_refs(path.read_text(encoding="utf-8"))
+    ]
+    if not files:
+        raise RuntimeError(f"No pinned TheRock workflow files found under {root}")
+    return files
+
+
 def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
     """Close all open PRs on TheRock that originated from old submodule SHA."""
     old_short = old_sha[:7]
@@ -323,6 +491,106 @@ def close_stale_prs(submodule: str, old_sha: str, token: str) -> None:
                 method="PATCH",
                 data={"state": "closed"},
             )
+
+
+def _parse_github_datetime(value: str) -> datetime:
+    """Parse a GitHub API timestamp into an aware UTC datetime."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def search_issues(token: str, query: str) -> list[dict[str, Any]]:
+    """Return every issue/PR matching a search query, following pagination."""
+    items: list[dict[str, Any]] = []
+    page = 1
+
+    while True:
+        result = gh_api(
+            token,
+            f"search/issues?q={quote(query)}"
+            f"&per_page={GITHUB_SEARCH_PAGE_SIZE}&page={page}",
+        )
+        page_items = result.get("items", [])
+        items.extend(page_items)
+
+        if len(page_items) < GITHUB_SEARCH_PAGE_SIZE:
+            return items
+        if len(items) >= result.get("total_count", 0):
+            return items
+        if len(items) >= GITHUB_SEARCH_RESULT_LIMIT:
+            print(
+                f"[WARN] Search hit the {GITHUB_SEARCH_RESULT_LIMIT}-result API "
+                f"limit; some matches were not retrieved"
+            )
+            return items
+
+        page += 1
+
+
+def close_stale_therock_ref_prs(
+    repo: str,
+    current_pr_number: int,
+    token: str,
+    bot_author: str,
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Close older automated TheRock reference PRs in an upstream repository.
+
+    `bot_author` is the GitHub App bot identity that opens these PRs on
+    `repo` (SUBMODULE_CONFIG["bot_author"] for the relevant entry); it is not
+    a single global value because each downstream repo has its own GitHub
+    App, and matching the wrong one would silently close nothing (or, if
+    reused carelessly, PRs that were never ours to close).
+
+    PRs younger than STALE_THEROCK_REF_PR_AGE are left open so their CI can
+    finish before they are superseded.
+    """
+    items = search_issues(
+        token,
+        f'repo:{repo} is:pr is:open in:title "{THEROCK_REF_PR_TITLE_PREFIX}"',
+    )
+    now = now or datetime.now(timezone.utc)
+
+    for item in items:
+        number = item["number"]
+        if number == current_pr_number:
+            continue
+        if item["user"]["login"] != bot_author:
+            continue
+        if not item["title"].startswith(THEROCK_REF_PR_TITLE_PREFIX):
+            continue
+
+        created_at = item.get("created_at")
+        if not created_at:
+            print(f"[WARN] Skipping PR #{number}: missing created_at")
+            continue
+        age = now - _parse_github_datetime(created_at)
+        if age < STALE_THEROCK_REF_PR_AGE:
+            age_hours = int(age.total_seconds() // 3600)
+            print(
+                f"[INFO] Leaving TheRock reference PR #{number} open "
+                f"({age_hours}h old; close after {STALE_THEROCK_REF_PR_AGE.days}d)"
+            )
+            continue
+
+        print(f"[INFO] Closing stale TheRock reference PR #{number}")
+        gh_api(
+            token,
+            f"repos/{repo}/issues/{number}/comments",
+            method="POST",
+            data={
+                "body": (
+                    f"Closing stale PR superseded by automated update "
+                    f"#{current_pr_number}."
+                )
+            },
+        )
+        gh_api(
+            token,
+            f"repos/{repo}/pulls/{number}",
+            method="PATCH",
+            data={"state": "closed"},
+        )
 
 
 def _git_commit(title: str) -> None:
@@ -504,13 +772,18 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
         run(["git", "checkout", "-b", branch])
 
         updater = config.get("updater")
-        for f in config["files"]:
-            if updater == "ci-env":
-                update_ci_env_file(f, after, baseline_run_id)
-            else:
+        files_to_update = list(config["files"])
+        if updater == "ci-env":
+            update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
+            workflow_files = find_therock_workflow_files()
+            for f in workflow_files:
+                update_therock_workflow_file(f, after)
+            files_to_update.extend(workflow_files)
+        else:
+            for f in files_to_update:
                 update_ref_in_file(f, after)
 
-        run(["git", "add"] + config["files"])
+        run(["git", "add"] + files_to_update)
 
         commit_msg = f"Update TheRock ref to {after[:7]}"
         if baseline_run_id:
@@ -519,11 +792,14 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
 
         run(["git", "push", "origin", branch])
 
-        pr_body = f"Updated TheRock ref to `{after[:7]}` due to submodule bump"
+        pr_body = (
+            f"Updated all pinned TheRock workflow and source refs to "
+            f"`{after[:7]}` due to submodule bump"
+        )
         if baseline_run_id:
             pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
 
-        gh_api(
+        pr = gh_api(
             token,
             f"repos/{repo_name}/pulls",
             method="POST",
@@ -533,6 +809,9 @@ def handle_push(before: str, after: str, tokens: dict[str, str]) -> None:
                 "base": "develop",
                 "body": pr_body,
             },
+        )
+        close_stale_therock_ref_prs(
+            repo_name, pr["number"], token, config["bot_author"]
         )
 
     os.chdir(original_cwd)
