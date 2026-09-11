@@ -33,6 +33,8 @@ if(NOT _example_hip_targets)
 endif()
 if(_example_hip_targets)
   list(GET _example_hip_targets 0 _example_hip_arch)
+  therock_expand_amdgpu_compilation_targets(_example_hip_arch ${_example_hip_arch})
+  string(REPLACE ";" "\\;" _example_hip_arch "${_example_hip_arch}")
   list(APPEND HIP_CMAKE_ARGS "-DCMAKE_HIP_ARCHITECTURES=${_example_hip_arch}")
 endif()
 

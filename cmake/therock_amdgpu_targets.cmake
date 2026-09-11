@@ -13,6 +13,20 @@
 # Note that each gfx_target will also create a family of the same name.
 set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
 
+# Expand compilation variants without registering another selectable GPU/family.
+# Keep the Python family expansion in cmake_amdgpu_targets.py in sync.
+function(therock_expand_amdgpu_compilation_targets out_var)
+  set(_targets)
+  foreach(_target IN LISTS ARGN)
+    list(APPEND _targets "${_target}")
+    if(_target STREQUAL "gfx1250")
+      list(APPEND _targets gfx1250-strict)
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES _targets)
+  set("${out_var}" "${_targets}" PARENT_SCOPE)
+endfunction()
+
 # Declares an AMDGPU target, associating it with family names and optionally
 # setting additional characteristics.
 # Args: gfx_target product_name
@@ -364,6 +378,11 @@ function(therock_validate_amdgpu_targets)
     endforeach()
     list(REMOVE_DUPLICATES _test_expanded_targets)
   endif()
+
+  # Resolve compilation variants before any component or artifact consumes them.
+  foreach(_target_list _expanded_targets _dist_expanded_targets _test_expanded_targets)
+    therock_expand_amdgpu_compilation_targets(${_target_list} ${${_target_list}})
+  endforeach()
 
   # Report test targets if different from per-arch targets.
   if(_test_expanded_targets AND NOT "${_test_expanded_targets}" STREQUAL "${_expanded_targets}")

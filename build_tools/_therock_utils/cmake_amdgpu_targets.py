@@ -85,8 +85,16 @@ def build_family_to_targets(infos: list[AmdgpuTargetInfo]) -> dict[str, list[str
         # The target is its own family plus all explicit FAMILY entries.
         for family in [info.gfx_target] + info.families:
             result.setdefault(family, [])
-            if info.gfx_target not in result[family]:
-                result[family].append(info.gfx_target)
+            # Match therock_expand_amdgpu_compilation_targets(): the strict
+            # variant belongs to each existing gfx1250 family, not a new family.
+            targets = (
+                ["gfx1250", "gfx1250-strict"]
+                if info.gfx_target == "gfx1250"
+                else [info.gfx_target]
+            )
+            for target in targets:
+                if target not in result[family]:
+                    result[family].append(target)
     return result
 
 

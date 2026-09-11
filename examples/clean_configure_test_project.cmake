@@ -31,7 +31,8 @@ set(propagate_vars
 set(build_options)
 foreach(var_name ${propagate_vars})
   if(DEFINED ${var_name})
-    list(APPEND build_options "-D${var_name}=${${var_name}}")
+    string(REPLACE ";" "\\;" _value "${${var_name}}")
+    list(APPEND build_options "-D${var_name}=${_value}")
   endif()
 endforeach()
 

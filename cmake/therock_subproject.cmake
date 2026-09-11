@@ -1638,6 +1638,7 @@ endfunction()
 function(therock_filter_amdgpu_targets out_var project_name)
   set(_filtered ${ARGN})
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name}")
+  therock_expand_amdgpu_compilation_targets(_excludes ${_excludes})
   list(REMOVE_ITEM _filtered ${_excludes})
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
 endfunction()
@@ -1645,6 +1646,7 @@ endfunction()
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
+  therock_expand_amdgpu_compilation_targets(_excludes ${_excludes})
   get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
   set(_filtered ${_gpu_targets})
   if(_excludes)
@@ -1718,11 +1720,8 @@ function(_therock_cmake_subproject_setup_toolchain
       endif()
     endif()
 
-    # Compile the strict variant alongside gfx1250 in subprojects.
-    if("gfx1250" IN_LIST _filtered_gpu_targets)
-      list(APPEND _filtered_gpu_targets gfx1250-strict)
-      list(REMOVE_DUPLICATES _filtered_gpu_targets)
-    endif()
+    # Also cover project-specific fallback targets selected after global resolution.
+    therock_expand_amdgpu_compilation_targets(_filtered_gpu_targets ${_filtered_gpu_targets})
 
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
