@@ -96,7 +96,9 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # _load_synthetic_subprojects below) with level 3 (unbounded) in
     # test_policies.toml, so they don't need to be hand-listed here too.
     "shared/origami": ["origami", "tensilelite"],
-    "shared/stinkytofu": ["tensilelite"],
+    # StinkyTofu only affects gfx1250. Multi-arch CI currently has no gfx1250
+    # test runners, so preserve its build selection while selecting no tests.
+    "shared/stinkytofu": [],
     "shared/tensile": ["hipblas", "rocblas"],
     "dnn-providers/cmake": ["hipdnn_integration_tests"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
@@ -626,13 +628,18 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    # Parse and normalize changed_projects
+    # Parse changed_projects.
     changed = args.changed_projects
     if changed:
         flattened = []
         for item in changed:
             flattened.extend(p.strip() for p in item.split(",") if p.strip())
         changed = flattened
+
+    # Record whether projects were explicitly supplied before alias normalization.
+    # An explicit external project may intentionally map to no tests, while no
+    # supplied projects continues to mean run all tests.
+    projects_were_provided = bool(changed)
 
     if changed:
         normalized = []
@@ -643,8 +650,8 @@ def main():
                 raise SystemExit(str(e)) from e
         changed = normalized
 
-    # No projects specified → all tests
-    if not changed:
+    # No projects supplied → all tests.
+    if not projects_were_provided:
         if args.gha_output:
             gha_set_output({"projects_to_test": "*"})
         else:

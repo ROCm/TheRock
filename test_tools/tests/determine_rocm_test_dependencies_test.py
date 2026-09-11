@@ -337,7 +337,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 # only exercises alias expansion, so it sees just the literal
                 # alias contents.
                 "shared/origami": {"origami", "tensilelite"},
-                "shared/stinkytofu": {"tensilelite"},
+                "shared/stinkytofu": set(),
                 "shared/tensile": {"hipblas", "rocblas"},
             }
             for changed_project, expected in cases.items():
@@ -569,6 +569,30 @@ class TestCliInputParsing(_FixtureTestCase):
         lines = proc.stdout.strip().splitlines()
         self.assertIn("amdsmi", lines)
         self.assertIn("rdc", lines)
+
+    def test_stinkytofu_explicitly_selects_no_tests(self) -> None:
+        proc = self._run(
+            "--changed-projects",
+            "shared/stinkytofu",
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout), [])
+
+    def test_stinkytofu_does_not_remove_mixed_project_tests(self) -> None:
+        proc = self._run(
+            "--changed-projects",
+            "shared/stinkytofu",
+            "shared/origami",
+            "--level",
+            "5",
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(
+            json.loads(proc.stdout),
+            ["origami", "tensilelite"],
+        )
 
 
 # ---------------------------------------------------------------------------
