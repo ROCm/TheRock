@@ -122,7 +122,7 @@ class GetGpgKeyUrlTest(unittest.TestCase):
             ),
             (
                 "https://rc.repo.amd.com/rocm/core/packages/ubuntu2404",
-                "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
+                "https://rc.repo.amd.com/rocm/gpg/packages.gpg",
             ),
         ]
         for repo_url, gpg_url in cases:
@@ -144,7 +144,7 @@ class GetGpgKeyUrlFromReleaseTypeTest(unittest.TestCase):
             (
                 "prerelease",
                 "multi_arch",
-                "https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg",
+                "https://rc.repo.amd.com/rocm/gpg/packages.gpg",
             ),
             (
                 "stable",
