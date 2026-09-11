@@ -218,6 +218,10 @@ if(THEROCK_ENABLE_COMPILER)
         -DHOTSWAP_BUILD_TOOL=ON
         "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
     endif()
+  else()
+    list(APPEND _comgr_hotswap_cmake_args
+      -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=OFF
+      -DHOTSWAP_BUILD_TOOL=OFF)
   endif()
 
   # Optionally override the comgr DLL/shared-library output name (Windows). Kept
