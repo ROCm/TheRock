@@ -1,0 +1,27 @@
+From 60088593fc1141251ea302b8a13da5f1fbab2abb Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 14:25:32 -0500
+Subject: [PATCH] hipBLASLt: accept explicitly requested gfx1250-strict
+
+Allow explicit strict-target builds past tensilelite_validate_gpu_targets. Keep the default all target list unchanged. This addresses the configuration rejection only; generated kernels still require build validation.
+
+Observed in https://github.com/ROCm/TheRock/actions/runs/34634887721/job/103383110591 . Temporary downstream validation patch; upstream submission pending.
+---
+ .../hipblaslt/cmake/tensilelite_supported_architectures.cmake    | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/projects/hipblaslt/cmake/tensilelite_supported_architectures.cmake b/projects/hipblaslt/cmake/tensilelite_supported_architectures.cmake
+index 4c910c9..5d85fb7 100644
+--- a/projects/hipblaslt/cmake/tensilelite_supported_architectures.cmake
++++ b/projects/hipblaslt/cmake/tensilelite_supported_architectures.cmake
+@@ -18,6 +18,7 @@ set(SUPPORTED_ARCHITECTURES
+     "gfx1200"
+     "gfx1201"
+     "gfx1250"
++    "gfx1250-strict"
+     "gfx908:xnack+"
+     "gfx908:xnack-"
+     "gfx90a:xnack+"
+-- 
+2.43.0
+

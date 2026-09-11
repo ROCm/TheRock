@@ -1,0 +1,49 @@
+From eb20786e5da942c880c1a47e331808e6e7edcac5 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 14:25:32 -0500
+Subject: [PATCH] CK: recognize gfx1250-strict architecture macros
+
+Classify the strict compiler macro as GFX12/GFX125 so synchronization selects the appropriate wait instructions rather than the legacy s_waitcnt intrinsic. Map the strict target to the existing architecture ID.
+
+Observed in https://github.com/ROCm/TheRock/actions/runs/34634887721/job/103383110591 . Temporary downstream validation patch; upstream submission pending.
+---
+ projects/composablekernel/CMakeLists.txt    | 2 +-
+ projects/composablekernel/include/ck/ck.hpp | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/projects/composablekernel/CMakeLists.txt b/projects/composablekernel/CMakeLists.txt
+index b58b176..ae53024 100644
+--- a/projects/composablekernel/CMakeLists.txt
++++ b/projects/composablekernel/CMakeLists.txt
+@@ -196,7 +196,7 @@ function(_ck_gpu_target_string_to_id TARGET_STR OUT_VAR)
+         set(${OUT_VAR} "0x1201" PARENT_SCOPE)
+     elseif(_tgt MATCHES "^gfx12-generic$")
+         set(${OUT_VAR} "0x12FF" PARENT_SCOPE)
+-    elseif(_tgt STREQUAL "gfx1250")
++    elseif(_tgt STREQUAL "gfx1250" OR _tgt STREQUAL "gfx1250-strict")
+         set(${OUT_VAR} "0x1250" PARENT_SCOPE)
+     else()
+         message(WARNING "_ck_gpu_target_string_to_id: unknown GPU target '${TARGET_STR}', skipping")
+diff --git a/projects/composablekernel/include/ck/ck.hpp b/projects/composablekernel/include/ck/ck.hpp
+index 7d18348..879a314 100644
+--- a/projects/composablekernel/include/ck/ck.hpp
++++ b/projects/composablekernel/include/ck/ck.hpp
+@@ -73,13 +73,13 @@
+ #define __gfx11__
+ #endif
+ #if defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx12_generic__) || \
+-    defined(__gfx1250__)
++    defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define __gfx12__
+ #endif
+ #if defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx12_generic__)
+ #define __gfx120__
+ #endif
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define __gfx125__
+ #endif
+ // buffer resource
+-- 
+2.43.0
+

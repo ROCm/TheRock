@@ -1,0 +1,27 @@
+From d0200b63f7895d356e5c3cbb600b99223e64b714 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 14:25:32 -0500
+Subject: [PATCH] rocPRIM: recognize gfx1250-strict load architecture
+
+Include the strict processor in the RDNA4 instruction-path predicate. Otherwise thread loads select legacy glc/slc and s_waitcnt assembly rejected by the strict target. Also affects hipCUB consumers.
+
+Observed in https://github.com/ROCm/TheRock/actions/runs/34634887721/job/103383110591 . Temporary downstream validation patch; upstream submission pending.
+---
+ projects/rocprim/rocprim/include/rocprim/config.hpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
+index 8584275..bb977af 100644
+--- a/projects/rocprim/rocprim/include/rocprim/config.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
+@@ -168,6 +168,7 @@
+     #define ROCPRIM_IS_RDNA4()                                                                \
+         (__builtin_amdgcn_processor_is("gfx1200") || __builtin_amdgcn_processor_is("gfx1201") \
+             || __builtin_amdgcn_processor_is("gfx1250")                                       \
++            || __builtin_amdgcn_processor_is("gfx1250-strict")                                \
+             || __builtin_amdgcn_processor_is("gfx12-generic"))
+     #define ROCPRIM_IS_RDNA3()                                                                   \
+         (__builtin_amdgcn_processor_is("gfx1100") || __builtin_amdgcn_processor_is("gfx1101")    \
+-- 
+2.43.0
+
