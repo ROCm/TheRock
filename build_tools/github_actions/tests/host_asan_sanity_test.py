@@ -40,6 +40,9 @@ class HostAsanSanityTest(unittest.TestCase):
         ):
             self.assertEqual(test_host_asan_sanity.main(), 0)
 
+        compile_command = run.call_args_list[0].args[0]
+        self.assertIn("-shared-libasan", compile_command)
+
     def test_missing_compiler_fails(self):
         with patch.dict(
             os.environ,

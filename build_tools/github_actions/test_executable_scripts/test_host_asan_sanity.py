@@ -41,6 +41,7 @@ def main() -> int:
             [
                 str(compiler),
                 "-fsanitize=address",
+                "-shared-libasan",
                 "-g",
                 str(source),
                 "-o",
