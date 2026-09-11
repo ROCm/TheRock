@@ -1,0 +1,25 @@
+From 2dae40fd010110764920659018df3d3a24bfe0d3 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 17:57:17 -0500
+Subject: [PATCH] rocWMMA: recognize gfx1250-strict device compilation
+
+---
+ projects/rocwmma/library/include/rocwmma/internal/config.hpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/projects/rocwmma/library/include/rocwmma/internal/config.hpp b/projects/rocwmma/library/include/rocwmma/internal/config.hpp
+index 4c3d608b..192d9de0 100644
+--- a/projects/rocwmma/library/include/rocwmma/internal/config.hpp
++++ b/projects/rocwmma/library/include/rocwmma/internal/config.hpp
+@@ -85,6 +85,8 @@
+ #define ROCWMMA_ARCH_GFX1201 __gfx1201__
+ #elif defined(__gfx1250__) && ROCWMMA_DEVICE_COMPILE
+ #define ROCWMMA_ARCH_GFX1250 __gfx1250__
++#elif defined(__gfx1250_strict__) && ROCWMMA_DEVICE_COMPILE
++#define ROCWMMA_ARCH_GFX1250 __gfx1250_strict__
+ #elif !ROCWMMA_DEVICE_COMPILE
+ #define ROCWMMA_ARCH_HOST 1
+ #else
+-- 
+2.43.0
+

@@ -1,0 +1,506 @@
+From bee9789283be8745cbb9e7f5070b926c607a853b Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 18:08:03 -0500
+Subject: [PATCH] RCCL: preserve gfx1250 device behavior for strict target
+
+---
+ projects/rccl/cmake/DeviceLinker.cmake        |  5 ++--
+ .../all_gather/all_gather_dda_fabric_ll128.h  |  2 +-
+ projects/rccl/src/device/all_gather.h         |  2 +-
+ projects/rccl/src/device/all_reduce.h         |  6 ++---
+ projects/rccl/src/device/broadcast.h          |  2 +-
+ projects/rccl/src/device/generate.py          | 10 ++++----
+ projects/rccl/src/device/prims_ll.h           |  2 +-
+ projects/rccl/src/device/prims_ll128.h        |  4 ++--
+ projects/rccl/src/device/prims_simple.h       |  8 +++----
+ projects/rccl/src/device/reduce.h             |  2 +-
+ projects/rccl/src/device/reduce_scatter.h     |  2 +-
+ projects/rccl/src/device/sendrecv.h           |  8 +++----
+ projects/rccl/src/device/tdm/asyncCopy.h      |  4 ++--
+ projects/rccl/src/device/tdm/tdmCopy.h        |  2 +-
+ projects/rccl/src/include/device.h            |  4 ++--
+ .../rccl/src/include/nccl_device/hip_compat.h |  2 +-
+ .../rccl/src/include/nccl_device/rccl_ptr.h   |  6 ++---
+ projects/rccl/src/include/rccl_float8.h       | 24 +++++++++----------
+ 18 files changed, 48 insertions(+), 47 deletions(-)
+
+diff --git a/projects/rccl/cmake/DeviceLinker.cmake b/projects/rccl/cmake/DeviceLinker.cmake
+index a0473529f9..3a2d8b8968 100644
+--- a/projects/rccl/cmake/DeviceLinker.cmake
++++ b/projects/rccl/cmake/DeviceLinker.cmake
+@@ -192,14 +192,15 @@ function(dl_evaluate_guard GUARD GPU_TARGET RESULT_VAR)
+     set(${RESULT_VAR} FALSE PARENT_SCOPE)
+     return()
+   endif()
+-  string(REGEX MATCHALL "__gfx[0-9a-z]+__" _guard_archs "${GUARD}")
++  string(REGEX MATCHALL "__gfx[0-9a-z_]+__" _guard_archs "${GUARD}")
++  string(REPLACE "-" "_" _gpu_macro "${GPU_TARGET}")
+   if(NOT _guard_archs)
+     set(${RESULT_VAR} TRUE PARENT_SCOPE)
+     return()
+   endif()
+   foreach(_ga ${_guard_archs})
+     string(REGEX REPLACE "^__(.+)__$" "\\1" _arch "${_ga}")
+-    if("${_arch}" STREQUAL "${GPU_TARGET}")
++    if("${_arch}" STREQUAL "${_gpu_macro}")
+       set(${RESULT_VAR} TRUE PARENT_SCOPE)
+       return()
+     endif()
+diff --git a/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h b/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
+index a933cefd77..bd77ac7461 100644
+--- a/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
++++ b/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
+@@ -105,7 +105,7 @@ __launch_bounds__(1024)
+     ddaLL128PollWire(gatherSlot + s * (size_t)kDdaLL128WireWordsPerSlice + 2 * lane, vr, flag, lane);
+     ddaLL128StoreRegs<int8_t>(dstBytes + dataByte, vr, eltInSlice, lane, flagLane);
+   }
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+   asm volatile("s_wait_storecnt 0x0" ::: "memory");
+ #endif
+   __syncthreads();
+diff --git a/projects/rccl/src/device/all_gather.h b/projects/rccl/src/device/all_gather.h
+index ab5ae9df99..706259273c 100644
+--- a/projects/rccl/src/device/all_gather.h
++++ b/projects/rccl/src/device/all_gather.h
+@@ -11,7 +11,7 @@
+ 
+ namespace {
+ template <typename T, typename RedOp, typename Proto, bool isNetOffload = false>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+diff --git a/projects/rccl/src/device/all_reduce.h b/projects/rccl/src/device/all_reduce.h
+index 4f1964063f..58c4b2cbed 100644
+--- a/projects/rccl/src/device/all_reduce.h
++++ b/projects/rccl/src/device/all_reduce.h
+@@ -15,7 +15,7 @@ namespace {
+ // template header. UserRegMode selects the LL128 user-buffer access path at
+ // compile time (see prims_ll128.h): 0=runtime, 1=registered, 2=non-registered.
+ template <typename T, typename RedOp, typename Proto, int RCCLMetadata>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+@@ -116,7 +116,7 @@ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct
+ }
+ 
+ template <typename T, typename RedOp, typename Proto>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
+@@ -186,7 +186,7 @@ __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, s
+ }
+ 
+ template <typename T, typename RedOp, typename Proto>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
+diff --git a/projects/rccl/src/device/broadcast.h b/projects/rccl/src/device/broadcast.h
+index 2760e483c0..2a1b3f5426 100644
+--- a/projects/rccl/src/device/broadcast.h
++++ b/projects/rccl/src/device/broadcast.h
+@@ -11,7 +11,7 @@
+ 
+ namespace {
+ template <typename T, typename RedOp, typename Proto>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+diff --git a/projects/rccl/src/device/generate.py b/projects/rccl/src/device/generate.py
+index 9fc30b4ec2..f2580b5808 100755
+--- a/projects/rccl/src/device/generate.py
++++ b/projects/rccl/src/device/generate.py
+@@ -421,13 +421,13 @@ def get_arch_guard(fn):
+       # Every other arch keeps the legacy LL kernel (reg "0"), which has no guard.
+       cond = "(defined(__gfx942__) || defined(__gfx950__)) && defined(ENABLE_LL128)"
+   elif fn.unroll in ("8", "16", "32"):
+-      cond = "defined(__gfx1250__)"
++      cond = "(defined(__gfx1250__) || defined(__gfx1250_strict__))"
+   elif fn.proto == "LL128" and fn.acc == "1":
+-      cond = "(defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)) && defined(ENABLE_LL128)"
++      cond = "(defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))) && defined(ENABLE_LL128)"
+   elif fn.proto == "LL128":
+-      cond = "(defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)) && defined(ENABLE_LL128)"
++      cond = "(defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))) && defined(ENABLE_LL128)"
+   elif fn.acc == "1":
+-      cond = "defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)"
++      cond = "defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))"
+   return cond
+ 
+ # Build the mangled function symbol suffix. The user-buffer registration mode is
+@@ -759,7 +759,7 @@ specialized_filelist.sort(key=_compile_cost_key)
+ with open(os.path.join(gensrc, "specialized_files.txt"), "w") as f:
+   for filename, func_name, guard, fn in specialized_filelist:
+     if fn.unroll in ("8", "16", "32"):
+-      cmake_guard = "defined(__gfx1250__)"
++      cmake_guard = "(defined(__gfx1250__) || defined(__gfx1250_strict__))"
+       if fn.proto == "LL128":
+         cmake_guard += " && defined(ENABLE_LL128)"
+     else:
+diff --git a/projects/rccl/src/device/prims_ll.h b/projects/rccl/src/device/prims_ll.h
+index 36da63e34b..7538a0ffe3 100644
+--- a/projects/rccl/src/device/prims_ll.h
++++ b/projects/rccl/src/device/prims_ll.h
+@@ -92,7 +92,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pi
+   inline __device__ void barrier() {
+ #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+     if (nthreads != WARP_SIZE)
+-#if defined(__gfx942__) || (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY)) || defined(__gfx1250__)
++#if defined(__gfx942__) || (defined(__gfx950__) && defined(HIP_HOST_UNCACHED_MEMORY)) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
+ #else
+       barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
+diff --git a/projects/rccl/src/device/prims_ll128.h b/projects/rccl/src/device/prims_ll128.h
+index 58a539b171..5e08120d33 100644
+--- a/projects/rccl/src/device/prims_ll128.h
++++ b/projects/rccl/src/device/prims_ll128.h
+@@ -132,7 +132,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata,
+   inline __device__ void barrier() {
+ #if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+     if (nthreads != WARP_SIZE)
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       barrier_generic(__threadfence_block(), nthreads, barrier_next, barriers);
+ #else
+       barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
+@@ -178,7 +178,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata,
+     if (sendConnTailPtr) {
+       if (skip_fence) {
+         __atomic_signal_fence(__ATOMIC_SEQ_CST);
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+         // To be revisited for correctness and performance on gfx1250
+         asm volatile("s_wait_loadcnt 0x0\n\ts_wait_storecnt 0x0");
+ #else
+diff --git a/projects/rccl/src/device/prims_simple.h b/projects/rccl/src/device/prims_simple.h
+index 4cc5793285..a339085fa6 100644
+--- a/projects/rccl/src/device/prims_simple.h
++++ b/projects/rccl/src/device/prims_simple.h
+@@ -62,7 +62,7 @@ class Primitives<T, RedOp, Fan, Direct,
+       // gfx942/gfx950/gfx1250 all use intra-block fence; __threadfence() is
+       // device-wide and doesn't add system-scope ordering here.
+       // To be revisited for correctness on gfx1250
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       barrier_generic(__threadfence_block(), nworkers, barrier_next, barriers);
+ #else
+       barrier_generic(__threadfence(), nworkers, barrier_next, barriers);
+@@ -75,7 +75,7 @@ class Primitives<T, RedOp, Fan, Direct,
+ 
+   inline __device__ void patBarrier() {
+     // To be revisited for correctness on gfx1250
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     barrier_generic(__threadfence_block(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+ #else
+     barrier_generic(__threadfence(), NCCL_PAT_NWORKERS, barrier_next_pat, barriers_pat);
+@@ -109,7 +109,7 @@ class Primitives<T, RedOp, Fan, Direct,
+     // NET no-GDR can publish host-staged payloads from the CPU proxy.
+     // Acquire the tail before GPU workers consume the payload.
+     return ld_acquire_sys_global(ptr);
+-#elif defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx1250__)
++#elif defined(__gfx1200__) || defined(__gfx1201__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+ #else
+     return __atomic_load_n(ptr, __ATOMIC_RELAXED);
+@@ -193,7 +193,7 @@ class Primitives<T, RedOp, Fan, Direct,
+   inline __device__ void postPeer(bool dataStored) {
+     if (skip_fence) {
+       __atomic_signal_fence(__ATOMIC_SEQ_CST);
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       // To be revisited for correctness and performance on gfx1250
+       barrier_generic(asm volatile("s_wait_loadcnt 0x0\n\ts_wait_storecnt 0x0"), nworkers, barrier_next, barriers);
+ #else
+diff --git a/projects/rccl/src/device/reduce.h b/projects/rccl/src/device/reduce.h
+index 47dad16de9..d593fc601b 100644
+--- a/projects/rccl/src/device/reduce.h
++++ b/projects/rccl/src/device/reduce.h
+@@ -11,7 +11,7 @@
+ 
+ namespace {
+ template <typename T, typename RedOp, typename Proto>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+diff --git a/projects/rccl/src/device/reduce_scatter.h b/projects/rccl/src/device/reduce_scatter.h
+index c770fcbae3..9d0295335e 100644
+--- a/projects/rccl/src/device/reduce_scatter.h
++++ b/projects/rccl/src/device/reduce_scatter.h
+@@ -11,7 +11,7 @@
+ 
+ namespace {
+ template <typename T, typename RedOp, typename Proto>
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+ __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+ #else
+ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
+diff --git a/projects/rccl/src/device/sendrecv.h b/projects/rccl/src/device/sendrecv.h
+index e0a6554993..20fe5ecf0f 100644
+--- a/projects/rccl/src/device/sendrecv.h
++++ b/projects/rccl/src/device/sendrecv.h
+@@ -60,7 +60,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
+     } while (cursor < bytes);
+   }
+ 
+-#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && !defined(__gfx1250__)
++#if defined(USE_INDIRECT_FUNCTION_CALL) && !defined(__gfx942__) && !defined(__gfx950__) && (!defined(__gfx1250__) && !defined(__gfx1250_strict__))
+   __device__ void run(){
+ #else
+   __device__ __attribute__((noinline)) void run() {
+@@ -174,7 +174,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
+   }
+ 
+   if (isCopy) {
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     reduceCopy<COLL_UNROLL * 2, 0, RedOp, T, 0, 1, 1, 0, 1, 1, /*PreOpSrcs=*/0>(
+       subtid, subtn, 0, false, 1, &work->sendAddr, 1, &work->recvAddr, (ssize_t)work->sendBytes);
+ #else
+@@ -193,7 +193,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
+       runSend<ProtoSimple<1, 1, 0, 8>>(subtid, subtn, group, work);
+ #elif defined(__gfx908__) || defined(__gfx942__) || defined(__gfx950__)
+         runSend<ProtoSimple<1, 1, 0, 4>>(subtid, subtn, group, work);
+-#elif defined(__gfx1250__)
++#elif (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       runSend<ProtoSimple<1, 1, 0, COLL_UNROLL>>(subtid, subtn, group, work);
+ #else
+       runSend<ProtoSimple<1, 1>>(subtid, subtn, group, work);
+@@ -211,7 +211,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
+       runRecv<ProtoSimple<1, 1, 0, 8>>(subtid, subtn, group, work);
+ #elif defined(__gfx908__) || defined(__gfx942__) || defined(__gfx950__)
+         runRecv<ProtoSimple<1, 1, 0, 4>>(subtid, subtn, group, work);
+-#elif defined(__gfx1250__)
++#elif (defined(__gfx1250__) || defined(__gfx1250_strict__))
+       runRecv<ProtoSimple<1, 1, 0, COLL_UNROLL>>(subtid, subtn, group, work);
+ #else
+       runRecv<ProtoSimple<1, 1>>(subtid, subtn, group, work);
+diff --git a/projects/rccl/src/device/tdm/asyncCopy.h b/projects/rccl/src/device/tdm/asyncCopy.h
+index 607fff13b2..537b928e92 100644
+--- a/projects/rccl/src/device/tdm/asyncCopy.h
++++ b/projects/rccl/src/device/tdm/asyncCopy.h
+@@ -60,7 +60,7 @@ THE SOFTWARE.
+ // multi-arch build (e.g. --amdgpu_targets gfx950 gfx1250) compiles this header
+ // once per target, and naming a gfx1250-only builtin on any other device pass is
+ // a hard error -- so every body that emits one has to be gated on these.
+-#if defined(__gfx1250__) && __has_builtin(__builtin_amdgcn_global_load_async_to_lds_b128)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __has_builtin(__builtin_amdgcn_global_load_async_to_lds_b128)
+                                   /* extend: || (defined(__gfxNNNN__) && ...) */
+ #define ASYNC_COPY_SUPPORTED 1
+ #else
+@@ -70,7 +70,7 @@ THE SOFTWARE.
+ // Same condition as tdmCopy.h's copy, kept #ifndef-guarded so the two headers can
+ // be included together in either order.
+ #ifndef TDM_SUPPORTED
+-#if defined(__gfx1250__) && __has_builtin(__builtin_amdgcn_tensor_load_to_lds) && TDM_TOOLCHAIN_AVAILABLE
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __has_builtin(__builtin_amdgcn_tensor_load_to_lds) && TDM_TOOLCHAIN_AVAILABLE
+                                   /* extend: || (defined(__gfxNNNN__) && ...) */
+ #define TDM_SUPPORTED 1
+ #else
+diff --git a/projects/rccl/src/device/tdm/tdmCopy.h b/projects/rccl/src/device/tdm/tdmCopy.h
+index 8221272d2c..1a02941787 100644
+--- a/projects/rccl/src/device/tdm/tdmCopy.h
++++ b/projects/rccl/src/device/tdm/tdmCopy.h
+@@ -101,7 +101,7 @@ THE SOFTWARE.
+ #define TDM_TOOLCHAIN_AVAILABLE 0
+ #endif
+ 
+-#if defined(__gfx1250__) && __has_builtin(__builtin_amdgcn_tensor_load_to_lds) && TDM_TOOLCHAIN_AVAILABLE
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && __has_builtin(__builtin_amdgcn_tensor_load_to_lds) && TDM_TOOLCHAIN_AVAILABLE
+                                   /* extend: || (defined(__gfxNNNN__) && ...) */
+ #define TDM_SUPPORTED 1
+ #else
+diff --git a/projects/rccl/src/include/device.h b/projects/rccl/src/include/device.h
+index f67175fc6e..6813b8d2d3 100644
+--- a/projects/rccl/src/include/device.h
++++ b/projects/rccl/src/include/device.h
+@@ -68,7 +68,7 @@ extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
+ // every kernel pays the LDS: 167KB of 320KB at 16KB/warp. The arch check cannot move to CMake:
+ // it must be zero on every device pass that is not gfx1250, or those kernels reserve LDS they
+ // can never use. Host and non-gfx1250 passes therefore see 0 and the member disappears.
+-#if ENABLE_TDM_SIMPLE && defined(__gfx1250__)
++#if ENABLE_TDM_SIMPLE && (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define RCCL_TDM_STAGE_BYTES_PER_WARP 16384
+ #else
+ #define RCCL_TDM_STAGE_BYTES_PER_WARP 0
+@@ -205,7 +205,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK
+  * comm->ll128LineElems / comm->ll128DataElems (and proxyState->* in the net proxy). */
+ 
+ #if __HIP_DEVICE_COMPILE__
+-#if defined(__gfx1250__)
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define NCCL_LL128_LINESIZE 128
+ #else
+ #define NCCL_LL128_LINESIZE 64
+diff --git a/projects/rccl/src/include/nccl_device/hip_compat.h b/projects/rccl/src/include/nccl_device/hip_compat.h
+index 6f70f67161..68e906ff2d 100644
+--- a/projects/rccl/src/include/nccl_device/hip_compat.h
++++ b/projects/rccl/src/include/nccl_device/hip_compat.h
+@@ -123,7 +123,7 @@
+ #if defined(NCCL_HIP_PLATFORM)
+   // AMD GPUs use 64-wide waves (or 32 in wave32 mode)
+ #if defined(__GFX10__) || defined(__GFX11__) || defined(__gfx1100__) || defined(__gfx1101__) || \
+-  defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx1250__)
++  defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define NCCL_WARP_SIZE 32
+ #else
+ #define NCCL_WARP_SIZE 64
+diff --git a/projects/rccl/src/include/nccl_device/rccl_ptr.h b/projects/rccl/src/include/nccl_device/rccl_ptr.h
+index 9e1f077206..aae2eee539 100644
+--- a/projects/rccl/src/include/nccl_device/rccl_ptr.h
++++ b/projects/rccl/src/include/nccl_device/rccl_ptr.h
+@@ -36,7 +36,7 @@ using u16_gptr = __attribute__((address_space(1))) uint16_t*;
+ using u8_gptr = __attribute__((address_space(1))) uint8_t*;
+ 
+ #ifdef __HIP_DEVICE_COMPILE__
+-#if (defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)) && \
++#if (defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))) && \
+   __has_builtin(__builtin_amdgcn_global_load_b128) && __has_builtin(__builtin_amdgcn_global_store_b128) && \
+   !defined(DWORDX4_INTRINSICS_FORCE_OFF)
+ #define RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS 1
+@@ -50,7 +50,7 @@ using u8_gptr = __attribute__((address_space(1))) uint8_t*;
+ #endif
+ 
+ #ifdef __HIP_DEVICE_COMPILE__
+-#if defined(__gfx1250__) && \
++#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && \
+   __has_builtin(__builtin_amdgcn_cooperative_atomic_load_8x16B) && \
+   __has_builtin(__builtin_amdgcn_cooperative_atomic_store_8x16B) && \
+   !defined(COOPERATIVE_ATOMIC_INTRINSICS_FORCE_OFF)
+@@ -77,7 +77,7 @@ typedef __attribute__((address_space(1))) v4i* v4i_gptr;
+ // Observed on gfx1250: with a cuMem/VMM comm FIFO the LL/LL128 flag poll does not
+ // observe peer writes under a non-temporal load, but does under scope:SCOPE_SYS.
+ // Restricted to gfx1250, the only arch measured. Following up with HIP/compilers.
+-#if RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS && defined(__gfx1250__)
++#if RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS && (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ #define RCCL_LL_FIFO_SYS_SCOPE_LOAD 1
+ #else
+ #define RCCL_LL_FIFO_SYS_SCOPE_LOAD 0
+diff --git a/projects/rccl/src/include/rccl_float8.h b/projects/rccl/src/include/rccl_float8.h
+index 5622bb28c9..d876385484 100644
+--- a/projects/rccl/src/include/rccl_float8.h
++++ b/projects/rccl/src/include/rccl_float8.h
+@@ -40,7 +40,7 @@ typedef struct {
+ 
+ // __cplusplus < 201103L || (!defined(__HIP_PLATFORM_AMD__) && !defined(__HIPCC__))
+ #elif HIP_VERSION >= 60300000 && (!__HIP_DEVICE_COMPILE__ || defined(__gfx942__) || defined(__gfx950__) || \
+-                                  defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx1250__))
++                                  defined(__gfx1200__) || defined(__gfx1201__) || (defined(__gfx1250__) || defined(__gfx1250_strict__)))
+ 
+ #include <hip/hip_fp8.h>
+ 
+@@ -72,7 +72,7 @@ inline __device__ rccl_float8 hadd(rccl_float8 x, rccl_float8 y) {
+   } u{0};
+   u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(u.i16_vec, v1, /* scale */ 1.f, 0);
+   return u.fp8[0];
+-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || defined(__gfx1250__))
++#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || (defined(__gfx1250__) || defined(__gfx1250_strict__)))
+ 
+   float2_t v;
+   uint32_t ival = 0;
+@@ -98,7 +98,7 @@ inline __device__ rccl_bfloat8 hadd_b(rccl_bfloat8 x, rccl_bfloat8 y) {
+   } u1{0};
+   u1.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_bf8_f16(u1.i16_vec, v1, /* scale */ 1.f, 0);
+   return u1.fp8[0];
+-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || defined(__gfx1250__))
++#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || (defined(__gfx1250__) || defined(__gfx1250_strict__)))
+ 
+   float2_t v;
+   uint32_t ival = 0;
+@@ -124,7 +124,7 @@ inline __device__ fp8x2_storage_t hadd2(fp8x2_storage_t x, fp8x2_storage_t y) {
+   } u{0};
+   u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_fp8_f16(u.i16_vec, v1, /* scale */ 1.f, 0);
+   return u.fp8;
+-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || defined(__gfx1250__))
++#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || (defined(__gfx1250__) || defined(__gfx1250_strict__)))
+   float2_t v;
+   uint32_t ival = 0;
+   asm volatile("v_pk_add_f32 %0, %1, %2"
+@@ -157,7 +157,7 @@ inline __device__ fp8x2_storage_t hadd2_b(fp8x2_storage_t x, fp8x2_storage_t y)
+   } u{0};
+   u.i16_vec = __builtin_amdgcn_cvt_scalef32_pk_bf8_f16(u.i16_vec, v1, /* scale */ 1.f, 0);
+   return u.fp8;
+-#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || defined(__gfx1250__))
++#elif __HIP_DEVICE_COMPILE__ && (defined(__gfx942__) || (defined(__gfx1250__) || defined(__gfx1250_strict__)))
+   float2_t v;
+   uint32_t ival = 0;
+   asm volatile("v_pk_add_f32 %0, %1, %2"
+@@ -445,7 +445,7 @@ struct rccl_float8 {
+ 
+   constexpr inline HIP_HOST_DEVICE rccl_float8(const rccl_float8& a) : data(a.data) {}
+ 
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     // device specific optimized F8 down-conversion code
+ 
+   template <bool stochastic_rounding = false>
+@@ -480,7 +480,7 @@ struct rccl_float8 {
+ #endif // __gfx942__
+ 
+     // constructor from float
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ 
+     // NOTE: ON-DEVICE... always optimal bias
+   explicit HIP_DEVICE rccl_float8(float v, rocblas_hip_f8_rounding_mode rm = rocblas_hip_f8_rounding_mode::standard,
+@@ -520,7 +520,7 @@ struct rccl_float8 {
+     : rccl_float8((float)v, rm, rng) {}
+ 
+     // convert to float
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     // upcast using device specific intrinsic
+   explicit inline HIP_DEVICE operator float() const {
+     float fval;
+@@ -579,7 +579,7 @@ struct rccl_bfloat8 {
+ 
+   constexpr inline HIP_HOST_DEVICE rccl_bfloat8(const rccl_bfloat8& a) : data(a.data) {}
+ 
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     // device specific optimized F8 down-conversion code
+ 
+   template <bool stochastic_rounding = false>
+@@ -614,7 +614,7 @@ struct rccl_bfloat8 {
+ #endif // __gfx942__
+ 
+     // constructor from float
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+ 
+     // NOTE: ON-DEVICE... always optimal bias
+   explicit HIP_DEVICE rccl_bfloat8(float v, rocblas_hip_f8_rounding_mode rm = rocblas_hip_f8_rounding_mode::standard,
+@@ -654,7 +654,7 @@ struct rccl_bfloat8 {
+     : rccl_bfloat8((float)v, rm, rng) {}
+ 
+     // convert to float
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     // upcast using device specific intrinsic
+   explicit inline HIP_DEVICE operator float() const {
+     float fval;
+@@ -984,7 +984,7 @@ template <
+   typename std::enable_if<
+     (!(std::is_same<T, Ta>{}) && (std::is_same<T, rccl_float8>{} || std::is_same<T, rccl_bfloat8>{})), int>::type = 0>
+ inline __host__ __device__ T explicit_downcast(Ta a, uint32_t rng) {
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx1250__)
++#if defined(__gfx942__) || defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))
+     // NOTE: we are directly calling cast_to_f8_from_f32 instead of constructor to optimize away one runtime branch
+   T val;
+   if (std::is_same<T, rccl_float8>::value)
+-- 
+2.43.0
+

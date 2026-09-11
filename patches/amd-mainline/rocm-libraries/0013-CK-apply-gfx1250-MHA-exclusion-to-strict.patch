@@ -1,0 +1,25 @@
+From 5bdc2f9b24eca62910ed8cbffc0de5fbeb196141 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 18:04:47 -0500
+Subject: [PATCH] CK: apply gfx1250 MHA exclusion to strict targets
+
+---
+ .../library/src/tensor_operation_instance/gpu/CMakeLists.txt    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/CMakeLists.txt b/projects/composablekernel/library/src/tensor_operation_instance/gpu/CMakeLists.txt
+index c8db9294..38b8c8e2 100644
+--- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/CMakeLists.txt
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/CMakeLists.txt
+@@ -145,7 +145,7 @@ function(add_instance_library INSTANCE_NAME)
+     set(UNSUPPORTED_TARGETS "gfx900;gfx906;gfx906:xnack-;gfx90c")
+     set(NON_XDL_TARGETS ${UNSUPPORTED_TARGETS} gfx1030 gfx1031 gfx1032 gfx1033 gfx1034 gfx1035 gfx1036 gfx10-3-generic amdgcnspirv)
+     set(NON_WMMA_TARGETS ${NON_XDL_TARGETS} gfx908 gfx90a gfx942 gfx950 gfx908:xnack+ gfx908:xnack- gfx90a:xnack+ gfx90a:xnack-)
+-    set(NON_MHA_TARGETS ${NON_XDL_TARGETS} gfx908:xnack- gfx908:xnack+ gfx908 gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201 gfx11-generic gfx12-generic gfx1250)
++    set(NON_MHA_TARGETS ${NON_XDL_TARGETS} gfx908:xnack- gfx908:xnack+ gfx908 gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201 gfx11-generic gfx12-generic gfx1250 gfx1250-strict)
+     set(NON_MX_TARGETS ${NON_XDL_TARGETS} gfx908:xnack- gfx908:xnack+ gfx90a:xnack+ gfx90a:xnack- gfx908 gfx90a gfx942 gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201 gfx11-generic gfx12-generic)
+     set(NON_F8_TARGETS ${NON_XDL_TARGETS} gfx908:xnack- gfx908:xnack+ gfx90a:xnack+ gfx90a:xnack- gfx908 gfx90a gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx11-generic)
+ 
+-- 
+2.43.0
+
