@@ -1718,6 +1718,12 @@ function(_therock_cmake_subproject_setup_toolchain
       endif()
     endif()
 
+    # Compile the strict variant alongside gfx1250 in subprojects.
+    if("gfx1250" IN_LIST _filtered_gpu_targets)
+      list(APPEND _filtered_gpu_targets gfx1250-strict)
+      list(REMOVE_DUPLICATES _filtered_gpu_targets)
+    endif()
+
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
