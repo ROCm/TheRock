@@ -34,6 +34,11 @@
 # consumers; see [component.tensilelite] below for the walk depth.
 consumers = ["hipblaslt", "hipsparselt"]
 
+[synthetic.stinkytofu]
+# StinkyTofu is vendored by TensileLite's rocisa backend and has its own
+# installed host-ASAN payload, but no standalone TheRock CMake target.
+consumers = ["tensilelite"]
+
 # --- Foundational runtimes ----------------------------------------------------
 # Used by most of the tree, so they test their full transitive downstream.
 
@@ -96,6 +101,10 @@ test_include = ["hipblas"]
 # Unbounded: a TensileLite-only change should retest hipblaslt/hipsparselt
 # (its synthetic consumers, declared above), then ripple transitively through
 # their own real consumers (rocblas, hipblas, ...) via the normal graph walk.
+level = 3
+
+[component.stinkytofu]
+# Run StinkyTofu itself, then follow its TensileLite/BLAS consumers.
 level = 3
 
 [component.hiprand]

@@ -96,7 +96,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # _load_synthetic_subprojects below) with level 3 (unbounded) in
     # test_policies.toml, so they don't need to be hand-listed here too.
     "shared/origami": ["origami", "tensilelite"],
-    "shared/stinkytofu": ["tensilelite"],
+    "shared/stinkytofu": ["stinkytofu"],
     "shared/tensile": ["hipblas", "rocblas"],
     "dnn-providers/cmake": ["hipdnn_integration_tests"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],

@@ -78,7 +78,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
-    def test_host_asan_phase1_matrix_is_explicit_and_cpu_only(self):
+    def test_host_asan_matrix_is_explicit_and_cpu_only(self):
         os.environ["HOST_ONLY_TESTS"] = "true"
         os.environ["BUILD_VARIANT"] = "host-asan"
 
@@ -88,7 +88,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         self.assertEqual(
             {job["job_name"] for job in components},
-            {"rocroller", "tensilelite", "origami", "hipdnn", "hipkernelprovider"},
+            {
+                "rocroller",
+                "tensilelite",
+                "origami",
+                "hipdnn",
+                "hipkernelprovider",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "stinkytofu",
+            },
         )
         for job in [sanity, *components]:
             self.assertTrue(job["linux_cpu_runner"])
@@ -107,6 +117,28 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         self.assertEqual([job["job_name"] for job in components], ["rocroller"])
+
+    def test_host_asan_phase2_uses_direct_cpu_runners(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocrand,hiprand,rocsparse,stinkytofu"
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components), {"rocrand", "hiprand", "rocsparse", "stinkytofu"}
+        )
+        self.assertIn("test_rand_host_asan.py", components["rocrand"]["test_script"])
+        self.assertIn("test_rand_host_asan.py", components["hiprand"]["test_script"])
+        self.assertIn(
+            "test_rocsparse_host_asan.py", components["rocsparse"]["test_script"]
+        )
+        self.assertIn(
+            "test_stinkytofu_host_asan.py", components["stinkytofu"]["test_script"]
+        )
+        self.assertEqual(components["stinkytofu"]["fetch_artifact_args"], "--blas --tests")
+        self.assertEqual(components["stinkytofu"]["timeout_minutes"], 10)
 
     def test_host_asan_tensilelite_does_not_append_gpu_ctest(self):
         os.environ["HOST_ONLY_TESTS"] = "true"

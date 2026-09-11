@@ -928,7 +928,7 @@ test_matrix = {
     },
 }
 
-# Phase 1 CPU-only host-ASAN admission list. This is deliberately separate from
+# CPU-only host-ASAN admission lists. These are deliberately separate from
 # the regular depth tiers: a normal component command may include GPU coverage,
 # and a new regular test must never be admitted here implicitly.
 HOST_ASAN_PHASE1_COMPONENTS = {
@@ -954,25 +954,49 @@ HOST_ASAN_PHASE1_COMPONENTS = {
     "hipkernelprovider": {"timeout_minutes": 10},
 }
 
+HOST_ASAN_PHASE2_COMPONENTS = {
+    "rocrand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "hiprand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocsparse": {
+        "test_script": f"python {_get_script_path('test_rocsparse_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    # StinkyTofu is vendored under hipBLASLt and therefore has no regular GPU
+    # matrix entry of its own. Its installed native payload is BLAS test data.
+    "stinkytofu": {
+        "job_name": "stinkytofu",
+        "fetch_artifact_args": "--blas --tests",
+        "test_script": f"python {_get_script_path('test_stinkytofu_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
+}
 
-def _host_asan_phase1_matrix() -> dict:
-    """Return the explicit Phase 1 host-ASAN matrix.
 
-    Each entry inherits artifact-fetching and wrapper details from the regular
-    matrix, then receives a host-only command/timeout overlay. All entries run
+def _host_asan_matrix() -> dict:
+    """Return the explicit Phase 1 + Phase 2 host-ASAN matrix.
+
+    Entries inherit artifact-fetching details from the regular matrix when one
+    exists, then receive a host-only command/timeout overlay. All entries run
     once on Linux CPU infrastructure with no GPU container devices.
     """
     result = {}
-    for key, overrides in HOST_ASAN_PHASE1_COMPONENTS.items():
-        entry = deepcopy(test_matrix[key])
-        entry.update(overrides)
-        entry["platform"] = ["linux"]
-        entry["linux_cpu_runner"] = True
-        entry["total_shards_dict"] = {"linux": 1}
-        entry.pop("multi_gpu", None)
-        entry.pop("include_family", None)
-        entry.pop("exclude_family", None)
-        result[key] = entry
+    for phase in (HOST_ASAN_PHASE1_COMPONENTS, HOST_ASAN_PHASE2_COMPONENTS):
+        for key, overrides in phase.items():
+            entry = deepcopy(test_matrix.get(key, {}))
+            entry.update(overrides)
+            entry["platform"] = ["linux"]
+            entry["linux_cpu_runner"] = True
+            entry["total_shards_dict"] = {"linux": 1}
+            entry.pop("multi_gpu", None)
+            entry.pop("include_family", None)
+            entry.pop("exclude_family", None)
+            result[key] = entry
     return result
 
 
@@ -1030,10 +1054,13 @@ def run():
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
     if host_only_tests:
-        selected_matrix = _host_asan_phase1_matrix()
+        selected_matrix = _host_asan_matrix()
         test_type = "host-asan"
         run_extended_tests = False
-        logging.info(f"Using Phase 1 host-ASAN matrix ({len(selected_matrix)} test(s))")
+        logging.info(
+            f"Using explicit Phase 1 + Phase 2 host-ASAN matrix "
+            f"({len(selected_matrix)} test(s))"
+        )
     else:
         selected_matrix = deepcopy(test_matrix)
         logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
