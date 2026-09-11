@@ -427,7 +427,15 @@ jobs:
   # ==========================================================================
   libraries_baseline_ready:
     name: "Libraries Baseline Ready"
-    if: always()
+    # Deliberately no `if:` and no failing step. GitHub already skips a job
+    # whose `needs:` did not all succeed, and bump_automation.py rejects any
+    # conclusion other than "success", so a skipped gate is the same signal as
+    # a failed one. Failing instead turns the whole run red: this job runs
+    # inside a reusable workflow, so its failure propagates to the calling
+    # `build_multi_arch_stages` job, and downstream jobs guarded by
+    # `if: !failure()` (the test matrix) never start. That penalizes callers
+    # who narrowed the build graph via `build_stages` and never asked for
+    # these stages -- external presubmits in particular.
     needs:
       [
         runtime-tests,
@@ -442,12 +450,8 @@ jobs:
       ]
     runs-on: ubuntu-24.04
     steps:
-      - name: Require reused stages to have succeeded
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
-        run: |
-          echo "One or more stages rocm-libraries reuses via baseline_run_id did not succeed:"
-          echo '${{ toJSON(needs) }}'
-          exit 1
+      - name: Report reused stage results
+        run: echo '${{ toJSON(needs) }}'
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

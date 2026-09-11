@@ -165,6 +165,18 @@ class BaselineGateJobsSucceededTest(unittest.TestCase):
                 _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
             )
 
+    def test_false_when_the_gate_job_was_skipped(self):
+        # The gate job carries no `if:`, so GitHub skips it whenever a reused
+        # stage did not succeed -- the usual case for a run that narrowed its
+        # build graph via build_stages. Rejecting on "skipped" is what lets the
+        # job stay non-failing without handing out an unusable baseline.
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job("skipped")])
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
 
 class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
     MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
