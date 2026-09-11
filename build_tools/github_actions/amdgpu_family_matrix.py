@@ -211,7 +211,9 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
+- strict_submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected. Does not run on workflow_dispatch or nightlies.
 - skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
+- test_type_for_family (optional): list of allowed test_type values for this family (e.g., ["quick"]). If the global test_type is not in this list, tests are skipped for this family.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -309,11 +311,11 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx125x": {
         "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds can be triggered manually via workflow_dispatch.
-            "test-runs-on": "",
+            # NOTE: MI455 runner coordinated with leadership and MI455 war room team.
+            # Do not use this label for undesignated workflows.
+            "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
-            "fetch-gfx-targets": [],
+            "fetch-gfx-targets": ["gfx1250"],
             # gfx1250 has xnack enabled by default and is not in the
             # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
             # so GPU_TARGETS stays plain "gfx1250" for these variants.
@@ -324,6 +326,10 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
             ],
+            # Only run tests on submodule bumps, no workflow_dispatch or nightlies
+            "strict_submodule_bump_tests_only": True,
+            # Only allow quick tests for MI455 hardware
+            "test_type_for_family": ["quick"],
         },
     },
 }

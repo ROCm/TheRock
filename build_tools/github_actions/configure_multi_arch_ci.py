@@ -1362,6 +1362,18 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
+        # If strict_submodule_bump_tests_only is set, only run tests when submodule
+        # changes are detected. Does not run on workflow_dispatch or nightlies.
+        if (
+            platform_info.get("strict_submodule_bump_tests_only", False)
+            and git_context.has_submodule_changes is not True
+        ):
+            test_runs_on = ""
+            print(
+                f"  {family_name}: strict_submodule_bump_tests_only flag set, "
+                f"disabling tests (no submodule changes detected)"
+            )
+
         # If skip_tests_on_submodule_bump is set, skip tests when submodule changes
         # are detected. This is the inverse of submodule_bump_tests_only - useful for
         # architectures with limited hardware where submodule bumps are tested elsewhere.
@@ -1374,6 +1386,16 @@ def _expand_build_config_for_platform(
             print(
                 f"  {family_name}: skip_tests_on_submodule_bump flag set, "
                 f"disabling tests (submodule changes detected)"
+            )
+
+        # If test_type_for_family is set, only run tests when test_type is in the list
+        test_type_for_family = platform_info.get("test_type_for_family", [])
+        if test_type_for_family and jobs.test_rocm.test_type not in test_type_for_family:
+            test_runs_on = ""
+            print(
+                f"  {family_name}: test_type_for_family={test_type_for_family}, "
+                f"test_type={jobs.test_rocm.test_type} not in allowed list, "
+                f"disabling tests"
             )
 
         family_info = {
