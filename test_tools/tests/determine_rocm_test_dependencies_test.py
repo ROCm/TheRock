@@ -339,6 +339,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "shared/origami": {"origami", "tensilelite"},
                 "shared/stinkytofu": {"tensilelite"},
                 "shared/tensile": {"hipblas", "rocblas"},
+                "projects/hipblaslt/tensilelite": {"tensilelite"},
             }
             for changed_project, expected in cases.items():
                 with self.subTest(changed_project=changed_project):
