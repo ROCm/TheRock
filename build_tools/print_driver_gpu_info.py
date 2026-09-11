@@ -78,12 +78,6 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
             stdin=subprocess.DEVNULL,
         )
         log(proc.stdout.rstrip())
-    except subprocess.CalledProcessError as e:
-        # Print the captured output before propagating, otherwise the command's
-        # own diagnostics are lost and only the traceback survives.
-        if e.stdout:
-            log(e.stdout.rstrip())
-        raise
     except FileNotFoundError:
         log(f"{args[0]}: command not found")
 
