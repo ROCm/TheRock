@@ -47,8 +47,17 @@ exclude = [
 # in the build tree because they need to be built separately in order to
 # install to different prefixes).
 [components.lib."compiler/amd-comgr/stage"]
+# 'run' is a catch-all for this stage dir, so the Windows driver build's PDB has
+# to be handed off explicitly to 'dbg' below; otherwise it lands in the shipped
+# runtime component.
 [components.run."compiler/amd-comgr/stage"]
+exclude = [
+  "**/*.pdb",
+]
 [components.dbg."compiler/amd-comgr/stage"]
+include = [
+  "**/*.pdb",
+]
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
 

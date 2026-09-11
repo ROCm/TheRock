@@ -89,12 +89,24 @@ endif()
 
 # Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
 # The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
+# LINKER: prefix, which handles the driver difference. Multiple link flags are
+# comma separated, per the LINKER: syntax.
 # /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
 # defaults to the latter.
-set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
+# /Z7 (-gcodeview) plus /DEBUG make the linker emit a separate .pdb beside each
+# DLL. The driver package does not ship the PDB: it is submitted to the MSFT
+# Hardware Dev Center so WHQL crash telemetry resolves to function names rather
+# than a single amd_comgr_3.dll!Unknown bucket. Neither flag disables
+# optimization, and the shipped DLL is unchanged apart from the debug directory
+# entry pointing at the PDB.
+# /Z7 rather than /Zi: /Zi routes debug info through a per-target compiler PDB
+# named by /Fd, which collides with LLVM's shared precompiled header (error
+# C2859, "is not the pdb file that was used when this precompiled header was
+# created"). /Z7 keeps the debug info in the object files, so there is no shared
+# PDB to conflict over, and the linker still emits a single .pdb per binary.
+set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf /Z7")
+set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf -gcodeview -g")
+set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf,/DEBUG")
 
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
