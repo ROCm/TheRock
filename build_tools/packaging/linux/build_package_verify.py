@@ -342,15 +342,52 @@ def resolve_installed_name(
     return update_package_name(pkg_name, local_config)
 
 
+def read_package_file_name(package_path: Path, pkg_type: str) -> str:
+    """Read the installed package name from a built ``.deb`` or ``.rpm`` file.
+
+    DEB filenames use ``{name}_{version}_{arch}.deb`` and RPM filenames use
+    ``{name}-{version}-{release}.{arch}.rpm``, so the metadata name must be
+    queried rather than derived from the filename alone.
+
+    Parameters:
+        package_path: Path to a built package file.
+        pkg_type: ``deb`` or ``rpm`` (case-insensitive).
+
+    Returns:
+        Package name from control metadata (``Package`` / ``NAME``).
+
+    Raises:
+        RuntimeError: When ``dpkg-deb`` or ``rpm`` query fails.
+    """
+    pkg_type = pkg_type.lower()
+    if pkg_type == "deb":
+        result = _run_capture(
+            ["dpkg-deb", "-f", str(package_path), "Package"],
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"dpkg-deb failed for {package_path}: {result.stderr.strip()}",
+            )
+        return result.stdout.strip()
+    result = _run_capture(
+        ["rpm", "-qp", "--qf", r"%{NAME}", str(package_path)],
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"rpm query failed for {package_path}: {result.stderr.strip()}",
+        )
+    return result.stdout.strip()
+
+
 def find_package_files(packages_dir: Path, pkg_type: str) -> dict[str, Path]:
-    """Index built package files in ``packages_dir`` by installed package stem.
+    """Index built package files in ``packages_dir`` by installed package name.
 
     Parameters:
         packages_dir: Directory containing built ``.deb`` or ``.rpm`` files.
         pkg_type: ``deb`` or ``rpm`` (case-insensitive).
 
     Returns:
-        Mapping from package stem (filename without extension) to file path.
+        Mapping from metadata package name to file path.
     """
     ext = ".deb" if pkg_type.lower() == "deb" else ".rpm"
     package_files: dict[str, Path] = {}
@@ -359,8 +396,12 @@ def find_package_files(packages_dir: Path, pkg_type: str) -> dict[str, Path]:
             continue
         if not path.name.lower().endswith(ext):
             continue
-        # Stem matches the installed package name used by dpkg/rpm metadata.
-        package_files[path.name[: -len(ext)]] = path
+        try:
+            name = read_package_file_name(path, pkg_type)
+        except RuntimeError as exc:
+            logger.warning(f"Skipping {path.name}: {exc}")
+            continue
+        package_files[name] = path
     return package_files
 
 

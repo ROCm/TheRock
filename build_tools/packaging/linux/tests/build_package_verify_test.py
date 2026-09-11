@@ -202,6 +202,50 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
         self.assertEqual(meta_variants, [(True, GFX_META)])
 
 
+class FindPackageFilesTest(unittest.TestCase):
+    @patch.object(verify, "read_package_file_name")
+    def test_indexes_rpm_by_metadata_name(self, mock_read_name):
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            device_rpm = (
+                packages_dir
+                / "amdrocm-core-sdk10.2-gfx1100-10.2.0~daily-12345.x86_64.rpm"
+            )
+            meta_rpm = (
+                packages_dir / "amdrocm-core-sdk10.2-10.2.0~daily-12345.x86_64.rpm"
+            )
+            device_rpm.write_bytes(b"rpm")
+            meta_rpm.write_bytes(b"rpm")
+
+            def name_for(path: Path, pkg_type: str) -> str:
+                if "gfx1100" in path.name:
+                    return "amdrocm-core-sdk10.2-gfx1100"
+                return "amdrocm-core-sdk10.2"
+
+            mock_read_name.side_effect = name_for
+            index = verify.find_package_files(packages_dir, "rpm")
+
+        self.assertEqual(
+            index["amdrocm-core-sdk10.2-gfx1100"],
+            device_rpm,
+        )
+        self.assertEqual(index["amdrocm-core-sdk10.2"], meta_rpm)
+
+    @patch.object(verify, "read_package_file_name")
+    def test_indexes_deb_by_metadata_name(self, mock_read_name):
+        with tempfile.TemporaryDirectory() as tmp:
+            packages_dir = Path(tmp)
+            deb_path = (
+                packages_dir / "amdrocm-core-sdk10.2_10.2.0~daily-12345_amd64.deb"
+            )
+            deb_path.write_bytes(b"deb")
+            mock_read_name.return_value = "amdrocm-core-sdk10.2"
+            index = verify.find_package_files(packages_dir, "deb")
+
+        self.assertEqual(index["amdrocm-core-sdk10.2"], deb_path)
+        mock_read_name.assert_called_once_with(deb_path, "deb")
+
+
 class VerifyVariantTest(unittest.TestCase):
     def setUp(self):
         self.config = PackageConfig(
