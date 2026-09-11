@@ -55,6 +55,7 @@ ______________________________________________________________________
   - [TheRock feature area: GitHub Actions workflows](#therock-feature-area-github-actions-workflows)
   - [TheRock feature area: Python scripts and tools](#therock-feature-area-python-scripts-and-tools)
   - [TheRock feature area: Packaging](#therock-feature-area-packaging)
+  - [TheRock feature area: Security scanning](#therock-feature-area-security-scanning)
 - [Testing changes to ROCm subprojects with TheRock](#testing-changes-to-rocm-subprojects-with-therock)
   - [Building subprojects through TheRock](#building-subprojects-through-therock)
   - [Testing subprojects through TheRock](#testing-subprojects-through-therock)
@@ -232,7 +233,7 @@ ______________________________________________________________________
 We use [GitHub Actions](https://github.com/features/actions) in the
 [`.github/workflows`](/.github/workflows/) directory for a variety of workflows:
 
-- Lightweight checks: codeql.yml, gitleaks.yml, pre-commit.yml, unit_tests.yml, therock-pr-bot.yml, etc.
+- Lightweight checks: security_scan_pr.yml, pre-commit.yml, unit_tests.yml, therock-pr-bot.yml, etc.
 - CI/CD workflows: multi_arch_ci.yml, multi_arch_release.yml, etc.
 - Other automation: bump_submodules.yml, copy_release.yml, publish_build_manylinux_x86_64.yml
 
@@ -421,6 +422,88 @@ Native Linux packaging unit tests live under
 > - Native Linux packages are missing xnack+ files for ASan
 >
 > See https://github.com/ROCm/TheRock/issues/5384.
+
+______________________________________________________________________
+
+### TheRock feature area: Security scanning
+
+#### Security scanning - Scope
+
+The test categories above check that TheRock behaves correctly. We separately
+scan the repository for security problems: secrets committed to git, unsafe
+patterns in our own Python and workflows, and misconfigurations in the images
+we build.
+
+None of these scanners are implemented here. TheRock calls the
+[`ROCm/rocm-security-gh`](https://github.com/ROCm/rocm-security-gh)
+`security-baseline.yml` reusable workflow, which runs each scanner in its own
+isolated job, and supplies only its own configuration:
+
+| Scanner                                          | Looks for                                                   | Configuration                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [gitleaks](https://github.com/gitleaks/gitleaks) | Secrets and credentials in tracked files and git history    | [`build_tools/scan_tools/gitleaks.toml`](/build_tools/scan_tools/gitleaks.toml) |
+| [bandit](https://bandit.readthedocs.io/)         | Unsafe patterns in our Python scripts                       | [`build_tools/scan_tools/bandit.yml`](/build_tools/scan_tools/bandit.yml)       |
+| [zizmor](https://docs.zizmor.sh/)                | GitHub Actions workflow vulnerabilities                     | [`build_tools/scan_tools/zizmor.yml`](/build_tools/scan_tools/zizmor.yml)       |
+| [trivy](https://trivy.dev/)                      | Dockerfile misconfigurations and dependency vulnerabilities | [`build_tools/scan_tools/trivy.yml`](/build_tools/scan_tools/trivy.yml)         |
+| [CodeQL](https://codeql.github.com/)             | Semantic code analysis (`security-extended` queries)        | [`build_tools/scan_tools/codeql.yml`](/build_tools/scan_tools/codeql.yml)       |
+
+#### Security scanning - Design for testing
+
+Two callers wrap the same reusable workflow and differ only in when they run
+and how they report:
+
+- [`security_scan_pr.yml`](/.github/workflows/security_scan_pr.yml) runs on
+  pull requests and asks for human-readable reports only. Findings go to a
+  build artifact and the job summary, never to the Security tab, so pull
+  requests from forks (which never receive elevated tokens) behave identically
+  to same-repo ones.
+- [`security_scan_weekly.yml`](/.github/workflows/security_scan_weekly.yml)
+  runs on a schedule over the whole repository and uploads SARIF to the
+  Security tab.
+
+Two consequences are worth knowing when reading a red check:
+
+- Pull request runs default to `scan_mode: changed`, so each scanner sees only
+  what the pull request touched. A finding elsewhere in the repository will not
+  appear until the weekly run. CodeQL narrows the same way, by language: a pull
+  request touching no C/C++ skips the `c-cpp` job entirely and says so in its
+  job summary.
+- Every configuration path is passed to the reusable workflow explicitly. A
+  mistyped path fails the job instead of quietly falling back to the org-wide
+  default, so a scanner cannot silently stop using TheRock's configuration.
+
+#### Security scanning - Validation methods
+
+Every scanner is runnable locally against the same configuration CI uses; see
+[the security scanners section in `CONTRIBUTING.md`](/CONTRIBUTING.md#security-scanners)
+for the commands. Prefer that over pushing a commit to see what CI says.
+
+Changes to the scanner configurations do not trigger builds, since they cannot
+affect build output. This is enforced by
+[`configure_ci_path_filters.py`](/build_tools/github_actions/configure_ci_path_filters.py)
+and covered by
+[`configure_ci_path_filters_test.py`](/build_tools/github_actions/tests/configure_ci_path_filters_test.py).
+
+#### Security scanning - Limitations and known gaps
+
+> [!WARNING]
+> These scanners were introduced after most of the code they scan, so they
+> report pre-existing findings that are not regressions from any one pull
+> request. Until those are triaged, a red security check does not necessarily
+> mean the pull request introduced the finding: compare against the findings
+> already on `main` before assuming otherwise.
+
+> [!WARNING]
+> CodeQL analyses without building the code (`build-mode: none`), so generated
+> code is not covered. Vendored sources under `build_tools/third_party` are
+> excluded by
+> [`codeql.yml`](/build_tools/scan_tools/codeql.yml), which means most of the
+> C/C++ in this repository is deliberately not analysed here; those findings
+> belong to the upstream projects.
+
+> [!WARNING]
+> Only TheRock's own tree is scanned. The ROCm subprojects are git submodules,
+> so their code is scanned in their own repositories, not by these workflows.
 
 ______________________________________________________________________
 
