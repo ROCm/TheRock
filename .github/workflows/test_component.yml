@@ -158,12 +158,20 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
-      - name: Driver / GPU sanity check
-        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
-        timeout-minutes: 3
+        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+      - name: Enable sanitizer-specific test flags
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
         env:
           LD_LIBRARY_PATH: >-
             ${{ env.THEROCK_BIN_DIR }}/../lib:${{ env.THEROCK_BIN_DIR }}/../lib/rocm_sysdeps/lib:${{ env.LD_LIBRARY_PATH }}
+        run: |
+          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
+          echo "HSA_XNACK=1" >> $GITHUB_ENV
+          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+
+      - name: Driver / GPU sanity check
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
+        timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
@@ -172,14 +180,6 @@ jobs:
         run: |
           python ./build_tools/install_additional_requirements.py \
             --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
-
-        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
-      - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.artifact_group, 'asan') }}
-        run: |
-          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
-          echo "HSA_XNACK=1" >> $GITHUB_ENV
-          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
