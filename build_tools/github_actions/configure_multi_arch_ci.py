@@ -1392,7 +1392,10 @@ def _expand_build_config_for_platform(
 
         # If test_type_for_family is set, only run tests when test_type is in the list
         test_type_for_family = platform_info.get("test_type_for_family", [])
-        if test_type_for_family and jobs.test_rocm.test_type not in test_type_for_family:
+        if (
+            test_type_for_family
+            and jobs.test_rocm.test_type not in test_type_for_family
+        ):
             test_runs_on = ""
             print(
                 f"  {family_name}: test_type_for_family={test_type_for_family}, "
