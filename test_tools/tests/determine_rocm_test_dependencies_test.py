@@ -299,6 +299,245 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("amdsmi", projects)
         self.assertIn("rdc", projects)
 
+    def test_shared_rocroller_prefix_mapped(self) -> None:
+        proc = self._run("--changed-projects", "shared/rocroller", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = json.loads(proc.stdout.strip())
+        self.assertIn("rocroller", projects)
+        self.assertIn("hipblaslt", projects)
+
+    def test_shared_blas_prefixes_mapped(self) -> None:
+        # tensilelite has no node in `graph` itself -- it is declared as a
+        # synthetic subproject below (empty consumers here; the real transitive
+        # reach through hipblaslt/rocblas/hipblas is covered by
+        # TestSyntheticSubprojects, not by this alias-expansion test).
+        graph = {
+            "hipblas": {"consumers": []},
+            "hipblaslt": {"consumers": []},
+            "origami": {"consumers": []},
+            "rocblas": {"consumers": []},
+            "rocroller": {"consumers": []},
+        }
+        policies = "[synthetic.tensilelite]\nconsumers = []\n"
+        root = _make_fixture(graph=graph, policies=policies)
+        try:
+            cases = {
+                "shared/mxdatagenerator": {
+                    "hipblas",
+                    "hipblaslt",
+                    "rocblas",
+                    "rocroller",
+                    "tensilelite",
+                },
+                # origami/stinkytofu intentionally list only the literal
+                # alias-seed names: tensilelite is a synthetic node with
+                # level=3 in the REAL test_policies.toml, so its own walk
+                # reaches hipblaslt/rocblas/hipblas transitively without
+                # hand-duplicating them here. This --level 5 (self-only) check
+                # only exercises alias expansion, so it sees just the literal
+                # alias contents.
+                "shared/origami": {"origami", "tensilelite"},
+                "shared/stinkytofu": {"tensilelite"},
+                "shared/tensile": {"hipblas", "rocblas"},
+            }
+            for changed_project, expected in cases.items():
+                with self.subTest(changed_project=changed_project):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed_project,
+                            "--level",
+                            "5",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertEqual(set(json.loads(proc.stdout.strip())), expected)
+                    self.assertEqual(proc.stderr, "")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_dnn_provider_prefixes_mapped(self) -> None:
+        graph = {
+            "hipdnn_integration_tests": {
+                "consumers": [
+                    "hipblasltprovider",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ]
+            },
+            "hipblasltprovider": {"consumers": []},
+            "hipkernelprovider": {"consumers": []},
+            "miopenprovider": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            cases = {
+                "dnn-providers/hipblaslt-provider": "hipblasltprovider",
+                "dnn-providers/hip-kernel-provider": "hipkernelprovider",
+                "dnn-providers/miopen-provider": "miopenprovider",
+            }
+            for changed_project, expected in cases.items():
+                with self.subTest(changed_project=changed_project):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed_project,
+                            "--level",
+                            "4",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "dnn-providers/integration-tests",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                json.loads(proc.stdout.strip()),
+                [
+                    "hipblasltprovider",
+                    "hipdnn-integration-tests",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ],
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_dnn_provider_cmake_prefix_maps_to_integration_tests(self) -> None:
+        graph = {
+            "hipdnn_integration_tests": {
+                "consumers": [
+                    "hipblasltprovider",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ]
+            },
+            "hipblasltprovider": {"consumers": []},
+            "hipkernelprovider": {"consumers": []},
+            "miopenprovider": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "dnn-providers/cmake",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                json.loads(proc.stdout.strip()),
+                [
+                    "hipblasltprovider",
+                    "hipdnn-integration-tests",
+                    "hipkernelprovider",
+                    "miopenprovider",
+                ],
+            )
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_composablekernel_prefix_mapped(self) -> None:
+        graph = {"composable_kernel": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/composablekernel",
+                    "--level",
+                    "5",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout.strip()), ["composable_kernel"])
+            self.assertEqual(proc.stderr, "")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_rocm_systems_prefixes_mapped(self) -> None:
+        graph = {
+            "amd-dbgapi": {"consumers": []},
+            "hip-clr": {"consumers": []},
+            "mirage": {"consumers": []},
+            "rdc": {"consumers": []},
+            "rocjitsu": {"consumers": []},
+            "rocm-kpack": {"consumers": []},
+            "rocm_smi_lib": {"consumers": []},
+            "rocprofiler-sdk": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            cases = {
+                "emulation/mirage": "mirage",
+                "emulation/rocjitsu": "rocjitsu",
+                "projects/clr": "hip-clr",
+                "projects/cuid": "rdc",
+                "projects/hip": "hip-clr",
+                "projects/hipother": "hip-clr",
+                "projects/rocdbgapi": "amd-dbgapi",
+                "projects/rocm-smi-lib": "rocm_smi_lib",
+                "projects/rocprofiler": "rocprofiler-sdk",
+                "shared/amdgpu-windows-interop": "hip-clr",
+                "shared/kpack": "rocm-kpack",
+                "shared/machine-readable-isa": "rocjitsu",
+            }
+            for changed_project, expected in cases.items():
+                with self.subTest(changed_project=changed_project):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed_project,
+                            "--level",
+                            "4",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_comma_separated_input(self) -> None:
         proc = self._run("--changed-projects", "amdsmi,rocroller", "--level", "4")
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -307,6 +546,11 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rdc", projects)  # amdsmi direct consumer
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)  # rocroller direct consumer
+
+    def test_unmapped_external_namespace_fails(self) -> None:
+        proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("no entry in _EXTERNAL_SUBTREE_ALIASES", proc.stderr)
 
     def test_empty_changed_projects_outputs_wildcard(self) -> None:
         proc = self._run()
@@ -325,6 +569,149 @@ class TestCliInputParsing(_FixtureTestCase):
         lines = proc.stdout.strip().splitlines()
         self.assertIn("amdsmi", lines)
         self.assertIn("rdc", lines)
+
+
+# ---------------------------------------------------------------------------
+# Synthetic subprojects: [synthetic.<name>] promotes a project with no CMake
+# target (e.g. TensileLite) into an ordinary consumer-graph node, merged in by
+# _load_consumer_graph. Once merged it walks, validates, and lists exactly like
+# a real graph node -- these tests exercise that mechanism directly, using a
+# small graph modeling tensilelite -> hipblaslt -> rocblas -> hipblas so the
+# transitive reach can be checked end to end (mirrors the real repo's shape
+# without depending on its size or drifting with it).
+# ---------------------------------------------------------------------------
+_SYNTHETIC_GRAPH = {
+    "hipblaslt": {"consumers": ["rocblas"]},
+    "rocblas": {"consumers": ["hipblas"]},
+    "hipblas": {"consumers": []},
+    "hipsparselt": {"consumers": []},
+}
+_SYNTHETIC_POLICIES = """\
+[synthetic.tensilelite]
+consumers = ["hipblaslt", "hipsparselt"]
+
+[component.tensilelite]
+level = 3
+
+[component.hipblaslt]
+test_include = ["hipblas"]
+"""
+
+
+class TestSyntheticSubprojects(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=_SYNTHETIC_POLICIES)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_synthetic_node_appears_in_list_subprojects(self) -> None:
+        # Merged in by _load_consumer_graph, so it is a known subproject just
+        # like any CMake-derived one.
+        self.assertIn("tensilelite", list_subprojects(self.root))
+
+    def test_tensilelite_change_ripples_transitively(self) -> None:
+        # tensilelite (level=3, unbounded) -> synthetic edge to
+        # {hipblaslt, hipsparselt} -> continues into the REAL graph edges
+        # transitively: hipblaslt -> rocblas -> hipblas.
+        result = get_subprojects_to_test(["tensilelite"], self.root)
+        self.assertEqual(
+            result,
+            {"tensilelite", "hipblaslt", "hipsparselt", "rocblas", "hipblas"},
+        )
+
+    def test_tensilelite_change_does_not_warn_unrecognized(self) -> None:
+        # A synthetic node is a known graph key -- no "unrecognized project"
+        # warning, unlike a bare test-only string with no declaration.
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            get_subprojects_to_test(["tensilelite"], self.root)
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_hipblaslt_change_does_not_retest_tensilelite(self) -> None:
+        # The asymmetric coupling this mechanism exists for: hipblaslt-proper
+        # changes must NOT force a tensilelite retest (only the reverse).
+        result = get_subprojects_to_test(["hipblaslt"], self.root, level=4)
+        self.assertNotIn("tensilelite", result)
+        # The real missing edge (hipblaslt -> hipblas) is still patched via
+        # test_include, independent of the synthetic mechanism.
+        self.assertIn("hipblas", result)
+
+    def test_validate_policies_passes_with_synthetic_table(self) -> None:
+        ok, messages = validate_policies(self.root)
+        self.assertTrue(ok, "\n".join(messages))
+        self.assertTrue(any("synthetic subproject" in m for m in messages))
+
+    def test_validate_policies_catches_bad_synthetic_consumer(self) -> None:
+        # A synthetic consumer naming a nonexistent project is almost always a
+        # typo: it would silently select nothing beyond itself.
+        bad = _SYNTHETIC_POLICIES.replace(
+            'consumers = ["hipblaslt", "hipsparselt"]',
+            'consumers = ["hipblaslt", "not-a-real-project"]',
+        )
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            ok, messages = validate_policies(root)
+            self.assertFalse(ok)
+            self.assertIn("not-a-real-project", "\n".join(messages))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_merge_is_additive_not_overwriting(self) -> None:
+        # If a synthetic name ever collides with a real graph node, the merge
+        # must union consumers rather than silently drop the real edge.
+        graph = {**_SYNTHETIC_GRAPH, "hipblaslt": {"consumers": ["rocblas"]}}
+        policies = '[synthetic.hipblaslt]\nconsumers = ["hipsparselt"]\n'
+        root = _make_fixture(graph=graph, policies=policies)
+        try:
+            result = get_subprojects_to_test(["hipblaslt"], root, level=4)
+            self.assertIn("rocblas", result)  # the pre-existing real edge
+            self.assertIn("hipsparselt", result)  # the added synthetic edge
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_consumers_must_be_a_list(self) -> None:
+        # consumers = "hipblaslt" (a bare string, not a list) would otherwise
+        # silently iterate characters instead of failing loudly.
+        bad = '[synthetic.tensilelite]\nconsumers = "hipblaslt"\n'
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a list of strings"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_consumers_must_be_strings(self) -> None:
+        bad = "[synthetic.tensilelite]\nconsumers = [1, 2]\n"
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a list of strings"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_synthetic_entry_must_be_a_table(self) -> None:
+        bad = '[synthetic]\ntensilelite = "not-a-table"\n'
+        root = _make_fixture(graph=_SYNTHETIC_GRAPH, policies=bad)
+        try:
+            with self.assertRaisesRegex(ValueError, "must be a table"):
+                get_subprojects_to_test(["tensilelite"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_graph_node_with_non_list_consumers_raises_on_merge(self) -> None:
+        # A corrupt/future-schema graph node ("consumers": null or similar)
+        # must fail loudly at merge time, not with a confusing TypeError --
+        # exercised via a synthetic name colliding with that corrupt node
+        # (the merge only ever touches the node named by the synthetic table).
+        graph = {**_SYNTHETIC_GRAPH, "hipblaslt": {"consumers": None}}
+        policies = '[synthetic.hipblaslt]\nconsumers = ["hipsparselt"]\n'
+        root = _make_fixture(graph=graph, policies=policies)
+        try:
+            with self.assertRaisesRegex(ValueError, "non-list 'consumers'"):
+                get_subprojects_to_test(["hipblaslt"], root)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -506,9 +893,9 @@ class TestRealCommittedPolicies(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Identifier-space contract: inputs must be consumer-graph keys. The function only
-# lowercases; the CLI also strips a leading `projects/`. Subtree paths and
-# hyphenated matrix keys are NOT graph keys and must be mapped by the caller.
+# Identifier-space contract: function inputs must be consumer-graph keys. The
+# CLI accepts external-repo subtree identifiers and normalizes known forms before
+# calling into the graph selection logic.
 # ---------------------------------------------------------------------------
 class TestIdentifierSpaceContract(_FixtureTestCase):
     def test_graph_key_input_resolves(self) -> None:
@@ -516,9 +903,9 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         self.assertIn("amdsmi", selected)
         self.assertIn("rdc", selected)
 
-    def test_subtree_path_is_not_a_graph_key(self) -> None:
-        # The CLI strips `projects/` -> `clr`, still not the graph key `hip-clr`,
-        # so it selects only itself with a warning.
+    def test_unmapped_project_prefix_strips_to_name(self) -> None:
+        # Unknown `projects/` paths still fall back to stripping the prefix; if
+        # the result is not a graph key, selection warns and returns that name.
         proc = subprocess.run(
             [
                 sys.executable,
@@ -526,7 +913,7 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
                 "--therock-dir",
                 str(self.root),
                 "--changed-projects",
-                "projects/clr",
+                "projects/not-a-graph-key",
                 "--level",
                 "4",
             ],
@@ -535,12 +922,12 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         selected = set(json.loads(proc.stdout.strip()))
-        self.assertEqual(selected, {"clr"})
+        self.assertEqual(selected, {"not-a-graph-key"})
         self.assertIn("unrecognized", proc.stderr.lower())
 
     def test_shared_prefix_not_stripped(self) -> None:
-        # Only `projects/` is stripped, not `shared/`. `shared/rocroller` is not a
-        # graph key, so it does not resolve to `rocroller`.
+        # Direct function callers pass graph keys. CLI-only aliases such as
+        # `shared/rocroller` are not normalized here.
         buf = io.StringIO()
         with redirect_stderr(buf):
             selected = get_subprojects_to_test(["shared/rocroller"], self.root, level=4)
@@ -549,7 +936,7 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
 
     def test_graph_keys_use_underscores_not_matrix_hyphens(self) -> None:
         # Selection returns graph keys (underscore-form), not the hyphenated CI
-        # matrix keys — asserting the skew a future mapping step must bridge.
+        # matrix keys. CLI output translates the skew for GitHub Actions.
         graph = {
             "miopen": {"consumers": ["hipdnn_integration_tests"]},
             "hipdnn_integration_tests": {"consumers": []},
@@ -559,6 +946,34 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
             selected = get_subprojects_to_test(["miopen"], root, level=4)
             self.assertIn("hipdnn_integration_tests", selected)
             self.assertNotIn("hipdnn-integration-tests", selected)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_cli_outputs_matrix_selector_aliases(self) -> None:
+        graph = {
+            "miopen": {"consumers": ["hipdnn_integration_tests"]},
+            "hipdnn_integration_tests": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "miopen",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertIn("hipdnn-integration-tests", selected)
+            self.assertNotIn("hipdnn_integration_tests", selected)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -600,6 +1015,21 @@ class TestExplain(_FixtureTestCase):
         }
         selection = get_subprojects_to_test(["amdsmi"], self.root)
         self.assertEqual(final_set, selection)
+
+    def test_explain_reports_ci_selector_aliases(self) -> None:
+        graph = {
+            "miopen": {"consumers": ["hipdnn_integration_tests"]},
+            "hipdnn_integration_tests": {"consumers": []},
+        }
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            text = explain_component("miopen", root)
+            self.assertIn("final:", text)
+            self.assertIn("hipdnn_integration_tests", text)
+            self.assertIn("ci selectors:", text)
+            self.assertIn("hipdnn-integration-tests", text)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
     def test_explain_reports_level_3_walk_depth(self) -> None:
         text = explain_component("rocm-core", self.root)

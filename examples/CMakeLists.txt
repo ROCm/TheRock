@@ -23,6 +23,19 @@ else()
   )
 endif()
 
+# Pin an architecture instead of letting CMake detect one: detection needs
+# either a GPU on the builder or a -target-cpu flag that clang no longer emits
+# (llvm/llvm-project#206483). One target is enough for a configure/build check.
+# Generic stages have no per-arch targets, so fall back to the dist targets.
+set(_example_hip_targets "${THEROCK_AMDGPU_TARGETS}")
+if(NOT _example_hip_targets)
+  set(_example_hip_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
+endif()
+if(_example_hip_targets)
+  list(GET _example_hip_targets 0 _example_hip_arch)
+  list(APPEND HIP_CMAKE_ARGS "-DCMAKE_HIP_ARCHITECTURES=${_example_hip_arch}")
+endif()
+
 # hipTensor is built conditionally to composable_kernel availability (CK is a hard
 # build dependency). _ck_enabled, set by math-libs/CMakeLists.txt, is OFF when
 # CK and hipTensor were filtered out for the selected gfx targets.

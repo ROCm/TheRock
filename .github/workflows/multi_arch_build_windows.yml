@@ -40,6 +40,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
+      rebuild_artifacts:
+        type: string
+        default: ""
+        description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
       skip_stages:
         type: string
         default: ""
@@ -171,6 +175,7 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      rebuild_artifacts: ${{ inputs.rebuild_artifacts }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
@@ -228,6 +233,25 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # ==========================================================================
+  # GATE: libraries_baseline_ready
+  # See multi_arch_build_portable_linux.yml for why this job exists. Windows
+  # only builds a subset of the stages rocm-libraries reuses (the rest are
+  # Linux-only), so `needs:` here is narrower than the Linux copy.
+  # ==========================================================================
+  libraries_baseline_ready:
+    name: "Libraries Baseline Ready"
+    if: always()
+    needs: [runtime-tests, debug-tools, media-libs]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require reused stages to have succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "One or more stages rocm-libraries reuses via baseline_run_id did not succeed:"
+          echo '${{ toJSON(needs) }}'
+          exit 1
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}

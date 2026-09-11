@@ -6,7 +6,9 @@ This script determines what test configurations to run.
 
 Outputs (written to $GITHUB_OUTPUT):
   - sanity_component: JSON object for the sanity component, always present as a
-    prerequisite that must pass before other components are run.
+    prerequisite that must pass before other components are run. The
+    ``test_runner`` field within this object is non-empty only on GPU runners,
+    so callers can gate GPU-only steps on that field.
   - components: JSON array of component configs for the regular test matrix
     (excludes sanity, which is output separately above).
   - platform: lowercase OS name derived from RUNNER_OS.
@@ -287,6 +289,10 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
+        # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
+        # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
+        # see the "tensilelite" special-case in the component loop
+        # (AIHPBLAS-4410).
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -303,7 +309,7 @@ test_matrix = {
     },
     "hipblas": {
         "job_name": "hipblas",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--blas --solver --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -341,7 +347,7 @@ test_matrix = {
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --sparse --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -352,7 +358,7 @@ test_matrix = {
     },
     "rocsolver": {
         "job_name": "rocsolver",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--solver --blas --tests",
         # test_runner.py drives ctest category labels, so it runs a filtered
         # subset rather than the full ~5 hr extended suite.
         # 68350(approx) tests needs 48 mins, so 48 mins / 2 shards = 24 mins per shard
@@ -398,7 +404,6 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        "expect_failure": True,
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
     },
     # Corefile tests require specific hardware support (GPU core dump capable runners).
@@ -408,7 +413,6 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
-        "expect_failure": True,
         "test_script": (
             "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
             " gdb.rocm/corefile.exp"
@@ -447,7 +451,7 @@ test_matrix = {
     # SPARSE tests
     "hipsparse": {
         "job_name": "hipsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -458,7 +462,7 @@ test_matrix = {
     },
     "rocsparse": {
         "job_name": "rocsparse",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # rocsparse now uses 3-way gtest sharding, enabled once the tolerance fix
         # in ROCm/rocm-libraries#8713 landed in TheRock. The full suite is ~240 min
         # single-shard; split across 3 shards that is ~80 min per shard, and 90 min
@@ -473,7 +477,7 @@ test_matrix = {
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
-        "fetch_artifact_args": "--blas --tests",
+        "fetch_artifact_args": "--sparse --blas --tests",
         # GHA step timeout: max category timeout in hipsparselt should be 6 hours / 6 shards = 60 min per shard
         # 60 min + 20% margin = 72 min
         "timeout_minutes": 72,
@@ -770,7 +774,7 @@ test_matrix = {
     # rocALUTION tests
     "rocalution": {
         "job_name": "rocalution",
-        "fetch_artifact_args": "--rocalution --tests --blas --rand",
+        "fetch_artifact_args": "--rocalution --tests --blas --sparse --rand",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -939,7 +943,13 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
-        "timeout_minutes": 15,
+        # Github Actions step timeout, applied to every tier (it does not vary by test_type).
+        # Must be sized for the largest tier the nightly runs (comprehensive),
+        # not quick/standard -- otherwise the step is killed mid-suite well
+        # before ctest's own per-test --timeout 7200 can take effect. See
+        # rocm-libraries/projects/hiptensor/test_categories.yaml
+        # execution_settings.category_timeouts (full: 7200s = 2h).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1147,6 +1157,30 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # tensilelite: append the tensilelite/tests C++ gtest suite (run via
+            # ctest -L <test_type>, driven by the shared test_runner.py) after
+            # the existing pytest stage, for every tier except quick -- that
+            # component's test_categories.yaml only defines standard/
+            # comprehensive/full so far (promote to quick once the standard
+            # tier proves stable). See AIHPBLAS-4410.
+            #
+            # TODO(#7851): this is a temporary special-case. test_runner.py
+            # only knows how to run the C++/ctest suite today, so the pytest
+            # and ctest stages have to be chained here instead. Fold both
+            # into test_runner.py's own dual-mode support and drop this
+            # branch once that lands.
+            if key == "tensilelite" and test_type != "quick":
+                job_config_data["test_script"] = (
+                    job_config_data["test_script"]
+                    + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
+                )
+                # +15 min over the pytest-only baseline for the added ctest
+                # stage; re-measure once CI timing is observed and adjust.
+                job_config_data["timeout_minutes"] = (
+                    job_config_data["timeout_minutes"] + 15
+                )
+
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
@@ -1165,6 +1199,15 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
+                # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
+                # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
+                # only run on standard, comprehensive, or full tiers.
+                if test_type == "quick":
+                    logging.info(
+                        f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
+                    )
+                    continue
+
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
@@ -1186,8 +1229,10 @@ def run():
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights
-    # For ASAN builds, use the sandbox runner to isolate potentially failing tests
-    is_asan_build = build_variant in ("asan", "host-asan")
+    # For ASan builds, use the sandbox runner to isolate potentially failing tests.
+    # This matches multiple build variants, including "asan", "host-asan",
+    # "asan-debug", and "host-asan-debug".
+    is_asan_build = "asan" in build_variant
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")

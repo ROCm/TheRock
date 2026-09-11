@@ -48,8 +48,8 @@
     "DEBDepends": [
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -124,8 +124,8 @@
       "python3",
       "libc6",
       "libstdc++6|libstdc++8",
-      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
-      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev|libstdc++-15-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev|libgcc-15-dev",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -431,61 +431,6 @@
     "Disable_DWZ": "True"
   },
   {
-    "Package": "amdrocm-fft-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-fft-devel",
-      "amdrocm-rand"
-    ],
-    "RPMRequires": [
-      "amdrocm-fft-devel",
-      "amdrocm-rand"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT library test suite and validation binaries",
-    "Description_Long": "Comprehensive test suite for rocFFT and hipFFT libraries. Includes unit tests, performance benchmarks, and correctness validation tools for Fast Fourier Transform operations on AMD GPUs. Provides test binaries and verification utilities for FFT algorithm implementation.",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Artifactory": [
-      {
-        "Artifact": "fft",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocFFT",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipFFT",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "True"
-  },
-  {
     "Package": "amdrocm-fft",
     "Version": "",
     "Architecture": "amd64",
@@ -645,14 +590,6 @@
               "run",
               "doc"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
           }
         ]
       },
@@ -695,7 +632,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -739,7 +676,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "hipSPARSELt",
@@ -885,12 +822,6 @@
             "Components": [
               "dev"
             ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "dev"
-            ]
           }
         ]
       }
@@ -924,7 +855,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -936,6 +867,14 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "lib",
               "run",
@@ -972,7 +911,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "sparse",
         "Artifact_Subdir": [
           {
             "Name": "rocSPARSE",
@@ -982,6 +921,12 @@
           },
           {
             "Name": "hipSPARSE",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
+            "Name": "hipSPARSELt",
             "Components": [
               "dev"
             ]
@@ -1018,7 +963,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -1069,7 +1014,7 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Artifactory": [
       {
-        "Artifact": "blas",
+        "Artifact": "solver",
         "Artifact_Subdir": [
           {
             "Name": "rocSOLVER",
@@ -3352,7 +3297,6 @@
     ],
     "Gfxarch": "False"
   },
-
   {
     "Package": "amdrocm-hipfile",
     "Version": "",
@@ -3846,6 +3790,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
