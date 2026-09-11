@@ -69,7 +69,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME HIPKERNELPROVIDER_ENABLE_ROCKE
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build the rocKE engine and smoke tests in hip-kernel-provider"
   CMAKE_VARS
     HIPKERNELPROVIDER_ENABLE_ROCKE=ON
@@ -81,7 +81,7 @@ therock_declare_flag(
 # rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
 therock_declare_flag(
   NAME HIPDNN_ENABLE_KERNEL_INGESTOR
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
   CMAKE_VARS
     HIPDNN_ENABLE_KERNEL_INGESTOR=ON
