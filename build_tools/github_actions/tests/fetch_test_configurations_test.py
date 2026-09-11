@@ -117,7 +117,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         tensilelite = self._get_components()[0]
 
         self.assertIn("detect_leaks=0", tensilelite["test_script"])
-        self.assertNotIn("TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"])
+        self.assertNotIn(
+            "TEST_COMPONENT=hipblaslt-tensilelite", tensilelite["test_script"]
+        )
 
     def test_host_only_rejects_windows(self):
         os.environ["HOST_ONLY_TESTS"] = "true"

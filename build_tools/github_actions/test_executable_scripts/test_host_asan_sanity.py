@@ -38,16 +38,21 @@ def main() -> int:
         executable = tmp_dir / "canary"
         source.write_text(CANARY_SOURCE, encoding="utf-8")
         subprocess.run(
-            [str(compiler), "-fsanitize=address", "-g", str(source), "-o", str(executable)],
+            [
+                str(compiler),
+                "-fsanitize=address",
+                "-g",
+                str(source),
+                "-o",
+                str(executable),
+            ],
             check=True,
         )
 
         env = os.environ.copy()
         options = env.get("ASAN_OPTIONS", "")
         env["ASAN_OPTIONS"] = ":".join(
-            value
-            for value in (options, "halt_on_error=1", "abort_on_error=1")
-            if value
+            value for value in (options, "halt_on_error=1", "abort_on_error=1") if value
         )
         result = subprocess.run(executable, env=env, capture_output=True, text=True)
 

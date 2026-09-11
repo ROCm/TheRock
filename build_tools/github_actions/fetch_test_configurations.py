@@ -1033,9 +1033,7 @@ def run():
         selected_matrix = _host_asan_phase1_matrix()
         test_type = "host-asan"
         run_extended_tests = False
-        logging.info(
-            f"Using Phase 1 host-ASAN matrix ({len(selected_matrix)} test(s))"
-        )
+        logging.info(f"Using Phase 1 host-ASAN matrix ({len(selected_matrix)} test(s))")
     else:
         selected_matrix = deepcopy(test_matrix)
         logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
