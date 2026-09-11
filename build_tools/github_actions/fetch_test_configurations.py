@@ -289,10 +289,10 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
-        # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
-        # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
-        # see the "tensilelite" special-case in the component loop
-        # (AIHPBLAS-4410).
+        # pytest suite only. The host-only slices (rocisa + Tensile/Tests/unit,
+        # and the C++ tensilelite/tests gtest) run on CPU-only Component CI lanes
+        # in rocm-libraries; TheRock runs the GPU-only tiers here (subtile GPU +
+        # common, selected via the category's markers in test_categories.yaml).
         "test_script": f"python {_get_script_path('pytest_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1098,29 +1098,6 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
-
-            # tensilelite: append the tensilelite/tests C++ gtest suite (run via
-            # ctest -L <test_type>, driven by the shared test_runner.py) after
-            # the existing pytest stage, for every tier except quick -- that
-            # component's test_categories.yaml only defines standard/
-            # comprehensive/full so far (promote to quick once the standard
-            # tier proves stable). See AIHPBLAS-4410.
-            #
-            # TODO(#7851): this is a temporary special-case. test_runner.py
-            # only knows how to run the C++/ctest suite today, so the pytest
-            # and ctest stages have to be chained here instead. Fold both
-            # into test_runner.py's own dual-mode support and drop this
-            # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
-                job_config_data["test_script"] = (
-                    job_config_data["test_script"]
-                    + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
-                )
-                # +15 min over the pytest-only baseline for the added ctest
-                # stage; re-measure once CI timing is observed and adjust.
-                job_config_data["timeout_minutes"] = (
-                    job_config_data["timeout_minutes"] + 15
-                )
 
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
