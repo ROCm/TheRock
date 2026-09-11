@@ -262,7 +262,14 @@ jobs:
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
               ROCM_ROOT="$(rocm-sdk path --root)"
+              AMDGPU_TARGETS="$(rocm-sdk targets)" || exit 1
+              AMDGPU_TARGETS="$(printf "%s" "${AMDGPU_TARGETS}" | xargs | tr " " ",")"
+              strict_target_args=()
+              if [[ ",${AMDGPU_TARGETS}," == *",gfx1250-strict,"* ]]; then
+                strict_target_args=(--bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}")
+              fi
               python build/build.py build \
+                "${strict_target_args[@]}" \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
