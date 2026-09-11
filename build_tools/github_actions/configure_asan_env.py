@@ -29,6 +29,7 @@ Used by `test_component.yml`.
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -58,7 +59,16 @@ STATIC_ASAN_ENV = {
     "HSA_XNACK": "1",
 }
 
-ASAN_RUNTIME_LIB = "libclang_rt.asan.so"
+
+def _asan_runtime_library_name() -> str:
+    """Returns Clang's shared ASAN runtime name for the current host."""
+    machine = platform.machine().lower()
+    arch = {
+        "amd64": "x86_64",
+        "x64": "x86_64",
+        "arm64": "aarch64",
+    }.get(machine, machine)
+    return f"libclang_rt.asan-{arch}.so"
 
 
 def _resolve_asan_runtime(
@@ -72,9 +82,10 @@ def _resolve_asan_runtime(
     if not os.access(clang, os.X_OK):
         return None, f"clang not found at {clang}, ASAN runtime path not resolved"
 
+    runtime_lib = _asan_runtime_library_name()
     try:
         result = subprocess.run(
-            [str(clang), f"-print-file-name={ASAN_RUNTIME_LIB}"],
+            [str(clang), f"-print-file-name={runtime_lib}"],
             capture_output=True,
             text=True,
             check=True,
