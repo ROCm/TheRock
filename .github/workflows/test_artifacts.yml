@@ -216,12 +216,18 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # Run when:
-    #   - sanity check passed
+    #   - configure_test_matrix succeeded (test_sanity_check's result deliberately does
+    #     NOT gate this job here - see TEMP note below)
     #   - there are components to test
     #   - sanity_check_only_for_family is not set
+    # TEMP(safaizal-asan-testing): testing branch only. test_sanity_check is currently
+    # red on a known LeakSanitizer hit inside libamdhip64.so (asan-debug variant), which
+    # otherwise blocks this whole matrix via `!failure()`. Scope the check to
+    # configure_test_matrix so rocrtst/hipblaslt/rocsolver/miopen/ck etc. still get a
+    # health signal on this branch. Revert to `!failure()` before merging upstream.
     if: >-
       ${{
-        !failure() &&
+        needs.configure_test_matrix.result != 'failure' &&
         !cancelled() &&
         needs.configure_test_matrix.outputs.components != '' &&
         needs.configure_test_matrix.outputs.components != '[]' &&
