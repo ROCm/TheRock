@@ -62,6 +62,10 @@ class TestResolveAsanEnv(unittest.TestCase):
             for key, value in STATIC_ASAN_ENV.items():
                 self.assertEqual(env[key], value)
 
+    def test_link_order_check_is_disabled(self):
+        """Uninstrumented tools (amdclang++) abort without this."""
+        self.assertIn("verify_asan_link_order=0", STATIC_ASAN_ENV["ASAN_OPTIONS"])
+
     @requires_posix
     def test_symbolizer_path_is_absolute_for_a_relative_artifacts_dir(self):
         """hip_check runs from build/bin, so a relative path resolves to nothing."""

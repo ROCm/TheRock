@@ -39,11 +39,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from github_actions_api import gha_set_env
 
 # Applied to every ASAN test job.
-#   detect_odr_violation=0 : instrumented ROCm libraries trip ODR checks that
-#                            are not actionable from a test job.
-#   quarantine_size_mb=600 : bounds ASAN's quarantine for freed memory.
+#   detect_odr_violation=0      : instrumented ROCm libraries trip ODR checks
+#                                 that are not actionable from a test job.
+#   quarantine_size_mb=600      : bounds ASAN's quarantine for freed memory.
+#   verify_asan_link_order=0    : uninstrumented binaries that load instrumented
+#                                 ROCm libraries abort unless the runtime is
+#                                 first in the library list. ASAN_RUNTIME_PATH
+#                                 below lets callers preload it where they
+#                                 control the process, but tests also invoke
+#                                 tools they do not spawn directly (amdclang++,
+#                                 for example). Disabling the check keeps those
+#                                 running; it suppresses the guard rather than
+#                                 fixing the ordering, so preload where you can.
 STATIC_ASAN_ENV = {
-    "ASAN_OPTIONS": "detect_odr_violation=0:quarantine_size_mb=600",
+    "ASAN_OPTIONS": (
+        "detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0"
+    ),
     "HSA_XNACK": "1",
 }
 
