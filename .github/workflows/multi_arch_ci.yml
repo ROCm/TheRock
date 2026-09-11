@@ -149,6 +149,7 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      ref: ${{ github.head_ref || github.ref }}
     permissions:
       contents: read
       id-token: write
@@ -169,6 +170,7 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      ref: ${{ github.head_ref || github.ref }}
     permissions:
       contents: read
       id-token: write
