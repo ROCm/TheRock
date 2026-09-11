@@ -320,7 +320,7 @@ class TestCliInputParsing(_FixtureTestCase):
         }
         policies = (
             "[synthetic.tensilelite]\nconsumers = []\n"
-            "[synthetic.stinkytofu]\nconsumers = [\"tensilelite\"]\n"
+            '[synthetic.stinkytofu]\nconsumers = ["tensilelite"]\n'
         )
         root = _make_fixture(graph=graph, policies=policies)
         try:

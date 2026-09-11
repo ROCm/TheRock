@@ -137,7 +137,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn(
             "test_stinkytofu_host_asan.py", components["stinkytofu"]["test_script"]
         )
-        self.assertEqual(components["stinkytofu"]["fetch_artifact_args"], "--blas --tests")
+        self.assertEqual(
+            components["stinkytofu"]["fetch_artifact_args"], "--blas --tests"
+        )
         self.assertEqual(components["stinkytofu"]["timeout_minutes"], 10)
 
     def test_host_asan_tensilelite_does_not_append_gpu_ctest(self):

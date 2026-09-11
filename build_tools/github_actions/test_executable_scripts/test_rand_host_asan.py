@@ -45,7 +45,10 @@ def main() -> int:
     for binary_name, arguments in selections[component]:
         executable = bin_dir / binary_name
         if not executable.is_file():
-            print(f"ERROR: required host-ASAN test is missing: {executable}", file=sys.stderr)
+            print(
+                f"ERROR: required host-ASAN test is missing: {executable}",
+                file=sys.stderr,
+            )
             return 1
         command = [str(executable), *arguments]
         logging.info("++ Exec %s", shlex.join(command))

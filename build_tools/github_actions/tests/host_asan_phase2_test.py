@@ -36,7 +36,9 @@ class HostAsanPhase2Test(unittest.TestCase):
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(len(commands), len(test_rand_host_asan.ROCRAND_TESTS))
         generator_command = next(
-            command for command in commands if "test_rocrand_generator_type" in command[0]
+            command
+            for command in commands
+            if "test_rocrand_generator_type" in command[0]
         )
         self.assertEqual(
             generator_command[1],

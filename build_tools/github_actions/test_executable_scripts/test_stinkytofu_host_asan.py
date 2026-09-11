@@ -14,7 +14,10 @@ from pathlib import Path
 def _required_file(path: Path) -> bool:
     if path.is_file():
         return True
-    print(f"ERROR: required StinkyTofu host-ASAN artifact is missing: {path}", file=sys.stderr)
+    print(
+        f"ERROR: required StinkyTofu host-ASAN artifact is missing: {path}",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -42,7 +45,10 @@ def main() -> int:
         if line.strip()
     ]
     if not architectures:
-        print(f"ERROR: no StinkyTofu architectures listed in {architecture_file}", file=sys.stderr)
+        print(
+            f"ERROR: no StinkyTofu architectures listed in {architecture_file}",
+            file=sys.stderr,
+        )
         return 1
 
     filecheck_inputs = sorted((test_dir / "filecheck").rglob("*.stir"))

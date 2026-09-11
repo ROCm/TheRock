@@ -15,7 +15,9 @@ def main() -> int:
     bin_dir = Path(os.environ["THEROCK_BIN_DIR"]).resolve()
     executable = bin_dir / "rocsparse-unit-test"
     if not executable.is_file():
-        print(f"ERROR: required host-ASAN test is missing: {executable}", file=sys.stderr)
+        print(
+            f"ERROR: required host-ASAN test is missing: {executable}", file=sys.stderr
+        )
         return 1
 
     command = [str(executable)]
