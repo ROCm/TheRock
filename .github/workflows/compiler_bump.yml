@@ -1,0 +1,671 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# This workflow automates the compiler team's daily branch creation and testing.
+#
+# It replaces the Jenkins pipeline that:
+# 1. Creates a branch `amd-compiler-YYYY-MM-DD[-suffix]` in TheRock
+# 2. Updates compiler submodules (amd-llvm, hipify, spirv-llvm-translator) to amd-staging HEAD
+# 3. Builds for ALL architectures but only tests on gfx94x (Linux) and gfx110x (Windows)
+# 4. Publishes artifacts to release buckets for downstream teams
+#
+# Key difference from multi_arch_release.yml:
+# - Builds ALL architectures (release + ASAN)
+# - Tests only gfx94x (Linux) and gfx110x (Windows) with quick/standard test type
+# - No ASAN tests (build only for downstream consumption)
+
+name: Compiler Daily Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch_suffix:
+        description: 'Optional suffix for branch name (e.g., "COT", "SMP"). Branch will be: amd-compiler-YYYY-MM-DD[-suffix]'
+        type: string
+        default: "COT"
+      llvm_ref:
+        description: 'llvm-project ref (branch/tag/SHA). Default: amd-staging HEAD'
+        type: string
+        default: "amd-staging"
+      hipify_ref:
+        description: 'HIPIFY ref (branch/tag/SHA). Default: amd-staging HEAD'
+        type: string
+        default: "amd-staging"
+      spirv_ref:
+        description: 'SPIRV-LLVM-Translator ref (branch/tag/SHA). Default: amd-staging HEAD'
+        type: string
+        default: "amd-staging"
+      test_type:
+        description: 'Test type'
+        type: choice
+        options:
+          - quick
+          - standard
+        default: "quick"
+      dry_run:
+        description: 'Dry run - create branch but do not trigger builds'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+
+run-name: >-
+  Compiler Bump (${{ inputs.branch_suffix || 'COT' }})
+  | Test: ${{ inputs.test_type || 'quick' }}
+
+jobs:
+  # ==========================================================================
+  # Phase 1: Create branch with bumped compiler submodules
+  # ==========================================================================
+  create-branch:
+    name: Create compiler bump branch
+    runs-on: ubuntu-24.04
+    outputs:
+      branch_name: ${{ steps.create-branch.outputs.branch_name }}
+    steps:
+      - name: Generate branch name
+        id: branch-name
+        env:
+          BRANCH_SUFFIX: ${{ inputs.branch_suffix || 'COT' }}
+        run: |
+          DATE=$(date +%Y-%-m-%-d)
+          if [ -n "${BRANCH_SUFFIX}" ]; then
+            BRANCH_NAME="amd-compiler-${DATE}-${BRANCH_SUFFIX}"
+          else
+            BRANCH_NAME="amd-compiler-${DATE}"
+          fi
+          echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+          echo "## Branch Name" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${BRANCH_NAME}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          fetch-depth: 0
+
+      - name: Initialize compiler submodules
+        run: |
+          git submodule init compiler/amd-llvm compiler/hipify compiler/spirv-llvm-translator
+          git submodule update --depth=1 compiler/amd-llvm compiler/hipify compiler/spirv-llvm-translator
+
+      - name: Update submodules to specified refs
+        id: update-submodules
+        env:
+          LLVM_REF: ${{ inputs.llvm_ref || 'amd-staging' }}
+          HIPIFY_REF: ${{ inputs.hipify_ref || 'amd-staging' }}
+          SPIRV_REF: ${{ inputs.spirv_ref || 'amd-staging' }}
+        run: |
+          set -e
+
+          echo "## Submodule Updates" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Component | Ref | SHA |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|-----|-----|" >> "$GITHUB_STEP_SUMMARY"
+
+          # Update llvm-project
+          cd compiler/amd-llvm
+          git fetch origin "${LLVM_REF}"
+          git checkout FETCH_HEAD
+          LLVM_SHA=$(git rev-parse HEAD)
+          echo "| llvm-project | ${LLVM_REF} | \`${LLVM_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
+          cd ../..
+
+          # Update HIPIFY
+          cd compiler/hipify
+          git fetch origin "${HIPIFY_REF}"
+          git checkout FETCH_HEAD
+          HIPIFY_SHA=$(git rev-parse HEAD)
+          echo "| HIPIFY | ${HIPIFY_REF} | \`${HIPIFY_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
+          cd ../..
+
+          # Update SPIRV-LLVM-Translator
+          cd compiler/spirv-llvm-translator
+          git fetch origin "${SPIRV_REF}"
+          git checkout FETCH_HEAD
+          SPIRV_SHA=$(git rev-parse HEAD)
+          echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
+          cd ../..
+
+      - name: Create and push branch
+        id: create-branch
+        env:
+          LLVM_REF: ${{ inputs.llvm_ref || 'amd-staging' }}
+          HIPIFY_REF: ${{ inputs.hipify_ref || 'amd-staging' }}
+          SPIRV_REF: ${{ inputs.spirv_ref || 'amd-staging' }}
+        run: |
+          BRANCH_NAME="${{ steps.branch-name.outputs.branch_name }}"
+          echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "${BRANCH_NAME}"
+          git add compiler/amd-llvm compiler/hipify compiler/spirv-llvm-translator
+
+          if git diff --cached --quiet; then
+            echo "No submodule changes detected"
+            echo "> **Note:** No submodule changes - already at specified refs" >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m "${BRANCH_NAME}
+
+          Compiler submodule bump:
+          - llvm-project: ${LLVM_REF}
+          - HIPIFY: ${HIPIFY_REF}
+          - SPIRV-LLVM-Translator: ${SPIRV_REF}"
+          fi
+
+          git push origin "${BRANCH_NAME}"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Branch pushed: [\`${BRANCH_NAME}\`](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME})" >> "$GITHUB_STEP_SUMMARY"
+
+  # ==========================================================================
+  # Phase 2 - Linux: Build and packaging
+  # ==========================================================================
+  setup-linux:
+    name: Setup Linux Release
+    needs: create-branch
+    if: ${{ inputs.dry_run != true }}
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "release"
+      release_type: dev
+      linux_amdgpu_families: "all"
+      windows_amdgpu_families: "none"
+      build_pytorch: false
+      build_jax: false
+      repository: ${{ github.repository }}
+      ref: ${{ needs.create-branch.outputs.branch_name }}
+    secrets: inherit
+
+  build-linux:
+    name: Build Linux Release
+    needs: [create-branch, setup-linux]
+    if: ${{ inputs.dry_run != true && needs.setup-linux.outputs.linux_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    secrets: inherit
+    with:
+      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-linux.outputs.linux_build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_suffix }}
+      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on }}
+      rocm_package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  build-linux-tarballs:
+    name: Build Linux Tarballs
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      platform: linux
+      package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  build-linux-python-packages:
+    name: Build Linux Python Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: "all"
+      windows_amdgpu_families: "all"
+      multiarch_index: true
+      package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  publish-linux-artifacts:
+    name: Publish Linux Artifacts
+    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages]
+    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          ref: ${{ needs.setup-linux.outputs.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
+        with:
+          release_type: dev
+          product: core
+
+      - name: Publish to release buckets
+        run: |
+          python build_tools/github_actions/publish_rocm_to_release_buckets.py \
+            --run-id="${{ github.run_id }}" \
+            --platform=linux \
+            --release-type="dev" \
+            --kpack-split="${{ needs.build-linux-python-packages.outputs.kpack_split }}" \
+            --structured \
+            --build-variant="release"
+
+  # ==========================================================================
+  # Phase 2 - Windows: Build and packaging
+  # ==========================================================================
+  setup-windows:
+    name: Setup Windows Release
+    needs: create-branch
+    if: ${{ inputs.dry_run != true }}
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "release"
+      release_type: dev
+      linux_amdgpu_families: "none"
+      windows_amdgpu_families: "all"
+      build_pytorch: false
+      build_jax: false
+      repository: ${{ github.repository }}
+      ref: ${{ needs.create-branch.outputs.branch_name }}
+    secrets: inherit
+
+  build-windows:
+    name: Build Windows Release
+    needs: [create-branch, setup-windows]
+    if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_build_windows.yml
+    secrets: inherit
+    with:
+      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-windows.outputs.windows_build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_suffix }}
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on }}
+      rocm_package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-windows.outputs.ref }}
+
+  build-windows-tarballs:
+    name: Build Windows Tarballs
+    needs: [create-branch, setup-windows, build-windows]
+    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_tarballs.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
+      platform: windows
+      package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-windows.outputs.ref }}
+
+  build-windows-python-packages:
+    name: Build Windows Python Packages
+    needs: [create-branch, setup-windows, build-windows]
+    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    uses: ./.github/workflows/build_windows_python_packages.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
+      linux_amdgpu_families: "all"
+      windows_amdgpu_families: "all"
+      multiarch_index: true
+      package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-windows.outputs.ref }}
+
+  publish-windows-artifacts:
+    name: Publish Windows Artifacts
+    needs: [create-branch, setup-windows, build-windows, build-windows-tarballs, build-windows-python-packages]
+    if: ${{ inputs.dry_run != true && needs.build-windows-tarballs.result == 'success' && needs.build-windows-python-packages.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          ref: ${{ needs.setup-windows.outputs.ref }}
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: ./.github/actions/configure_aws_product_publication_credentials
+        with:
+          release_type: dev
+          product: core
+
+      - name: Publish to release buckets
+        run: |
+          python build_tools/github_actions/publish_rocm_to_release_buckets.py \
+            --run-id="${{ github.run_id }}" \
+            --platform=windows \
+            --release-type="dev" \
+            --kpack-split="${{ needs.build-windows-python-packages.outputs.kpack_split }}" \
+            --structured \
+            --build-variant="release"
+
+  # ==========================================================================
+  # Phase 2 - ASAN: Build only (no packaging, no tests)
+  # ==========================================================================
+  setup-asan:
+    name: Setup ASAN Build
+    needs: create-branch
+    if: ${{ inputs.dry_run != true }}
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: "asan-debug"
+      release_type: dev
+      linux_amdgpu_families: "all"
+      windows_amdgpu_families: "none"
+      build_pytorch: false
+      build_jax: false
+      repository: ${{ github.repository }}
+      ref: ${{ needs.create-branch.outputs.branch_name }}
+    secrets: inherit
+
+  build-linux-asan:
+    name: Build Linux ASAN
+    needs: [create-branch, setup-asan]
+    if: ${{ inputs.dry_run != true && needs.setup-asan.outputs.linux_build_config != '' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    secrets: inherit
+    with:
+      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-asan.outputs.linux_build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_suffix }}
+      build_runs_on: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on }}
+      rocm_package_version: ${{ needs.setup-asan.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-asan.outputs.ref }}
+
+  # ==========================================================================
+  # Phase 3 - Testing: gfx94x (Linux) and gfx110x (Windows) only
+  # ==========================================================================
+  trigger-linux-tests:
+    name: Trigger Linux Tests (gfx94X-dcgpu)
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get gfx94X-dcgpu family info
+        id: family-info
+        env:
+          BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
+        run: |
+          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx94X-dcgpu")')
+          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
+          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger test_artifacts for gfx94X-dcgpu
+        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            {
+              "artifact_group": "gfx94X-dcgpu",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "gfx94X-dcgpu",
+              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
+              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
+              "test_type": "${{ inputs.test_type || 'quick' }}",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "build_variant": "release"
+            }
+
+  trigger-windows-tests:
+    name: Trigger Windows Tests (gfx110X-all)
+    needs: [create-branch, setup-windows, build-windows]
+    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get gfx110X-all family info
+        id: family-info
+        env:
+          BUILD_CONFIG: ${{ needs.setup-windows.outputs.windows_build_config }}
+        run: |
+          FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx110X-all")')
+          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
+          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger test_artifacts for gfx110X-all (Windows)
+        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          inputs: |
+            {
+              "artifact_group": "gfx110X-all",
+              "artifact_run_id": "${{ github.run_id }}",
+              "amdgpu_families": "gfx110X-all",
+              "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
+              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
+              "test_type": "${{ inputs.test_type || 'quick' }}",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "build_variant": "release"
+            }
+
+  # ==========================================================================
+  # Summary
+  # ==========================================================================
+  summary:
+    name: Summary
+    needs:
+      - create-branch
+      - setup-linux
+      - build-linux
+      - build-linux-tarballs
+      - build-linux-python-packages
+      - publish-linux-artifacts
+      - setup-windows
+      - build-windows
+      - build-windows-tarballs
+      - build-windows-python-packages
+      - publish-windows-artifacts
+      - setup-asan
+      - build-linux-asan
+      - trigger-linux-tests
+      - trigger-windows-tests
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Generate artifact URLs
+        id: artifact-urls
+        env:
+          RELEASE_TYPE: dev
+        run: |
+          cd build_tools
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+          run_id = '${{ github.run_id }}'
+
+          for platform in ['linux', 'windows']:
+              root = WorkflowOutputRoot.from_workflow_run(
+                  run_id=run_id,
+                  platform=platform,
+                  release_type='dev'
+              )
+              print(f'{platform}_artifact_url={root.artifact_index().https_url}')
+              print(f'{platform}_log_url={root.log_root_index().https_url}')
+              print(f'{platform}_manifest_url={root.manifests_index().https_url}')
+          " >> "$GITHUB_OUTPUT"
+
+      - name: Generate summary
+        run: |
+          echo "## Workflow Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Branch
+          if [ "${{ needs.create-branch.result }}" == "success" ]; then
+            echo "- :white_check_mark: Branch: [\`${{ needs.create-branch.outputs.branch_name }}\`](https://github.com/${{ github.repository }}/tree/${{ needs.create-branch.outputs.branch_name }})" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- :x: Branch creation failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Linux" >> "$GITHUB_STEP_SUMMARY"
+
+          # Linux Release build
+          if [ "${{ needs.build-linux.result }}" == "success" ]; then
+            echo "- :white_check_mark: Build (all architectures)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux.result }}" == "failure" ]; then
+            echo "- :x: Build failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Linux packaging
+          if [ "${{ needs.build-linux-tarballs.result }}" == "success" ] && [ "${{ needs.build-linux-python-packages.result }}" == "success" ]; then
+            echo "- :white_check_mark: Packaging (tarballs + Python packages)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-tarballs.result }}" == "failure" ] || [ "${{ needs.build-linux-python-packages.result }}" == "failure" ]; then
+            echo "- :x: Packaging failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-tarballs.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Linux publish
+          if [ "${{ needs.publish-linux-artifacts.result }}" == "success" ]; then
+            echo "- :white_check_mark: Published to release buckets" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.publish-linux-artifacts.result }}" == "failure" ]; then
+            echo "- :x: Publishing failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.publish-linux-artifacts.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Publishing skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Linux tests
+          if [ "${{ needs.trigger-linux-tests.result }}" == "success" ]; then
+            echo "- :white_check_mark: Tests triggered (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-linux-tests.result }}" == "failure" ]; then
+            echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Windows" >> "$GITHUB_STEP_SUMMARY"
+
+          # Windows build
+          if [ "${{ needs.build-windows.result }}" == "success" ]; then
+            echo "- :white_check_mark: Build (all architectures)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows.result }}" == "failure" ]; then
+            echo "- :x: Build failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows packaging
+          if [ "${{ needs.build-windows-tarballs.result }}" == "success" ] && [ "${{ needs.build-windows-python-packages.result }}" == "success" ]; then
+            echo "- :white_check_mark: Packaging (tarballs + Python packages)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-tarballs.result }}" == "failure" ] || [ "${{ needs.build-windows-python-packages.result }}" == "failure" ]; then
+            echo "- :x: Packaging failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-tarballs.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows publish
+          if [ "${{ needs.publish-windows-artifacts.result }}" == "success" ]; then
+            echo "- :white_check_mark: Published to release buckets" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.publish-windows-artifacts.result }}" == "failure" ]; then
+            echo "- :x: Publishing failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.publish-windows-artifacts.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Publishing skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows tests
+          if [ "${{ needs.trigger-windows-tests.result }}" == "success" ]; then
+            echo "- :white_check_mark: Tests triggered (gfx110X-all)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.trigger-windows-tests.result }}" == "failure" ]; then
+            echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ASAN" >> "$GITHUB_STEP_SUMMARY"
+
+          # Linux ASAN build
+          if [ "${{ needs.build-linux-asan.result }}" == "success" ]; then
+            echo "- :white_check_mark: Linux ASAN Build (all architectures)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-asan.result }}" == "failure" ]; then
+            echo "- :x: Linux ASAN Build failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-asan.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Linux ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Dry run note
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Dry Run:** Branch was created but no builds were triggered." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Build outputs
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Build Outputs" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platform | Artifacts | Logs | Manifests |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-----------|------|-----------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Linux | ${{ steps.artifact-urls.outputs.linux_artifact_url }} | ${{ steps.artifact-urls.outputs.linux_log_url }} | ${{ steps.artifact-urls.outputs.linux_manifest_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows | ${{ steps.artifact-urls.outputs.windows_artifact_url }} | ${{ steps.artifact-urls.outputs.windows_log_url }} | ${{ steps.artifact-urls.outputs.windows_manifest_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Tip:** Use \`gh run download ${{ github.run_id }}\` to download artifacts locally." >> "$GITHUB_STEP_SUMMARY"
+
+          # Links
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Find Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Test Artifacts runs](https://github.com/${{ github.repository }}/actions/workflows/test_artifacts.yml)" >> "$GITHUB_STEP_SUMMARY"
+
+          # Config
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Configuration" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test Type | \`${{ inputs.test_type || 'quick' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Linux Test Family | \`gfx94X-dcgpu\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Windows Test Family | \`gfx110X-all\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| llvm-project | \`${{ inputs.llvm_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| HIPIFY | \`${{ inputs.hipify_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SPIRV-LLVM-Translator | \`${{ inputs.spirv_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"
