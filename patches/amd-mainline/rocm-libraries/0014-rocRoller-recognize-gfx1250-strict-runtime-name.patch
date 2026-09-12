@@ -1,0 +1,42 @@
+From 3d4f3ec42d857de009e46a978a9b720eecf83ae2 Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Sat, 12 Sep 2026 14:08:42 -0500
+Subject: [PATCH] rocRoller: recognize gfx1250-strict runtime name
+
+---
+ .../rocroller/lib/source/GPUArchitectureTarget.cpp   | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/shared/rocroller/lib/source/GPUArchitectureTarget.cpp b/shared/rocroller/lib/source/GPUArchitectureTarget.cpp
+index 4ec3162b..50000ec1 100644
+--- a/shared/rocroller/lib/source/GPUArchitectureTarget.cpp
++++ b/shared/rocroller/lib/source/GPUArchitectureTarget.cpp
+@@ -20,6 +20,12 @@ namespace rocRoller
+         size_t      end   = archStr.find(":");
+         std::string arch  = archStr.substr(start, end - start);
+ 
++        // ROCr exposes gfx1250 A0 agents with the strict compiler target name.
++        // rocRoller models A0 as gfx1250 revision 0 rather than as a separate architecture.
++        bool const isGfx1250Strict = arch == "gfx1250-strict";
++        if(isGfx1250Strict)
++            arch = "gfx1250";
++
+         std::regex  pattern(R"(rev(\d+))");
+         std::smatch revIdMatch;
+         if(std::regex_search(arch, revIdMatch, pattern))
+@@ -29,7 +35,11 @@ namespace rocRoller
+         }
+         else if(arch == "gfx1250")
+         {
+-            if(asicRevisionId == 2)
++            if(isGfx1250Strict)
++            {
++                asicRevisionId = 0;
++            }
++            else if(asicRevisionId == 2)
+             {
+                 int newRevId = Settings::Get(Settings::GFX1250AsicRevisionId);
+                 Log::warn("Overriding current device asic revision id from {} to {}",
+-- 
+2.43.0
+
