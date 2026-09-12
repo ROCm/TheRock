@@ -14,6 +14,8 @@ sys.path.insert(0, os.fspath(SCRIPT_DIR))
 
 import test_rand_host_asan
 import test_rocsparse_host_asan
+import test_rocprim_host_asan
+import test_rocthrust_host_asan
 import test_stinkytofu_host_asan
 
 
@@ -101,6 +103,38 @@ class HostAsanPhase2Test(unittest.TestCase):
         self.assertEqual(Path(commands[1][0]).name, "test_gen_instructions")
         self.assertEqual(commands[1][-2:], ["Gfx1250", "Gfx1250v0"])
         self.assertEqual(len(commands), 4)
+
+    def test_rocprim_runs_exact_host_allowlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp)
+            for binary in test_rocprim_host_asan.ROCPRIM_HOST_TESTS:
+                (bin_dir / binary).touch()
+            with (
+                patch.dict(os.environ, {"THEROCK_BIN_DIR": tmp}, clear=False),
+                patch.object(test_rocprim_host_asan.subprocess, "run") as run,
+            ):
+                self.assertEqual(test_rocprim_host_asan.main(), 0)
+
+        self.assertEqual(
+            [Path(call.args[0][0]).name for call in run.call_args_list],
+            list(test_rocprim_host_asan.ROCPRIM_HOST_TESTS),
+        )
+
+    def test_rocthrust_runs_exact_host_allowlist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp)
+            for binary in test_rocthrust_host_asan.ROCTHRUST_HOST_TESTS:
+                (bin_dir / binary).touch()
+            with (
+                patch.dict(os.environ, {"THEROCK_BIN_DIR": tmp}, clear=False),
+                patch.object(test_rocthrust_host_asan.subprocess, "run") as run,
+            ):
+                self.assertEqual(test_rocthrust_host_asan.main(), 0)
+
+        self.assertEqual(
+            [Path(call.args[0][0]).name for call in run.call_args_list],
+            list(test_rocthrust_host_asan.ROCTHRUST_HOST_TESTS),
+        )
 
 
 if __name__ == "__main__":

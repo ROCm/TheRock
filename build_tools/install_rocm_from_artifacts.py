@@ -383,6 +383,10 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
+        # Some math test payloads (notably StinkyTofu through hipBLASLt) link
+        # libamd_comgr even on CPU-only runners. GPU images happen to provide it,
+        # but the no-ROCm host-ASAN image must receive it from build artifacts.
+        "amd-comgr_lib",
         "core-amdsmi_run",
         "core-amdsmi_lib",
         "core-hip_lib",

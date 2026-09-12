@@ -977,16 +977,34 @@ HOST_ASAN_PHASE2_COMPONENTS = {
     },
 }
 
+HOST_ASAN_PHASE3_COMPONENTS = {
+    "rocprim": {
+        "test_script": f"python {_get_script_path('test_rocprim_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocthrust": {
+        "test_script": f"python {_get_script_path('test_rocthrust_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocalution": {
+        "timeout_minutes": 10,
+    },
+}
+
 
 def _host_asan_matrix() -> dict:
-    """Return the explicit Phase 1 + Phase 2 host-ASAN matrix.
+    """Return the explicit Phase 1 + Phase 2 + Phase 3 host-ASAN matrix.
 
     Entries inherit artifact-fetching details from the regular matrix when one
     exists, then receive a host-only command/timeout overlay. All entries run
     once on Linux CPU infrastructure with no GPU container devices.
     """
     result = {}
-    for phase in (HOST_ASAN_PHASE1_COMPONENTS, HOST_ASAN_PHASE2_COMPONENTS):
+    for phase in (
+        HOST_ASAN_PHASE1_COMPONENTS,
+        HOST_ASAN_PHASE2_COMPONENTS,
+        HOST_ASAN_PHASE3_COMPONENTS,
+    ):
         for key, overrides in phase.items():
             entry = deepcopy(test_matrix.get(key, {}))
             entry.update(overrides)
