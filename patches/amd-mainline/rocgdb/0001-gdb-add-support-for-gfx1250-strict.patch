@@ -1,0 +1,89 @@
+From e83129414e59c0c4420edd2174821e7224f5efd9 Mon Sep 17 00:00:00 2001
+From: Olu Ogunbowale <oogunbow@amd.com>
+Date: Sat, 12 Sep 2026 15:29:29 -0500
+Subject: [PATCH] gdb: Add support for gfx1250-strict
+
+Backport ROCgdb commit cc4d60f76435a075dc64e25c255c58633ba9b133 to the release BKC source. Add the gfx1250-strict architecture variant with machine ID 0x0eb to BFD and readelf.
+---
+ bfd/archures.c       |  1 +
+ bfd/bfd-in2.h        |  1 +
+ bfd/cpu-amdgcn.c     | 13 +++++++------
+ binutils/readelf.c   |  1 +
+ include/elf/amdgpu.h |  1 +
+ 5 files changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/bfd/archures.c b/bfd/archures.c
+index e78cadde195..5d3e120f3e9 100644
+--- a/bfd/archures.c
++++ b/bfd/archures.c
+@@ -591,6 +591,7 @@ DESCRIPTION
+ .#define bfd_mach_amdgcn_gfx1201         0x04e
+ .#define bfd_mach_amdgcn_gfx12_5_generic 0x05b
+ .#define bfd_mach_amdgcn_gfx1250         0x049
++.#define bfd_mach_amdgcn_gfx1250_strict  0x0eb
+ .  bfd_arch_last
+ .  };
+ */
+diff --git a/bfd/bfd-in2.h b/bfd/bfd-in2.h
+index 52472195d8c..6cf55a85f58 100644
+--- a/bfd/bfd-in2.h
++++ b/bfd/bfd-in2.h
+@@ -1856,6 +1856,7 @@ enum bfd_architecture
+ #define bfd_mach_amdgcn_gfx1201         0x04e
+ #define bfd_mach_amdgcn_gfx12_5_generic 0x05b
+ #define bfd_mach_amdgcn_gfx1250         0x049
++#define bfd_mach_amdgcn_gfx1250_strict  0x0eb
+   bfd_arch_last
+   };
+ 
+diff --git a/bfd/cpu-amdgcn.c b/bfd/cpu-amdgcn.c
+index 119b51bfe63..f981789f2da 100644
+--- a/bfd/cpu-amdgcn.c
++++ b/bfd/cpu-amdgcn.c
+@@ -66,12 +66,13 @@ static const bfd_arch_info_type arch_info_struct[] =
+   N (bfd_mach_amdgcn_gfx1200, "amdgcn:gfx1200", false, NN (21)),
+   N (bfd_mach_amdgcn_gfx1201, "amdgcn:gfx1201", false, NN (22)),
+   N (bfd_mach_amdgcn_gfx1250, "amdgcn:gfx1250", false, NN (23)),
+-  N (bfd_mach_amdgcn_gfx9_generic, "amdgcn:gfx9-generic", false, NN (24)),
+-  N (bfd_mach_amdgcn_gfx9_4_generic, "amdgcn:gfx9-4-generic", false, NN (25)),
+-  N (bfd_mach_amdgcn_gfx10_1_generic, "amdgcn:gfx10-1-generic", false, NN (26)),
+-  N (bfd_mach_amdgcn_gfx10_3_generic, "amdgcn:gfx10-3-generic", false, NN (27)),
+-  N (bfd_mach_amdgcn_gfx11_generic, "amdgcn:gfx11-generic", false, NN (28)),
+-  N (bfd_mach_amdgcn_gfx12_generic, "amdgcn:gfx12-generic", false, NN (29)),
++  N (bfd_mach_amdgcn_gfx1250_strict, "amdgcn:gfx1250-strict", false, NN (24)),
++  N (bfd_mach_amdgcn_gfx9_generic, "amdgcn:gfx9-generic", false, NN (25)),
++  N (bfd_mach_amdgcn_gfx9_4_generic, "amdgcn:gfx9-4-generic", false, NN (26)),
++  N (bfd_mach_amdgcn_gfx10_1_generic, "amdgcn:gfx10-1-generic", false, NN (27)),
++  N (bfd_mach_amdgcn_gfx10_3_generic, "amdgcn:gfx10-3-generic", false, NN (28)),
++  N (bfd_mach_amdgcn_gfx11_generic, "amdgcn:gfx11-generic", false, NN (29)),
++  N (bfd_mach_amdgcn_gfx12_generic, "amdgcn:gfx12-generic", false, NN (30)),
+   N (bfd_mach_amdgcn_gfx12_5_generic, "amdgcn:gfx12-5-generic", false, NULL),
+ };
+ 
+diff --git a/binutils/readelf.c b/binutils/readelf.c
+index 503b7e25627..5e4d5bbc72d 100644
+--- a/binutils/readelf.c
++++ b/binutils/readelf.c
+@@ -4900,6 +4900,7 @@ decode_AMDGPU_machine_flags (char *out, unsigned int e_flags, Filedata *filedata
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX1200, "gfx1200")
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX1201, "gfx1201")
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX1250, "gfx1250")
++    AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX1250_STRICT, "gfx1250-strict")
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX602, "gfx602")
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX705, "gfx705")
+     AMDGPU_CASE (EF_AMDGPU_MACH_AMDGCN_GFX805, "gfx805")
+diff --git a/include/elf/amdgpu.h b/include/elf/amdgpu.h
+index 052bb4df149..c70ae014901 100644
+--- a/include/elf/amdgpu.h
++++ b/include/elf/amdgpu.h
+@@ -82,6 +82,7 @@
+ #define EF_AMDGPU_MACH_AMDGCN_GFX1102 0x047
+ #define EF_AMDGPU_MACH_AMDGCN_GFX1200 0x048
+ #define EF_AMDGPU_MACH_AMDGCN_GFX1250 0x049
++#define EF_AMDGPU_MACH_AMDGCN_GFX1250_STRICT 0x0eb
+ #define EF_AMDGPU_MACH_AMDGCN_GFX1151 0x04a
+ #define EF_AMDGPU_MACH_AMDGCN_GFX942  0x04c
+ #define EF_AMDGPU_MACH_AMDGCN_GFX1201 0x04e
+-- 
+2.43.0
+
