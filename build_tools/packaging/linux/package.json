@@ -431,61 +431,6 @@
     "Disable_DWZ": "True"
   },
   {
-    "Package": "amdrocm-fft-test",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "amdrocm-fft-devel",
-      "amdrocm-rand"
-    ],
-    "RPMRequires": [
-      "amdrocm-fft-devel",
-      "amdrocm-rand"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT library test suite and validation binaries",
-    "Description_Long": "Comprehensive test suite for rocFFT and hipFFT libraries. Includes unit tests, performance benchmarks, and correctness validation tools for Fast Fourier Transform operations on AMD GPUs. Provides test binaries and verification utilities for FFT algorithm implementation.",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Artifactory": [
-      {
-        "Artifact": "fft",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocFFT",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipFFT",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "fftw3",
-        "Artifact_Gfxarch": "False",
-        "Artifact_Subdir": [
-          {
-            "Name": "fftw3",
-            "Components": [
-              "lib"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "True"
-  },
-  {
     "Package": "amdrocm-fft",
     "Version": "",
     "Architecture": "amd64",

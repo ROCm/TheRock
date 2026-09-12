@@ -18,7 +18,10 @@ on:
           - rocgdb
           - mesa-fork
   schedule:
-    - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
+    - cron: "0 */12 * * *" # Existing cadence: rocgdb and mesa-fork. UTC: 12AM/12PM; Eastern: 8PM/8AM; Pacific: 5PM/5AM.
+    - cron: "0 7 * * *" # rocm-systems and rocm-libraries. UTC: 7AM; Eastern: 3AM; Pacific: 12AM.
+    - cron: "0 16 * * *" # rocm-systems. UTC: 4PM; Eastern: 12PM; Pacific: 9AM.
+    - cron: "0 19 * * *" # rocm-libraries. UTC: 7PM; Eastern: 3PM; Pacific: 12PM.
   push:
     branches:
       - main
@@ -43,6 +46,19 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Select scheduled submodule
+        id: schedule
+        if: github.event_name == 'schedule'
+        run: |
+          submodules=()
+          case "${{ github.event.schedule }}" in
+            "0 */12 * * *") submodules+=("rocgdb" "mesa-fork") ;;
+            "0 7 * * *") submodules+=("rocm-systems" "rocm-libraries") ;;
+            "0 16 * * *") submodules+=("rocm-systems") ;;
+            "0 19 * * *") submodules+=("rocm-libraries") ;;
+          esac
+          echo "submodules=${submodules[*]}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -73,7 +89,20 @@ jobs:
           pip install requests
 
       - name: Run scheduled bump automation
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' && steps.schedule.outputs.submodules != ''
+        run: |
+          for submodule in ${{ steps.schedule.outputs.submodules }}; do
+            python3 build_tools/github_actions/bump_automation.py \
+              --event_type "schedule" \
+              --submodule "${submodule}" \
+              --systems_token "${{ steps.systems-token.outputs.token }}" \
+              --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+              --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
+              --mesa_token "${{ steps.systems-token.outputs.token }}"
+          done
+
+      - name: Run manually dispatched bump automation
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
