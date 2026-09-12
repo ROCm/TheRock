@@ -96,13 +96,17 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # _load_synthetic_subprojects below) with level 3 (unbounded) in
     # test_policies.toml, so they don't need to be hand-listed here too.
     "shared/origami": ["origami", "tensilelite"],
-    "shared/stinkytofu": ["tensilelite"],
+    "shared/stinkytofu": ["stinkytofu"],
     "shared/tensile": ["hipblas", "rocblas"],
     "dnn-providers/cmake": ["hipdnn_integration_tests"],
     "dnn-providers/hipblaslt-provider": ["hipblasltprovider"],
     "dnn-providers/hip-kernel-provider": ["hipkernelprovider"],
     "dnn-providers/integration-tests": ["hipdnn_integration_tests"],
     "dnn-providers/miopen-provider": ["miopenprovider"],
+    # rocm-libraries registers TensileLite as a nested subtree under hipBLASLt;
+    # stripping only the leading projects/ would produce the unknown graph key
+    # hipblaslt/tensilelite instead of the synthetic tensilelite node.
+    "projects/hipblaslt/tensilelite": ["tensilelite"],
     "projects/clr": ["hip-clr"],
     "projects/composablekernel": ["composable_kernel"],
     "projects/cuid": ["rdc"],

@@ -243,15 +243,18 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "standard",
                 "comprehensive",
                 "full",
+                "host-asan",
                 "ffm-quick",
                 "ffm-standard",
                 "ffm-comprehensive",
                 "ffm-full",
+                "emu-fast",
+                "emu-full",
             },
         )
 
     def test_valid_category_accepted(self):
-        for cat in ("quick", "standard", "comprehensive", "full"):
+        for cat in ("quick", "standard", "comprehensive", "full", "host-asan"):
             self.assertIn(cat, test_runner.VALID_TEST_CATEGORIES)
 
     def test_invalid_category_not_accepted(self):

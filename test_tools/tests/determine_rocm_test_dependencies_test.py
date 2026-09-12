@@ -318,7 +318,10 @@ class TestCliInputParsing(_FixtureTestCase):
             "rocblas": {"consumers": []},
             "rocroller": {"consumers": []},
         }
-        policies = "[synthetic.tensilelite]\nconsumers = []\n"
+        policies = (
+            "[synthetic.tensilelite]\nconsumers = []\n"
+            '[synthetic.stinkytofu]\nconsumers = ["tensilelite"]\n'
+        )
         root = _make_fixture(graph=graph, policies=policies)
         try:
             cases = {
@@ -329,7 +332,7 @@ class TestCliInputParsing(_FixtureTestCase):
                     "rocroller",
                     "tensilelite",
                 },
-                # origami/stinkytofu intentionally list only the literal
+                # origami/StinkyTofu intentionally list only the literal
                 # alias-seed names: tensilelite is a synthetic node with
                 # level=3 in the REAL test_policies.toml, so its own walk
                 # reaches hipblaslt/rocblas/hipblas transitively without
@@ -337,8 +340,9 @@ class TestCliInputParsing(_FixtureTestCase):
                 # only exercises alias expansion, so it sees just the literal
                 # alias contents.
                 "shared/origami": {"origami", "tensilelite"},
-                "shared/stinkytofu": {"tensilelite"},
+                "shared/stinkytofu": {"stinkytofu"},
                 "shared/tensile": {"hipblas", "rocblas"},
+                "projects/hipblaslt/tensilelite": {"tensilelite"},
             }
             for changed_project, expected in cases.items():
                 with self.subTest(changed_project=changed_project):
@@ -590,7 +594,13 @@ _SYNTHETIC_POLICIES = """\
 [synthetic.tensilelite]
 consumers = ["hipblaslt", "hipsparselt"]
 
+[synthetic.stinkytofu]
+consumers = ["tensilelite"]
+
 [component.tensilelite]
+level = 3
+
+[component.stinkytofu]
 level = 3
 
 [component.hipblaslt]
@@ -618,6 +628,20 @@ class TestSyntheticSubprojects(unittest.TestCase):
         self.assertEqual(
             result,
             {"tensilelite", "hipblaslt", "hipsparselt", "rocblas", "hipblas"},
+        )
+
+    def test_stinkytofu_change_runs_its_payload_and_consumers(self) -> None:
+        result = get_subprojects_to_test(["stinkytofu"], self.root)
+        self.assertEqual(
+            result,
+            {
+                "stinkytofu",
+                "tensilelite",
+                "hipblaslt",
+                "hipsparselt",
+                "rocblas",
+                "hipblas",
+            },
         )
 
     def test_tensilelite_change_does_not_warn_unrecognized(self) -> None:

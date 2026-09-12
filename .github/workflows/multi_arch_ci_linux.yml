@@ -132,7 +132,7 @@ jobs:
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && !startsWith(fromJSON(inputs.build_config).build_variant_label, 'host-asan') }}
     strategy:
       fail-fast: false
       matrix:
@@ -149,6 +149,28 @@ jobs:
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      changed_projects: ${{ inputs.changed_projects }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
+
+  # Phase 1 host-ASAN uses one architecture artifact as the host code carrier.
+  # It runs once on the same AWS runner class selected for the sanitizer build.
+  test_host_asan_cpu:
+    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    name: Test host-ASAN on CPU
+    if: ${{ !failure() && !cancelled() && startsWith(fromJSON(inputs.build_config).build_variant_label, 'host-asan') }}
+    uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.build_config).per_family_info[0].amdgpu_family }}
+      amdgpu_targets: ${{ fromJSON(inputs.build_config).per_family_info[0].amdgpu_targets }}
+      test_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on }}
+      host_only: true
+      test_type: host-asan
+      test_labels: ${{ inputs.test_labels }}
       changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}

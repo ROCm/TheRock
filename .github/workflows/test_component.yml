@@ -133,10 +133,10 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+        timeout-minutes: ${{ contains(inputs.build_variant, 'asan') && 60 || 15 }}
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
+          STEP_TIMEOUT_MINUTES: ${{ contains(inputs.build_variant, 'asan') && '60' || '15' }}
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -205,6 +205,10 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
+          # Python-launched Phase 1 tests load instrumented DSOs into an
+          # uninstrumented interpreter, so the matching runtime must load first.
+          # Keep this scoped to host-ASAN to avoid changing existing GPU lanes.
+          LD_PRELOAD: ${{ startsWith(inputs.build_variant, 'host-asan') && env.ASAN_RUNTIME_PATH || '' }}
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
@@ -245,7 +249,7 @@ jobs:
             ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
 
       - name: Post-job cleanup GPU processes on Linux
-        if: ${{ always() && runner.os == 'Linux' }}
+        if: ${{ always() && runner.os == 'Linux' && !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 5
         run: bash ./build_tools/github_actions/cleanup_processes.sh
 

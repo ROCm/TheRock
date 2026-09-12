@@ -33,6 +33,8 @@ VALID_TEST_CATEGORIES = {
     "standard",
     "comprehensive",
     "full",
+    # Orthogonal CPU-only sanitizer scope (Phase 1).
+    "host-asan",
     # ffm-specific categories
     "ffm-quick",
     "ffm-standard",

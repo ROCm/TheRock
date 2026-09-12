@@ -105,6 +105,8 @@ include = [
   # TensileLite C++ tests (test_runner runs ctest from bin/hipblaslt-tensilelite/;
   # needs CTestTestfile.cmake, the test binary, and its data/ fixtures)
   "bin/hipblaslt-tensilelite/**",
+  # StinkyTofu native host-ASAN payload and relocatable test inputs.
+  "bin/stinkytofu/**",
 ]
 
 # rocBLAS
