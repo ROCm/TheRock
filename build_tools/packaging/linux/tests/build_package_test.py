@@ -49,6 +49,7 @@ PKG_CORE_SDK = "amdrocm-core-sdk"
 PKG_DEVELOPER_TOOLS = "amdrocm-developer-tools"
 PKG_RUNTIME = "amdrocm-runtime"
 PKG_DEBUGGER = "amdrocm-debugger"
+PKG_PROFILER = "amdrocm-profiler"
 PKG_CK = "amdrocm-ck"
 
 FFT_HOST_PACKAGE = "amdrocm-fft-host7.1"
@@ -56,6 +57,11 @@ FFT_DEVICE_PACKAGE = "amdrocm-fft7.1-gfx1100"
 FFT_META_PACKAGE = "amdrocm-fft7.1"
 CORE_SDK_DEVICE_PACKAGE = "amdrocm-core-sdk7.1-gfx1100"
 DEVELOPER_TOOLS_PACKAGE = "amdrocm-developer-tools7.1"
+PROFILER_PACKAGE = "amdrocm-profiler7.1"
+TBB_PROVIDES_EXCLUDE = (
+    "%global __provides_exclude libtbb\\.so\\.12|libtbbmalloc\\.so\\.2|"
+    "libtbbmalloc_proxy\\.so\\.2"
+)
 
 STAGING_PAYLOAD_NAME = "libdummy.so"
 STAGING_PAYLOAD_BYTES = b"\x00"
@@ -583,6 +589,46 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
         self.assertEqual(_spec_field(spec, "Name"), CORE_SDK_DEVICE_PACKAGE)
         # RPM keeps -devel naming (no debian_replace_devel_name mapping).
         self.assertIn("amdrocm-core-devel", _spec_field(spec, "Requires"))
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_profiler_spec_excludes_vendored_tbb_provides(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Profiler spec suppresses vendored TBB auto-provides."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_package_artifacts(
+            pkg_name=PKG_PROFILER,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=EMPTY_GFX_ARCH,
+            enable_kpack=True,
+        )
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_PROFILER, config=cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_PROFILER, config=cfg)
+        self.assertEqual(_spec_field(spec, "Name"), PROFILER_PACKAGE)
+        self.assertIn(TBB_PROVIDES_EXCLUDE, spec)
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_fft_spec_does_not_exclude_vendored_tbb_provides(
+        self, _mock_rpmbuild: object, _mock_move: object
+    ) -> None:
+        """Non-profiler packages must not inherit TBB provides exclusion."""
+        cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_FFT, config=device_cfg)
+
+        spec = _read_spec_file(pkg_name=PKG_FFT, config=device_cfg)
+        self.assertNotIn("__provides_exclude", spec)
 
 
 # ---------------------------------------------------------------------------
