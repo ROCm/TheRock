@@ -6,7 +6,7 @@
 # split_databases). The rocKE Python SDK under bin/**/rocke/** is dev/test only
 # and ships via [test] below, not here.
 # Capture is intentionally NOT asserted by tests yet: it is gated on
-# HIPKERNELPROVIDER_ENABLE_ROCKE (default off) and only has content once
+# HIPKERNELPROVIDER_ENABLE_ROCKE and only has content once
 # rocm-libraries #9207 lands. Follow-up tests tracked by ROCm/TheRock#6553.
 include = [
   "**/engines/arch_content/**",
@@ -18,6 +18,9 @@ exclude = [
 include = [
   "bin/hip_kernel_provider*_test*",
   "bin/hip_kernel_provider/CTestTestfile.cmake",
+  # Test-only per-arch descriptor content. The test binaries resolve this root at
+  # startup and exit 1 before gtest runs when it is missing or holds no descriptors.
+  "**/engines/test_arch_content/**",
   # Test config TOMLs (e.g. HIP_KERNEL_ENGINE.toml) consumed by the cross-provider
   # integration suite (hipdnn_integration_tests --test-config).
   "bin/hip_kernel_provider/*.toml",
