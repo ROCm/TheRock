@@ -1,11 +1,11 @@
-From bee9789283be8745cbb9e7f5070b926c607a853b Mon Sep 17 00:00:00 2001
+From e1e8d47e6b39f72f188ee8e3d9e4e137cbab5486 Mon Sep 17 00:00:00 2001
 From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
-Date: Fri, 11 Sep 2026 18:08:03 -0500
-Subject: [PATCH] RCCL: preserve gfx1250 device behavior for strict target
+Date: Sat, 12 Sep 2026 13:49:07 -0500
+Subject: [PATCH] RCCL: preserve gfx1250-strict device behavior
 
+Rebased onto the release BKC rocm-systems pin e64a0f514351b0452850d2eebc4be9a3ea0cd1b5. Obsolete hunks for code removed by the newer pin were omitted.
 ---
  projects/rccl/cmake/DeviceLinker.cmake        |  5 ++--
- .../all_gather/all_gather_dda_fabric_ll128.h  |  2 +-
  projects/rccl/src/device/all_gather.h         |  2 +-
  projects/rccl/src/device/all_reduce.h         |  6 ++---
  projects/rccl/src/device/broadcast.h          |  2 +-
@@ -20,12 +20,12 @@ Subject: [PATCH] RCCL: preserve gfx1250 device behavior for strict target
  projects/rccl/src/device/tdm/tdmCopy.h        |  2 +-
  projects/rccl/src/include/device.h            |  4 ++--
  .../rccl/src/include/nccl_device/hip_compat.h |  2 +-
- .../rccl/src/include/nccl_device/rccl_ptr.h   |  6 ++---
+ .../rccl/src/include/nccl_device/rccl_ptr.h   |  4 ++--
  projects/rccl/src/include/rccl_float8.h       | 24 +++++++++----------
- 18 files changed, 48 insertions(+), 47 deletions(-)
+ 17 files changed, 46 insertions(+), 45 deletions(-)
 
 diff --git a/projects/rccl/cmake/DeviceLinker.cmake b/projects/rccl/cmake/DeviceLinker.cmake
-index a0473529f9..3a2d8b8968 100644
+index 70ac6a5a..4670e205 100644
 --- a/projects/rccl/cmake/DeviceLinker.cmake
 +++ b/projects/rccl/cmake/DeviceLinker.cmake
 @@ -192,14 +192,15 @@ function(dl_evaluate_guard GUARD GPU_TARGET RESULT_VAR)
@@ -46,21 +46,8 @@ index a0473529f9..3a2d8b8968 100644
        set(${RESULT_VAR} TRUE PARENT_SCOPE)
        return()
      endif()
-diff --git a/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h b/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
-index a933cefd77..bd77ac7461 100644
---- a/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
-+++ b/projects/rccl/src/algorithms/dda/all_gather/all_gather_dda_fabric_ll128.h
-@@ -105,7 +105,7 @@ __launch_bounds__(1024)
-     ddaLL128PollWire(gatherSlot + s * (size_t)kDdaLL128WireWordsPerSlice + 2 * lane, vr, flag, lane);
-     ddaLL128StoreRegs<int8_t>(dstBytes + dataByte, vr, eltInSlice, lane, flagLane);
-   }
--#if defined(__gfx1250__)
-+#if (defined(__gfx1250__) || defined(__gfx1250_strict__))
-   asm volatile("s_wait_storecnt 0x0" ::: "memory");
- #endif
-   __syncthreads();
 diff --git a/projects/rccl/src/device/all_gather.h b/projects/rccl/src/device/all_gather.h
-index ab5ae9df99..706259273c 100644
+index 30e91bc9..8d6b91ba 100644
 --- a/projects/rccl/src/device/all_gather.h
 +++ b/projects/rccl/src/device/all_gather.h
 @@ -11,7 +11,7 @@
@@ -73,7 +60,7 @@ index ab5ae9df99..706259273c 100644
  #else
  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 diff --git a/projects/rccl/src/device/all_reduce.h b/projects/rccl/src/device/all_reduce.h
-index 4f1964063f..58c4b2cbed 100644
+index 1719a080..2dce7950 100644
 --- a/projects/rccl/src/device/all_reduce.h
 +++ b/projects/rccl/src/device/all_reduce.h
 @@ -15,7 +15,7 @@ namespace {
@@ -85,7 +72,7 @@ index 4f1964063f..58c4b2cbed 100644
  __device__ void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
  #else
  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
-@@ -116,7 +116,7 @@ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct
+@@ -106,7 +106,7 @@ __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct
  }
  
  template <typename T, typename RedOp, typename Proto>
@@ -94,7 +81,7 @@ index 4f1964063f..58c4b2cbed 100644
  __device__ void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
  #else
  __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, struct ncclDevWorkColl* work) {
-@@ -186,7 +186,7 @@ __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, s
+@@ -172,7 +172,7 @@ __device__ __attribute__((noinline)) void runTreeUpDown(int tid, int nthreads, s
  }
  
  template <typename T, typename RedOp, typename Proto>
@@ -104,7 +91,7 @@ index 4f1964063f..58c4b2cbed 100644
  #else
  __device__ __attribute__((noinline)) void runTreeSplit(int tid, int nthreads, struct ncclDevWorkColl* work) {
 diff --git a/projects/rccl/src/device/broadcast.h b/projects/rccl/src/device/broadcast.h
-index 2760e483c0..2a1b3f5426 100644
+index 2760e483..2a1b3f54 100644
 --- a/projects/rccl/src/device/broadcast.h
 +++ b/projects/rccl/src/device/broadcast.h
 @@ -11,7 +11,7 @@
@@ -117,7 +104,7 @@ index 2760e483c0..2a1b3f5426 100644
  #else
  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 diff --git a/projects/rccl/src/device/generate.py b/projects/rccl/src/device/generate.py
-index 9fc30b4ec2..f2580b5808 100755
+index 9fc30b4e..f2580b58 100755
 --- a/projects/rccl/src/device/generate.py
 +++ b/projects/rccl/src/device/generate.py
 @@ -421,13 +421,13 @@ def get_arch_guard(fn):
@@ -148,7 +135,7 @@ index 9fc30b4ec2..f2580b5808 100755
          cmake_guard += " && defined(ENABLE_LL128)"
      else:
 diff --git a/projects/rccl/src/device/prims_ll.h b/projects/rccl/src/device/prims_ll.h
-index 36da63e34b..7538a0ffe3 100644
+index 4176126f..cf31b895 100644
 --- a/projects/rccl/src/device/prims_ll.h
 +++ b/projects/rccl/src/device/prims_ll.h
 @@ -92,7 +92,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p, isNetOffload, Metadata, Pi
@@ -161,7 +148,7 @@ index 36da63e34b..7538a0ffe3 100644
  #else
        barrier_generic(__threadfence(), nthreads, barrier_next, barriers);
 diff --git a/projects/rccl/src/device/prims_ll128.h b/projects/rccl/src/device/prims_ll128.h
-index 58a539b171..5e08120d33 100644
+index eb7bcf61..d7dbbb33 100644
 --- a/projects/rccl/src/device/prims_ll128.h
 +++ b/projects/rccl/src/device/prims_ll128.h
 @@ -132,7 +132,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p, isNetOffload, Metadata,
@@ -183,7 +170,7 @@ index 58a539b171..5e08120d33 100644
          asm volatile("s_wait_loadcnt 0x0\n\ts_wait_storecnt 0x0");
  #else
 diff --git a/projects/rccl/src/device/prims_simple.h b/projects/rccl/src/device/prims_simple.h
-index 4cc5793285..a339085fa6 100644
+index 40e4188b..84b832df 100644
 --- a/projects/rccl/src/device/prims_simple.h
 +++ b/projects/rccl/src/device/prims_simple.h
 @@ -62,7 +62,7 @@ class Primitives<T, RedOp, Fan, Direct,
@@ -213,7 +200,7 @@ index 4cc5793285..a339085fa6 100644
      return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
  #else
      return __atomic_load_n(ptr, __ATOMIC_RELAXED);
-@@ -193,7 +193,7 @@ class Primitives<T, RedOp, Fan, Direct,
+@@ -191,7 +191,7 @@ class Primitives<T, RedOp, Fan, Direct,
    inline __device__ void postPeer(bool dataStored) {
      if (skip_fence) {
        __atomic_signal_fence(__ATOMIC_SEQ_CST);
@@ -223,7 +210,7 @@ index 4cc5793285..a339085fa6 100644
        barrier_generic(asm volatile("s_wait_loadcnt 0x0\n\ts_wait_storecnt 0x0"), nworkers, barrier_next, barriers);
  #else
 diff --git a/projects/rccl/src/device/reduce.h b/projects/rccl/src/device/reduce.h
-index 47dad16de9..d593fc601b 100644
+index 47dad16d..d593fc60 100644
 --- a/projects/rccl/src/device/reduce.h
 +++ b/projects/rccl/src/device/reduce.h
 @@ -11,7 +11,7 @@
@@ -236,7 +223,7 @@ index 47dad16de9..d593fc601b 100644
  #else
  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 diff --git a/projects/rccl/src/device/reduce_scatter.h b/projects/rccl/src/device/reduce_scatter.h
-index c770fcbae3..9d0295335e 100644
+index 1fccff88..eeaa77db 100644
 --- a/projects/rccl/src/device/reduce_scatter.h
 +++ b/projects/rccl/src/device/reduce_scatter.h
 @@ -11,7 +11,7 @@
@@ -249,7 +236,7 @@ index c770fcbae3..9d0295335e 100644
  #else
  __device__ __attribute__((noinline)) void runRing(int tid, int nthreads, struct ncclDevWorkColl* work) {
 diff --git a/projects/rccl/src/device/sendrecv.h b/projects/rccl/src/device/sendrecv.h
-index e0a6554993..20fe5ecf0f 100644
+index e0a65549..20fe5ecf 100644
 --- a/projects/rccl/src/device/sendrecv.h
 +++ b/projects/rccl/src/device/sendrecv.h
 @@ -60,7 +60,7 @@ struct RunWorkBatch<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPL
@@ -289,7 +276,7 @@ index e0a6554993..20fe5ecf0f 100644
  #else
        runRecv<ProtoSimple<1, 1>>(subtid, subtn, group, work);
 diff --git a/projects/rccl/src/device/tdm/asyncCopy.h b/projects/rccl/src/device/tdm/asyncCopy.h
-index 607fff13b2..537b928e92 100644
+index 607fff13..537b928e 100644
 --- a/projects/rccl/src/device/tdm/asyncCopy.h
 +++ b/projects/rccl/src/device/tdm/asyncCopy.h
 @@ -60,7 +60,7 @@ THE SOFTWARE.
@@ -311,7 +298,7 @@ index 607fff13b2..537b928e92 100644
  #define TDM_SUPPORTED 1
  #else
 diff --git a/projects/rccl/src/device/tdm/tdmCopy.h b/projects/rccl/src/device/tdm/tdmCopy.h
-index 8221272d2c..1a02941787 100644
+index 8221272d..1a029417 100644
 --- a/projects/rccl/src/device/tdm/tdmCopy.h
 +++ b/projects/rccl/src/device/tdm/tdmCopy.h
 @@ -101,7 +101,7 @@ THE SOFTWARE.
@@ -324,10 +311,10 @@ index 8221272d2c..1a02941787 100644
  #define TDM_SUPPORTED 1
  #else
 diff --git a/projects/rccl/src/include/device.h b/projects/rccl/src/include/device.h
-index f67175fc6e..6813b8d2d3 100644
+index 5516f5be..970ffd19 100644
 --- a/projects/rccl/src/include/device.h
 +++ b/projects/rccl/src/include/device.h
-@@ -68,7 +68,7 @@ extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
+@@ -62,7 +62,7 @@ extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
  // every kernel pays the LDS: 167KB of 320KB at 16KB/warp. The arch check cannot move to CMake:
  // it must be zero on every device pass that is not gfx1250, or those kernels reserve LDS they
  // can never use. Host and non-gfx1250 passes therefore see 0 and the member disappears.
@@ -336,7 +323,7 @@ index f67175fc6e..6813b8d2d3 100644
  #define RCCL_TDM_STAGE_BYTES_PER_WARP 16384
  #else
  #define RCCL_TDM_STAGE_BYTES_PER_WARP 0
-@@ -205,7 +205,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK
+@@ -199,7 +199,7 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK
   * comm->ll128LineElems / comm->ll128DataElems (and proxyState->* in the net proxy). */
  
  #if __HIP_DEVICE_COMPILE__
@@ -346,7 +333,7 @@ index f67175fc6e..6813b8d2d3 100644
  #else
  #define NCCL_LL128_LINESIZE 64
 diff --git a/projects/rccl/src/include/nccl_device/hip_compat.h b/projects/rccl/src/include/nccl_device/hip_compat.h
-index 6f70f67161..68e906ff2d 100644
+index 6f70f671..68e906ff 100644
 --- a/projects/rccl/src/include/nccl_device/hip_compat.h
 +++ b/projects/rccl/src/include/nccl_device/hip_compat.h
 @@ -123,7 +123,7 @@
@@ -359,7 +346,7 @@ index 6f70f67161..68e906ff2d 100644
  #else
  #define NCCL_WARP_SIZE 64
 diff --git a/projects/rccl/src/include/nccl_device/rccl_ptr.h b/projects/rccl/src/include/nccl_device/rccl_ptr.h
-index 9e1f077206..aae2eee539 100644
+index 7166dd2b..233baa6c 100644
 --- a/projects/rccl/src/include/nccl_device/rccl_ptr.h
 +++ b/projects/rccl/src/include/nccl_device/rccl_ptr.h
 @@ -36,7 +36,7 @@ using u16_gptr = __attribute__((address_space(1))) uint16_t*;
@@ -371,16 +358,7 @@ index 9e1f077206..aae2eee539 100644
    __has_builtin(__builtin_amdgcn_global_load_b128) && __has_builtin(__builtin_amdgcn_global_store_b128) && \
    !defined(DWORDX4_INTRINSICS_FORCE_OFF)
  #define RCCL_HAVE_GLOBAL_DWORDX4_BUILTINS 1
-@@ -50,7 +50,7 @@ using u8_gptr = __attribute__((address_space(1))) uint8_t*;
- #endif
- 
- #ifdef __HIP_DEVICE_COMPILE__
--#if defined(__gfx1250__) && \
-+#if (defined(__gfx1250__) || defined(__gfx1250_strict__)) && \
-   __has_builtin(__builtin_amdgcn_cooperative_atomic_load_8x16B) && \
-   __has_builtin(__builtin_amdgcn_cooperative_atomic_store_8x16B) && \
-   !defined(COOPERATIVE_ATOMIC_INTRINSICS_FORCE_OFF)
-@@ -77,7 +77,7 @@ typedef __attribute__((address_space(1))) v4i* v4i_gptr;
+@@ -59,7 +59,7 @@ typedef __attribute__((address_space(1))) v4u* v4u_gptr;
  // Observed on gfx1250: with a cuMem/VMM comm FIFO the LL/LL128 flag poll does not
  // observe peer writes under a non-temporal load, but does under scope:SCOPE_SYS.
  // Restricted to gfx1250, the only arch measured. Following up with HIP/compilers.
@@ -390,7 +368,7 @@ index 9e1f077206..aae2eee539 100644
  #else
  #define RCCL_LL_FIFO_SYS_SCOPE_LOAD 0
 diff --git a/projects/rccl/src/include/rccl_float8.h b/projects/rccl/src/include/rccl_float8.h
-index 5622bb28c9..d876385484 100644
+index 5622bb28..d8763854 100644
 --- a/projects/rccl/src/include/rccl_float8.h
 +++ b/projects/rccl/src/include/rccl_float8.h
 @@ -40,7 +40,7 @@ typedef struct {

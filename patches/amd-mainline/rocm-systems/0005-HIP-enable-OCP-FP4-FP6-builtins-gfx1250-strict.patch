@@ -1,0 +1,80 @@
+From 1615b2c77f379045b1247de2a8e400f9926447ba Mon Sep 17 00:00:00 2001
+From: "Mingyang Sun (Public)" <Mingyang.Sun@amd.com>
+Date: Sat, 12 Sep 2026 10:45:33 -0700
+Subject: [PATCH] HIP: enable OCP FP4/FP6 hardware builtins for gfx1250-strict
+
+Same defect as the FP8 guards, in the MX/OCP headers. Both
+amd_hip_mx_common.h and amd_hip_ocp_fp.hpp derive
+HIP_ENABLE_GFX1250_OCP_BUILTINS and HIP_ENABLE_HOST_OCP_CONVERSIONS from
+__gfx1250__ alone, so a gfx1250-strict build gets:
+
+  HIP_ENABLE_GFX1250_OCP_BUILTINS = 0
+  HIP_ENABLE_HOST_OCP_CONVERSIONS = 1   (host conversion path on device)
+
+That macro gates the hardware builtin at ~103 sites:
+
+  amd_hip_ocp_fp.hpp   67
+  amd_hip_fp6.h        20
+  amd_hip_fp4.h        16
+
+so FP4 and FP6 conversions silently lose their hardware paths on strict,
+in the same way FP8 did.
+
+Recognise the strict variant in both guards, in both headers. The two
+headers define the same macros, so they must stay consistent; both are
+updated together. Only a macro exclusive to gfx1250-strict is added, so
+no other target changes behaviour.
+
+Measured on MI455X (gfx1250), ROCm 10.1.0 / HIP 7.16.26362, counting
+hardware conversion instructions in the generated device ISA for a
+standalone __hip_fp4_e2m1 / __hip_fp6_e2m3 kernel:
+
+                            v_cvt_*fp4*   v_cvt_*fp6*
+  gfx1250                        1             1
+  gfx1250-strict, before         0             0
+  gfx1250-strict, after          1             1   (parity with gfx1250)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ .../clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h     | 4 ++--
+ projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+index e2d74d87f61..82eba78fa12 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_mx_common.h
+@@ -10,12 +10,12 @@
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) && !defined(__gfx1250__)
++#if !defined(__gfx950__) && !defined(__gfx1250__) && !defined(__gfx1250_strict__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+index 5b199c27893..54fe59bfa44 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_ocp_fp.hpp
+@@ -30,12 +30,12 @@ static_assert(sizeof(__hip_uint64_t) * CHAR_BIT == 64);
+ #else
+ #define HIP_ENABLE_GFX950_OCP_BUILTINS 0
+ #endif
+-#if defined(__gfx1250__)
++#if defined(__gfx1250__) || defined(__gfx1250_strict__)
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 1
+ #else
+ #define HIP_ENABLE_GFX1250_OCP_BUILTINS 0
+ #endif
+-#if !defined(__gfx950__) and !defined(__gfx1250__)
++#if !defined(__gfx950__) and !defined(__gfx1250__) and !defined(__gfx1250_strict__)
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 1
+ #else
+ #define HIP_ENABLE_HOST_OCP_CONVERSIONS 0

@@ -1,0 +1,65 @@
+From f9ef0188b2d12ea4225497b184043594c6a72d10 Mon Sep 17 00:00:00 2001
+From: "Mingyang Sun (Public)" <Mingyang.Sun@amd.com>
+Date: Sat, 12 Sep 2026 10:33:57 -0700
+Subject: [PATCH] HIP: enable native FP8 conversions for gfx1250-strict
+
+amd_hip_fp8.h selects the hardware FP8 conversion fast path and the OCP
+FP8 format by testing target predefines. gfx1250 is listed, but the
+gfx1250-strict variant is not, and clang predefines a distinct macro for
+it (__gfx1250_strict__, confirmed from the device-pass predefines).
+
+As a result a gfx1250-strict build matches neither guard:
+
+  HIP_FP8_CVT_FAST_PATH = 0   (software conversion expansion)
+  HIP_FP8_TYPE_OCP      = 0
+  HIP_FP8_TYPE_FNUZ     = 0   (no FP8 format selected at all)
+
+Add the strict variant alongside gfx1250 in both guards. This only adds
+a macro that is exclusively defined for gfx1250-strict, so no other
+target changes behaviour. The compiler target is not aliased and the
+strict ISA restrictions are untouched.
+
+Measured on MI455X (gfx1250), ROCm 10.1.0 / HIP 7.16.26362, with a
+standalone HIP reproducer (no RCCL), counting hardware FP8 conversion
+instructions in the generated device ISA:
+
+  gfx1250                      : 2  (v_cvt_pk_fp8_f32, v_cvt_f32_fp8_e32)
+  gfx1250-strict, before       : 0
+  gfx1250-strict, after        : 2  (parity with gfx1250)
+
+Preprocessor state for gfx1250-strict after the change:
+  HIP_FP8_CVT_FAST_PATH 0 -> 1
+  HIP_FP8_TYPE_OCP      0 -> 1
+
+This matches the change carried downstream in TheRock as
+patches/amd-mainline/rocm-systems/0004-HIP-enable-gfx1250-strict-FP8-conversion-fast-path.patch
+(ROCm/TheRock@5ea0abc); landing it here allows that carry-patch to be
+dropped.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
+index 88afc35bda1..8b39dcc15cc 100644
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
+@@ -13,7 +13,7 @@
+ #define _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_FP8_H_
+ 
+ #if (defined(__gfx942__) || defined(__gfx1200__) || defined(__gfx1201__) ||                        \
+-     defined(__gfx950__) || defined (__gfx1250__)) &&                                              \
++     defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))) &&              \
+     __HIP_DEVICE_COMPILE__
+ #define HIP_FP8_CVT_FAST_PATH 1
+ #else
+@@ -24,7 +24,7 @@
+ #define HIP_FP8_TYPE_OCP 0
+ #define HIP_FP8_TYPE_FNUZ 1
+ #elif (defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx950__) ||                      \
+-       defined(__gfx1250__)) &&                                                                    \
++       (defined(__gfx1250__) || defined(__gfx1250_strict__))) &&                                   \
+        __HIP_DEVICE_COMPILE__
+ #define HIP_FP8_TYPE_OCP 1
+ #define HIP_FP8_TYPE_FNUZ 0

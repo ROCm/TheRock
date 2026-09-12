@@ -1,0 +1,357 @@
+From a10ffb989d4af7b9287fffc784da94fc512fb742 Mon Sep 17 00:00:00 2001
+From: Tony Gutierrez <anthony.gutierrez@amd.com>
+Date: Sat, 12 Sep 2026 13:48:41 -0500
+Subject: [PATCH] [rocr][rocjitsu] Require explicit hotswap enablement
+
+Rebased from ROCm/rocm-systems#11526 commit b7fa081ca6c7a2e067d277151e9a6db891dfb7f2 onto the release BKC rocm-systems pin e64a0f514351b0452850d2eebc4be9a3ea0cd1b5.
+---
+ .github/workflows/rocjitsu-corpus-tests.yml   |  2 +-
+ emulation/rocjitsu/docs/rocjitsu_dbt_guest.md |  9 ++--
+ .../rocjitsu/hooks/gfx1250_b0_a0_hotswap.cpp  |  4 +-
+ .../src/rocjitsu/hooks/hotswap-user-guide.md  | 42 ++++++++++++-------
+ .../rocjitsu/tests/corpus/run-corpus-tests.sh |  1 -
+ .../rocjitsu/tests/rocgdb/debug_kernel.sh     | 17 ++++----
+ .../runtime/docs/data/env_variables.rst       |  8 ++--
+ .../runtime/hsa-runtime/core/inc/runtime.h    |  8 ++--
+ .../hsa-runtime/core/runtime/runtime.cpp      | 20 ++++-----
+ .../runtime/hsa-runtime/core/util/flag.h      | 12 +++---
+ 10 files changed, 62 insertions(+), 61 deletions(-)
+
+diff --git a/.github/workflows/rocjitsu-corpus-tests.yml b/.github/workflows/rocjitsu-corpus-tests.yml
+index 410080ba..4801e66d 100644
+--- a/.github/workflows/rocjitsu-corpus-tests.yml
++++ b/.github/workflows/rocjitsu-corpus-tests.yml
+@@ -443,7 +443,7 @@ jobs:
+           # hook explicitly so the candidate leg qualifies this checkout. Keep
+           # every env option before the shared NAME=VALUE assignment.
+           COMMON_UNSETS="-u LD_PRELOAD"
+-          COMMON_HOTSWAP_ENV="HSA_HOTSWAP_DISABLE=1"
++          COMMON_HOTSWAP_ENV="HSA_HOTSWAP_ENABLE=0"
+           PLAIN_WRAPPER="env ${COMMON_UNSETS} -u HSA_TOOLS_LIB -u HSA_TOOLS_DISABLE_REGISTER -u HSA_HOTSWAP_VERBOSE ${COMMON_HOTSWAP_ENV} ${LAUNCHER} --config ${B0_CONFIG} --"
+           TRANSLATED_WRAPPER="env ${COMMON_UNSETS} ${COMMON_HOTSWAP_ENV} HSA_TOOLS_DISABLE_REGISTER=1 HSA_TOOLS_LIB=${HOTSWAP} HSA_HOTSWAP_VERBOSE=1 ${LAUNCHER} --config ${A0_CONFIG} --"
+ 
+diff --git a/emulation/rocjitsu/docs/rocjitsu_dbt_guest.md b/emulation/rocjitsu/docs/rocjitsu_dbt_guest.md
+index aaa85109..6cb8bdff 100644
+--- a/emulation/rocjitsu/docs/rocjitsu_dbt_guest.md
++++ b/emulation/rocjitsu/docs/rocjitsu_dbt_guest.md
+@@ -210,11 +210,10 @@ rocjitsu goes through the patched table and is covered.
+ 
+   Note that `HSA_TOOLS_LIB` does not decide this. ROCR loads the hotswap hook
+   itself from `Runtime::LoadHotswapTool()`, before it reads `HSA_TOOLS_LIB` at
+-  all, whenever a gfx1250 A0 agent is present and `HSA_HOTSWAP_DISABLE` is not
+-  set. So on such a machine the hotswap hook is always first and the DBT hook
+-  always wraps it, whatever `HSA_TOOLS_LIB` says — and merely leaving the hotswap
+-  hook out of that variable does not keep it out of the process. To run the DBT
+-  hook there, set `HSA_HOTSWAP_DISABLE`.
++  all, whenever `HSA_HOTSWAP_ENABLE` is set to a true value and a gfx1250 A0
++  agent is present. So when enabled the hotswap hook is always first and the DBT
++  hook always wraps it, whatever `HSA_TOOLS_LIB` says. Leave
++  `HSA_HOTSWAP_ENABLE` unset when running the DBT hook by itself.
+ 
+   Everywhere else the hotswap hook never loads, `HSA_TOOLS_LIB` is the only
+   thing naming a tool, and the supported launch path keeps it to one: `rocjitsu`
+diff --git a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/gfx1250_b0_a0_hotswap.cpp b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/gfx1250_b0_a0_hotswap.cpp
+index e3a1dc83..122bfb07 100644
+--- a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/gfx1250_b0_a0_hotswap.cpp
++++ b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/gfx1250_b0_a0_hotswap.cpp
+@@ -21,8 +21,8 @@
+ /// copying a large input adds pressure to a system that just ran out, and the
+ /// bytes are not what failed.
+ ///
+-/// `HSA_HOTSWAP_DISABLE` belongs to ROCr rather than this hook: it stops
+-/// Runtime::LoadHotswapTool() loading this library at all.
++/// `HSA_HOTSWAP_ENABLE` belongs to ROCr rather than this hook: the runtime only
++/// calls Runtime::LoadHotswapTool() for this library when the flag is enabled.
+ 
+ #include "hsa/hsa_api_trace_minimal.h"
+ #include "rocjitsu/code/amdgpu_elf.h"
+diff --git a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/hotswap-user-guide.md b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/hotswap-user-guide.md
+index 8c972f76..cc9a0fd8 100644
+--- a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/hotswap-user-guide.md
++++ b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/hooks/hotswap-user-guide.md
+@@ -10,21 +10,30 @@ A0 and B0 share one machine identity (`amdgcn-amd-amdhsa--gfx1250`), so the
+ compiler cannot tell them apart and the loader would otherwise hand B0-only
+ encodings to an A0 part.
+ 
+-## When it engages
++## Enable the hook
+ 
+-The hook only translates when **every** one of these holds. If any fails, loads
+-take the untouched path and translation never runs:
++HotSwap is disabled by default. Enable it for a workload with:
+ 
+-1. Linux. On other platforms `Runtime::LoadHotswapTool()` reports
+-   `HSA_STATUS_ERROR_NOT_SUPPORTED`.
+-2. `HSA_HOTSWAP_DISABLE` is unset or set to an off value (see below).
+-3. At `hsa_init` time at least one agent is named `gfx1250` **and** reports
++```bash
++HSA_HOTSWAP_ENABLE=1 <your workload>
++```
++
++ROCr loads the hook only when **every** one of these holds:
++
++1. `HSA_HOTSWAP_ENABLE` is set to an on value (see below).
++2. At `hsa_init` time at least one agent is named `gfx1250` **and** reports
+    `HSA_AMD_AGENT_INFO_ASIC_REVISION == 0`. With no such agent ROCr skips the
+    dlopen entirely — on a B0-only or non-gfx1250 machine the hook is never
+    loaded, so it cannot be the cause of a problem there.
++3. The runtime is Linux. On other platforms `Runtime::LoadHotswapTool()` reports
++   `HSA_STATUS_ERROR_NOT_SUPPORTED`.
+ 4. `libhsa_hotswap_rocjitsu.so` resolves, either next to `libhsa-runtime64.so`
+    or on the default search path.
+ 
++When the flag is off or no supported agent is present, code objects take the
++untouched path. When HotSwap is requested on an unsupported platform or the DSO
++cannot be loaded, `hsa_init` reports the loader error.
++
+ Once loaded, each individual load is still decided on its own:
+ 
+ | Situation | What happens |
+@@ -45,15 +54,15 @@ turn one bad moment into a permanent refusal.
+ 
+ | Variable | Read by | Effect |
+ | --- | --- | --- |
+-| `HSA_HOTSWAP_DISABLE` | ROCr | Stops the tool being loaded at all. **Tolerant parsing**: unset, empty, `0`, `off`, `false`, `no`, `n`, `f` (any case) all mean "load it". Anything else disables. |
++| `HSA_HOTSWAP_ENABLE` | ROCr | Enables loading the tool. **Tolerant parsing**: unset, empty, `0`, `off`, `false`, `no`, `n`, `f` (any case) all leave it disabled. Anything else enables it. |
+ | `HSA_HOTSWAP_VERBOSE` | the hook | Diagnostic logging to stderr. **Strict parsing**: only unset, empty, or `0` are off. |
+ | `HSA_HOTSWAP_DUMP_SOURCE` | the hook | Write the source object to disk when translation is refused. Strict parsing, as above. |
+ | `HSA_HOTSWAP_DUMP_DIR` | the hook | Where those artifacts go. Falls back to `TMPDIR`, then `/tmp`. |
+ 
+-The two parsings genuinely differ, and it is the most common way to mislead
+-yourself here. `HSA_HOTSWAP_DISABLE=false` leaves hotswap **on**, while
+-`HSA_HOTSWAP_VERBOSE=false` turns verbose logging **on**, because the hook only
+-special-cases `0`. Use `1` and `0` and the distinction never bites.
++The two parsings genuinely differ. `HSA_HOTSWAP_ENABLE=false` leaves hotswap
++**off**, while `HSA_HOTSWAP_VERBOSE=false` turns verbose logging **on**, because
++the hook only special-cases `0`. Use `1` and `0` for both variables to avoid
++that difference.
+ 
+ Errors are always reported regardless of `HSA_HOTSWAP_VERBOSE`; the flag governs
+ what else is reported, never what is done.
+@@ -128,14 +137,15 @@ to a system that just ran out, and the bytes are not what failed.
+ 
+ Work down this list; each step is cheap and rules out a class.
+ 
+-**1. Did the hook even load?** On a machine with no gfx1250 A0 agent it never
+-does, and it cannot be your problem. Confirm with `HSA_HOTSWAP_VERBOSE=1` — no
++**1. Did the hook even load?** It is disabled unless
++`HSA_HOTSWAP_ENABLE=1` is set, and on a machine with no gfx1250 A0 agent it
++never loads even when enabled. Confirm with `HSA_HOTSWAP_VERBOSE=1` — no
+ `[hsa-hotswap-rj]` output at all means it is not in the picture.
+ 
+-**2. Bisect with the kill switch.**
++**2. Compare with the hook disabled.**
+ 
+ ```bash
+-HSA_HOTSWAP_DISABLE=1 <your workload>
++HSA_HOTSWAP_ENABLE=0 <your workload>
+ ```
+ 
+ Read the result carefully, because it is easy to over-read:
+diff --git a/emulation/rocjitsu/tests/corpus/run-corpus-tests.sh b/emulation/rocjitsu/tests/corpus/run-corpus-tests.sh
+index 79d71fce..a37c3069 100755
+--- a/emulation/rocjitsu/tests/corpus/run-corpus-tests.sh
++++ b/emulation/rocjitsu/tests/corpus/run-corpus-tests.sh
+@@ -152,7 +152,6 @@ run_wrapper_prefix=(
+   env
+   -u LD_PRELOAD
+   -u HSA_HOTSWAP_ENABLE
+-  "HSA_HOTSWAP_DISABLE=1"
+ )
+ 
+ if ! rocjitsu_launcher="$(command -v rocjitsu)"; then
+diff --git a/emulation/rocjitsu/tests/rocgdb/debug_kernel.sh b/emulation/rocjitsu/tests/rocgdb/debug_kernel.sh
+index 87a648c5..cf1002f5 100755
+--- a/emulation/rocjitsu/tests/rocgdb/debug_kernel.sh
++++ b/emulation/rocjitsu/tests/rocgdb/debug_kernel.sh
+@@ -99,13 +99,12 @@ mirage_runtime_args=()
+ if [[ -n "$runtime_library_path" ]]; then
+   mirage_runtime_args+=(--env "LD_LIBRARY_PATH=$runtime_library_path")
+ fi
+-# The nightly gfx1250 HIP/ROCr stack enables its code-object rewrite path by
+-# default. A debugger qualification must observe the code object that hipcc
+-# emitted, not a replacement held in anonymous memory, so disable that path in
+-# both CLR and ROCr for every scenario below. The first ROCgdb run also prints
+-# the inherited value and loaded libraries; the assertions below make this
+-# fail closed if the variable is lost or the rewrite library is loaded anyway.
+-mirage_runtime_args+=(--env "HSA_HOTSWAP_DISABLE=1")
++# A debugger qualification must observe the code object that hipcc emitted, not
++# a replacement held in anonymous memory, so explicitly leave ROCr's hotswap
++# path disabled for every scenario below. The first ROCgdb run also prints the
++# inherited value and loaded libraries; the assertions below make this fail
++# closed if the variable is changed or the rewrite library is loaded anyway.
++mirage_runtime_args+=(--env "HSA_HOTSWAP_ENABLE=0")
+ 
+ # --- Build the demo kernel --------------------------------------------------
+ workdir="$(mktemp -d)"
+@@ -136,7 +135,7 @@ echo "running rocgdb under: $mirage_bin run --profile $profile"
+ outfile="$workdir/rocgdb.out"
+ timeout 180 "$mirage_bin" run --profile "$profile" "${mirage_runtime_args[@]}" -- \
+   rocgdb --batch \
+-    -ex 'show environment HSA_HOTSWAP_DISABLE' \
++    -ex 'show environment HSA_HOTSWAP_ENABLE' \
+     -ex 'set breakpoint pending on' \
+     -ex 'break add_one' \
+     -ex 'run' \
+@@ -199,7 +198,7 @@ check() { # <regex> <description>
+ }
+ 
+ check 'hit Breakpoint 1, .*add_one .*at .*:[0-9]+' 'stopped at the GPU kernel breakpoint'
+-check '^HSA_HOTSWAP_DISABLE = 1' 'disabled the gfx1250 code-object rewrite path'
++check '^HSA_HOTSWAP_ENABLE = 0' 'disabled the gfx1250 code-object rewrite path'
+ if grep -qaE 'libhsa_hotswap_rocjitsu|HotSwap: forwarding' <<<"$out"; then
+   echo "  FAIL: a HotSwap implementation was active during ROCgdb qualification" >&2
+   fail=1
+diff --git a/projects/rocr-runtime/runtime/docs/data/env_variables.rst b/projects/rocr-runtime/runtime/docs/data/env_variables.rst
+index f873d628..6190edf8 100644
+--- a/projects/rocr-runtime/runtime/docs/data/env_variables.rst
++++ b/projects/rocr-runtime/runtime/docs/data/env_variables.rst
+@@ -93,11 +93,11 @@
+       - | 0: Disable debug mode.
+         | 1: Enable debug mode with additional validation and logging.
+ 
+-    * - | ``HSA_HOTSWAP_DISABLE``
+-        | Stops the runtime from loading the HotSwap tool, which retargets code objects for ``gfx1250`` A0 agents. The tool loads by default whenever such an agent is present.
++    * - | ``HSA_HOTSWAP_ENABLE``
++        | Enables the HotSwap tool, which retargets code objects for ``gfx1250`` A0 agents. The tool is disabled by default and only loads when explicitly enabled and a supported agent is present.
+       - ``0``
+-      - | Unset, empty, 0, ``false``, ``off``, ``no``, ``n``, or ``f``: Load the HotSwap tool when a supported agent is present.
+-        | Any other value: Never load the HotSwap tool.
++      - | Unset, empty, 0, ``false``, ``off``, ``no``, ``n``, or ``f``: Do not load the HotSwap tool.
++        | Any other value: Load the HotSwap tool when a supported agent is present.
+ 
+     * - | ``HSA_DISABLE_GFX12_STRICT``
+         | Controls reporting of the "strict" ISA variant on A0 silicon. Disabled by default, so the agent keeps the base target. Set to 0 to opt in and have the agent report the strict variant instead.
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+index 042a76a2..0e2ef483 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/inc/runtime.h
+@@ -431,10 +431,8 @@ class Runtime {
+                                const hsa_signal_t* dep_signals, hsa_signal_t completion_signal);
+ 
+   hsa_status_t SvmDiscardAndPrefetchBatch(void** ptrs, size_t* sizes, uint32_t count,
+-                                          const hsa_agent_t* dst_agents,
+-                                          uint32_t num_dst_agents,
+-                                          uint32_t num_dep_signals,
+-                                          const hsa_signal_t* dep_signals,
++                                          const hsa_agent_t* dst_agents, uint32_t num_dst_agents,
++                                          uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                           hsa_signal_t completion_signal);
+ 
+   hsa_status_t DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset,
+@@ -860,7 +858,7 @@ class Runtime {
+   /// loaded library.
+   void LoadTools();
+ 
+-  /// @brief Load the rocjitsu hotswap hook as the first HSA tool.
++  /// @brief Load the rocjitsu hotswap hook as the first HSA tool when enabled.
+   hsa_status_t LoadHotswapTool();
+ 
+   /// @brief Call OnUnload method of each tool library.
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+index 13eb2ac0..6c94af87 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/runtime/runtime.cpp
+@@ -3130,11 +3130,11 @@ void Runtime::LoadTools() {
+   }
+ }
+ 
+-// Load the rocjitsu hotswap hook through the existing HSA tool lifecycle.
++// When enabled, load the rocjitsu hotswap hook through the existing HSA tool lifecycle.
+ // Keeping its handle in tool_libs_ gives it the normal reverse-order OnUnload
+ // and CloseTools handling without dedicated runtime state.
+ hsa_status_t Runtime::LoadHotswapTool() {
+-  if (flag().hotswap_disable()) return HSA_STATUS_SUCCESS;
++  if (!flag().hotswap_enable()) return HSA_STATUS_SUCCESS;
+ 
+   bool has_gfx1250_a0_agent = false;
+   for (const Agent* agent : gpu_agents_) {
+@@ -4008,8 +4008,7 @@ hsa_status_t Runtime::SvmBatchDiscard(void** ptrs, size_t* sizes, uint32_t count
+ 
+ hsa_status_t Runtime::SvmDiscardAndPrefetchBatch(void** ptrs, size_t* sizes, uint32_t count,
+                                                  const hsa_agent_t* dst_agents,
+-                                                 uint32_t num_dst_agents,
+-                                                 uint32_t num_dep_signals,
++                                                 uint32_t num_dst_agents, uint32_t num_dep_signals,
+                                                  const hsa_signal_t* dep_signals,
+                                                  hsa_signal_t completion_signal) {
+ #if !defined(__linux__)
+@@ -4041,7 +4040,7 @@ hsa_status_t Runtime::SvmDiscardAndPrefetchBatch(void** ptrs, size_t* sizes, uin
+ 
+   // Operation context
+   struct DiscardAndPrefetchOp {
+-    std::vector<uint32_t> target_gpus;    // per-region dest gpu node for prefetch
++    std::vector<uint32_t> target_gpus;  // per-region dest gpu node for prefetch
+     std::vector<std::pair<void*, size_t>> regions;
+     std::atomic<uint32_t> remaining_deps;
+     hsa_signal_t completion;
+@@ -4068,8 +4067,7 @@ hsa_status_t Runtime::SvmDiscardAndPrefetchBatch(void** ptrs, size_t* sizes, uin
+   std::vector<hsa_signal_t> pending_deps;
+   pending_deps.reserve(num_dep_signals);
+   for (uint32_t i = 0; i < num_dep_signals; i++) {
+-    if (Signal::Convert(dep_signals[i])->LoadRelaxed() != 0)
+-      pending_deps.push_back(dep_signals[i]);
++    if (Signal::Convert(dep_signals[i])->LoadRelaxed() != 0) pending_deps.push_back(dep_signals[i]);
+   }
+ 
+   static auto discard_and_prefetch_all = [](DiscardAndPrefetchOp* op) {
+@@ -4088,15 +4086,15 @@ hsa_status_t Runtime::SvmDiscardAndPrefetchBatch(void** ptrs, size_t* sizes, uin
+       gpu_attr.value = target_gpu;
+       HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtSVMSetAttr(base, size, 1, &gpu_attr));
+       if (err != HSAKMT_STATUS_SUCCESS)
+-        debug_warning(false && "hsaKmtSVMSetAttr gpu prefetch failed in SvmDiscardAndPrefetchBatch");
++        debug_warning(false &&
++                      "hsaKmtSVMSetAttr gpu prefetch failed in SvmDiscardAndPrefetchBatch");
+     }
+ 
+-    if (op->completion.handle != 0)
+-      Signal::Convert(op->completion)->SubRelaxed(1);
++    if (op->completion.handle != 0) Signal::Convert(op->completion)->SubRelaxed(1);
+     delete op;
+   };
+ 
+-  /* Every dep signal calls this handler when it reaches 0. The last one to decrement 
++  /* Every dep signal calls this handler when it reaches 0. The last one to decrement
+   remaining_deps to 0 triggers the discard-and-prefetch op on all memory ranges */
+   static hsa_amd_signal_handler signal_handler = [](hsa_signal_value_t value, void* arg) {
+     DiscardAndPrefetchOp* op = reinterpret_cast<DiscardAndPrefetchOp*>(arg);
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+index e05545fd..778f879f 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
++++ b/projects/rocr-runtime/runtime/hsa-runtime/core/util/flag.h
+@@ -219,11 +219,9 @@ class Flag {
+     var = os::GetEnvVar("HSA_TOOLS_REPORT_REGISTER_FAILURE");
+     report_tool_register_failures_ = (var == "1") ? true : false;
+ 
+-    // Kill switch for the rocjitsu hotswap tool. Unlike most flags here it
+-    // accepts the spelled-out negatives, because the scripts that set it were
+-    // written against the retired hotswap implementation and pass "0"/"false"
+-    // to mean "leave hotswap on".
+-    hotswap_disable_ = IsEnvVarTruthy("HSA_HOTSWAP_DISABLE");
++    // Opt-in switch for the rocjitsu hotswap tool. Leave the tool disabled
++    // unless the user explicitly requests it with a truthy value.
++    hotswap_enable_ = IsEnvVarTruthy("HSA_HOTSWAP_ENABLE");
+ 
+     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
+     disable_fragment_alloc_ = (var == "1") ? true : false;
+@@ -424,7 +422,7 @@ class Flag {
+ 
+   bool report_tool_load_failures() const { return report_tool_load_failures_; }
+ 
+-  bool hotswap_disable() const { return hotswap_disable_; }
++  bool hotswap_enable() const { return hotswap_enable_; }
+ 
+   bool report_tool_register_failures() const { return report_tool_register_failures_; }
+ 
+@@ -604,7 +602,7 @@ class Flag {
+   bool poison_sigbus_delay_set_ = false;
+   uint32_t poison_sigbus_delay_ms_ = 0;
+   bool report_tool_load_failures_;
+-  bool hotswap_disable_ = false;
++  bool hotswap_enable_ = false;
+   bool report_tool_register_failures_ = false;
+   bool disable_tool_register_ = false;
+   bool disable_fragment_alloc_;
+-- 
+2.43.0
+

@@ -1,40 +1,41 @@
-From 81e46b48e098807359469a602a8fe91428abf500 Mon Sep 17 00:00:00 2001
+From 2539dafa803ed085fb3f6b5a3d36f1dc566bea78 Mon Sep 17 00:00:00 2001
 From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
-Date: Fri, 11 Sep 2026 16:42:40 -0500
-Subject: [PATCH] TensileLite: preserve gfx1250-strict through code generation
+Date: Sat, 12 Sep 2026 14:00:59 -0500
+Subject: [PATCH] TensileLite: preserve gfx1250-strict compiler target
 
+Rebased onto rocm-libraries 271344a472037d303d5220eea2b14fd2ac01c1e5. Keep gfx1250v0 as the logic-selection identity while compiling and storing a separate gfx1250-strict device library.
 ---
- projects/hipblaslt/CMakeLists.txt             |  8 ++++
- .../hipblaslt/cmake/hipblaslt_codegen.cmake   | 10 ++++-
- .../hipblaslt/device-library/CMakeLists.txt   | 37 +++++++++++++++----
+ projects/hipblaslt/CMakeLists.txt             |  8 +++
+ .../hipblaslt/cmake/HipBLASLtCodegen.cmake    |  9 ++-
+ .../hipblaslt/device-library/CMakeLists.txt   | 65 ++++++++++++++-----
  .../device-library/extops/CMakeLists.txt      |  4 +-
  .../matrix-transform/CMakeLists.txt           |  2 +-
  .../include/hipblaslt/hipblaslt_bfloat6.h     |  2 +-
  .../include/hipblaslt/hipblaslt_e5m3.h        |  2 +-
  .../include/hipblaslt/hipblaslt_float4.h      |  2 +-
  .../include/hipblaslt/hipblaslt_float6.h      |  2 +-
- .../amd_detail/rocblaslt/src/tensile_host.cpp |  7 +++-
- .../hipblaslt/tensilelite/AMaxGenerator.py    |  5 ++-
- .../tensilelite/LayerNormGenerator.py         |  5 ++-
+ .../amd_detail/rocblaslt/src/tensile_host.cpp |  7 +-
+ .../hipblaslt/tensilelite/AMaxGenerator.py    |  5 +-
+ .../tensilelite/LayerNormGenerator.py         |  5 +-
  .../hipblaslt/tensilelite/SoftmaxGenerator.py |  3 +-
- .../Tensile/Common/Architectures.py           | 22 ++++++++++-
+ .../Tensile/Common/Architectures.py           | 22 ++++++-
  .../tensilelite/Tensile/Source/memory_gfx.h   |  4 +-
- .../Tensile/TensileCreateLibrary/Run.py       | 18 +++++++--
+ .../Tensile/TensileCreateLibrary/Run.py       | 18 +++--
  .../tensilelite/Tensile/Toolchain/Assembly.py |  4 +-
  .../include/Tensile/DataTypes_E5M3.hpp        |  2 +-
  .../rocisa/rocisa/include/code.hpp            |  2 +-
- .../rocisa/rocisa/include/hardware_caps.hpp   |  5 ++-
- .../rocisa/rocisa/include/helper.hpp          | 10 +++++
- .../rocisa_stinkytofu_adaptor/code.py         |  6 ++-
+ .../rocisa/rocisa/include/hardware_caps.hpp   |  5 +-
+ .../rocisa/rocisa/include/helper.hpp          | 10 +++
+ .../rocisa_stinkytofu_adaptor/code.py         |  6 +-
  .../mxDataGenerator/DataGeneratorGPU_impl.hpp |  2 +-
- .../stinkytofu/src/ir/asm/StinkySignature.cpp |  8 +++-
- 24 files changed, 135 insertions(+), 37 deletions(-)
+ .../stinkytofu/src/ir/asm/StinkySignature.cpp |  8 ++-
+ 24 files changed, 151 insertions(+), 48 deletions(-)
 
 diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
-index 4082c1df..21752833 100644
+index 0e77bbf..3c9e6a2 100644
 --- a/projects/hipblaslt/CMakeLists.txt
 +++ b/projects/hipblaslt/CMakeLists.txt
-@@ -571,6 +571,14 @@ if(HIPBLASLT_ENABLE_DEVICE OR HIPBLASLT_ENABLE_ROCROLLER)
+@@ -521,6 +521,14 @@ if(HIPBLASLT_ENABLE_DEVICE OR HIPBLASLT_ENABLE_ROCROLLER)
          DESTINATION ${HIPBLASLT_TENSILE_LIBRARY_DIR}
          COMPONENT runtime
      )
@@ -49,87 +50,125 @@ index 4082c1df..21752833 100644
      # The gfx1250 v0 GEMM tree builds into its own directory (see
      # device-library/CMakeLists.txt) but installs as one more subdir of the same
      # library/ root. The property is only set when that tree is built.
-diff --git a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
-index 50031dcf..cc437595 100644
---- a/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
-+++ b/projects/hipblaslt/cmake/hipblaslt_codegen.cmake
-@@ -291,10 +291,18 @@ function(create_device_library)
-         list(APPEND _opts_list "--disable-asm-comments")
-     endif()
+diff --git a/projects/hipblaslt/cmake/HipBLASLtCodegen.cmake b/projects/hipblaslt/cmake/HipBLASLtCodegen.cmake
+index bcef72a..daaa888 100644
+--- a/projects/hipblaslt/cmake/HipBLASLtCodegen.cmake
++++ b/projects/hipblaslt/cmake/HipBLASLtCodegen.cmake
+@@ -8,7 +8,7 @@ function(hipblaslt_create_device_library)
+     set(_one
+         TARGET LOGIC_PATH OUTPUT_DIR CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER
+         ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL LAZY_LOAD ASM_COMMENTS KEEP_BUILD_TMP ASM_DEBUG)
+-    set(_multi ARCHES)
++    set(_multi ARCHES LOGIC_ARCHES)
+     cmake_parse_arguments(_cdl "${_opts}" "${_one}" "${_multi}" ${ARGN})
  
-+    set(_logic_arches "${_arches_semi}")
-+    if("gfx1250-strict" IN_LIST _cdl_ARCHES)
-+        if(_cdl_REQUIRE_GFX1250V0_OVERLAY)
-+            set(_logic_arches gfx1250v0)
-+        else()
-+            set(_logic_arches gfx1250)
-+        endif()
+     if(_cdl_UNPARSED_ARGUMENTS)
+@@ -45,6 +45,11 @@ function(hipblaslt_create_device_library)
+     file(MAKE_DIRECTORY "${_cdl_OUTPUT_DIR}/library")
+ 
+     list(JOIN _cdl_ARCHES "$<SEMICOLON>" _arches_semi)
++    if(_cdl_LOGIC_ARCHES)
++        list(JOIN _cdl_LOGIC_ARCHES "$<SEMICOLON>" _logic_arches_semi)
++    else()
++        set(_logic_arches_semi "${_arches_semi}")
 +    endif()
-     set(_tensile_logic_args
-         "${_cdl_LOGIC_PATH}"
-         --architecture
--        "${_arches_semi}"
-+        "${_logic_arches}"
-         --use-bundled-known-bugs
-         --check-all
-     )
+     set(_opts_list "--architecture=${_arches_semi}" "--cxx-compiler=${_cdl_CXX_COMPILER}")
+     if(_cdl_OFFLOAD_BUNDLER)
+         list(APPEND _opts_list "--offload-bundler=${_cdl_OFFLOAD_BUNDLER}")
+@@ -91,7 +96,7 @@ function(hipblaslt_create_device_library)
+             "${_codegen_dir}/Tensile/bin/TensileLogic"
+             "${_cdl_LOGIC_PATH}"
+             --architecture
+-            "${_arches_semi}"
++            "${_logic_arches_semi}"
+             --use-bundled-known-bugs
+             --check-all
+         COMMAND ${CMAKE_COMMAND} -E touch "${_logic_stamp}"
 diff --git a/projects/hipblaslt/device-library/CMakeLists.txt b/projects/hipblaslt/device-library/CMakeLists.txt
-index b1529e38..0115dd30 100644
+index 8d7f54e..e33842e 100644
 --- a/projects/hipblaslt/device-library/CMakeLists.txt
 +++ b/projects/hipblaslt/device-library/CMakeLists.txt
-@@ -74,6 +74,7 @@ endif()
+@@ -32,6 +32,7 @@ endif()
  # only prunes which. GPU_TARGETS is untouched (it also feeds extops/transform/
  # validation on the base name); only the bare gfx1250 reaches here.
  set(_main_arches ${GPU_TARGETS})
 +list(REMOVE_ITEM _main_arches gfx1250-strict)
  set(_build_gfx1250v0 OFF)
- set(_main_requires_gfx1250v0_overlay OFF)
  if("gfx1250" IN_LIST GPU_TARGETS)
-@@ -92,14 +93,34 @@ elseif(HIPBLASLT_ASIC_REVISION STREQUAL "v0")
+     if(HIPBLASLT_ASIC_REVISION STREQUAL "v0")
+@@ -48,24 +49,52 @@ elseif(HIPBLASLT_ASIC_REVISION STREQUAL "v0")
                      "(${GPU_TARGETS}); nothing in this build is for the v0 revision.")
  endif()
  
--create_device_library(
+-hipblaslt_create_device_library(
+-    TARGET tensilelite-device-libraries
 -    LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
 -    OUTPUT_DIR "${HIPBLASLT_TENSILE_LIBPATH}"
 -    ARCHES ${_main_arches}
--    REQUIRE_GFX1250V0_OVERLAY ${_main_requires_gfx1250v0_overlay}
--    ${_codegen_host_sanitizer_args}
--    ${_codegen_product_args}
+-    CXX_COMPILER "${CMAKE_CXX_COMPILER}"
+-    OFFLOAD_BUNDLER "${TENSILELITE_OFFLOADBUNDLER}"
+-    JOBS "${TENSILELITE_BUILD_PARALLEL_LEVEL}"
+-    LOGIC_FILTER "${TENSILELITE_LOGIC_FILTER}"
+-    ASAN "${HIPBLASLT_ENABLE_ASAN}"
+-    YAML_FORMAT "${HIPBLASLT_ENABLE_YAML}"
+-    NO_COMPRESS "${TENSILELITE_NO_COMPRESS}"
+-    EXPERIMENTAL "${TENSILELITE_EXPERIMENTAL}"
+-    LAZY_LOAD "${HIPBLASLT_ENABLE_LAZY_LOAD}"
+-    ASM_COMMENTS "${TENSILELITE_ENABLE_ASM_COMMENTS}"
+-    KEEP_BUILD_TMP "${TENSILELITE_KEEP_BUILD_TMP}"
+-    ASM_DEBUG "${TENSILELITE_ASM_DEBUG}"
 -)
 +if(_main_arches)
-+    create_device_library(
++    hipblaslt_create_device_library(
++        TARGET tensilelite-device-libraries
 +        LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
 +        OUTPUT_DIR "${HIPBLASLT_TENSILE_LIBPATH}"
 +        ARCHES ${_main_arches}
-+        REQUIRE_GFX1250V0_OVERLAY ${_main_requires_gfx1250v0_overlay}
-+        ${_codegen_host_sanitizer_args}
-+        ${_codegen_product_args}
++        CXX_COMPILER "${CMAKE_CXX_COMPILER}"
++        OFFLOAD_BUNDLER "${TENSILELITE_OFFLOADBUNDLER}"
++        JOBS "${TENSILELITE_BUILD_PARALLEL_LEVEL}"
++        LOGIC_FILTER "${TENSILELITE_LOGIC_FILTER}"
++        ASAN "${HIPBLASLT_ENABLE_ASAN}"
++        YAML_FORMAT "${HIPBLASLT_ENABLE_YAML}"
++        NO_COMPRESS "${TENSILELITE_NO_COMPRESS}"
++        EXPERIMENTAL "${TENSILELITE_EXPERIMENTAL}"
++        LAZY_LOAD "${HIPBLASLT_ENABLE_LAZY_LOAD}"
++        ASM_COMMENTS "${TENSILELITE_ENABLE_ASM_COMMENTS}"
++        KEEP_BUILD_TMP "${TENSILELITE_KEEP_BUILD_TMP}"
++        ASM_DEBUG "${TENSILELITE_ASM_DEBUG}"
 +    )
-+
 +endif()
 +
 +if("gfx1250-strict" IN_LIST GPU_TARGETS)
-+    # Isolate ISA-keyed generator caches, temporary objects, and output trees.
 +    set(_strict_output_dir "${HIPBLASLT_TENSILE_LIBPATH}-strict")
 +    file(MAKE_DIRECTORY "${_strict_output_dir}/library/gfx1250-strict")
 +    set_property(GLOBAL PROPERTY HIPBLASLT_STRICT_LIBRARY_DIR
 +                 "${_strict_output_dir}/library/gfx1250-strict")
-+    create_device_library(
++    hipblaslt_create_device_library(
 +        TARGET tensilelite-device-libraries-strict
 +        LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
 +        OUTPUT_DIR "${_strict_output_dir}"
 +        ARCHES gfx1250-strict
-+        REQUIRE_GFX1250V0_OVERLAY ${HIPBLASLT_REQUIRE_GFX1250V0_OVERLAY}
-+        ${_codegen_host_sanitizer_args}
-+        ${_codegen_product_args}
++        LOGIC_ARCHES gfx1250v0
++        CXX_COMPILER "${CMAKE_CXX_COMPILER}"
++        OFFLOAD_BUNDLER "${TENSILELITE_OFFLOADBUNDLER}"
++        JOBS "${TENSILELITE_BUILD_PARALLEL_LEVEL}"
++        LOGIC_FILTER "${TENSILELITE_LOGIC_FILTER}"
++        ASAN "${HIPBLASLT_ENABLE_ASAN}"
++        YAML_FORMAT "${HIPBLASLT_ENABLE_YAML}"
++        NO_COMPRESS "${TENSILELITE_NO_COMPRESS}"
++        EXPERIMENTAL "${TENSILELITE_EXPERIMENTAL}"
++        LAZY_LOAD "${HIPBLASLT_ENABLE_LAZY_LOAD}"
++        ASM_COMMENTS "${TENSILELITE_ENABLE_ASM_COMMENTS}"
++        KEEP_BUILD_TMP "${TENSILELITE_KEEP_BUILD_TMP}"
++        ASM_DEBUG "${TENSILELITE_ASM_DEBUG}"
 +    )
 +endif()
  
  if(_build_gfx1250v0)
      # Needs its own OUTPUT_DIR: the two runs share a compiler target and each
 diff --git a/projects/hipblaslt/device-library/extops/CMakeLists.txt b/projects/hipblaslt/device-library/extops/CMakeLists.txt
-index 27cba450..a5d176a7 100644
+index 27cba45..a5d176a 100644
 --- a/projects/hipblaslt/device-library/extops/CMakeLists.txt
 +++ b/projects/hipblaslt/device-library/extops/CMakeLists.txt
 @@ -3,7 +3,7 @@
@@ -151,7 +190,7 @@ index 27cba450..a5d176a7 100644
      endif()
      add_library(extop-obj-${arch} OBJECT)
 diff --git a/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt b/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
-index 95046e56..8cba14e7 100644
+index 95046e5..8cba14e 100644
 --- a/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
 +++ b/projects/hipblaslt/device-library/matrix-transform/CMakeLists.txt
 @@ -23,7 +23,7 @@
@@ -164,7 +203,7 @@ index 95046e56..8cba14e7 100644
  
  set(matrix_transform_cpp "${CMAKE_CURRENT_SOURCE_DIR}/matrix_transform.cpp")
 diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
-index 822bd06f..0f3786f0 100644
+index 822bd06..0f3786f 100644
 --- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
 +++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_bfloat6.h
 @@ -30,7 +30,7 @@
@@ -177,7 +216,7 @@ index 822bd06f..0f3786f0 100644
  #endif
  
 diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
-index 9b3f149b..2ee6fafa 100644
+index 9b3f149..2ee6faf 100644
 --- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
 +++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_e5m3.h
 @@ -33,7 +33,7 @@
@@ -190,7 +229,7 @@ index 9b3f149b..2ee6fafa 100644
  #else
  #define HIP_E5M3_CVT_FAST_PATH 0
 diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
-index 6d1ff408..7acb4854 100644
+index 6d1ff40..7acb485 100644
 --- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
 +++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float4.h
 @@ -30,7 +30,7 @@
@@ -203,7 +242,7 @@ index 6d1ff408..7acb4854 100644
  #endif
  
 diff --git a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
-index ace50087..7a8ee3dd 100644
+index ace5008..7a8ee3d 100644
 --- a/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
 +++ b/projects/hipblaslt/library/include/hipblaslt/hipblaslt_float6.h
 @@ -30,7 +30,7 @@
@@ -216,7 +255,7 @@ index ace50087..7a8ee3dd 100644
  #endif
  
 diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
-index 675214d8..9771950e 100644
+index 675214d..9771950 100644
 --- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 +++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 @@ -2814,6 +2814,11 @@ namespace
@@ -241,7 +280,7 @@ index 675214d8..9771950e 100644
              if(!m_library && once != 0)
              {
 diff --git a/projects/hipblaslt/tensilelite/AMaxGenerator.py b/projects/hipblaslt/tensilelite/AMaxGenerator.py
-index 169eba95..30de7815 100644
+index 169eba9..30de781 100644
 --- a/projects/hipblaslt/tensilelite/AMaxGenerator.py
 +++ b/projects/hipblaslt/tensilelite/AMaxGenerator.py
 @@ -36,7 +36,7 @@ import json
@@ -271,7 +310,7 @@ index 169eba95..30de7815 100644
      waveFrontSize = 32 if isa[0] in [11, 12] else 64
      _global_ti.setKernel(isa, waveFrontSize)
 diff --git a/projects/hipblaslt/tensilelite/LayerNormGenerator.py b/projects/hipblaslt/tensilelite/LayerNormGenerator.py
-index 6a55c1dc..2247ee4b 100644
+index 6a55c1d..2247ee4 100644
 --- a/projects/hipblaslt/tensilelite/LayerNormGenerator.py
 +++ b/projects/hipblaslt/tensilelite/LayerNormGenerator.py
 @@ -37,7 +37,7 @@ import json
@@ -301,7 +340,7 @@ index 6a55c1dc..2247ee4b 100644
      waveFrontSize = 32 if isa[0] in [11, 12] else 64
      _global_ti.setKernel(isa, waveFrontSize)
 diff --git a/projects/hipblaslt/tensilelite/SoftmaxGenerator.py b/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
-index 0046e317..37b16284 100644
+index 0046e31..37b1628 100644
 --- a/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
 +++ b/projects/hipblaslt/tensilelite/SoftmaxGenerator.py
 @@ -39,7 +39,7 @@ from contextlib import contextmanager
@@ -322,7 +361,7 @@ index 0046e317..37b16284 100644
      waveFrontSize = 32 if isa[0] in [11, 12] else 64
      _global_ti.setKernel(isa, waveFrontSize)
 diff --git a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
-index da06f12c..0b36eed3 100644
+index da06f12..0b36eed 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
 +++ b/projects/hipblaslt/tensilelite/Tensile/Common/Architectures.py
 @@ -21,6 +21,7 @@
@@ -383,7 +422,7 @@ index da06f12c..0b36eed3 100644
  
  def expandAllArchitectures(archs: List[str]) -> List[str]:
 diff --git a/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h b/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
-index beeb9004..3bc1793b 100644
+index beeb900..3bc1793 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
 +++ b/projects/hipblaslt/tensilelite/Tensile/Source/memory_gfx.h
 @@ -53,7 +53,7 @@
@@ -405,7 +444,7 @@ index beeb9004..3bc1793b 100644
  
          // bits [56:0] - base address (57 bits)
 diff --git a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
-index 92f76cd4..984fc6eb 100644
+index 92f76cd..984fc6e 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
 +++ b/projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Run.py
 @@ -54,7 +54,7 @@ from Tensile.Common import (
@@ -476,7 +515,7 @@ index 92f76cd4..984fc6eb 100644
  
      print1(f"# Experimental:      {arguments['Experimental']}")
 diff --git a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
-index 92b34ca6..70c275bc 100644
+index 92b34ca..70c275b 100644
 --- a/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
 +++ b/projects/hipblaslt/tensilelite/Tensile/Toolchain/Assembly.py
 @@ -31,7 +31,7 @@ from pathlib import Path
@@ -498,7 +537,7 @@ index 92b34ca6..70c275bc 100644
            shutil.move(coFileRaw, coFile)
          coFiles.append(coFile)
 diff --git a/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp b/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
-index 40f4afa7..6fd1a03e 100644
+index 40f4afa..6fd1a03 100644
 --- a/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
 +++ b/projects/hipblaslt/tensilelite/include/Tensile/DataTypes_E5M3.hpp
 @@ -34,7 +34,7 @@
@@ -511,7 +550,7 @@ index 40f4afa7..6fd1a03e 100644
  #else
  #define HIP_E5M3_CVT_FAST_PATH 0
 diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
-index 8f34ae27..d313b6ca 100644
+index 8f34ae2..d313b6c 100644
 --- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
 +++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/code.hpp
 @@ -1413,7 +1413,7 @@ namespace rocisa
@@ -524,7 +563,7 @@ index 8f34ae27..d313b6ca 100644
              kStr += ".protected " + name + "\n";
              kStr += ".globl " + name + "\n";
 diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
-index d73a5b4e..d2977d40 100644
+index 4dd47ec..71db287 100644
 --- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
 +++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/hardware_caps.hpp
 @@ -40,7 +40,7 @@ inline bool tryAssembler(const IsaVersion&  isaVersion,
@@ -547,7 +586,7 @@ index d73a5b4e..d2977d40 100644
      rv["HasWMMA_AccImmZero"] = tryAssembler(isaVersion,
                                              assemblerPath,
 diff --git a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
-index 5acdc3eb..49e95e7c 100644
+index 5acdc3e..49e95e7 100644
 --- a/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
 +++ b/projects/hipblaslt/tensilelite/rocisa/rocisa/include/helper.hpp
 @@ -23,6 +23,7 @@
@@ -575,7 +614,7 @@ index 5acdc3eb..49e95e7c 100644
  bool checkInList(const T& a, const std::vector<T> b)
  {
 diff --git a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
-index 7bf73277..b0b41ede 100644
+index 7bf7327..b0b41ed 100644
 --- a/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
 +++ b/projects/hipblaslt/tensilelite/rocisa_stinkytofu_adaptor/rocisa_stinkytofu_adaptor/code.py
 @@ -9,6 +9,7 @@ builds a LogicalModule, and routes through lower_logical_module for emission.
@@ -599,7 +638,7 @@ index 7bf73277..b0b41ede 100644
          out += f".protected {self.name}\n"
          out += f".globl {self.name}\n"
 diff --git a/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp b/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
-index 8407e4cb..f4d93eb9 100644
+index 8407e4c..f4d93eb 100644
 --- a/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
 +++ b/shared/mxdatagenerator/lib/include/mxDataGenerator/DataGeneratorGPU_impl.hpp
 @@ -853,7 +853,7 @@ namespace DGen
@@ -612,7 +651,7 @@ index 8407e4cb..f4d93eb9 100644
                  outBytes[b] = 0;
              __amd_floatx32_storage_t decoded
 diff --git a/shared/stinkytofu/src/ir/asm/StinkySignature.cpp b/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
-index f3f9ecb6..93bdcd77 100644
+index f3f9ecb..93bdcd7 100644
 --- a/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
 +++ b/shared/stinkytofu/src/ir/asm/StinkySignature.cpp
 @@ -25,6 +25,7 @@
@@ -637,3 +676,6 @@ index f3f9ecb6..93bdcd77 100644
      kStr += ".text\n";
      kStr += ".protected " + kernelName + "\n";
      kStr += ".globl " + kernelName + "\n";
+-- 
+2.43.0
+
