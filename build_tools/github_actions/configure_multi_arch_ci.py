@@ -61,6 +61,8 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     select_build_runner,
+    select_medium_build_runner,
+    select_small_build_runner,
 )
 from configure_ci_path_filters import (
     get_git_commit_hash,
@@ -244,6 +246,9 @@ class CIInputs:
     # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
     changed_projects: list[str] = field(default_factory=list)
 
+    # When True, suppress GPU test jobs for all families (test-runs-on = "").
+    skip_gpu_tests: bool = False
+
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
@@ -416,6 +421,7 @@ class CIInputs:
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            skip_gpu_tests=os.environ.get("SKIP_GPU_TESTS", "").lower() in ("1", "true"),
         )
         inputs.validate()
         return inputs
@@ -686,8 +692,10 @@ class BuildConfig:
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
+    # Build runner labels for this platform/variant combination
     build_runs_on: str = ""
+    small_build_runs_on: str = ""
+    medium_build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -1270,6 +1278,11 @@ def _expand_build_config_for_platform(
         # Here we just use the default fallback label.
         test_runs_on = platform_info["test-runs-on"]
 
+        # When skip_gpu_tests is set, suppress all GPU test jobs.
+        if ci_inputs.skip_gpu_tests and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: skip_gpu_tests=true, disabling GPU tests")
+
         # When a test_runner:<kernel> label is set, use the
         # kernel-specific runner if available, otherwise disable testing for
         # this family (the default runner may not have the right kernel).
@@ -1402,6 +1415,8 @@ def _expand_build_config_for_platform(
 
     # Select build runner using weighted distribution
     build_runs_on = select_build_runner(platform, build_variant)
+    small_build_runs_on = select_small_build_runner(platform, build_variant)
+    medium_build_runs_on = select_medium_build_runner(platform, build_variant)
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1472,6 +1487,8 @@ def _expand_build_config_for_platform(
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
         build_runs_on=build_runs_on,
+        small_build_runs_on=small_build_runs_on,
+        medium_build_runs_on=medium_build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,
