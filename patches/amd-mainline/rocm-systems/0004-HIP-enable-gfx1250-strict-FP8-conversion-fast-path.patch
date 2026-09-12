@@ -1,0 +1,30 @@
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Sat, 12 Sep 2026 01:02:00 -0500
+Subject: [PATCH] HIP: enable native FP8 conversions for gfx1250-strict
+
+Recognize the strict target in FP8 conversion and OCP format guards.
+This avoids software conversion expansion in unrolled RCCL FP8 kernels
+while retaining the strict compiler target and its ISA restrictions.
+
+---
+diff --git a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
+--- a/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
++++ b/projects/clr/hipamd/include/hip/amd_detail/amd_hip_fp8.h
+@@ -13,7 +13,7 @@
+ #define _HIP_INCLUDE_HIP_AMD_DETAIL_HIP_FP8_H_
+ 
+ #if (defined(__gfx942__) || defined(__gfx1200__) || defined(__gfx1201__) ||                        \
+-     defined(__gfx950__) || defined (__gfx1250__)) &&                                              \
++     defined(__gfx950__) || (defined(__gfx1250__) || defined(__gfx1250_strict__))) &&                                              \
+     __HIP_DEVICE_COMPILE__
+ #define HIP_FP8_CVT_FAST_PATH 1
+ #else
+@@ -24,7 +24,7 @@
+ #define HIP_FP8_TYPE_OCP 0
+ #define HIP_FP8_TYPE_FNUZ 1
+ #elif (defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx950__) ||                      \
+-       defined(__gfx1250__)) &&                                                                    \
++       (defined(__gfx1250__) || defined(__gfx1250_strict__))) &&                                                                    \
+        __HIP_DEVICE_COMPILE__
+ #define HIP_FP8_TYPE_OCP 1
+ #define HIP_FP8_TYPE_FNUZ 0
