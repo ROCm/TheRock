@@ -550,6 +550,11 @@ def retrieve_artifacts_by_run_id(args):
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so DT_NEEDED libhipfile.so.0 once hipFile telemetry
+            # is compiled in. Not implied by --rocprofiler-systems-examples:
+            # those samples skip at configure when hipFile is missing.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
