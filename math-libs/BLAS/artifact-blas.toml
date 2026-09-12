@@ -4,6 +4,12 @@
 [components.dev."math-libs/BLAS/hipBLAS-common/stage"]
 [components.doc."math-libs/BLAS/hipBLAS-common/stage"]
 
+# stinkytofu
+[components.lib."math-libs/BLAS/stinkytofu/stage"]
+[components.dbg."math-libs/BLAS/stinkytofu/stage"]
+[components.dev."math-libs/BLAS/stinkytofu/stage"]
+[components.doc."math-libs/BLAS/stinkytofu/stage"]
+
 # rocRoller
 [components.lib."math-libs/BLAS/rocRoller/stage"]
 optional = true
