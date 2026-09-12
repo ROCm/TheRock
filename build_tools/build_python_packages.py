@@ -203,7 +203,8 @@ def validate_required_dist_packages(
         platform_name=platform_name,
     )
     for target in expected_targets or []:
-        required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
+        wheel_target = target.replace("-", "_")
+        required_patterns.append(f"rocm_sdk_device_{wheel_target}-{version}-*.whl")
 
     if _has_devel_artifacts(artifacts):
         required_patterns.append(f"rocm_sdk_devel-{version}-*.whl")
