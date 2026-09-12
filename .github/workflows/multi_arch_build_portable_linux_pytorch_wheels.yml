@@ -415,6 +415,8 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
+          git -C rocm-systems apply \
+            "$GITHUB_WORKSPACE/patches/amd-mainline/rocm-systems/0007-rocm-bootstrap-package-gfx1250-strict-separately.patch"
 
       - name: Install kpack tooling
         run: |

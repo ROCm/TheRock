@@ -1,0 +1,42 @@
+From eb8071df3ed94395e93298296625c3621ead384a Mon Sep 17 00:00:00 2001
+From: Ammar ELWazir <3832908+ammarwa@users.noreply.github.com>
+Date: Sat, 12 Sep 2026 17:56:58 -0500
+Subject: [PATCH] rocm-bootstrap: package gfx1250-strict separately
+
+---
+ .../rocm-bootstrap/python/rocm_bootstrap/targets.py  | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/python/rocm-bootstrap/python/rocm_bootstrap/targets.py b/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
+index 956bf1a2b3..d973e4f001 100644
+--- a/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
++++ b/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
+@@ -403,6 +403,13 @@ BUNDLE_GFX1250 = TargetBundle(
+     llvm_generic=None,
+     members=(GFX1250,),
+ )
++BUNDLE_GFX1250_STRICT = TargetBundle(
++    key="gfx1250-strict",
++    level=_TARGET,
++    display_name="gfx1250-strict",
++    llvm_generic=None,
++    members=(GFX1250,),
++)
+ BUNDLE_GFX1251 = TargetBundle(
+     key="gfx1251",
+     level=_TARGET,
+@@ -702,6 +709,11 @@ def _build_lookups() -> None:
+         )
+         _BUNDLE_BY_KEY[t.name] = bundle
+ 
++    # gfx1250-strict is a compiler target variant for gfx1250, rather than a
++    # separate hardware target. Give it a distinct packaging key so code
++    # objects built for the strict target remain in their own device wheel.
++    _BUNDLE_BY_KEY[BUNDLE_GFX1250_STRICT.key] = BUNDLE_GFX1250_STRICT
++
+     # Build sub-family -> family mapping
+     for fam_key, sfs in _FAMILY_TO_SUB_FAMILIES.items():
+         fam = _BUNDLE_BY_KEY[fam_key]
+-- 
+2.43.0
+

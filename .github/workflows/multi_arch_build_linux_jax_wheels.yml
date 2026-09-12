@@ -266,7 +266,7 @@ jobs:
               AMDGPU_TARGETS="$(printf "%s" "${AMDGPU_TARGETS//;/ }" | xargs | tr " " ",")"
               strict_target_args=()
               if [[ ",${AMDGPU_TARGETS}," == *",gfx1250-strict,"* ]]; then
-                strict_target_args=(--bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}")
+                strict_target_args=(--rocm_amdgpu_targets="${AMDGPU_TARGETS}")
               fi
               python build/build.py build \
                 "${strict_target_args[@]}" \
