@@ -1,0 +1,22 @@
+# profiler-hub
+[components.lib."profiler/profiler-hub/stage"]
+include = [
+  "lib/libprofiler-hub.so*",
+]
+[components.dbg."profiler/profiler-hub/stage"]
+[components.dev."profiler/profiler-hub/stage"]
+include = [
+  "include/profiler-hub/**",
+  "lib/libprofiler-hub.a",
+  "lib/cmake/profiler-hub/**",
+]
+[components.doc."profiler/profiler-hub/stage"]
+
+# profiler-hub-install-test
+# libprofiler-hub.so is not listed here: it reaches the test machine through the
+# lib component above, and the executable resolves it through $ORIGIN/../lib.
+[components.test."profiler/profiler-hub-install-test/stage"]
+default_patterns = false
+include = [
+  "bin/test_profiler-hub",
+]

@@ -547,6 +547,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
+            argv.append("profiler-hub_lib")
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")

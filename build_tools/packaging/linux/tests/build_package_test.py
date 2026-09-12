@@ -302,6 +302,20 @@ def _read_control_file(pkg_name: str, config: PackageConfig) -> str:
     return control_path.read_text(encoding="utf-8")
 
 
+def _rules_path(pkg_name: str, config: PackageConfig) -> Path:
+    """Return path to generated ``debian/rules`` for a versioned DEB build."""
+    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+    return Path(config.dest_dir) / config.pkg_type / updated / "debian" / "rules"
+
+
+def _read_rules_file(pkg_name: str, config: PackageConfig) -> str:
+    """Read generated ``debian/rules`` after validating it was created."""
+    rules_path = _rules_path(pkg_name=pkg_name, config=config)
+    if not rules_path.exists():
+        raise AssertionError(f"Expected rules file was not created: {rules_path}")
+    return rules_path.read_text(encoding="utf-8")
+
+
 def _spec_path(pkg_name: str, config: PackageConfig) -> Path:
     """Return path to generated RPM ``specfile`` for a versioned RPM build."""
     updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
@@ -438,6 +452,31 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
 
         control = _read_control_file(pkg_name=PKG_FFT, config=device_cfg)
         self.assertEqual(_control_field(control, "Package"), FFT_DEVICE_PACKAGE)
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_rules_file_excludes_code_objects_from_makeshlibs(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """The rendered ``debian/rules`` must override dh_makeshlibs to skip
+        ``.co`` GPU code objects. hip-tests ships an intentionally-corrupted ELF
+        fixture (elf_bad_shoff.co) that dh_makeshlibs cannot parse; without the
+        ``-X.co`` exclusion it aborts dpkg-buildpackage for the whole package.
+        """
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+        deb_package.create_versioned_deb_package(pkg_name=PKG_FFT, config=device_cfg)
+
+        rules = _read_rules_file(pkg_name=PKG_FFT, config=device_cfg)
+        self.assertIn("override_dh_makeshlibs:", rules)
+        self.assertIn("dh_makeshlibs -X.co", rules)
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")

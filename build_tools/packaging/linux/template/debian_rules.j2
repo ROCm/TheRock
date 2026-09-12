@@ -58,6 +58,9 @@ override_dh_install:
 	else \
 		dh_install; \
 	fi
+override_dh_makeshlibs:
+	dh_makeshlibs -X.co
+
 
 override_dh_clean:
 	dh_clean
