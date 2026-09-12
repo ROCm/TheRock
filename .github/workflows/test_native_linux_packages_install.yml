@@ -68,10 +68,10 @@ on:
         type: string
         default: ""
       run_uninstall:
-        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Disabled by default."
+        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Enabled by default."
         required: false
         type: boolean
-        default: false
+        default: true
   workflow_dispatch:
     inputs:
       package_install_url:
