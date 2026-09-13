@@ -266,14 +266,17 @@ jobs:
               AMDGPU_TARGETS="$(printf "%s" "${AMDGPU_TARGETS//;/ }" | xargs | tr " " ",")"
               strict_target_args=()
               if [[ ",${AMDGPU_TARGETS}," == *",gfx1250-strict,"* ]]; then
-                strict_target_args=(--rocm_amdgpu_targets="${AMDGPU_TARGETS}")
+                strict_target_args=(
+                  --bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
+                  --bazel_options=--action_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
+                )
               fi
               python build/build.py build \
-                "${strict_target_args[@]}" \
                 --wheels=jax-rocm-plugin,jax-rocm-pjrt \
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
+                "${strict_target_args[@]}" \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
