@@ -1,0 +1,39 @@
+diff --git a/MODULE.bazel b/MODULE.bazel
+index cacd476..fe8f3c3 100644
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -31,6 +31,8 @@ archive_override(
+ bazel_dep(name = "xla")
+ archive_override(
+     module_name = "xla",
++    patches = ["//third_party/xla:hipcc_bzlmod_repo_path.patch"],
++    patch_strip = 1,
+     integrity = "sha256-0c3PKx0uQ6wb2SA3qBJxanwN7Na0eJrMVgAZ47+U990=",
+     strip_prefix = "xla-ec0d0021721452515553ebe726c80a290711df17",
+     urls = ["https://github.com/ROCm/xla/archive/ec0d0021721452515553ebe726c80a290711df17.tar.gz"],
+diff --git a/third_party/xla/BUILD.bazel b/third_party/xla/BUILD.bazel
+index 554f568..407316d 100644
+--- a/third_party/xla/BUILD.bazel
++++ b/third_party/xla/BUILD.bazel
+@@ -11,3 +11,4 @@
+ # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
++exports_files(["hipcc_bzlmod_repo_path.patch"])
+diff --git a/third_party/xla/hipcc_bzlmod_repo_path.patch b/third_party/xla/hipcc_bzlmod_repo_path.patch
+new file mode 100644
+index 0000000..a560dcb
+--- /dev/null
++++ b/third_party/xla/hipcc_bzlmod_repo_path.patch
+@@ -0,0 +1,11 @@
++--- a/third_party/gpus/crosstool/hipcc_cc_toolchain_config.bzl.tpl
+++++ b/third_party/gpus/crosstool/hipcc_cc_toolchain_config.bzl.tpl
++@@ -1130,7 +1130,7 @@
++     # ROCm HIPcc feature from hipcc_config()
++     _hipcc_config = hipcc_config()
++     # Construct full paths - config_rocm_hipcc is in external workspace
++-    _workspace_prefix = "external/config_rocm_hipcc/rocm"
+++    _workspace_prefix = "external/xla++rocm_configure_ext+config_rocm_hipcc/rocm"
++     _rocm_path = _workspace_prefix + "/" + _hipcc_config.rocm_root
++ 
++     rocm_hipcc_feature = feature(

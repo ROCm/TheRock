@@ -204,6 +204,11 @@ jobs:
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
 
+      - name: Apply gfx1250-strict JAX compiler patch
+        if: contains(inputs.gfx_arch, 'gfx1250')
+        run: |
+          patch -d jax-source -p1 < \
+            external-builds/jax/patches/gfx1250-strict-rocm-clang-local.patch
 
       - name: Configure Git Identity
         run: |
@@ -267,11 +272,13 @@ jobs:
               strict_target_args=()
               if [[ ",${AMDGPU_TARGETS}," == *",gfx1250-strict,"* ]]; then
                 strict_target_args=(
-                  --bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
-                  --bazel_options=--action_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
                   --bazel_options=--config=rocm_clang_local
                   --bazel_options=--@local_config_rocm//rocm:rocm_path_type=hermetic
                   --bazel_options=--action_env=CLANG_COMPILER_PATH=/opt/clang/bin/clang
+                  --bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
+                  --bazel_options=--action_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
+                  --bazel_options=--copt=-DHWY_DISABLED_TARGETS=0x1D8
+                  --bazel_options=--host_copt=-DHWY_DISABLED_TARGETS=0x1D8
                 )
               fi
               python build/build.py build \
