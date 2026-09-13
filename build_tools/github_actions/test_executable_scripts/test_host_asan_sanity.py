@@ -9,6 +9,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
 
 CANARY_SOURCE = r"""
 #include <cstdlib>
@@ -50,11 +54,12 @@ def main() -> int:
             check=True,
         )
 
-        env = os.environ.copy()
+        env = native_host_asan_environment()
         options = env.get("ASAN_OPTIONS", "")
         env["ASAN_OPTIONS"] = ":".join(
             value for value in (options, "halt_on_error=1", "abort_on_error=1") if value
         )
+        require_direct_clang_asan(executable, env)
         result = subprocess.run(executable, env=env, capture_output=True, text=True)
 
     report = result.stderr + result.stdout

@@ -10,6 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
+
 
 def main() -> int:
     bin_dir = Path(os.environ["THEROCK_BIN_DIR"]).resolve()
@@ -20,9 +25,11 @@ def main() -> int:
         )
         return 1
 
+    env = native_host_asan_environment()
+    require_direct_clang_asan(executable, env)
     command = [str(executable)]
     logging.info("++ Exec %s", shlex.join(command))
-    subprocess.run(command, cwd=bin_dir, check=True)
+    subprocess.run(command, cwd=bin_dir, env=env, check=True)
     return 0
 
 

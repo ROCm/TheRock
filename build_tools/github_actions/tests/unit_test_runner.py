@@ -1,7 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -125,6 +127,139 @@ class BuildCtestCommandTest(unittest.TestCase):
         self.assertIn("--test-dir", cmd)
         self.assertIn("-V", cmd)
         self.assertIn("--tests-information", cmd)
+
+    def test_host_asan_fails_when_label_selects_no_tests(self):
+        cmd = self._build("host-asan", "", set())
+        self.assertIn("--no-tests=error", cmd)
+
+    def test_non_host_asan_preserves_legacy_empty_selection_behavior(self):
+        cmd = self._build("quick", "", set())
+        self.assertNotIn("--no-tests=error", cmd)
+
+    def test_host_asan_audits_direct_targets_without_preload(self):
+        command = ["ctest", "-L", "^host-asan$", "--test-dir", "/tests"]
+        inventory = {
+            "tests": [
+                {"name": "one", "command": ["/tests/one"]},
+                {"name": "two", "command": ["/tests/two", "--flag"]},
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        with (
+            patch.object(test_runner.subprocess, "run", return_value=completed),
+            patch.object(test_runner, "require_direct_clang_asan") as require_asan,
+        ):
+            env = test_runner.prepare_ctest_environment(
+                "host-asan", command, {"LD_PRELOAD": "/tmp/not-allowed.so"}
+            )
+
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertEqual(
+            [call.args[0] for call in require_asan.call_args_list],
+            [Path("/tests/one"), Path("/tests/two")],
+        )
+
+    def test_host_asan_rejects_empty_ctest_inventory(self):
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps({"tests": []}), stderr=""
+        )
+        with patch.object(test_runner.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "zero tests"):
+                test_runner.prepare_ctest_environment(
+                    "host-asan", ["ctest"], {"LD_PRELOAD": "/tmp/not-allowed.so"}
+                )
+
+    def test_host_asan_permits_exact_housekeeping_fixture(self):
+        inventory = {
+            "tests": [
+                {
+                    "name": "clear_cache",
+                    "command": [
+                        "/usr/bin/cmake",
+                        "-E",
+                        "rm",
+                        "-rf",
+                        "/tmp/miopen_test_cache",
+                    ],
+                    "properties": [
+                        {"name": "FIXTURES_SETUP", "value": ["clear_cache"]}
+                    ],
+                },
+                {"name": "native", "command": ["/tests/native"]},
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        with (
+            patch.object(test_runner.subprocess, "run", return_value=completed),
+            patch.object(test_runner, "require_direct_clang_asan") as require_asan,
+        ):
+            test_runner.audit_host_asan_ctest_command(["ctest"], {})
+
+        require_asan.assert_called_once_with(Path("/tests/native"), {})
+
+    def test_host_asan_does_not_bypass_other_fixture_commands(self):
+        inventory = {
+            "tests": [
+                {
+                    "name": "unexpected_fixture",
+                    "command": [
+                        "/usr/bin/cmake",
+                        "-E",
+                        "rm",
+                        "-rf",
+                        "/tmp/other_cache",
+                    ],
+                    "properties": [
+                        {"name": "FIXTURES_SETUP", "value": ["unexpected_fixture"]}
+                    ],
+                }
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        with (
+            patch.object(test_runner.subprocess, "run", return_value=completed),
+            patch.object(test_runner, "require_direct_clang_asan") as require_asan,
+        ):
+            test_runner.audit_host_asan_ctest_command(["ctest"], {})
+
+        require_asan.assert_called_once_with(Path("/usr/bin/cmake"), {})
+
+    def test_host_asan_rejects_zero_case_gtest_filter(self):
+        inventory = {
+            "tests": [
+                {
+                    "name": "empty_suite",
+                    "command": ["/tests/native", "--gtest_filter=NoSuchSuite.*"],
+                }
+            ]
+        }
+        ctest_result = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        list_result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with (
+            patch.object(
+                test_runner.subprocess,
+                "run",
+                side_effect=(ctest_result, list_result),
+            ),
+            patch.object(test_runner, "require_direct_clang_asan"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "GTest filter.*zero tests"):
+                test_runner.audit_host_asan_ctest_command(["ctest"], {})
+
+    def test_non_host_asan_does_not_audit_or_remove_preload(self):
+        source_env = {"LD_PRELOAD": "/tmp/legacy.so"}
+        with patch.object(test_runner, "audit_host_asan_ctest_command") as audit:
+            env = test_runner.prepare_ctest_environment("quick", ["ctest"], source_env)
+        audit.assert_not_called()
+        self.assertEqual(env, source_env)
 
     def test_category_exclude_label_applied(self):
         exclude_labels = {"quick_exclude", "standard_exclude"}

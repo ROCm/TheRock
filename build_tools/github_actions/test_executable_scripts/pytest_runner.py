@@ -43,6 +43,11 @@ from importlib.util import find_spec
 from pathlib import Path
 import yaml
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Map job name -> install location, relative to the ROCm prefix (THEROCK_BIN_DIR
@@ -251,6 +256,27 @@ def build_environment(rocm_path, component_name):
     return env
 
 
+def configure_tensilelite_host_asan(env, component_root):
+    """Validate TensileLite's native extension and preload ASAN for Python.
+
+    The Python interpreter is intentionally not instrumented. This is the sole
+    host-ASAN preload exception: the extension loaded by Python must itself have
+    a direct Clang-ASAN dependency, and the matching runtime path must exist.
+    """
+    runtime_value = env.get("ASAN_RUNTIME_PATH")
+    if not runtime_value:
+        raise RuntimeError("ASAN_RUNTIME_PATH is required for TensileLite host-ASAN")
+    runtime = Path(runtime_value).resolve()
+    if not runtime.is_file():
+        raise RuntimeError(f"ASAN runtime is missing: {runtime}")
+
+    extension = component_root / "rocisa" / "_rocisa.abi3.so"
+    preload_free_env = native_host_asan_environment(env)
+    require_direct_clang_asan(extension, preload_free_env)
+    preload_free_env["LD_PRELOAD"] = str(runtime)
+    return preload_free_env
+
+
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
     TEST_TYPE = os.getenv("TEST_TYPE", "quick")
@@ -334,6 +360,17 @@ if __name__ == "__main__":
         )
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
+
+    if TEST_TYPE == "host-asan":
+        if TEST_COMPONENT_NAME != "tensilelite":
+            _fail(
+                "No explicit Python host-ASAN instrumentation policy for "
+                f"component '{TEST_COMPONENT_NAME}'"
+            )
+        try:
+            env = configure_tensilelite_host_asan(env, component_path)
+        except RuntimeError as error:
+            _fail(str(error))
 
     sys.exit(
         run_pytest(

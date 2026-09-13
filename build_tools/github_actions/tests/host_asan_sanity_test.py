@@ -16,9 +16,10 @@ class HostAsanSanityTest(unittest.TestCase):
     @patch.object(Path, "write_text")
     @patch.object(Path, "is_file", return_value=True)
     @patch.object(test_host_asan_sanity.tempfile, "TemporaryDirectory")
+    @patch.object(test_host_asan_sanity, "require_direct_clang_asan")
     @patch.object(test_host_asan_sanity.subprocess, "run")
     def test_expected_asan_failure_passes(
-        self, run, temporary_directory, _is_file, _write_text
+        self, run, require_asan, temporary_directory, _is_file, _write_text
     ):
         temporary_directory.return_value.__enter__.return_value = "/tmp/canary"
         run.side_effect = [
@@ -42,6 +43,7 @@ class HostAsanSanityTest(unittest.TestCase):
 
         compile_command = run.call_args_list[0].args[0]
         self.assertIn("-shared-libasan", compile_command)
+        require_asan.assert_called_once()
 
     def test_missing_compiler_fails(self):
         with patch.dict(

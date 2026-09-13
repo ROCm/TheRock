@@ -383,10 +383,6 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
-        # Some math test payloads (notably StinkyTofu through hipBLASLt) link
-        # libamd_comgr even on CPU-only runners. GPU images happen to provide it,
-        # but the no-ROCm host-ASAN image must receive it from build artifacts.
-        "amd-comgr_lib",
         "core-amdsmi_run",
         "core-amdsmi_lib",
         "core-hip_lib",
@@ -413,6 +409,7 @@ def retrieve_artifacts_by_run_id(args):
             args.miopen,
             args.miopenprovider,
             args.hiptensor,
+            args.composable_kernel,
             args.hipblasltprovider,
             args.hipkernelprovider,
             args.prim,
@@ -494,6 +491,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipkernelprovider")
         if args.hiptensor:
             extra_artifacts.append("hiptensor")
+        if args.composable_kernel:
+            extra_artifacts.append("composable-kernel")
         if args.rocdecode:
             extra_artifacts.append("sysdeps-amd-mesa")
             extra_artifacts.append("rocdecode")
@@ -902,6 +901,13 @@ def main(argv):
         "--hiptensor",
         default=False,
         help="Include 'hiptensor' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--composable-kernel",
+        default=False,
+        help="Include 'composable-kernel' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

@@ -205,10 +205,6 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
-          # Python-launched Phase 1 tests load instrumented DSOs into an
-          # uninstrumented interpreter, so the matching runtime must load first.
-          # Keep this scoped to host-ASAN to avoid changing existing GPU lanes.
-          LD_PRELOAD: ${{ startsWith(inputs.build_variant, 'host-asan') && env.ASAN_RUNTIME_PATH || '' }}
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}

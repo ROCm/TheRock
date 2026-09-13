@@ -944,13 +944,23 @@ HOST_ASAN_PHASE1_COMPONENTS = {
             'ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" '
             f"python {_get_script_path('pytest_runner.py')}"
         ),
-        "timeout_minutes": 15,
+        # The host-only selection currently collects 7,260 cases. Its complete
+        # local device-traced proof took 66 minutes, so keep the outer budget
+        # above that observed runtime; individual pytest cases retain their
+        # existing 2700-second timeout.
+        "timeout_minutes": 90,
     },
     "origami": {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "timeout_minutes": 5,
     },
-    "hipdnn": {"timeout_minutes": 30},
+    "hipdnn": {
+        # The legacy wrapper runs every installed CTest entry and ignores
+        # TEST_TYPE. The generic runner selects only the positive host-asan
+        # labels generated from hipDNN's six-suite allowlist.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 30,
+    },
     "hipkernelprovider": {"timeout_minutes": 10},
 }
 
@@ -980,20 +990,75 @@ HOST_ASAN_PHASE2_COMPONENTS = {
 HOST_ASAN_PHASE3_COMPONENTS = {
     "rocprim": {
         "test_script": f"python {_get_script_path('test_rocprim_host_asan.py')}",
-        "timeout_minutes": 5,
+        # The complete fail-closed CPU allowlist took 5m54s on the local
+        # host-ASAN proof machine. Keep enough headroom for contended runners.
+        "timeout_minutes": 15,
     },
     "rocthrust": {
         "test_script": f"python {_get_script_path('test_rocthrust_host_asan.py')}",
         "timeout_minutes": 5,
     },
     "rocalution": {
+        # Select only the generated positive host-asan CTest entry; the legacy
+        # wrapper ignores TEST_TYPE and would run GPU suites as well.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "timeout_minutes": 10,
+    },
+}
+
+HOST_ASAN_PHASE4_COMPONENTS = {
+    # Composable Kernel has no regular test-matrix entry. Keep its proven
+    # CPU-only executable set behind a dedicated runner and explicit selector.
+    "composable-kernel": {
+        "job_name": "composable-kernel",
+        "fetch_artifact_args": "--composable-kernel --tests",
+        "test_script": (
+            f"python {_get_script_path('test_composable_kernel_host_asan.py')}"
+        ),
+        "timeout_minutes": 10,
+    },
+    # Provider host-ASAN labels are fail-closed positive suite allowlists. The
+    # external hipDNN integration artifact is deliberately omitted: those GPU
+    # suites are outside this admission, so the provider integration binaries
+    # are deliberately not registered for HOST_ASAN.
+    "miopenprovider": {
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipblasltprovider": {
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+}
+
+HOST_ASAN_PHASE5_COMPONENTS = {
+    # These four components use one dedicated fail-closed runner. It validates
+    # direct ASAN linkage and the complete selected-test inventory before it
+    # executes anything, so a newly-added device test cannot enter implicitly.
+    "hipfile": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 15,
+    },
+    "rocprofiler-compute": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocprofiler-sdk": {
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocrtst": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
     },
 }
 
 
 def _host_asan_matrix() -> dict:
-    """Return the explicit Phase 1 + Phase 2 + Phase 3 host-ASAN matrix.
+    """Return the explicit Phase 1 through Phase 5 host-ASAN matrix.
 
     Entries inherit artifact-fetching details from the regular matrix when one
     exists, then receive a host-only command/timeout overlay. All entries run
@@ -1004,6 +1069,8 @@ def _host_asan_matrix() -> dict:
         HOST_ASAN_PHASE1_COMPONENTS,
         HOST_ASAN_PHASE2_COMPONENTS,
         HOST_ASAN_PHASE3_COMPONENTS,
+        HOST_ASAN_PHASE4_COMPONENTS,
+        HOST_ASAN_PHASE5_COMPONENTS,
     ):
         for key, overrides in phase.items():
             entry = deepcopy(test_matrix.get(key, {}))
@@ -1076,7 +1143,7 @@ def run():
         test_type = "host-asan"
         run_extended_tests = False
         logging.info(
-            f"Using explicit Phase 1 + Phase 2 host-ASAN matrix "
+            f"Using explicit Phase 1 through Phase 5 host-ASAN matrix "
             f"({len(selected_matrix)} test(s))"
         )
     else:

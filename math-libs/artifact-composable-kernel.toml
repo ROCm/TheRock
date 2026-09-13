@@ -7,3 +7,25 @@ include = [
   "lib/cmake/composable_kernel/*",
 ]
 [components.doc."math-libs/composable_kernel/stage"]
+[components.test."math-libs/composable_kernel/stage"]
+optional = true
+include = [
+  "bin/unit_sequence",
+  "bin/unit_ford",
+  "bin/unit_sequence_helper",
+  "bin/unit_tensor_descriptor_functors",
+  "bin/unit_index_expression",
+  "bin/test_ck_tile_tuple_apply",
+  "bin/ck_tile_unit_sequence",
+  "bin/test_ck_tile_sequence",
+  "bin/test_ck_tile_static_ford",
+  "bin/test_print_sequence",
+  "bin/test_print_array",
+  "bin/test_print_tuple",
+  "bin/test_print_coordinate_transform",
+  "bin/test_print_static_encoding_pattern",
+  "bin/test_print_buffer_view",
+  "bin/test_print_basic_types",
+  "bin/test_custom_type",
+  "bin/test_type_convert_const",
+]

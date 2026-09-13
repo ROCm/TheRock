@@ -10,6 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
 
 ROCTHRUST_HOST_TESTS = (
     "address_stability.hip",
@@ -33,6 +37,7 @@ ROCTHRUST_HOST_TESTS = (
 
 def main() -> int:
     bin_dir = Path(os.environ["THEROCK_BIN_DIR"]).resolve()
+    env = native_host_asan_environment()
     for binary_name in ROCTHRUST_HOST_TESTS:
         executable = bin_dir / binary_name
         if not executable.is_file():
@@ -42,8 +47,9 @@ def main() -> int:
             )
             return 1
         command = [str(executable)]
+        require_direct_clang_asan(executable, env)
         logging.info("++ Exec %s", shlex.join(command))
-        subprocess.run(command, cwd=bin_dir, check=True)
+        subprocess.run(command, cwd=bin_dir, env=env, check=True)
     return 0
 
 

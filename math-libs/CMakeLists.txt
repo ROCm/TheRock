@@ -580,6 +580,11 @@ if(_ck_enabled)
   # Composable_kernel
   ##############################################################################
 
+  set(_ck_build_host_tests_only OFF)
+  if(THEROCK_BUILD_TESTING AND THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+    set(_ck_build_host_tests_only ON)
+  endif()
+
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
@@ -589,6 +594,7 @@ if(_ck_enabled)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      "-DCK_BUILD_HOST_TESTS_ONLY=${_ck_build_host_tests_only}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
       "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
     CMAKE_INCLUDES
@@ -615,6 +621,7 @@ if(_ck_enabled)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       composable_kernel
   )
