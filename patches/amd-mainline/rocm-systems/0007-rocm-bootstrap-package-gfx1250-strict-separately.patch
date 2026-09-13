@@ -4,11 +4,11 @@ Date: Sat, 12 Sep 2026 17:56:58 -0500
 Subject: [PATCH] rocm-bootstrap: package gfx1250-strict separately
 
 ---
- .../rocm-bootstrap/python/rocm_bootstrap/targets.py  | 12 ++++++++++++
- 1 file changed, 12 insertions(+)
+ python/rocm-bootstrap/python/rocm_bootstrap/targets.py | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
 
 diff --git a/python/rocm-bootstrap/python/rocm_bootstrap/targets.py b/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
-index 956bf1a2b3..d973e4f001 100644
+index 956bf1a2b3..d36a7dfc1a 100644
 --- a/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
 +++ b/python/rocm-bootstrap/python/rocm_bootstrap/targets.py
 @@ -403,6 +403,13 @@ BUNDLE_GFX1250 = TargetBundle(
@@ -25,7 +25,15 @@ index 956bf1a2b3..d973e4f001 100644
  BUNDLE_GFX1251 = TargetBundle(
      key="gfx1251",
      level=_TARGET,
-@@ -702,6 +709,11 @@ def _build_lookups() -> None:
+@@ -660,6 +667,7 @@ def _build_target_bundle_map() -> dict[str, TargetBundle]:
+ 
+ # Map: target name -> GfxTarget
+ _TARGET_BY_NAME: dict[str, GfxTarget] = {t.name: t for t in ALL_TARGETS}
++_TARGET_BY_NAME["gfx1250-strict"] = GFX1250
+ 
+ # Map: gfx_target_version int -> GfxTarget
+ _TARGET_BY_GTV: dict[int, GfxTarget] = {t.gfx_target_version: t for t in ALL_TARGETS}
+@@ -702,6 +710,11 @@ def _build_lookups() -> None:
          )
          _BUNDLE_BY_KEY[t.name] = bundle
  
@@ -37,6 +45,19 @@ index 956bf1a2b3..d973e4f001 100644
      # Build sub-family -> family mapping
      for fam_key, sfs in _FAMILY_TO_SUB_FAMILIES.items():
          fam = _BUNDLE_BY_KEY[fam_key]
+@@ -792,11 +805,12 @@ def packaging_chain(
+     Raises:
+         ValueError: If the target is not known.
+     """
++    requested_name = target if isinstance(target, str) else target.name
+     if isinstance(target, str):
+         target = lookup_target(target)
+     name = target.name
+ 
+-    target_bundle = _BUNDLE_BY_KEY[name]
++    target_bundle = _BUNDLE_BY_KEY[requested_name]
+     sf_bundle = _SUB_FAMILY_BY_TARGET[name]
+     fam_bundle = _FAMILY_BY_SUB_FAMILY[sf_bundle.key]
+ 
 -- 
 2.43.0
-

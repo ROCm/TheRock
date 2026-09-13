@@ -732,6 +732,11 @@ def _do_build_wheels_core(
     apex_dir: Path | None,
 ) -> None:
     """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
+    if pytorch_dir:
+        apply_strict_target_patches(
+            pytorch_dir, env.get("PYTORCH_ROCM_ARCH", "")
+        )
+
     # Build triton.
     triton_requirement = None
     if args.build_triton:
@@ -1093,8 +1098,6 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    apply_strict_target_patches(pytorch_dir, env.get("PYTORCH_ROCM_ARCH", ""))
-
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
         pytorch_dir, args.version_suffix, args.release_type

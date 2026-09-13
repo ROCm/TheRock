@@ -269,6 +269,9 @@ jobs:
                 strict_target_args=(
                   --bazel_options=--repo_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
                   --bazel_options=--action_env=TF_ROCM_AMDGPU_TARGETS="${AMDGPU_TARGETS}"
+                  --bazel_options=--config=rocm_clang_local
+                  --bazel_options=--@local_config_rocm//rocm:rocm_path_type=hermetic
+                  --bazel_options=--action_env=CLANG_COMPILER_PATH=/opt/clang/bin/clang
                 )
               fi
               python build/build.py build \
