@@ -74,6 +74,12 @@ string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -fPIC")
+# GCC 15+ has stricter -Werror defaults that break upstream elfutils sources.
+# Only demote these warnings on GNU toolchains that actually emit them.
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
+  string(APPEND EXTRA_CPPFLAGS " -Wno-error=discarded-qualifiers")
+  string(APPEND EXTRA_CPPFLAGS " -Wno-error=incompatible-pointer-types")
+endif()
 message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
 
 add_custom_target(
