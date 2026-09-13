@@ -753,9 +753,9 @@ def process_devel_dependencies_kpack(
     pkg_name = pkg_info.get("Package")
     dep_list = list(pkg_info.get(field_key, []) or [])
 
-    # Filter deps without artifacts
+    # Filter deps without artifacts (use GFX_META to check if any arch artifacts exist)
     dep_list = filter_dependencies_by_artifacts(
-        dep_list, config.artifacts_dir, config.gfx_arch
+        dep_list, config.artifacts_dir, GFX_META
     )
 
     if is_meta:
@@ -1187,10 +1187,9 @@ def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
     if is_meta_package(pkg_info):
         return True
 
-    # For GFX_META or empty gfx_arch, check if ANY arch artifacts exist
-    # (regular GfxArch packages have gfx942, gfx1100, etc. but not gfx_meta)
-    # Empty gfx_arch is used for devel packages - they just need deps to exist
-    if gfx_arch in (GFX_META, ""):
+    # For GFX_META, check if ANY arch artifacts exist
+    # (used by devel packages to verify gfxarch deps have artifacts)
+    if gfx_arch == GFX_META:
         return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
 
     artifactory = pkg_info.get("Artifactory")
