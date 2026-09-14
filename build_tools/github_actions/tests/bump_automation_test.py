@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
@@ -11,16 +12,26 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
+    _baseline_gate_jobs_succeeded,
     _clone_url,
+    _list_run_jobs,
     close_stale_prs,
+    close_stale_therock_ref_prs,
     create_therock_bump,
+    find_therock_workflow_files,
     generate_pr_body,
+    get_baseline_run_id_from_merged_pr,
+    GITHUB_SEARCH_PAGE_SIZE,
+    GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
     handle_push,
     latest_commit,
+    LIBRARIES_BASELINE_GATE_JOB_NAME,
+    search_issues,
     submodule_changed,
     update_ci_env_file,
     update_ref_in_file,
+    update_therock_workflow_file,
 )
 
 
@@ -77,6 +88,210 @@ class LatestCommitTest(unittest.TestCase):
             mock_api.call_args.args[1],
             "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-16",
         )
+
+
+def _gate_job(conclusion: str | None, name: str = LIBRARIES_BASELINE_GATE_JOB_NAME):
+    return {
+        "name": f"Linux::release / Build Multi-Arch Stages / {name}",
+        "conclusion": conclusion,
+    }
+
+
+def _jobs_page(jobs: list[dict], total_count: int | None = None) -> dict:
+    return {
+        "jobs": jobs,
+        "total_count": total_count if total_count is not None else len(jobs),
+    }
+
+
+class ListRunJobsTest(unittest.TestCase):
+    def test_returns_single_page_without_further_requests(self):
+        with patch(
+            "bump_automation.gh_api",
+            return_value=_jobs_page([_gate_job("success")]),
+        ) as mock_api:
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 1)
+        mock_api.assert_called_once()
+
+    def test_follows_pagination_until_all_jobs_are_retrieved(self):
+        first_page = _jobs_page([_gate_job("success")] * 100, total_count=101)
+        second_page = _jobs_page([_gate_job("success")], total_count=101)
+        with patch(
+            "bump_automation.gh_api", side_effect=[first_page, second_page]
+        ) as mock_api:
+            jobs = _list_run_jobs("ROCm/TheRock", "token", 111)
+        self.assertEqual(len(jobs), 101)
+        self.assertEqual(mock_api.call_count, 2)
+
+
+class BaselineGateJobsSucceededTest(unittest.TestCase):
+    def test_true_when_the_single_gate_job_succeeded(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job("success")])
+        ):
+            self.assertTrue(_baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111))
+
+    def test_true_only_when_every_platform_gate_job_succeeded(self):
+        jobs = [
+            {
+                "name": f"Linux::release / Build Multi-Arch Stages / {LIBRARIES_BASELINE_GATE_JOB_NAME}",
+                "conclusion": "success",
+            },
+            {
+                "name": f"Windows::release / Build Multi-Arch Stages / {LIBRARIES_BASELINE_GATE_JOB_NAME}",
+                "conclusion": "failure",
+            },
+        ]
+        with patch("bump_automation.gh_api", return_value=_jobs_page(jobs)):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+    def test_false_when_no_gate_job_is_found(self):
+        with patch(
+            "bump_automation.gh_api",
+            return_value=_jobs_page([{"name": "setup", "conclusion": "success"}]),
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+    def test_false_when_gate_job_conclusion_is_missing(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job(None)])
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
+
+class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
+    MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
+    HEAD_SHA = "23bc501d4b826695062a657d0b582076c354dd77"
+
+    def _pr(self, number: int = 7999) -> dict:
+        return {
+            "number": number,
+            "merged_at": "2026-09-08T20:33:17Z",
+            "merge_commit_sha": self.MERGE_SHA,
+            "head": {"sha": self.HEAD_SHA},
+        }
+
+    def _run(self, run_id: int, conclusion: str | None, name: str = "Multi-Arch CI"):
+        return {"id": run_id, "name": name, "conclusion": conclusion}
+
+    def test_returns_the_run_id_when_its_gate_job_succeeded(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "success")]},
+                _jobs_page([_gate_job("success")]),
+            ],
+        ) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
+        # The run lookup must key off the PR's pre-merge head SHA, not the
+        # merge commit itself.
+        self.assertIn(self.HEAD_SHA, mock_api.call_args_list[1].args[1])
+
+    def test_returns_the_run_id_even_when_overall_run_conclusion_is_failure(self):
+        # This is the real scenario that motivated the gate-job check: an
+        # unrelated math-libs/compiler-runtime failure elsewhere in the
+        # matrix makes the whole run "failure" even though every stage
+        # rocm-libraries reuses succeeded.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "failure")]},
+                _jobs_page([_gate_job("success")]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "111")
+
+    def test_skips_runs_whose_gate_job_did_not_succeed(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "success"),
+                        self._run(112, "success"),
+                    ]
+                },
+                _jobs_page([_gate_job("failure")]),  # run 111's gate job
+                _jobs_page([_gate_job("success")]),  # run 112's gate job
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertEqual(run_id, "112")
+
+    def test_returns_none_when_no_run_gate_job_succeeded(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {
+                    "workflow_runs": [
+                        self._run(111, "failure"),
+                        self._run(112, "cancelled"),
+                    ]
+                },
+                _jobs_page([_gate_job("failure")]),
+                _jobs_page([_gate_job("cancelled")]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_gate_job_is_missing(self):
+        # A run that predates the gate job (or is otherwise structurally
+        # different) must not be treated as a usable baseline.
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "success")]},
+                _jobs_page([{"name": "setup", "conclusion": "success"}]),
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_no_matching_workflow_name(self):
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[
+                [self._pr()],
+                {"workflow_runs": [self._run(111, "success", name="pre-commit")]},
+            ],
+        ):
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+
+    def test_returns_none_when_no_merged_pr_found(self):
+        with patch("bump_automation.gh_api", return_value=[]) as mock_api:
+            run_id = get_baseline_run_id_from_merged_pr(
+                "ROCm/TheRock", "token", self.MERGE_SHA
+            )
+        self.assertIsNone(run_id)
+        mock_api.assert_called_once()
 
 
 class SubmoduleChangedTest(unittest.TestCase):
@@ -238,6 +453,122 @@ class UpdateCiEnvFileTest(unittest.TestCase):
         self.assertIn("oldsha1234567", result)
 
 
+class UpdateTheRockWorkflowFileTest(unittest.TestCase):
+    OLD_SHA = "1" * 40
+    OTHER_SHA = "2" * 40
+    NEW_SHA = "3" * 40
+    STALE_COMMENT_SHA = "4" * 40
+
+    def _run(self, content: str) -> str:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            update_therock_workflow_file(path, self.NEW_SHA)
+            return Path(path).read_text()
+        finally:
+            os.unlink(path)
+
+    def test_updates_reusable_workflow_and_matching_source_refs(self):
+        content = textwrap.dedent(
+            f"""\
+            # TheRock ref: pinned to ROCm/TheRock commit {self.STALE_COMMENT_SHA}.
+            jobs:
+              setup:
+                uses: ROCm/TheRock/.github/workflows/setup_multi_arch.yml@{self.OLD_SHA} # 2026-01-02
+                with:
+                  repository: ROCm/TheRock
+                  ref: {self.OLD_SHA} # 2026-01-02
+            """
+        )
+        result = self._run(content)
+        self.assertEqual(result.count(self.NEW_SHA), 3)
+        self.assertNotIn(self.OLD_SHA, result)
+        self.assertNotIn(self.STALE_COMMENT_SHA, result)
+        self.assertNotIn("2026-01-02", result)
+
+    def test_updates_therock_checkout_without_reusable_workflow(self):
+        content = textwrap.dedent(
+            f"""\
+            steps:
+              - uses: actions/checkout@{self.OTHER_SHA}
+                with:
+                  repository: "ROCm/TheRock"
+                  ref: {self.OLD_SHA} # 2026-01-02
+            """
+        )
+        result = self._run(content)
+        self.assertIn(f"actions/checkout@{self.OTHER_SHA}", result)
+        self.assertIn(f"ref: {self.NEW_SHA}", result)
+        self.assertNotIn(self.OLD_SHA, result)
+
+    def test_updates_therock_ref_override_default(self):
+        content = textwrap.dedent(
+            f"""\
+            steps:
+              - uses: actions/checkout@{self.OTHER_SHA}
+                with:
+                  repository: "ROCm/TheRock"
+                  ref: ${{{{ inputs.therock_ref_override || '{self.OLD_SHA}' }}}}
+            """
+        )
+        result = self._run(content)
+        self.assertIn(self.NEW_SHA, result)
+        self.assertNotIn(self.OLD_SHA, result)
+
+    def test_fails_when_workflow_has_no_pinned_therock_ref(self):
+        with self.assertRaisesRegex(RuntimeError, "No pinned TheRock refs"):
+            self._run("name: unrelated workflow\n")
+
+
+class FindTheRockWorkflowFilesTest(unittest.TestCase):
+    def test_discovers_all_yaml_extensions_with_pinned_refs(self):
+        old_sha = "1" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / "workflows"
+            actions = root / "actions"
+            workflows.mkdir()
+            actions.mkdir()
+            (workflows / "reusable.yml").write_text(
+                f"uses: ROCm/TheRock/.github/workflows/ci.yml@{old_sha}\n",
+                encoding="utf-8",
+            )
+            (actions / "checkout.yaml").write_text(
+                textwrap.dedent(
+                    f"""\
+                    repository: ROCm/TheRock
+                    ref: {old_sha}
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (workflows / "unrelated.yml").write_text(
+                "uses: actions/checkout@v4\n", encoding="utf-8"
+            )
+
+            result = find_therock_workflow_files(root)
+
+        self.assertEqual(
+            result,
+            [
+                (actions / "checkout.yaml").as_posix(),
+                (workflows / "reusable.yml").as_posix(),
+            ],
+        )
+
+    def test_fails_when_no_pinned_workflows_are_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "unrelated.yml").write_text(
+                "uses: actions/checkout@v4\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                RuntimeError, "No pinned TheRock workflow files"
+            ):
+                find_therock_workflow_files(root)
+
+
 class CloseStalePrsTest(unittest.TestCase):
     def _make_pr(self, number: int, title: str) -> dict:
         return {"number": number, "title": title}
@@ -273,6 +604,203 @@ class CloseStalePrsTest(unittest.TestCase):
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "POST"
         ]
         self.assertTrue(any("comments" in c.args[1] for c in post_calls))
+
+
+def _search_page(numbers: range, total_count: int) -> dict:
+    return {
+        "total_count": total_count,
+        "items": [{"number": n} for n in numbers],
+    }
+
+
+class SearchIssuesTest(unittest.TestCase):
+    def test_returns_single_page_without_further_requests(self):
+        page = _search_page(range(3), total_count=3)
+        with patch("bump_automation.gh_api", return_value=page) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual(len(items), 3)
+        mock_api.assert_called_once()
+        self.assertIn("page=1", mock_api.call_args.args[1])
+
+    def test_follows_pagination_until_all_matches_are_retrieved(self):
+        total = GITHUB_SEARCH_PAGE_SIZE + 5
+        pages = [
+            _search_page(range(GITHUB_SEARCH_PAGE_SIZE), total_count=total),
+            _search_page(range(GITHUB_SEARCH_PAGE_SIZE, total), total_count=total),
+        ]
+        with patch("bump_automation.gh_api", side_effect=pages) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual([item["number"] for item in items], list(range(total)))
+        requested_pages = [call.args[1] for call in mock_api.call_args_list]
+        self.assertEqual(len(requested_pages), 2)
+        self.assertIn("page=1", requested_pages[0])
+        self.assertIn("page=2", requested_pages[1])
+
+    def test_stops_at_the_search_api_result_limit(self):
+        full_page = _search_page(range(GITHUB_SEARCH_PAGE_SIZE), total_count=10**6)
+        with patch("bump_automation.gh_api", return_value=full_page) as mock_api:
+            items = search_issues("token", "repo:ROCm/rocm-libraries is:pr")
+
+        self.assertEqual(len(items), GITHUB_SEARCH_RESULT_LIMIT)
+        self.assertEqual(
+            mock_api.call_count, GITHUB_SEARCH_RESULT_LIMIT // GITHUB_SEARCH_PAGE_SIZE
+        )
+
+    def test_quotes_the_query(self):
+        with patch(
+            "bump_automation.gh_api", return_value=_search_page(range(0), 0)
+        ) as mock_api:
+            search_issues("token", 'repo:ROCm/rocm-libraries in:title "Update"')
+
+        endpoint = mock_api.call_args.args[1]
+        self.assertTrue(endpoint.startswith("search/issues?q="))
+        self.assertNotIn(" ", endpoint)
+        self.assertNotIn('"', endpoint)
+
+
+class CloseStaleTheRockRefPrsTest(unittest.TestCase):
+    NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+
+    def _make_pr(self, number: int, title: str, author: str, *, age: timedelta) -> dict:
+        created = self.NOW - age
+        return {
+            "number": number,
+            "title": title,
+            "user": {"login": author},
+            "created_at": created.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+    def test_closes_older_bot_reference_prs_only(self):
+        search_result = {
+            "items": [
+                self._make_pr(
+                    10,
+                    "Update TheRock reference to (1111111)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                ),
+                self._make_pr(
+                    20,
+                    "Update TheRock reference to (2222222)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                ),
+                self._make_pr(
+                    30,
+                    "Update TheRock reference to (3333333)",
+                    "human-author",
+                    age=timedelta(days=3),
+                ),
+            ]
+        }
+        with patch("bump_automation.gh_api", return_value=search_result) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                bot_author="assistant-librarian[bot]",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/10"])
+
+    def test_leaves_recent_bot_reference_prs_open(self):
+        search_result = {
+            "items": [
+                self._make_pr(
+                    10,
+                    "Update TheRock reference to (1111111)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=1, hours=23),
+                ),
+                self._make_pr(
+                    11,
+                    "Update TheRock reference to (aaaaaaa)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=2),
+                ),
+            ]
+        }
+        with patch("bump_automation.gh_api", return_value=search_result) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                bot_author="assistant-librarian[bot]",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/11"])
+
+    def test_searches_all_open_reference_prs(self):
+        with patch("bump_automation.gh_api", return_value={"items": []}) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                bot_author="assistant-librarian[bot]",
+            )
+
+        endpoint = mock_api.call_args.args[1]
+        self.assertTrue(endpoint.startswith("search/issues?q="))
+        self.assertIn("per_page=100", endpoint)
+
+    def test_closes_stale_prs_found_beyond_the_first_search_page(self):
+        # A full first page of unrelated PRs must not hide stale bot PRs that
+        # only appear on a later page.
+        first_page = {
+            "total_count": GITHUB_SEARCH_PAGE_SIZE + 1,
+            "items": [
+                self._make_pr(
+                    number,
+                    "Update TheRock reference to (1111111)",
+                    "human-author",
+                    age=timedelta(days=3),
+                )
+                for number in range(GITHUB_SEARCH_PAGE_SIZE)
+            ],
+        }
+        second_page = {
+            "total_count": GITHUB_SEARCH_PAGE_SIZE + 1,
+            "items": [
+                self._make_pr(
+                    2000,
+                    "Update TheRock reference to (2222222)",
+                    "assistant-librarian[bot]",
+                    age=timedelta(days=3),
+                )
+            ],
+        }
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[first_page, second_page, {}, {}],
+        ) as mock_api:
+            close_stale_therock_ref_prs(
+                "ROCm/rocm-libraries",
+                current_pr_number=20,
+                token="token",
+                bot_author="assistant-librarian[bot]",
+                now=self.NOW,
+            )
+
+        closed_endpoints = [
+            call.args[1]
+            for call in mock_api.call_args_list
+            if call.kwargs.get("method") == "PATCH"
+        ]
+        self.assertEqual(closed_endpoints, ["repos/ROCm/rocm-libraries/pulls/2000"])
 
 
 class HandlePushTest(unittest.TestCase):
@@ -342,6 +870,99 @@ class HandlePushTest(unittest.TestCase):
         self.assertEqual(mock_close.call_args.args[2], "systems-token")
         # submodule-only: must not clone any upstream repo.
         mock_tmp.assert_not_called()
+
+    def test_ref_updater_closes_stale_prs_with_its_own_bot_author(self):
+        """rocm-systems' bump PRs are opened by "systems-assistant[bot]", a
+        different GitHub App than rocm-libraries' "assistant-librarian[bot]".
+        handle_push must pass each repo's own bot identity through to
+        close_stale_therock_ref_prs rather than a single hardcoded value."""
+
+        def changed(before, after, path):
+            return path == "rocm-systems"
+
+        with patch("bump_automation.submodule_changed", side_effect=changed):
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs"):
+                    with patch("bump_automation.run"):
+                        with patch("bump_automation.os.chdir"):
+                            with patch(
+                                "bump_automation.os.path.exists", return_value=True
+                            ):
+                                with patch("bump_automation.update_ref_in_file"):
+                                    with patch(
+                                        "bump_automation.gh_api",
+                                        return_value={"number": 1},
+                                    ):
+                                        with patch(
+                                            "bump_automation.close_stale_therock_ref_prs"
+                                        ) as mock_close_ref:
+                                            with patch(
+                                                "bump_automation.create_therock_bump"
+                                            ):
+                                                handle_push(
+                                                    "before",
+                                                    "after",
+                                                    {
+                                                        "systems": "systems-token",
+                                                        "libraries": "libraries-token",
+                                                    },
+                                                )
+
+        mock_close_ref.assert_called_once()
+        self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-systems")
+        self.assertEqual(mock_close_ref.call_args.args[3], "systems-assistant[bot]")
+
+    def test_ci_env_updater_closes_stale_prs_with_its_own_bot_author(self):
+        """rocm-libraries must keep using its own "assistant-librarian[bot]"
+        identity, not rocm-systems'."""
+
+        def changed(before, after, path):
+            return path == "rocm-libraries"
+
+        with patch("bump_automation.submodule_changed", side_effect=changed):
+            with patch(
+                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
+            ):
+                with patch("bump_automation.close_stale_prs"):
+                    with patch(
+                        "bump_automation.get_baseline_run_id_from_merged_pr",
+                        return_value=None,
+                    ):
+                        with patch("bump_automation.run"):
+                            with patch("bump_automation.os.chdir"):
+                                with patch(
+                                    "bump_automation.os.path.exists",
+                                    return_value=True,
+                                ):
+                                    with patch("bump_automation.update_ci_env_file"):
+                                        with patch(
+                                            "bump_automation.find_therock_workflow_files",
+                                            return_value=[],
+                                        ):
+                                            with patch(
+                                                "bump_automation.gh_api",
+                                                return_value={"number": 1},
+                                            ):
+                                                with patch(
+                                                    "bump_automation.close_stale_therock_ref_prs"
+                                                ) as mock_close_ref:
+                                                    with patch(
+                                                        "bump_automation.create_therock_bump"
+                                                    ):
+                                                        handle_push(
+                                                            "before",
+                                                            "after",
+                                                            {
+                                                                "systems": "systems-token",
+                                                                "libraries": "libraries-token",
+                                                            },
+                                                        )
+
+        mock_close_ref.assert_called_once()
+        self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-libraries")
+        self.assertEqual(mock_close_ref.call_args.args[3], "assistant-librarian[bot]")
 
 
 class CreateTheRockBumpTest(unittest.TestCase):

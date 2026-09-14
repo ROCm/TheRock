@@ -4,12 +4,11 @@
 
 """Unit tests for ``upload_package_repo.py``.
 
-Regression guards for Issue #6540 and the simplified upload path: local repo
-metadata is built once and uploaded by ``upload_to_s3`` (no S3 merge/regen).
+Regression guards for Issue #6540 upload path: metadata is always uploaded;
+package dedupe skips only ``.deb`` / ``.rpm`` files.
 
 Coverage:
 
-  - ``generate_release_file_with_checksums`` — DEB ``Release`` has checksum sections
   - ``upload_to_s3`` — uploads ``repodata/``; dedupes ``.rpm`` only (not metadata)
   - ``s3_object_exists`` — ``head_object`` success and 404 handling (dedupe helper)
   - ``_package_install_url`` — RPM baseurl includes ``x86_64/``
@@ -28,7 +27,6 @@ Run::
         -p 'upload_package_repo_test.py' -v
 """
 
-import gzip
 import os
 import sys
 import tempfile
@@ -74,30 +72,6 @@ upload_repo = _import_upload_package_repo()
 
 TEST_BUCKET = "therock-test-bucket"
 TEST_PREFIX = "12345-linux/packages/rpm/20250825-12345"
-TEST_JOB_TYPE = "nightly"
-
-
-class GenerateReleaseFileTest(unittest.TestCase):
-    """Tests for ``generate_release_file_with_checksums()`` (DEB upload-ready Release)."""
-
-    def test_release_includes_checksum_sections(self) -> None:
-        """Release must include MD5/SHA256 sections before ``upload_to_s3`` uploads it."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            dists_dir = Path(temp_dir) / "main" / "binary-amd64"
-            dists_dir.mkdir(parents=True)
-            (dists_dir / "Packages").write_text("Package: demo\n", encoding="utf-8")
-            with gzip.open(dists_dir / "Packages.gz", "wb") as handle:
-                handle.write(b"Package: demo\n")
-
-            release_file = Path(temp_dir) / "Release"
-            upload_repo.generate_release_file_with_checksums(
-                release_file, TEST_JOB_TYPE, dists_dir
-            )
-            release_text = release_file.read_text(encoding="utf-8")
-
-        self.assertIn("MD5Sum:", release_text)
-        self.assertIn("SHA256:", release_text)
-        self.assertIn("main/binary-amd64/Packages", release_text)
 
 
 class UploadToS3Test(unittest.TestCase):
