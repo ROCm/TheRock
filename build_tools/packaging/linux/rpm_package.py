@@ -109,10 +109,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     # Multiple Python-version-specific binaries are included; the wrapper script
     # automatically selects the binary matching the system's Python version
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
-    # amdrocm-profiler: Exclude vendored TBB provides from auto-generated RPM metadata.
-    # rocprofiler-systems bundles TBB for Dyninst; RPM auto-provides sonames
-    # that collide with system tbb/dyninst and block dnf autoremove on EL8.
-    exclude_vendored_tbb_provides = pkg_name == "amdrocm-profiler"
+    # amdrocm-profiler: Exclude vendored TBB from auto-generated RPM metadata.
+    # rocprofiler-systems bundles TBB for Dyninst; suppress public Provides so
+    # dyninst/tbb do not block dnf autoremove (ROCM-28385), and suppress
+    # auto-Requires so profiler does not couple to distro tbb at install time.
+    exclude_vendored_tbb_metadata = pkg_name == "amdrocm-profiler"
 
     if config.versioned_pkg:
         # Get -> Filter -> Transform
@@ -188,7 +189,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
-        "exclude_vendored_tbb_provides": exclude_vendored_tbb_provides,
+        "exclude_vendored_tbb_metadata": exclude_vendored_tbb_metadata,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:

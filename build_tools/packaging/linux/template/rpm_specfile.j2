@@ -16,8 +16,9 @@
 {%- if exclude_libpython_requires %}
 %define __requires_exclude libpython*.*
 {%- endif %}
-# Exclude vendored TBB provides. Used for amdrocm-profiler.
-{%- if exclude_vendored_tbb_provides %}
+# Exclude vendored TBB metadata. Used for amdrocm-profiler (ROCM-28385).
+{%- if exclude_vendored_tbb_metadata %}
+%global __requires_exclude libtbb\.so.*|libtbbmalloc\.so.*|libtbbmalloc_proxy\.so.*
 %global __provides_exclude libtbb\.so\.12|libtbbmalloc\.so\.2|libtbbmalloc_proxy\.so\.2
 {%- endif %}
 %define _binary_payload w9.zstdio
