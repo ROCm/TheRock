@@ -165,6 +165,16 @@ class BaselineGateJobsSucceededTest(unittest.TestCase):
                 _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
             )
 
+    def test_false_when_the_gate_job_was_skipped(self):
+        # Skipping is how the gate reports a reused stage that did not succeed,
+        # so this is the primary rejection path rather than an edge case.
+        with patch(
+            "bump_automation.gh_api", return_value=_jobs_page([_gate_job("skipped")])
+        ):
+            self.assertFalse(
+                _baseline_gate_jobs_succeeded("ROCm/TheRock", "token", 111)
+            )
+
 
 class GetBaselineRunIdFromMergedPrTest(unittest.TestCase):
     MERGE_SHA = "df3d451a3c054e14705ddf94e58498e1208df8d5"
