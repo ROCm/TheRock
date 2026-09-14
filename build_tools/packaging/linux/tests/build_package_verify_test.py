@@ -4,6 +4,10 @@
 
 """Unit tests for ``build_package_verify.py``.
 
+Covers structural metadata checks per TESTING.md packaging validation: variant
+routing (kpack/gfx-arch), metadata-based file indexing, version matching, verify
+tiers, rollup reporting, and report file output.
+
 Run::
 
     python3.12 -m unittest build_tools.packaging.linux.tests.build_package_verify_test -v
@@ -97,6 +101,32 @@ class BuildPackageVerifyTestCase(unittest.TestCase):
         self._temp_context.cleanup()
 
 
+class NormalizeVerifyTypeTest(unittest.TestCase):
+    """Maps workflow verify-type aliases to canonical smoke/sanity/full tiers."""
+
+    def test_quick_maps_to_smoke(self):
+        self.assertEqual(verify.normalize_verify_type("quick"), verify.VERIFY_TYPE_SMOKE)
+
+    def test_standard_maps_to_sanity(self):
+        self.assertEqual(
+            verify.normalize_verify_type("standard"),
+            verify.VERIFY_TYPE_SANITY,
+        )
+
+    def test_comprehensive_maps_to_full(self):
+        self.assertEqual(
+            verify.normalize_verify_type("comprehensive"),
+            verify.VERIFY_TYPE_FULL,
+        )
+
+    def test_skip_maps_to_off(self):
+        self.assertEqual(verify.normalize_verify_type("skip"), verify.VERIFY_TYPE_OFF)
+
+    def test_invalid_verify_type_raises(self):
+        with self.assertRaises(ValueError):
+            verify.normalize_verify_type("standrd")
+
+
 class ExpectedControlVersionTest(unittest.TestCase):
     def test_deb_version_with_suffix(self):
         cfg = PackageConfig(
@@ -159,6 +189,8 @@ class VersionsMatchTest(unittest.TestCase):
 
 
 class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
+    """Regression tests for kpack/gfx-arch routing (#6093-style variant enumeration)."""
+
     def test_core_sdk_kpack_lists_meta_and_device_variants(self):
         cfg = _kpack_config(self.temp_dir)
         labels = [
@@ -203,6 +235,8 @@ class IterPackageVariantSpecsRoutingTest(BuildPackageVerifyTestCase):
 
 
 class FindPackageFilesTest(unittest.TestCase):
+    """Ensures package index keys match control metadata names, not filename stems."""
+
     @patch.object(verify, "read_package_file_name")
     def test_indexes_rpm_by_metadata_name(self, mock_read_name):
         with tempfile.TemporaryDirectory() as tmp:
@@ -343,6 +377,8 @@ class BuildSummaryTest(unittest.TestCase):
             [report],
             {"amdrocm-core-sdk7.14": Path("/tmp/x.deb")},
             fail_on_extra=False,
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         self.assertTrue(summary.passed)
         self.assertEqual(summary.variants_passed, 1)
@@ -359,6 +395,8 @@ class BuildSummaryTest(unittest.TestCase):
             [report],
             {},
             fail_on_extra=False,
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         self.assertFalse(summary.passed)
         self.assertEqual(summary.missing_variants(), ["amdrocm-core-sdk7.14"])
@@ -378,12 +416,16 @@ class BuildSummaryTest(unittest.TestCase):
                 "extra7.14": Path("/tmp/y.deb"),
             },
             fail_on_extra=True,
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         self.assertFalse(summary.passed)
         self.assertEqual(summary.extra_package_files, ["extra7.14"])
 
 
 class ReportFormatTest(unittest.TestCase):
+    """Validates text/JSON report shape and rollup behavior for large verify tiers."""
+
     def test_json_roundtrip_fields(self):
         variant = verify.VariantBuildCheck(
             base_package=PKG_CORE_SDK,
@@ -403,12 +445,53 @@ class ReportFormatTest(unittest.TestCase):
             packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         payload = json.loads(verify.format_report_json(summary))
         self.assertTrue(payload["passed"])
         self.assertEqual(payload["variants_expected"], 1)
+        self.assertEqual(payload["verify_type"], verify.VERIFY_TYPE_SMOKE)
         text = verify.format_report_text(summary)
         self.assertIn("ROCm build package verification report", text)
+
+    def test_full_report_uses_rollup_for_passing_variants(self):
+        passed_variant = verify.VariantBuildCheck(
+            base_package=PKG_CORE_SDK,
+            label="meta",
+            expected_name="amdrocm-core-sdk7.14",
+            file_path=Path("/tmp/x.deb"),
+            found=True,
+            expected_version="7.14.0-daily",
+            actual_version="7.14.0~daily",
+            version_ok=True,
+        )
+        failed_variant = verify.VariantBuildCheck(
+            base_package=PKG_CORE_SDK,
+            label="device-gfx1100",
+            expected_name="amdrocm-core-sdk7.14-gfx1100",
+            file_path=None,
+            found=False,
+            expected_version="7.14.0-daily",
+            actual_version=None,
+            version_ok=False,
+            errors=["package file not found"],
+        )
+        report = verify.BuildVerifyReport(
+            base_package=PKG_CORE_SDK,
+            variants=[passed_variant, failed_variant],
+        )
+        summary = verify.BuildVerifySummary(
+            packages_requested=[PKG_CORE_SDK],
+            reports=[report],
+            package_files_found=["amdrocm-core-sdk7.14"],
+            verify_type=verify.VERIFY_TYPE_FULL,
+            packages_eligible=76,
+        )
+        text = verify.format_report_text(summary)
+        self.assertIn("Verify type: full", text)
+        self.assertIn("[FAIL] device-gfx1100", text)
+        self.assertNotIn("[PASS] meta", text)
 
     def test_text_contains_pass(self):
         variant = verify.VariantBuildCheck(
@@ -429,6 +512,8 @@ class ReportFormatTest(unittest.TestCase):
             packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         text = verify.format_report_text(summary)
         self.assertIn("Overall result: PASS", text)
@@ -436,6 +521,8 @@ class ReportFormatTest(unittest.TestCase):
 
 
 class WriteReportFilesTest(unittest.TestCase):
+    """Confirms all three report artifacts are written and parseable."""
+
     def test_writes_both_reports(self):
         variant = verify.VariantBuildCheck(
             base_package=PKG_CORE_SDK,
@@ -455,16 +542,43 @@ class WriteReportFilesTest(unittest.TestCase):
             packages_requested=[PKG_CORE_SDK],
             reports=[report],
             package_files_found=["amdrocm-core-sdk7.14"],
+            verify_type=verify.VERIFY_TYPE_SMOKE,
+            packages_eligible=1,
         )
         with tempfile.TemporaryDirectory() as tmp:
             report_dir = Path(tmp)
             verify.write_report_files(summary, report_dir)
             self.assertTrue((report_dir / "build_status_report.txt").is_file())
             self.assertTrue((report_dir / "build_status_report.json").is_file())
+            self.assertTrue((report_dir / "build_status_report.summary.json").is_file())
             payload = json.loads(
                 (report_dir / "build_status_report.json").read_text(encoding="utf-8"),
             )
             self.assertTrue(payload["passed"])
+
+
+class VerifyPackageIndexingTest(unittest.TestCase):
+    """Ensures verify_package reuses a pre-built index instead of re-scanning disk."""
+
+    @patch.object(verify, "find_package_files")
+    def test_verify_package_reuses_package_index(self, mock_find):
+        config = PackageConfig(
+            artifacts_dir=Path("/tmp"),
+            dest_dir=Path("/tmp/out"),
+            pkg_type="deb",
+            rocm_version="7.14.0",
+            version_suffix="daily",
+            install_prefix="/opt/rocm/core",
+            gfx_arch="",
+        )
+        package_files = {"amdrocm-core-sdk7.14": Path("/tmp/x.deb")}
+        verify.verify_package(
+            PKG_CORE_SDK,
+            config,
+            package_files,
+            check_version=False,
+        )
+        mock_find.assert_not_called()
 
 
 if __name__ == "__main__":

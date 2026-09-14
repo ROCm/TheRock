@@ -12,8 +12,16 @@ the same CLI flags used at build time, then confirms files exist in
 ``--packages-dir`` and optionally checks control-field versions against
 ``--rocm-version`` and ``--version-suffix``.
 
-Writes ``build_status_report.txt`` and ``build_status_report.json`` when
-``--report-dir`` is set.
+Verification tiers (``--verify-type``) mirror install-test ``test_type`` aliases
+so CI can scale checks without rebuilding: ``smoke`` checks ``amdrocm-core-sdk``,
+``sanity`` adds core metapackages, and ``full`` verifies every eligible package.
+
+Package files are indexed once via ``rpm``/``dpkg-deb`` metadata names, not
+filename stems, because DEB/RPM filenames embed version and arch tokens that do
+not match the installed package names ``build_package.py`` emits.
+
+Writes ``build_status_report.txt``, ``build_status_report.json``, and a compact
+``build_status_report.summary.json`` when ``--report-dir`` is set.
 
 ```
 # Standard CI pre-upload verification (deb):
@@ -61,6 +69,35 @@ from packaging_utils import (
 from _therock_utils.log_utils import TheRockLogger, configure_logging
 
 logger = TheRockLogger(__name__)
+
+# Canonical verification tiers; workflow inputs normalize through _VERIFY_TYPE_MAP.
+VERIFY_TYPE_OFF = "off"
+VERIFY_TYPE_SMOKE = "smoke"
+VERIFY_TYPE_SANITY = "sanity"
+VERIFY_TYPE_FULL = "full"
+
+# Aligns with native_linux_package_install_test._TEST_TYPE_MAP CI aliases.
+_VERIFY_TYPE_MAP: dict[str, str] = {
+    "off": VERIFY_TYPE_OFF,
+    "skip": VERIFY_TYPE_OFF,
+    "": VERIFY_TYPE_SMOKE,
+    "quick": VERIFY_TYPE_SMOKE,
+    "smoke": VERIFY_TYPE_SMOKE,
+    "standard": VERIFY_TYPE_SANITY,
+    "sanity": VERIFY_TYPE_SANITY,
+    "comprehensive": VERIFY_TYPE_FULL,
+    "full": VERIFY_TYPE_FULL,
+    "extended": VERIFY_TYPE_FULL,
+}
+
+# Default smoke tier: one kpack metapackage exercises host/meta/device routing.
+SMOKE_PKG_NAMES: tuple[str, ...] = ("amdrocm-core-sdk",)
+# Sanity tier: core metapackages without verifying every optional component package.
+SANITY_PKG_NAMES: tuple[str, ...] = (
+    "amdrocm-core-sdk",
+    "amdrocm-core",
+    "amdrocm",
+)
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
@@ -158,12 +195,30 @@ class BuildVerifyReport:
 
 @dataclass
 class BuildVerifySummary:
-    """Aggregate verification outcome across all requested packages."""
+    """Aggregate verification outcome across all requested packages.
+
+    Attributes:
+        verify_type: Canonical tier used for this run (drives rollup reporting).
+        packages_eligible: Total packages ``build_package.py`` could build for the
+            artifact tree; used in rollup output to show scope vs. full builds.
+    """
 
     packages_requested: list[str]
     reports: list[BuildVerifyReport]
     package_files_found: list[str]
     extra_package_files: list[str] = field(default_factory=list)
+    verify_type: str = VERIFY_TYPE_SMOKE
+    packages_eligible: int = 0
+
+    @property
+    def packages_passed(self) -> int:
+        """Base packages whose variants all passed."""
+        return sum(1 for report in self.reports if report.passed)
+
+    @property
+    def packages_failed(self) -> int:
+        """Base packages with at least one failed variant."""
+        return len(self.reports) - self.packages_passed
 
     @property
     def variants_expected(self) -> int:
@@ -230,7 +285,9 @@ def iter_package_variant_specs(
     """Enumerate expected variants using the same routing as ``build_package_variants``.
 
     Read-only helper for verification: mirrors how ``build_package.py`` splits a
-    ``package.json`` entry into variant names without building anything.
+    ``package.json`` entry into variant names without building anything. Logic is
+    duplicated here (not imported) so verify stays side-effect free and runnable
+    after build completes.
 
     Parameters:
         pkg_name: ``package.json`` base name.
@@ -308,9 +365,36 @@ def iter_package_variant_specs(
     return specs
 
 
+def normalize_verify_type(verify_type: str | None) -> str:
+    """Map CLI or CI verify scope to a canonical verification tier.
+
+    Parameters:
+        verify_type: Raw value from ``--verify-type`` or workflow input.
+
+    Returns:
+        One of ``off``, ``smoke``, ``sanity``, or ``full``.
+
+    Raises:
+        ValueError: When ``verify_type`` is not recognized.
+    """
+    normalized = (verify_type or VERIFY_TYPE_SMOKE).strip().lower()
+    try:
+        return _VERIFY_TYPE_MAP[normalized]
+    except KeyError as exc:
+        valid = ", ".join(sorted(_VERIFY_TYPE_MAP))
+        raise ValueError(
+            f"Unsupported verify_type {verify_type!r}. Expected one of: {valid}.",
+        ) from exc
+
+
 def _run_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     """Run a subprocess and capture stdout/stderr without raising on failure."""
-    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        # Fail fast when rpm/dpkg-deb is missing instead of a vague query failure.
+        tool = Path(cmd[0]).name if cmd else "tool"
+        raise RuntimeError(f"{tool} not found on PATH") from exc
 
 
 def resolve_installed_name(
@@ -332,7 +416,7 @@ def resolve_installed_name(
         gfx_arch: Gfx-arch token for kpack variants (``GFX_HOST``, ``GFX_META``, etc.).
 
     Returns:
-        Package stem without ``.deb``/``.rpm`` extension (e.g. ``amdrocm-core-sdk7.15``).
+        Expected installed package stem (e.g. ``amdrocm-core-sdk7.15``).
     """
     local_config = replace(
         config,
@@ -387,7 +471,9 @@ def find_package_files(packages_dir: Path, pkg_type: str) -> dict[str, Path]:
         pkg_type: ``deb`` or ``rpm`` (case-insensitive).
 
     Returns:
-        Mapping from metadata package name to file path.
+        Mapping from metadata package name to file path. Names come from
+        ``read_package_file_name``, not filename parsing, so lookups match
+        ``resolve_installed_name`` output.
     """
     ext = ".deb" if pkg_type.lower() == "deb" else ".rpm"
     package_files: dict[str, Path] = {}
@@ -399,6 +485,7 @@ def find_package_files(packages_dir: Path, pkg_type: str) -> dict[str, Path]:
         try:
             name = read_package_file_name(path, pkg_type)
         except RuntimeError as exc:
+            # Skip corrupt files; verify_variant reports missing expected names.
             logger.warning(f"Skipping {path.name}: {exc}")
             continue
         package_files[name] = path
@@ -547,7 +634,7 @@ def verify_variant(
 def verify_package(
     pkg_name: str,
     config: PackageConfig,
-    packages_dir: Path,
+    package_files: dict[str, Path],
     *,
     check_version: bool,
 ) -> BuildVerifyReport:
@@ -556,14 +643,13 @@ def verify_package(
     Parameters:
         pkg_name: ``package.json`` base name.
         config: Shared build configuration (kpack routing, gfx targets, etc.).
-        packages_dir: Directory containing built package files.
+        package_files: Index from ``find_package_files``.
         check_version: When False, verify presence only.
 
     Returns:
         Report with one ``VariantBuildCheck`` per expected variant.
     """
     report = BuildVerifyReport(base_package=pkg_name)
-    package_files = find_package_files(packages_dir, config.pkg_type)
 
     for spec in iter_package_variant_specs(pkg_name, config):
         expected_name = resolve_installed_name(
@@ -604,23 +690,44 @@ def collect_extra_package_files(
 def resolve_pkg_names(
     args: argparse.Namespace,
     config: PackageConfig,
-) -> list[str]:
-    """Resolve the package list from CLI flags.
+    verify_type: str,
+) -> tuple[list[str], int]:
+    """Resolve base package names and eligible count for a verification tier.
 
     Parameters:
         args: Parsed command-line arguments.
-        config: Shared build configuration (used for ``--all-eligible`` filtering).
+        config: Shared build configuration.
+        verify_type: Canonical tier from ``normalize_verify_type``.
 
     Returns:
-        ``package.json`` base names to verify.
+        Tuple of package names to verify and total eligible packages for the build.
 
     Raises:
         ValueError: Propagated from ``parse_input_package_list`` on invalid input.
+
+    Tier selection enables fast CI smoke checks without listing every package name
+    on the command line; ``full`` and ``--all-eligible`` verify the entire build.
     """
-    if args.all_eligible:
-        pkg_list, _skipped = parse_input_package_list(None, config.artifacts_dir)
-        return pkg_list
-    return list(args.pkg_names)
+    eligible, _skipped = parse_input_package_list(None, config.artifacts_dir)
+    packages_eligible = len(eligible)
+    eligible_set = set(eligible)
+
+    if args.all_eligible or verify_type == VERIFY_TYPE_FULL:
+        return eligible, packages_eligible
+
+    if verify_type == VERIFY_TYPE_SANITY:
+        requested = [name for name in SANITY_PKG_NAMES if name in eligible_set]
+        if not requested:
+            raise ValueError("no sanity-tier packages are eligible for verification")
+        return requested, packages_eligible
+
+    if verify_type == VERIFY_TYPE_SMOKE:
+        requested = [name for name in SMOKE_PKG_NAMES if name in eligible_set]
+        if not requested:
+            raise ValueError("no smoke-tier packages are eligible for verification")
+        return requested, packages_eligible
+
+    return list(args.pkg_names), packages_eligible
 
 
 def build_summary(
@@ -629,6 +736,8 @@ def build_summary(
     package_files: dict[str, Path],
     *,
     fail_on_extra: bool,
+    verify_type: str,
+    packages_eligible: int,
 ) -> BuildVerifySummary:
     """Assemble the aggregate verification summary.
 
@@ -637,6 +746,8 @@ def build_summary(
         reports: Per-package verification reports.
         package_files: Full index of files in ``--packages-dir``.
         fail_on_extra: When False, unexpected files are ignored for pass/fail.
+        verify_type: Canonical tier (included in reports for CI artifact review).
+        packages_eligible: Total buildable packages for scope context in rollups.
 
     Returns:
         Summary used for console output and report files.
@@ -650,6 +761,8 @@ def build_summary(
         reports=reports,
         package_files_found=sorted(package_files.keys()),
         extra_package_files=extra,
+        verify_type=verify_type,
+        packages_eligible=packages_eligible,
     )
 
 
@@ -669,6 +782,49 @@ def _variant_to_dict(variant: VariantBuildCheck) -> dict[str, object]:
     }
 
 
+def _report_uses_rollup_detail(summary: BuildVerifySummary) -> bool:
+    """Return True when passing variants should be omitted from text/JSON detail.
+
+    Sanity and full tiers can cover dozens of packages; rollup keeps CI logs and
+    artifacts readable while still listing every failure.
+    """
+    return summary.verify_type in {VERIFY_TYPE_SANITY, VERIFY_TYPE_FULL}
+
+
+def format_report_summary_json(summary: BuildVerifySummary) -> str:
+    """Format a compact rollup JSON report for CI and large verification runs.
+
+    Omits per-variant detail so sanity/full artifacts stay small; failures are
+    listed in ``missing_variants`` and ``version_failures``.
+    """
+    payload = {
+        "passed": summary.passed,
+        "verify_type": summary.verify_type,
+        "packages_eligible": summary.packages_eligible,
+        "packages_requested": summary.packages_requested,
+        "packages_passed": summary.packages_passed,
+        "packages_failed": summary.packages_failed,
+        "variants_expected": summary.variants_expected,
+        "variants_found": summary.variants_found,
+        "variants_passed": summary.variants_passed,
+        "variants_failed": summary.variants_failed,
+        "package_files_on_disk": len(summary.package_files_found),
+        "missing_variants": summary.missing_variants(),
+        "version_failures": summary.version_failures(),
+        "extra_package_files": summary.extra_package_files,
+        "package_reports": [
+            {
+                "base_package": report.base_package,
+                "passed": report.passed,
+                "variants_expected": len(report.variants),
+                "variants_passed": sum(1 for v in report.variants if v.passed),
+            }
+            for report in summary.reports
+        ],
+    }
+    return json.dumps(payload, indent=2)
+
+
 def format_report_json(summary: BuildVerifySummary) -> str:
     """Format the verification summary as indented JSON.
 
@@ -678,27 +834,38 @@ def format_report_json(summary: BuildVerifySummary) -> str:
     Returns:
         JSON string suitable for ``build_status_report.json``.
     """
-    payload = {
-        "passed": summary.passed,
-        "packages_requested": summary.packages_requested,
-        "variants_expected": summary.variants_expected,
-        "variants_found": summary.variants_found,
-        "variants_passed": summary.variants_passed,
-        "variants_failed": summary.variants_failed,
-        "missing_variants": summary.missing_variants(),
-        "version_failures": summary.version_failures(),
-        "package_files_found": summary.package_files_found,
-        "extra_package_files": summary.extra_package_files,
-        "reports": [
-            {
-                "base_package": report.base_package,
-                "passed": report.passed,
-                "variants": [_variant_to_dict(v) for v in report.variants],
-            }
-            for report in summary.reports
-        ],
-    }
+    payload = json.loads(format_report_summary_json(summary))
+    payload["package_files_found"] = summary.package_files_found
+    payload["reports"] = [
+        {
+            "base_package": report.base_package,
+            "passed": report.passed,
+            "variants": [_variant_to_dict(v) for v in report.variants],
+        }
+        for report in summary.reports
+    ]
     return json.dumps(payload, indent=2)
+
+
+def _append_variant_detail(
+    lines: list[str],
+    variant: VariantBuildCheck,
+) -> None:
+    """Append one variant block to the human-readable report."""
+    status = "PASS" if variant.passed else "FAIL"
+    found = "yes" if variant.found else "no"
+    lines.append(f"  [{status}] {variant.label}")
+    lines.append(f"         expected name: {variant.expected_name}")
+    lines.append(f"         file found: {found}")
+    if variant.file_path:
+        lines.append(f"         path: {variant.file_path}")
+    if variant.actual_version is not None:
+        lines.append(
+            f"         version: {variant.actual_version} "
+            f"(expected {variant.expected_version})",
+        )
+    for err in variant.errors:
+        lines.append(f"         error: {err}")
 
 
 def format_report_text(summary: BuildVerifySummary) -> str:
@@ -709,12 +876,19 @@ def format_report_text(summary: BuildVerifySummary) -> str:
 
     Returns:
         Multi-line report for console output and ``build_status_report.txt``.
+        Sanity/full tiers use rollup mode (failures only per package).
     """
     lines: list[str] = []
     overall = "PASS" if summary.passed else "FAIL"
+    rollup = _report_uses_rollup_detail(summary)
     lines.append("ROCm build package verification report")
     lines.append("=" * 72)
     lines.append(f"Overall result: {overall}")
+    lines.append(f"Verify type: {summary.verify_type}")
+    lines.append(
+        f"Packages: {summary.packages_passed}/{len(summary.packages_requested)} passed "
+        f"({summary.packages_eligible} eligible for this build)",
+    )
     lines.append(f"Packages requested: {', '.join(summary.packages_requested)}")
     lines.append(
         f"Variants: {summary.variants_expected} expected, "
@@ -726,22 +900,19 @@ def format_report_text(summary: BuildVerifySummary) -> str:
     lines.append("")
 
     for report in summary.reports:
-        lines.append(f"Package (package.json): {report.base_package}")
+        status = "PASS" if report.passed else "FAIL"
+        variant_passed = sum(1 for variant in report.variants if variant.passed)
+        lines.append(
+            f"Package (package.json): {report.base_package} "
+            f"[{status}] {variant_passed}/{len(report.variants)} variants",
+        )
+        if rollup and report.passed:
+            lines.append("")
+            continue
         for variant in report.variants:
-            status = "PASS" if variant.passed else "FAIL"
-            found = "yes" if variant.found else "no"
-            lines.append(f"  [{status}] {variant.label}")
-            lines.append(f"         expected name: {variant.expected_name}")
-            lines.append(f"         file found: {found}")
-            if variant.file_path:
-                lines.append(f"         path: {variant.file_path}")
-            if variant.actual_version is not None:
-                lines.append(
-                    f"         version: {variant.actual_version} "
-                    f"(expected {variant.expected_version})",
-                )
-            for err in variant.errors:
-                lines.append(f"         error: {err}")
+            if rollup and variant.passed:
+                continue
+            _append_variant_detail(lines, variant)
         lines.append("")
 
     if summary.missing_variants():
@@ -756,24 +927,30 @@ def format_report_text(summary: BuildVerifySummary) -> str:
 def write_report_files(summary: BuildVerifySummary, report_dir: Path) -> None:
     """Write text and JSON verification reports under ``report_dir``.
 
+    Produces three artifacts: full text (``.txt``), full JSON with per-variant
+    detail (``.json``), and compact rollup JSON (``.summary.json``) for CI upload.
+
     Parameters:
         summary: Aggregate verification outcome.
         report_dir: Output directory (created if missing).
 
     Raises:
-        FileNotFoundError: When either report file is missing after write.
+        FileNotFoundError: When a report file is missing after write.
     """
     report_dir.mkdir(parents=True, exist_ok=True)
     text_path = report_dir / "build_status_report.txt"
     json_path = report_dir / "build_status_report.json"
+    summary_json_path = report_dir / "build_status_report.summary.json"
     text_path.write_text(format_report_text(summary) + "\n", encoding="utf-8")
     json_path.write_text(format_report_json(summary) + "\n", encoding="utf-8")
-    if not text_path.is_file():
-        raise FileNotFoundError(f"Failed to write report: {text_path}")
-    if not json_path.is_file():
-        raise FileNotFoundError(f"Failed to write report: {json_path}")
-    logger.info(f"Build report written to: {text_path}")
-    logger.info(f"Build report written to: {json_path}")
+    summary_json_path.write_text(
+        format_report_summary_json(summary) + "\n",
+        encoding="utf-8",
+    )
+    for path in (text_path, json_path, summary_json_path):
+        if not path.is_file():
+            raise FileNotFoundError(f"Failed to write report: {path}")
+        logger.info(f"Build report written to: {path}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -872,15 +1049,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--verify-type",
+        default=VERIFY_TYPE_SMOKE,
+        help=(
+            "Verification scope: off, smoke, sanity, full. "
+            "Also accepts CI aliases quick, standard, comprehensive."
+        ),
+    )
+    parser.add_argument(
         "--pkg-names",
         nargs="+",
-        default=["amdrocm-core-sdk"],
-        help="package.json base names to verify (ignored if --all-eligible)",
+        default=list(SMOKE_PKG_NAMES),
+        help="Explicit package.json base names (legacy override)",
     )
     parser.add_argument(
         "--all-eligible",
         action="store_true",
-        help="Verify every package.json entry eligible for the artifact dir",
+        help="Verify every eligible package (same as --verify-type full)",
     )
     parser.add_argument(
         "--no-version-check",
@@ -910,11 +1095,23 @@ def run(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 when verification failed, 2 on usage or configuration errors.
     """
+    try:
+        verify_type = normalize_verify_type(args.verify_type)
+    except ValueError as exc:
+        logger.error(f"{exc}")
+        return 2
+
+    if verify_type == VERIFY_TYPE_OFF:
+        # Workflow uses off/skip to bypass verify without failing the job.
+        logger.info("Build package verification skipped (--verify-type off)")
+        return 0
+
     packages_dir = args.packages_dir.expanduser().resolve()
     if not packages_dir.is_dir():
         logger.error(f"packages directory not found: {packages_dir}")
         return 2
 
+    # Load package.json once; create_package_config shares build_package routing.
     read_package_json_file()
     try:
         config = create_package_config(args)
@@ -922,8 +1119,11 @@ def run(args: argparse.Namespace) -> int:
         logger.error(f"{exc}")
         return 2
 
+    if args.all_eligible:
+        verify_type = VERIFY_TYPE_FULL
+
     try:
-        pkg_names = resolve_pkg_names(args, config)
+        pkg_names, packages_eligible = resolve_pkg_names(args, config, verify_type)
     except ValueError as exc:
         logger.error(f"{exc}")
         return 2
@@ -933,16 +1133,19 @@ def run(args: argparse.Namespace) -> int:
         return 2
 
     check_version = not args.no_version_check
+    # Index packages once so full-tier runs avoid N×rpm/dpkg-deb queries per variant.
+    package_files = find_package_files(packages_dir, config.pkg_type)
     reports = [
-        verify_package(name, config, packages_dir, check_version=check_version)
+        verify_package(name, config, package_files, check_version=check_version)
         for name in pkg_names
     ]
-    package_files = find_package_files(packages_dir, config.pkg_type)
     summary = build_summary(
         pkg_names,
         reports,
         package_files,
         fail_on_extra=args.fail_on_extra,
+        verify_type=verify_type,
+        packages_eligible=packages_eligible,
     )
 
     print(format_report_text(summary))
