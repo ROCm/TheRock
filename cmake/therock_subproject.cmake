@@ -1844,6 +1844,30 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" -resource-dir \${_therock_clang_resource_dir}\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
+    # Clang-only Release size/LTO flags. Emitted only when the effective
+    # sanitizer for this subproject is full ASAN (host+device). The ASAN
+    # runtime flags (-fsanitize=address, -shared-libsan) come solely from
+    # therock_sanitizer_configure(); this block adds only size/LTO tuning.
+    # Only emitted into the toolchain files of subprojects built with the
+    # "amd-llvm"/"amd-hip" (clang) toolchain. gcc-built subprojects use the
+    # system-toolchain branch above and therefore never receive these flags
+    # (several are unsupported by gcc/g++).
+    # Use the *_INIT variants: CMake seeds CMAKE_<LANG>_FLAGS_RELEASE and
+    # CMAKE_<TYPE>_LINKER_FLAGS from these during enable_language(), which is the
+    # correct, idempotent injection point from a toolchain file.
+    set(_therock_effective_sanitizer "${THEROCK_SANITIZER}")
+    if(DEFINED "${target_name}_SANITIZER")
+      set(_therock_effective_sanitizer "${${target_name}_SANITIZER}")
+    endif()
+    if(_therock_effective_sanitizer STREQUAL "ASAN")
+      set(_therock_clang_release_flags "-Oz -gz -gline-tables-only --offload-compress -fdata-sections -ffunction-sections -Wl,--gc-sections")
+      set(_therock_clang_linker_flags "-flto -Wl,--gc-sections")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_RELEASE_INIT \" ${_therock_clang_release_flags}\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_RELEASE_INIT \" ${_therock_clang_release_flags}\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" ${_therock_clang_linker_flags}\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" ${_therock_clang_linker_flags}\")\n")
+    endif()
+
     therock_sanitizer_configure(
       _sanitizer_stanza
       _sanitizer_enabled
