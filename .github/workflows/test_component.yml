@@ -90,6 +90,11 @@ jobs:
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
+      # POC (ALMIOPEN sharding investigation): number of gtest sub-shards to run
+      # concurrently on this single runner/GPU. Defaults to 1 (today's behavior)
+      # for every component that doesn't opt in via job_shard_dict in
+      # fetch_test_configurations.py.
+      SUBSHARDS_PER_JOB: ${{ fromJSON(inputs.component).subshards_per_job || 1 }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
       # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
@@ -194,9 +199,17 @@ jobs:
         run: |
           if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
             CPU_COUNT="${KUBE_CPU_REQUEST%.*}"
+            # POC (ALMIOPEN sharding investigation): when this runner hosts several
+            # concurrent gtest sub-shards (SUBSHARDS_PER_JOB > 1), divide the CPU
+            # budget among them so their combined OpenBLAS/OMP thread pools don't
+            # oversubscribe the runner's cores.
+            CPU_COUNT=$(( CPU_COUNT / ${SUBSHARDS_PER_JOB:-1} ))
+            if [[ "${CPU_COUNT}" -lt 1 ]]; then
+              CPU_COUNT=1
+            fi
             echo "OPENBLAS_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
             echo "OMP_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
-            echo "Thread limits set: OPENBLAS_NUM_THREADS=${CPU_COUNT}, OMP_NUM_THREADS=${CPU_COUNT} (from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST})"
+            echo "Thread limits set: OPENBLAS_NUM_THREADS=${CPU_COUNT}, OMP_NUM_THREADS=${CPU_COUNT} (from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST}, SUBSHARDS_PER_JOB=${SUBSHARDS_PER_JOB:-1})"
           else
             echo "KUBE_CPU_REQUEST not set, thread limits not configured"
           fi
@@ -227,7 +240,44 @@ jobs:
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
-          ${{ fromJSON(inputs.component).test_script }}
+          if [ "${SUBSHARDS_PER_JOB:-1}" -le 1 ]; then
+            ${{ fromJSON(inputs.component).test_script }}
+          else
+            # POC (ALMIOPEN sharding investigation): fan out SUBSHARDS_PER_JOB
+            # concurrent gtest sub-shards on this runner's single GPU, mirroring
+            # Jenkins' CTEST_PARALLEL_LEVEL model instead of TheRock's default
+            # one-shard-per-runner model. matrix.shard picks which contiguous
+            # block of 1-based sub-shard indices (out of TOTAL_SHARDS) this
+            # runner owns.
+            echo "::group::Launching ${SUBSHARDS_PER_JOB} concurrent gtest sub-shards (runner shard ${SHARD_INDEX}, total_shards=${TOTAL_SHARDS})"
+            base_index=$(( (SHARD_INDEX - 1) * SUBSHARDS_PER_JOB ))
+            declare -a pids=()
+            declare -a logs=()
+            for i in $(seq 0 $((SUBSHARDS_PER_JOB - 1))); do
+              sub_index=$(( base_index + i + 1 ))
+              logf="${RUNNER_TEMP}/subshard_${sub_index}.log"
+              logs+=("$logf")
+              ( export SHARD_INDEX="${sub_index}"; ${{ fromJSON(inputs.component).test_script }} ) > "$logf" 2>&1 &
+              pids+=($!)
+              echo "  sub-shard ${sub_index}/${TOTAL_SHARDS} -> pid $! -> ${logf}"
+            done
+            echo "::endgroup::"
+            overall_status=0
+            for idx in "${!pids[@]}"; do
+              pid="${pids[$idx]}"
+              logf="${logs[$idx]}"
+              if wait "${pid}"; then
+                result="OK"
+              else
+                result="FAILED"
+                overall_status=1
+              fi
+              echo "::group::Sub-shard log ${logf} (${result})"
+              cat "${logf}"
+              echo "::endgroup::"
+            done
+            exit "${overall_status}"
+          fi
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
