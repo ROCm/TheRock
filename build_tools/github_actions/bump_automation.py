@@ -702,6 +702,17 @@ def create_therock_bump(submodule: str, token: str) -> None:
         os.chdir(original_cwd)
 
 
+# Maps the short --only_submodule CLI value to its SUBMODULE_CONFIG key.
+# "rocm-systems"/"rocm-libraries" already are the canonical keys, but
+# "rocgdb" and "mesa-fork" are not (their real paths are nested under the
+# submodule tree), so handle_push must translate before indexing
+# SUBMODULE_CONFIG or it KeyErrors.
+ONLY_SUBMODULE_ALIASES = {
+    "rocgdb": "debug-tools/rocgdb/source",
+    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
+}
+
+
 def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
     """Create bump PRs for the specified submodule(s)."""
     if submodule in ("all", "rocm-systems"):
@@ -729,7 +740,7 @@ def handle_push(
     function for one specific submodule without also queuing a new "Bump
     <submodule>" PR in TheRock. Real push events never set either.
     """
-    changed = only_submodule
+    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
     if changed is None:
         for path in SUBMODULE_CONFIG:
             if submodule_changed(before, after, path):
