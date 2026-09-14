@@ -37,8 +37,6 @@ _KNOWN_VIOLATIONS = frozenset(
         "gitleaks.yml / scan / 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'",
         "hip_tagging_automation.yml / tag-rocm-systems / 'Checkout ROCm/TheRock'",
         "manifest-diff.yml / generate-report / 'Checkout repository'",
-        "multi_arch_build_linux_jax_wheels.yml / generate_target_to_run / 'Checking out repository'",
-        "multi_arch_build_linux_jax_wheels.yml / generate_target_to_run / 'Checkout CI config'",
         "multi_arch_build_native_linux_packages.yml / build_native_packages / 'Checking out repository'",
         "multi_arch_build_portable_linux_pytorch_wheels.yml / build_pytorch_wheels / 'Checkout'",
         "multi_arch_build_portable_linux_pytorch_wheels.yml / configure_pytorch_tests / 'Checkout'",
