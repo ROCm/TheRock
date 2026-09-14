@@ -581,9 +581,19 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
+        # POC (ALMIOPEN sharding investigation): total_shards is the *gtest-level*
+        # shard count; job_shard_dict is how many separate GHA jobs/GPU-runners we
+        # actually request. When job_shard_dict < total_shards, test_component.yml
+        # runs (total_shards / job_shard_dict) gtest sub-shards concurrently on each
+        # runner's single GPU, mirroring Jenkins' CTEST_PARALLEL_LEVEL=4 model
+        # instead of TheRock's default one-shard-per-runner model. Windows keeps the
+        # original 1:1 mapping (no job_shard_dict entry -> subshards_per_job==1).
         "total_shards_dict": {
-            "linux": 4,
+            "linux": 16,
             "windows": 4,
+        },
+        "job_shard_dict": {
+            "linux": 4,
         },
     },
     # RCCL tests
@@ -1135,6 +1145,20 @@ def run():
             if test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
+
+            # POC (ALMIOPEN sharding investigation): job_shard_dict lets a component
+            # request fewer physical GHA jobs/GPU-runners than gtest-level shards;
+            # the remainder run as concurrent gtest sub-shard processes sharing one
+            # runner's GPU (test_component.yml's "Test" step). Components without a
+            # job_shard_dict entry get job_shards == total_shards, i.e.
+            # subshards_per_job == 1 -- byte-for-byte today's behavior.
+            job_shards = job_config_data.get("job_shard_dict", {}).get(
+                platform, job_config_data["total_shards"]
+            )
+            if not job_shards or job_shards <= 0 or job_shards > job_config_data["total_shards"]:
+                job_shards = job_config_data["total_shards"]
+            job_config_data["shard_arr"] = [i + 1 for i in range(job_shards)]
+            job_config_data["subshards_per_job"] = job_config_data["total_shards"] // job_shards
 
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
