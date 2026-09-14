@@ -144,7 +144,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
     def test_release_uses_primary_python_version_for_standard_tests(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
-            python_versions=["3.10", "3.12"],
+            python_versions=["3.10", "3.11", "3.12"],
             pytorch_git_refs=["release/2.13"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
@@ -152,7 +152,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
         self.assertEqual(
             [(row["python_version"], row["test_level"]) for row in matrix],
-            [("3.10", "standard"), ("3.12", "none")],
+            [("3.10", "none"), ("3.11", "standard"), ("3.12", "none")],
         )
 
     def test_summary_explains_an_all_none_matrix(self):
@@ -174,8 +174,8 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
         self.assertIn("| Generated rows | 2 (`none`: 2) |", summary)
-        self.assertIn("`release/2.12`: `3.10`", summary)
-        self.assertIn("`nightly`: `3.10`", summary)
+        self.assertIn("`release/2.12`: `3.11`", summary)
+        self.assertIn("`nightly`: `3.11`", summary)
         self.assertIn("All generated rows use `none`", summary)
         self.assertIn(
             "| `3.12` | `release/2.12` | `gfx94X-dcgpu` | `none` |",
