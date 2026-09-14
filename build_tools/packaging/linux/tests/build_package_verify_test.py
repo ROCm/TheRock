@@ -105,7 +105,9 @@ class NormalizeVerifyTypeTest(unittest.TestCase):
     """Maps workflow verify-type aliases to canonical smoke/sanity/full tiers."""
 
     def test_quick_maps_to_smoke(self):
-        self.assertEqual(verify.normalize_verify_type("quick"), verify.VERIFY_TYPE_SMOKE)
+        self.assertEqual(
+            verify.normalize_verify_type("quick"), verify.VERIFY_TYPE_SMOKE
+        )
 
     def test_standard_maps_to_sanity(self):
         self.assertEqual(
