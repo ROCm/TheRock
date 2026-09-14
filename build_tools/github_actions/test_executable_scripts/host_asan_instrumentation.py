@@ -20,6 +20,16 @@ def native_host_asan_environment(
     """Return an execution environment that cannot rely on ASAN preloading."""
     env = dict(os.environ if source is None else source)
     env.pop("LD_PRELOAD", None)
+
+    # -shared-libasan records a direct DT_NEEDED entry, but the dynamic loader
+    # still needs the matching Clang runtime directory in its search path.
+    runtime = env.get("ASAN_RUNTIME_PATH")
+    if runtime:
+        runtime_dir = os.fspath(Path(runtime).parent)
+        library_path = env.get("LD_LIBRARY_PATH", "")
+        entries = [entry for entry in library_path.split(os.pathsep) if entry]
+        if runtime_dir not in entries:
+            env["LD_LIBRARY_PATH"] = os.pathsep.join([runtime_dir, *entries])
     return env
 
 
