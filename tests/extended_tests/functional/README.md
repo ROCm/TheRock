@@ -102,11 +102,6 @@ class YourTest(FunctionalBase):
         """Run functional tests and save results to JSON."""
         log.info(f"Running {self.display_name}")
 
-        # Optional: Get GPU architecture for GPU-specific behavior
-        from github_actions_api import get_first_gpu_architecture
-
-        gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
-
         all_results = []
         for test_case in self.test_cases:
             # Execute test, capture result
