@@ -310,33 +310,21 @@ class TestPullLargeFilesIntegration(unittest.TestCase):
     def test_rocm_libraries_scenario_pulls_rocm_systems_wkmi(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
-        """Regression test for the rocm-libraries-triggered wkmi breakage.
-
-        When rocm-libraries (not rocm-systems) is the external repo driving CI,
-        TheRock's own "rocm-systems" submodule is checked out normally (not as
-        "external-rocm-systems"), and its DVC-tracked wkmi libs must also be
-        pulled or CLR fails to link on both Windows (`wkmi.lib`) and the Linux
-        wsl-rocdxg stage (`libwkmi.a`, `-lwkmi`). See
-        https://github.com/ROCm/TheRock/issues/8131 and the follow-up
-        regression this test guards against, where --dvc-projects carried
-        only "external-rocm-libraries" and silently dropped "rocm-systems".
-        """
+        """Test that a rocm-libraries-triggered build also pulls rocm-systems DVC data (wkmi)."""
         temp_dir = tempfile.mkdtemp()
         try:
             therock_dir = Path(temp_dir)
             fetch_sources.THEROCK_DIR = therock_dir
 
-            # external-rocm-libraries: the checked-out rocm-libraries source,
-            # with its own DVC-tracked hipdnn golden data.
+            # External checkout, with its own DVC-tracked hipdnn golden data.
             external_repo = therock_dir / "external-rocm-libraries"
             external_repo.mkdir()
             ext_dvc_dir = external_repo / ".dvc"
             ext_dvc_dir.mkdir()
             (ext_dvc_dir / "config").write_text("[core]\n    remote = origin\n")
 
-            # rocm-systems: TheRock's own submodule, checked out normally
-            # (not "external-"), hosting the DVC-tracked wkmi prebuilt libs
-            # that CLR/rocdxg link against.
+            # TheRock's own rocm-systems submodule, hosting the DVC-tracked
+            # wkmi libs that CLR/rocdxg link against.
             rocm_systems_submodule = therock_dir / "rocm-systems"
             rocm_systems_submodule.mkdir()
             sub_dvc_dir = rocm_systems_submodule / ".dvc"
@@ -358,24 +346,15 @@ class TestPullLargeFilesIntegration(unittest.TestCase):
             mock_get_submodule_path.return_value = "rocm-systems"
             mock_dvc_pull.return_value = MockPullResult()
 
-            # This is what detect_external_repo_config.py must emit for
-            # rocm-libraries: both the external checkout's own DVC data and
-            # TheRock's rocm-systems submodule DVC data.
             dvc_projects = ["external-rocm-libraries", "rocm-systems"]
-            projects = ["rocm-systems"]  # rocm-systems submodule is enabled
+            projects = ["rocm-systems"]
 
             fetch_sources.pull_large_files(dvc_projects, projects)
 
-            # Both DVC roots must be pulled.
             self.assertEqual(mock_dvc_pull.call_count, 2)
             call_paths = [c[0][0] for c in mock_dvc_pull.call_args_list]
             self.assertIn(external_repo, call_paths)
-            self.assertIn(
-                rocm_systems_submodule,
-                call_paths,
-                "rocm-systems submodule (wkmi) must be DVC-pulled when "
-                "rocm-libraries is the external-repo build trigger",
-            )
+            self.assertIn(rocm_systems_submodule, call_paths)
         finally:
             import shutil
 
