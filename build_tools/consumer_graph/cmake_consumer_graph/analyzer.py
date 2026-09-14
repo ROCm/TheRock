@@ -3,6 +3,8 @@
 
 """Conservative static analysis of TheRock subproject declarations."""
 
+from __future__ import annotations
+
 import copy
 import json
 import re
@@ -241,7 +243,58 @@ class GraphComparison:
         }
 
 
-Environment = dict[str, set[str]]
+class Environment:
+    """CMake variable scope: names to the set of values they may hold.
+
+    Copy-on-write: ``copy()`` shares the value sets, and every mutator replaces a
+    name's set rather than mutating it in place, so a child scope never disturbs
+    its parent. Sets returned by ``get()`` must therefore be treated as read-only.
+    """
+
+    def __init__(self, variables: dict[str, set[str]] | None = None) -> None:
+        self._variables: dict[str, set[str]] = (
+            variables if variables is not None else {}
+        )
+
+    def __contains__(self, name: str) -> bool:
+        return name in self._variables
+
+    def get(self, name: str, default: set[str] | None = None) -> set[str] | None:
+        return self._variables.get(name, default)
+
+    def assign(self, name: str, values: set[str]) -> None:
+        self._variables[name] = set(values)
+
+    def append(self, name: str, values: set[str]) -> None:
+        self._variables[name] = self._variables.get(name, set()) | set(values)
+
+    def remove(self, name: str, values: set[str]) -> None:
+        self._variables[name] = self._variables.get(name, set()) - set(values)
+
+    def discard(self, name: str) -> None:
+        self._variables.pop(name, None)
+
+    def copy(self) -> Environment:
+        return Environment(dict(self._variables))
+
+    def merge_from(self, other: Environment) -> None:
+        # Union another scope's values in, never dropping — the over-approximate
+        # direction used to fold a foreach() body back into its enclosing scope.
+        for name, values in other._variables.items():
+            self._variables[name] = self._variables.get(name, set()) | values
+
+    def replace_with(self, other: Environment) -> None:
+        self._variables = other._variables
+
+    @classmethod
+    def branch_union(cls, first: Environment, second: Environment) -> Environment:
+        """Union two scopes key-by-key (the conservative if()/else() merge)."""
+        result = cls()
+        for name in first._variables.keys() | second._variables.keys():
+            result._variables[name] = first._variables.get(
+                name, set()
+            ) | second._variables.get(name, set())
+        return result
 
 
 def list_tracked_cmake_files(repository_root: Path) -> set[Path]:
@@ -348,9 +401,9 @@ class RepositoryAnalyzer:
             raise AnalysisError(
                 f"Root CMakeLists.txt is not tracked under {self.repository_root}"
             )
-        initial_environment: Environment = {
-            "THEROCK_SOURCE_DIR": {str(self.repository_root)},
-        }
+        initial_environment = Environment(
+            {"THEROCK_SOURCE_DIR": {str(self.repository_root)}}
+        )
         self._process_file(root_listfile, initial_environment)
         return AnalysisResult(
             tracked_cmake_files=set(self.tracked_cmake_files),
@@ -420,7 +473,7 @@ class RepositoryAnalyzer:
                 # after (CMAKE_CURRENT_SOURCE_DIR stays the caller's).
                 environment = inherited_environment
                 saved_list_dir = environment.get("CMAKE_CURRENT_LIST_DIR")
-                environment["CMAKE_CURRENT_LIST_DIR"] = {str(source_directory)}
+                environment.assign("CMAKE_CURRENT_LIST_DIR", {str(source_directory)})
                 try:
                     self._execute_nodes(
                         nodes=self._parse_file(relative_path),
@@ -429,13 +482,13 @@ class RepositoryAnalyzer:
                     )
                 finally:
                     if saved_list_dir is None:
-                        environment.pop("CMAKE_CURRENT_LIST_DIR", None)
+                        environment.discard("CMAKE_CURRENT_LIST_DIR")
                     else:
-                        environment["CMAKE_CURRENT_LIST_DIR"] = saved_list_dir
+                        environment.assign("CMAKE_CURRENT_LIST_DIR", saved_list_dir)
             else:
-                environment = copy.deepcopy(inherited_environment)
-                environment["CMAKE_CURRENT_SOURCE_DIR"] = {str(source_directory)}
-                environment["CMAKE_CURRENT_LIST_DIR"] = {str(source_directory)}
+                environment = inherited_environment.copy()
+                environment.assign("CMAKE_CURRENT_SOURCE_DIR", {str(source_directory)})
+                environment.assign("CMAKE_CURRENT_LIST_DIR", {str(source_directory)})
                 self._execute_nodes(
                     nodes=self._parse_file(relative_path),
                     environment=environment,
@@ -476,11 +529,11 @@ class RepositoryAnalyzer:
                 break
             value_tokens.append(token)
         values, _ = _expand_tokens(value_tokens, environment)
-        environment[variable_name] = values
+        environment.assign(variable_name, values)
 
     def _execute_unset(self, node: cmake_ast.Unset, environment: Environment) -> None:
         if node.args:
-            environment[node.args[0].value] = set()
+            environment.assign(node.args[0].value, set())
 
     def _execute_if(
         self,
@@ -488,16 +541,14 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
-        true_environment = copy.deepcopy(environment)
-        false_environment = copy.deepcopy(environment)
+        true_environment = environment.copy()
+        false_environment = environment.copy()
         self._execute_nodes(node.if_true, true_environment, relative_path)
         if node.if_false is not None:
             self._execute_nodes(node.if_false, false_environment, relative_path)
-        environment.clear()
-        for variable_name in true_environment.keys() | false_environment.keys():
-            environment[variable_name] = true_environment.get(
-                variable_name, set()
-            ) | false_environment.get(variable_name, set())
+        environment.replace_with(
+            Environment.branch_union(true_environment, false_environment)
+        )
 
     def _execute_foreach(
         self,
@@ -505,16 +556,15 @@ class RepositoryAnalyzer:
         environment: Environment,
         relative_path: Path,
     ) -> None:
-        loop_environment = copy.deepcopy(environment)
+        loop_environment = environment.copy()
         if node.args:
             loop_variable = node.args[0].value
             loop_values = self._foreach_loop_values(node.args[1:], environment)
-            loop_environment[loop_variable] = loop_values
+            loop_environment.assign(loop_variable, loop_values)
         self._execute_nodes(node.body, loop_environment, relative_path)
         # Deliberately over-approximate: merge the loop environment back (loop
         # variable included). Only ever adds values, never drops — the safe direction.
-        for variable_name, values in loop_environment.items():
-            environment.setdefault(variable_name, set()).update(values)
+        environment.merge_from(loop_environment)
 
     def _foreach_loop_values(
         self, tokens: list[Token], environment: Environment
@@ -568,9 +618,9 @@ class RepositoryAnalyzer:
         variable_name = node.args[1].value
         values, _ = _expand_tokens(node.args[2:], environment)
         if operation in {"APPEND", "PREPEND"}:
-            environment.setdefault(variable_name, set()).update(values)
+            environment.append(variable_name, values)
         elif operation == "REMOVE_ITEM":
-            environment.setdefault(variable_name, set()).difference_update(values)
+            environment.remove(variable_name, values)
 
     def _execute_add_subdirectory(
         self,
