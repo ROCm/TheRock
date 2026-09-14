@@ -50,7 +50,7 @@ jobs:
   test_component:
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
-      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).job_shard_count || fromJSON(inputs.component).total_shards }})
       (${{ inputs.amdgpu_families }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
@@ -226,7 +226,7 @@ jobs:
           STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}
-            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).job_shard_count || fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         run: |
@@ -253,6 +253,8 @@ jobs:
             done
             echo "::endgroup::"
             overall_status=0
+            total_tests_run=0
+            total_suites_run=0
             for idx in "${!pids[@]}"; do
               pid="${pids[$idx]}"
               logf="${logs[$idx]}"
@@ -265,7 +267,23 @@ jobs:
               echo "::group::Sub-shard log ${logf} (${result})"
               cat "${logf}"
               echo "::endgroup::"
+              # gtest prints one "[==========] N tests from M test suites ran." summary
+              # line per shard (the LAST one in the log is the real run's aggregate --
+              # earlier ones can come from forked child-worker processes). Sum these so
+              # this job's total is directly comparable against a plain (unsharded)
+              # ctest run's own "N tests ... ran" count for the same test_type.
+              summary_line=$(grep -oE '\[==========\] [0-9]+ tests? from [0-9]+ test suites? ran\.' "$logf" | tail -1 || true)
+              if [ -n "${summary_line}" ]; then
+                n_tests=$(echo "${summary_line}" | grep -oE '^\[==========\] [0-9]+' | grep -oE '[0-9]+')
+                n_suites=$(echo "${summary_line}" | grep -oE 'from [0-9]+' | grep -oE '[0-9]+')
+                echo "  sub-shard $(( base_index + idx + 1 )): ${n_tests} tests from ${n_suites} suites"
+                total_tests_run=$(( total_tests_run + n_tests ))
+                total_suites_run=$(( total_suites_run + n_suites ))
+              else
+                echo "  sub-shard $(( base_index + idx + 1 )): WARNING -- no gtest summary line found in ${logf}"
+              fi
             done
+            echo "::notice::Runner shard ${SHARD_INDEX}/$(( TOTAL_SHARDS / SUBSHARDS_PER_JOB )) ran ${total_tests_run} tests total across ${SUBSHARDS_PER_JOB} concurrent sub-shards (sub-shards $(( base_index + 1 ))-$(( base_index + SUBSHARDS_PER_JOB )) of ${TOTAL_SHARDS}); distinct suite-count sum ${total_suites_run} (suites can repeat across sub-shards, only the test count is meaningful for coverage verification)."
             exit "${overall_status}"
           fi
 
