@@ -255,9 +255,12 @@ jobs:
             overall_status=0
             total_tests_run=0
             total_suites_run=0
+            declare -a shard_results=()
+            declare -a failed_tests=()
             for idx in "${!pids[@]}"; do
               pid="${pids[$idx]}"
               logf="${logs[$idx]}"
+              sub_index=$(( base_index + idx + 1 ))
               if wait "${pid}"; then
                 result="OK"
               else
@@ -274,16 +277,50 @@ jobs:
               # ctest run's own "N tests ... ran" count for the same test_type.
               summary_line=$(grep -oE '\[==========\] [0-9]+ tests? from [0-9]+ test suites? ran\.' "$logf" | tail -1 || true)
               if [ -n "${summary_line}" ]; then
-                n_tests=$(echo "${summary_line}" | grep -oE '^\[==========\] [0-9]+' | grep -oE '[0-9]+')
-                n_suites=$(echo "${summary_line}" | grep -oE 'from [0-9]+' | grep -oE '[0-9]+')
-                echo "  sub-shard $(( base_index + idx + 1 )): ${n_tests} tests from ${n_suites} suites"
+                n_tests=$(echo "${summary_line}" | grep -oE '^\[==========\] [0-9]+' | grep -oE '[0-9]+' || true)
+                n_suites=$(echo "${summary_line}" | grep -oE 'from [0-9]+' | grep -oE '[0-9]+' || true)
+                n_tests="${n_tests:-0}"
+                n_suites="${n_suites:-0}"
+                echo "  sub-shard ${sub_index}: ${n_tests} tests from ${n_suites} suites"
                 total_tests_run=$(( total_tests_run + n_tests ))
                 total_suites_run=$(( total_suites_run + n_suites ))
               else
-                echo "  sub-shard $(( base_index + idx + 1 )): WARNING -- no gtest summary line found in ${logf}"
+                echo "  sub-shard ${sub_index}: WARNING -- no gtest summary line found in ${logf}"
               fi
+              # Pull out the actual failing gtest names (not the "[  FAILED  ] N
+              # test(s), listed below:" count line) so a failure is visible
+              # without opening a multi-thousand-line log. A crashed/restarted
+              # gtest process can print the same failure 2-3x; dedupe per shard.
+              if [ "${result}" = "FAILED" ]; then
+                shard_failed_tests=$(grep -oE '\[  FAILED  \] [A-Za-z_][A-Za-z0-9_./]*\.[A-Za-z0-9_/]+' "$logf" \
+                  | sed -E 's/^\[  FAILED  \] //' | sort -u || true)
+                if [ -n "${shard_failed_tests}" ]; then
+                  while IFS= read -r t; do
+                    failed_tests+=("sub-shard ${sub_index}: ${t}")
+                  done <<< "${shard_failed_tests}"
+                else
+                  failed_tests+=("sub-shard ${sub_index}: (non-zero exit, no gtest [  FAILED  ] line found -- crash/timeout/OOM, see its log group above)")
+                fi
+              fi
+              shard_results+=("sub-shard ${sub_index}/${TOTAL_SHARDS}: ${result}")
             done
             echo "::notice::Runner shard ${SHARD_INDEX}/$(( TOTAL_SHARDS / SUBSHARDS_PER_JOB )) ran ${total_tests_run} tests total across ${SUBSHARDS_PER_JOB} concurrent sub-shards (sub-shards $(( base_index + 1 ))-$(( base_index + SUBSHARDS_PER_JOB )) of ${TOTAL_SHARDS}); distinct suite-count sum ${total_suites_run} (suites can repeat across sub-shards, only the test count is meaningful for coverage verification)."
+            echo ""
+            echo "=================================================================="
+            echo "SUB-SHARD SUMMARY (runner shard ${SHARD_INDEX}/$(( TOTAL_SHARDS / SUBSHARDS_PER_JOB )))"
+            echo "=================================================================="
+            for line in "${shard_results[@]}"; do
+              echo "  ${line}"
+            done
+            if [ "${overall_status}" -ne 0 ]; then
+              echo ""
+              echo "FAILED TESTS:"
+              for t in "${failed_tests[@]}"; do
+                echo "  ${t}"
+                echo "::error::${t}"
+              done
+            fi
+            echo "=================================================================="
             exit "${overall_status}"
           fi
 
