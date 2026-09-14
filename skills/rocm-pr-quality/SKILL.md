@@ -47,7 +47,15 @@ ______________________________________________________________________
 1. **Follow the repo's own standards.** When a component repo ships its own
    testing/contributing/standards docs (e.g. `CONTRIBUTING.md`, a `docs/testing*.md`, a per-repo
    best-practices file), read and apply them rather than inventing guidance. The skill checks that
-   repo standards are followed; it does not replace them.
+   repo standards are followed; it does not replace them. In particular, ROCm components are
+   rolling out a standard **`TESTING.md`** — a per-component testing-strategy doc (piloted by
+   hipBLASLt: `projects/hipblaslt/TESTING.md` and `projects/hipblaslt/tensilelite/TESTING.md` in
+   `rocm-libraries`) naming what actually gates a merge versus what is informational, its test
+   tiers, and its known gaps. Where one exists — check the repo root, then walk up from each
+   changed path to the nearest component-level copy — it is the canonical source for testing
+   questions on that component; see "Discover the component's `TESTING.md` first" in
+   `reference.md`. Its absence is not a blocker (rollout in progress); fall back to CI-config
+   discovery and this skill's generic guidance instead.
 1. **Discover, do not hardcode.** Supported architectures, CI labels, test lanes, and
    tracker prefixes drift. Discover them from the repo and CI config at run time.
 1. **Evidence over assertion.** Ground every finding in a `file:line`, a CI link, a diff
@@ -136,6 +144,13 @@ public API, perf-critical path, incomplete coverage; 5 = cross-project/architect
 behavior change in a critical path, ABI break, large unproven refactor, known unresolved
 failures. Residual coverage gaps (a required sweep that has not passed) raise the level.
 
+Pick the level through the seven-factor risk-dimension lens in `reference.md` (component
+criticality, historical regression risk, blast radius, sensitive-path exposure, code churn,
+test-coverage delta, release-phase timing). The **required validation floor** for that level
+should come from the component's discovered `TESTING.md` first — its own documented tiers and
+what actually gates — falling back to the generic floor table in `reference.md` only when no
+`TESTING.md` covers the touched component.
+
 ### Interlinking — every PR is an entry point
 
 A PR should never be a dead end. From any artifact a reader should follow links outward to the
@@ -165,6 +180,13 @@ not render empty `N/A` fields in the body.
    not found in the contributing guide so the author knows where it came from.
 1. Inspect the diff: `gh pr view`, `gh pr diff`, `git diff --stat`, targeted file reads.
 1. Classify the change (one or more classes; stricter when unsure).
+1. Discover the nearest `TESTING.md`(s) for the changed paths (repo root, then walk up from each
+   changed file's directory) — see "Discover the component's `TESTING.md` first" in
+   `reference.md`. Use its documented tiers and its real-gate-vs-informational distinction to
+   describe testing accurately in the Testing Summary/Checklist and Device/Architecture Coverage,
+   and explicitly flag in the PR body if the change touches a documented Known Risk/Gap. If none
+   exists for the touched component yet, fall back to the risk-dimension lens and CI-config
+   discovery, and note the gap as a `SUGGESTION`.
 1. Scan branch name, commit messages, and diff for tracker keys, issue numbers, and referenced
    PRs; pre-fill the Related section; prompt for anything obviously missing (e.g. "this fixes a
    defect — link the defect ticket").
@@ -205,6 +227,12 @@ web diff alone has lower confidence). Do not modify files during review.
 1. Testing review is required every time, even when no test files changed. Do not equate "tests
    added" with "behavior covered" — read assertions, run the mutation question, run the smell
    scan, and check the test "why" for non-obvious choices.
+1. Discover the nearest `TESTING.md`(s) for the changed paths and reconcile the PR's testing
+   claims against them (see "Discover the component's `TESTING.md` first" in `reference.md`). A
+   claim that a lane "passed"/"gates" the change when the doc marks that lane informational-only
+   or a documented known gap is a finding (`BLOCKING`, per the finding-tiers table). If the PR
+   touches an area a Known Risks/Gaps row already names, check whether that row should be
+   updated (closed, tightened, or left with a note) alongside the code change.
 1. Assess blast radius and device/arch coverage; reconcile what the content warrants against what
    the PR actually tested/claimed. Flag gaps; do not over-escalate.
 1. Answer the four review questions explicitly: (1) what new/changed functionality lands,
@@ -273,6 +301,10 @@ merge queue, and it does not force a CI rerun by default.
 - **Impacted open PRs (advisory).** Optionally identify other open PRs that touch the same
   high-coupling files and would be affected by this merge. You may *draft* a courtesy
   "consider rebasing" comment for those PRs — but never post it without explicit human approval.
+- **Validation floor met.** For a Level 4–5 PR (or one whose discovered `TESTING.md` names an
+  equivalent gate), confirm the sign-off it requires — named SME approval, or SME **and**
+  QA/release sign-off — actually happened, not just that CI is green. See "Required validation
+  floor by risk level" in `reference.md`.
 
 **Output:** a go / caution / hold summary with the specific reason and the recommended action
 (e.g. "overlap on a high-coupling file — rebase + re-run before merge"). The decision stays with
