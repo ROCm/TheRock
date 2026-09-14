@@ -48,6 +48,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
     [--rpp | --no-rpp]
+    [--mivisionx | --no-mivisionx]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
@@ -429,6 +430,7 @@ def retrieve_artifacts_by_run_id(args):
             args.kfdtest,
             args.rocwmma,
             args.rpp,
+            args.mivisionx,
             args.solver,
             args.sparse,
             args.libhipcxx,
@@ -585,6 +587,17 @@ def retrieve_artifacts_by_run_id(args):
             #                  in turn resolves AMDDeviceLibs through the
             #                  lib/cmake/AMDDeviceLibs shim in base_lib.
             argv.append("rpp_dev")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
+        if args.mivisionx:
+            extra_artifacts.append("mivisionx")
+            # test_mivisionx.py compiles the test suite against the installed tree.
+            #   mivisionx_run - bin/runvx needed by the runvx_test CTest entry.
+            #   mivisionx_dev - lib/cmake/mivisionx for find_package(mivisionx), plus headers.
+            #   base_dev      - include/half/half.hpp needed by mivisionx headers.
+            #   amd-llvm_dev  - lib/llvm/lib/cmake/AMDDeviceLibs for HIP resolution.
+            argv.append("mivisionx_run")
+            argv.append("mivisionx_dev")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
         if args.libhipcxx:
@@ -1031,6 +1044,13 @@ def main(argv):
         "--rpp",
         default=False,
         help="Include 'rpp' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--mivisionx",
+        default=False,
+        help="Include 'mivisionx' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

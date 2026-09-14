@@ -878,6 +878,19 @@ test_matrix = {
             "linux": 1,
         },
     },
+    "mivisionx": {
+        "job_name": "mivisionx",
+        "fetch_artifact_args": "--mivisionx --tests",
+        # standard tier: all CPU tests < 30 min.
+        # comprehensive/full: adds GPU tests including openvx_hip_cu_mask_remap_4K
+        # which iterates multiple CU-mask counts; allow up to 60 min for that tier.
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_mivisionx.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # aqlprofile tests
     "aqlprofile": {
         "job_name": "aqlprofile",

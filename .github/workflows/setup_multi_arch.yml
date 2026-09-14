@@ -106,6 +106,15 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      extra_cmake_options:
+        description: >-
+          Extra CMake -D options injected into every stage configure step.
+          Use to enable opt-in components without modifying any build scripts,
+          e.g. '-DTHEROCK_ENABLE_MIVISIONX=ON' to build the vision extension pack.
+          Ignored when external_repo is also set (external_repo carries its own
+          extra_cmake_options inside the JSON).
+        type: string
+        default: ""
       external_repo:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
         type: string
@@ -181,7 +190,7 @@ jobs:
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
-      external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+      external_repo_config: ${{ steps.external_repo_config.outputs.config_json || steps.extra_cmake_config.outputs.config_json }}
     env:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
@@ -283,6 +292,28 @@ jobs:
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json='${{ inputs.external_repo }}'
+
+      - name: Build extra cmake options config
+        id: extra_cmake_config
+        if: ${{ inputs.extra_cmake_options != '' && inputs.external_repo == '' }}
+        env:
+          EXTRA_CMAKE_OPTIONS: ${{ inputs.extra_cmake_options }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          config = {
+            "extra_cmake_options": os.environ["EXTRA_CMAKE_OPTIONS"],
+            "repository": "",
+            "ref": "",
+            "checkout_path": "",
+            "source_package": "",
+            "fetch_sources_args": "",
+            "projects": "",
+            "family_overrides": {},
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"config_json={json.dumps(config)}\n")
+          EOF
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

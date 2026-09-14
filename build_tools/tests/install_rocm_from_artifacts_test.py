@@ -403,6 +403,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         kfdtest=False,
         rocwmma=False,
         rpp=False,
+        mivisionx=False,
         solver=False,
         sparse=False,
         libhipcxx=False,

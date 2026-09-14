@@ -2,36 +2,42 @@
 
 This directory contains computer vision libraries for AMD CPUs and GPUs.
 
-- **RPP** (ROCm Performance Primitives) -- a comprehensive, high-performance
-  computer vision library for AMD CPUs and GPUs, with HOST and HIP backends.
+## Libraries
 
-## Dependencies
+### RPP (ROCm Performance Primitives)
 
-RPP depends on the HIP runtime, the half-precision floating-point headers, and
+A comprehensive, high-performance computer vision library for AMD CPUs and GPUs,
+with HOST and HIP backends. **Part of the default ROCm distribution** — included
+in `amdrocm-core` and built by default on Linux.
+
+Depends on the HIP runtime, the half-precision floating-point headers, and
 OpenMP (used to parallelize the host/CPU code paths, not for GPU offload).
 
-The library can be individually controlled:
+Enable flag: `-DTHEROCK_ENABLE_RPP=ON`
+Disable group: `-DTHEROCK_ENABLE_CV_LIBS=OFF`
 
-- `-DTHEROCK_ENABLE_RPP=ON`
+Source: [`rocm-libraries/projects/rpp`](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rpp)
 
-Or disabled as a group:
+### MIVisionX
 
-- `-DTHEROCK_ENABLE_CV_LIBS=OFF`
+A computer vision toolkit built on AMD OpenVX, providing GPU-accelerated image
+processing and vision kernels. **Opt-in extension — not part of the default ROCm
+distribution.** Packaged separately as `amdrocm-vision`.
+
+Depends on RPP, the HIP runtime, and the half-precision floating-point headers.
+
+Enable flag: `-DTHEROCK_ENABLE_MIVISIONX=ON` (Linux only, off by default)
+
+Source: [`github.com/ROCm/MIVisionX`](https://github.com/ROCm/MIVisionX)
 
 ## Platform support
 
-RPP is built by default on Linux. On Windows it is **experimental and disabled
-by default**; it can be opted into explicitly with `-DTHEROCK_ENABLE_RPP=ON`
-(or `-DTHEROCK_ENABLE_CV_LIBS=ON`). The Windows CI pipeline does not build
-cv-libs.
+| Library   | Linux default                                 | Windows                                               |
+| --------- | --------------------------------------------- | ----------------------------------------------------- |
+| RPP       | ✅ Built by default                           | 🟡 Experimental; opt-in via `-DTHEROCK_ENABLE_RPP=ON` |
+| MIVisionX | ⚪ Opt-in via `-DTHEROCK_ENABLE_MIVISIONX=ON` | ❌ Unsupported                                        |
 
-Native packages are produced for Linux only (`amdrocm-rpp`, `amdrocm-rpp-devel`,
-`amdrocm-rpp-test`). Windows packaging would be a follow-up if/when RPP graduates
-from experimental on Windows.
+The Windows CI pipeline does not build cv-libs.
 
-## Source Layout
-
-The source code for RPP lives in the
-[rocm-libraries](https://github.com/ROCm/rocm-libraries) monorepo:
-
-- `rocm-libraries/projects/rpp`
+Native packages are produced for Linux only. Windows packaging for RPP would be
+a follow-up if/when it graduates from experimental on Windows.

@@ -171,6 +171,9 @@
   "rpp": [
     "rpp"
   ],
+  "mivisionx": [
+    "mivisionx"
+  ],
   "sparse": [
     "hipSPARSELt",
     "rocSPARSE"
