@@ -1181,6 +1181,12 @@ def run():
             if not job_shards or job_shards <= 0 or job_shards > job_config_data["total_shards"]:
                 job_shards = job_config_data["total_shards"]
             job_config_data["shard_arr"] = [i + 1 for i in range(job_shards)]
+            # Physical GHA job count, for display (job name / STEP_NAME) so the
+            # sub-sharding change doesn't alter what's shown in the Actions UI --
+            # everywhere that used to print "shard N/total_shards" keeps printing
+            # "shard N/job_shard_count" (== total_shards for every non-opted-in
+            # component, since job_shard_count falls back to total_shards).
+            job_config_data["job_shard_count"] = job_shards
             job_config_data["subshards_per_job"] = job_config_data["total_shards"] // job_shards
 
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
