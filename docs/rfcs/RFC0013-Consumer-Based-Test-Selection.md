@@ -400,7 +400,7 @@ blowing the per-PR SLA. Transitive closure is retained, but as the opt-in **leve
   validates `test_policies.toml` against it; a low-frequency drift-check job
   regenerates the graph from a configure and fails on mismatch.
 - **Generator:** a later refinement replaces `cmake/therock_emit_consumer_graph.cmake` and the drift job's
-  `ENABLE_ALL` configure with a Python CMake-parser generator (adding a pinned/vendored `cmake-parser`
+  `ENABLE_ALL` configure with a Python CMake-parser generator (adding a pinned `cmake-parser`
   dependency; the drift check moves into `unit_tests.yml` and runs cross-platform). Only the generator changes —
   the committed-graph and drift contract is unchanged.
 - **Behavioral parity:** existing couplings (e.g. rocGDB → rocgdb-cpu/gpu,

@@ -1,17 +1,16 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Pytest bootstrap: put the package and vendored ``cmake_parser`` on sys.path.
+"""Pytest bootstrap: put the package directory on sys.path.
 
-Runs before collection so ``from cmake_parser import ...`` in the tests resolves
-to the vendored copy without an install.
+Runs before collection so ``import cmake_consumer_graph`` resolves without an
+editable install. ``cmake_parser`` is a normal dependency from requirements-test.txt.
 """
 
 import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent
-for _path in (_ROOT, _ROOT / "_vendor"):
-    _entry = str(_path)
-    if _entry not in sys.path:
-        sys.path.insert(0, _entry)
+_entry = str(_ROOT)
+if _entry not in sys.path:
+    sys.path.insert(0, _entry)
