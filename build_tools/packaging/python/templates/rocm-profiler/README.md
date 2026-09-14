@@ -32,8 +32,11 @@ invoking a console script will result in a `FileNotFoundError`.
 
 ## Packaging Notes
 
-- No `install_requires` are declared.
-- Dependencies are managed by the `rocm` meta package.
+- `rocprof-compute analyze`'s Python dependencies are declared under the
+  `compute-analyze` extra, read at build time from the staged rocprofiler-compute
+  payload at `libexec/rocprofiler-compute/requirements.txt`.
+- Analyze mode should run from its own virtualenv:
+  `pip install rocm-profiler[compute-analyze]`.
 - Versioning is centrally managed via `rocm_sdk._dist_info`.
 
 When integrated into the full ROCm packaging pipeline, this package will be
