@@ -3,9 +3,17 @@
 
 """Validate repository-wide uniqueness of summary job display names.
 
+GitHub's branch protection documentation states:
+
+    "If you use branch protection rules that require specific status checks,
+    make sure that job names are unique across all workflows. Using the same job
+    name in multiple workflows can cause ambiguous status check results and
+    block pull requests from being merged."
+
+https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#about-branch-protection-rules
+
 Required status checks identify jobs by display name, so a summary job must
-not share its name with another job in the repository. Step names do not
-affect required checks. Scan only this repository's workflows, not submodules.
+not share its name with another job. Step names do not affect required checks.
 
 This checks statically declared names; it does not expand matrix expressions
 or compose caller/callee names for reusable workflows.
