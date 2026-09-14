@@ -23,7 +23,8 @@ on:
           where `submodule`'s pinned commit differs from pin_after. Required
           together with pin_after to replay the push-event ref/pin update for
           `submodule` (e.g. rocm-libraries) without opening a new "Bump
-          <submodule>" submodule PR.
+          <submodule>" submodule PR. `submodule` must be a specific submodule
+          (not "all") when this is set.
         required: false
         default: ''
       pin_after:
@@ -33,7 +34,10 @@ on:
         required: false
         default: ''
   schedule:
-    - cron: "0 */12 * * *" # Runs every 12 hrs at 12AM and 12PM
+    - cron: "0 */12 * * *" # Existing cadence: rocgdb and mesa-fork. UTC: 12AM/12PM; Eastern: 8PM/8AM; Pacific: 5PM/5AM.
+    - cron: "0 7 * * *" # rocm-systems and rocm-libraries. UTC: 7AM; Eastern: 3AM; Pacific: 12AM.
+    - cron: "0 16 * * *" # rocm-systems. UTC: 4PM; Eastern: 12PM; Pacific: 9AM.
+    - cron: "0 19 * * *" # rocm-libraries. UTC: 7PM; Eastern: 3PM; Pacific: 12PM.
   push:
     branches:
       - main
@@ -58,6 +62,42 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Select scheduled submodule
+        id: schedule
+        if: github.event_name == 'schedule'
+        run: |
+          submodules=()
+          case "${{ github.event.schedule }}" in
+            "0 */12 * * *") submodules+=("rocgdb" "mesa-fork") ;;
+            "0 7 * * *") submodules+=("rocm-systems" "rocm-libraries") ;;
+            "0 16 * * *") submodules+=("rocm-systems") ;;
+            "0 19 * * *") submodules+=("rocm-libraries") ;;
+          esac
+          echo "submodules=${submodules[*]}" >> "${GITHUB_OUTPUT}"
+
+      # Guards the manual pin-bump replay inputs before any automation runs:
+      # pin_before/pin_after must be supplied together (a partial pair would
+      # otherwise make both the "dispatched bump" and "pin-only replay" steps
+      # below skip silently, doing nothing), and submodule must name one
+      # specific submodule since --only_submodule rejects "all".
+      - name: Validate manual pin replay inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PIN_BEFORE: ${{ github.event.inputs.pin_before }}
+          PIN_AFTER: ${{ github.event.inputs.pin_after }}
+          PIN_SUBMODULE: ${{ github.event.inputs.submodule }}
+        run: |
+          if [[ -n "${PIN_BEFORE}" || -n "${PIN_AFTER}" ]]; then
+            if [[ -z "${PIN_BEFORE}" || -z "${PIN_AFTER}" ]]; then
+              echo "::error::pin_before and pin_after must both be set together (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
+              exit 1
+            fi
+            if [[ "${PIN_SUBMODULE}" == "all" ]]; then
+              echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
+              exit 1
+            fi
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -88,11 +128,23 @@ jobs:
           pip install requests
 
       - name: Run scheduled bump automation
+        if: github.event_name == 'schedule' && steps.schedule.outputs.submodules != ''
+        run: |
+          for submodule in ${{ steps.schedule.outputs.submodules }}; do
+            python3 build_tools/github_actions/bump_automation.py \
+              --event_type "schedule" \
+              --submodule "${submodule}" \
+              --systems_token "${{ steps.systems-token.outputs.token }}" \
+              --libraries_token "${{ steps.librarian-token.outputs.token }}" \
+              --rocgdb_token "${{ steps.systems-token.outputs.token }}" \
+              --mesa_token "${{ steps.systems-token.outputs.token }}"
+          done
+
+      - name: Run manually dispatched bump automation
         if: >-
-          github.event_name == 'schedule' ||
-          (github.event_name == 'workflow_dispatch' &&
-           github.event.inputs.pin_before == '' &&
-           github.event.inputs.pin_after == '')
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.pin_before == '' &&
+          github.event.inputs.pin_after == ''
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
@@ -112,12 +164,22 @@ jobs:
           github.event_name == 'workflow_dispatch' &&
           github.event.inputs.pin_before != '' &&
           github.event.inputs.pin_after != ''
+        env:
+          # workflow_dispatch string inputs are arbitrary operator-supplied
+          # text, not a fixed choice list, so they must be passed through
+          # env and expanded as quoted shell variables below rather than
+          # interpolated directly into the script text: a value containing a
+          # quote or command substitution could otherwise break out of its
+          # argument and run commands in a job holding App-derived tokens.
+          PIN_BEFORE: ${{ github.event.inputs.pin_before }}
+          PIN_AFTER: ${{ github.event.inputs.pin_after }}
+          PIN_SUBMODULE: ${{ github.event.inputs.submodule }}
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "push" \
-            --before "${{ github.event.inputs.pin_before }}" \
-            --after "${{ github.event.inputs.pin_after }}" \
-            --only_submodule "${{ github.event.inputs.submodule }}" \
+            --before "${PIN_BEFORE}" \
+            --after "${PIN_AFTER}" \
+            --only_submodule "${PIN_SUBMODULE}" \
             --skip_next_bump \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
