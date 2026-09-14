@@ -147,7 +147,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
@@ -174,10 +174,8 @@ if(THEROCK_ENABLE_COMPILER)
     INSTALL_DESTINATION "lib/llvm"
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
-      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
     INTERFACE_INSTALL_RPATH_DIRS
       "lib/llvm/lib"
-      ${THEROCK_LLVM_RPATH_WITH_TRIPLE}
   )
   # LLVM is too large to glob by default; opt in with THEROCK_DEV_PROJECTS.
   if(THEROCK_DEV_PROJECTS AND "amd-llvm" IN_LIST THEROCK_DEV_PROJECTS)
@@ -210,16 +208,6 @@ if(THEROCK_ENABLE_COMPILER)
   # version script, avoiding symbol interposition issues.
   ##############################################################################
 
-  set(_comgr_hotswap_cmake_args)
-  if(THEROCK_ENABLE_HOTSWAP)
-    list(APPEND _comgr_hotswap_cmake_args -DCOMGR_ENABLE_HOTSWAP_TRANSPILE=ON)
-    if(NOT WIN32)
-      list(APPEND _comgr_hotswap_cmake_args
-        -DHOTSWAP_BUILD_TOOL=ON
-        "-DHOTSWAP_TOOL_HSA_INCLUDE_ROOT=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime")
-    endif()
-  endif()
-
   # Optionally override the comgr DLL/shared-library output name (Windows). Kept
   # in sync with the CLR load side via the same THEROCK_COMGR_DLL_NAME option.
   set(_comgr_dll_name_cmake_args)
@@ -242,7 +230,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
-      ${_comgr_hotswap_cmake_args}
       ${_comgr_dll_name_cmake_args}
     BUILD_DEPS
       rocm-cmake
