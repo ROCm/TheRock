@@ -59,30 +59,62 @@ else()
   set(_meson_path_env "PATH=$ENV{PATH}")
 endif()
 
+# Formats its arguments as a meson array literal, e.g. ['a', 'b'].
+function(_therock_meson_string_array out_var)
+  set(_elems "")
+  foreach(_arg ${ARGN})
+    list(APPEND _elems "'${_arg}'")
+  endforeach()
+  list(JOIN _elems ", " _joined)
+  set(${out_var} "[${_joined}]" PARENT_SCOPE)
+endfunction()
+
 # Pass the compiler (and any launcher such as ccache) to meson via a native
 # file rather than CC/CXX env strings. Meson whitespace-splits the CC/CXX env
 # value, which breaks the MSVC compiler path ("C:/Program Files/.../cl.exe");
 # quoting it instead breaks `cmake -E env` batch parsing. A native file lists
 # the command as an array, so the space-containing path is never re-split.
 function(_therock_meson_binary_array out_var compiler)
-  set(_elems "")
-  foreach(_launcher ${ARGN})
-    list(APPEND _elems "'${_launcher}'")
-  endforeach()
-  list(APPEND _elems "'${compiler}'")
-  list(JOIN _elems ", " _joined)
-  set(${out_var} "[${_joined}]" PARENT_SCOPE)
+  # Launchers come first, so that e.g. ccache wraps the compiler.
+  _therock_meson_string_array(_array ${ARGN} "${compiler}")
+  set(${out_var} "${_array}" PARENT_SCOPE)
 endfunction()
 
 _therock_meson_binary_array(_meson_c_bin "${CMAKE_C_COMPILER}" ${CMAKE_C_COMPILER_LAUNCHER})
 _therock_meson_binary_array(_meson_cpp_bin "${CMAKE_CXX_COMPILER}" ${CMAKE_CXX_COMPILER_LAUNCHER})
+
+# The meson build does not inherit CMAKE_<LANG>_FLAGS, so the mitigations the
+# rest of the build gets from the generated toolchain file have to be restated
+# here as meson built-in options.
+set(_meson_builtin_options)
+if(THEROCK_CONTROL_FLOW_GUARD_ACTIVE)
+  include("${THEROCK_SOURCE_DIR}/cmake/therock_control_flow_guard.cmake")
+  therock_control_flow_guard_compile_flags(_cfg_compile_flags "${CMAKE_C_COMPILER_ID}")
+  therock_probe_control_flow_guard(_cfg_supported
+    "${CMAKE_C_COMPILER}" "${_cfg_compile_flags}")
+  if(NOT _cfg_supported)
+    message(WARNING
+      "Control Flow Guard is not supported by ${CMAKE_C_COMPILER}; building "
+      "amd-mesa without it.")
+  else()
+    _therock_meson_string_array(_cfg_compile_array ${_cfg_compile_flags})
+    _therock_meson_string_array(_cfg_link_array ${THEROCK_CONTROL_FLOW_GUARD_LINK_FLAGS})
+    set(_meson_builtin_options
+"[built-in options]
+c_args = ${_cfg_compile_array}
+cpp_args = ${_cfg_compile_array}
+c_link_args = ${_cfg_link_array}
+cpp_link_args = ${_cfg_link_array}
+")
+  endif()
+endif()
 
 set(_meson_native_file "${CMAKE_CURRENT_BINARY_DIR}/therock-native.ini")
 file(WRITE "${_meson_native_file}"
 "[binaries]
 c = ${_meson_c_bin}
 cpp = ${_meson_cpp_bin}
-")
+${_meson_builtin_options}")
 
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
 

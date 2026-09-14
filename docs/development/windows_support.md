@@ -320,6 +320,33 @@ If iterating and wishes to use ccache, see [CCache usage on Windows](../../READM
 > If you see some other compiler there, refer to the MSVC setup instructions up
 > in [Important tool settings](#important-tool-settings).
 
+#### Control Flow Guard
+
+Windows builds enable [Control Flow Guard][cfg] (CFG) for every binary by
+default. CFG is a compiler/linker pair of flags, so it is applied to every
+subproject rather than to a single final link:
+
+| Compiler                       | Compile flag       | Link flag   |
+| ------------------------------ | ------------------ | ----------- |
+| Host MSVC (`cl.exe`)           | `/guard:cf`        | `/guard:cf` |
+| In-tree amd-llvm `clang++.exe` | `-Xclang -cfguard` | `/guard:cf` |
+
+The amd-llvm toolchain drives clang through its GNU-style driver, which accepts
+neither clang-cl's `/guard:cf` nor `-mguard=cf` (the latter is only implemented
+for the ARM and PowerPC targets), so the `cc1` flag is passed explicitly.
+
+Both compilers are probed before the flags are used, since the amd-llvm clang
+is built by TheRock and cannot be checked at super-project configure time. If a
+compiler rejects the flags, the build prints a warning and continues without
+the mitigation; it does not fail. Set `-DTHEROCK_ENABLE_CONTROL_FLOW_GUARD=OFF`
+to turn CFG off and silence the warning.
+
+To confirm the mitigation landed in a binary:
+
+```bat
+dumpbin /loadconfig build\dist\rocm\bin\some_tool.exe | findstr "Guard CF function count"
+```
+
 ### CMake build usage
 
 ```bash
@@ -572,3 +599,5 @@ features should be turned off:
 -DTHEROCK_ENABLE_MATH_LIBS=OFF \
 -DTHEROCK_ENABLE_ML_LIBS=OFF \
 ```
+
+[cfg]: https://learn.microsoft.com/en-us/windows/win32/secbp/control-flow-guard
