@@ -58,6 +58,10 @@ FFT_META_PACKAGE = "amdrocm-fft7.1"
 CORE_SDK_DEVICE_PACKAGE = "amdrocm-core-sdk7.1-gfx1100"
 DEVELOPER_TOOLS_PACKAGE = "amdrocm-developer-tools7.1"
 PROFILER_PACKAGE = "amdrocm-profiler7.1"
+TBB_REQUIRES_EXCLUDE = (
+    "%global __requires_exclude libtbb\\.so.*|libtbbmalloc\\.so.*|"
+    "libtbbmalloc_proxy\\.so.*"
+)
 TBB_PROVIDES_EXCLUDE = (
     "%global __provides_exclude libtbb\\.so\\.12|libtbbmalloc\\.so\\.2|"
     "libtbbmalloc_proxy\\.so\\.2"
@@ -592,10 +596,10 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
 
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")
-    def test_profiler_spec_excludes_vendored_tbb_provides(
+    def test_profiler_spec_excludes_vendored_tbb_metadata(
         self, _mock_rpmbuild: object, _mock_move: object
     ) -> None:
-        """Profiler spec suppresses vendored TBB auto-provides."""
+        """Profiler spec suppresses vendored TBB auto-requires and provides."""
         cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
         _stage_package_artifacts(
             pkg_name=PKG_PROFILER,
@@ -608,14 +612,15 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
 
         spec = _read_spec_file(pkg_name=PKG_PROFILER, config=cfg)
         self.assertEqual(_spec_field(spec, "Name"), PROFILER_PACKAGE)
+        self.assertIn(TBB_REQUIRES_EXCLUDE, spec)
         self.assertIn(TBB_PROVIDES_EXCLUDE, spec)
 
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")
-    def test_fft_spec_does_not_exclude_vendored_tbb_provides(
+    def test_fft_spec_does_not_exclude_vendored_tbb_metadata(
         self, _mock_rpmbuild: object, _mock_move: object
     ) -> None:
-        """Non-profiler packages must not inherit TBB provides exclusion."""
+        """Non-profiler packages must not inherit TBB metadata exclusion."""
         cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
         _stage_package_artifacts(
             pkg_name=PKG_FFT,
@@ -628,6 +633,7 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
         rpm_package.create_versioned_rpm_package(pkg_name=PKG_FFT, config=device_cfg)
 
         spec = _read_spec_file(pkg_name=PKG_FFT, config=device_cfg)
+        self.assertNotIn("__requires_exclude", spec)
         self.assertNotIn("__provides_exclude", spec)
 
 
