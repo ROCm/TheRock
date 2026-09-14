@@ -235,7 +235,7 @@ jobs:
         shell: bash
 
     env:
-      QUARTZ_REPORTING_WORKFLOW: test_linux_jax_wheels_partial.yml
+      QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_jax_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test JAX wheels (partial)"
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
       PYTHON_VERSION: ${{ inputs.python_version }}

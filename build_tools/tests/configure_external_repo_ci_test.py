@@ -13,10 +13,12 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "github_actions"))
 
 from configure_external_repo_ci import (
+    CI_RELEVANT_NON_SUBTREE_PREFIXES,
     ConfigureResult,
     RepoEntry,
     configure,
     find_matched_subtrees,
+    get_unclassified_paths,
     get_valid_prefixes,
     load_repo_config,
     matches_patterns,
@@ -60,6 +62,37 @@ class FindMatchedSubtreesTest(unittest.TestCase):
         prefixes = {"projects/rocblas"}
         result = find_matched_subtrees(files, prefixes)
         self.assertEqual(result, [])
+
+    def test_nested_subtree_wins_over_parent(self):
+        # A file inside a registered nested subtree (e.g. hipblaslt/tensilelite)
+        # must match the longer, more specific prefix, not collapse to its
+        # 2-segment parent -- a fixed-length truncation would make the two
+        # indistinguishable and silently lose the more specific match.
+        files = ["projects/hipblaslt/tensilelite/Tensile/KernelWriter.py"]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/hipblaslt/tensilelite"])
+
+    def test_parent_only_change_does_not_match_nested_subtree(self):
+        # A change outside the nested subtree still matches the parent, not the
+        # (unrelated) nested prefix.
+        files = ["projects/hipblaslt/library/src/Handle.cpp"]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/hipblaslt"])
+
+    def test_mixed_nested_and_parent_changes_match_both(self):
+        # Changes to both areas in the same PR attribute independently: one
+        # file matches the nested subtree, the other matches the parent.
+        files = [
+            "projects/hipblaslt/tensilelite/Tensile/KernelWriter.py",
+            "projects/hipblaslt/library/src/Handle.cpp",
+        ]
+        prefixes = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+        result = find_matched_subtrees(files, prefixes)
+        self.assertEqual(
+            result, ["projects/hipblaslt", "projects/hipblaslt/tensilelite"]
+        )
 
 
 class GetValidPrefixesTest(unittest.TestCase):
@@ -216,6 +249,80 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
+
+
+class GetUnclassifiedPathsTest(unittest.TestCase):
+    """Tests for get_unclassified_paths()."""
+
+    def test_unmapped_nonskippable_is_unclassified(self):
+        valid = {"projects/rocblas"}
+        self.assertEqual(
+            get_unclassified_paths(["tools/build/x.py"], valid),
+            ["tools/build/x.py"],
+        )
+
+    def test_recognized_and_skippable_are_not_unclassified(self):
+        valid = {"projects/rocblas"}
+        self.assertEqual(
+            get_unclassified_paths(["projects/rocblas/src/a.cpp", "README.md"], valid),
+            [],
+        )
+
+
+class ConfigureNonSubtreeTest(unittest.TestCase):
+    """Surfacing of non-subtree shared/* + emulation/* paths and the
+    unclassified-change fallback (rocm-systems multi-arch gap)."""
+
+    def _configure(self, paths, config=None):
+        with patch(
+            "configure_external_repo_ci.get_modified_paths_api",
+            return_value=set(paths),
+        ), patch(
+            "configure_external_repo_ci.load_repo_config",
+            return_value=config
+            or [RepoEntry(name="rocm-core", url="", branch="", category="projects")],
+        ):
+            return configure(
+                event_name="pull_request",
+                github_repo="ROCm/rocm-systems",
+                base_sha="abc123",
+                head_sha="def456",
+                config_path=".github/repos-config.json",
+            )
+
+    def test_shared_component_is_surfaced(self):
+        r = self._configure(["shared/amdgpu-windows-interop/pal/x.cpp"])
+        self.assertEqual(r.changed_projects, "shared/amdgpu-windows-interop")
+        self.assertFalse(r.run_all_tests)
+        self.assertFalse(r.skip_tests)
+
+    def test_emulation_components_are_surfaced(self):
+        r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])
+        self.assertEqual(
+            sorted(r.changed_projects.split(",")),
+            ["emulation/mirage", "emulation/rocjitsu"],
+        )
+
+    def test_ctest_harness_triggers_full_run(self):
+        r = self._configure(["shared/ctest/TestCategories.cmake"])
+        self.assertTrue(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "")
+
+    def test_mixed_recognized_and_unclassified_runs_all(self):
+        r = self._configure(
+            ["projects/rocm-core/src/x.cpp", "tools/rocm-build/helper.py"]
+        )
+        self.assertTrue(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "")
+
+    def test_recognized_plus_skippable_still_narrows(self):
+        r = self._configure(["projects/rocm-core/src/x.cpp", "README.md"])
+        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "projects/rocm-core")
+
+    def test_declared_prefixes_are_wellformed(self):
+        for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:
+            self.assertEqual(len(prefix.split("/")), 2, prefix)
 
 
 if __name__ == "__main__":
