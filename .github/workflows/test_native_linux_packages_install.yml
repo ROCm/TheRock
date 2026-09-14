@@ -67,6 +67,11 @@ on:
           set it manually.
         type: string
         default: ""
+      run_uninstall:
+        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Enabled by default."
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       package_install_url:
@@ -132,6 +137,11 @@ on:
           set it manually.
         type: string
         default: ""
+      run_uninstall:
+        description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Disabled by default."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -295,6 +305,13 @@ jobs:
         run: |
           echo "TEST - OS:${{ inputs.os_profile }} REPO:${{ env.REPO_URL }} Arch:${{ env.GFX_ARCH }} Type:${{ env.RELEASE_TYPE }}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+      - name: Package Uninstall Test
+        # Gated by workflow input only; no RUN_UNINSTALL env (reuses job env from install step).
+        if: ${{ inputs.run_uninstall && inputs.test_type != 'install' }}
+        run: |
+          echo "UNINSTALL TEST - OS:${{ inputs.os_profile }} Prefix:${{ env.INSTALL_PREFIX }}"
+          $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_uninstall_test.py -vv --tb=long -s
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
