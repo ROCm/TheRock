@@ -17,13 +17,12 @@ if(THEROCK_ENABLE_RPP)
       amd-hip
     RUNTIME_DEPS
       hip-clr
+      rocFFT
     BUILD_DEPS
       rocm-half
     CMAKE_ARGS
       -DROCM_PATH=
       -DBACKEND=HIP
-      # TODO: bundle FFTS as a sysdep to enable audio augmentations.
-      -DRPP_AUDIO_SUPPORT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     # RPP's bundled test suite calls find_package(rpp) on itself.
