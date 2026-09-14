@@ -88,16 +88,16 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 # * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
 PYTORCH_TEST_LEVELS = ["none", "standard"]
 
-# Release workflows limit standard GPU testing to the oldest Python version
-# supported by each PyTorch ref. Match upstream's trunk test version and
-# release support policy:
+# Release workflows limit standard GPU testing to one primary Python version
+# per PyTorch ref. Use Python 3.11 to align with upstream's ROCm trunk testing.
+# Revisit each ref's selection as upstream's test and support versions change:
 # https://github.com/pytorch/pytorch/blob/main/.github/workflows/trunk.yml
 # https://github.com/pytorch/pytorch/blob/main/RELEASE.md#python
 PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
-    "release/2.12": "3.10",
-    "release/2.13": "3.10",
-    "release/2.14": "3.10",
-    "nightly": "3.10",
+    "release/2.12": "3.11",
+    "release/2.13": "3.11",
+    "release/2.14": "3.11",
+    "nightly": "3.11",
 }
 
 
@@ -196,7 +196,7 @@ def generate_pytorch_matrix_for_release_type(
     #     "python_version": "3.10",
     #     "pytorch_git_ref": "release/2.12",
     #     "amdgpu_families": "gfx94X-dcgpu",
-    #     "test_level": "standard"
+    #     "test_level": "none"
     #   },
     #   ...
     #   {
