@@ -13,6 +13,7 @@ This RFC proposes integrating code coverage builds and reporting into TheRock CI
 ## Motivation
 
 Currently, Math CI builds projects individually for code coverage:
+
 ```bash
 mkdir projects/rocfft/build && cd projects/rocfft/build
 cmake -DBUILD_CODE_COVERAGE ..
@@ -23,20 +24,24 @@ LLVM_PROFILE_FILE="./coverage-report/%m-%p-rocfft.profraw" make -j coverage
 This workflow relies on prepackaged dependencies and component-specific coverage targets that handle test execution, profraw merging, and report generation.
 
 TheRock CI needs to support code coverage while:
+
 1. Maintaining per-project isolation for instrumentation
-2. Accommodating the build/test node split architecture
-3. Avoiding performance impacts on pre-checkin and performance testing builds
-4. Supporting nightly coverage runs for individual components
+1. Accommodating the build/test node split architecture
+1. Avoiding performance impacts on pre-checkin and performance testing builds
+1. Supporting nightly coverage runs for individual components
 
 ## Background: Why Per-Project Isolation is Required
 
 ### Coverage Report Scope
+
 Coverage reports for a given project should only instrument that project's code, not upstream or downstream dependencies. For example:
+
 - **rocFFT coverage** should instrument only rocFFT, not hipFFT (downstream)
 - **rocBLAS coverage** should not instrument hipBLASLt or downstream consumers
 - **hipBLASLt coverage** should not instrument upstream dependencies like rocBLAS, rocRAND, or rocPRIM
 
 **Why exclude downstream components?** Coverage in one component does not affect coverage in downstream components - they are independent concerns. For example:
+
 - Generating a coverage report for rocBLAS has no effect on coverage for hipBLASLt
 - Generating a coverage report for rocFFT has no effect on coverage for hipFFT
 - Each component's coverage is measured independently against its own codebase
@@ -44,9 +49,11 @@ Coverage reports for a given project should only instrument that project's code,
 Downstream functional testing is already covered by TheRock CI's existing test infrastructure, which validates that downstream components work correctly with their dependencies. Coverage testing focuses solely on exercising the code paths within the component being measured.
 
 ### Instrumentation Behavior and Profraw Contamination
+
 Instrumented binaries emit `.profraw` files during execution. If we instrument code upstream to the project being measured, those upstream libraries will emit profraw files whenever the downstream project calls their APIs.
 
 Example: If both hipBLASLt and rocBLAS are instrumented, but we only care about hipBLASLt coverage:
+
 - When hipBLASLt calls rocBLAS APIs, rocBLAS emits profraw files
 - These upstream profraw files contaminate the coverage report
 - We must either:
@@ -56,13 +63,17 @@ Example: If both hipBLASLt and rocBLAS are instrumented, but we only care about 
 This contamination propagates up the entire dependency chain to rocRAND and rocPRIM, which are high in the dependency tree and consumed by many downstream projects.
 
 ### Performance Impact
+
 Coverage builds have significant performance degradation:
+
 - **Example (rocPRIM)**: Normal pre-checkin tests take ~20 minutes; coverage runs take ~3 hours
 - Most projects have less extreme degradation, but the impact is still substantial
 - Coverage builds add debug instrumentation and disable compiler optimizations
 
 ### Separation from Pre-Checkin Testing
+
 Coverage builds must be separate from pre-checkin builds:
+
 - **Pre-checkin goal**: Test binaries as close to production as possible
 - **Coverage builds**: Add debug lines, disable optimizations, enable instrumentation
 - Using coverage builds for pre-checkin creates an inconsistent testing environment
@@ -80,36 +91,42 @@ LLVM_PROFILE_FILE="./coverage-report/%m-%p-rocfft.profraw" make -j coverage
 ```
 
 The `coverage` target:
+
 1. Runs the test suite
-2. Drops `*.profraw` files to `LLVM_PROFILE_FILE` location (with `%m-%p` interpolation for unique identifiers)
-3. Executes report generation commands:
+1. Drops `*.profraw` files to `LLVM_PROFILE_FILE` location (with `%m-%p` interpolation for unique identifiers)
+1. Executes report generation commands:
    ```bash
    llvm-profdata merge coverage-report/*.profraw -o coverage.profdata
    llvm-cov show -object <lib>.so -instr-profile=coverage.profdata
    llvm-cov export -format=lcov -object <lib>.so -instr-profile=coverage.profdata > coverage.lcov
    ```
-4. Uploads to codecov.io, which:
+1. Uploads to codecov.io, which:
    - Comments on PRs showing coverage deltas
    - Can fail CI if coverage drops below 80%
 
 ### Nightly Runs
+
 Math CI performs nightly coverage runs on `develop` for each component individually. This approach avoids resource contention and provides per-component coverage trends.
 
 ## Challenges in TheRock
 
 ### Build/Test Node Split
+
 TheRock CI splits build nodes and test nodes and does not retain the entire CMake tree between nodes, breaking the `make coverage` target workflow.
 
 ### Solution for Most Projects
+
 For most projects, the solution is straightforward:
+
 1. Instrument code during build
-2. Run tests using the Test Filter Standard (test_categories.yaml or test_categories_coverage.yaml)
-3. Schema additions to test_categories_coverage.yaml:
+1. Run tests using the Test Filter Standard (test_categories.yaml or test_categories_coverage.yaml)
+1. Schema additions to test_categories_coverage.yaml:
    - **`llvm_profile_file`**: Path pattern for profraw file output (with `%m-%p` interpolation)
    - **`ignore-filename-regex`**: Pattern to exclude test code from coverage reports
    - **`test_names`**: List of test binary names for `-object` flags (header-only libraries only)
 
 **Declarative approach:** These fields can potentially be calculated at the top level rather than explicitly configured per-project:
+
 - **`test_names`**: Discovered by listing test executables matching `test_*` in a standardized test directory
 - **`llvm_profile_file`**: Hardcoded to standard path (e.g., `./coverage-report/%m-%p.profraw`)
 - **`ignore-filename-regex`**: Set to exclude anything outside the src directory (e.g., patterns matching test files)
@@ -119,15 +136,18 @@ This reduces per-project configuration overhead and ensures consistency across c
 **Error handling:** If profraw files are missing entirely, the coverage job fails. This indicates a fundamental problem with instrumentation or test execution.
 
 ### Problematic: Header-Only Static Libraries
+
 Some components are header-only static libraries (e.g., rocPRIM, hipCUB) and do not produce a simple `.so` file for `llvm-cov show -object <lib>.so`.
 
 **For these projects:**
+
 - Must instrument the test binaries themselves (headers are compiled into the test binary)
 - Must use `--ignore-filename-regex` to exclude test code from the report
 - Requires explicit reference to test binaries rather than library objects
 - **The `-object` flag does not accept wildcards** - cannot use `-object test_*`, must expand to `-object test_1 -object test_2 ... -object test_n`
 
 **Handling mixed library types:**
+
 - **Shared libraries (.so)**: Use `-object <lib>.so`, only need `llvm_profile_file`
 - **Static libraries**: May require `-object` for each test binary plus `ignore-filename-regex` and `test_names`
 - **Header-only libraries**: Require all three fields (test binaries, ignore patterns, profraw path)
@@ -136,6 +156,7 @@ The test runner can determine library type and adjust llvm-cov invocation accord
 
 **Why test_categories_coverage.yaml may be needed:**
 Because `llvm-cov show -object` does not accept wildcard patterns, we must explicitly list each test binary for header-only libraries. However, with standardized `test_*` naming:
+
 ```bash
 # Declaratively generate -object flags for all tests
 llvm-cov show $(for test in $(ls tests/); do echo -n "-object $test "; done) -instr-profile=coverage.profdata
@@ -154,6 +175,7 @@ Projects currently use generic `-DBUILD_CODE_COVERAGE` flag. If multiple project
 
 **Solution:**
 Use project-specific coverage flags that match the project's logical target name:
+
 - `-DROCPRIM_ENABLE_COVERAGE=ON`
 - `-DROCFFT_ENABLE_COVERAGE=ON` (matches casing of rocFFT target)
 - `-DHIPBLASLT_ENABLE_COVERAGE=ON`
@@ -164,6 +186,7 @@ Use project-specific coverage flags that match the project's logical target name
 TheRock provides several mechanisms to pass coverage flags from super-build to subprojects:
 
 **Option 1: Direct project-specific flags (implemented)**
+
 ```cmake
 cmake -B build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
@@ -172,6 +195,7 @@ cmake -B build -GNinja \
 ```
 
 Implementation in `cmake/therock_subproject.cmake`:
+
 ```cmake
 # Passthrough -D<PROJECT_NAME>_ENABLE_COVERAGE=ON to the subproject
 # Convert logical target name to uppercase (e.g., hipDNN -> HIPDNN_ENABLE_COVERAGE)
@@ -183,7 +207,8 @@ if(DEFINED ${_coverage_var_name})
 endif()
 ```
 
-**Option 2: Existing {project}_CMAKE_ARGS mechanism**
+**Option 2: Existing {project}\_CMAKE_ARGS mechanism**
+
 ```cmake
 cmake -B build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
@@ -191,6 +216,7 @@ cmake -B build -GNinja \
 ```
 
 **Option 3: Dedicated coverage project list**
+
 ```cmake
 cmake -B build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
@@ -200,6 +226,7 @@ cmake -B build -GNinja \
 Would require additional logic to convert project list to individual `<PROJECT>_ENABLE_COVERAGE` flags.
 
 **Option 4: Comma-separated list (alternative syntax)**
+
 ```cmake
 cmake -B build -GNinja \
   -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
@@ -224,6 +251,7 @@ For nightly runs and comprehensive coverage testing, TheRock provides flags to e
 ```
 
 These flags are independent:
+
 - `THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` only instruments math-libs, ml-libs, cv-libs, etc.
 - `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL` only instruments base/rocm-systems components
 - `THEROCK_COVERAGE_ALL` is equivalent to enabling both
@@ -237,12 +265,14 @@ CI workflows detect changed projects and need a simple way to pass project names
 **Recommended approach: Option 3 or 4 (list-based)**
 
 Options 3 and 4 are better suited for CI integration because:
+
 - Accept project names as values, not as formatted arguments
 - No formatting burden on the caller - TheRock handles case conversion
 - Single flag instead of multiple project-specific flags
 - Easier to programmatically construct from CI-detected changes
 
 Example implementation in TheRock CMake:
+
 ```cmake
 # Option 3: -DTHEROCK_COVERAGE_PROJECTS="rocfft;hiprand;hipblaslt"
 if(DEFINED THEROCK_COVERAGE_PROJECTS)
@@ -254,6 +284,7 @@ endif()
 ```
 
 This approach:
+
 - Accepts any case: "hiprand", "hipRAND", "HIPRAND" all work
 - Converts to correct uppercase flag: `HIPRAND_ENABLE_COVERAGE=ON`
 - Simplifies caller code - just pass the project name
@@ -262,14 +293,18 @@ This approach:
 Direct project flags remain valuable for developers doing local coverage builds on specific projects without needing to construct lists.
 
 #### Required Compiler Flags (for device-side coverage)
+
 Recent amd-llvm changes enable device-side coverage, requiring:
+
 1. `-DCOMPILER_RT_BUILD_PROFILE_ROCM=ON`
    - Ensures device profiler is built into instrumented device code
 
 ### TheRock CI Workflow
 
 #### Separate Coverage Pipeline
+
 Code coverage requires its own build/test pipeline separate from pre-checkin:
+
 - **Reason**: Custom instrumented build with different compiler flags
 - **Architecture strategy**: Phased approach to multi-architecture coverage
   - **Phase 1 (initial)**: Single default architecture (gfx942 or gfx950) for all coverage runs - achieves parity with Math CI
@@ -281,7 +316,9 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
     - Optional optimization: Replace default architecture with changed architecture when architecture-specific code changes (since changed arch covers common code too)
 
 #### Build Phase
+
 1. Determine coverage-enabled projects from PR changes via `therock_configure_coverage.py`:
+
    - Leverages existing TheRock CI infrastructure (`therock_matrix.py`) to detect changed projects
    - Maintains a whitelist of coverage-enabled projects in `COVERAGE_PROJECT_METADATA`
    - For each coverage-enabled project that changed:
@@ -292,6 +329,7 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
    - **Multi-component PRs**: Each coverage-enabled project gets its own isolated build → test → report pipeline
 
    Example metadata output for hipRAND:
+
    ```json
    {
      "project_name": "HIPRAND",
@@ -303,7 +341,8 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
    }
    ```
 
-2. Run coverage build for each project:
+1. Run coverage build for each project:
+
    ```bash
    cmake -B build -GNinja \
      -DTHEROCK_AMDGPU_FAMILIES=gfx942 \
@@ -312,7 +351,8 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
    ninja -C build
    ```
 
-3. Upload artifacts:
+1. Upload artifacts:
+
    ```bash
    python build_tools/artifact_manager.py
    python build_tools/github_actions/post_stage_upload.py
@@ -325,12 +365,14 @@ Code coverage requires its own build/test pipeline separate from pre-checkin:
 For PR coverage, modify existing test workflows:
 
 **`therock-ci-test-packages.yml`:**
+
 - Add `coverage_enabled` input parameter (boolean, default: false)
 - Pass through to `therock-ci-test-component.yml`
 
 **`therock-ci-test-component.yml` modifications:**
 
 1. **Input parameter:**
+
    ```yaml
    coverage_enabled:
      description: "When true, collect llvm profraw from the test run and generate a coverage report."
@@ -338,53 +380,60 @@ For PR coverage, modify existing test workflows:
      default: false
    ```
 
-2. **Artifact download:**
+1. **Artifact download:**
+
    - Pass `AMDGPU_TARGETS: ${{ inputs.coverage_enabled && inputs.amdgpu_families || '' }}` to setup_test_environment
    - Downloads coverage-instrumented artifacts when coverage_enabled is true
 
-3. **Prepare coverage profile directory** (conditional on `coverage_enabled`):
+1. **Prepare coverage profile directory** (conditional on `coverage_enabled`):
+
    ```bash
    mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
    echo "LLVM_PROFILE_FILE=${GITHUB_WORKSPACE}/coverage-report/profraw/${TEST_COMPONENT}-shard${matrix.shard}-%p-%m.profraw" >> "${GITHUB_ENV}"
    ```
+
    - Creates directory for profraw files
    - Sets `LLVM_PROFILE_FILE` environment variable with component name and shard index
    - Pattern `%p-%m` provides unique identifiers per process/module
 
-4. **Upload profraw files as artifacts** (conditional on `coverage_enabled`):
+1. **Upload profraw files as artifacts** (conditional on `coverage_enabled`):
+
    - Each test shard uploads its profraw files as workflow artifacts
    - Do NOT merge profraw on test nodes - aggregation happens later
    - Artifact name: `coverage-profraw-${COMPONENT_NAME}-shard${SHARD_INDEX}`
 
-5. **Coverage aggregation job** (separate node that runs after all test shards complete):
+1. **Coverage aggregation job** (separate node that runs after all test shards complete):
+
    ```bash
    # Download profraw artifacts from all shards
    # (GitHub Actions: actions/download-artifact downloads all matching artifacts)
-   
+
    # Merge profraw from ALL shards
    cd ${GITHUB_WORKSPACE}/coverage-report
    ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-profdata merge -sparse \
      -o coverage.profdata \
      shard1/*.profraw shard2/*.profraw shard3/*.profraw shard4/*.profraw
-   
+
    # Generate final coverage report
    ${GITHUB_WORKSPACE}/build/lib/llvm/bin/llvm-cov export \
      -object ${GITHUB_WORKSPACE}/build/lib/lib${COMPONENT_NAME}.so \
      -instr-profile=coverage.profdata --format=lcov > coverage.info
    ```
-   
+
    **Why aggregation is required:**
    Tests are sharded across multiple nodes for performance. Without aggregation:
+
    - Shard 1 only covers tests 1-25 (25% coverage)
    - Shard 2 only covers tests 26-50 (25% coverage)
    - Shard 3 only covers tests 51-75 (25% coverage)
    - Shard 4 only covers tests 76-100 (25% coverage)
-   
+
    Aggregation merges profraw from all shards to produce complete 100% coverage report.
 
 **Artifact naming conventions:**
 
 **PR Coverage:** Can follow ASAN pattern - separate workflow run provides natural isolation:
+
 - Coverage workflow (run_id: 12345) produces artifacts in S3 directory `12345-linux/`
 - Regular CI workflow (run_id: 12346) produces artifacts in S3 directory `12346-linux/`
 - Test jobs download from their own run_id → no naming collision
@@ -393,11 +442,13 @@ For PR coverage, modify existing test workflows:
 **Nightly Coverage:** Suffix requirements depend on architectural choice (see Nightly Coverage Architecture Options):
 
 **Option A (Same Run-ID - Extend Regular Nightly):**
+
 - Regular and coverage artifacts in **same S3 directory** (e.g., `99999-linux/`)
 - Suffix **REQUIRED** to differentiate: `hiprand_lib_gfx942.tar.zst` vs `hiprand_lib_gfx942-coverage.tar.zst`
 - Test jobs fetch from single run_id but different artifact names
 
 **Option B/C (Different Run-ID - Separate Workflow):**
+
 - Coverage artifacts in `99999-linux/`, regular in `88888-linux/` (different directories)
 - Suffix **technically optional** (artifacts in different S3 directories)
 - Suffix **recommended** for clarity and to support future Option A migration
@@ -409,6 +460,7 @@ For PR coverage, modify existing test workflows:
 **Rationale:** PR coverage follows ASAN pattern (separate workflow = natural isolation). Nightly coverage instruments entire stack but tests components separately. Option A requires suffix for same-directory differentiation; Options B/C use it for clarity and future-proofing.
 
 **Other coverage artifacts:**
+
 - Profraw files: `${TEST_COMPONENT}-shard${matrix.shard}-%p-%m.profraw`
 - Coverage data: `coverage.profdata`
 - Coverage report: `coverage.info` (lcov format)
@@ -416,6 +468,7 @@ For PR coverage, modify existing test workflows:
 ### Coverage Report Upload
 
 **Codecov.io integration:**
+
 - Already configured for Math CI at https://app.codecov.io/gh/ROCm/rocm-libraries
 - Upload token stored as GitHub repository secret
 - Service handles PR commenting and coverage aggregation automatically
@@ -428,6 +481,7 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 ### Resource Allocation
 
 **Architecture scope (phased approach):**
+
 - **Phase 1**: Single default architecture (gfx942/gfx950) - common code paths only
 - **Phase 2+**: Multi-architecture coverage
   - Default architecture always tested
@@ -437,6 +491,7 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 - No downstream testing - only the changed project itself
 
 **Node allocation:**
+
 - Build nodes per coverage-enabled project:
   - Coverage builds can leverage multi-arch CI pipeline structure with build stages
   - May use multiple build nodes in parallel (e.g., different stages running concurrently)
@@ -454,6 +509,7 @@ The specific coverage reporting service (codecov.io vs alternatives) and its det
 - Resource sizing should align with single-project testing requirements
 
 **Expected characteristics:**
+
 - Build time: Similar to regular builds plus instrumentation overhead (exact metrics TBD)
 - Test time: Significantly longer than regular tests due to instrumentation (example: rocPRIM 20min → 3hr)
 - Storage: Coverage artifacts similar size to regular artifacts; profraw files are temporary and merged/deleted after report generation
@@ -463,15 +519,18 @@ Specific node sizing, runtime benchmarks, and storage quotas remain open topics 
 ### Failure Handling
 
 **Coverage test failures:**
+
 - If a test fails during coverage runs, the pipeline fails
 - Coverage failures block PR merges (must be fixed before merge)
 - Treated the same as any other test failure in the CI pipeline
 
 **Missing profraw files:**
+
 - If profraw files are missing entirely, the coverage job fails
 - Indicates fundamental instrumentation or test execution problem
 
 **Flaky tests:**
+
 - Can be disabled at component owner's discretion
 - Same policy as regular pre-checkin test handling
 
@@ -485,6 +544,7 @@ A change in ROCm 7.14 broke the code coverage process, preventing coverage repor
 
 **Required safeguard:**
 amd-llvm changes must be gatekept with code coverage smoke tests before merge:
+
 - Smoke test builds a sample instrumented project with coverage flags enabled
 - Runs minimal test suite to generate profraw files
 - Verifies profraw merging with `llvm-profdata merge`
@@ -498,8 +558,8 @@ Without this safeguard, amd-llvm regressions can break coverage reporting for we
 Coverage testing requires different strategies for three distinct types of code paths that cannot be covered by default single-architecture testing:
 
 1. **Multi-Architecture Code**: Architecture-specific optimizations (e.g., gfx90a vs gfx942)
-2. **Multi-GPU Code**: Code paths requiring multiple GPUs (parallel operations, multi-GPU algorithms)
-3. **Mock-Required Code**: Error handling paths that need upstream dependency error injection
+1. **Multi-GPU Code**: Code paths requiring multiple GPUs (parallel operations, multi-GPU algorithms)
+1. **Mock-Required Code**: Error handling paths that need upstream dependency error injection
 
 #### Multi-Architecture Coverage Strategy
 
@@ -509,27 +569,32 @@ Architecture-specific code paths (e.g., gfx90a vs gfx942 optimizations) require 
 **Solution - Phased Rollout:**
 
 **Phase 1: Default Architecture Only (Math CI parity)**
+
 - Test all components on single default architecture (gfx942 or gfx950 - most abundant nodes)
 - Covers all common code paths shared across architectures
 - Establishes baseline coverage infrastructure
 
 **Phase 2: Architecture-Specific Change Detection**
+
 - Implement detection of architecture-specific code changes in PRs
 - Requires team buy-in and potentially refactoring to identify arch-specific code paths
 - Foundation for conditional multi-arch testing
 
 **Phase 3: Nightly Multi-Architecture Coverage**
+
 - Run coverage on various architectures using hash-range changes (between nightly runs)
 - Builds baseline coverage reports for all architectures
 - Populates coverage history for architecture-specific code
 
 **Phase 4: PR-Triggered Multi-Architecture Coverage**
+
 - Always test on default architecture (covers common code)
 - When architecture-specific code changes detected:
   - Trigger coverage jobs for affected architectures
   - Aggregate reports with default architecture report
 
 **Phase 5: Optimization - Replace Default When Appropriate**
+
 - When PR modifies only architecture-specific code for a single architecture:
   - Run coverage on that architecture only (it covers common code too)
   - Skip default architecture to avoid redundancy
@@ -537,22 +602,26 @@ Architecture-specific code paths (e.g., gfx90a vs gfx942 optimizations) require 
 **Report Aggregation Options:**
 
 1. **Preferred: Tag-based aggregation (codecov.io)**
+
    - Upload each architecture's report with architecture tag
    - Coverage service handles aggregation automatically
    - Requires verification that chosen platform supports this
 
-2. **Alternative: Profraw merging**
+1. **Alternative: Profraw merging**
+
    - Accumulate profraw files from all tested architectures
    - Merge on aggregate node before uploading
    - More complex, less flexible if changing platforms
 
 **Baseline Coverage Initialization:**
 The aggregate report includes:
+
 - Current PR's default architecture coverage
 - Current PR's architecture-specific coverage (if arch-specific changes detected)
 - Historical coverage for untested architectures (from nightly runs or previous PRs)
 
 **Open question:** How to handle missing baseline reports? Options:
+
 - Self-healing: Kick off all-architecture coverage run when baseline missing (expensive, susceptible to transient failures)
 - Manual initialization: Run comprehensive all-architecture coverage once at Phase 3 start
 - Graceful degradation: Report only tested architectures until baseline available
@@ -564,16 +633,19 @@ The aggregate report includes:
 Nightly coverage follows a phased approach with increasing sophistication:
 
 **Phase 1: Full coverage on default architecture**
+
 - Build entire instrumented ROCm stack once (`-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON` or `-DTHEROCK_COVERAGE_ALL=ON`)
 - Run coverage for every component regardless of changes (sanity check + baseline)
 - Execute on single default architecture (gfx942 or gfx950)
 
 **Phase 2: Change-based selection**
+
 - Detect what changed on develop branch since last nightly run
 - Run coverage only for components with changes
 - Reduces nightly resource usage while maintaining coverage trends
 
 **Phase 3: Multi-architecture coverage**
+
 - Expand to multiple architectures for architecture-specific code
 - May use round-robin (different architectures on different nights) OR weekly/monthly full sweeps
 - Requires architecture-specific change detection (likely comes after PR multi-arch support)
@@ -585,21 +657,22 @@ Unlike PR coverage builds (which only instrument changed projects), nightly runs
 #### Option A: Extend Existing Regular Nightly (Same Run-ID)
 
 **Architecture:**
+
 ```yaml
 # Single nightly run 99999 (extended workflow)
 jobs:
   # EXISTING: Regular build
   build_regular_stack:
     # Produces: rocblas_lib_gfx942.tar.zst
-  
+
   # NEW: Instrumented build (parallel to regular)
   build_instrumented_stack:
     # Produces: rocblas_lib_gfx942-coverage.tar.zst
-  
+
   # EXISTING: Regular tests
   test_regular:
     # Uses: rocblas_lib_gfx942.tar.zst
-  
+
   # NEW: Coverage tests
   test_coverage:
     # Uses: rocblas_lib_gfx942-coverage.tar.zst
@@ -608,6 +681,7 @@ jobs:
 **Trade-offs:**
 
 **Pros:**
+
 - **No coordination needed**: Both regular and coverage artifacts in same S3 directory (`99999-linux/`)
 - **Guaranteed consistency**: Coverage built from exact same commit as regular nightly
 - **Simpler orchestration**: Extend `multi_arch_release.yml` instead of new workflow
@@ -615,6 +689,7 @@ jobs:
 - **Trivial artifact fetching**: Same run_id for both regular and coverage artifacts
 
 **Cons:**
+
 - **Longer nightly runtime**: Builds entire stack twice (regular + instrumented)
 - **Resource contention**: More jobs competing for nodes in single run
 - **Coupled execution**: Coverage can't run independently of regular nightly
@@ -625,6 +700,7 @@ jobs:
 #### Option B: Separate Coverage Workflow (Different Run-ID)
 
 **Architecture:**
+
 ```yaml
 # Coverage nightly run 99999
 build_instrumented_stack:
@@ -638,6 +714,7 @@ test_coverage:
 **Baseline Run-ID Resolution:**
 
 **B1. Manual Input (Phase 1 PoC):**
+
 ```yaml
 workflow_dispatch:
   inputs:
@@ -647,6 +724,7 @@ workflow_dispatch:
 ```
 
 **B2. GitHub API Query (Automated):**
+
 ```yaml
 get_baseline:
   steps:
@@ -657,6 +735,7 @@ get_baseline:
 ```
 
 **B3. Orchestrator-Provided (Production):**
+
 ```yaml
 # rockrel triggers coverage after regular nightly
 uses: ROCm/TheRock/.github/workflows/coverage_nightly.yml@main
@@ -667,12 +746,14 @@ with:
 **Trade-offs:**
 
 **Pros:**
+
 - **Independent execution**: Coverage can run/fail without affecting regular nightly
 - **Flexible scheduling**: Run coverage less frequently than regular nightly
 - **Easier rollout**: Can test coverage workflow without modifying production nightly
 - **Isolated failures**: Coverage issues don't impact regular nightly status
 
 **Cons:**
+
 - **Baseline coordination**: Must track which regular nightly run_id to use
 - **Potential inconsistency**: Coverage might test different commit than latest regular (if baseline stale)
 - **More complex fetching**: Test jobs download from two different run_ids
@@ -683,15 +764,16 @@ with:
 #### Option C: Downstream Trigger from Regular Nightly (CHOSEN APPROACH)
 
 **Architecture:**
+
 ```yaml
 # Regular nightly run 88888
 jobs:
   build_regular_stack:
     # Produces: rocblas_lib_gfx942.tar.zst in 88888-linux/
-  
+
   test_regular:
     # May fail (nightly is unstable)
-  
+
   trigger_coverage:
     needs: build_regular_stack
     if: always()  # Trigger even if tests fail
@@ -703,7 +785,7 @@ jobs:
 jobs:
   build_instrumented_stack:
     # Produces: rocblas_lib_gfx942-coverage.tar.zst in 99999-linux/
-  
+
   test_coverage:
     # Fetch instrumented from 99999
     # Fetch dependencies from 88888 (passed via baseline_run_id)
@@ -712,6 +794,7 @@ jobs:
 **Trigger Conditions:**
 
 Regular nightly triggers coverage workflow using `if: always()` to ensure coverage runs regardless of test status, because:
+
 - **Nightly stability**: Regular nightly tests are unstable, rarely achieve full green pass
 - **Build stability**: Build phase is relatively stable and reliable
 - **Independence**: Coverage should run even when regular tests fail
@@ -719,38 +802,45 @@ Regular nightly triggers coverage workflow using `if: always()` to ensure covera
 **Blocking strategy options:**
 
 1. **Block on build success only (recommended):**
+
    ```yaml
    trigger_coverage:
      needs: build_regular_stack
      if: ${{ success() }}  # Only if build succeeded
    ```
+
    - Ensures baseline artifacts are available
    - Doesn't wait for unstable tests
-   
-2. **Never block (always trigger):**
+
+1. **Never block (always trigger):**
+
    ```yaml
    trigger_coverage:
      needs: build_regular_stack
      if: ${{ always() }}  # Even if build fails
    ```
+
    - Maximum availability, but may lack dependencies
    - Could cherry-pick successful stages/artifacts
 
-3. **Cherry-pick successful artifacts:**
+1. **Cherry-pick successful artifacts:**
+
    ```yaml
    trigger_coverage:
      needs: [build_stage1, build_stage2, build_stage3, test_regular]
      if: |
-       success() || 
-       (needs.build_stage1.result == 'success' && 
+       success() ||
+       (needs.build_stage1.result == 'success' &&
         needs.build_stage2.result == 'success')
    ```
+
    - Use artifacts from stages that succeeded
    - Coverage can proceed with partial baseline
 
 **Trade-offs:**
 
 **Pros:**
+
 - **Automatic coordination**: Baseline run_id automatically passed from regular nightly
 - **Guaranteed availability**: Baseline artifacts guaranteed fresh (just built)
 - **No manual intervention**: No need to lookup or input run_ids
@@ -759,6 +849,7 @@ Regular nightly triggers coverage workflow using `if: always()` to ensure covera
 - **Adapts to stability**: Can run even when regular nightly tests fail
 
 **Cons:**
+
 - **Coupled scheduling**: Coverage always runs after regular nightly (can't run independently)
 - **Potential delays**: Coverage waits for regular nightly build to complete
 - **Workflow complexity**: Regular nightly must know about coverage workflow
@@ -767,6 +858,7 @@ Regular nightly triggers coverage workflow using `if: always()` to ensure covera
 **When to use:** Production deployment when regular nightly controls coverage scheduling and automatic baseline tracking is desired.
 
 **Why this is the chosen approach:**
+
 - **Practical**: Works with unstable regular nightly (common in real-world CI)
 - **Automatic**: No manual baseline coordination or API queries needed
 - **Reliable**: Coverage gets fresh baseline artifacts from same nightly run
@@ -782,18 +874,21 @@ Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLA
 **Recommended Implementation Roadmap:**
 
 1. **Phase 1 (PoC)**: Option B1 - Separate workflow, manual baseline_run_id input
+
    - Proves coverage workflow works in isolation
    - No changes to production regular nightly
    - Manual coordination acceptable for initial validation
    - Validates instrumented build and coverage reporting end-to-end
 
-2. **Phase 2 (Production)**: Option C - Downstream trigger from regular nightly **(CHOSEN)**
+1. **Phase 2 (Production)**: Option C - Downstream trigger from regular nightly **(CHOSEN)**
+
    - Regular nightly triggers coverage workflow after build completes
    - Automatic baseline_run_id passing
    - Coverage adapts to nightly stability (runs even when tests fail)
    - Two separate run-ids with automatic coordination
 
-3. **Phase 3 (Future optimization)**: Option A - Merge with regular nightly
+1. **Phase 3 (Future optimization)**: Option A - Merge with regular nightly
+
    - Only if coverage proves stable and runtime increase acceptable
    - Simplifies to single workflow
    - Simplest long-term maintenance but loses scheduling flexibility
@@ -801,11 +896,13 @@ Produces instrumented artifacts for all **individual projects** (rocBLAS, hipBLA
 **Artifact Management:**
 
 **Option A (Same Run-ID):**
+
 - Requires `-coverage` suffix to differentiate regular vs coverage artifacts in same S3 directory
 - Example: `rocblas_lib_gfx942.tar.zst` (regular) vs `rocblas_lib_gfx942-coverage.tar.zst` (coverage)
 - Test jobs fetch from single run_id but different artifact names
 
 **Option B (Different Run-ID):**
+
 - **May not need** `-coverage` suffix since artifacts in different S3 directories
 - Coverage build in `99999-linux/rocblas_lib_gfx942.tar.zst`
 - Regular build in `88888-linux/rocblas_lib_gfx942.tar.zst`
@@ -826,6 +923,7 @@ python build_tools/artifact_manager.py push \
 ```
 
 This produces grouped component artifacts like:
+
 - `blas_lib_gfx942.tar.zst` (contains instrumented rocBLAS + hipBLASLt)
 - `fft_lib_gfx942.tar.zst` (contains instrumented rocFFT)
 - `prim_lib_gfx942.tar.zst` (contains instrumented rocPRIM + hipCUB + rocThrust + rocRAND + hipRAND)
@@ -835,10 +933,10 @@ This produces grouped component artifacts like:
 Nightly coverage test jobs use a multi-step extraction process to isolate instrumented components:
 
 1. **Fetch all non-instrumented artifacts** (from baseline nightly run)
-2. **Unpack into installation directories**
-3. **Fetch grouped component under test** (from coverage run) - e.g., BLAS tar containing instrumented rocBLAS + hipBLASLt
-4. **Extract only the specific project files** (lib, dev, test) from grouped tar
-5. **Overwrite non-instrumented version** with cherry-picked instrumented files
+1. **Unpack into installation directories**
+1. **Fetch grouped component under test** (from coverage run) - e.g., BLAS tar containing instrumented rocBLAS + hipBLASLt
+1. **Extract only the specific project files** (lib, dev, test) from grouped tar
+1. **Overwrite non-instrumented version** with cherry-picked instrumented files
 
 Example for testing hipBLASLt coverage:
 
@@ -868,6 +966,7 @@ tar -xzf coverage-artifacts/blas_test_gfx942.tar.zst \
 ```
 
 **Why this approach:**
+
 - **No -coverage suffix needed**: Separate run IDs (baseline vs coverage) provide natural isolation
 - **Works with BUILD_TOPOLOGY grouped artifacts**: Extracts per-project files from grouped component tars
 - **Prevents cross-contamination**: Only the project under test is instrumented; all dependencies remain non-instrumented
@@ -880,11 +979,13 @@ tar -xzf coverage-artifacts/blas_test_gfx942.tar.zst \
 Some code paths only execute when multiple GPUs are available (e.g., multi-GPU GEMM operations, distributed algorithms, peer-to-peer memory transfers). Default single-GPU coverage testing cannot exercise these paths.
 
 **Detection:**
+
 - Identify PRs that modify multi-GPU specific code
 - Requires code organization/annotation to distinguish multi-GPU paths
 - Similar to architecture-specific detection but for GPU count
 
 **Testing approach:**
+
 - Default coverage runs on single-GPU nodes (majority of code)
 - When multi-GPU code changes detected:
   - Trigger coverage job on multi-GPU node
@@ -892,6 +993,7 @@ Some code paths only execute when multiple GPUs are available (e.g., multi-GPU G
 - Multi-GPU testing likely limited to specific components (not all projects have multi-GPU code)
 
 **Resource implications:**
+
 - Multi-GPU nodes are scarcer than single-GPU nodes
 - May require dedicated multi-GPU coverage node pool
 - Nightly multi-GPU coverage sweeps to maintain baseline
@@ -900,27 +1002,32 @@ Some code paths only execute when multiple GPUs are available (e.g., multi-GPU G
 
 **Problem:**
 Error handling code for upstream dependency failures cannot be covered without error injection. Example: Component A calls Component B's API - to cover A's error handling when B fails, we need to inject failures into B. However:
+
 - Cannot safely inject errors into real upstream components during coverage testing
 - Instrumenting upstream components provides no value for downstream coverage
 - Need controlled error injection to trigger error paths
 
 **Solution: Mocking upstream dependencies**
+
 - Create mock implementations of upstream APIs that can inject controlled errors
 - Mock testing exercises error handling paths in component under test
 - **Does NOT require instrumentation of upstream components** - only the component under test is instrumented
 - Mocks simulate failures without affecting real dependency behavior
 
 **Integration with default architecture:**
+
 - Mock-based coverage tests can run on default architecture (gfx942/gfx950)
 - No special hardware requirements - mocks are software-level abstractions
 - Can be integrated into Phase 1 (no multi-arch dependency)
 
 **Detection:**
+
 - Identify components with error handling for upstream dependencies
 - May require component teams to flag mock-requiring code paths
 - Build/test matrix determines which components need mock coverage
 
 **Open questions:**
+
 - Should all components provide mock implementations for error injection?
 - How to maintain mocks as upstream APIs evolve?
 - Should mock coverage be mandatory or optional?
@@ -928,6 +1035,7 @@ Error handling code for upstream dependency failures cannot be covered without e
 ## Open Questions
 
 1. **Artifact granularity for per-project coverage isolation**: TheRock's BUILD_TOPOLOGY.toml defines artifacts at a grouped component level (e.g., `blas` = rocBLAS + hipBLASLt, `prim` = rocPRIM + hipCUB + rocThrust + rocRAND + hipRAND). Coverage requires per-project isolation - each project must be instrumented and tested independently. This conflicts with the artifact system where `artifact_manager.py` operates on grouped artifact names. **Options:**
+
    - **Option A**: Create separate per-project artifacts for coverage builds (rocblas-coverage, hipblaslt-coverage, etc.) - requires BUILD_TOPOLOGY changes and may complicate artifact management
    - **Option B**: Use existing grouped artifacts but rely on selective component filtering (lib vs test vs dev) - won't achieve full per-project isolation
    - **Option C**: Coverage builds use a different artifact organization entirely, bypassing BUILD_TOPOLOGY's grouped structure - creates parallel artifact system
@@ -935,12 +1043,17 @@ Error handling code for upstream dependency failures cannot be covered without e
    - **Impact**: Affects both nightly hybrid artifact fetching and potentially PR coverage builds
    - **Decision needed**: How to reconcile per-project coverage requirements with grouped artifact structure?
 
-2. **Multi-architecture report aggregation**: Does codecov.io support tag-based architecture aggregation needed for Phase 4+ multi-arch coverage? If not, fallback to profraw merging approach.
-3. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
-4. **Multi-GPU detection**: How to identify multi-GPU specific code paths? Similar refactoring/annotation needs.
-5. **Mock coverage mandate**: Should all components provide mocks for upstream error injection? Mandatory or optional?
-6. **Baseline initialization (Phase 4+)**: Self-healing all-arch coverage vs manual initialization vs graceful degradation when baseline reports missing?
-7. **Multi-GPU node allocation**: Dedicated pool vs shared with other multi-GPU workloads?
+1. **Multi-architecture report aggregation**: Does codecov.io support tag-based architecture aggregation needed for Phase 4+ multi-arch coverage? If not, fallback to profraw merging approach.
+
+1. **Architecture-specific detection**: How to identify architecture-specific code paths? Requires team input on refactoring needs.
+
+1. **Multi-GPU detection**: How to identify multi-GPU specific code paths? Similar refactoring/annotation needs.
+
+1. **Mock coverage mandate**: Should all components provide mocks for upstream error injection? Mandatory or optional?
+
+1. **Baseline initialization (Phase 4+)**: Self-healing all-arch coverage vs manual initialization vs graceful degradation when baseline reports missing?
+
+1. **Multi-GPU node allocation**: Dedicated pool vs shared with other multi-GPU workloads?
 
 ## Revision History
 
