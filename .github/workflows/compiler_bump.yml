@@ -223,8 +223,8 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
-      linux_amdgpu_families: "all"
-      windows_amdgpu_families: "all"
+      linux_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
@@ -328,8 +328,8 @@ jobs:
     with:
       artifact_group: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).artifact_group }}
       amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
-      linux_amdgpu_families: "all"
-      windows_amdgpu_families: "all"
+      linux_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).windows_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
@@ -418,6 +418,8 @@ jobs:
     needs: [create-branch, setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-24.04
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
       - name: Get gfx94X-dcgpu family info
         id: family-info
@@ -429,6 +431,7 @@ jobs:
           echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
 
       - name: Trigger test_artifacts for gfx94X-dcgpu
+        id: trigger-tests
         if: ${{ steps.family-info.outputs.test_runs_on != '' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
@@ -447,11 +450,19 @@ jobs:
               "build_variant": "release"
             }
 
+      - name: Output test run URL
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        run: |
+          echo "## Linux Tests Triggered" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${{ steps.trigger-tests.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+
   trigger-windows-tests:
     name: Trigger Windows Tests (gfx110X-all)
     needs: [create-branch, setup-windows, build-windows]
     if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-24.04
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
     steps:
       - name: Get gfx110X-all family info
         id: family-info
@@ -463,6 +474,7 @@ jobs:
           echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
 
       - name: Trigger test_artifacts for gfx110X-all (Windows)
+        id: trigger-tests
         if: ${{ steps.family-info.outputs.test_runs_on != '' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
@@ -480,6 +492,12 @@ jobs:
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
               "build_variant": "release"
             }
+
+      - name: Output test run URL
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        run: |
+          echo "## Windows Tests Triggered" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Test Run:** ${{ steps.trigger-tests.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
 
   # ==========================================================================
   # Summary
@@ -582,7 +600,12 @@ jobs:
 
           # Linux tests
           if [ "${{ needs.trigger-linux-tests.result }}" == "success" ]; then
-            echo "- :white_check_mark: Tests triggered (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+            LINUX_TEST_URL="${{ needs.trigger-linux-tests.outputs.test_run_url }}"
+            if [ -n "$LINUX_TEST_URL" ]; then
+              echo "- :white_check_mark: Tests triggered (gfx94X-dcgpu): [View Run]($LINUX_TEST_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: Tests triggered (gfx94X-dcgpu)" >> "$GITHUB_STEP_SUMMARY"
+            fi
           elif [ "${{ needs.trigger-linux-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -619,7 +642,12 @@ jobs:
 
           # Windows tests
           if [ "${{ needs.trigger-windows-tests.result }}" == "success" ]; then
-            echo "- :white_check_mark: Tests triggered (gfx110X-all)" >> "$GITHUB_STEP_SUMMARY"
+            WINDOWS_TEST_URL="${{ needs.trigger-windows-tests.outputs.test_run_url }}"
+            if [ -n "$WINDOWS_TEST_URL" ]; then
+              echo "- :white_check_mark: Tests triggered (gfx110X-all): [View Run]($WINDOWS_TEST_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: Tests triggered (gfx110X-all)" >> "$GITHUB_STEP_SUMMARY"
+            fi
           elif [ "${{ needs.trigger-windows-tests.result }}" == "failure" ]; then
             echo "- :x: Test trigger failed" >> "$GITHUB_STEP_SUMMARY"
           fi
