@@ -205,6 +205,7 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         "postinst": "%post",
         "prerm": "%preun",
         "postrm": "%postun",
+        "transfiletriggerin": "%transfiletriggerin",
     }
     pkg_name = pkg_info.get("Package")
     parts = config.rocm_version.split(".")

@@ -1,0 +1,46 @@
+{# Shared helpers for the /opt/rocm compat symlinks, included by the amdrocm-sysdeps
+   maintainer scripts. Registration runs after payload unpack and skips slots whose
+   target is absent, so it never turns a payload-owned symlink into a directory. #}
+alt_score() {
+    # base-14 version pack + minutes-since-2020 tiebreaker; highest wins the slot.
+    local now s
+    now=$(date -u +%s)
+    s=$(( {{ version_major }} - 3 ))
+    s=$(( s * 14 + {{ version_minor }} ))
+    s=$(( s * 14 + {{ version_patch }} ))
+    printf '%s' "$(( s * 1000000 + (now - 1600000000) / 60 ))"
+}
+
+alt_install() {
+    command -v update-alternatives >/dev/null || return 0
+    local p score
+    p="{{ install_prefix }}"
+    score="$(alt_score)"
+    # register a slot only if its target exists (dir or symlink); never create it.
+    _reg() { if [ -e "$2" ]; then update-alternatives --install "$1" "$3" "$2" "$score" || true; fi; }
+    _reg /opt/rocm/core                     "$p"          core
+    _reg /opt/rocm/core-{{ version_major }} "$p"          core-{{ version_major }}
+    _reg /opt/rocm/bin                      "$p/bin"      rocm-bin
+    _reg /opt/rocm/lib                      "$p/lib"      rocm-lib
+    _reg /opt/rocm/include                  "$p/include"  rocm-include
+    _reg /opt/rocm/llvm                     "$p/llvm"     rocm-llvm
+    _reg /opt/rocm/amdgcn                   "$p/amdgcn"   rocm-amdgcn
+    _reg /opt/rocm/libexec                  "$p/libexec"  rocm-libexec
+    _reg /opt/rocm/share                    "$p/share"    rocm-share
+    return 0
+}
+
+alt_remove() {
+    command -v update-alternatives >/dev/null || return 0
+    local p="{{ install_prefix }}"
+    update-alternatives --remove core                     "$p"         || true
+    update-alternatives --remove core-{{ version_major }} "$p"         || true
+    update-alternatives --remove rocm-bin                 "$p/bin"     || true
+    update-alternatives --remove rocm-lib                 "$p/lib"     || true
+    update-alternatives --remove rocm-include             "$p/include" || true
+    update-alternatives --remove rocm-llvm                "$p/llvm"    || true
+    update-alternatives --remove rocm-amdgcn              "$p/amdgcn"  || true
+    update-alternatives --remove rocm-libexec             "$p/libexec" || true
+    update-alternatives --remove rocm-share               "$p/share"   || true
+    return 0
+}

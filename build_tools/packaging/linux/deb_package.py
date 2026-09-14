@@ -407,6 +407,17 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
                 f.write(template.render(context))
             os.chmod(script_file, 0o755)
 
+    # Non-executable dpkg control files (e.g. debian/triggers); dh_installdeb ships them.
+    NONEXEC_CONTROL = {"triggers"}
+    for control in NONEXEC_CONTROL:
+        pattern = f"{pkg_name}-{control}.j2"
+        for file in templates_root.glob(pattern):
+            control_file = Path(deb_dir) / control
+            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            with control_file.open("w", encoding="utf-8") as f:
+                # Jinja strips the trailing newline; dpkg needs directives newline-terminated.
+                f.write(template.render(context).rstrip("\n") + "\n")
+
 
 def copy_package_contents(source_dir, destination_dir):
     """Copy package contents from artfactory to package build directory

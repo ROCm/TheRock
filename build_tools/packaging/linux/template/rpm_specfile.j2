@@ -88,3 +88,8 @@ rm -rf $RPM_BUILD_ROOT
 %postun
 {{ rpm_scripts['%postun'] }}
 {% endif %}
+
+{% if rpm_scripts['%transfiletriggerin'] %}
+%transfiletriggerin -- {{ install_prefix }}
+{{ rpm_scripts['%transfiletriggerin'] }}
+{% endif %}
