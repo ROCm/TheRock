@@ -700,7 +700,12 @@ def publish_snapshot(
     """Publish one validated local snapshot into one S3 bucket."""
     snapshot = load_snapshot(snapshot_dir)
     client = s3_client if s3_client is not None else boto3.client("s3")
-    client.head_bucket(Bucket=bucket)
+    try:
+        client.head_bucket(Bucket=bucket)
+    except ClientError as exc:
+        raise RuntimeError(
+            f"Destination bucket is missing or inaccessible: s3://{bucket}"
+        ) from exc
     uploaded = 0
     refreshed = 0
     skipped = 0

@@ -649,20 +649,25 @@ def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
     assert not client.copy_calls
 
 
-def test_publish_dry_run_rejects_inaccessible_bucket(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_publish_rejects_inaccessible_bucket(tmp_path: Path, dry_run: bool) -> None:
     _write_snapshot(tmp_path)
     client = FakeS3Client()
     client.fail_head_bucket = True
 
-    with pytest.raises(ClientError):
+    with pytest.raises(
+        RuntimeError,
+        match="Destination bucket is missing or inaccessible: s3://misspelled-bucket",
+    ) as exc_info:
         mirror.publish_snapshot(
             snapshot_dir=tmp_path,
             bucket="misspelled-bucket",
             refresh_existing=False,
-            dry_run=True,
+            dry_run=dry_run,
             s3_client=client,
         )
 
+    assert isinstance(exc_info.value.__cause__, ClientError)
     assert client.head_bucket_calls == [{"Bucket": "misspelled-bucket"}]
     assert not client.head_object_calls
     assert not client.put_calls
