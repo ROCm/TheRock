@@ -2,8 +2,8 @@
 author: John Robbins (jorobbin)
 created: 2026-07-28
 modified: 2026-09-14
-status: draft
-discussion: in progress
+status: accepted
+discussion: complete
 ---
 
 # Code Coverage Infrastructure for TheRock
@@ -950,4 +950,4 @@ Error handling code for upstream dependency failures cannot be covered without e
 - 2026-08-24: jorobbin: Documented amd-llvm dependency and smoke test requirements; clarified profraw naming patterns and aggregation node separation; added nightly coverage phased rollout (full→change-based→multi-arch); documented hybrid artifact approach for nightly (single instrumented build + separate per-component tests with non-instrumented dependencies); added coverage-for-all flags for rocm-libraries, rocm-systems, and all components; documented nightly hybrid artifact management strategy using -coverage suffix and selective artifact fetching via artifact_manager.py
 - 2026-08-26: jorobbin: Documented three nightly coverage architecture options (Option A: extend regular nightly with same run-id requiring suffix, Option B: separate workflow with manual/automated baseline resolution, Option C: downstream trigger from regular nightly - CHOSEN APPROACH); Option C provides automatic baseline_run_id passing and adapts to nightly instability (runs even when regular nightly tests fail); added phased implementation roadmap (manual PoC → downstream trigger → potential future merge); clarified artifact naming strategy - PR coverage follows ASAN pattern (separate workflow, no suffix needed), nightly Options B/C use suffix for clarity and future-proofing; added artifact granularity as critical open question (BUILD_TOPOLOGY grouped artifacts vs per-project coverage isolation); cleaned up stale open questions
 - 2026-08-30: jorobbin: Expanded Option C documentation with detailed workflow structure, automatic baseline_run_id passing mechanism, and trade-offs explaining how downstream trigger adapts to nightly instability while maintaining automatic coordination; removed -coverage suffix from nightly artifacts (separate run IDs provide isolation); documented multi-step artifact extraction process for nightly (fetch all non-instrumented → fetch grouped instrumented component → extract specific project files → overwrite) to work with BUILD_TOPOLOGY grouped artifacts while achieving per-project instrumentation isolation
-- 2026-09-14: jorobbin: Removed deprecated -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF flag (default-enabled for months, now retired)
+- 2026-09-14: jorobbin: Removed deprecated -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF flag (default-enabled for months, now retired); marked RFC as accepted
