@@ -149,11 +149,9 @@ class AnalysisResult:
 
     def build_consumer_graph(self) -> dict[str, dict[str, list[str]]]:
         """Build the existing reverse-dependency JSON schema."""
-        graph = {
-            name.lower(): {"consumers": []}
-            for name in sorted(self.subprojects, key=str.lower)
+        consumers: dict[str, set[str]] = {
+            name.lower(): set() for name in self.subprojects
         }
-        consumers: dict[str, set[str]] = {name: set() for name in graph}
         for subproject in self.subprojects.values():
             consumer = subproject.name.lower()
             for dependency in subproject.all_deps:
@@ -172,6 +170,8 @@ class AnalysisResult:
         may back several keys. Sources outside those roots, or that did not resolve
         (see _resolve_source_dir_section), get no entry.
         """
+        # Default source roots (THEROCK_ROCM_{LIBRARIES,SYSTEMS}_SOURCE_DIR); the
+        # parser assumes the default layout and does not honor a cache override.
         roots = (
             self.repository_root / "rocm-libraries",
             self.repository_root / "rocm-systems",
@@ -255,7 +255,15 @@ def list_tracked_cmake_files(repository_root: Path) -> set[Path]:
         "ls-files",
         "-z",
     ]
-    result = subprocess.run(command, check=True, capture_output=True)
+    try:
+        result = subprocess.run(command, check=True, capture_output=True)
+    except FileNotFoundError as error:
+        raise AnalysisError("git executable not found on PATH") from error
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr.decode("utf-8", errors="replace").strip()
+        raise AnalysisError(
+            f"git ls-files failed in {repository_root}: {stderr}"
+        ) from error
     tracked_paths = {
         Path(raw_path.decode("utf-8"))
         for raw_path in result.stdout.split(b"\0")
@@ -292,6 +300,12 @@ def load_consumer_graph(path: Path) -> dict[str, dict[str, list[str]]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise AnalysisError(f"Expected a JSON object in {path}")
+    for name, entry in data.items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("consumers"), list):
+            raise AnalysisError(
+                f"Malformed consumer graph entry {name!r} in {path}: "
+                "expected an object with a 'consumers' list"
+            )
     return data
 
 
@@ -362,7 +376,12 @@ class RepositoryAnalyzer:
         absolute_path = self.repository_root / relative_path
         if not absolute_path.is_file():
             raise AnalysisError(f"Tracked CMake file does not exist: {absolute_path}")
-        source = absolute_path.read_text(encoding="utf-8")
+        try:
+            source = absolute_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as error:
+            raise AnalysisError(
+                f"Tracked CMake file is not valid UTF-8: {relative_path.as_posix()}"
+            ) from error
         try:
             nodes = list(parse_tree(source, skip_comments=True))
         except CMakeParseError as error:
@@ -372,8 +391,15 @@ class RepositoryAnalyzer:
         return nodes
 
     def _process_file(
-        self, relative_path: Path, inherited_environment: Environment
+        self,
+        relative_path: Path,
+        inherited_environment: Environment,
+        *,
+        inherit_scope: bool = False,
     ) -> None:
+        # inherit_scope models CMake variable scoping: add_subdirectory() (and the
+        # root) open a fresh child scope, while include() runs in the caller's scope
+        # so variables set() in the included file persist to the includer.
         if relative_path in self._active_files:
             location = SourceLocation(path=relative_path, line=1)
             self._skipped_paths.append(
@@ -386,16 +412,35 @@ class RepositoryAnalyzer:
             return
         self._active_files.add(relative_path)
         self._reachable_files.add(relative_path)
-        environment = copy.deepcopy(inherited_environment)
         source_directory = (self.repository_root / relative_path).parent.resolve()
-        environment["CMAKE_CURRENT_SOURCE_DIR"] = {str(source_directory)}
-        environment["CMAKE_CURRENT_LIST_DIR"] = {str(source_directory)}
         try:
-            self._execute_nodes(
-                nodes=self._parse_file(relative_path),
-                environment=environment,
-                relative_path=relative_path,
-            )
+            if inherit_scope:
+                # include(): share the caller's environment; only
+                # CMAKE_CURRENT_LIST_DIR changes for the duration and is restored
+                # after (CMAKE_CURRENT_SOURCE_DIR stays the caller's).
+                environment = inherited_environment
+                saved_list_dir = environment.get("CMAKE_CURRENT_LIST_DIR")
+                environment["CMAKE_CURRENT_LIST_DIR"] = {str(source_directory)}
+                try:
+                    self._execute_nodes(
+                        nodes=self._parse_file(relative_path),
+                        environment=environment,
+                        relative_path=relative_path,
+                    )
+                finally:
+                    if saved_list_dir is None:
+                        environment.pop("CMAKE_CURRENT_LIST_DIR", None)
+                    else:
+                        environment["CMAKE_CURRENT_LIST_DIR"] = saved_list_dir
+            else:
+                environment = copy.deepcopy(inherited_environment)
+                environment["CMAKE_CURRENT_SOURCE_DIR"] = {str(source_directory)}
+                environment["CMAKE_CURRENT_LIST_DIR"] = {str(source_directory)}
+                self._execute_nodes(
+                    nodes=self._parse_file(relative_path),
+                    environment=environment,
+                    relative_path=relative_path,
+                )
         finally:
             self._active_files.remove(relative_path)
 
@@ -463,13 +508,44 @@ class RepositoryAnalyzer:
         loop_environment = copy.deepcopy(environment)
         if node.args:
             loop_variable = node.args[0].value
-            loop_values, _ = _expand_tokens(node.args[1:], environment)
+            loop_values = self._foreach_loop_values(node.args[1:], environment)
             loop_environment[loop_variable] = loop_values
         self._execute_nodes(node.body, loop_environment, relative_path)
         # Deliberately over-approximate: merge the loop environment back (loop
         # variable included). Only ever adds values, never drops — the safe direction.
         for variable_name, values in loop_environment.items():
             environment.setdefault(variable_name, set()).update(values)
+
+    def _foreach_loop_values(
+        self, tokens: list[Token], environment: Environment
+    ) -> set[str]:
+        """Values the foreach() loop variable may take, across all iterations.
+
+        Handles the keyword forms: ``IN LISTS <var>...`` dereferences each named
+        list variable, ``IN ITEMS <val>...`` takes the values directly, and
+        ``RANGE ...`` yields integers (never names) so it contributes nothing.
+        A bare ``foreach(var a b c)`` expands the operands as literal items.
+        """
+        if not tokens:
+            return set()
+        if tokens[0].value == "RANGE":
+            return set()
+        if tokens[0].value != "IN":
+            values, _ = _expand_tokens(tokens, environment)
+            return values
+        values: set[str] = set()
+        mode: str | None = None
+        for token in tokens[1:]:
+            if token.value in {"LISTS", "ITEMS"}:
+                mode = token.value
+                continue
+            operand_values, _ = _expand_token(token, environment)
+            if mode == "LISTS":
+                for list_name in operand_values:
+                    values.update(environment.get(list_name, set()))
+            elif mode == "ITEMS":
+                values.update(operand_values)
+        return values
 
     def _execute_command(
         self,
@@ -528,7 +604,7 @@ class RepositoryAnalyzer:
             is_subdirectory=False,
         )
         for include_path in include_paths:
-            self._process_file(include_path, environment)
+            self._process_file(include_path, environment, inherit_scope=True)
 
     def _resolve_listfile_paths(
         self,

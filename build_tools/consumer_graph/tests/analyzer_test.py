@@ -3,6 +3,7 @@
 
 """Tests for conservative CMake repository analysis."""
 
+import os
 import re
 from pathlib import Path
 
@@ -15,6 +16,18 @@ from cmake_consumer_graph.analyzer import (
     list_tracked_cmake_files,
     load_consumer_graph,
 )
+
+# The real-tree invariant tests below are report-only: they enforce the
+# static-parser guarantees against the live checkout, but only when opted in via
+# CONSUMER_GRAPH_ENFORCE so an unmodeled CMake construct in an unrelated PR does
+# not block the default (blocking) unit-test job. CI runs them in a dedicated
+# continue-on-error step. The synthetic tmp_path tests always run and gate.
+_ENFORCE_ENV = "CONSUMER_GRAPH_ENFORCE"
+
+
+def _require_enforcement() -> None:
+    if not os.environ.get(_ENFORCE_ENV):
+        pytest.skip(f"real-tree enforcement is opt-in; set {_ENFORCE_ENV}=1 to run")
 
 
 def _write(path: Path, contents: str) -> None:
@@ -149,9 +162,128 @@ therock_cmake_subproject_declare(client
     assert result.build_consumer_graph()["dep"]["consumers"] == []
 
 
+def test_include_runs_in_caller_scope(tmp_path: Path) -> None:
+    # include() shares the caller's scope: a variable set() in the included file
+    # is visible to the includer. Without that, ${SHARED_DEPS} would be unresolved
+    # in the parent and analyze() would fail loudly.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+include(shared)
+therock_cmake_subproject_declare(dep)
+therock_cmake_subproject_declare(client BUILD_DEPS ${SHARED_DEPS})
+""",
+    )
+    _write(tmp_path / "shared.cmake", "set(SHARED_DEPS dep)\n")
+    tracked = {Path("CMakeLists.txt"), Path("shared.cmake")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    assert result.subprojects["client"].build_deps == {"dep"}
+    assert result.build_consumer_graph()["dep"]["consumers"] == ["client"]
+
+
+def test_add_subdirectory_scope_does_not_leak_to_parent(tmp_path: Path) -> None:
+    # Contrast with include(): add_subdirectory() opens a fresh child scope, so a
+    # set() inside the child does not overwrite the parent's variable.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(DEPS parent-dep)
+therock_cmake_subproject_declare(parent-dep)
+add_subdirectory(child)
+therock_cmake_subproject_declare(client BUILD_DEPS ${DEPS})
+""",
+    )
+    _write(
+        tmp_path / "child" / "CMakeLists.txt",
+        """
+set(DEPS child-dep)
+therock_cmake_subproject_declare(child-dep)
+""",
+    )
+    tracked = {Path("CMakeLists.txt"), Path("child/CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    assert result.subprojects["client"].build_deps == {"parent-dep"}
+    assert result.build_consumer_graph()["child-dep"]["consumers"] == []
+
+
+def test_foreach_in_lists_expands_named_list_contents(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(DEPS alpha beta)
+therock_cmake_subproject_declare(alpha)
+therock_cmake_subproject_declare(beta)
+foreach(item IN LISTS DEPS)
+  therock_cmake_subproject_declare(client BUILD_DEPS ${item})
+endforeach()
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    graph = result.build_consumer_graph()
+
+    assert graph["alpha"]["consumers"] == ["client"]
+    assert graph["beta"]["consumers"] == ["client"]
+
+
+def test_foreach_in_items_uses_values_directly(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(alpha)
+therock_cmake_subproject_declare(beta)
+foreach(item IN ITEMS alpha beta)
+  therock_cmake_subproject_declare(client BUILD_DEPS ${item})
+endforeach()
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    graph = result.build_consumer_graph()
+
+    assert graph["alpha"]["consumers"] == ["client"]
+    assert graph["beta"]["consumers"] == ["client"]
+
+
+def test_foreach_range_binds_no_dependency_names(tmp_path: Path) -> None:
+    # RANGE yields integers, never names, so the loop variable expands to nothing
+    # (the defined-but-empty path) and contributes no bogus dependency.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(base)
+therock_cmake_subproject_declare(client BUILD_DEPS base)
+foreach(i RANGE 2)
+  therock_cmake_subproject_declare(client BUILD_DEPS ${i})
+endforeach()
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    assert result.subprojects["client"].build_deps == {"base"}
+    assert result.dangling_dependencies() == {}
+
+
+def test_load_consumer_graph_rejects_malformed_entry(tmp_path: Path) -> None:
+    path = tmp_path / "graph.json"
+    path.write_text('{"a": {"consumers": ["b"]}, "bad": []}', encoding="utf-8")
+
+    with pytest.raises(AnalysisError, match="bad"):
+        load_consumer_graph(path)
+
+
 def test_static_graph_is_superset_of_committed_graph() -> None:
     # Run against the real tree: the generated graph must not miss any node or edge
     # in the committed graph (the superset invariant). Skips outside a git checkout.
+    _require_enforcement()
     repo_root = Path(__file__).resolve().parents[3]
     committed = repo_root / "test_tools" / "therock_consumer_graph.json"
     if not (
@@ -207,6 +339,7 @@ def test_subtree_map_covers_known_subtrees_on_real_tree() -> None:
     # Real-tree anchors: fan-out, name skew, and a non-projects/ prefix all resolve;
     # a variable-sourced (therock_enable_external_source) subtree is skipped. Skips
     # outside a git checkout.
+    _require_enforcement()
     repo_root = Path(__file__).resolve().parents[3]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
@@ -223,10 +356,12 @@ def test_subtree_map_covers_all_direct_external_source_dirs() -> None:
     # Coverage cross-check: regex the tracked CMake for every EXTERNAL_SOURCE_DIR
     # written directly under a source root and assert subtree_map covers each,
     # catching a silently-shrinking map. Variable-sourced dirs are not matched.
+    _require_enforcement()
     repo_root = Path(__file__).resolve().parents[3]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
 
+    # Capture the root-relative subtree of each directly-rooted EXTERNAL_SOURCE_DIR.
     pattern = re.compile(
         r"EXTERNAL_SOURCE_DIR\s+\"?\$\{THEROCK_ROCM_(?:LIBRARIES|SYSTEMS)_SOURCE_DIR\}"
         r"/([^\"\s)]+)"

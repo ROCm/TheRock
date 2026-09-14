@@ -144,6 +144,13 @@ D:\scratch\cmake-consumer-graph-venv\Scripts\python.exe `
 The CLI does not depend on the current working directory except that Python
 must be able to import the prototype package, such as when run from this folder.
 
+The synthetic (`tmp_path`) unit tests always run. The real-tree enforcement
+tests — the committed-graph superset invariant and the subtree-map coverage
+cross-check — are opt-in: they only run when `CONSUMER_GRAPH_ENFORCE=1` is set,
+so an unmodeled CMake construct in an unrelated PR does not block the default
+unit-test job. CI runs them in a dedicated `continue-on-error` step; run them
+locally with `CONSUMER_GRAPH_ENFORCE=1 python -m pytest tests/analyzer_test.py`.
+
 ## Known limitations and next experiments
 
 - The analyzer deliberately ignores correlations between conditions, so it can
