@@ -46,7 +46,15 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
         "skip_submodules": ["rocm-libraries"],
-        "dvc_projects": ["external-rocm-libraries"],
+        # "external-rocm-libraries" pulls DVC-tracked hipdnn golden data from the
+        # external rocm-libraries checkout itself (#8131). "rocm-systems"
+        # additionally pulls TheRock's own rocm-systems submodule DVC data
+        # (e.g. the amdgpu-windows-interop/wkmi prebuilt libs that CLR links
+        # against on both Windows and Linux/wsl-rocdxg). fetch_sources.py's
+        # --dvc-projects replaces its default project list rather than
+        # extending it, so both entries must be listed explicitly here or the
+        # rocm-systems pull silently disappears again.
+        "dvc_projects": ["external-rocm-libraries", "rocm-systems"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",

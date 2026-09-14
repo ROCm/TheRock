@@ -71,10 +71,37 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
         )
 
         # Verify it contains external-rocm-libraries
-        self.assertEqual(
+        self.assertIn(
+            "external-rocm-libraries",
             config["dvc_projects"],
-            ["external-rocm-libraries"],
             "dvc_projects should contain external-rocm-libraries path",
+        )
+
+    def test_rocm_libraries_also_pulls_rocm_systems_dvc(self):
+        """Regression test: rocm-libraries's dvc_projects must also include
+        "rocm-systems", or TheRock's own rocm-systems submodule DVC data (e.g.
+        shared/amdgpu-windows-interop/wkmi, which CLR links against on both
+        Windows and the Linux wsl-rocdxg stage) is silently never pulled for
+        the external-repo build.
+
+        Regression for the second-order breakage introduced by the #8131 fix
+        (https://github.com/ROCm/TheRock/pull/8132): adding an explicit
+        --dvc-projects value replaced fetch_sources.py's default project list
+        (["rocm-libraries", "rocm-systems"] on Windows) instead of extending
+        it, so "rocm-systems" silently dropped out again. This broke:
+          - Windows compiler-runtime: `wkmi.lib` missing, "no known rule to
+            make it" linking opencl/amdocl64.dll and hipamd/amdhip64_7.dll.
+          - Linux wsl-rocdxg: `ld: cannot find -lwkmi` linking librocdxg.so.
+        """
+        config = get_repo_config("rocm-libraries")
+
+        self.assertIn(
+            "rocm-systems",
+            config["dvc_projects"],
+            "rocm-libraries dvc_projects must include 'rocm-systems' so "
+            "TheRock's own rocm-systems submodule DVC data (e.g. wkmi) is "
+            "pulled for external-repo builds; see issue for the wkmi.lib / "
+            "libwkmi.a link failures this causes when omitted",
         )
 
 
@@ -165,12 +192,14 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
         with open(self.temp_file, "r") as f:
             output = f.read()
 
-        # rocm-libraries should have both skip-submodules and dvc-projects
+        # rocm-libraries should have both skip-submodules and dvc-projects,
+        # and the dvc-projects value must carry both the external checkout's
+        # own DVC data and TheRock's rocm-systems submodule DVC data (wkmi).
         self.assertIn("--skip-submodules rocm-libraries", output)
         self.assertIn(
-            "--dvc-projects external-rocm-libraries",
+            "--dvc-projects external-rocm-libraries rocm-systems",
             output,
-            "Should include --dvc-projects external-rocm-libraries",
+            "Should include --dvc-projects external-rocm-libraries rocm-systems",
         )
 
 
