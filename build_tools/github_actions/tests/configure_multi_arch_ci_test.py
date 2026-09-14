@@ -1728,15 +1728,15 @@ class TestFormatSummary(unittest.TestCase):
         self.assertNotIn("logs/comm-libs/", result)
         self.assertNotIn("logs/cv-libs/", result)
 
-    def test_summary_observability_profiling_off_by_default(self):
-        """Default push/ci run → profiling reported OFF."""
+    def test_summary_observability_profiling_on_by_default(self):
+        """Default push/ci run → profiling reported ON (default on)."""
         outputs = cm.CIOutputs(
             is_ci_enabled=True,
             jobs=self._observability_jobs(),
             builds=cm.BuildConfigs(linux=self._linux_config()),
         )
         result = format_summary(self._inputs(), outputs)
-        self.assertIn("Resource profiling: **OFF**", result)
+        self.assertIn("Resource profiling: **ON**", result)
         # The "how to force it" hint is always present.
         self.assertIn("force_resource_profiling", result)
 
