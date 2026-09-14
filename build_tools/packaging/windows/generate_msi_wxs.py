@@ -46,7 +46,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pyzstd
-import yaml
 
 # Add build_tools/ to sys.path so _therock_utils can be imported.
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent
@@ -99,9 +98,11 @@ class PackageDef:
 
     # DLL filenames to install into the Windows System32 directory as a
     # default-enabled "legacy install" feature (for applications that load
-    # ROCm DLLs from System32 rather than PATH). Each name is resolved against
-    # the extracted artifacts and the _legacy/bin cache fallback. Empty means
-    # the package emits no legacy feature.
+    # ROCm DLLs from System32 rather than PATH). Current runtime DLLs are
+    # resolved from the extracted artifacts; the legacy driver-supplied DLLs
+    # (amdhip64_6.dll, amd_comgr_2.dll) come from the rocm-systems source
+    # checkout (see resolve_legacy_dlls). This script does not fetch any of
+    # them. Empty means the package emits no System32 install feature.
     legacy_system32_dlls: list[str] = None
 
     def __post_init__(self):
@@ -337,85 +338,32 @@ def collect_files_from_catalog(
     return sorted((Path(r), s) for r, s in seen.items())
 
 
-def fetch_legacy_dlls_from_dvc(
-    dest_dir: Path,
-    repo_root: Path,
-) -> None:
-    """Download legacy DLLs tracked by DVC in rocm-systems into dest_dir.
-
-    Reads *.dvc pointer files from
-    rocm-systems/shared/amdgpu-windows-interop/legacy/ and fetches each DLL
-    from the DVC S3 remote (s3://therock-dvc/rocm-systems, anonymous) into
-    dest_dir. The S3 object key is derived from the md5 hash in the pointer
-    file: <md5[:2]>/<md5[2:]>.
-
-    dest_dir is the _legacy/bin/ path that resolve_legacy_dlls() searches as
-    its fallback. Missing DLLs are warned and skipped; a DVC fetch failure
-    does not abort the generator.
-    """
-    dvc_dir = (
-        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
-    )
-    if not dvc_dir.is_dir():
-        print(
-            f"Warning: rocm-systems legacy DVC dir not found: {dvc_dir}\n"
-            "  (submodule not initialized? run: git submodule update --init rocm-systems)",
-            file=sys.stderr,
-        )
-        return
-
-    dvc_remote = "https://therock-dvc.s3.us-east-2.amazonaws.com/rocm-systems/files/md5"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    for dvc_file in sorted(dvc_dir.glob("*.dvc")):
-        dll_name = dvc_file.stem  # e.g. amdhip64_6.dll
-        dest = dest_dir / dll_name
-        if dest.exists():
-            print(f"  Cached:    {dll_name} (legacy DVC)")
-            continue
-
-        try:
-            data = yaml.safe_load(dvc_file.read_text(encoding="utf-8"))
-            md5 = data["outs"][0]["md5"]
-        except Exception as e:
-            print(
-                f"Warning: could not parse {dvc_file.name}: {e}",
-                file=sys.stderr,
-            )
-            continue
-
-        s3_key = f"{md5[:2]}/{md5[2:]}"
-        url = f"{dvc_remote}/{s3_key}"
-        print(f"  Fetching:  {dll_name} (legacy DVC, md5={md5[:8]}...)")
-        try:
-            urllib.request.urlretrieve(url, dest)
-        except Exception as e:
-            print(
-                f"Warning: failed to fetch legacy DLL {dll_name} from {url}: {e}",
-                file=sys.stderr,
-            )
-            dest.unlink(missing_ok=True)
-
-
 def resolve_legacy_dlls(
     artifact_dir: Path,
     dll_names: list[str],
+    repo_root: Path,
 ) -> list[tuple[str, Path]]:
-    """Resolve legacy System32 DLLs to concrete source paths.
+    """Resolve the System32 install feature's DLLs to concrete source paths.
 
     Each name is searched for (by basename) first among the extracted
-    artifacts in artifact_dir, then in the _legacy/bin cache fallback
-    (a sibling of artifact_dir, i.e. <cache>/_legacy/bin). Driver-sourced
-    DLLs like amdhip64_6.dll and amd_comgr_2.dll live only in the fallback.
+    artifacts in artifact_dir, then in the rocm-systems source checkout at
+    shared/amdgpu-windows-interop/legacy/. The current runtime DLLs
+    (amdhip64_7.dll, amd_comgr.dll, rocm_kpack.dll) come from the artifacts;
+    only the legacy driver-supplied DLLs (amdhip64_6.dll, amd_comgr_2.dll) live
+    in that source dir, where the build's DVC pull materializes them — this
+    script does not fetch them; their presence is a prerequisite for including
+    them in the MSI.
 
-    Returns a list of (dll_name, source_path). Missing DLLs are reported as
-    a warning and skipped so the generator never fails on an absent legacy
-    DLL.
+    Returns a list of (dll_name, source_path). Their presence is a
+    prerequisite, so a DLL that cannot be found in either location is a fatal
+    error (the MSI must not silently ship without its declared System32 DLLs).
     """
     if not dll_names:
         return []
 
-    legacy_fallback = artifact_dir.parent / "_legacy" / "bin"
+    legacy_fallback = (
+        repo_root / "rocm-systems" / "shared" / "amdgpu-windows-interop" / "legacy"
+    )
     resolved: list[tuple[str, Path]] = []
     for name in dll_names:
         found: Path | None = None
@@ -429,12 +377,13 @@ def resolve_legacy_dlls(
             if fallback.is_file():
                 found = fallback
         if found is None:
-            print(
-                f"Warning: legacy DLL not found, skipping: {name} "
-                f"(searched {artifact_dir} and {legacy_fallback})",
-                file=sys.stderr,
+            sys.exit(
+                f"Error: System32 DLL not found: {name} "
+                f"(searched {artifact_dir} and {legacy_fallback}). "
+                "These DLLs are a prerequisite; ensure the artifacts and the "
+                "rocm-systems DVC files are present (e.g. run fetch_sources.py "
+                "--dvc-projects rocm-systems)."
             )
-            continue
         resolved.append((name, found))
     return resolved
 
@@ -511,16 +460,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--fetch-legacy-dlls",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help=(
-            "Fetch legacy DLLs from DVC (rocm-systems submodule) into the "
-            "_legacy/bin cache used by the legacy System32 install feature. "
-            "Defaults to True when --artifacts-url is set, False otherwise."
-        ),
-    )
-    parser.add_argument(
         "--artifacts-cache-dir",
         type=Path,
         default=None,
@@ -539,6 +478,17 @@ def parse_args() -> argparse.Namespace:
         help=(
             "CMake build directory. Artifacts are read from <build-root>/artifacts/. "
             f"Default: {default_build}. Ignored when --artifacts-url is set."
+        ),
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=repo_root,
+        metavar="PATH",
+        help=(
+            "TheRock repo root. Used to locate the rocm-systems source checkout "
+            "for the legacy driver DLLs (shared/amdgpu-windows-interop/legacy). "
+            f"Default: {repo_root}."
         ),
     )
     parser.add_argument(
@@ -689,8 +639,11 @@ class WixDocument:
 def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
     """Gather artifacts and payload/legacy file lists for the selected package.
 
-    Downloads artifacts when --artifacts-url is set and fetches legacy DLLs from
-    DVC when applicable, then enumerates the concrete files to install.
+    Downloads artifacts when --artifacts-url is set, then enumerates the concrete
+    files to install. Legacy System32 DLLs are read from wherever they already
+    exist (the extracted artifacts, or the rocm-systems source checkout for the
+    driver-supplied ones) — this script never fetches them; see
+    resolve_legacy_dlls().
     """
     package = PACKAGES[args.package]
 
@@ -702,29 +655,19 @@ def resolve_package_inputs(args: argparse.Namespace) -> PackageInputs:
             components=PACKAGE_COMPONENTS,
             dest_dir=args.artifacts_cache_dir,
         )
-        legacy_bin = args.artifacts_cache_dir / "_legacy" / "bin"
     else:
         # Local build: artifacts live at build/artifacts/{name}_{component}_generic/
         artifact_dir = args.build_root / "artifacts"
-        legacy_bin = args.build_root / "_legacy" / "bin"
-
-    # --fetch-legacy-dlls defaults to True in --artifacts-url mode, False for a
-    # local build. Skip entirely when the package declares no legacy DLLs.
-    fetch_legacy = args.fetch_legacy_dlls
-    if fetch_legacy is None:
-        fetch_legacy = bool(args.artifacts_url)
-    if fetch_legacy and package.legacy_system32_dlls:
-        print("Fetching legacy DLLs from DVC ...")
-        fetch_legacy_dlls_from_dvc(
-            dest_dir=legacy_bin,
-            repo_root=Path(__file__).parent.parent.parent.parent,
-        )
 
     return PackageInputs(
         package=package,
         version=args.package_version,
         files=collect_files_from_catalog(artifact_dir, package),
-        legacy_dlls=resolve_legacy_dlls(artifact_dir, package.legacy_system32_dlls),
+        legacy_dlls=resolve_legacy_dlls(
+            artifact_dir,
+            package.legacy_system32_dlls,
+            repo_root=args.repo_root,
+        ),
     )
 
 
