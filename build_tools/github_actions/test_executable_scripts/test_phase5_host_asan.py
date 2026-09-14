@@ -80,16 +80,6 @@ CTEST_COMPONENTS = {
         ),
         "instrumented_binary": "share/hipfile/test/internal_tests",
     },
-    "rocrtst": {
-        "test_dir": "bin/rocrtst",
-        "inventory_args": ("-R", "^intercept_queue_logic_test$"),
-        "run_args": ("-R", "^intercept_queue_logic_test$"),
-        "inventory_count": 1,
-        "inventory_sha256": (
-            "71436c72cb805b1d542b6860671c733b5165810711944094d8326aa25ec515b9"
-        ),
-        "instrumented_binary": "bin/intercept_queue_logic_test",
-    },
 }
 
 _ASAN_NEEDED_RE = re.compile(r"NEEDED.*libclang_rt\.asan(?:-[^.]+)?\.so")

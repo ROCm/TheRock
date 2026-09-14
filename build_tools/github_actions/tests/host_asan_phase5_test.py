@@ -36,9 +36,7 @@ class HostAsanPhase5Test(unittest.TestCase):
             set(test_phase5_host_asan.GTEST_COMPONENTS),
             {"rocprofiler-compute", "rocprofiler-sdk"},
         )
-        self.assertEqual(
-            set(test_phase5_host_asan.CTEST_COMPONENTS), {"hipfile", "rocrtst"}
-        )
+        self.assertEqual(set(test_phase5_host_asan.CTEST_COMPONENTS), {"hipfile"})
         self.assertEqual(
             [
                 entry["inventory_count"]
@@ -64,10 +62,6 @@ class HostAsanPhase5Test(unittest.TestCase):
         self.assertEqual(
             test_phase5_host_asan.CTEST_COMPONENTS["hipfile"]["inventory_count"],
             668,
-        )
-        self.assertEqual(
-            test_phase5_host_asan.CTEST_COMPONENTS["rocrtst"]["inventory_args"],
-            ("-R", "^intercept_queue_logic_test$"),
         )
 
     def test_fetch_selectors_have_enabled_producer_stages(self):
@@ -164,7 +158,7 @@ Typed/Parameterized.
             ["Suite.expected_skip"],
         )
 
-    def test_main_routes_only_the_four_components(self):
+    def test_main_routes_only_phase5_components(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = Path(tmp) / "bin"
             bin_dir.mkdir()

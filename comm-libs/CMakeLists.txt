@@ -202,6 +202,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
       "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
       -DBUILD_FUNCTIONAL_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_UNIT_TESTS=${THEROCK_BUILD_TESTING}
+      -DBUILD_HOST_TESTS=${THEROCK_BUILD_TESTING}
       # Register functional/unit tests with CTest and install the relocatable
       # bin/rocshmem/**/CTestTestfile.cmake files (with quick/standard/
       # comprehensive/full tier labels) that test_runner.py drives via ctest.

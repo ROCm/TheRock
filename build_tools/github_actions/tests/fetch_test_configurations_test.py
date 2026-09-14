@@ -108,6 +108,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "rocprofiler-compute",
                 "rocprofiler-sdk",
                 "rocrtst",
+                "hip-tests",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
+                "aqlprofile",
+                "rocshmem",
             },
         )
         for job in [sanity, *components]:
@@ -148,6 +153,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "rocprofiler-compute",
                 "rocprofiler-sdk",
                 "rocrtst",
+                "hip-tests",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
+                "aqlprofile",
+                "rocshmem",
             },
         )
 
@@ -167,10 +177,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["PROJECTS_TO_TEST"] = "hipdnn"
 
         fetch_test_configurations.run()
-        hipdnn = self._get_components()[0]
+        components = {job["job_name"]: job for job in self._get_components()}
 
-        self.assertIn("test_runner.py", hipdnn["test_script"])
-        self.assertNotIn("test_hipdnn.py", hipdnn["test_script"])
+        self.assertEqual(set(components), {"hipdnn", "hipdnn_install"})
+        self.assertIn("test_runner.py", components["hipdnn"]["test_script"])
+        self.assertNotIn("test_hipdnn.py", components["hipdnn"]["test_script"])
+        self.assertIn(
+            "test_hipdnn_host_asan.py", components["hipdnn_install"]["test_script"]
+        )
 
     def test_host_asan_phase2_uses_direct_cpu_runners(self):
         os.environ["HOST_ONLY_TESTS"] = "true"
@@ -265,8 +279,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             set(components),
             {"hipfile", "rocprofiler-compute", "rocprofiler-sdk", "rocrtst"},
         )
-        for component in components.values():
-            self.assertIn("test_phase5_host_asan.py", component["test_script"])
+        for key, component in components.items():
+            expected_runner = (
+                "test_runtime_host_asan.py"
+                if key == "rocrtst"
+                else "test_phase5_host_asan.py"
+            )
+            self.assertIn(expected_runner, component["test_script"])
             self.assertTrue(component["linux_cpu_runner"])
             self.assertEqual(component["test_type"], "host-asan")
             self.assertEqual(component["test_runner"], "host-only")
@@ -288,6 +307,58 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertEqual(
             components["rocrtst"]["fetch_artifact_args"], "--rocrtst --tests"
+        )
+
+    def test_host_asan_phase6_uses_fail_closed_cpu_runners(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = (
+            "hip-tests,hipdnn-integration-tests,hipdnn_install,aqlprofile,rocshmem"
+        )
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components),
+            {
+                "hip-tests",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
+                "aqlprofile",
+                "rocshmem",
+            },
+        )
+        expected_runners = {
+            "hip-tests": "test_hiptests_host_asan.py",
+            "hipdnn-integration-tests": "test_hipdnn_host_asan.py",
+            "hipdnn_install": "test_hipdnn_host_asan.py",
+            "aqlprofile": "test_aqlprofile_host_asan.py",
+            "rocshmem": "test_runtime_host_asan.py",
+        }
+        for key, runner in expected_runners.items():
+            component = components[key]
+            self.assertIn(runner, component["test_script"])
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_type"], "host-asan")
+            self.assertEqual(component["test_runner"], "host-only")
+            self.assertNotIn("/dev/kfd", component["container_options"])
+            self.assertNotIn("/dev/dri", component["container_options"])
+
+        self.assertEqual(components["hip-tests"]["fetch_artifact_args"], "--tests")
+        self.assertEqual(
+            components["hipdnn-integration-tests"]["fetch_artifact_args"],
+            "--hipdnn --hipdnn-integration-tests --tests",
+        )
+        self.assertEqual(
+            components["hipdnn_install"]["fetch_artifact_args"],
+            "--hipdnn --tests",
+        )
+        self.assertEqual(
+            components["aqlprofile"]["fetch_artifact_args"], "--aqlprofile --tests"
+        )
+        self.assertEqual(
+            components["rocshmem"]["fetch_artifact_args"], "--rocshmem --tests"
         )
 
     def test_host_asan_tensilelite_does_not_append_gpu_ctest(self):

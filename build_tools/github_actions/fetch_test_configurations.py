@@ -1051,14 +1051,44 @@ HOST_ASAN_PHASE5_COMPONENTS = {
         "timeout_minutes": 5,
     },
     "rocrtst": {
-        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        # Keep the original 9 queue-interception cases and add the isolated
+        # poll-backoff/doorbell helper suites in one cumulative ROCr job.
+        "test_script": f"python {_get_script_path('test_runtime_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+}
+
+
+HOST_ASAN_PHASE6_COMPONENTS = {
+    "hip-tests": {
+        "test_script": f"python {_get_script_path('test_hiptests_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
+    "hipdnn-integration-tests": {
+        "test_script": f"python {_get_script_path('test_hipdnn_host_asan.py')}",
+        "timeout_minutes": 30,
+    },
+    # Exercise the installed synthetic default plugin separately from the 541
+    # integration cases; this validates host-side plugin discovery/metadata
+    # without admitting provider or sample GPU coverage.
+    "hipdnn_install": {
+        "fetch_artifact_args": "--hipdnn --tests",
+        "test_script": f"python {_get_script_path('test_hipdnn_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "aqlprofile": {
+        "test_script": f"python {_get_script_path('test_aqlprofile_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
+    "rocshmem": {
+        "test_script": f"python {_get_script_path('test_runtime_host_asan.py')}",
         "timeout_minutes": 5,
     },
 }
 
 
 def _host_asan_matrix() -> dict:
-    """Return the explicit Phase 1 through Phase 5 host-ASAN matrix.
+    """Return the explicit Phase 1 through Phase 6 host-ASAN matrix.
 
     Entries inherit artifact-fetching details from the regular matrix when one
     exists, then receive a host-only command/timeout overlay. All entries run
@@ -1071,6 +1101,7 @@ def _host_asan_matrix() -> dict:
         HOST_ASAN_PHASE3_COMPONENTS,
         HOST_ASAN_PHASE4_COMPONENTS,
         HOST_ASAN_PHASE5_COMPONENTS,
+        HOST_ASAN_PHASE6_COMPONENTS,
     ):
         for key, overrides in phase.items():
             entry = deepcopy(test_matrix.get(key, {}))
@@ -1143,7 +1174,7 @@ def run():
         test_type = "host-asan"
         run_extended_tests = False
         logging.info(
-            f"Using explicit Phase 1 through Phase 5 host-ASAN matrix "
+            f"Using explicit Phase 1 through Phase 6 host-ASAN matrix "
             f"({len(selected_matrix)} test(s))"
         )
     else:
@@ -1168,6 +1199,15 @@ def run():
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
+    if (
+        host_only_tests
+        and "hipdnn" in project_array
+        and "hipdnn_install" not in project_array
+    ):
+        # The changed-project graph emits hipdnn for backend/library changes,
+        # while the synthetic plugin validation is a separate CI job. Couple
+        # that job explicitly so selective presubmits cannot silently omit it.
+        project_array.append("hipdnn_install")
 
     all_components = []
     for key in selected_matrix:

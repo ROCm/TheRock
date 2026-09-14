@@ -55,7 +55,7 @@
         "amd-comgr_SANITIZER": "HOST_ASAN",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",
-        "aqlprofile_SANITIZER": "OFF",
+        "aqlprofile_SANITIZER": "HOST_ASAN",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
