@@ -60,9 +60,7 @@ _DECLARATION_MULTI_VALUE_ARGS = {
     "INSTALL_OPTIONAL_COMPONENTS",
 }
 _DECLARATION_KEYWORDS = (
-    _DECLARATION_FLAGS
-    | _DECLARATION_ONE_VALUE_ARGS
-    | _DECLARATION_MULTI_VALUE_ARGS
+    _DECLARATION_FLAGS | _DECLARATION_ONE_VALUE_ARGS | _DECLARATION_MULTI_VALUE_ARGS
 )
 
 # TODO: mirrors CMake's therock_compiler_toolchain_subproject() (the CMake-side
@@ -163,8 +161,7 @@ class AnalysisResult:
                 if dependency_key in consumers and dependency_key != consumer:
                     consumers[dependency_key].add(consumer)
         return {
-            name: {"consumers": sorted(consumers[name])}
-            for name in sorted(consumers)
+            name: {"consumers": sorted(consumers[name])} for name in sorted(consumers)
         }
 
     def build_subtree_map(self) -> dict[str, list[str]]:
@@ -195,8 +192,7 @@ class AnalysisResult:
                     subtree_to_keys.setdefault(relative.as_posix(), set()).add(key)
                     break
         return {
-            subtree: sorted(keys)
-            for subtree, keys in sorted(subtree_to_keys.items())
+            subtree: sorted(keys) for subtree, keys in sorted(subtree_to_keys.items())
         }
 
     def dangling_dependencies(self) -> dict[str, list[str]]:
@@ -437,9 +433,7 @@ class RepositoryAnalyzer:
         values, _ = _expand_tokens(value_tokens, environment)
         environment[variable_name] = values
 
-    def _execute_unset(
-        self, node: cmake_ast.Unset, environment: Environment
-    ) -> None:
+    def _execute_unset(self, node: cmake_ast.Unset, environment: Environment) -> None:
         if node.args:
             environment[node.args[0].value] = set()
 
@@ -456,10 +450,9 @@ class RepositoryAnalyzer:
             self._execute_nodes(node.if_false, false_environment, relative_path)
         environment.clear()
         for variable_name in true_environment.keys() | false_environment.keys():
-            environment[variable_name] = (
-                true_environment.get(variable_name, set())
-                | false_environment.get(variable_name, set())
-            )
+            environment[variable_name] = true_environment.get(
+                variable_name, set()
+            ) | false_environment.get(variable_name, set())
 
     def _execute_foreach(
         self,
@@ -492,9 +485,7 @@ class RepositoryAnalyzer:
         elif identifier == "therock_cmake_subproject_declare":
             self._record_declaration(node, environment, relative_path)
 
-    def _execute_list(
-        self, node: cmake_ast.Command, environment: Environment
-    ) -> None:
+    def _execute_list(self, node: cmake_ast.Command, environment: Environment) -> None:
         if len(node.args) < 2:
             return
         operation = node.args[0].value.upper()
@@ -704,9 +695,7 @@ def _expand_tokens(
     return values, unresolved
 
 
-def _expand_token(
-    token: Token, environment: Environment
-) -> tuple[set[str], set[str]]:
+def _expand_token(token: Token, environment: Environment) -> tuple[set[str], set[str]]:
     references = _VARIABLE_REFERENCE_PATTERN.findall(token.value)
     unresolved = {name for name in references if name not in environment}
     if unresolved:
@@ -726,10 +715,7 @@ def _expand_token(
                 next_values.add(value.replace(reference, replacement))
         expanded_values = next_values
     split_values = {
-        item
-        for value in expanded_values
-        for item in value.split(";")
-        if item
+        item for value in expanded_values for item in value.split(";") if item
     }
     return split_values, set()
 

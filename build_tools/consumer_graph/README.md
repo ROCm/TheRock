@@ -14,20 +14,20 @@ configure.
 Results were captured on 2026-08-31 from TheRock commit
 `3c4ec014374d4d32243334ef229093fe7b38c5b2`.
 
-| Measurement | Result |
-| --- | ---: |
-| Super-project-owned CMake files tracked by Git | 140 |
-| Files successfully parsed by `cmake-parser` | 140 |
-| Files reached from the root listfile | 78 |
-| Tracked files containing subproject declarations | 56 |
-| Declaration files missed by traversal | 0 |
-| Declaration calls reached | 122 |
-| Unique subproject names | 121 |
-| Reference nodes reproduced | 117 / 117 |
-| Reference edges reproduced | 421 / 421 |
-| Conservative-only nodes | 4 |
-| Conservative-only edges | 11 |
-| Unresolved dependency names | 0 |
+| Measurement                                      |    Result |
+| ------------------------------------------------ | --------: |
+| Super-project-owned CMake files tracked by Git   |       140 |
+| Files successfully parsed by `cmake-parser`      |       140 |
+| Files reached from the root listfile             |        78 |
+| Tracked files containing subproject declarations |        56 |
+| Declaration files missed by traversal            |         0 |
+| Declaration calls reached                        |       122 |
+| Unique subproject names                          |       121 |
+| Reference nodes reproduced                       | 117 / 117 |
+| Reference edges reproduced                       | 421 / 421 |
+| Conservative-only nodes                          |         4 |
+| Conservative-only edges                          |        11 |
+| Unresolved dependency names                      |         0 |
 
 The additional nodes are conditionally declared projects that were absent from
 the Linux `gfx94X-dcgpu` configure used to produce the committed reference:
