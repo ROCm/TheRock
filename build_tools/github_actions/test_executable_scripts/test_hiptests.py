@@ -153,6 +153,8 @@ def setup_env(env):
     # Set ROCM Path, to find rocm_agent_enum etc
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
+    # Require HIP YAML entries to exist for all tests
+    env["THEROCK_REQUIRE_HIP_YAML_ENTRIES"] = "1"
     # required for hip-tests to avoid optimizing out multi-stream tests
     env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
     if platform.system() == "Linux":
