@@ -120,10 +120,9 @@ on:
       force_resource_profiling:
         description: >-
           Resource-usage profiling override for the build observability report
-          (Linux builds): "true" forces it on, "false" forces it off, empty
-          (default) falls back to the release_type gate (nightly/release only).
-          Passed through so the CI configuration summary can report the
-          effective state. See #7692.
+          (Linux builds): "false" forces it off; "true" or "" (default) keeps
+          it on for all builds. Passed through so the CI configuration summary
+          can report the effective state. See #7692.
         type: string
         default: ""
     outputs:
