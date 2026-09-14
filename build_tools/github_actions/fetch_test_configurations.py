@@ -928,6 +928,162 @@ test_matrix = {
     },
 }
 
+# CPU-only host-ASAN admission lists. These are deliberately separate from
+# the regular depth tiers: a normal component command may include GPU coverage,
+# and a new regular test must never be admitted here implicitly.
+HOST_ASAN_PHASE1_COMPONENTS = {
+    "sanity": {
+        "test_script": f"python {_get_script_path('test_host_asan_sanity.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocroller": {"timeout_minutes": 15},
+    "tensilelite": {
+        # Scope the known Python/PyYAML shutdown leak workaround to this process;
+        # native Phase 1 suites retain LeakSanitizer coverage.
+        "test_script": (
+            'ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" '
+            f"python {_get_script_path('pytest_runner.py')}"
+        ),
+        # The host-only selection currently collects 7,260 cases. Its complete
+        # local device-traced proof took 66 minutes, so keep the outer budget
+        # above that observed runtime; individual pytest cases retain their
+        # existing 2700-second timeout.
+        "timeout_minutes": 90,
+    },
+    "origami": {
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipdnn": {
+        # The legacy wrapper runs every installed CTest entry and ignores
+        # TEST_TYPE. The generic runner selects only the positive host-asan
+        # labels generated from hipDNN's six-suite allowlist.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 30,
+    },
+    "hipkernelprovider": {"timeout_minutes": 10},
+}
+
+HOST_ASAN_PHASE2_COMPONENTS = {
+    "rocrand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "hiprand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocsparse": {
+        "test_script": f"python {_get_script_path('test_rocsparse_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    # StinkyTofu is vendored under hipBLASLt and therefore has no regular GPU
+    # matrix entry of its own. Its installed native payload is BLAS test data.
+    "stinkytofu": {
+        "job_name": "stinkytofu",
+        "fetch_artifact_args": "--blas --tests",
+        "test_script": f"python {_get_script_path('test_stinkytofu_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
+}
+
+HOST_ASAN_PHASE3_COMPONENTS = {
+    "rocprim": {
+        "test_script": f"python {_get_script_path('test_rocprim_host_asan.py')}",
+        # The complete fail-closed CPU allowlist took 5m54s on the local
+        # host-ASAN proof machine. Keep enough headroom for contended runners.
+        "timeout_minutes": 15,
+    },
+    "rocthrust": {
+        "test_script": f"python {_get_script_path('test_rocthrust_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocalution": {
+        # Select only the generated positive host-asan CTest entry; the legacy
+        # wrapper ignores TEST_TYPE and would run GPU suites as well.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 10,
+    },
+}
+
+HOST_ASAN_PHASE4_COMPONENTS = {
+    # Composable Kernel has no regular test-matrix entry. Keep its proven
+    # CPU-only executable set behind a dedicated runner and explicit selector.
+    "composable-kernel": {
+        "job_name": "composable-kernel",
+        "fetch_artifact_args": "--composable-kernel --tests",
+        "test_script": (
+            f"python {_get_script_path('test_composable_kernel_host_asan.py')}"
+        ),
+        "timeout_minutes": 10,
+    },
+    # Provider host-ASAN labels are fail-closed positive suite allowlists. The
+    # external hipDNN integration artifact is deliberately omitted: those GPU
+    # suites are outside this admission, so the provider integration binaries
+    # are deliberately not registered for HOST_ASAN.
+    "miopenprovider": {
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipblasltprovider": {
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+}
+
+HOST_ASAN_PHASE5_COMPONENTS = {
+    # These four components use one dedicated fail-closed runner. It validates
+    # direct ASAN linkage and the complete selected-test inventory before it
+    # executes anything, so a newly-added device test cannot enter implicitly.
+    "hipfile": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 15,
+    },
+    "rocprofiler-compute": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocprofiler-sdk": {
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocrtst": {
+        "test_script": f"python {_get_script_path('test_phase5_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+}
+
+
+def _host_asan_matrix() -> dict:
+    """Return the explicit Phase 1 through Phase 5 host-ASAN matrix.
+
+    Entries inherit artifact-fetching details from the regular matrix when one
+    exists, then receive a host-only command/timeout overlay. All entries run
+    once on Linux CPU infrastructure with no GPU container devices.
+    """
+    result = {}
+    for phase in (
+        HOST_ASAN_PHASE1_COMPONENTS,
+        HOST_ASAN_PHASE2_COMPONENTS,
+        HOST_ASAN_PHASE3_COMPONENTS,
+        HOST_ASAN_PHASE4_COMPONENTS,
+        HOST_ASAN_PHASE5_COMPONENTS,
+    ):
+        for key, overrides in phase.items():
+            entry = deepcopy(test_matrix.get(key, {}))
+            entry.update(overrides)
+            entry["platform"] = ["linux"]
+            entry["linux_cpu_runner"] = True
+            entry["total_shards_dict"] = {"linux": 1}
+            entry.pop("multi_gpu", None)
+            entry.pop("include_family", None)
+            entry.pop("exclude_family", None)
+            result[key] = entry
+    return result
+
 
 def run():
     parser = argparse.ArgumentParser()
@@ -945,6 +1101,12 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    host_only_tests = str2bool(os.getenv("HOST_ONLY_TESTS", "false"))
+
+    if host_only_tests and platform != "linux":
+        raise ValueError("HOST_ONLY_TESTS is supported only on Linux")
+    if host_only_tests and not build_variant.startswith("host-asan"):
+        raise ValueError("HOST_ONLY_TESTS requires a host-asan build variant")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -976,8 +1138,17 @@ def run():
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
-    selected_matrix: dict = deepcopy(test_matrix)
-    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
+    if host_only_tests:
+        selected_matrix = _host_asan_matrix()
+        test_type = "host-asan"
+        run_extended_tests = False
+        logging.info(
+            f"Using explicit Phase 1 through Phase 5 host-ASAN matrix "
+            f"({len(selected_matrix)} test(s))"
+        )
+    else:
+        selected_matrix = deepcopy(test_matrix)
+        logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
     if run_extended_tests and functional_matrix:
         logging.info(
@@ -1037,7 +1208,9 @@ def run():
             )
             continue
 
-        # If test labels are populated, and the test job name is not in the test labels, skip the test
+        # If test labels are populated, and the test job name is not in the test labels, skip the test.
+        # Host-only tests use their explicit admission matrix instead: the regular labels describe GPU
+        # coverage and can otherwise suppress admitted host-ASAN components.
         # Note: Benchmarks never use test_labels (always empty list)
         parsed_test_labels = [c.split("test:")[-1] for c in test_labels]
         expanded_test_labels = [
@@ -1045,7 +1218,12 @@ def run():
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+        if (
+            not host_only_tests
+            and key != "sanity"
+            and expanded_test_labels
+            and key not in expanded_test_labels
+        ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -1111,7 +1289,7 @@ def run():
             # and ctest stages have to be chained here instead. Fold both
             # into test_runner.py's own dual-mode support and drop this
             # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
+            if key == "tensilelite" and test_type not in ("quick", "host-asan"):
                 job_config_data["test_script"] = (
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
@@ -1177,7 +1355,11 @@ def run():
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
-        if "multi_gpu_runner" in component:
+        if host_only_tests:
+            # Non-empty sentinel for the reusable workflow's sanity prerequisite.
+            # test_artifacts.yml routes the job to its build-runner input.
+            component["test_runner"] = "host-only"
+        elif "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels
             if test_runs_on_multi_gpu_labels:
                 component["multi_gpu_runner"] = select_weighted_label(

@@ -15,6 +15,7 @@ AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
+import json
 import sys
 import subprocess
 import re
@@ -25,6 +26,11 @@ import logging
 import shlex
 from pathlib import Path
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
+
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -33,6 +39,8 @@ VALID_TEST_CATEGORIES = {
     "standard",
     "comprehensive",
     "full",
+    # Orthogonal CPU-only sanitizer scope (Phase 1).
+    "host-asan",
     # ffm-specific categories
     "ffm-quick",
     "ffm-standard",
@@ -548,6 +556,11 @@ def build_ctest_command(
 
     # Add common ctest parameters
     cmd.append("--output-on-failure")
+    # Host-ASAN categories are deliberately narrow positive allowlists. A
+    # missing or mispackaged label must fail instead of silently green-lighting
+    # a component after selecting zero tests.
+    if category == "host-asan":
+        cmd.append("--no-tests=error")
 
     # ctest_parallel_count is the module-level default (arch-tuned). Components
     # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
@@ -591,6 +604,89 @@ def build_ctest_command(
         cmd.extend(["--resource-spec-file", resource_spec_file])
 
     return cmd
+
+
+def audit_host_asan_ctest_command(cmd, env):
+    """Require every selected CTest command to be a directly instrumented ELF."""
+    audit_cmd = [*cmd, "--show-only=json-v1"]
+    result = subprocess.run(
+        audit_cmd,
+        cwd=THEROCK_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    try:
+        tests = json.loads(result.stdout).get("tests", [])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"invalid CTest JSON inventory: {error}") from error
+    if not tests:
+        raise RuntimeError("host-ASAN CTest selector resolved to zero tests")
+
+    for test in tests:
+        command = test.get("command") or []
+        if not command:
+            raise RuntimeError(
+                f"host-ASAN CTest entry has no command: {test.get('name', '<unnamed>')}"
+            )
+        properties = {
+            prop.get("name"): prop.get("value") for prop in test.get("properties", [])
+        }
+        # CTest may add a fixture setup selected only because an admitted test
+        # requires it. Permit the one exact, non-test housekeeping operation
+        # used by the DNN providers; all other selected commands remain subject
+        # to the direct-instrumentation gate below.
+        if (
+            properties.get("FIXTURES_SETUP")
+            and Path(command[0]).name in {"cmake", "cmake.exe"}
+            and command[1:4] == ["-E", "rm", "-rf"]
+            and len(command) == 5
+            and Path(command[4]).name == "miopen_test_cache"
+        ):
+            continue
+        executable = Path(command[0])
+        if not executable.is_absolute():
+            executable = (Path(TEST_DIR) / executable).resolve()
+        require_direct_clang_asan(executable, env)
+
+        # A CTest entry is not sufficient evidence when a GTest filter selects
+        # no cases inside the executable. Enumerate exact filtered payloads and
+        # fail closed before the real test run.
+        if any(arg.startswith("--gtest_filter=") for arg in command[1:]):
+            list_env = dict(env)
+            for assignment in properties.get("ENVIRONMENT", []):
+                key, separator, value = assignment.partition("=")
+                if separator:
+                    list_env[key] = value
+            working_dir = properties.get("WORKING_DIRECTORY", TEST_DIR)
+            list_result = subprocess.run(
+                [*command, "--gtest_list_tests"],
+                cwd=working_dir,
+                env=list_env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            selected_cases = sum(
+                1
+                for line in list_result.stdout.splitlines()
+                if line.startswith("  ") and line.strip()
+            )
+            if selected_cases == 0:
+                raise RuntimeError(
+                    "host-ASAN GTest filter resolved to zero tests: "
+                    f"{test.get('name', '<unnamed>')}"
+                )
+
+
+def prepare_ctest_environment(category, cmd, source_env):
+    """Return the execution environment after host-ASAN instrumentation audit."""
+    if category != "host-asan":
+        return dict(source_env)
+    env = native_host_asan_environment(source_env)
+    audit_host_asan_ctest_command(cmd, env)
+    return env
 
 
 def main():
@@ -643,8 +739,9 @@ def main():
 
     # Execute the command
     try:
+        execution_env = prepare_ctest_environment(category, cmd, environ_vars)
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars, check=False)
+        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=execution_env, check=False)
         return result.returncode
     except Exception as e:
         print(f"Error running ctest: {e}", file=sys.stderr)

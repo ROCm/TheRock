@@ -176,7 +176,9 @@ jobs:
   # ==========================================================================
   wsl-rocdxg:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
+    # WSL/ROCDXG is unrelated to Linux CPU sanitizer coverage and requires a
+    # Windows/WSL runner. Do not put it on the host-ASAN critical path.
+    if: ${{ !cancelled() && !failure() && !startsWith(inputs.build_variant_label, 'host-asan') && !contains(inputs.prebuilt_stages, 'wsl-rocdxg') && !contains(inputs.skip_stages, 'wsl-rocdxg') }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
     secrets: inherit
     with:
@@ -427,7 +429,9 @@ jobs:
   # ==========================================================================
   libraries_baseline_ready:
     name: "Libraries Baseline Ready"
-    if: always()
+    # This gate qualifies reusable release baselines. A host-ASAN presubmit is
+    # deliberately not a baseline candidate and skips WSL/ROCDXG above.
+    if: ${{ always() && !startsWith(inputs.build_variant_label, 'host-asan') }}
     needs:
       [
         runtime-tests,
