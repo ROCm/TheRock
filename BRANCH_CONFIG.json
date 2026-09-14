@@ -1,0 +1,5 @@
+{
+  "flags": {
+    "HIPDNN_ENABLE_CUDNN_COMPATIBILITY": "ON"
+  }
+}
