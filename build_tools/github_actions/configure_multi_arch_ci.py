@@ -1429,8 +1429,12 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
+    # Driver builds skip them too: partial tree, not a distribution.
     is_asan = suffix in ("asan", "host-asan")
-    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    is_driver = suffix == "driver"
+    build_python_packages = (
+        ci_inputs.build_python_packages and not is_asan and not is_driver
+    )
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
             per_family_info=per_family_info,
