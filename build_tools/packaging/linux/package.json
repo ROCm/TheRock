@@ -249,6 +249,17 @@
         ]
       },
       {
+        "Artifact": "core-hrr",
+        "Artifact_Subdir": [
+          {
+            "Name": "hrr",
+            "Components": [
+              "run"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
@@ -318,6 +329,17 @@
         "Artifact_Subdir": [
           {
             "Name": "clr",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "core-hrr",
+        "Artifact_Subdir": [
+          {
+            "Name": "hrr",
             "Components": [
               "dev"
             ]

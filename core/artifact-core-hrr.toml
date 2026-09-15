@@ -1,0 +1,15 @@
+# hrr
+[components.run."core/hrr/stage"]
+include = [
+  "bin/**",
+]
+[components.dbg."core/hrr/stage"]
+[components.dev."core/hrr/stage"]
+include = [
+  "include/hrr/**",
+]
+[components.doc."core/hrr/stage"]
+[components.test."core/hrr/stage"]
+include = [
+  "share/hrr/**",
+]
