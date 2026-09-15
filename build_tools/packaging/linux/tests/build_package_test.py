@@ -98,6 +98,8 @@ from packaging_utils import (  # noqa: E402
     get_package_info,
     is_gfxarch_package,
     is_key_defined,
+    process_devel_dependencies_kpack,
+    process_nonversioned_dependencies,
     update_package_name,
 )
 
@@ -814,6 +816,60 @@ class CopyPackageContentsTest(BuildPackageTestCase):
             "dangling symlink should be preserved",
         )
         self.assertEqual((dest / "amdgcn").readlink(), Path("lib/llvm/amdgcn"))
+
+
+# ---------------------------------------------------------------------------
+# Devel package dependency resolution (#6391)
+# ---------------------------------------------------------------------------
+class DevelDependencyResolutionTest(BuildPackageTestCase):
+    """Devel and non-versioned package dependency resolution in kpack mode."""
+
+    def test_devel_gfxarch_depends_on_full_meta(self) -> None:
+        """GfxArch devel depends on full meta (e.g., amdrocm-fft7.1), not host."""
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        devel_cfg = replace(cfg, gfx_arch=EMPTY_GFX_ARCH)
+
+        pkg_info = get_package_info("amdrocm-fft-devel")
+        deps = process_devel_dependencies_kpack(pkg_info, "DEBDepends", devel_cfg)
+
+        self.assertIn("amdrocm-fft7.1", deps)
+        self.assertNotIn("amdrocm-fft-host", deps)
+
+    def test_devel_meta_includes_version_constraints(self) -> None:
+        """Meta devel packages include version constraints on dependencies."""
+        cfg = _kpack_config(self.temp_dir)
+        devel_cfg = replace(cfg, gfx_arch=EMPTY_GFX_ARCH)
+
+        pkg_info = get_package_info("amdrocm-core-devel")
+        deps = process_devel_dependencies_kpack(pkg_info, "DEBDepends", devel_cfg)
+
+        self.assertRegex(deps, r"\(.*=.*\)")
+
+    def test_nonversioned_gfxarch_depends_on_versioned_meta(self) -> None:
+        """Non-versioned gfxarch package depends on versioned meta in kpack mode."""
+        cfg = _kpack_config(self.temp_dir)
+        nonversioned_cfg = replace(cfg, versioned_pkg=False, gfx_arch=GFX_META)
+
+        pkg_info = get_package_info(PKG_FFT)
+        deps = process_nonversioned_dependencies(pkg_info, nonversioned_cfg)
+
+        self.assertEqual(deps, "amdrocm-fft7.1")
+
+    def test_nonversioned_devel_depends_on_versioned_devel(self) -> None:
+        """Non-versioned devel depends on versioned devel in kpack mode."""
+        cfg = _kpack_config(self.temp_dir)
+        nonversioned_cfg = replace(cfg, versioned_pkg=False, gfx_arch=EMPTY_GFX_ARCH)
+
+        pkg_info = get_package_info("amdrocm-fft-devel")
+        deps = process_nonversioned_dependencies(pkg_info, nonversioned_cfg)
+
+        self.assertEqual(deps, "amdrocm-fft-dev7.1")
 
 
 if __name__ == "__main__":
