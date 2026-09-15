@@ -133,7 +133,7 @@ class Artifact:
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
     source_paths: List[str] = field(
         default_factory=list
-    )  # Monorepo source paths for granular CI reuse (e.g., ["rocblas", "hipblas"])
+    )  # Monorepo source paths for granular CI reuse (e.g., ["rocblas", "hipblas", "origami"])
 
 
 class BuildTopology:
@@ -1348,17 +1348,20 @@ class BuildTopology:
         """Get all build stage names."""
         return set(self.build_stages.keys())
 
-    def get_source_path_to_artifact_map(self) -> Dict[str, str]:
-        """Return {source_path_name: artifact_name} mapping."""
-        mapping: Dict[str, str] = {}
+    def get_source_path_to_artifacts_map(self) -> Dict[str, List[str]]:
+        """Return {source_path_name: [artifact_name, ...]} mapping.
+
+        Multiple artifacts can share the same source path (e.g., shared libraries).
+        """
+        mapping: Dict[str, List[str]] = {}
         for artifact_name, artifact in self.artifacts.items():
             for source_path in artifact.source_paths:
-                mapping[source_path] = artifact_name
+                mapping.setdefault(source_path, []).append(artifact_name)
         return mapping
 
-    def get_artifact_for_source_path(self, source_path_name: str) -> Optional[str]:
-        """Look up artifact name for a source path directory name."""
-        return self.get_source_path_to_artifact_map().get(source_path_name)
+    def get_artifacts_for_source_path(self, source_path_name: str) -> List[str]:
+        """Look up artifact names for a source path directory name."""
+        return self.get_source_path_to_artifacts_map().get(source_path_name, [])
 
     def get_source_sets_with_source_paths(self) -> List[str]:
         """Get source sets that support granular artifact analysis."""
@@ -1381,14 +1384,20 @@ class BuildTopology:
 
     @staticmethod
     def extract_source_path_from_path(path: str) -> Optional[str]:
-        """Extract source path name from projects/NAME/... or shared/NAME/... path."""
+        """Extract source path name from projects/NAME/..., shared/NAME/..., or dnn-providers/NAME/... path."""
         match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
         return match.group(1) if match else None
 
-    def get_artifact_for_path(self, path: str) -> Optional[str]:
-        """Map submodule path to artifact. Returns None if source path not found."""
+    def get_artifacts_for_path(self, path: str) -> List[str]:
+        """Map submodule path to artifacts. Returns empty list if not found.
+
+        Works for both projects/ and shared/ paths - looks up source_paths mapping.
+        Multiple artifacts can share the same source path.
+        """
         source_path = self.extract_source_path_from_path(path)
-        return self.get_artifact_for_source_path(source_path) if source_path else None
+        if source_path is None:
+            return []
+        return self.get_artifacts_for_source_path(source_path)
 
     @staticmethod
     def parse_changed_path(changed_path: str) -> Tuple[Optional[str], Optional[str]]:

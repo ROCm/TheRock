@@ -73,7 +73,28 @@ FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic consumed by every
+    # project's tests; a change there can alter selection everywhere, so treat
+    # it as a full-test trigger rather than a single surfaced component.
+    "shared/ctest/*",
 ]
+
+# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
+# absent from an external repo's repos-config.json. Without these, a PR confined
+# to shared/* or emulation/* yields no matched subtree -> empty changed_projects
+# -> TheRock falls back to building and testing everything. Each entry MUST have
+# a corresponding mapping in TheRock (build-topology alias + the test selector's
+# _EXTERNAL_SUBTREE_ALIASES); the test selector hard-fails on an unmapped
+# shared/* or emulation/* path, so keep this list in lock-step with TheRock when
+# adding directories. (Currently enumerates rocm-systems' non-subtree dirs;
+# rocm-libraries paths already resolve as repos-config subtrees.)
+CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
 
 
 @dataclass
@@ -203,7 +224,7 @@ def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
 
 def find_matched_subtrees(
     changed_files: Iterable[str], valid_prefixes: Set[str]
-) -> Tuple[List[str], bool]:
+) -> List[str]:
     """Find subtrees matching changed files via longest-prefix match.
 
     A changed file's subtree is the LONGEST registered prefix (`category/name`,
@@ -216,30 +237,20 @@ def find_matched_subtrees(
     longest-prefix-first, and attributing each changed file to exactly one
     subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
     (potentially different) test selection.
-
-    Returns:
-        Tuple of (matched_subtrees, has_unmapped):
-        - matched_subtrees: Sorted list of matched subtree paths
-        - has_unmapped: True if any files couldn't be matched to a subtree
     """
     # Longest prefixes first, so a nested subtree wins over its parent.
     prefixes_by_specificity = sorted(
         valid_prefixes, key=lambda p: p.count("/"), reverse=True
     )
     matched: Set[str] = set()
-    has_unmapped = False
     for path in changed_files:
         segments = path.split("/")
-        found_match = False
         for prefix in prefixes_by_specificity:
             prefix_segments = prefix.split("/")
             if segments[: len(prefix_segments)] == prefix_segments:
                 matched.add(prefix)
-                found_match = True
                 break
-        if not found_match:
-            has_unmapped = True
-    return sorted(matched), has_unmapped
+    return sorted(matched)
 
 
 def set_github_output(outputs: Mapping[str, str]) -> None:
@@ -253,6 +264,28 @@ def set_github_output(outputs: Mapping[str, str]) -> None:
     with open(output_file, "a") as f:
         for k, v in outputs.items():
             f.write(f"{k}={v}\n")
+
+
+def _subtree_prefix(path: str) -> str:
+    """First two path components, matching find_matched_subtrees()."""
+    return "/".join(path.split("/", 2)[:2])
+
+
+def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> List[str]:
+    """Non-skippable changed paths that map to no known subtree.
+
+    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with a path we
+    cannot classify (a top-level file, or a directory absent from both
+    repos-config.json and CI_RELEVANT_NON_SUBTREE_PREFIXES). find_matched_subtrees
+    silently drops the unclassified path, which would let CI narrow the build to
+    the recognized subset and miss the impact of the unclassified change. Callers
+    should treat any such path conservatively (run the full suite).
+    """
+    return [
+        p
+        for p in paths
+        if not is_skippable(p) and _subtree_prefix(p) not in valid_prefixes
+    ]
 
 
 def configure(
@@ -323,19 +356,34 @@ def configure(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
 
-    valid_prefixes = get_valid_prefixes(config)
-    matched, has_unmapped = find_matched_subtrees(modified_paths, valid_prefixes)
-    logger.info(f"Matched projects: {matched}")
-    if has_unmapped:
-        logger.warning(
-            "Some changed files could not be classified - sparse checkout will fall back to full"
+    valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
+
+    # Conservative guard: if any non-skippable change cannot be classified to a
+    # known subtree, we cannot reason about its build/test impact. Narrowing on
+    # just the recognized subset would silently drop the unclassified change, so
+    # fall back to a full run instead. Also set has_unmapped_files to signal
+    # downstream consumers (like sparse checkout) that fallback is needed.
+    unclassified = get_unclassified_paths(modified_paths, valid_prefixes)
+    if unclassified:
+        logger.info(
+            f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+            " - running all tests"
         )
+        return ConfigureResult(
+            changed_projects="",
+            run_all_tests=True,
+            skip_tests=False,
+            has_unmapped_files=True,
+        )
+
+    matched = find_matched_subtrees(modified_paths, valid_prefixes)
+    logger.info(f"Matched projects: {matched}")
 
     return ConfigureResult(
         changed_projects=",".join(matched),
         run_all_tests=False,
         skip_tests=False,
-        has_unmapped_files=has_unmapped,
+        has_unmapped_files=False,
     )
 
 

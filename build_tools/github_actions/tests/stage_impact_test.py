@@ -673,5 +673,172 @@ class ArtifactLevelAnalysisTest(unittest.TestCase):
         self.assertFalse(result.artifact_level_analysis)
 
 
+class SharedSourcePathsAnalysisTest(unittest.TestCase):
+    """Test cases for shared/ paths in source_paths artifact-level analysis."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as temp_file:
+            self.topology_path = temp_file.name
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.topology_path):
+            os.unlink(self.topology_path)
+
+    def write_topology(self, content: str) -> None:
+        """Write topology content to temp file."""
+        with open(self.topology_path, "w", encoding="utf-8") as f:
+            f.write(textwrap.dedent(content))
+
+    def write_shared_source_paths_topology(self) -> None:
+        """Write a topology with shared paths in source_paths."""
+        self.write_topology(
+            """
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-libraries"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.blas]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocblas", "hipblas", "origami", "blas-common"]
+
+            [artifacts.fft]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocfft", "hipfft"]
+
+            [artifacts.prim]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocprim", "hipcub", "rocthrust"]
+
+            [artifacts.rand]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocrand", "hiprand"]
+            """
+        )
+
+    def test_shared_path_maps_to_artifact(self):
+        """A shared/ change with source_paths mapping should identify the artifact."""
+        self.write_shared_source_paths_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["rocm-libraries/shared/origami/foo.hpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        self.assertIn("blas", result.impacted_artifacts)
+        # Other artifacts should be reusable
+        self.assertIn("fft", result.reusable_artifacts)
+        self.assertIn("prim", result.reusable_artifacts)
+        self.assertIn("rand", result.reusable_artifacts)
+
+    def test_unmapped_shared_disables_artifact_analysis(self):
+        """A shared/ change without source_paths mapping should be conservative."""
+        self.write_shared_source_paths_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["rocm-libraries/shared/unknown-shared/foo.hpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        # Artifact-level analysis should NOT be enabled due to conservative fallback
+        self.assertFalse(result.artifact_level_analysis)
+        self.assertEqual(result.impacted_artifacts, ())
+        self.assertEqual(result.reusable_artifacts, ())
+
+    def test_shared_source_path_with_multiple_artifacts(self):
+        """A source_path used by multiple artifacts should impact all of them."""
+        self.write_topology(
+            """
+            [source_sets.rocm-libraries]
+            description = "ROCm libraries"
+            submodules = ["rocm-libraries"]
+
+            [artifact_groups.math-libs]
+            description = "Math libs"
+            type = "per-arch"
+            source_sets = ["rocm-libraries"]
+
+            [build_stages.math-libs]
+            description = "Math libs stage"
+            artifact_groups = ["math-libs"]
+            type = "per-arch"
+
+            [artifacts.blas]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocblas", "common-utils"]
+
+            [artifacts.fft]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocfft", "common-utils"]
+
+            [artifacts.rand]
+            artifact_group = "math-libs"
+            type = "target-specific"
+            source_paths = ["rocrand"]
+            """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            ["rocm-libraries/shared/common-utils/helper.hpp"],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        # Both blas and fft should be impacted
+        self.assertIn("blas", result.impacted_artifacts)
+        self.assertIn("fft", result.impacted_artifacts)
+        # Only rand should be reusable
+        self.assertIn("rand", result.reusable_artifacts)
+        self.assertEqual(len(result.reusable_artifacts), 1)
+
+    def test_mixed_project_and_shared_changes(self):
+        """Mixed project and shared changes should union impacted artifacts."""
+        self.write_shared_source_paths_topology()
+
+        topology = BuildTopology(self.topology_path)
+        result = analyze_stage_impact(
+            [
+                "rocm-libraries/projects/rocfft/src/foo.cpp",
+                "rocm-libraries/shared/origami/bar.hpp",
+            ],
+            topology=topology,
+        )
+
+        self.assertFalse(result.full_rebuild_required)
+        self.assertTrue(result.artifact_level_analysis)
+        # fft from project path, blas from source_paths
+        self.assertIn("fft", result.impacted_artifacts)
+        self.assertIn("blas", result.impacted_artifacts)
+        # prim and rand should be reusable
+        self.assertIn("prim", result.reusable_artifacts)
+        self.assertIn("rand", result.reusable_artifacts)
+
+
 if __name__ == "__main__":
     unittest.main()

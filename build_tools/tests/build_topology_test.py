@@ -1155,28 +1155,40 @@ class ExtractSourcePathFromPathTest(unittest.TestCase):
         self.assertIsNone(BuildTopology.extract_source_path_from_path("CMakeLists.txt"))
 
 
-class GetArtifactForSourcePathTest(unittest.TestCase):
+class GetArtifactsForSourcePathTest(unittest.TestCase):
     """Tests for artifact lookup by source_path."""
 
     def setUp(self):
         self.topology = get_topology()
 
     def test_rocblas_maps_to_blas(self):
-        self.assertEqual(self.topology.get_artifact_for_source_path("rocblas"), "blas")
-
-    def test_hipblas_maps_to_blas(self):
-        self.assertEqual(self.topology.get_artifact_for_source_path("hipblas"), "blas")
-
-    def test_rocrand_maps_to_rand(self):
-        self.assertEqual(self.topology.get_artifact_for_source_path("rocrand"), "rand")
-
-    def test_unknown_source_path_returns_none(self):
-        self.assertIsNone(
-            self.topology.get_artifact_for_source_path("unknown-source-path")
+        self.assertEqual(
+            self.topology.get_artifacts_for_source_path("rocblas"), ["blas"]
         )
 
+    def test_hipblas_maps_to_blas(self):
+        self.assertEqual(
+            self.topology.get_artifacts_for_source_path("hipblas"), ["blas"]
+        )
 
-class GetArtifactForPathTest(unittest.TestCase):
+    def test_rocrand_maps_to_rand(self):
+        self.assertEqual(
+            self.topology.get_artifacts_for_source_path("rocrand"), ["rand"]
+        )
+
+    def test_unknown_source_path_returns_empty(self):
+        self.assertEqual(
+            self.topology.get_artifacts_for_source_path("unknown-source-path"), []
+        )
+
+    def test_shared_source_path_multiple_artifacts(self):
+        # primbench is used by both rand and prim
+        artifacts = self.topology.get_artifacts_for_source_path("primbench")
+        self.assertIn("rand", artifacts)
+        self.assertIn("prim", artifacts)
+
+
+class GetArtifactsForPathTest(unittest.TestCase):
     """Tests for artifact lookup by full file path."""
 
     def setUp(self):
@@ -1184,24 +1196,31 @@ class GetArtifactForPathTest(unittest.TestCase):
 
     def test_rocblas_maps_to_blas(self):
         self.assertEqual(
-            self.topology.get_artifact_for_path("projects/rocblas/src/foo.cpp"),
-            "blas",
+            self.topology.get_artifacts_for_path("projects/rocblas/src/foo.cpp"),
+            ["blas"],
         )
 
     def test_rocfft_maps_to_fft(self):
         self.assertEqual(
-            self.topology.get_artifact_for_path("projects/rocfft/src/kernel.cpp"),
-            "fft",
+            self.topology.get_artifacts_for_path("projects/rocfft/src/kernel.cpp"),
+            ["fft"],
         )
 
     def test_shared_rocroller_maps_to_blas(self):
         self.assertEqual(
-            self.topology.get_artifact_for_path("shared/rocroller/src/foo.cpp"),
-            "blas",
+            self.topology.get_artifacts_for_path("shared/rocroller/src/foo.cpp"),
+            ["blas"],
         )
 
-    def test_unknown_path_returns_none(self):
-        self.assertIsNone(self.topology.get_artifact_for_path("cmake/FindHIP.cmake"))
+    def test_shared_primbench_maps_to_multiple(self):
+        artifacts = self.topology.get_artifacts_for_path("shared/primbench/bench.hpp")
+        self.assertIn("rand", artifacts)
+        self.assertIn("prim", artifacts)
+
+    def test_unknown_path_returns_empty(self):
+        self.assertEqual(
+            self.topology.get_artifacts_for_path("cmake/FindHIP.cmake"), []
+        )
 
 
 class ParseChangedPathTest(unittest.TestCase):
