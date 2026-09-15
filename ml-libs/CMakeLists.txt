@@ -293,6 +293,21 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
+  # rocKE loads comgr through ctypes, which searches the dynamic loader path.
+  # Nothing puts TheRock's staged trees on that path, so hand the pack step the
+  # built library explicitly. Use THEROCK_DIST_DIR (not THEROCK_STAGE_DIR): dist
+  # carries the merged runtime deps the library needs to load.
+  get_target_property(_comgr_dist amd-comgr THEROCK_DIST_DIR)
+  if(WIN32)
+    set(_comgr_dll_name "${THEROCK_COMGR_DLL_NAME}")
+    if(NOT _comgr_dll_name)
+      set(_comgr_dll_name "amd_comgr.dll")
+    endif()
+    set(_rocke_comgr_lib "${_comgr_dist}/bin/${_comgr_dll_name}")
+  else()
+    set(_rocke_comgr_lib "${_comgr_dist}/lib/libamd_comgr.so")
+  endif()
+
   therock_cmake_subproject_declare(hipkernelprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
@@ -305,6 +320,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
       -DROCKE_KPACK_PYTHON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
+      -DHIPKERNELPROVIDER_ROCKE_COMGR_LIB=${_rocke_comgr_lib}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
