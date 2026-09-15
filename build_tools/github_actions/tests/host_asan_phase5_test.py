@@ -1,11 +1,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import io
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -103,7 +106,12 @@ Typed/Parameterized.
     def test_test_environment_forbids_preload_and_enables_lsan(self):
         with patch.dict(
             os.environ,
-            {"LD_PRELOAD": "/tmp/not-allowed.so", "ASAN_OPTIONS": "existing=1"},
+            {
+                "LD_PRELOAD": "/tmp/not-allowed.so",
+                "LD_LIBRARY_PATH": "/existing/lib",
+                "ASAN_RUNTIME_PATH": "/toolchain/lib/libclang_rt.asan.so",
+                "ASAN_OPTIONS": "existing=1",
+            },
             clear=False,
         ):
             env = test_phase5_host_asan._test_environment(
@@ -113,6 +121,16 @@ Typed/Parameterized.
         self.assertIn("detect_leaks=1", env["ASAN_OPTIONS"])
         self.assertIn("halt_on_error=1", env["ASAN_OPTIONS"])
         self.assertIn("exitcode=23", env["LSAN_OPTIONS"])
+        self.assertEqual(
+            env["LD_LIBRARY_PATH"].split(os.pathsep),
+            [
+                str(Path("/opt/rocm/lib")),
+                str(Path("/opt/rocm/lib/rocm_sysdeps/lib")),
+                str(Path("/opt/rocm/lib/llvm/lib")),
+                str(Path("/toolchain/lib")),
+                "/existing/lib",
+            ],
+        )
         self.assertEqual(
             env["ROCPROFILER_METRICS_PATH"],
             str(Path("/opt/rocm") / "share" / "rocprofiler-sdk"),
@@ -147,6 +165,39 @@ Typed/Parameterized.
                 expected_count=1,
                 expected_sha256="0" * 64,
             )
+
+    def test_main_reports_captured_subprocess_diagnostics(self):
+        failure = subprocess.CalledProcessError(
+            127,
+            ["host-test", "--gtest_list_tests"],
+            output="discovery stdout\n",
+            stderr="loader diagnostic\n",
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "THEROCK_BIN_DIR": "/opt/rocm/bin",
+                    "TEST_COMPONENT": "rocprofiler-sdk",
+                },
+                clear=False,
+            ),
+            patch.object(test_phase5_host_asan, "_require_no_gpu_nodes"),
+            patch.object(
+                test_phase5_host_asan,
+                "_run_gtest_component",
+                side_effect=failure,
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(test_phase5_host_asan.main(), 1)
+
+        self.assertIn("discovery stdout", stdout.getvalue())
+        self.assertIn("loader diagnostic", stderr.getvalue())
+        self.assertIn("exit status 127", stderr.getvalue())
 
     def test_skipped_name_parser_ignores_timed_event_and_reads_summary(self):
         output = """[  SKIPPED ] Suite.expected_skip (4 ms)

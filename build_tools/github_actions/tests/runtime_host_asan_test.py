@@ -15,6 +15,25 @@ import test_runtime_host_asan
 
 
 class RuntimeHostAsanTest(unittest.TestCase):
+    def test_host_asan_comm_stage_rebuilds_only_rocshmem(self):
+        workflow_path = (
+            Path(__file__).resolve().parents[3]
+            / ".github"
+            / "workflows"
+            / "multi_arch_build_portable_linux.yml"
+        )
+        workflow = workflow_path.read_text(encoding="utf-8")
+        comm_job = workflow.split("\n  comm-libs:\n", maxsplit=1)[1].split(
+            "\n  # ==========================================================================",
+            maxsplit=1,
+        )[0]
+
+        self.assertIn(
+            "rebuild_artifacts: ${{ startsWith(inputs.build_variant_label, "
+            "'host-asan') && 'rocshmem' || inputs.rebuild_artifacts }}",
+            comm_job,
+        )
+
     def test_inventory_is_explicit(self):
         self.assertEqual(set(test_runtime_host_asan.COMPONENTS), {"rocshmem", "rocrtst"})
         self.assertEqual(

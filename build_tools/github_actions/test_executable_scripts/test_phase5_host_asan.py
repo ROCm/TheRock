@@ -16,6 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from host_asan_instrumentation import native_host_asan_environment
+
 GTEST_COMPONENTS = {
     "rocprofiler-compute": (
         {
@@ -94,10 +96,18 @@ def _with_option(value: str, option: str) -> str:
 
 
 def _test_environment(prefix: Path, component: str) -> dict[str, str]:
-    env = os.environ.copy()
+    env = native_host_asan_environment()
     # Preload-only execution is not host-ASAN instrumentation. Each selected
     # native binary is checked for a direct ASAN DT_NEEDED entry below.
-    env.pop("LD_PRELOAD", None)
+    library_dirs = (
+        prefix / "lib",
+        prefix / "lib" / "rocm_sysdeps" / "lib",
+        prefix / "lib" / "llvm" / "lib",
+    )
+    existing = env.get("LD_LIBRARY_PATH", "")
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        [*(str(path) for path in library_dirs), existing]
+    ).rstrip(os.pathsep)
     # LeakSanitizer cannot run under ptrace. The opt-in trace mode is only for
     # collecting the separate device-node syscall proof; the normal CI mode
     # always enables leak detection.
@@ -287,6 +297,11 @@ def main() -> int:
             _run_ctest_component(prefix, component, env)
         return 0
     except (KeyError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        if isinstance(error, subprocess.CalledProcessError):
+            if error.stdout:
+                sys.stdout.write(error.stdout)
+            if error.stderr:
+                sys.stderr.write(error.stderr)
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
