@@ -192,10 +192,13 @@ def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
     submodule_path = config.get("submodule_path")
     ref = config.get("ref")
 
-    if not submodule_path or not ref:
+    if not isinstance(submodule_path, str) or not submodule_path.strip():
         raise ValueError(
-            "EXTERNAL_REPO_CONFIG must contain both 'submodule_path' and 'ref'"
+            "EXTERNAL_REPO_CONFIG 'submodule_path' must be a non-empty string"
         )
+
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValueError("EXTERNAL_REPO_CONFIG 'ref' must be a non-empty string")
 
     return config
 
