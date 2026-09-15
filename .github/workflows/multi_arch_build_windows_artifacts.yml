@@ -174,7 +174,7 @@ jobs:
       - name: Setup ccache
         run: |
           python ./build_tools/setup_ccache.py \
-            --release-type "${{ inputs.release_type }}" \
+            --config-preset local \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
