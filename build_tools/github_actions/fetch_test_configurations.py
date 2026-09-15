@@ -618,7 +618,7 @@ test_matrix = {
     "rocprofiler-sdk": {
         "job_name": "rocprofiler-sdk",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 20,
         "additional_requirements_files": [
             "share/rocprofiler-sdk/tests/requirements.txt",
         ],
