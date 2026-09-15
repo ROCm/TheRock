@@ -84,20 +84,39 @@ class FindMatchedSubtreesTest(unittest.TestCase):
     def test_finds_valid_prefixes(self):
         files = ["projects/rocblas/src/main.cpp", "projects/hipblas/CMakeLists.txt"]
         prefixes = {"projects/rocblas", "projects/hipblas", "projects/rocfft"}
-        result = find_matched_subtrees(files, prefixes)
+        result, has_unmapped = find_matched_subtrees(files, prefixes)
         self.assertEqual(result, ["projects/hipblas", "projects/rocblas"])
+        self.assertFalse(has_unmapped)
 
-    def test_ignores_invalid_prefixes(self):
+    def test_ignores_invalid_prefixes_and_signals_unmapped(self):
         files = ["projects/unknown/file.cpp", "random/file.txt"]
         prefixes = {"projects/rocblas"}
-        result = find_matched_subtrees(files, prefixes)
+        result, has_unmapped = find_matched_subtrees(files, prefixes)
         self.assertEqual(result, [])
+        self.assertTrue(has_unmapped)
 
     def test_handles_single_segment_paths(self):
         files = ["README.md"]
         prefixes = {"projects/rocblas"}
-        result = find_matched_subtrees(files, prefixes)
+        result, has_unmapped = find_matched_subtrees(files, prefixes)
         self.assertEqual(result, [])
+        self.assertTrue(has_unmapped)
+
+    def test_mixed_matched_and_unmapped(self):
+        """Mixed files: some matched, some unmapped."""
+        files = ["projects/rocblas/src/main.cpp", "experimental/foo/bar.cpp"]
+        prefixes = {"projects/rocblas"}
+        result, has_unmapped = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/rocblas"])
+        self.assertTrue(has_unmapped)
+
+    def test_all_files_matched(self):
+        """All files matched means no unmapped."""
+        files = ["projects/rocblas/src/main.cpp", "projects/hipblas/test.cpp"]
+        prefixes = {"projects/rocblas", "projects/hipblas"}
+        result, has_unmapped = find_matched_subtrees(files, prefixes)
+        self.assertEqual(result, ["projects/hipblas", "projects/rocblas"])
+        self.assertFalse(has_unmapped)
 
 
 class GetValidPrefixesTest(unittest.TestCase):
@@ -249,6 +268,45 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result.run_all_tests, True)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_unmapped_files_sets_has_unmapped_files(self, mock_config, mock_api):
+        """Changes outside known subtrees should set has_unmapped_files=True."""
+        mock_api.return_value = {
+            "projects/rocblas/src/main.cpp",
+            "experimental/foo/bar.cpp",  # Not a known subtree
+        }
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.changed_projects, "projects/rocblas")
+        self.assertTrue(result.has_unmapped_files)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_all_files_mapped_has_unmapped_files_false(self, mock_config, mock_api):
+        """When all files map to subtrees, has_unmapped_files should be False."""
+        mock_api.return_value = {"projects/rocblas/src/main.cpp"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.changed_projects, "projects/rocblas")
+        self.assertFalse(result.has_unmapped_files)
 
 
 if __name__ == "__main__":

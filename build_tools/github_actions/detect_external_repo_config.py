@@ -44,6 +44,30 @@ from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
 
 
+# Map source_path names to their directory prefix.
+# Most source_paths use "projects/" but some use "shared/".
+# This mapping is derived from CMakeLists.txt EXTERNAL_SOURCE_DIR declarations.
+# Note: Only non-default prefixes need to be listed here.
+SOURCE_PATH_PREFIX_OVERRIDES: Dict[str, str] = {
+    # rocm-libraries shared/ paths
+    "rocroller": "shared/",
+    "origami": "shared/",
+    "mxdatagenerator": "shared/",
+    # rocm-systems shared/ paths
+    "kpack": "shared/",
+}
+
+
+def get_source_path_prefix(source_path: str) -> str:
+    """Get the directory prefix for a source_path.
+
+    Returns the appropriate prefix ('projects/' or 'shared/') for a given
+    source_path name. Uses SOURCE_PATH_PREFIX_OVERRIDES for known shared
+    paths, defaulting to 'projects/' for everything else.
+    """
+    return SOURCE_PATH_PREFIX_OVERRIDES.get(source_path, "projects/")
+
+
 def get_stage_source_paths(stage_name: str) -> Set[str]:
     """Get all source_paths that map to artifacts built in this stage."""
     topology = get_topology()
@@ -350,11 +374,13 @@ def compute_stage_sparse_checkout(
     all_needed_paths = all_needed_paths.intersection(stage_source_paths)
 
     # Convert source_paths back to project paths using the prefix map
-    # For siblings not in the original changed_projects, use "projects/" as default
-    # since that's the most common case in rocm-libraries
+    # For siblings not in the original changed_projects, use get_source_path_prefix()
+    # which handles shared/ vs projects/ prefixes correctly
     result_paths: List[str] = []
     for sp in all_needed_paths:
-        prefix = project_prefix_map.get(sp, "projects/")
+        # Use the explicit prefix from changed_projects if available,
+        # otherwise look up the correct prefix from SOURCE_PATH_PREFIX_OVERRIDES
+        prefix = project_prefix_map.get(sp, get_source_path_prefix(sp))
         result_paths.append(f"{prefix}{sp}")
 
     return sorted(result_paths), unmapped_projects

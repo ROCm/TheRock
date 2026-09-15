@@ -22,6 +22,7 @@ from detect_external_repo_config import (
     get_all_topology_source_paths,
     get_repo_config,
     get_external_repo_path,
+    get_source_path_prefix,
     get_stage_source_paths,
     get_skip_patterns,
     get_test_list,
@@ -30,6 +31,7 @@ from detect_external_repo_config import (
     normalize_changed_projects,
     output_github_actions_vars,
     REPO_CONFIGS,
+    SOURCE_PATH_PREFIX_OVERRIDES,
 )
 
 
@@ -694,6 +696,60 @@ class TestGetAllTopologySourcePaths(unittest.TestCase):
         """Should return a set."""
         result = get_all_topology_source_paths()
         self.assertIsInstance(result, set)
+
+
+class TestGetSourcePathPrefix(unittest.TestCase):
+    """Tests for get_source_path_prefix function."""
+
+    def test_shared_paths_return_shared_prefix(self):
+        """Known shared/ source paths should return 'shared/' prefix."""
+        self.assertEqual(get_source_path_prefix("rocroller"), "shared/")
+        self.assertEqual(get_source_path_prefix("origami"), "shared/")
+        self.assertEqual(get_source_path_prefix("mxdatagenerator"), "shared/")
+        self.assertEqual(get_source_path_prefix("kpack"), "shared/")
+
+    def test_projects_paths_return_projects_prefix(self):
+        """Standard source paths should return 'projects/' prefix (default)."""
+        self.assertEqual(get_source_path_prefix("rocblas"), "projects/")
+        self.assertEqual(get_source_path_prefix("hipblaslt"), "projects/")
+        self.assertEqual(get_source_path_prefix("rocprim"), "projects/")
+        self.assertEqual(get_source_path_prefix("miopen"), "projects/")
+
+    def test_unknown_paths_default_to_projects(self):
+        """Unknown source paths should default to 'projects/'."""
+        self.assertEqual(get_source_path_prefix("unknown_project"), "projects/")
+
+    def test_source_path_prefix_overrides_contains_known_shared(self):
+        """SOURCE_PATH_PREFIX_OVERRIDES should contain known shared paths."""
+        self.assertIn("rocroller", SOURCE_PATH_PREFIX_OVERRIDES)
+        self.assertIn("origami", SOURCE_PATH_PREFIX_OVERRIDES)
+
+
+class TestSiblingPrefixHandling(unittest.TestCase):
+    """Tests that siblings get correct prefix (shared/ vs projects/)."""
+
+    def test_rocblas_change_includes_rocroller_with_shared_prefix(self):
+        """When rocblas changes, rocroller sibling should use shared/ prefix.
+
+        This tests the fix for the comment: project_prefix_map only contains
+        paths for explicitly changed projects; automatically added siblings
+        should NOT default to projects/ when they're actually in shared/.
+        """
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "projects/rocblas")
+        # rocroller is a sibling in the blas artifact, should be shared/
+        self.assertIn("shared/rocroller", paths)
+        # origami is also a sibling in shared/
+        self.assertIn("shared/origami", paths)
+        # rocblas itself stays in projects/
+        self.assertIn("projects/rocblas", paths)
+        self.assertEqual(unmapped, [])
+
+    def test_explicitly_passed_shared_path_preserved(self):
+        """Explicitly passed shared/ paths should be preserved."""
+        paths, unmapped = compute_stage_sparse_checkout("math-libs", "shared/rocroller")
+        self.assertIn("shared/rocroller", paths)
+        # Other blas siblings should also be included with correct prefixes
+        self.assertIn("projects/rocblas", paths)
 
 
 if __name__ == "__main__":

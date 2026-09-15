@@ -83,6 +83,7 @@ class ConfigureResult:
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
     skip_tests: bool
+    has_unmapped_files: bool = False  # True if some files couldn't be classified
 
 
 @dataclass
@@ -202,7 +203,7 @@ def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
 
 def find_matched_subtrees(
     changed_files: Iterable[str], valid_prefixes: Set[str]
-) -> List[str]:
+) -> Tuple[List[str], bool]:
     """Find subtrees matching changed files via longest-prefix match.
 
     A changed file's subtree is the LONGEST registered prefix (`category/name`,
@@ -215,20 +216,30 @@ def find_matched_subtrees(
     longest-prefix-first, and attributing each changed file to exactly one
     subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
     (potentially different) test selection.
+
+    Returns:
+        Tuple of (matched_subtrees, has_unmapped):
+        - matched_subtrees: Sorted list of matched subtree paths
+        - has_unmapped: True if any files couldn't be matched to a subtree
     """
     # Longest prefixes first, so a nested subtree wins over its parent.
     prefixes_by_specificity = sorted(
         valid_prefixes, key=lambda p: p.count("/"), reverse=True
     )
     matched: Set[str] = set()
+    has_unmapped = False
     for path in changed_files:
         segments = path.split("/")
+        found_match = False
         for prefix in prefixes_by_specificity:
             prefix_segments = prefix.split("/")
             if segments[: len(prefix_segments)] == prefix_segments:
                 matched.add(prefix)
+                found_match = True
                 break
-    return sorted(matched)
+        if not found_match:
+            has_unmapped = True
+    return sorted(matched), has_unmapped
 
 
 def set_github_output(outputs: Mapping[str, str]) -> None:
@@ -313,13 +324,18 @@ def configure(
         )
 
     valid_prefixes = get_valid_prefixes(config)
-    matched = find_matched_subtrees(modified_paths, valid_prefixes)
+    matched, has_unmapped = find_matched_subtrees(modified_paths, valid_prefixes)
     logger.info(f"Matched projects: {matched}")
+    if has_unmapped:
+        logger.warning(
+            "Some changed files could not be classified - sparse checkout will fall back to full"
+        )
 
     return ConfigureResult(
         changed_projects=",".join(matched),
         run_all_tests=False,
         skip_tests=False,
+        has_unmapped_files=has_unmapped,
     )
 
 
@@ -377,6 +393,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "changed_projects": result.changed_projects,
             "run_all_tests": str(result.run_all_tests).lower(),
             "skip_tests": str(result.skip_tests).lower(),
+            "has_unmapped_files": str(result.has_unmapped_files).lower(),
         }
     )
 

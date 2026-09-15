@@ -5,7 +5,8 @@ name: Checkout External Repository
 description: >-
   Checkout external repo with sparse checkout when stage is affected.
   Skips checkout entirely for stages with no affected projects.
-  Falls back to full checkout only when changed_projects is unknown.
+  Falls back to full checkout when changed_projects is unknown or
+  when sparse_checkout_fallback_full is true (some files couldn't be classified).
 
 inputs:
   external_repo_config:
@@ -22,9 +23,13 @@ inputs:
 runs:
   using: composite
   steps:
-    # Sparse checkout: stage has affected projects
+    # Sparse checkout: stage has affected projects and no unmapped files
     - name: Checkout external repository (sparse)
-      if: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] != '' }}
+      if: >-
+        ${{
+          fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] != '' &&
+          fromJSON(inputs.external_repo_config).sparse_checkout_fallback_full != true
+        }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: ${{ fromJSON(inputs.external_repo_config).repository }}
@@ -33,24 +38,25 @@ runs:
         sparse-checkout: ${{ fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] }}
         sparse-checkout-cone-mode: true
 
-    # Skip checkout: stage has no affected projects and we know what changed
+    # Skip checkout: stage has no affected projects and we know what changed (no unmapped)
     - name: Skip external repository checkout (stage not affected)
       if: >-
         ${{
           fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] == '' &&
-          fromJSON(inputs.external_repo_config).changed_projects != ''
+          fromJSON(inputs.external_repo_config).changed_projects != '' &&
+          fromJSON(inputs.external_repo_config).sparse_checkout_fallback_full != true
         }}
       shell: bash
       run: |
         echo "Skipping external repo checkout - stage '${{ inputs.stage_name }}' has no affected projects"
         echo "Changed projects: ${{ fromJSON(inputs.external_repo_config).changed_projects }}"
 
-    # Full checkout: fallback when we don't know what changed
+    # Full checkout: fallback when we don't know what changed OR some files couldn't be classified
     - name: Checkout external repository (full)
       if: >-
         ${{
-          fromJSON(inputs.external_repo_config).sparse_checkout_by_stage[inputs.stage_name] == '' &&
-          fromJSON(inputs.external_repo_config).changed_projects == ''
+          fromJSON(inputs.external_repo_config).changed_projects == '' ||
+          fromJSON(inputs.external_repo_config).sparse_checkout_fallback_full == true
         }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
