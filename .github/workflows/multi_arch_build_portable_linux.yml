@@ -52,15 +52,15 @@ on:
         description: >-
           Comma-separated build stages to drop from the graph entirely. Unlike
           prebuilt_stages, no artifacts exist for these stages afterwards.
-      build_runs_on:
+      build_runs_on_large:
         type: string
         default: "aws-linux-scale-rocm-prod"
         description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
-      small_build_runs_on:
+      build_runs_on_small:
         type: string
         default: "aws-linux-scale-rocm-small"
         description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs, emulation)"
-      medium_build_runs_on:
+      build_runs_on_medium:
         type: string
         default: "aws-linux-scale-rocm-medium"
         description: "Build runner label for medium-CPU stages (runtime-tests)"
@@ -119,7 +119,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.medium_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_medium }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -144,7 +144,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -169,7 +169,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.medium_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_medium }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -228,7 +228,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -258,7 +258,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -285,7 +285,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -310,7 +310,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -335,7 +335,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -360,7 +360,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -385,7 +385,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -410,7 +410,7 @@ jobs:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_runs_on: ${{ inputs.small_build_runs_on }}
+      build_runs_on: ${{ inputs.build_runs_on_large_small }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

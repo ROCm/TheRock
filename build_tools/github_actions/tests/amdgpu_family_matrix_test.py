@@ -9,6 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -22,6 +23,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     get_build_runner_labels,
     load_external_runner_config,
+    select_build_runner,
 )
 
 
@@ -275,6 +277,87 @@ class TestExternalConfig(unittest.TestCase):
         # Non-runner keys should come from local definitions
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
+
+# ---------------------------------------------------------------------------
+# Build runner selection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunnerSelection(unittest.TestCase):
+    """Tests for select_build_runner() in amdgpu_family_matrix.py.
+
+    CI_CONFIG_PATH is cleared to ensure tests use local definitions only.
+    """
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        if "CI_CONFIG_PATH" in os.environ:
+            del os.environ["CI_CONFIG_PATH"]
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_select_build_runner_large_linux_release(self):
+        """Large (default) runner is used for CPU-intensive Linux release stages."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release", size="large"),
+                "aws-linux-scale-rocm-prod",
+            )
+
+    def test_select_build_runner_large_windows(self):
+        """Windows still uses Azure for large runner."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("windows", "release", size="large"),
+                "azure-windows-scale-rocm",
+            )
+
+    def test_select_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer builds (asan/tsan) always use the large runner regardless of size."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "asan", size="small"),
+                "aws-linux-scale-rocm-large",
+            )
+            self.assertEqual(
+                select_build_runner("linux", "tsan", size="medium"),
+                "aws-linux-scale-rocm-large",
+            )
+
+    def test_select_build_runner_small_linux_release(self):
+        """Small runner is used for low-CPU Linux release stages."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release", size="small"),
+                "aws-linux-scale-rocm-small",
+            )
+
+    def test_select_build_runner_small_windows_falls_back_to_default(self):
+        """Windows has no small runner pool — falls back to the Windows default."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("windows", "release", size="small"),
+                "azure-windows-scale-rocm",
+            )
+
+    def test_select_build_runner_medium_linux_release(self):
+        """Medium runner is used for medium-CPU Linux stages."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("linux", "release", size="medium"),
+                "aws-linux-scale-rocm-medium",
+            )
+
+    def test_select_build_runner_medium_windows_falls_back_to_default(self):
+        """Windows has no medium runner pool — falls back to the Windows default."""
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_build_runner("windows", "release", size="medium"),
+                "azure-windows-scale-rocm",
+            )
 
 
 if __name__ == "__main__":
