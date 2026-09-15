@@ -1382,14 +1382,14 @@ def _expand_build_config_for_platform(
         # If test_type_for_family is set, force the test type for this family.
         # This overrides the global test_type, allowing families with limited
         # hardware to always run quick tests regardless of trigger type.
-        test_type_for_family = platform_info.get("test_type_for_family", [])
+        test_type_for_family = platform_info.get("test_type_for_family", "")
         family_test_type = None
         if test_type_for_family and test_runs_on:
-            family_test_type = test_type_for_family[0]
+            family_test_type = test_type_for_family
             if family_test_type != jobs.test_rocm.test_type:
                 print(
-                    f"  {family_name}: test_type_for_family={test_type_for_family}, "
-                    f"forcing test_type={family_test_type} (global={jobs.test_rocm.test_type})"
+                    f"  {family_name}: forcing test_type={family_test_type} "
+                    f"(global={jobs.test_rocm.test_type})"
                 )
 
         family_info = {
