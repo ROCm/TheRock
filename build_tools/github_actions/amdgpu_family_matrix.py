@@ -311,8 +311,8 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx125x": {
         "linux": {
-            # NOTE: MI455 runner coordinated with leadership and MI455 war room team.
-            # Do not use this label for undesignated workflows.
+            # NOTE: MI455 runner supply is very limited.
+            # Only use for designated workflow runs (submodule bumps, quick tests).
             "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": ["gfx1250"],
