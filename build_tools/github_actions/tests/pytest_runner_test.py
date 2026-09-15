@@ -109,6 +109,31 @@ class BuildMarkerExpressionTest(unittest.TestCase):
         )
 
 
+class ResolveRunsTest(unittest.TestCase):
+    def test_no_runs_key_returns_single_run(self):
+        # Backward compatible: a category without `runs:` runs once as itself.
+        cfg = {"test_paths": ["Tensile/Tests/unit"]}
+        self.assertEqual(pytest_runner.resolve_runs(cfg, "quick"), [cfg])
+
+    def test_runs_list_returned_verbatim(self):
+        runs = [
+            {"name": "host", "test_paths": ["Tensile/Tests/unit"]},
+            {"name": "common", "test_paths": ["Tensile/Tests/common"]},
+        ]
+        self.assertEqual(pytest_runner.resolve_runs({"runs": runs}, "standard"), runs)
+
+    def test_duplicate_names_exit(self):
+        # Duplicate names would collide the per-run JUnit file → hard fail.
+        runs = [{"name": "host"}, {"name": "host"}]
+        with self.assertRaises(SystemExit):
+            pytest_runner.resolve_runs({"runs": runs}, "standard")
+
+    def test_missing_name_exits(self):
+        runs = [{"name": "host"}, {"test_paths": ["x"]}]
+        with self.assertRaises(SystemExit):
+            pytest_runner.resolve_runs({"runs": runs}, "standard")
+
+
 class ResolveComponentPathTest(unittest.TestCase):
     def test_known_component(self):
         rocm = Path("/opt/rocm")
