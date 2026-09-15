@@ -110,6 +110,34 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertEqual(names, {"rocblas", "hipblas"})
 
+    def test_test_label_forces_component_not_in_projects(self):
+        # An explicit test label runs its component even when the change-derived
+        # project set does not include it (on-demand label-driven testing, e.g.
+        # the composite gfx<arch>-tensilelite label). Here a hipblaslt-only
+        # change (no "tensilelite" in PROJECTS_TO_TEST) still runs tensilelite
+        # because it is named in TEST_LABELS.
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        os.environ["TEST_LABELS"] = json.dumps(["tensilelite"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertEqual(names, {"tensilelite"})
+
+    def test_runnerless_family_skips_forced_gpu_component(self):
+        # A component force-selected by a test label on a build-only family
+        # (no GPU test runner, e.g. gfx125x) is dropped, not emitted with an
+        # empty runs-on that would fail the job.
+        os.environ["AMDGPU_FAMILIES"] = "gfx125x"
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        os.environ["TEST_LABELS"] = json.dumps(["tensilelite"])
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        self.assertEqual(components, [])
+
     # -----------------------
     # TEST_LABELS handling
     # -----------------------

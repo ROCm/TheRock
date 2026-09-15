@@ -1052,8 +1052,17 @@ def run():
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
+        # `key in expanded_test_labels` lets an explicit test:<component> label
+        # FORCE that component even when the change-derived project set does not
+        # include it — this is what makes on-demand labels (e.g. the composite
+        # gfx<arch>-tensilelite label, which injects test:tensilelite) run the
+        # component regardless of which files changed. Other components still
+        # require project membership.
         if platform in selected_matrix[key]["platform"] and (
-            key == "sanity" or key in project_array or "*" in project_array
+            key == "sanity"
+            or key in project_array
+            or "*" in project_array
+            or key in expanded_test_labels
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
 
@@ -1206,6 +1215,28 @@ def run():
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
+
+            # A Linux GPU component with no resolvable runner (e.g. a build-only
+            # family like gfx125x whose test-runs-on is "") must be dropped, not
+            # emitted with an empty runs-on that fails the job. This can happen
+            # when a component is force-selected by an explicit test:<component>
+            # label on a family that has no test runner yet. Scoped to Linux:
+            # that is where the on-demand per-arch labels select build-only
+            # families; Windows runner assignment is handled by the full
+            # ci-config. CPU-only and benchmark components get their runner from
+            # the workflow expression in test_artifacts.yml, so are left alone.
+            if (
+                platform == "linux"
+                and "test_runner" not in component
+                and not component.get("linux_cpu_runner", False)
+                and not component.get("is_benchmark", False)
+            ):
+                print(
+                    f"::warning::Skipping job {job_name}: selected for testing "
+                    f"but family {amdgpu_families!r} has no GPU test runner "
+                    f"(test-runs-on is empty) — build only, no test scheduled."
+                )
+                continue
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
