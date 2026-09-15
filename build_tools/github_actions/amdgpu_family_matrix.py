@@ -112,6 +112,9 @@ BUILD_RUNNER_LABELS = {
         "small": [
             {"label": "aws-linux-scale-rocm-small", "weight": 1.0},
         ],
+        "medium": [
+            {"label": "aws-linux-scale-rocm-medium", "weight": 1.0},
+        ],
         "sanitizer": [
             {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
