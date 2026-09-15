@@ -35,6 +35,14 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      exclude_test_owners:
+        description: 'Comma-separated source repos whose component tests to drop from the selected matrix, expanded via TEST_COMPONENTS_BY_OWNER in fetch_test_configurations.py (e.g. "rocm-systems"). Used by cross-repo consumers whose CI should not re-run another repo''s tests. Empty = exclude nothing.'
+        type: string
+        default: ""
+      exclude_projects_to_test:
+        description: "Comma-separated component keys to drop from the selected matrix directly (unioned with exclude_test_owners). Empty = exclude nothing."
+        type: string
+        default: ""
       release_type:
         description: 'Release type for the artifacts being tested.'
         type: choice
@@ -94,6 +102,14 @@ on:
         default: 'false'
       changed_projects:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
+        type: string
+        default: ""
+      exclude_test_owners:
+        description: 'Comma-separated source repos whose component tests to drop from the selected matrix, expanded via TEST_COMPONENTS_BY_OWNER in fetch_test_configurations.py (e.g. "rocm-systems"). Used by cross-repo consumers whose CI should not re-run another repo''s tests. Empty = exclude nothing.'
+        type: string
+        default: ""
+      exclude_projects_to_test:
+        description: "Comma-separated component keys to drop from the selected matrix directly (unioned with exclude_test_owners). Empty = exclude nothing."
         type: string
         default: ""
       release_type:
@@ -183,6 +199,8 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           RUN_EXTENDED_TESTS: ${{ inputs.run_extended_tests }}
+          EXCLUDE_TEST_OWNERS: ${{ inputs.exclude_test_owners }}
+          EXCLUDE_PROJECTS_TO_TEST: ${{ inputs.exclude_projects_to_test }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           CI_CONFIG_PATH: ci-config
           BUILD_VARIANT: ${{ inputs.build_variant }}

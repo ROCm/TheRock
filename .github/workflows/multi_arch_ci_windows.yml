@@ -34,6 +34,14 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      exclude_test_owners:
+        description: "Comma-separated source repos whose component tests to drop (forwarded to test_artifacts.yml)."
+        type: string
+        default: ""
+      exclude_projects_to_test:
+        description: "Comma-separated component keys to drop directly (forwarded to test_artifacts.yml)."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -151,6 +159,8 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       changed_projects: ${{ inputs.changed_projects }}
+      exclude_test_owners: ${{ inputs.exclude_test_owners }}
+      exclude_projects_to_test: ${{ inputs.exclude_projects_to_test }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

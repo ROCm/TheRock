@@ -195,6 +195,46 @@ _rocgdb_common = {
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 
+# Ownership of test-matrix components by the source repo that hosts them, so a
+# downstream consumer can drop another repo's component tests from its run.
+# ROCm/rocm-libraries' multi-arch CI excludes owner "rocm-systems" so its full
+# ("*") test set does not re-run rocm-systems component tests (already covered by
+# rocm-systems' own CI). Selected via the EXCLUDE_TEST_OWNERS env (see run()).
+# Only the repos that need excluding are listed; add an owner (e.g.
+# "rocm-libraries") when a consumer needs to skip it. Values are test_matrix keys.
+TEST_COMPONENTS_BY_OWNER: dict[str, frozenset] = {
+    "rocm-systems": frozenset(
+        {
+            # base / runtime (ROCR-Runtime, amdsmi, hipFile)
+            "amdsmi",
+            "hipfile",
+            "rocrtst",
+            # clr / hip runtime
+            "hip-tests",
+            # comm-libs
+            "rccl",
+            "rocshmem",
+            # media-libs
+            "rocdecode",
+            "rocjpeg",
+            # profiler-apps
+            "aqlprofile",
+            "rocprofiler-sdk",
+            "rocprofiler-compute",
+            "rocprofiler-systems",
+            # debug-tools. rocgdb (ROCm/ROCgdb) and libhipcxx (ROCm/libhipcxx)
+            # are standalone repos, grouped here as systems/runtime tooling; move
+            # them to their own owner if they ever need separate exclusion.
+            "rocr-debug-agent",
+            "rocgdb-cpu",
+            "rocgdb-gpu",
+            "rocgdb-corefile",
+            "libhipcxx_amdclang",
+            "libhipcxx_hiprtc",
+        }
+    ),
+}
+
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
     "sanity": {
@@ -946,6 +986,44 @@ def run():
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
 
+    # Opt-in test exclusion (default: none, so TheRock's own CI and every other
+    # consumer are unaffected):
+    #   EXCLUDE_TEST_OWNERS       comma-separated source repos whose component
+    #                             tests to drop, expanded via
+    #                             TEST_COMPONENTS_BY_OWNER (e.g. "rocm-systems").
+    #   EXCLUDE_PROJECTS_TO_TEST  comma-separated component keys to drop directly
+    #                             (path-/change-specific policies compute this).
+    # The two are unioned; "sanity" is never excluded.
+    exclude_projects_to_test: set = {
+        p.strip()
+        for p in os.getenv("EXCLUDE_PROJECTS_TO_TEST", "").split(",")
+        if p.strip()
+    }
+    exclude_test_owners = [
+        o.strip() for o in os.getenv("EXCLUDE_TEST_OWNERS", "").split(",") if o.strip()
+    ]
+    _unknown_owners = [
+        o for o in exclude_test_owners if o not in TEST_COMPONENTS_BY_OWNER
+    ]
+    if _unknown_owners:
+        logging.warning(
+            f"EXCLUDE_TEST_OWNERS has unknown owner(s) {_unknown_owners}; "
+            f"known owners: {sorted(TEST_COMPONENTS_BY_OWNER)}"
+        )
+    for _owner in exclude_test_owners:
+        exclude_projects_to_test |= set(TEST_COMPONENTS_BY_OWNER.get(_owner, ()))
+    if exclude_projects_to_test:
+        _unknown = sorted(exclude_projects_to_test - set(test_matrix))
+        if _unknown:
+            logging.warning(
+                "Excluded name(s) not in test_matrix (stale after a rename/"
+                f"removal?): {_unknown}"
+            )
+        logging.info(
+            f"Excluding {len(exclude_projects_to_test)} component(s) from test "
+            f"selection: {sorted(exclude_projects_to_test)}"
+        )
+
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
     test_runs_on_labels = None
@@ -1047,6 +1125,13 @@ def run():
         ]
         if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Skip components the caller excluded (EXCLUDE_TEST_OWNERS /
+        # EXCLUDE_PROJECTS_TO_TEST). Independent of project selection so it also
+        # trims the full "*" set. "sanity" is always kept as a prerequisite.
+        if key != "sanity" and key in exclude_projects_to_test:
+            logging.info(f"Excluding job {job_name}: excluded by caller")
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
