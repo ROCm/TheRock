@@ -1379,18 +1379,18 @@ def _expand_build_config_for_platform(
                     f"'{family_label}' label not present, disabling tests"
                 )
 
-        # If test_type_for_family is set, only run tests when test_type is in the list
+        # If test_type_for_family is set, force the test type for this family.
+        # This overrides the global test_type, allowing families with limited
+        # hardware to always run quick tests regardless of trigger type.
         test_type_for_family = platform_info.get("test_type_for_family", [])
-        if (
-            test_type_for_family
-            and jobs.test_rocm.test_type not in test_type_for_family
-        ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: test_type_for_family={test_type_for_family}, "
-                f"test_type={jobs.test_rocm.test_type} not in allowed list, "
-                f"disabling tests"
-            )
+        family_test_type = None
+        if test_type_for_family and test_runs_on:
+            family_test_type = test_type_for_family[0]
+            if family_test_type != jobs.test_rocm.test_type:
+                print(
+                    f"  {family_name}: test_type_for_family={test_type_for_family}, "
+                    f"forcing test_type={family_test_type} (global={jobs.test_rocm.test_type})"
+                )
 
         family_info = {
             "amdgpu_family": platform_info["family"],
@@ -1400,6 +1400,8 @@ def _expand_build_config_for_platform(
                 "sanity_check_only_for_family", False
             ),
         }
+        if family_test_type:
+            family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
         # Per-family test labels allow limiting which tests run for specific architectures

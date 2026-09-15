@@ -2121,22 +2121,32 @@ class TestFamilyTestFilters(unittest.TestCase):
                         f"Expected tests disabled for {tc['name']}",
                     )
 
-    def test_test_type_for_family_filters_non_matching_test_type(self):
-        """test_type_for_family disables tests when test_type doesn't match allowed list."""
-        # gfx125x has test_type_for_family=["quick"]
-        # schedule triggers test_type="comprehensive" which is not in ["quick"]
+    def test_test_type_for_family_forces_test_type(self):
+        """test_type_for_family forces the test type for a family."""
+        # gfx125x has test_type_for_family=["quick"] and trigger_test_label_only
+        # With label present, tests should run with forced test_type="quick"
         ci_inputs = cm.CIInputs(
             run_id="12345",
-            event_name="schedule",
-            commit_ref="main",
-            base_ref=None,
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
             build_variant="release",
+            pr_labels=["gfx125X-dcgpu"],
+            linux_amdgpu_families=["gfx125x"],
         )
-        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        # Submodule changes would normally trigger test_type="full"
+        git_context = cm.GitContext(
+            changed_files=["some-submodule"],
+            submodule_paths=["some-submodule"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
         gfx125x_info = self._find_family_info(outputs, "gfx125X-dcgpu")
 
         self.assertIsNotNone(gfx125x_info)
-        self.assertEqual(gfx125x_info["test-runs-on"], "")
+        # Tests should be enabled (label present)
+        self.assertNotEqual(gfx125x_info["test-runs-on"], "")
+        # test_type should be forced to "quick" despite global being "full"
+        self.assertEqual(gfx125x_info.get("test_type"), "quick")
 
 
 # ---------------------------------------------------------------------------

@@ -211,7 +211,7 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
-- test_type_for_family (optional): list of allowed test_type values for this family (e.g., ["quick"]). If the global test_type is not in this list, tests are skipped for this family.
+- test_type_for_family (optional): forces the test type for this family (e.g., ["quick"]). The first value in the list is used, overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
 - trigger_test_label_only (optional): if enabled, only run tests when the family's gfx* label is present on the PR (e.g., gfx125x label for gfx125x family). Builds always run regardless of label.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
