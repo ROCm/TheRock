@@ -579,20 +579,32 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
-        # POC (ALMIOPEN sharding investigation): total_shards is the *gtest-level*
-        # shard count; job_shard_dict is how many separate GHA jobs/GPU-runners we
-        # actually request. When job_shard_dict < total_shards, test_component.yml
-        # runs (total_shards / job_shard_dict) gtest sub-shards concurrently on each
-        # runner's single GPU, mirroring Jenkins' CTEST_PARALLEL_LEVEL=4 model
-        # instead of TheRock's default one-shard-per-runner model. Windows keeps the
-        # original 1:1 mapping (no job_shard_dict entry -> subshards_per_job==1).
         "total_shards_dict": {
-            "linux": 16,
+            "linux": 4,
             "windows": 4,
         },
-        "job_shard_dict": {
+        # POC (ALMIOPEN sharding investigation): both fields below are only
+        # honored when the family being configured is gfx94X (see the
+        # is_gfx94x_family gate in run()) -- every other family/platform gets
+        # today's stock total_shards_dict above, unaffected. For gfx94X/linux,
+        # gfx94x_total_shards_override bumps the *gtest-level* shard count to
+        # 16 while gfx94x_job_shard_dict keeps only 4 physical GHA jobs/GPU-
+        # runners, so each runner backgrounds 4 concurrent gtest sub-shards
+        # sharing its single GPU, mirroring Jenkins' CTEST_PARALLEL_LEVEL=4
+        # model instead of TheRock's default one-shard-per-runner model.
+        "gfx94x_total_shards_override": {
+            "linux": 16,
+        },
+        "gfx94x_job_shard_dict": {
             "linux": 4,
         },
+        # POC (ALMIOPEN sharding investigation): HipGraphExist is excluded
+        # from the main "exhaustive" filter (test_categories.yaml) because
+        # running it concurrently with sibling sub-shards on the same GPU can
+        # OOM the LLVM JIT (Jenkins hits the same issue and reruns it
+        # separately too). Run it once, sequentially, on the first physical
+        # runner only -- see test_component.yml's "Test" step.
+        "gfx94x_serial_companion_test_type": "exhaustive_hipgraph_serial",
     },
     # RCCL tests
     "rccl": {
@@ -1169,13 +1181,32 @@ def run():
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
-            # POC (ALMIOPEN sharding investigation): job_shard_dict lets a component
-            # request fewer physical GHA jobs/GPU-runners than gtest-level shards;
-            # the remainder run as concurrent gtest sub-shard processes sharing one
-            # runner's GPU (test_component.yml's "Test" step). Components without a
-            # job_shard_dict entry get job_shards == total_shards, i.e.
-            # subshards_per_job == 1 -- byte-for-byte today's behavior.
-            job_shards = job_config_data.get("job_shard_dict", {}).get(
+            # POC (ALMIOPEN sharding investigation): gfx94x_total_shards_override /
+            # gfx94x_job_shard_dict let a component request more gtest-level shards
+            # than physical GHA jobs/GPU-runners; the remainder run as concurrent
+            # gtest sub-shard processes sharing one runner's GPU
+            # (test_component.yml's "Test" step). Structurally scoped to gfx94X
+            # here (not just via the calling workflow's family selection) so this
+            # POC can never affect any other architecture even if a caller
+            # broadens linux_amdgpu_families -- both fields are only read when the
+            # family being configured right now is gfx94X and test_type isn't
+            # "quick" (which always forces total_shards=1 above). Every other
+            # family/platform/tier keeps today's stock total_shards_dict-derived
+            # total_shards with job_shards == total_shards, i.e.
+            # subshards_per_job == 1 -- byte-for-byte unchanged.
+            is_gfx94x_family = amdgpu_families is not None and "gfx94X" in amdgpu_families
+            if is_gfx94x_family and test_type != "quick":
+                gfx94x_override = job_config_data.get(
+                    "gfx94x_total_shards_override", {}
+                ).get(platform)
+                if gfx94x_override:
+                    job_config_data["total_shards"] = gfx94x_override
+            job_shard_dict_for_family = (
+                job_config_data.get("gfx94x_job_shard_dict", {})
+                if is_gfx94x_family and test_type != "quick"
+                else {}
+            )
+            job_shards = job_shard_dict_for_family.get(
                 platform, job_config_data["total_shards"]
             )
             if not job_shards or job_shards <= 0 or job_shards > job_config_data["total_shards"]:
@@ -1188,6 +1219,18 @@ def run():
             # component, since job_shard_count falls back to total_shards).
             job_config_data["job_shard_count"] = job_shards
             job_config_data["subshards_per_job"] = job_config_data["total_shards"] // job_shards
+            # POC (ALMIOPEN sharding investigation): a component's
+            # gfx94x_serial_companion_test_type (if set) names a second ctest
+            # category to run once, sequentially, on exactly the first
+            # physical GHA job -- for tests deliberately excluded from the
+            # main sharded filter due to GPU-contention risk (see
+            # test_component.yml's "Test" step). Same gfx94X/non-quick gate
+            # as the sub-sharding fields above; empty for every other case.
+            job_config_data["serial_companion_test_type"] = (
+                job_config_data.get("gfx94x_serial_companion_test_type", "")
+                if is_gfx94x_family and test_type != "quick"
+                else ""
+            )
 
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)

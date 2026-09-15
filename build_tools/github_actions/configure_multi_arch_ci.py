@@ -973,7 +973,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
-_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
+_VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full", "exhaustive"}
 
 
 def _has_test_labels(ci_inputs: CIInputs) -> bool:
