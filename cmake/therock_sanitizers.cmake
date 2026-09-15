@@ -64,8 +64,15 @@ function(therock_sanitizer_configure
     # Only enable sanitizers for C/C++ for now. Include fortran once the toolchain
     # is available and can be used for portable builds.
     # https://github.com/ROCm/TheRock/issues/1782
-    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=${_sanitizer_string}>\n")
-    string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    # LINK_LANGUAGE must include HIP: any target that gains a HIP-language
+    # source (e.g. a .hip test file) has its LINKER_LANGUAGE flipped to HIP by
+    # CMake, even when most of its sources are C/C++. Omitting HIP here would
+    # silently drop the sanitizer link flags for such targets while their C/C++
+    # objects are still compiled with -fsanitize=, producing undefined
+    # __asan_*/__tsan_* symbols at link time.
+    # See https://github.com/ROCm/TheRock/issues/7979
+    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX,HIP>:-fsanitize=${_sanitizer_string}>\n")
+    string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX,HIP>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
     # Fix FindThreads detection under ASAN. The threads probe is a try_compile
     # that inherits CMAKE_C/CXX_FLAGS_INIT (-fsanitize) but NOT the directory
     # add_link_options() above, so it never sees -shared-libsan and links clang's
