@@ -2287,6 +2287,74 @@ class TestBuildRunnerSelection(unittest.TestCase):
                 "aws-linux-scale-rocm-large",
             )
 
+    def test_select_small_build_runner_linux_release(self):
+        """Small runner is used for low-CPU Linux release stages."""
+        from amdgpu_family_matrix import select_small_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_small_build_runner("linux", "release"),
+                "aws-linux-scale-rocm-small",
+            )
+
+    def test_select_small_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer small stages still use the large runner (memory-intensive)."""
+        from amdgpu_family_matrix import select_small_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_small_build_runner("linux", "asan"),
+                "aws-linux-scale-rocm-large",
+            )
+            self.assertEqual(
+                select_small_build_runner("linux", "tsan"),
+                "aws-linux-scale-rocm-large",
+            )
+
+    def test_select_small_build_runner_windows_falls_back_to_default(self):
+        """Windows has no small runner pool — falls back to the Windows default."""
+        from amdgpu_family_matrix import select_small_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_small_build_runner("windows", "release"),
+                "azure-windows-scale-rocm",
+            )
+
+    def test_select_medium_build_runner_linux_release(self):
+        """Medium runner is used for medium-CPU Linux stages."""
+        from amdgpu_family_matrix import select_medium_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_medium_build_runner("linux", "release"),
+                "aws-linux-scale-rocm-medium",
+            )
+
+    def test_select_medium_build_runner_sanitizer_uses_large_runner(self):
+        """Sanitizer medium stages still use the large runner (memory-intensive)."""
+        from amdgpu_family_matrix import select_medium_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_medium_build_runner("linux", "asan"),
+                "aws-linux-scale-rocm-large",
+            )
+            self.assertEqual(
+                select_medium_build_runner("linux", "tsan"),
+                "aws-linux-scale-rocm-large",
+            )
+
+    def test_select_medium_build_runner_windows_falls_back_to_default(self):
+        """Windows has no medium runner pool — falls back to the Windows default."""
+        from amdgpu_family_matrix import select_medium_build_runner
+
+        with patch("random.random", return_value=0.5):
+            self.assertEqual(
+                select_medium_build_runner("windows", "release"),
+                "azure-windows-scale-rocm",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
