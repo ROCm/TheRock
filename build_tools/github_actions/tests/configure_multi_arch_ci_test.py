@@ -831,6 +831,8 @@ class TestSelectTargets(unittest.TestCase):
         result = cm.select_targets(inputs)
         # gfx950 is postsubmit-only, should be present for push
         self.assertIn("gfx950", result.linux_families)
+        # gfx125x is build-only, but should still be covered by default builds.
+        self.assertIn("gfx125x", result.linux_families)
 
     def test_schedule_returns_all_families(self):
         """Schedule trigger selects all families (presubmit+postsubmit+nightly)."""
@@ -895,6 +897,8 @@ class TestSelectTargets(unittest.TestCase):
         )
         result = cm.select_targets(inputs)
         self.assertGreater(len(result.linux_families), 0)
+        # gfx125x is build-only, but should still be covered by default builds.
+        self.assertIn("gfx125x", result.linux_families)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
 
@@ -1515,16 +1519,16 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 self.assertEqual(build_variant_cmake_preset, expected_variant)
 
     def test_push_asan_excludes_families_without_host_asan_support(self):
-        """Push ASAN: gfx950 supports asan but not host-asan, so it must be excluded.
+        """Push ASAN: gfx110x only supports release, so it must be excluded.
 
         When build_variant=asan on push events, the effective variant becomes
         host-asan. Families must be filtered using this effective variant, not
-        the original asan variant. gfx950 supports asan but not host-asan, so
-        it should be excluded from the result.
+        the original asan variant. gfx110x only supports release (not host-asan),
+        so it should be excluded from the result.
         """
-        # gfx94x supports host-asan, gfx950 only supports asan (not host-asan)
+        # gfx94x supports host-asan, gfx110x only supports release (not host-asan)
         targets = cm.TargetSelection(
-            linux_families=["gfx94x", "gfx950"],
+            linux_families=["gfx94x", "gfx110x"],
         )
         ci_inputs = cm.CIInputs(
             run_id="12345",
@@ -1544,10 +1548,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(
             result.linux.build_variant_cmake_preset, "linux-release-host-asan"
         )
-        # Only gfx94x should survive (it supports host-asan), gfx950 should be excluded
+        # Only gfx94x should survive (it supports host-asan), gfx110x should be excluded
         family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
         self.assertIn("gfx94X-dcgpu", family_names)
-        self.assertNotIn("gfx950-dcgpu", family_names)
+        self.assertNotIn("gfx110X-all", family_names)
         self.assertEqual(len(result.linux.per_family_info), 1)
 
     def test_test_runner_kernel_overrides_runner_label(self):
@@ -1616,6 +1620,32 @@ class TestExpandBuildConfigs(unittest.TestCase):
         )
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
+
+    def test_asan_debug_uses_sandbox_runner(self):
+        """asan-debug variant uses sandbox runner like asan."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="schedule", build_variant="asan-debug"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertIn("sandbox", entry["test-runs-on"])
+
+    def test_host_asan_debug_uses_sandbox_runner(self):
+        """host-asan-debug variant uses sandbox runner like host-asan."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="schedule", build_variant="host-asan-debug"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        entry = result.linux.per_family_info[0]
+        self.assertIn("sandbox", entry["test-runs-on"])
 
 
 # ---------------------------------------------------------------------------
@@ -1920,7 +1950,11 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
-        unused_fields = {"build_native_linux", "build_jax", "jax_build_matrix"}
+        unused_fields = {
+            "build_native_linux",
+            "build_jax",
+            "jax_build_matrix",
+        }
         self.assertEqual(
             yaml_fields,
             python_fields - unused_fields,
@@ -1933,11 +1967,11 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 class TestFamilyTestFilters(unittest.TestCase):
     """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
 
-    def test_real_family_gfx90a_postsubmit(self):
-        """Integration test: gfx90a is in postsubmit matrix with submodule changes."""
+    def test_real_family_gfx90a_postsubmit_no_submodule_changes(self):
+        """Integration test: gfx90a runs tests on push without submodule changes."""
         # gfx90a is in postsubmit matrix, so it runs on push events.
-        # It has submodule_bump_tests_only=True, so tests only run when
-        # submodule changes are detected.
+        # It has skip_tests_on_submodule_bump=True, so tests run on regular
+        # pushes but are skipped when submodule changes are detected.
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="push",
@@ -1945,8 +1979,37 @@ class TestFamilyTestFilters(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
         )
-        # gfx90a has submodule_bump_tests_only=True, so we need submodule changes
-        # for tests to be enabled. Simulate a submodule bump.
+        # No submodule changes - regular CI change
+        git_context = cm.GitContext(
+            changed_files=["CMakeLists.txt"],
+            submodule_paths=["rocm-systems", "rocm-libraries"],
+        )
+        outputs = cm.configure(ci_inputs, git_context)
+
+        # Find gfx90a in the linux build config
+        gfx90a_info = None
+        if outputs.builds.linux:
+            for family_info in outputs.builds.linux.per_family_info:
+                if family_info["amdgpu_family"] == "gfx90a":
+                    gfx90a_info = family_info
+                    break
+
+        self.assertIsNotNone(gfx90a_info)
+        # gfx90a should have tests enabled on regular pushes (no submodule changes)
+        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+
+    def test_real_family_gfx90a_postsubmit_with_submodule_changes(self):
+        """Integration test: gfx90a skips tests on push with submodule changes."""
+        # gfx90a has skip_tests_on_submodule_bump=True, so tests are skipped
+        # when submodule changes are detected.
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        # Simulate a submodule bump
         git_context = cm.GitContext(
             changed_files=["some-submodule"],
             submodule_paths=["some-submodule"],
@@ -1962,8 +2025,8 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx90a_info)
-        # gfx90a should have test-runs-on set in postsubmit when submodule changes
-        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+        # gfx90a should have tests DISABLED on submodule bumps
+        self.assertEqual(gfx90a_info["test-runs-on"], "")
 
     def test_workflow_dispatch_allows_gfx90a(self):
         """workflow_dispatch should allow testing gfx90a."""

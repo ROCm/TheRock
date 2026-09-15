@@ -671,6 +671,57 @@ class CreatePackageConfigTest(BuildPackageTestCase):
                 _args(self.temp_dir, rocm_version="7"),
             )
 
+    def test_asan_family_variants_get_asan_install_prefix(self) -> None:
+        """asan, host-asan, and their "-debug" counterparts must all get the
+        same "-asan-MAJOR.MINOR" install prefix suffix as full asan."""
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                cfg = build_package.create_package_config(
+                    _args(
+                        self.temp_dir,
+                        build_variant=build_variant,
+                        install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
+                    )
+                )
+                self.assertTrue(cfg.install_prefix.endswith("-asan-7.1"))
+
+    def test_release_variant_gets_plain_install_prefix(self) -> None:
+        cfg = build_package.create_package_config(
+            _args(
+                self.temp_dir,
+                build_variant="release",
+                install_prefix=build_package.DEFAULT_INSTALL_PREFIX,
+            )
+        )
+        self.assertFalse("asan" in cfg.install_prefix)
+        self.assertTrue(cfg.install_prefix.endswith("-7.1"))
+
+
+# ---------------------------------------------------------------------------
+# update_package_name
+# ---------------------------------------------------------------------------
+class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
+    """``update_package_name`` must add the "-asan" suffix for every ASan-family
+    build_variant, including the "-debug" variants."""
+
+    def test_asan_family_variants_get_asan_name_suffix(self) -> None:
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                cfg = build_package.create_package_config(
+                    _args(self.temp_dir, build_variant=build_variant)
+                )
+                updated = update_package_name(
+                    "amdrocm-core", replace(cfg, versioned_pkg=True)
+                )
+                self.assertEqual(updated, f"amdrocm-core-asan7.1-{TEST_GFX_TARGET}")
+
+    def test_release_variant_gets_plain_name(self) -> None:
+        cfg = build_package.create_package_config(
+            _args(self.temp_dir, build_variant="release")
+        )
+        updated = update_package_name("amdrocm-core", replace(cfg, versioned_pkg=True))
+        self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
+
 
 # ---------------------------------------------------------------------------
 # load_kpack_from_manifest
@@ -703,6 +754,66 @@ class ParseInputPackageListTest(BuildPackageTestCase):
         )
         self.assertEqual(set(pkg_list), {PKG_CORE_SDK, PKG_CK})
         self.assertEqual(skipped, [])
+
+
+# ---------------------------------------------------------------------------
+# copy_package_contents — symlink handling
+# ---------------------------------------------------------------------------
+class CopyPackageContentsTest(BuildPackageTestCase):
+    """``copy_package_contents`` preserves symlinks correctly.
+
+    Regression test: in ROCm 10.1, symlinks pointing to valid directories
+    (e.g., llvm -> lib/llvm) were incorrectly expanded via copytree because
+    Path.is_dir() follows symlinks and returns True.
+    """
+
+    def test_valid_symlink_to_directory_preserved(self) -> None:
+        """Symlink to existing directory must remain a symlink.
+
+        In ROCm 10.1, llvm -> lib/llvm points to a valid directory. Without
+        the fix, is_dir() returns True and copytree expands it into a directory.
+        """
+        source = self.temp_dir / "source"
+        dest = self.temp_dir / "dest"
+        source.mkdir()
+
+        # Create lib/llvm structure (the real directory)
+        lib_llvm = source / "lib" / "llvm"
+        lib_llvm.mkdir(parents=True)
+        (lib_llvm / "bin").mkdir()
+        (lib_llvm / "bin" / "clang").write_bytes(b"\x00")
+
+        # Valid symlink: target exists
+        (source / "llvm").symlink_to("lib/llvm")
+
+        deb_package.copy_package_contents(source, dest)
+
+        self.assertTrue(
+            (dest / "llvm").is_symlink(),
+            "valid symlink should be preserved, not expanded",
+        )
+        self.assertEqual((dest / "llvm").readlink(), Path("lib/llvm"))
+
+    def test_dangling_symlink_preserved(self) -> None:
+        """Dangling symlinks must be preserved.
+
+        In ROCm 10.0, symlinks like amdgcn -> lib/llvm/amdgcn were dangling
+        at copy time (target didn't exist yet).
+        """
+        source = self.temp_dir / "source"
+        dest = self.temp_dir / "dest"
+        source.mkdir()
+
+        # Dangling symlink: target doesn't exist
+        (source / "amdgcn").symlink_to("lib/llvm/amdgcn")
+
+        deb_package.copy_package_contents(source, dest)
+
+        self.assertTrue(
+            (dest / "amdgcn").is_symlink(),
+            "dangling symlink should be preserved",
+        )
+        self.assertEqual((dest / "amdgcn").readlink(), Path("lib/llvm/amdgcn"))
 
 
 if __name__ == "__main__":
