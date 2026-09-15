@@ -590,11 +590,11 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 2,
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
@@ -906,7 +906,13 @@ test_matrix = {
     "hiptensor": {
         "job_name": "hiptensor",
         "fetch_artifact_args": "--hiptensor --tests",
-        "timeout_minutes": 15,
+        # Github Actions step timeout, applied to every tier (it does not vary by test_type).
+        # Must be sized for the largest tier the nightly runs (comprehensive),
+        # not quick/standard -- otherwise the step is killed mid-suite well
+        # before ctest's own per-test --timeout 7200 can take effect. See
+        # rocm-libraries/projects/hiptensor/test_categories.yaml
+        # execution_settings.category_timeouts (full: 7200s = 2h).
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1134,6 +1140,15 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
+                # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
+                # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
+                # only run on standard, comprehensive, or full tiers.
+                if test_type == "quick":
+                    logging.info(
+                        f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
+                    )
+                    continue
+
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]

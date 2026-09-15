@@ -267,6 +267,10 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # RCCL runs its ctest entries in parallel across the available GPUs.
+    "rccl": {
+        "ctest_parallel": 8,
+    },
     # rocshmem's functional/unit test wrappers run rocshmem_info to auto-detect
     # the backend. rocshmem_info is installed via install(PROGRAMS ...) (not as a
     # target), so it keeps its build-tree RPATH and can't find its shared libs

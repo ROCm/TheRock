@@ -755,7 +755,7 @@ type = "target-neutral"
 # half headers come from base; amd-llvm arrives transitively via core-hip.
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
 feature_group = "CV_LIBS"
-# No disable_platforms: Windows is opt-in via -DTHEROCK_ENABLE_RPP=ON.
+disable_platforms = ["windows"]
 
 # --- Media Integration ---
 
