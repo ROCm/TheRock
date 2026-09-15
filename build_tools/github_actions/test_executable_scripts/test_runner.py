@@ -33,6 +33,13 @@ VALID_TEST_CATEGORIES = {
     "standard",
     "comprehensive",
     "full",
+    # POC (ALMIOPEN sharding investigation): distinct name for the
+    # Jenkins-parity, match-everything miopen category so it's never confused
+    # with the curated "full" tier at a glance.
+    "exhaustive",
+    # POC (ALMIOPEN sharding investigation): HipGraphExist run serially,
+    # companion to "exhaustive" above.
+    "exhaustive_hipgraph_serial",
     # ffm-specific categories
     "ffm-quick",
     "ffm-standard",

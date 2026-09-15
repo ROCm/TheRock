@@ -210,6 +210,9 @@ jobs:
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
+          # POC (ALMIOPEN sharding investigation): see the serial-companion
+          # block at the end of the run: below.
+          SERIAL_COMPANION_TEST_TYPE: ${{ fromJSON(inputs.component).serial_companion_test_type || '' }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
@@ -304,6 +307,49 @@ jobs:
               fi
               shard_results+=("sub-shard ${sub_index}/${TOTAL_SHARDS}: ${result}")
             done
+            # POC (ALMIOPEN sharding investigation): run a serial companion
+            # category once, sequentially (no concurrency), on exactly the
+            # first physical runner -- for tests deliberately excluded from
+            # the main sharded filter due to GPU-contention risk (e.g.
+            # HipGraphExist, which Jenkins also reruns separately for the
+            # same reason). Runs strictly after the main loop's `wait`s
+            # above, so this runner's GPU is idle for it.
+            if [ -n "${SERIAL_COMPANION_TEST_TYPE}" ] && [ "${SHARD_INDEX}" -eq 1 ]; then
+              echo "::group::Running serial companion category '${SERIAL_COMPANION_TEST_TYPE}' (sequential, no concurrency)"
+              serial_logf="${RUNNER_TEMP}/serial_companion.log"
+              if ( export TEST_TYPE="${SERIAL_COMPANION_TEST_TYPE}"; export SHARD_INDEX=1; export TOTAL_SHARDS=1; ${{ fromJSON(inputs.component).test_script }} ) > "${serial_logf}" 2>&1; then
+                serial_result="OK"
+              else
+                serial_result="FAILED"
+                overall_status=1
+              fi
+              cat "${serial_logf}"
+              echo "::endgroup::"
+              serial_summary_line=$(grep -oE '\[==========\] [0-9]+ tests? from [0-9]+ test suites? ran\.' "${serial_logf}" | tail -1 || true)
+              if [ -n "${serial_summary_line}" ]; then
+                serial_n_tests=$(echo "${serial_summary_line}" | grep -oE '^\[==========\] [0-9]+' | grep -oE '[0-9]+' || true)
+                serial_n_suites=$(echo "${serial_summary_line}" | grep -oE 'from [0-9]+' | grep -oE '[0-9]+' || true)
+                serial_n_tests="${serial_n_tests:-0}"
+                serial_n_suites="${serial_n_suites:-0}"
+                echo "  serial companion (${SERIAL_COMPANION_TEST_TYPE}): ${serial_n_tests} tests from ${serial_n_suites} suites"
+                total_tests_run=$(( total_tests_run + serial_n_tests ))
+                total_suites_run=$(( total_suites_run + serial_n_suites ))
+              else
+                echo "  serial companion (${SERIAL_COMPANION_TEST_TYPE}): WARNING -- no gtest summary line found"
+              fi
+              if [ "${serial_result}" = "FAILED" ]; then
+                serial_failed_tests=$(grep -oE '\[  FAILED  \] [A-Za-z_][A-Za-z0-9_./]*\.[A-Za-z0-9_/]+' "${serial_logf}" \
+                  | sed -E 's/^\[  FAILED  \] //' | sort -u || true)
+                if [ -n "${serial_failed_tests}" ]; then
+                  while IFS= read -r t; do
+                    failed_tests+=("serial companion (${SERIAL_COMPANION_TEST_TYPE}): ${t}")
+                  done <<< "${serial_failed_tests}"
+                else
+                  failed_tests+=("serial companion (${SERIAL_COMPANION_TEST_TYPE}): (non-zero exit, no gtest [  FAILED  ] line found -- crash/timeout/OOM, see its log group above)")
+                fi
+              fi
+              shard_results+=("serial companion (${SERIAL_COMPANION_TEST_TYPE}): ${serial_result}")
+            fi
             echo "::notice::Runner shard ${SHARD_INDEX}/$(( TOTAL_SHARDS / SUBSHARDS_PER_JOB )) ran ${total_tests_run} tests total across ${SUBSHARDS_PER_JOB} concurrent sub-shards (sub-shards $(( base_index + 1 ))-$(( base_index + SUBSHARDS_PER_JOB )) of ${TOTAL_SHARDS}); distinct suite-count sum ${total_suites_run} (suites can repeat across sub-shards, only the test count is meaningful for coverage verification)."
             echo ""
             echo "=================================================================="
