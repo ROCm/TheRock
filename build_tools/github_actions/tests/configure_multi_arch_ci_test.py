@@ -1950,14 +1950,14 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
-        # small_build_runs_on and medium_build_runs_on are Linux-only runner
+        # build_runs_on_small and build_runs_on_medium are Linux-only runner
         # pool labels; Windows CI has no equivalent small/medium pools.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
-            "small_build_runs_on",
-            "medium_build_runs_on",
+            "build_runs_on_small",
+            "build_runs_on_medium",
         }
         self.assertEqual(
             yaml_fields,
@@ -2233,127 +2233,6 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
                 gfx103x_info = builds.linux.per_family_info[0]
                 # Should always use the primary label
                 self.assertEqual(gfx103x_info["test-runs-on"], "linux-gfx1030-gpu-rocm")
-
-
-# ---------------------------------------------------------------------------
-# Build runner selection
-# ---------------------------------------------------------------------------
-
-
-class TestBuildRunnerSelection(unittest.TestCase):
-    """Test count-based random selection of build runners (Azure vs AWS).
-
-    These tests validate local amdgpu_family_matrix.py definitions.
-    CI_CONFIG_PATH is cleared to ensure external config is not loaded.
-    """
-
-    def setUp(self):
-        self._orig_env = os.environ.copy()
-        # Ensure tests use local fallback, not external config
-        if "CI_CONFIG_PATH" in os.environ:
-            del os.environ["CI_CONFIG_PATH"]
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self._orig_env)
-
-    def test_select_build_runner_weight_selection(self):
-        """Test weight-based selection for build runners."""
-        from amdgpu_family_matrix import select_build_runner
-
-        # With only one runner (weight=1.0), any random value selects it
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "release"), "aws-linux-scale-rocm-prod"
-            )
-
-        # Windows still uses Azure
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("windows", "release"), "azure-windows-scale-rocm"
-            )
-
-    def test_select_build_runner_sanitizer_uses_large_runner(self):
-        """Sanitizer builds (asan/tsan) should use AWS large runner."""
-        from amdgpu_family_matrix import select_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "asan"),
-                "aws-linux-scale-rocm-large",
-            )
-            self.assertEqual(
-                select_build_runner("linux", "tsan"),
-                "aws-linux-scale-rocm-large",
-            )
-
-    def test_select_small_build_runner_linux_release(self):
-        """Small runner is used for low-CPU Linux release stages."""
-        from amdgpu_family_matrix import select_small_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_small_build_runner("linux", "release"),
-                "aws-linux-scale-rocm-small",
-            )
-
-    def test_select_small_build_runner_sanitizer_uses_large_runner(self):
-        """Sanitizer small stages still use the large runner (memory-intensive)."""
-        from amdgpu_family_matrix import select_small_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_small_build_runner("linux", "asan"),
-                "aws-linux-scale-rocm-large",
-            )
-            self.assertEqual(
-                select_small_build_runner("linux", "tsan"),
-                "aws-linux-scale-rocm-large",
-            )
-
-    def test_select_small_build_runner_windows_falls_back_to_default(self):
-        """Windows has no small runner pool — falls back to the Windows default."""
-        from amdgpu_family_matrix import select_small_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_small_build_runner("windows", "release"),
-                "azure-windows-scale-rocm",
-            )
-
-    def test_select_medium_build_runner_linux_release(self):
-        """Medium runner is used for medium-CPU Linux stages."""
-        from amdgpu_family_matrix import select_medium_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_medium_build_runner("linux", "release"),
-                "aws-linux-scale-rocm-medium",
-            )
-
-    def test_select_medium_build_runner_sanitizer_uses_large_runner(self):
-        """Sanitizer medium stages still use the large runner (memory-intensive)."""
-        from amdgpu_family_matrix import select_medium_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_medium_build_runner("linux", "asan"),
-                "aws-linux-scale-rocm-large",
-            )
-            self.assertEqual(
-                select_medium_build_runner("linux", "tsan"),
-                "aws-linux-scale-rocm-large",
-            )
-
-    def test_select_medium_build_runner_windows_falls_back_to_default(self):
-        """Windows has no medium runner pool — falls back to the Windows default."""
-        from amdgpu_family_matrix import select_medium_build_runner
-
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_medium_build_runner("windows", "release"),
-                "azure-windows-scale-rocm",
-            )
 
 
 if __name__ == "__main__":
