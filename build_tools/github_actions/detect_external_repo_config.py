@@ -46,6 +46,7 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "submodule_path": "rocm-libraries",
         "skip_submodules": ["rocm-libraries"],
+        "dvc_projects": ["external-rocm-libraries"],
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",

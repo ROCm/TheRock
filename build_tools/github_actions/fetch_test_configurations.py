@@ -1140,6 +1140,15 @@ def run():
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
             # If the multi GPU test runner is not enabled, we will skip the test
             if "multi_gpu" in selected_matrix[key]:
+                # TEMPORARY: Skip multi-GPU tests for quick runs until capacity is restored.
+                # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
+                # only run on standard, comprehensive, or full tiers.
+                if test_type == "quick":
+                    logging.info(
+                        f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
+                    )
+                    continue
+
                 if (
                     platform in selected_matrix[key]["multi_gpu"]
                     and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
