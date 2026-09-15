@@ -66,41 +66,10 @@ jobs:
         name: coverage-report-${{ matrix.runs-on }}
         path: build/coverage-html/
 
-    # Report-only: statically parse the super-project CMake (no configure, no
-    # submodules) and compare the generated graph to the committed one; the matrix
-    # also exercises Windows. `continue-on-error` keeps it non-blocking (remove to
-    # gate); the parity summary is echoed to the job summary so failures stay visible.
-    - name: "Consumer graph parity (report-only)"
-      continue-on-error: true
-      run: |
-        set +e
-        PYTHONPATH=build_tools/consumer_graph python -m cmake_consumer_graph.cli \
-          --therock-dir . \
-          --output-dir build/consumer_graph_report
-        status=$?
-        {
-          echo "### Consumer graph parity (report-only)"
-          if [ -f build/consumer_graph_report/comparison.json ]; then
-            echo '```json'
-            python -c "import json, sys; json.dump(json.load(open('build/consumer_graph_report/comparison.json'))['summary'], sys.stdout, indent=2)"
-            echo
-            echo '```'
-          else
-            echo ":warning: no comparison.json produced — the parser step failed (exit ${status}). See logs."
-          fi
-        } >> "$GITHUB_STEP_SUMMARY"
-        exit "${status}"
-
-    - name: "Upload consumer graph parity report"
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: consumer-graph-parity-${{ matrix.runs-on }}
-        path: build/consumer_graph_report/
-
-    # Report-only: the real-tree enforcement tests (superset invariant + subtree
-    # coverage) are opt-in via CONSUMER_GRAPH_ENFORCE so they never block an
-    # unrelated PR. `continue-on-error` keeps them non-gating while still visible.
+    # Report-only: the real-tree consumer-graph checks (committed-graph superset
+    # invariant + subtree-map coverage) are opt-in via CONSUMER_GRAPH_ENFORCE so
+    # they never block an unrelated PR. `continue-on-error` keeps them non-gating
+    # while still visible. The synthetic unit tests already run in "Test build_tools".
     - name: "Consumer graph enforcement tests (report-only)"
       continue-on-error: true
       working-directory: build_tools/consumer_graph
