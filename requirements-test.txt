@@ -37,3 +37,8 @@ toml>=0.10.2
 # which pulls this in via deb_package.py and rpm_package.py.
 # Keep the specifier in sync with requirements.txt.
 jinja2>=3.0.0
+
+# CMake parser for build_tools/consumer_graph's drift check (unit_tests.yml).
+# Exact-pinned like other sub-1.0 CI-path tools (e.g. pytest-cmake); pulls its
+# `attrs` dependency in transitively.
+cmake-parser==0.9.2
