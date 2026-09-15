@@ -55,6 +55,7 @@ import argparse
 import os
 import platform
 import subprocess
+import sysconfig
 import sys
 import tempfile
 from pathlib import Path
@@ -89,6 +90,7 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
+IS_WINDOWS = platform.system() == "Windows"
 
 THEROCK_ENV_VARS = [
     "CI",
@@ -140,8 +142,21 @@ INDUCTOR_UNIT_TESTS = [
 ]
 
 
+def config_libpython_ld_path() -> None:
+    libpython_dir = sysconfig.get_config_var("LIBDIR") or os.path.join(
+        sys.prefix, "lib"
+    )
+    if libpython_dir and os.path.isdir(libpython_dir):
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = (
+            f"{libpython_dir}:{existing}" if existing else libpython_dir
+        )
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     reconcile_agent_visibility_env()
+    if not IS_WINDOWS:
+        config_libpython_ld_path()
 
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
