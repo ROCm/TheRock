@@ -50,6 +50,13 @@ on:
           set it manually.
         type: string
         default: ""
+      pre_upload_build_verify_type:
+        description: >-
+          Build package verification scope between build and simulate install.
+          off/skip = disabled; smoke/quick = amdrocm-core-sdk; standard/sanity =
+          curated metapackages; full/comprehensive = all eligible packages.
+        type: string
+        default: smoke
     outputs:
       package_repository_url:
         description: "Public repository URL for package installation"
@@ -80,6 +87,8 @@ jobs:
       OUTPUT_DIR: output
       ARTIFACTS_DIR: output/artifacts
       PACKAGE_DIST_DIR: output/packages
+      # Pre-upload verify writes build_status_report.* here for CI artifact upload.
+      PRE_UPLOAD_REPORT_DIR: output/pre_upload_reports
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -144,6 +153,32 @@ jobs:
             --pkg-type "${{ inputs.native_package_type }}" \
             --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
             --build-variant "${{ inputs.build_variant }}"
+
+      # Structural check between build and simulate-install; does not install packages.
+      # Default smoke tier keeps CI fast; use sanity/full/comprehensive for deeper scope.
+      - name: Pre-upload build package verification
+        if: ${{ inputs.pre_upload_build_verify_type != 'off' && inputs.pre_upload_build_verify_type != 'skip' }}
+        id: pre-upload-build-verify
+        run: |
+          mkdir -p "${{ env.PRE_UPLOAD_REPORT_DIR }}"
+          python ./build_tools/packaging/linux/build_package_verify.py \
+            --pkg-type "${{ inputs.native_package_type }}" \
+            --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --artifacts-dir "${{ env.ARTIFACTS_DIR }}" \
+            --dest-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --version-suffix "${{ env.ARTIFACT_RUN_ID }}" \
+            --build-variant "${{ inputs.build_variant }}" \
+            --verify-type "${{ inputs.pre_upload_build_verify_type }}" \
+            --report-dir "${{ env.PRE_UPLOAD_REPORT_DIR }}"
+
+      # Upload reports even when verify fails so triage can read build_status_report.*.
+      - name: Upload pre-upload build verify reports
+        if: ${{ always() && inputs.pre_upload_build_verify_type != 'off' && inputs.pre_upload_build_verify_type != 'skip' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pre-upload-build-verify-${{ inputs.native_package_type }}-${{ github.run_id }}
+          path: ${{ env.PRE_UPLOAD_REPORT_DIR }}/
 
       - name: Simulated install Test
         id: test-packages
