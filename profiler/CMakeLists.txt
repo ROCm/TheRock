@@ -323,10 +323,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     set(_rocprofsys_build_libiberty ON)
   endif()
 
-  # hipFile telemetry: ROCPROFSYS_USE_HIPFILE is ON/OFF/AUTO. TheRock uses ON
-  # when hipFile is enabled so a missing or too-old package fails configure
-  # instead of silently dropping support. Only declare the subproject dep when
-  # hipFile is enabled; otherwise CMake would fail looking up a missing target.
   set(_rocprofiler_systems_hipfile_dep)
   set(_rocprofsys_use_hipfile OFF)
   if(THEROCK_ENABLE_HIPFILE)
@@ -432,10 +428,6 @@ if(THEROCK_ENABLE_ROCPROFSYS)
         "lib"
         "lib/rocprofiler-systems"
         "lib/llvm/lib"
-      # When hipFile is enabled, declare it so find_package(hipfile) in
-      # examples/hipfile resolves from the super-project and the sample is
-      # built. Leaving it undeclared would either fatal (strict provider) or
-      # skip the sample; pytest then skips hipfile-io / hipfile-trace.
       RUNTIME_DEPS
         rocprofiler-systems
         ${_rocprofiler_systems_hipfile_dep}
