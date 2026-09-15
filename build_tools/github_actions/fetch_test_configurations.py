@@ -586,6 +586,33 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
+    # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
+    # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
+    # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
+    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
+    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
+    # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
+    "miopen-dbsync": {
+        "job_name": "miopen-dbsync",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # Skipped on the `quick` tier by the runner script (TEST_TYPE guard); this
+        # governs standard/comprehensive/full only. Runs serially
+        # (MIOPEN_DBSYNC_MAX_THREADS=1) under rocjitsu; full set (gfx942 304+228) +
+        # artifact fetch + rocjitsu build measures ~15 min, so 30 gives margin and
+        # fails a hung interposer faster.
+        "timeout_minutes": 30,
+        "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # RCCL tests
     "rccl": {
         "job_name": "rccl",
