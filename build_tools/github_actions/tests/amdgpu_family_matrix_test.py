@@ -20,7 +20,10 @@ if "CI_CONFIG_PATH" in os.environ:
 import amdgpu_family_matrix
 from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
+    get_asan_lib_path,
     get_build_runner_labels,
+    is_asan,
+    is_asan_instrumented,
     load_external_runner_config,
 )
 
@@ -275,6 +278,64 @@ class TestExternalConfig(unittest.TestCase):
         # Non-runner keys should come from local definitions
         self.assertEqual(result["gfx94x"]["linux"]["family"], "gfx94X-dcgpu")
         self.assertIn("asan", result["gfx94x"]["linux"]["build_variants"])
+
+
+class AsanHelpersTest(unittest.TestCase):
+    def test_is_asan_only_matches_full_asan(self):
+        """is_asan() gates full (host + device) ASAN behavior only."""
+        for variant, expected in [
+            ("asan", True),
+            ("host-asan", False),
+            ("release", False),
+            ("tsan", False),
+            ("", False),
+        ]:
+            with mock.patch.dict(os.environ, {"BUILD_VARIANT": variant}):
+                self.assertEqual(is_asan(), expected, f"BUILD_VARIANT={variant}")
+
+    def test_is_asan_instrumented_covers_host_asan(self):
+        """Host libraries are instrumented under both ASAN variants."""
+        for variant, expected in [
+            ("asan", True),
+            ("host-asan", True),
+            ("release", False),
+            ("tsan", False),
+            ("", False),
+        ]:
+            with mock.patch.dict(os.environ, {"BUILD_VARIANT": variant}):
+                self.assertEqual(
+                    is_asan_instrumented(), expected, f"BUILD_VARIANT={variant}"
+                )
+
+    def test_is_asan_instrumented_without_build_variant_set(self):
+        """A missing BUILD_VARIANT must not be treated as an ASAN build."""
+        with mock.patch.dict(os.environ, clear=False) as _:
+            os.environ.pop("BUILD_VARIANT", None)
+            self.assertFalse(is_asan_instrumented())
+
+    def test_get_asan_lib_path_returns_resolved_runtime(self):
+        with mock.patch.object(amdgpu_family_matrix.subprocess, "run") as fake_run:
+            fake_run.return_value = mock.Mock(stdout=f"{__file__}\n")
+            self.assertEqual(get_asan_lib_path("/rocm/bin"), str(Path(__file__)))
+        # The runtime is looked up via the clang shipped alongside the build.
+        cmd = fake_run.call_args[0][0]
+        self.assertTrue(cmd[0].endswith(os.path.join("lib", "llvm", "bin", "clang++")))
+        self.assertTrue(cmd[1].startswith("-print-file-name=libclang_rt.asan-"))
+
+    def test_get_asan_lib_path_raises_when_unresolved(self):
+        """Clang echoes the bare filename back when it cannot resolve it."""
+        with mock.patch.object(amdgpu_family_matrix.subprocess, "run") as fake_run:
+            fake_run.return_value = mock.Mock(
+                stdout=f"libclang_rt.asan-{amdgpu_family_matrix.platform.machine()}.so\n"
+            )
+            with self.assertRaises(FileNotFoundError):
+                get_asan_lib_path("/rocm/bin")
+
+    def test_get_asan_lib_path_raises_on_missing_file(self):
+        with mock.patch.object(amdgpu_family_matrix.subprocess, "run") as fake_run:
+            fake_run.return_value = mock.Mock(stdout="/nonexistent/libclang_rt.so\n")
+            with self.assertRaises(FileNotFoundError):
+                get_asan_lib_path("/rocm/bin")
 
 
 if __name__ == "__main__":
