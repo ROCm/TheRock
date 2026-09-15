@@ -37,7 +37,7 @@ on:
         default: "release"
       default_container_image:
         type: string
-        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -47,7 +47,14 @@ permissions:
   contents: read
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      image_name: no_rocm_image_ubuntu24_04
+
   test_component:
+    needs: [resolve-images]
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
@@ -60,10 +67,11 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
       # If the component has specified an alternate image, honor that option.
-      # Otherwise use the default image.
+      # Otherwise fall back to the caller-supplied default, then the centrally
+      # resolved image from docker_images.json.
       image: >-
         ${{ inputs.platform == 'linux' &&
-            (fromJSON(inputs.component).container_image || inputs.default_container_image)
+            (fromJSON(inputs.component).container_image || inputs.default_container_image || needs.resolve-images.outputs.image_ref)
             || null
         }}
       # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
