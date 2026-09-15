@@ -109,6 +109,12 @@ BUILD_RUNNER_LABELS = {
         "default": [
             {"label": "aws-linux-scale-rocm-prod", "weight": 1.0},
         ],
+        "small": [
+            {"label": "aws-linux-scale-rocm-small", "weight": 1.0},
+        ],
+        "medium": [
+            {"label": "aws-linux-scale-rocm-medium", "weight": 1.0},
+        ],
         "sanitizer": [
             {"label": "aws-linux-scale-rocm-large", "weight": 1.0},
         ],
@@ -121,20 +127,30 @@ BUILD_RUNNER_LABELS = {
 }
 
 
-def select_build_runner(platform: str, build_variant: str) -> str:
-    """Select a build runner label based on platform and build variant."""
+def select_build_runner(platform: str, build_variant: str, size: str = "large") -> str:
+    """Select a build runner label based on platform, build variant, and size.
+
+    Args:
+        platform: "linux" or "windows"
+        build_variant: build variant string (e.g. "release", "asan", "tsan")
+        size: runner pool size — "small", "medium", or "large" (default).
+              Sanitizer variants always use the sanitizer (large) pool regardless
+              of size. Platforms without a size-specific pool fall back to default.
+    """
     build_runner_labels = get_build_runner_labels()
     if platform not in build_runner_labels:
-        # Platform not configured for weighted selection, return default
         print(f"  No build runner config for platform {platform}, using default")
         return ""
 
     platform_config = build_runner_labels[platform]
 
-    # Use sanitizer runners for asan/tsan builds
+    # Sanitizer builds are memory-intensive; keep them on dedicated runners
     if "san" in build_variant:
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
+    elif size in ("small", "medium"):
+        labels_config = platform_config.get(size, platform_config["default"])
+        context_name = f"build-runner-{size} ({platform})"
     else:
         labels_config = platform_config["default"]
         context_name = f"build-runner ({platform})"

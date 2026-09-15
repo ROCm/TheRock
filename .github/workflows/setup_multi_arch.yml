@@ -118,6 +118,10 @@ on:
           artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
         type: string
         default: ""
+      skip_gpu_tests:
+        description: "When true, suppress GPU test jobs for all families."
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -255,6 +259,7 @@ jobs:
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
           # Changed projects from external repos for granular artifact-level reuse
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          SKIP_GPU_TESTS: ${{ inputs.skip_gpu_tests }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
