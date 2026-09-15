@@ -216,8 +216,7 @@ _SKIPPABLE_PATH_PATTERNS = [
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
-    # Files used by gitleaks, no impact on CI.
-    "gitleaks.toml",
+    # Scanner configs consumed by the security scan workflows, no impact on CI.
     "build_tools/scan_tools/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
@@ -241,7 +240,6 @@ _SKIPPABLE_PATH_PATTERNS = [
     "build_tools/packaging/linux/tests/*",
     "build_tools/packaging/python/tests/*",
     "build_tools/third_party/s3_management/tests/*",
-    "build_tools/scan_tools/github_actions/tests/*",
     "test_tools/tests/*",
 ]
 
