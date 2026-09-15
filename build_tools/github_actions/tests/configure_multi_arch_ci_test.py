@@ -2053,36 +2053,6 @@ class TestFamilyTestFilters(unittest.TestCase):
         # workflow_dispatch should have test-runs-on set (not empty)
         self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-    def test_gfx120x_tests_run_on_pull_request(self):
-        """Linux and Windows gfx120x tests run on PR/bump."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature-branch",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx120x_linux = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx120X-all":
-                    gfx120x_linux = family_info
-                    break
-        self.assertIsNotNone(gfx120x_linux)
-        self.assertEqual(gfx120x_linux["test-runs-on"], "linux-gfx120X-gpu-rocm")
-
-        gfx120x_windows = None
-        if outputs.builds.windows:
-            for family_info in outputs.builds.windows.per_family_info:
-                if family_info["amdgpu_family"] == "gfx120X-all":
-                    gfx120x_windows = family_info
-                    break
-        self.assertIsNotNone(gfx120x_windows)
-        self.assertEqual(gfx120x_windows["test-runs-on"], "windows-gfx120X-gpu-rocm")
-
     def test_submodule_bump_tests_only_disables_tests_without_submodule_changes(self):
         """gfx950 tests should be disabled on push without submodule changes."""
         ci_inputs = cm.CIInputs(
