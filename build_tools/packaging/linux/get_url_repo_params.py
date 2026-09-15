@@ -229,7 +229,7 @@ def get_gpg_key_url_from_release_type(
     Examples:
         prerelease + per_family
             → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
-        stable + per_family
+        stable (before ROCm 10) + per_family
             → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
         prerelease + multi_arch
             → https://rc.repo.amd.com/rocm/gpg/packages.gpg
