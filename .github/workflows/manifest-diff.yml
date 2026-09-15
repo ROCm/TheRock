@@ -83,7 +83,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      pull-requests: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
     steps:
@@ -104,7 +103,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            generate \
             --end "${{ inputs.end_ref || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}" \
             --start "${{ inputs.start_ref || (github.event_name == 'push' && github.event.before) || '' }}" \
             --find-last-run "${{ inputs.find_last_run }}" \
@@ -125,21 +123,3 @@ jobs:
             --subfolder manifest-diff \
             --report-path reports \
             --index-file-name index.html
-
-      - name: Post manifest-diff report link to bump PR
-        if: >-
-          ${{
-            steps.gen-report.conclusion == 'success' &&
-            github.event_name == 'pull_request' &&
-            startsWith(github.event.pull_request.head.ref, 'bump-')
-          }}
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          COMMIT_RANGE_SUMMARY: ${{ steps.gen-report.outputs.commit_range_summary }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            post_comment \
-            --run-id ${{ github.run_id }} \
-            --pr-number ${{ github.event.pull_request.number }} \
-            --commit-range-summary "$COMMIT_RANGE_SUMMARY"

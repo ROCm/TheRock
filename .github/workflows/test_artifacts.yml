@@ -54,6 +54,9 @@ on:
         options:
           - release
           - asan
+          - asan-debug
+          - host-asan
+          - host-asan-debug
         default: release
       quartz_tracking_id:
         description: >-
@@ -190,6 +193,7 @@ jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
+    if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit
     with:

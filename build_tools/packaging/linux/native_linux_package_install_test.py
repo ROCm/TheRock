@@ -147,6 +147,15 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 from packaging_utils import normalize_target_list
+from native_linux_package_test_common import (
+    ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    VERIFY_KEY_COMPONENTS,
+    build_metapackage_names,
+    derive_package_type,
+    is_sles,
+    major_minor_rocm_version_from_input,
+    run_streaming as _run_streaming,
+)
 
 
 def _env(key: str, default: str) -> str:
@@ -173,13 +182,6 @@ APT_SOURCES_LIST = _env(
 APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
-VERIFY_KEY_COMPONENTS = [
-    "bin/rocminfo",
-    "bin/hipcc",
-    "bin/clinfo",
-    "include/hip/hip_runtime.h",
-    "lib/libamdhip64.so",
-]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
 
@@ -197,9 +199,6 @@ AMDROCM_RPM_REPO_BASENAME = "amdrocm.repo"
 # Named -amdrocm, not -rocm, for the same collision reason as the deb
 # keyring. Must match build_repo_package.RPM_GPG_KEY_PATH.
 AMDROCM_RPM_KEY = "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"
-
-# Pytest/CI only: becomes ``--rocm-version``.
-ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION = "NATIVE_LINUX_INSTALL_ROCM_VERSION"
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -302,89 +301,22 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         return False
 
 
-def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
-    """Run a command with streaming stdout/stderr and return its exit code.
-
-    Lines are printed as they are produced. Raises subprocess.TimeoutExpired
-    (after killing the process) or OSError on failure.
-    """
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    try:
-        for line in process.stdout:
-            print(line.rstrip())
-            sys.stdout.flush()
-        return process.wait(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        raise
-
-
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
-        """Derive package type from OS profile.
-
-        Args:
-        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
-
-        Returns:
-        Package type ('deb' or 'rpm')
-        """
-        os_profile_lower = os_profile.lower()
-        if os_profile_lower.startswith(("ubuntu", "debian")):
-            return "deb"
-        elif os_profile_lower.startswith(
-            ("rhel", "sles", "almalinux", "centos", "azl")
-        ):
-            return "rpm"
-        else:
-            raise ValueError(
-                f"Unable to derive package type from OS profile: {os_profile}. "
-                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
-            )
+        """Derive package type from OS profile (delegates to shared helper)."""
+        return derive_package_type(os_profile)
 
     @staticmethod
     def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
-        """Parse ROCm version for arch-specific package names: major.minor only.
-
-        Examples: ``7.13.1`` → ``7.13``, ``v7.13`` → ``7.13``,
-        ``7.14.0~20260520`` / ``7.14.0~rc1-123456`` → ``7.14``. Used when forming
-        names like ``amdrocm7.13-gfx1100``. Returns ``None`` if input is absent
-        or blank.
-
-        Raises:
-        ValueError: Non-empty input that does not start with a major.minor pattern.
-        """
-        if rocm_version is None:
-            return None
-        s = str(rocm_version).strip()
-        if not s:
-            return None
-        if s.lower().startswith("v"):
-            s = s[1:].lstrip()
-        m = re.match(r"^(\d+)\.(\d+)", s)
-        if not m:
-            raise ValueError(
-                "Invalid ROCm version "
-                f"{rocm_version!r}: expected major.minor (e.g. 7.13 or 7.13.1)."
-            )
-        return f"{int(m.group(1))}.{int(m.group(2))}"
+        """Parse ROCm version for metapackage names (delegates to shared helper)."""
+        return major_minor_rocm_version_from_input(rocm_version)
 
     def _is_sles(self) -> bool:
-        """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
-
-        Returns:
-        True if SLES, False otherwise
-        """
-        return self.os_profile.lower().startswith("sles")
+        """Return True when the OS profile is SLES (delegates to shared helper)."""
+        return is_sles(self.os_profile)
 
     def __init__(
         self,
@@ -416,10 +348,13 @@ class NativeLinuxPackageInstallTest:
         If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
-        build_variant: Build variant (e.g. 'asan'). When set, '-{variant}' is
-        inserted before the version suffix in package names so that variant
-        packages are tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
-        ``amdrocm7.15-gfx942``).
+        build_variant: Build variant (e.g. 'asan', 'host-asan', 'asan-debug',
+        'host-asan-debug'). When it contains 'asan', '-asan' is inserted before
+        the version suffix in package names so that variant packages are
+        tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
+        ``amdrocm7.15-gfx942``). Debug variants collapse to the same '-asan'
+        name as their non-debug counterpart — there is no separate
+        amdrocm-asan-debug package.
         repo_package_dir: Directory holding the built ``amdrocm-repo`` package. When
         set, the repository is configured by installing that package instead of
         writing repo files directly.
@@ -447,42 +382,11 @@ class NativeLinuxPackageInstallTest:
         )
         self.gpg_key_url = gpg_key_url
         self.build_variant = build_variant.strip().lower()
-
-        # Build variants that produce distinct package names with a '-{variant}'
-        # suffix inserted before the version. 'release' is the default build and
-        # does NOT alter the package name (amdrocm7.15, not amdrocm-release7.15).
-        _NAMED_VARIANTS = {"asan"}
-
-        # Metapackage install targets (four combinations of optional inputs).
-        # When build_variant is a named variant (e.g. 'asan'), '-{variant}' is
-        # inserted before the version suffix:
-        #   gfx_arch + rocm_version -> amdrocm-asan{major.minor}-{arch} per arch
-        #   gfx_arch only           -> amdrocm-asan / amdrocm-core-sdk-asan
-        #   rocm_version only       -> amdrocm-asan{major.minor} / amdrocm-core-sdk-asan{major.minor}
-        #   neither                 -> amdrocm-asan / amdrocm-core-sdk-asan
-        ver = self.rocm_version_major_minor
-        variant_sep = (
-            f"-{self.build_variant}" if self.build_variant in _NAMED_VARIANTS else ""
+        self.package_names = build_metapackage_names(
+            gfx_arch=self.gfx_arch_list,
+            rocm_version=rocm_version,
+            build_variant=self.build_variant,
         )
-        if self.gfx_arch_list and ver:
-            self.package_names = []
-            for arch in self.gfx_arch_list:
-                self.package_names.extend(
-                    [
-                        f"amdrocm{variant_sep}{ver}-{arch}",
-                        f"amdrocm-core-sdk{variant_sep}{ver}-{arch}",
-                    ]
-                )
-        elif ver:
-            self.package_names = [
-                f"amdrocm{variant_sep}{ver}",
-                f"amdrocm-core-sdk{variant_sep}{ver}",
-            ]
-        else:
-            self.package_names = [
-                f"amdrocm{variant_sep}",
-                f"amdrocm-core-sdk{variant_sep}",
-            ]
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -1832,7 +1736,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--build-variant",
         type=str,
         default="",
-        help="Build variant (e.g. 'asan'). Changes expected package names to match variant-suffixed packages.",
+        help="Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). "
+        "Changes expected package names to match variant-suffixed packages.",
     )
     parser.add_argument(
         "--test-type",
@@ -1933,7 +1838,13 @@ def parse_cli_arguments(
 
 
 def run_tests(args: Namespace) -> int:
-    """Run simulate or repo-based install test from parsed CLI args. Returns exit code (0 success)."""
+    """Run simulate or repo-based install test from parsed CLI args.
+
+    Repo-based flows run Steps 1–2 (sanity) or 1–3 (full).
+
+    Returns:
+        Exit code (0 success).
+    """
     if args.test_type == "simulate":
         pkg_type = args.pkg_type or NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
@@ -2051,9 +1962,9 @@ def run_tests(args: Namespace) -> int:
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            print("(sanity: basic verification completed)")
-        else:
-            print("ROCm has been successfully installed from repository and verified!")
+            print("(sanity: repo install and basic verification completed)")
+        elif args.test_type == "full":
+            print("(full: repo install, basic verification, and RDHC completed)")
         print("=" * 80 + "\n")
         return 0
     except Exception as e:
@@ -2069,8 +1980,9 @@ def _argv_from_ci_env() -> list[str] | None:
     INSTALL_PREFIX — except in package mode (REPO_PACKAGE_DIR set), where the
     repo is configured by the installed package so REPO_URL is not needed, and
     when REPO_CONFIG_ONLY is set INSTALL_PREFIX is not needed either.
-    Optional: GFX_ARCH, GPG_KEY_URL; ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version``
-    only when versioned package names are needed (omit for unversioned installs).
+    Optional: GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT;
+    ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version`` only when
+    versioned package names are needed (omit for unversioned installs).
     """
     test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
 
@@ -2162,13 +2074,15 @@ def test_native_linux_package_install() -> None:
                 "Missing required environment variables for native install test "
                 "(expected OS_PROFILE, RELEASE_TYPE, plus REPO_URL and INSTALL_PREFIX "
                 "unless REPO_PACKAGE_DIR is set, and INSTALL_PREFIX is not needed with "
-                "REPO_CONFIG_ONLY; optional GFX_ARCH, NATIVE_LINUX_INSTALL_ROCM_VERSION; "
+                "REPO_CONFIG_ONLY; optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+                "NATIVE_LINUX_INSTALL_ROCM_VERSION; "
                 "or for simulate: PACKAGES_DIR)."
             )
         pytest.skip(
             "Set workflow env vars (OS_PROFILE, RELEASE_TYPE, plus REPO_URL/INSTALL_PREFIX "
             "unless REPO_PACKAGE_DIR/REPO_CONFIG_ONLY is set); "
-            "optional GFX_ARCH and NATIVE_LINUX_INSTALL_ROCM_VERSION."
+            "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION."
         )
 
     args = parse_cli_arguments(argv, raise_instead_of_exit=True)

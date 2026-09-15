@@ -1,6 +1,5 @@
 """Tests for generate_manifest_diff_report.py."""
 
-import argparse
 import os
 import sys
 import unittest
@@ -10,33 +9,19 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from generate_manifest_diff_report import (
-    build_commit_range_summary,
-    Component,
+    create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
+    generate_non_superrepo_html,
     get_api_base_from_url,
-    handle_post_comment,
     is_revert,
-    main,
     ManifestDiff,
     parse_args,
-    PR_COMMENT_MARKER,
     resolve_commits,
     Submodule,
-    Superrepo,
 )
-
-
-def _make_output_root(run_id="12345", platform="linux"):
-    return WorkflowOutputRoot(
-        bucket="therock-ci-artifacts",
-        external_repo="",
-        run_id=run_id,
-        platform=platform,
-    )
 
 
 # =============================================================================
@@ -230,9 +215,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_workflow_mode_resolves_both_commits(self):
         """--workflow-mode resolves both start and end from workflow run IDs."""
-        args = parse_args(
-            ["generate", "--start", "123", "--end", "456", "--workflow-mode"]
-        )
+        args = parse_args(["--start", "123", "--end", "456", "--workflow-mode"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_workflow_run_by_id"
@@ -249,9 +232,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_resolves_start(self):
         """--find-last-run finds the most recent matching run for start commit."""
-        args = parse_args(
-            ["generate", "--end", "def456", "--find-last-run", "multi_arch_ci.yml"]
-        )
+        args = parse_args(["--end", "def456", "--find-last-run", "multi_arch_ci.yml"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run"
@@ -265,7 +246,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_uses_terminal_statuses(self):
         """--find-last-run hardcodes accepted statuses to {success, failure}."""
-        args = parse_args(["generate", "--end", "def456", "--find-last-run", "ci.yml"])
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run"
@@ -278,7 +259,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_pr_base_ref_resolves_start_via_compare(self):
         """--pr-base-ref resolves start as the merge-base via the Compare API."""
-        args = parse_args(["generate", "--end", "deadbeef", "--pr-base-ref", "main"])
+        args = parse_args(["--end", "deadbeef", "--pr-base-ref", "main"])
 
         with mock.patch(
             "generate_manifest_diff_report.gha_send_request"
@@ -294,7 +275,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_find_last_run_no_match_returns_none(self):
         """--find-last-run with no matching prior run → (None, None)."""
-        args = parse_args(["generate", "--end", "def456", "--find-last-run", "ci.yml"])
+        args = parse_args(["--end", "def456", "--find-last-run", "ci.yml"])
         with mock.patch(
             "generate_manifest_diff_report.gha_query_last_workflow_run",
             return_value=None,
@@ -310,7 +291,6 @@ class ResolveCommitsTest(unittest.TestCase):
         """
         args = parse_args(
             [
-                "generate",
                 "--end",
                 "deadbeef",
                 "--pr-base-ref",
@@ -335,7 +315,7 @@ class ResolveCommitsTest(unittest.TestCase):
 
     def test_direct_commit_shas_no_api_calls(self):
         """Direct commit SHAs don't require API calls."""
-        args = parse_args(["generate", "--start", "abc123", "--end", "def456"])
+        args = parse_args(["--start", "abc123", "--end", "def456"])
 
         # No mocking needed - should work without API calls
         start_sha, end_sha = resolve_commits(args)
@@ -343,190 +323,48 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(start_sha, "abc123")
         self.assertEqual(end_sha, "def456")
 
+    def test_output_dir_argument_parsed(self):
+        """--output-dir argument is parsed as Path."""
+        args = parse_args(["--start", "abc", "--end", "def", "--output-dir", "reports"])
+        self.assertEqual(args.output_dir, Path("reports"))
 
-# =============================================================================
-# Report Content Tests
-# =============================================================================
-
-
-class BuildCommitRangeSummaryTest(unittest.TestCase):
-    """Tests for build_commit_range_summary()."""
-
-    def test_includes_short_shas_and_singular_changed_count(self):
-        diff = ManifestDiff(
-            start_commit="a" * 40,
-            end_commit="b" * 40,
-            submodules={
-                "changed-sub": Submodule(
-                    name="changed-sub",
-                    sha="c" * 40,
-                    api_base="https://api.github.com/repos/ROCm/changed-sub",
-                    branch="main",
-                    status="changed",
-                ),
-                "unchanged-sub": Submodule(
-                    name="unchanged-sub",
-                    sha="d" * 40,
-                    api_base="https://api.github.com/repos/ROCm/unchanged-sub",
-                    branch="main",
-                    status="unchanged",
-                ),
-            },
-        )
-
-        summary = build_commit_range_summary(diff)
-
-        self.assertIn(f"`{diff.start_commit[:8]}`", summary)
-        self.assertIn(f"`{diff.end_commit[:8]}`", summary)
-        self.assertIn("1 submodule changed", summary)
-
-    def test_counts_changed_superrepo_alongside_regular_submodules(self):
-        """A superrepo-only bump (e.g. rocm-systems) must still be counted,
-        not reported as "0 submodules changed"."""
-        diff = ManifestDiff(
-            start_commit="a" * 40,
-            end_commit="b" * 40,
-            submodules={
-                "unchanged-sub": Submodule(
-                    name="unchanged-sub",
-                    sha="d" * 40,
-                    api_base="https://api.github.com/repos/ROCm/unchanged-sub",
-                    branch="main",
-                    status="unchanged",
-                ),
-            },
-            superrepos={
-                "rocm-systems": Superrepo(
-                    name="rocm-systems",
-                    sha="c" * 40,
-                    api_base="https://api.github.com/repos/ROCm/rocm-systems",
-                    branch="develop",
-                    status="changed",
-                ),
-            },
-        )
-
-        summary = build_commit_range_summary(diff)
-
-        self.assertIn("1 submodule changed", summary)
-
-    def test_lists_changed_components_for_changed_superrepo(self):
-        diff = ManifestDiff(
-            start_commit="a" * 40,
-            end_commit="b" * 40,
-            superrepos={
-                "rocm-systems": Superrepo(
-                    name="rocm-systems",
-                    sha="c" * 40,
-                    api_base="https://api.github.com/repos/ROCm/rocm-systems",
-                    branch="develop",
-                    status="changed",
-                    components={
-                        "hip": Component(path="hip", name="hip", status="changed"),
-                        "rccl": Component(path="rccl", name="rccl", status="changed"),
-                        "clr": Component(path="clr", name="clr", status="unchanged"),
-                    },
-                ),
-            },
-        )
-
-        summary = build_commit_range_summary(diff)
-
-        self.assertIn("`rocm-systems`: hip, rccl", summary)
-        self.assertNotIn("clr", summary)
-
-    def test_omits_component_list_for_unchanged_superrepo(self):
-        diff = ManifestDiff(
-            start_commit="a" * 40,
-            end_commit="b" * 40,
-            superrepos={
-                "rocm-libraries": Superrepo(
-                    name="rocm-libraries",
-                    sha="c" * 40,
-                    api_base="https://api.github.com/repos/ROCm/rocm-libraries",
-                    branch="develop",
-                    status="unchanged",
-                ),
-            },
-        )
-
-        summary = build_commit_range_summary(diff)
-
-        self.assertNotIn("rocm-libraries", summary)
+    def test_output_dir_defaults_to_none(self):
+        """--output-dir defaults to None when not specified."""
+        args = parse_args(["--start", "abc", "--end", "def"])
+        self.assertIsNone(args.output_dir)
 
 
 # =============================================================================
-# post_comment Subcommand Tests
+# HTML Report Structure Tests
 # =============================================================================
 
 
-class HandlePostCommentTest(unittest.TestCase):
-    """Tests for handle_post_comment(): URL computation + comment body/dispatch."""
+class HtmlReportStructureTest(unittest.TestCase):
+    """Tests that generated HTML includes semantic row classes and data attributes."""
 
-    def test_posts_comment_with_computed_report_url(self):
-        args = argparse.Namespace(
-            run_id="99999",
-            pr_number=1234,
-            commit_range_summary="**Commit Range:** `aaa` -> `bbb` (1 submodule changed)",
-            github_repository="ROCm/TheRock",
+    def test_create_table_includes_header_row_class(self):
+        """Report tables have header row with class report-table-header-row."""
+        html = create_table(["Component", "Commits"], [])
+        self.assertIn("report-table-header-row", html)
+
+    def test_non_superrepo_html_includes_component_row_and_data_component(self):
+        """Non-superrepo table rows have component-row class and data-component attribute."""
+        sub = Submodule(
+            name="test-submodule",
+            sha="abc123",
+            api_base="https://api.github.com/repos/ROCm/test",
+            branch="main",
+            status="unchanged",
         )
-
-        with mock.patch(
-            "generate_manifest_diff_report.WorkflowOutputRoot.from_workflow_run",
-            return_value=_make_output_root(run_id="99999"),
-        ) as from_workflow_run, mock.patch(
-            "generate_manifest_diff_report.gha_update_pr_comment"
-        ) as gha_update_pr_comment:
-            handle_post_comment(args)
-
-        from_workflow_run.assert_called_once_with(run_id="99999", platform="linux")
-        gha_update_pr_comment.assert_called_once()
-        call_kwargs = gha_update_pr_comment.call_args.kwargs
-        self.assertEqual(call_kwargs["pr_number"], 1234)
-        self.assertEqual(call_kwargs["github_repository"], "ROCm/TheRock")
-        self.assertTrue(call_kwargs["body"].startswith(PR_COMMENT_MARKER))
-        self.assertIn(
-            "99999-linux/logs/manifest-diff/TheRockReport.html", call_kwargs["body"]
+        diff = ManifestDiff(
+            start_commit="start",
+            end_commit="end",
+            submodules={"test-submodule": sub},
         )
-        self.assertIn(
-            "**Commit Range:** `aaa` -> `bbb` (1 submodule changed)",
-            call_kwargs["body"],
-        )
-
-    def test_omits_summary_line_when_blank(self):
-        args = argparse.Namespace(
-            run_id="99999",
-            pr_number=1234,
-            commit_range_summary="",
-            github_repository="ROCm/TheRock",
-        )
-
-        with mock.patch(
-            "generate_manifest_diff_report.WorkflowOutputRoot.from_workflow_run",
-            return_value=_make_output_root(run_id="99999"),
-        ), mock.patch(
-            "generate_manifest_diff_report.gha_update_pr_comment"
-        ) as gha_update_pr_comment:
-            handle_post_comment(args)
-
-        body = gha_update_pr_comment.call_args.kwargs["body"]
-        self.assertNotIn("Commit Range", body)
-
-
-class MainDispatchTest(unittest.TestCase):
-    """Tests that main() routes the post_comment subcommand to its handler."""
-
-    def test_post_comment_dispatches_to_handler(self):
-        with mock.patch(
-            "generate_manifest_diff_report.handle_post_comment", return_value=0
-        ) as handle_post_comment_mock:
-            result = main(["post_comment", "--run-id", "123", "--pr-number", "456"])
-
-        self.assertEqual(result, 0)
-        handle_post_comment_mock.assert_called_once()
-        called_args = handle_post_comment_mock.call_args[0][0]
-        self.assertEqual(called_args.run_id, "123")
-        self.assertEqual(called_args.pr_number, 456)
+        html = generate_non_superrepo_html(diff)
+        self.assertIn("component-row", html)
+        self.assertIn("data-component=", html)
+        self.assertIn("test-submodule", html)
 
 
 if __name__ == "__main__":
