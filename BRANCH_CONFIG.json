@@ -1,1 +1,1 @@
-{ "flags": { "HIPDNN_ENABLE_KERNEL_INGESTOR": true } }
+{ "flags": { "HIPDNN_ENABLE_KERNEL_INGESTOR": true, "HIPDNN_ENABLE_SDPA": true } }
