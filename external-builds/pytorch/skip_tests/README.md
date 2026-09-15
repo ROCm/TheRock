@@ -23,7 +23,7 @@ Independent of this tooling, it is _always_ welcome to _get those changes upstre
 
 ## How to run
 
-[`../run_pytorch_tests.py`](../run_pytorch_tests.py) steers the pytest and is
+[`../run_pytorch_tests.py`](../run_pytorch_tests.py) steers PyTorch's `run_test.py` and is
 used by the CI, while [`./create_skip_tests.py`](create_skip_tests.py) creates
 the list of tests to be included or excluded.
 
