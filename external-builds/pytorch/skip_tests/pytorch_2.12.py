@@ -4,6 +4,9 @@
 skip_tests = {
     "common": {
         "cuda": [
+            # TestCuda - conflicts with how our test script and runners are
+            # configured.
+            "test_hip_device_count",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
             # AssertionError: Scalars are not equal!

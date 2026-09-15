@@ -307,6 +307,25 @@ amdgpu_family_info_matrix_presubmit = {
             "nightly_check_only_for_family": True,
         },
     },
+    "gfx125x": {
+        "linux": {
+            # No hardware available for testing yet; build-only.
+            # PyTorch builds can be triggered manually via workflow_dispatch.
+            "test-runs-on": "",
+            "family": "gfx125X-dcgpu",
+            "fetch-gfx-targets": [],
+            # gfx1250 has xnack enabled by default and is not in the
+            # gfx942/gfx950 xnack+ munging list in therock_sanitizers.cmake,
+            # so GPU_TARGETS stays plain "gfx1250" for these variants.
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+            ],
+        },
+    },
 }
 
 
@@ -334,7 +353,14 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
-            "build_variants": ["release", "asan", "asan-debug", "tsan"],
+            "build_variants": [
+                "release",
+                "asan",
+                "asan-debug",
+                "host-asan",
+                "host-asan-debug",
+                "tsan",
+            ],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
         }
@@ -479,18 +505,6 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
-            "fetch-gfx-targets": [],
-            "build_variants": ["release"],
-        },
-    },
-    "gfx125x": {
-        "linux": {
-            # No hardware available for testing yet; build-only.
-            # PyTorch builds are included — workflow_dispatch can be used
-            # to trigger manually; nightly schedule runs both ROCm stack
-            # and PyTorch builds.
-            "test-runs-on": "",
-            "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
