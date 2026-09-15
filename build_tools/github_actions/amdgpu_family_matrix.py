@@ -311,7 +311,6 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
-            # Tests only run when gfx125x label is present on the PR.
             "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": ["gfx1250"],
@@ -325,7 +324,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
             ],
-            # Only run tests when gfx125x label is present
+            # Only run tests when gfx125X-dcgpu label is present
             "trigger_test_label_only": True,
             # Only allow quick tests for MI455 hardware
             "test_type_for_family": ["quick"],
@@ -365,7 +364,7 @@ amdgpu_family_info_matrix_postsubmit = {
                 "host-asan-debug",
                 "tsan",
             ],
-            # Only run tests when gfx950 label is present
+            # Only run tests when gfx950-dcgpu label is present
             "trigger_test_label_only": True,
         }
     },

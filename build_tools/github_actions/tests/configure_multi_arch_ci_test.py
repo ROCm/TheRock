@@ -1965,247 +1965,166 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
 
 
 class TestFamilyTestFilters(unittest.TestCase):
-    """Tests for run-full-tests-only and nightly_check_only_for_family behavior."""
+    """Tests for family-level test filtering (trigger_test_label_only, test_type_for_family)."""
 
-    def test_real_family_gfx90a_postsubmit_runs_tests_on_push(self):
-        """Integration test: gfx90a runs tests on all pushes."""
-        # gfx90a is in postsubmit matrix, so it runs on push events.
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        git_context = cm.GitContext(
-            changed_files=["CMakeLists.txt"],
-            submodule_paths=["rocm-systems", "rocm-libraries"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # Find gfx90a in the linux build config
-        gfx90a_info = None
+    def _find_family_info(self, outputs, family_name):
+        """Helper to find family info in build outputs."""
         if outputs.builds.linux:
             for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx90a":
-                    gfx90a_info = family_info
-                    break
+                if family_info["amdgpu_family"] == family_name:
+                    return family_info
+        return None
 
-        self.assertIsNotNone(gfx90a_info)
-        # gfx90a should have tests enabled on pushes
-        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+    def test_gfx90a_always_runs_tests(self):
+        """gfx90a (no trigger_test_label_only) runs tests on push and workflow_dispatch."""
+        test_cases = [
+            {
+                "name": "push",
+                "event_name": "push",
+                "base_ref": "HEAD^",
+                "extra_inputs": {},
+                "git_context": cm.GitContext(
+                    changed_files=["CMakeLists.txt"],
+                    submodule_paths=["rocm-systems"],
+                ),
+            },
+            {
+                "name": "push_with_submodule_changes",
+                "event_name": "push",
+                "base_ref": "HEAD^",
+                "extra_inputs": {},
+                "git_context": cm.GitContext(
+                    changed_files=["some-submodule"],
+                    submodule_paths=["some-submodule"],
+                ),
+            },
+            {
+                "name": "workflow_dispatch",
+                "event_name": "workflow_dispatch",
+                "base_ref": "HEAD^",
+                "extra_inputs": {"linux_amdgpu_families": ["gfx90a"]},
+                "git_context": cm.GitContext.empty(),
+            },
+        ]
 
-    def test_workflow_dispatch_allows_gfx90a(self):
-        """workflow_dispatch should allow testing gfx90a."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-            linux_amdgpu_families=["gfx90a"],
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
+        for tc in test_cases:
+            with self.subTest(tc["name"]):
+                ci_inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=tc["event_name"],
+                    commit_ref="main",
+                    base_ref=tc["base_ref"],
+                    build_variant="release",
+                    **tc["extra_inputs"],
+                )
+                outputs = cm.configure(ci_inputs, tc["git_context"])
+                gfx90a_info = self._find_family_info(outputs, "gfx90a")
 
-        # Find gfx90a in the linux build config
-        gfx90a_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx90a":
-                    gfx90a_info = family_info
-                    break
+                self.assertIsNotNone(gfx90a_info)
+                self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-        self.assertIsNotNone(gfx90a_info)
-        # workflow_dispatch should have test-runs-on set (not empty)
-        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
+    def test_trigger_test_label_only_behavior(self):
+        """trigger_test_label_only gates tests based on label presence."""
+        test_cases = [
+            # gfx125x tests
+            {
+                "name": "gfx125x_pr_with_label_enabled",
+                "family_key": "gfx125x",
+                "family_name": "gfx125X-dcgpu",
+                "event_name": "pull_request",
+                "pr_labels": ["gfx125X-dcgpu"],
+                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
+                "expect_tests": True,
+            },
+            {
+                "name": "gfx125x_pr_without_label_disabled",
+                "family_key": "gfx125x",
+                "family_name": "gfx125X-dcgpu",
+                "event_name": "pull_request",
+                "pr_labels": [],
+                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
+                "expect_tests": False,
+            },
+            # gfx950 tests
+            {
+                "name": "gfx950_push_with_label_enabled",
+                "family_key": "gfx950",
+                "family_name": "gfx950-dcgpu",
+                "event_name": "push",
+                "pr_labels": ["gfx950-dcgpu"],
+                "extra_inputs": {},
+                "expect_tests": True,
+            },
+            {
+                "name": "gfx950_push_without_label_disabled",
+                "family_key": "gfx950",
+                "family_name": "gfx950-dcgpu",
+                "event_name": "push",
+                "pr_labels": [],
+                "extra_inputs": {},
+                "expect_tests": False,
+            },
+            # workflow_dispatch bypasses label requirement
+            {
+                "name": "gfx950_workflow_dispatch_bypasses_label",
+                "family_key": "gfx950",
+                "family_name": "gfx950-dcgpu",
+                "event_name": "workflow_dispatch",
+                "pr_labels": [],
+                "extra_inputs": {"linux_amdgpu_families": ["gfx950"]},
+                "expect_tests": True,
+            },
+            {
+                "name": "gfx125x_workflow_dispatch_bypasses_label",
+                "family_key": "gfx125x",
+                "family_name": "gfx125X-dcgpu",
+                "event_name": "workflow_dispatch",
+                "pr_labels": [],
+                "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
+                "expect_tests": True,
+            },
+        ]
 
-    def test_submodule_bump_tests_only_disables_tests_without_submodule_changes(self):
-        """gfx950 tests should be disabled on push without submodule changes."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref=None,  # Skip path filtering
-            build_variant="release",
-        )
-        # No submodule changes - CI-relevant file but not a submodule
-        git_context = cm.GitContext(
-            changed_files=["CMakeLists.txt"],
-            submodule_paths=["rocm-systems", "rocm-libraries"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
+        for tc in test_cases:
+            with self.subTest(tc["name"]):
+                base_ref = None if tc["event_name"] == "workflow_dispatch" else "main"
+                if tc["event_name"] == "push":
+                    base_ref = "HEAD^"
 
-        # Find gfx950 in the linux build config
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
+                ci_inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=tc["event_name"],
+                    commit_ref=(
+                        "main" if tc["event_name"] != "pull_request" else "feature"
+                    ),
+                    base_ref=base_ref,
+                    build_variant="release",
+                    pr_labels=tc["pr_labels"],
+                    **tc["extra_inputs"],
+                )
+                outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+                family_info = self._find_family_info(outputs, tc["family_name"])
 
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be disabled (empty runner)
-        self.assertEqual(gfx950_info["test-runs-on"], "")
-
-    def test_submodule_bump_tests_only_enables_tests_on_workflow_dispatch(self):
-        """gfx950 tests should be enabled on workflow_dispatch regardless of submodule changes."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,  # Skip path filtering
-            build_variant="release",
-            linux_amdgpu_families=["gfx950"],
-        )
-        # No submodule changes
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # Find gfx950 in the linux build config
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be enabled on workflow_dispatch
-        self.assertNotEqual(gfx950_info["test-runs-on"], "")
-
-    def test_trigger_test_label_only_enables_tests_with_label(self):
-        """trigger_test_label_only enables tests when family label is present."""
-        # gfx125x has trigger_test_label_only=True, label is "gfx125X-dcgpu"
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature-branch",
-            base_ref="main",
-            build_variant="release",
-            pr_labels=["gfx125X-dcgpu"],  # Family label enables tests
-            linux_amdgpu_families=["gfx125x"],
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx125x_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
-                    gfx125x_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx125x_info)
-        # Tests should be ENABLED because gfx125X-dcgpu label is present
-        self.assertEqual(gfx125x_info["test-runs-on"], "linux-mi455-gpu-rocm")
-
-    def test_trigger_test_label_only_disables_tests_without_label(self):
-        """trigger_test_label_only disables tests when family label is missing."""
-        # gfx125x has trigger_test_label_only=True
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature-branch",
-            base_ref="main",
-            build_variant="release",
-            pr_labels=[],  # No label - tests should be disabled
-            linux_amdgpu_families=["gfx125x"],
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx125x_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
-                    gfx125x_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx125x_info)
-        # Tests should be DISABLED because no gfx125X-dcgpu label
-        self.assertEqual(gfx125x_info["test-runs-on"], "")
-
-    def test_trigger_test_label_only_works_for_gfx950(self):
-        """trigger_test_label_only works for gfx950 with gfx950-dcgpu label."""
-        # gfx950 has trigger_test_label_only=True, label is "gfx950-dcgpu"
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-            pr_labels=["gfx950-dcgpu"],  # Family label enables tests
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be ENABLED because gfx950-dcgpu label is present
-        self.assertNotEqual(gfx950_info["test-runs-on"], "")
-
-    def test_trigger_test_label_only_bypassed_on_workflow_dispatch(self):
-        """workflow_dispatch bypasses trigger_test_label_only for manual testing."""
-        # gfx950 has trigger_test_label_only=True but workflow_dispatch should bypass
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="workflow_dispatch",
-            commit_ref="main",
-            base_ref=None,
-            build_variant="release",
-            pr_labels=[],  # No label, but workflow_dispatch should bypass
-            linux_amdgpu_families=["gfx950"],
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be ENABLED - workflow_dispatch bypasses label requirement
-        self.assertNotEqual(gfx950_info["test-runs-on"], "")
-
-    def test_trigger_test_label_only_disabled_on_push_without_label(self):
-        """Push events without label should have tests disabled for label-gated families."""
-        # gfx950 has trigger_test_label_only=True
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-            pr_labels=[],  # No label on push
-        )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx950_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx950-dcgpu":
-                    gfx950_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx950_info)
-        # Tests should be DISABLED - no label on push
-        self.assertEqual(gfx950_info["test-runs-on"], "")
+                self.assertIsNotNone(
+                    family_info, f"Family {tc['family_name']} not found"
+                )
+                if tc["expect_tests"]:
+                    self.assertNotEqual(
+                        family_info["test-runs-on"],
+                        "",
+                        f"Expected tests enabled for {tc['name']}",
+                    )
+                else:
+                    self.assertEqual(
+                        family_info["test-runs-on"],
+                        "",
+                        f"Expected tests disabled for {tc['name']}",
+                    )
 
     def test_test_type_for_family_filters_non_matching_test_type(self):
-        """test_type_for_family should disable tests when test_type doesn't match."""
-        # Create a scenario where test_type would be "comprehensive" (schedule)
-        # but test_type_for_family only allows ["quick"]
+        """test_type_for_family disables tests when test_type doesn't match allowed list."""
+        # gfx125x has test_type_for_family=["quick"]
+        # schedule triggers test_type="comprehensive" which is not in ["quick"]
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="schedule",
@@ -2213,49 +2132,11 @@ class TestFamilyTestFilters(unittest.TestCase):
             base_ref=None,
             build_variant="release",
         )
-        git_context = cm.GitContext.empty()
-        outputs = cm.configure(ci_inputs, git_context)
-
-        # gfx125x has test_type_for_family=["quick"]
-        # On schedule: test_type is "comprehensive" which is not in ["quick"]
-        gfx125x_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx125X-dcgpu":
-                    gfx125x_info = family_info
-                    break
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        gfx125x_info = self._find_family_info(outputs, "gfx125X-dcgpu")
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests disabled due to test_type_for_family filtering (comprehensive not in ["quick"])
         self.assertEqual(gfx125x_info["test-runs-on"], "")
-
-    def test_gfx90a_runs_tests_on_all_push_events(self):
-        """gfx90a (no trigger_test_label_only) runs tests on all pushes."""
-        # gfx90a doesn't have trigger_test_label_only, so tests always run on push
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="push",
-            commit_ref="main",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        # Even with submodule changes, gfx90a should run tests
-        git_context = cm.GitContext(
-            changed_files=["some-submodule"],
-            submodule_paths=["some-submodule"],
-        )
-        outputs = cm.configure(ci_inputs, git_context)
-
-        gfx90a_info = None
-        if outputs.builds.linux:
-            for family_info in outputs.builds.linux.per_family_info:
-                if family_info["amdgpu_family"] == "gfx90a":
-                    gfx90a_info = family_info
-                    break
-
-        self.assertIsNotNone(gfx90a_info)
-        # gfx90a should have tests enabled on all pushes (including submodule bumps)
-        self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
 
 # ---------------------------------------------------------------------------
