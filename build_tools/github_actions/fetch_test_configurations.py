@@ -1143,6 +1143,17 @@ def run():
 
             job_config_data = {**_common_settings, **selected_matrix[key]}
             job_config_data["test_type"] = test_type
+            # POC (ALMIOPEN sharding investigation): computed once here and
+            # reused below (shard gating, serial companion). "exhaustive" is
+            # a POC-only category meant strictly for gfx94X; if a
+            # test_filter:exhaustive label is in effect but this family isn't
+            # gfx94X, downgrade to "standard" so it can never escalate
+            # testing on any other architecture -- regardless of whether
+            # that architecture happens to have a test runner for this
+            # component now or in the future.
+            is_gfx94x_family = amdgpu_families is not None and "gfx94X" in amdgpu_families
+            if job_config_data["test_type"] == "exhaustive" and not is_gfx94x_family:
+                job_config_data["test_type"] = "standard"
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
@@ -1194,7 +1205,8 @@ def run():
             # family/platform/tier keeps today's stock total_shards_dict-derived
             # total_shards with job_shards == total_shards, i.e.
             # subshards_per_job == 1 -- byte-for-byte unchanged.
-            is_gfx94x_family = amdgpu_families is not None and "gfx94X" in amdgpu_families
+            # (is_gfx94x_family already computed above, right after test_type
+            # was assigned -- reused here unchanged.)
             if is_gfx94x_family and test_type != "quick":
                 gfx94x_override = job_config_data.get(
                     "gfx94x_total_shards_override", {}
