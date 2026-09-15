@@ -753,7 +753,8 @@ source_paths = ["hip-kernel-provider"]
 artifact_group = "cv-libs"
 type = "target-neutral"
 # half headers come from base; amd-llvm arrives transitively via core-hip.
-artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
+# fft is required for GPU audio augmentations (rocFFT).
+artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "fft"]
 feature_group = "CV_LIBS"
 disable_platforms = ["windows"]
 
