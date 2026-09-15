@@ -1809,7 +1809,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
     # we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
-    #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
+    #     doesn't know anything about hip (i.e. it doesn't have HIP headers, etc).
     #   "amd-hip": Superset of "amd-llvm" which also includes HIP headers and
     #     HIP version info.
     # The main difference is that for "amd-llvm", we derive the configuration from
