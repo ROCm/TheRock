@@ -378,8 +378,7 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2962): Re-enable run_tests once sanity checks work with this architecture.
-                    "run_tests": False,
+                    "run_tests": True,
                     "runs_on": {
                         "test": "windows-gfx120X-gpu-rocm",
                     },

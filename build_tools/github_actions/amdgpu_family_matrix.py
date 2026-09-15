@@ -303,8 +303,6 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            # TODO(#2962): Re-enable Windows gfx120X PR tests once sanity checks work.
-            "nightly_check_only_for_family": True,
         },
     },
     "gfx125x": {

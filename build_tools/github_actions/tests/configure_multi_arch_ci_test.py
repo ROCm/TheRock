@@ -2053,8 +2053,8 @@ class TestFamilyTestFilters(unittest.TestCase):
         # workflow_dispatch should have test-runs-on set (not empty)
         self.assertNotEqual(gfx90a_info["test-runs-on"], "")
 
-    def test_gfx120x_linux_tests_run_on_pull_request(self):
-        """Linux gfx120x tests run on PR/bump; Windows stays nightly-only."""
+    def test_gfx120x_tests_run_on_pull_request(self):
+        """Linux and Windows gfx120x tests run on PR/bump."""
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -2081,7 +2081,7 @@ class TestFamilyTestFilters(unittest.TestCase):
                     gfx120x_windows = family_info
                     break
         self.assertIsNotNone(gfx120x_windows)
-        self.assertEqual(gfx120x_windows["test-runs-on"], "")
+        self.assertEqual(gfx120x_windows["test-runs-on"], "windows-gfx120X-gpu-rocm")
 
     def test_submodule_bump_tests_only_disables_tests_without_submodule_changes(self):
         """gfx950 tests should be disabled on push without submodule changes."""
