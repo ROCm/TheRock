@@ -582,6 +582,7 @@ source_paths = ["clr", "hip", "amdgpu-windows-interop"]
 artifact_group = "hip-runtime"
 type = "target-neutral"
 artifact_deps = ["core-hip"]
+source_paths = ["hrr"]
 feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-ocl-icd]
