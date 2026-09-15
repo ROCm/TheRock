@@ -53,7 +53,15 @@ on:
       build_runs_on:
         type: string
         default: "azure-windows-scale-rocm"
-        description: "Build runner label (selected by configure script with weighted distribution)"
+        description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
+      build_runs_on_small:
+        type: string
+        default: "azure-windows-scale-rocm"
+        description: "Build runner label for low-CPU stages (no dedicated small pool for Windows yet, defaults to standard pool)"
+      build_runs_on_medium:
+        type: string
+        default: "azure-windows-scale-rocm"
+        description: "Build runner label for medium-CPU stages (no dedicated medium pool for Windows yet, defaults to standard pool)"
       rocm_package_version:
         type: string
       release_type:
