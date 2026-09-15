@@ -324,7 +324,7 @@ class CIInputs:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -940,12 +940,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            if label.lower().startswith("gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
+                # Family keys are lowercase, so normalize the target.
+                target = label.split("-")[0].lower()
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -1371,7 +1371,7 @@ def _expand_build_config_for_platform(
             platform_info.get("trigger_test_label_only", False)
             and not ci_inputs.is_workflow_dispatch
         ):
-            family_label = platform_info["family"].lower()
+            family_label = platform_info["family"]
             if family_label not in ci_inputs.pr_labels:
                 test_runs_on = ""
                 print(

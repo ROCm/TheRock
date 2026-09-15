@@ -64,7 +64,7 @@ SUBMODULE_CONFIG = {
         #   * Build for all variants (asan)
         #   * All builds and tests (including downstream rocm-libraries jobs)
         #   * gfx950-dcgpu/gfx125X-dcgpu tests (limited hardware, label-gated)
-        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125x-dcgpu"],
+        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
     },
     "rocm-libraries": {
         "repo": "ROCm/rocm-libraries",
@@ -82,7 +82,7 @@ SUBMODULE_CONFIG = {
         #   * Build for all variants (asan)
         #   * All rocm-libraries tests
         #   * gfx950-dcgpu/gfx125X-dcgpu tests (limited hardware, label-gated)
-        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125x-dcgpu"],
+        "labels": [*COMMON_CI_LABELS, "ci:asan", "gfx950-dcgpu", "gfx125X-dcgpu"],
     },
     "debug-tools/rocgdb/source": {
         "repo": "ROCm/rocgdb",

@@ -2076,14 +2076,14 @@ class TestFamilyTestFilters(unittest.TestCase):
 
     def test_trigger_test_label_only_enables_tests_with_label(self):
         """trigger_test_label_only enables tests when family label is present."""
-        # gfx125x has trigger_test_label_only=True, label is "gfx125x-dcgpu"
+        # gfx125x has trigger_test_label_only=True, label is "gfx125X-dcgpu"
         ci_inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
             commit_ref="feature-branch",
             base_ref="main",
             build_variant="release",
-            pr_labels=["gfx125x-dcgpu"],  # Family label enables tests
+            pr_labels=["gfx125X-dcgpu"],  # Family label enables tests
             linux_amdgpu_families=["gfx125x"],
         )
         git_context = cm.GitContext.empty()
@@ -2097,7 +2097,7 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests should be ENABLED because gfx125x-dcgpu label is present
+        # Tests should be ENABLED because gfx125X-dcgpu label is present
         self.assertEqual(gfx125x_info["test-runs-on"], "linux-mi455-gpu-rocm")
 
     def test_trigger_test_label_only_disables_tests_without_label(self):
@@ -2123,7 +2123,7 @@ class TestFamilyTestFilters(unittest.TestCase):
                     break
 
         self.assertIsNotNone(gfx125x_info)
-        # Tests should be DISABLED because no gfx125x-dcgpu label
+        # Tests should be DISABLED because no gfx125X-dcgpu label
         self.assertEqual(gfx125x_info["test-runs-on"], "")
 
     def test_trigger_test_label_only_works_for_gfx950(self):
