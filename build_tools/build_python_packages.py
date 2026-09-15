@@ -421,6 +421,10 @@ def _run_kpack_split(
     # mode the generic test binaries are host-only and can't run without device
     # code. Tests will be reintroduced via a dedicated package later.
     devel = PopulatedDistPackage(params, logical_name="devel", target_family=None)
+
+    devel.rpath_dep(core, "lib")
+    devel.rpath_dep(core, "lib/llvm/lib")
+
     devel.populate_devel_files(
         addl_artifact_names=[
             # Header-only libraries not included in runtime packages.
@@ -522,6 +526,10 @@ def _run_legacy(
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
         )
+
+        devel.rpath_dep(core, "lib")
+        devel.rpath_dep(core, "lib/llvm/lib")
+
         devel.populate_devel_files(
             addl_artifact_names=[
                 # Since prim and rocwmma are header only libraries, they are not
