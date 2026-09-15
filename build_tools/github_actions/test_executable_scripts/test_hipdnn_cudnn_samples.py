@@ -107,7 +107,9 @@ def get_parallelism() -> int:
         try:
             return max(1, int(kube_cpu_request.split(".")[0]))
         except ValueError:
-            logging.warning(f"Ignoring unparsable KUBE_CPU_REQUEST={kube_cpu_request!r}")
+            logging.warning(
+                f"Ignoring unparsable KUBE_CPU_REQUEST={kube_cpu_request!r}"
+            )
     return max(1, os.cpu_count() or 1)
 
 
@@ -131,8 +133,11 @@ def build_environment(artifacts_path: Path) -> dict:
         # runtime DLLs live in those subdirectories, and Windows resolves imports off
         # PATH. Missing them surfaces as exit 0xC0000135 (STATUS_DLL_NOT_FOUND) from
         # every sample, which the launcher correctly-but-unhelpfully reports as a crash.
-        prefixes = [str(artifacts_path / "bin"), str(artifacts_path / "lib"),
-                    str(artifacts_path)]
+        prefixes = [
+            str(artifacts_path / "bin"),
+            str(artifacts_path / "lib"),
+            str(artifacts_path),
+        ]
         existing = environ_vars.get("PATH", "")
         environ_vars["PATH"] = ";".join(prefixes + ([existing] if existing else []))
     else:
