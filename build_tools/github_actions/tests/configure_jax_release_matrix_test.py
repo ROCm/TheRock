@@ -39,6 +39,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "jax_repository",
                 "rocm_jax_ref",
                 "gfx_arch",
+                "wheel_type",
             },
         )
 
@@ -68,6 +69,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["jax_repository"], "ROCm/jax")
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jaxlib-v0.10.1")
         self.assertEqual(matrix[0]["gfx_arch"], "device-all")
+        self.assertEqual(matrix[0]["wheel_type"], "release")
 
     def test_release_refs_check_out_rocm_jax_at_the_jax_ref(self):
         # A release tag exists under the same name in ROCm/jax and
@@ -96,6 +98,20 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["jax_label"], "tip")
         self.assertEqual(matrix[0]["jax_repository"], "jax-ml/jax")
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
+        self.assertEqual(matrix[0]["wheel_type"], "nightly")
+
+    def test_release_refs_build_release_wheels(self):
+        # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
+        # carries the release version; only the tip config opts into nightly
+        # versioning, and a config that names nothing gets "release".
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="dev",
+            platform="linux",
+        )
+
+        self.assertGreater(len(matrix), 0)
+        for row in matrix:
+            self.assertEqual(row["wheel_type"], "release")
 
     def test_jax_main_is_not_a_default_ref(self):
         # The tip build is opt-in: no release type builds upstream main unless
