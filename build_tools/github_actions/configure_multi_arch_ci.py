@@ -1362,33 +1362,22 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
-        # If strict_submodule_bump_tests_only is set, only run tests when submodule
-        # changes are detected on pull_request events. This flag only applies to
-        # pull_request - push, schedule, and workflow_dispatch are not affected.
+        # If trigger_test_label_only is set, only run tests when the family's
+        # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
+        # This allows families with limited hardware to have tests opt-in via
+        # PR labels rather than always running. Builds always run regardless.
+        # workflow_dispatch bypasses this check to allow manual test triggering.
         if (
-            platform_info.get("strict_submodule_bump_tests_only", False)
-            and ci_inputs.is_pull_request
-            and git_context.has_submodule_changes is not True
-        ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: strict_submodule_bump_tests_only flag set, "
-                f"disabling tests (no submodule changes detected)"
-            )
-
-        # If skip_tests_on_submodule_bump is set, skip tests when submodule changes
-        # are detected. This is the inverse of submodule_bump_tests_only - useful for
-        # architectures with limited hardware where submodule bumps are tested elsewhere.
-        if (
-            platform_info.get("skip_tests_on_submodule_bump", False)
+            platform_info.get("trigger_test_label_only", False)
             and not ci_inputs.is_workflow_dispatch
-            and git_context.has_submodule_changes is True
         ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: skip_tests_on_submodule_bump flag set, "
-                f"disabling tests (submodule changes detected)"
-            )
+            family_label = platform_info["family"].lower()
+            if family_label not in ci_inputs.pr_labels:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: trigger_test_label_only set, "
+                    f"'{family_label}' label not present, disabling tests"
+                )
 
         # If test_type_for_family is set, only run tests when test_type is in the list
         test_type_for_family = platform_info.get("test_type_for_family", [])

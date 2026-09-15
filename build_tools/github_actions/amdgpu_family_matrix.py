@@ -211,9 +211,8 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
 - submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
-- strict_submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected. Only applies to pull_request events - push, schedule, and workflow_dispatch are not affected.
-- skip_tests_on_submodule_bump (optional): if enabled, skip tests when submodule changes are detected (inverse of submodule_bump_tests_only). Useful for architectures with limited hardware where submodule bumps are tested elsewhere.
 - test_type_for_family (optional): list of allowed test_type values for this family (e.g., ["quick"]). If the global test_type is not in this list, tests are skipped for this family.
+- trigger_test_label_only (optional): if enabled, only run tests when the family's gfx* label is present on the PR (e.g., gfx125x label for gfx125x family). Builds always run regardless of label.
 """
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
@@ -312,7 +311,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
-            # Only use for designated workflow runs (submodule bumps, quick tests).
+            # Tests only run when gfx125x label is present on the PR.
             "test-runs-on": "linux-mi455-gpu-rocm",
             "family": "gfx125X-dcgpu",
             "fetch-gfx-targets": ["gfx1250"],
@@ -326,8 +325,8 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
             ],
-            # Only run tests on submodule bumps, no workflow_dispatch or nightlies
-            "strict_submodule_bump_tests_only": True,
+            # Only run tests when gfx125x label is present
+            "trigger_test_label_only": True,
             # Only allow quick tests for MI455 hardware
             "test_type_for_family": ["quick"],
         },
@@ -343,7 +342,6 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            "skip_tests_on_submodule_bump": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -367,8 +365,8 @@ amdgpu_family_info_matrix_postsubmit = {
                 "host-asan-debug",
                 "tsan",
             ],
-            # Only run tests on submodule bumps (builds always run)
-            "submodule_bump_tests_only": True,
+            # Only run tests when gfx950 label is present
+            "trigger_test_label_only": True,
         }
     },
 }
