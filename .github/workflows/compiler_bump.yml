@@ -4,7 +4,7 @@
 # This workflow automates the compiler team's daily branch creation and testing.
 #
 # It replaces the Jenkins pipeline that:
-# 1. Creates a branch `amd-compiler-auto-YYYY-MM-DD[-suffix]` in TheRock
+# 1. Creates a branch `amd-compiler-YYYY-MM-DD[-suffix]` in TheRock
 # 2. Updates compiler submodules (amd-llvm, hipify, spirv-llvm-translator) to amd-staging HEAD
 # 3. Builds for ALL architectures but only tests on gfx94x (Linux) and gfx110x (Windows)
 # 4. Publishes artifacts to release buckets for downstream teams
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       branch_suffix:
-        description: 'Optional suffix for branch name (e.g., "COT", "SMP"). Branch will be: amd-compiler-auto-YYYY-MM-DD[-suffix]'
+        description: 'Optional suffix for branch name (e.g., "COT", "SMP"). Branch will be: amd-compiler-YYYY-MM-DD[-suffix]'
         type: string
         default: "COT"
       llvm_ref:
@@ -78,9 +78,9 @@ jobs:
         run: |
           DATE=$(date +%Y-%-m-%-d)
           if [ -n "${BRANCH_SUFFIX}" ]; then
-            BRANCH_NAME="amd-compiler-auto-${DATE}-${BRANCH_SUFFIX}"
+            BRANCH_NAME="amd-compiler-${DATE}-${BRANCH_SUFFIX}"
           else
-            BRANCH_NAME="amd-compiler-auto-${DATE}"
+            BRANCH_NAME="amd-compiler-${DATE}"
           fi
           echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
           echo "## Branch Name" >> "$GITHUB_STEP_SUMMARY"
