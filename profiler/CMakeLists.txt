@@ -323,6 +323,13 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     set(_rocprofsys_build_libiberty ON)
   endif()
 
+  set(_rocprofiler_systems_hipfile_dep)
+  set(_rocprofsys_use_hipfile OFF)
+  if(THEROCK_ENABLE_HIPFILE)
+    set(_rocprofiler_systems_hipfile_dep hipfile)
+    set(_rocprofsys_use_hipfile ON)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-systems
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -340,6 +347,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       -DROCPROFSYS_BUILD_FMT=OFF
       -DROCPROFSYS_BUILD_SPDLOG=OFF
       -DROCPROFSYS_BUILD_SQLITE3=OFF
+      -DROCPROFSYS_USE_HIPFILE="${_rocprofsys_use_hipfile}"
       -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
       -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_ROCPROFSYS_PYTHON_VERSIONS_STR}"
       -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_ROCPROFSYS_PYTHON_ROOT_DIRS_STR}"
@@ -367,6 +375,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
       ${_openmpi_optional_dep}
+      ${_rocprofiler_systems_hipfile_dep}
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-systems
     SUBDIRS .
@@ -389,6 +398,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       amdsmi
       rocprofiler-sdk
       rocprofiler-systems
+      ${_rocprofiler_systems_hipfile_dep}
     )
 
 
@@ -420,6 +430,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
         "lib/llvm/lib"
       RUNTIME_DEPS
         rocprofiler-systems
+        ${_rocprofiler_systems_hipfile_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
       SUBDIRS .

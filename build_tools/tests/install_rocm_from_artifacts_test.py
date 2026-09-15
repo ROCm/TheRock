@@ -429,5 +429,20 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
         self.assertIn("amd-llvm_dev", argv)
 
 
+class TestRocprofilerSystemsHipfile(unittest.TestCase):
+    """librocprof-sys.so DT_NEEDED libhipfile.so.0."""
+
+    def test_rocprofiler_systems_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+    def test_rocprofiler_systems_examples_does_not_imply_hipfile(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(rocprofiler_systems_examples=True)
+        )
+        self.assertNotIn("hipfile_lib", argv)
+
+
 if __name__ == "__main__":
     unittest.main()

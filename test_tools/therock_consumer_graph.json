@@ -181,7 +181,8 @@
   },
   "hipfile": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems"
     ]
   },
   "hipify": {
