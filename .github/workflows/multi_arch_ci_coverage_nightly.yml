@@ -174,7 +174,6 @@ jobs:
       stage_display_name: "Stage - Coverage Compiler Runtime"
       timeout_minutes: 480 # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      extra_cmake_options: -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -208,9 +207,7 @@ jobs:
       timeout_minutes: 480 # 8 hours; instrumented builds are slower than normal
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      extra_cmake_options: >-
-        ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
-        -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF
+      extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}

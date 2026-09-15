@@ -35,14 +35,6 @@ Passing the flag for a project with no registered option is a configure error
 rather than a silent no-op, since the failure it replaces — an uninstrumented
 build that tests cleanly and reports nothing — surfaces hours later.
 
-> [!NOTE]
-> Coverage builds are incompatible with split kernel packaging. The CI
-> workflows pass `-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF`; do the same if you
-> build with a target family that enables kernel packing by default. Split
-> packaging rearranges the code objects embedded in the library `llvm-cov` is
-> later pointed at. Coverage is host-only now, so this may no longer be load
-> bearing, but it has not been retested and the flag is cheap to keep.
-
 ### Enabling a whole group
 
 Three aggregate options turn on coverage for a whole component group instead of
