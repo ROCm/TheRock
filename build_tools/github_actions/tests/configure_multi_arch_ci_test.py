@@ -209,6 +209,46 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.linux_test_labels, ["test:rccl", "test:rocprim"])
         self.assertEqual(inputs.windows_test_labels, ["test:rccl", "test:rocprim"])
 
+    def test_composite_tensilelite_label_scopes_to_tensilelite_only(self):
+        """A -tensilelite composite label surfaces only test:tensilelite."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {"labels": [{"name": "gfx1250-tensilelite", "id": 1}]}
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["test:tensilelite"])
+        self.assertEqual(inputs.windows_test_labels, ["test:tensilelite"])
+
+    def test_composite_hipblaslt_label_scopes_to_both_components(self):
+        """A -hipblaslt composite label runs both hipblaslt and tensilelite."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {"labels": [{"name": "gfx1250-hipblaslt", "id": 1}]}
+            },
+        )
+        self.assertEqual(
+            inputs.linux_test_labels, ["test:hipblaslt", "test:tensilelite"]
+        )
+
+    def test_composite_hw_test_label_dedupes_explicit_component_label(self):
+        """An explicit test:tensilelite plus a -hipblaslt composite is not duplicated."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "test:tensilelite", "id": 1},
+                        {"name": "gfx1250-hipblaslt", "id": 2},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(
+            inputs.linux_test_labels, ["test:tensilelite", "test:hipblaslt"]
+        )
+
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
         inputs = _run_from_environ(
@@ -470,6 +510,31 @@ class TestDecideJobs(unittest.TestCase):
             targets=cm.TargetSelection(),
         )
         self.assertEqual(result.test_rocm.test_type, "full")
+
+    def test_composite_hw_test_label_is_full(self):
+        """PR with a composite HW-test label → full tests, beating the
+        external-repo submodule default (which would otherwise be standard)."""
+        git = cm.GitContext(
+            changed_files=["rocm-libraries"],
+            submodule_paths=["rocm-libraries"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["gfx1250-tensilelite"]),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "full")
+        self.assertIn("composite", result.test_rocm.test_type_reason)
+
+    def test_test_filter_label_overrides_composite_hw_test_label(self):
+        """test_filter stays the ultimate override above a composite label."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        result = cm.decide_jobs(
+            self._inputs(pr_labels=["gfx1250-tensilelite", "test_filter:quick"]),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "quick")
 
     def test_workflow_dispatch_test_labels_is_full(self):
         """workflow_dispatch with test labels → full tests."""
@@ -924,6 +989,95 @@ class TestSelectTargets(unittest.TestCase):
         result_with = cm.select_targets(inputs_with)
         self.assertNotIn("gfx906", result_without.linux_families)
         self.assertIn("gfx906", result_with.linux_families)
+
+    def test_composite_label_narrows_linux_to_labeled_arch(self):
+        """A composite label makes the Linux run FOCUSED: family set = the
+        labeled arch only (gfx1250 -> gfx125x), dropping presubmit defaults.
+        Windows is untouched."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        without = cm.select_targets(cm.CIInputs(**base))
+        gfx1250 = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["gfx1250-tensilelite"])
+        )
+        # Default presubmit set has multiple archs; the label narrows to one.
+        self.assertGreater(len(without.linux_families), 1)
+        self.assertEqual(gfx1250.linux_families, ["gfx125x"])
+        # Windows keeps the presubmit default (composite labels are Linux archs).
+        self.assertEqual(gfx1250.windows_families, without.windows_families)
+
+    def test_composite_labels_union_multiple_arches(self):
+        """Two composite labels -> union of both arches (never last-writer-wins)."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["gfx950-tensilelite", "gfx1250-tensilelite"])
+        )
+        self.assertEqual(set(result.linux_families), {"gfx950", "gfx125x"})
+
+    def test_composite_label_unions_with_explicit_gfx_label(self):
+        """Composite + an explicit gfx* label -> union, honoring the explicit
+        arch request rather than discarding it."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["gfx1250-tensilelite", "gfx110x"])
+        )
+        self.assertEqual(set(result.linux_families), {"gfx125x", "gfx110x"})
+
+    def test_composite_label_with_run_all_archs_yields_all(self):
+        """ci:run-all-archs still wins over a composite label's narrowing."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        result = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["gfx1250-tensilelite", "ci:run-all-archs"])
+        )
+        # Includes a nightly-only family -> proves the full set, not just gfx125x.
+        self.assertIn("gfx906", result.linux_families)
+
+    def test_composite_label_warns_when_family_has_no_test_runner(self):
+        """A composite label on a runnerless family warns loudly (gfx125x has
+        no test-runs-on); one on a family with a runner does not (gfx950)."""
+        import contextlib
+        import io
+
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        no_runner = io.StringIO()
+        with contextlib.redirect_stdout(no_runner):
+            cm.select_targets(cm.CIInputs(**base, pr_labels=["gfx1250-tensilelite"]))
+        self.assertIn("::warning::", no_runner.getvalue())
+        self.assertIn("no Linux test runner", no_runner.getvalue())
+
+        has_runner = io.StringIO()
+        with contextlib.redirect_stdout(has_runner):
+            cm.select_targets(cm.CIInputs(**base, pr_labels=["gfx950-tensilelite"]))
+        self.assertNotIn("::warning::", has_runner.getvalue())
 
     def test_pull_request_run_all_archs_label(self):
         """PR with ci:run-all-archs label selects all families."""

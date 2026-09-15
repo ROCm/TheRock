@@ -157,6 +157,7 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
         "rocblas",
         "hipblas",
         "hipblaslt",
+        "tensilelite",
         "rocfft",
         "hipfft",
         "rocrand",
@@ -180,6 +181,25 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "cv-libs": ["rpp"],
     "media-libs": ["rocdecode", "rocjpeg"],
     "debug-tools": ["rocgdb"],
+}
+
+# Composite on-demand HW-test labels for per-arch library testing. A single PR
+# label selects a GPU family, forces the `full` test tier, and scopes tests to
+# one or more components (each surfaced as a test:<component>). Maps label ->
+# (amdgpu_family key, component test labels). Note the family key is `gfx125x`,
+# not `gfx1250`. tensilelite is a component nested under hipblaslt, so a
+# `-hipblaslt` label runs both (hipblaslt gtest + tensilelite), while a
+# `-tensilelite` label runs only tensilelite.
+#
+# Inert by construction until the target family has a test runner: if the
+# family's `test-runs-on` is empty (e.g. gfx125x today), the build runs at
+# `full` but no test job is scheduled. Enable by giving the family a runner
+# (matrix `test-runs-on` or external-repo family_overrides).
+COMPOSITE_HW_TEST_LABELS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "gfx950-tensilelite": ("gfx950", ("tensilelite",)),
+    "gfx1250-tensilelite": ("gfx125x", ("tensilelite",)),
+    "gfx950-hipblaslt": ("gfx950", ("hipblaslt", "tensilelite")),
+    "gfx1250-hipblaslt": ("gfx125x", ("hipblaslt", "tensilelite")),
 }
 
 
@@ -345,6 +365,15 @@ class CIInputs:
         # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
         # 2. PR test:* labels (apply to both platforms)
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
+        # Composite HW-test labels (e.g. gfx1250-tensilelite) also scope tests to
+        # their component(s), so surface each as a test:<component> label.
+        pr_test_labels += [
+            f"test:{component}"
+            for label in pr_labels
+            if label in COMPOSITE_HW_TEST_LABELS
+            for component in COMPOSITE_HW_TEST_LABELS[label][1]
+        ]
+        pr_test_labels = list(dict.fromkeys(pr_test_labels))
         linux_test_labels = (
             _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
         )
@@ -897,7 +926,15 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         # the set below (gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
-        linux_names = list(defaults)
+        # A composite HW-test label makes this a FOCUSED run: the Linux family
+        # set becomes the union of the labeled arch(es) (plus any explicit
+        # gfx*/ci:run-all-archs added below), NOT the presubmit default — so
+        # gfx1250-tensilelite targets gfx1250 alone instead of elevating every
+        # presubmit arch to full. Windows is untouched (these are Linux archs).
+        if any(lbl in COMPOSITE_HW_TEST_LABELS for lbl in ci_inputs.pr_labels):
+            linux_names = []
+        else:
+            linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_push:
         # Broader than PR: presubmit + postsubmit. Code has landed, so
@@ -940,6 +977,30 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
+            if label in COMPOSITE_HW_TEST_LABELS:
+                # Composite HW-test label maps to a specific family key (e.g.
+                # gfx1250-tensilelite -> gfx125x). These GPU families are Linux
+                # only. Checked before the generic gfx-prefix branch since the
+                # label's split prefix ('gfx1250') is not itself a valid family.
+                target = COMPOSITE_HW_TEST_LABELS[label][0]
+                linux_names.append(target)
+                print(f"  Composite label '{label}' -> adding target {target}")
+                # Surface the runnerless case loudly instead of silently
+                # building without testing: the family is still added (build
+                # runs at full), but with no `test-runs-on` no test job is
+                # scheduled, which would otherwise look green.
+                if (
+                    not all_families.get(target, {})
+                    .get("linux", {})
+                    .get("test-runs-on")
+                ):
+                    print(
+                        f"::warning::Composite label '{label}' requested full "
+                        f"tests on {target}, but that family has no Linux test "
+                        f"runner (test-runs-on is empty): build only, no test "
+                        f"job scheduled."
+                    )
+                continue
             if label.startswith("gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
@@ -1032,13 +1093,22 @@ def _determine_test_type(
             )
         return filter_type, f"test_filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
+    # Priority 2: composite HW-test labels (e.g. gfx1250-tensilelite) force the
+    # full tier for on-demand per-arch library testing. Checked above the
+    # submodule/external-repo default (Priority 6) so the label wins for
+    # rocm-libraries PRs (which always trip the submodule default), but below
+    # test_filter so it stays overridable.
+    composite = sorted({l for l in all_labels if l in COMPOSITE_HW_TEST_LABELS})
+    if composite:
+        return "full", f"composite HW-test label(s): {composite}"
+
+    # Priority 3: test:* labels request specific component tests (e.g.
     # test:rocprim). When someone explicitly asks for tests, run the full
     # suite — they're investigating something specific.
     if _has_test_labels(ci_inputs):
         return "full", "test labels specified"
 
-    # Priority 3: release builds run deeper test suites than regular CI.
+    # Priority 4: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
     #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
@@ -1048,12 +1118,12 @@ def _determine_test_type(
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"
 
-    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # Priority 5: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 5: a submodule change means actual library code changed
+    # Priority 6: a submodule change means actual library code changed
     # (e.g. rocBLAS, MIOpen). These need full testing since the change
     # could affect any downstream consumer.
     if git_context.has_submodule_changes is True:
