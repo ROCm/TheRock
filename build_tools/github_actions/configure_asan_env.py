@@ -103,6 +103,15 @@ def _resolve_symbolizer(artifacts_dir: Path) -> tuple[Optional[Path], Optional[s
     return symbolizer.resolve(), None
 
 
+def _resolve_library_path(artifacts_dir: Path) -> str:
+    lib_dir = (artifacts_dir / "lib").resolve()
+    parts = [str(lib_dir), str(lib_dir / "rocm_sysdeps" / "lib")]
+    existing = os.environ.get("LD_LIBRARY_PATH")
+    if existing:
+        parts.append(existing)
+    return ":".join(parts)
+
+
 def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
     """Returns (environment variables to export, warnings to surface)."""
     env = dict(STATIC_ASAN_ENV)
@@ -119,6 +128,8 @@ def resolve_asan_env(artifacts_dir: Path) -> tuple[dict[str, str], list[str]]:
         env["ASAN_SYMBOLIZER_PATH"] = str(symbolizer)
     if warning:
         warnings.append(warning)
+
+    env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir)
 
     return env, warnings
 
@@ -141,6 +152,7 @@ def main(argv=None) -> int:
         print(f"Resolved ASAN runtime: {env['ASAN_RUNTIME_PATH']}")
     if "ASAN_SYMBOLIZER_PATH" in env:
         print(f"Resolved ASAN symbolizer: {env['ASAN_SYMBOLIZER_PATH']}")
+    print(f"Resolved LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
 
     gha_set_env(env)
     return 0
