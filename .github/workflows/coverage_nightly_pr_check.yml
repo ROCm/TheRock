@@ -61,10 +61,20 @@ jobs:
       # Pinned rather than resolved, so that a change in the report means a
       # change in this branch.
       #
-      # ROCm/rockrel run 34068476531, "Multi-Arch Release (nightly)" on main,
-      # 2026-09-07, succeeded. A real nightly rather than a CI run, because
-      # that is what a dispatched coverage run will be given in practice and
-      # the phase 1 PoC is worth exercising against the real thing.
+      # ROCm/rockrel run 35038162281, "Multi-Arch Release (nightly) | Linux:
+      # all" on main, 2026-09-16, succeeded. A real nightly rather than a CI
+      # run, because that is what a dispatched coverage run will be given in
+      # practice and the phase 1 PoC is worth exercising against the real thing.
+      #
+      # Kept close to this branch's own commit on purpose. The previous pin,
+      # run 34068476531 from 2026-09-07, predated the host LLVM install layout
+      # moving off LLVM_ENABLE_PER_TARGET_RUNTIME_DIR: it ships libomp.so in
+      # lib/llvm/lib/<triple>/, while a test client built from this branch
+      # carries only lib/llvm/lib in its RUNPATH. In run 35092904145 that left
+      # every OpenMP-linking test client -- rocBLAS, rocSPARSE, hipSPARSELt,
+      # hipBLAS, rocFFT and hipFFT -- unable to resolve libomp.so, so none of
+      # them ran a single test. A baseline is only usable while its install
+      # tree still matches what the instrumented build links against.
       #
       # Being a rockrel run is safe here. Its artifacts embed the workspace
       # they were built in (/__w/rockrel/rockrel), which breaks any consumer
@@ -77,8 +87,9 @@ jobs:
       # every selected project: blas, fft, hipdnn, rand, solver and
       # sparse. Not all are per-target -- hipdnn is generic throughout and
       # solver's tests are generic -- so checking only for _gfx942 understates
-      # what is there.
-      baseline_run_id: "34068476531"
+      # what is there. Its libomp.so sits in lib/llvm/lib, matching the layout
+      # this branch builds against.
+      baseline_run_id: "35038162281"
       # The bucket lookup queries the run through the GitHub API, so it has to
       # be told where the run lives; ROCm/TheRock returns 404 for a rockrel id.
       baseline_repository: "ROCm/rockrel"

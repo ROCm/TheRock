@@ -220,6 +220,33 @@ jobs:
             --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
             --replace-"${REPLACE_COMPONENT}"
 
+      # The swapped-in binaries and the generic install can disagree on where
+      # the LLVM runtime lives. LLVM_ENABLE_PER_TARGET_RUNTIME_DIR puts
+      # libomp.so under lib/llvm/lib/<triple>/ rather than lib/llvm/lib/, and a
+      # binary's RUNPATH names only the layout its own build produced, so a
+      # client built one way cannot resolve libomp.so in a tree built the
+      # other. Naming both on LD_LIBRARY_PATH covers either layout;
+      # pytest_runner.py already does this for the same reason.
+      #
+      # test_runner.py inherits the environment and preserves LD_LIBRARY_PATH,
+      # so this reaches ctest and the test binaries under it.
+      - name: Add the LLVM runtime directories to the library path
+        timeout-minutes: 2
+        run: |
+          llvm_lib="$(cd "${OUTPUT_ARTIFACTS_DIR}" && pwd)/lib/llvm/lib"
+          if [[ ! -d "${llvm_lib}" ]]; then
+            echo "::warning::${llvm_lib} is missing; leaving LD_LIBRARY_PATH alone."
+            exit 0
+          fi
+          # Sorted so the result does not depend on directory order.
+          paths=("${llvm_lib}")
+          while IFS= read -r dir; do
+            paths+=("${dir}")
+          done < <(find "${llvm_lib}" -mindepth 2 -maxdepth 2 -name 'libomp.so*' -printf '%h\n' | sort -u)
+          joined=$(IFS=:; printf '%s' "${paths[*]}")
+          echo "Prepending to LD_LIBRARY_PATH: ${joined}"
+          echo "LD_LIBRARY_PATH=${joined}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
