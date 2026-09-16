@@ -83,7 +83,7 @@ In [`fetch_test_configurations.py`](/build_tools/github_actions/fetch_test_confi
 | ----------------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | job_name                      | string | Any      | Name of the job                                                                                                               |
 | fetch_artifact_args           | string | Any      | Arguments for which artifacts for [`install_rocm_from_artifacts.py`](/build_tools/install_rocm_from_artifacts.py) to retrieve |
-| additional_requirements_files | array  | Any      | Repository-relative paths to Python requirements files needed by this test (include `build/` for fetched artifacts)           |
+| additional_requirements_files | array  | Any      | Repository-relative or absolute paths to Python requirements files; use `_get_artifact_path()` for fetched artifacts          |
 | timeout_minutes               | int    | Any      | The timeout (in minutes) for the test step                                                                                    |
 | test_script                   | string | Any      | The path to the test script                                                                                                   |
 | platform                      | array  | Any      | An array of platforms that the test can execute on, options are `linux` and `windows`                                         |
@@ -121,7 +121,14 @@ in
 }
 ```
 
-The paths are relative to the extracted test artifact directory, not the source
-checkout. The test workflow installs these files into the common test virtual
+The argument to `_get_artifact_path()` is relative to the extracted artifact
+directory. The helper prefixes it with `OUTPUT_ARTIFACTS_DIR`, read from the
+environment with a default of `build`. The resulting matrix paths are relative
+to the repository root, or absolute if `OUTPUT_ARTIFACTS_DIR` is absolute.
+Requirements files in the repository can be registered directly using
+repository-relative paths.
+
+The installer passes these paths unchanged to `uv`, running from the repository
+root. The test workflow installs these files into the common test virtual
 environment after fetching the component's artifacts. A test can register more
 than one requirements file when necessary.
