@@ -20,8 +20,8 @@ Package files are indexed once via ``rpm``/``dpkg-deb`` metadata names, not
 filename stems, because DEB/RPM filenames embed version and arch tokens that do
 not match the installed package names ``build_package.py`` emits.
 
-Writes ``build_status_report.txt``, ``build_status_report.json``, and a compact
-``build_status_report.summary.json`` when ``--report-dir`` is set.
+Prints a human-readable summary to stdout. When ``--report-dir`` is set, also
+writes a compact ``build_status_report.json`` (counts and failures only).
 
 ```
 # Standard CI pre-upload verification (deb):
@@ -791,11 +791,27 @@ def _report_uses_rollup_detail(summary: BuildVerifySummary) -> bool:
     return summary.verify_type in {VERIFY_TYPE_SANITY, VERIFY_TYPE_FULL}
 
 
-def format_report_summary_json(summary: BuildVerifySummary) -> str:
-    """Format a compact rollup JSON report for CI and large verification runs.
+def _failed_variant_dicts(summary: BuildVerifySummary) -> list[dict[str, object]]:
+    """Return per-variant detail for failures only (keeps JSON artifacts small)."""
+    return [
+        _variant_to_dict(variant)
+        for report in summary.reports
+        for variant in report.variants
+        if not variant.passed
+    ]
 
-    Omits per-variant detail so sanity/full artifacts stay small; failures are
-    listed in ``missing_variants`` and ``version_failures``.
+
+def format_report_json(summary: BuildVerifySummary) -> str:
+    """Format a compact verification summary as JSON.
+
+    Includes aggregate counts, failure name lists, per-package rollups, and
+    per-variant detail only for failed checks. Passing variants are omitted.
+
+    Parameters:
+        summary: Aggregate verification outcome.
+
+    Returns:
+        JSON string for ``build_status_report.json``.
     """
     payload = {
         "passed": summary.passed,
@@ -821,29 +837,8 @@ def format_report_summary_json(summary: BuildVerifySummary) -> str:
             }
             for report in summary.reports
         ],
+        "failed_variants": _failed_variant_dicts(summary),
     }
-    return json.dumps(payload, indent=2)
-
-
-def format_report_json(summary: BuildVerifySummary) -> str:
-    """Format the verification summary as indented JSON.
-
-    Parameters:
-        summary: Aggregate verification outcome.
-
-    Returns:
-        JSON string suitable for ``build_status_report.json``.
-    """
-    payload = json.loads(format_report_summary_json(summary))
-    payload["package_files_found"] = summary.package_files_found
-    payload["reports"] = [
-        {
-            "base_package": report.base_package,
-            "passed": report.passed,
-            "variants": [_variant_to_dict(v) for v in report.variants],
-        }
-        for report in summary.reports
-    ]
     return json.dumps(payload, indent=2)
 
 
@@ -875,8 +870,8 @@ def format_report_text(summary: BuildVerifySummary) -> str:
         summary: Aggregate verification outcome.
 
     Returns:
-        Multi-line report for console output and ``build_status_report.txt``.
-        Sanity/full tiers use rollup mode (failures only per package).
+        Multi-line report for console output. Sanity/full tiers use rollup mode
+        (failures only per package).
     """
     lines: list[str] = []
     overall = "PASS" if summary.passed else "FAIL"
@@ -924,33 +919,25 @@ def format_report_text(summary: BuildVerifySummary) -> str:
     return "\n".join(lines)
 
 
-def write_report_files(summary: BuildVerifySummary, report_dir: Path) -> None:
-    """Write text and JSON verification reports under ``report_dir``.
+def write_report_file(summary: BuildVerifySummary, report_dir: Path) -> None:
+    """Write ``build_status_report.json`` under ``report_dir`` when requested.
 
-    Produces three artifacts: full text (``.txt``), full JSON with per-variant
-    detail (``.json``), and compact rollup JSON (``.summary.json``) for CI upload.
+    Stdout text is always emitted by ``run()``; this file is optional for CI
+    artifact upload and automation.
 
     Parameters:
         summary: Aggregate verification outcome.
         report_dir: Output directory (created if missing).
 
     Raises:
-        FileNotFoundError: When a report file is missing after write.
+        FileNotFoundError: When the report file is missing after write.
     """
     report_dir.mkdir(parents=True, exist_ok=True)
-    text_path = report_dir / "build_status_report.txt"
     json_path = report_dir / "build_status_report.json"
-    summary_json_path = report_dir / "build_status_report.summary.json"
-    text_path.write_text(format_report_text(summary) + "\n", encoding="utf-8")
     json_path.write_text(format_report_json(summary) + "\n", encoding="utf-8")
-    summary_json_path.write_text(
-        format_report_summary_json(summary) + "\n",
-        encoding="utf-8",
-    )
-    for path in (text_path, json_path, summary_json_path):
-        if not path.is_file():
-            raise FileNotFoundError(f"Failed to write report: {path}")
-        logger.info(f"Build report written to: {path}")
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Failed to write report: {json_path}")
+    logger.info(f"Build report written to: {json_path}")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -1081,7 +1068,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--report-dir",
         type=Path,
         metavar="DIR",
-        help="Write build_status_report.txt and .json under DIR",
+        help="Write build_status_report.json under DIR (stdout summary is always printed)",
     )
     return parser.parse_args(argv)
 
@@ -1151,7 +1138,7 @@ def run(args: argparse.Namespace) -> int:
     print(format_report_text(summary))
 
     if args.report_dir is not None:
-        write_report_files(summary, args.report_dir.expanduser())
+        write_report_file(summary, args.report_dir.expanduser())
 
     if not summary.passed:
         logger.error(

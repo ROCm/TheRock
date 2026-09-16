@@ -182,7 +182,7 @@ jobs:
             --verify-type "${{ inputs.pre_upload_build_verify_type }}" \
             --report-dir "${{ env.PRE_UPLOAD_REPORT_DIR }}"
 
-      # Upload reports even when verify fails so triage can read build_status_report.*.
+      # Upload JSON report even when verify fails so triage can read build_status_report.json.
       - name: Upload pre-upload build verify reports
         if: ${{ always() && inputs.pre_upload_build_verify_type != 'off' && inputs.pre_upload_build_verify_type != 'skip' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
