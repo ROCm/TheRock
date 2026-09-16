@@ -18,9 +18,9 @@ locally.
 
 This runs *inside* the manylinux build container rather than on the runner. The
 container reaches the network through the Docker daemon and receives the
-credentials through a mount, so it is the only place that can tell whether Bazel
-will actually reach the cache. When the credentials are absent (fork pull
-requests get no secrets), the release type may not read shared entries, or the
+credentials through a mount of the runner's `/data/ci-cert.*` files, so it is
+the only place that can tell whether Bazel will actually reach the cache. When
+those files are absent, the release type may not read shared entries, or the
 endpoint does not answer, this prints nothing and the build runs exactly as it
 would without a cache.
 
@@ -39,7 +39,7 @@ from urllib.parse import urlsplit
 REMOTE_CACHE_URL = "grpcs://wardite.cluster.engflow.com"
 
 # Paths `build/rocm/rocm.bazelrc` already expects, populated by mounting the
-# runner's decoded credentials at /data.
+# runner's `/data/ci-cert.*` files into the build container.
 CLIENT_CERTIFICATE = Path("/data/ci-cert.crt")
 CLIENT_KEY = Path("/data/ci-cert.key")
 
@@ -163,8 +163,8 @@ def main(argv: list[str] | None = None):
 
     missing = [p for p in (args.client_certificate, args.client_key) if not p.exists()]
     if missing:
-        # Fork pull requests get no secrets, so this is a normal outcome and
-        # not an error: the build simply runs without a cache.
+        # Runners without `/data/ci-cert.*` skip the cache. That is a normal
+        # outcome, not an error: the build simply compiles locally.
         _log(f"No cache credentials at {', '.join(str(p) for p in missing)}")
         return
 
