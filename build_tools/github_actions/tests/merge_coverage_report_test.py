@@ -160,6 +160,7 @@ class CommandConstructionTest(TempDirTestBase):
     def test_html_renders_into_a_directory(self):
         objects = [self.touch("lib/a.so")]
         output_dir = self.root / "out" / "html"
+        demangler = Path("/llvm/llvm-cxxfilt")
 
         with mock.patch("subprocess.run") as run:
             merge_coverage_report.write_html(
@@ -168,7 +169,7 @@ class CommandConstructionTest(TempDirTestBase):
                 objects,
                 output_dir,
                 project_title="hiprand",
-                demangler=Path("/llvm/llvm-cxxfilt"),
+                demangler=demangler,
             )
 
         command = run.call_args.args[0]
@@ -176,7 +177,7 @@ class CommandConstructionTest(TempDirTestBase):
         self.assertIn("--format=html", command)
         self.assertIn(f"-output-dir={output_dir}", command)
         self.assertIn("--project-title=hiprand", command)
-        self.assertIn("-Xdemangler=/llvm/llvm-cxxfilt", command)
+        self.assertIn(f"-Xdemangler={demangler}", command)
 
     def test_path_equivalence_reaches_every_rendering(self):
         objects = [self.touch("lib/a.so")]
