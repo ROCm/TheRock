@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -1762,6 +1761,61 @@ class TestWriteOutputs(unittest.TestCase):
 
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
+
+    def test_explicit_strict_linux_dev_build(self):
+        """Manual strict selection reaches the build config without GPU tests."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="",
+            build_variant="release",
+            linux_amdgpu_families=["gfx1250-strict"],
+            windows_amdgpu_families=["none"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertIsNone(outputs.builds.windows)
+        linux = outputs.builds.linux
+        self.assertIsNotNone(linux)
+        self.assertEqual(linux.dist_amdgpu_families, "gfx1250-strict")
+        self.assertEqual(linux.build_variant_label, "release")
+        self.assertEqual(len(linux.per_family_info), 1)
+        family = linux.per_family_info[0]
+        self.assertEqual(family["amdgpu_family"], "gfx1250-strict")
+        self.assertEqual(family["test-runs-on"], "")
+        self.assertEqual(family["amdgpu_targets"], "")
+        self.assertEqual(linux.test_python_packages_matrix, [])
+
+    def test_strict_stays_out_of_default_selections(self):
+        for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name=event,
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="release",
+                    linux_amdgpu_families=(
+                        ["all"] if event == "workflow_dispatch" else []
+                    ),
+                    windows_amdgpu_families=["none"],
+                )
+                targets = cm.select_targets(inputs)
+                self.assertNotIn("gfx1250-strict", targets.linux_families)
+                self.assertNotIn("gfx1250-strict", targets.windows_families)
+
+    def test_manual_selection_still_rejects_unknown_family(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="feature",
+            base_ref="",
+            build_variant="release",
+            linux_amdgpu_families=["gfx1250-stric"],
+        )
+        with self.assertRaisesRegex(ValueError, "Unknown GPU families"):
+            cm.select_targets(inputs)
 
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
