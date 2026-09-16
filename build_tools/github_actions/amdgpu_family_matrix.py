@@ -73,9 +73,15 @@ def load_external_runner_config() -> dict | None:
 
 
 def is_asan():
-    """Determines if this is an ASAN build using BUILD_VARIANT env var."""
-    BUILD_VARIANT = os.getenv("BUILD_VARIANT", "")
-    return BUILD_VARIANT == "asan"
+    """Determines if this is an ASAN-family build using BUILD_VARIANT env var.
+
+    Matches "asan", "host-asan" and their "-debug" forms, like the check in
+    fetch_test_configurations.py. An exact match on "asan" leaves host-asan test
+    jobs without the ASAN handling their callers apply -- most visibly the
+    LD_PRELOAD in test_hiptests.py, without which Catch2 cannot load the
+    instrumented binaries to enumerate tests.
+    """
+    return "asan" in os.getenv("BUILD_VARIANT", "")
 
 
 def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
