@@ -30,6 +30,7 @@ import sys
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map, expand_families
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, build_packages
+from _therock_utils.sdk_targets import group_package_targets, package_owner
 
 
 def _amdgpu_families_arg(value: str) -> list[str] | None:
@@ -202,7 +203,7 @@ def validate_required_dist_packages(
         windows_targets=windows_targets,
         platform_name=platform_name,
     )
-    for target in expected_targets or []:
+    for target in group_package_targets(expected_targets or []):
         required_patterns.append(f"rocm_sdk_device_{target}-{version}-*.whl")
 
     if _has_devel_artifacts(artifacts):
@@ -389,16 +390,16 @@ def _run_kpack_split(
     # Per-ISA device wheels. Device artifacts overlay into
     # _rocm_sdk_libraries/lib/ and may include ELF .so files (per-arch
     # MIOpen CK kernels) with dynamic deps on core.
-    # Group by base target (strip xnack suffix) to merge variants like
-    # 'gfx950' and 'gfx950:xnack+' into a single device package.
-    all_base_targets = sorted(set(t.split(":")[0] for t in params.all_target_families))
-    for target in all_base_targets:
+    # Group supplied members before construction, preserving artifact identities.
+    owner_groups = group_package_targets(sorted(params.all_target_families))
+    for target, members in owner_groups.items():
         dev = PopulatedDistPackage(params, logical_name="device", target_family=target)
         dev.rpath_dep(core, "lib")
         dev.rpath_dep(core, "lib/rocm_sysdeps/lib")
         dev.populate_device_files(
             params.filter_artifacts(
-                filter=functools.partial(device_artifact_filter, target),
+                filter=lambda an: an.target_family in members
+                and device_artifact_filter(target, an),
             )
         )
         if args.build_packages:
@@ -647,17 +648,11 @@ PROFILER_WHEEL_INCLUDES = [
 
 
 def device_artifact_filter(target: str, an: ArtifactName) -> bool:
-    """Selects per-ISA library artifacts for a specific GFX target.
+    """Select supplied device artifacts belonging to a package owner.
 
-    Unlike libraries_artifact_filter, this only matches the specific ISA target
-    (no generic). Used in kpack-split mode for device wheel population.
-
-    Matches both the base target and any xnack variants (e.g., target='gfx950'
-    matches artifacts for both 'gfx950' and 'gfx950:xnack+'), merging them into
-    a single device package.
+    Does not select generic artifacts or expand requested build targets.
     """
-    # Strip xnack suffix from artifact's target_family for comparison
-    artifact_base_target = an.target_family.split(":")[0]
+    artifact_base_target = package_owner(an.target_family)
     return (
         an.name
         in [
@@ -674,7 +669,7 @@ def device_artifact_filter(target: str, an: ArtifactName) -> bool:
             "rccl",
         ]
         and an.component == "lib"
-        and artifact_base_target == target
+        and artifact_base_target == package_owner(target)
     )
 
 

@@ -20,6 +20,7 @@ import sys
 import tarfile
 
 from .artifacts import ArtifactCatalog, ArtifactName
+from .sdk_targets import package_owner
 from .exe_stub_gen import generate_exe_link_stub
 
 is_windows = platform.system() == "Windows"
@@ -107,7 +108,13 @@ class Parameters:
             linux_set = set(self.linux_target_families)
             windows_set = set(self.windows_target_families)
             self.available_target_families: list[str] = sorted(linux_set | windows_set)
-            intersection = sorted(linux_set & windows_set)
+            if kpack_split:
+                windows_owners = {package_owner(t) for t in windows_set}
+                intersection = sorted(
+                    t for t in linux_set if package_owner(t) in windows_owners
+                )
+            else:
+                intersection = sorted(linux_set & windows_set)
             if intersection:
                 self.default_target_family: str | None = intersection[0]
             elif self.available_target_families:
@@ -418,7 +425,7 @@ class PopulatedDistPackage:
         package_dest_dir = self.platform_dir
         libraries_py_package_name = package_dest_dir.name
         devel_links: list[dict[str, str]] = []
-        for relpath, dir_entry in artifacts.pm.matches():
+        for relpath, dir_entry in artifacts.validated_matches().items():
             if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
@@ -449,7 +456,7 @@ class PopulatedDistPackage:
         """
         manifest_dir = self.platform_dir / ".devel_links"
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        manifest_path = manifest_dir / f"{self.target_family}.json"
+        manifest_path = manifest_dir / f"{package_owner(self.target_family)}.json"
         manifest_path.write_text(
             json.dumps(
                 {"version": self.params.version, "links": devel_links},
