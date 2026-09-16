@@ -199,7 +199,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -304,7 +306,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on }}
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
@@ -409,7 +413,9 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on }}
+      build_runs_on_large: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on_medium }}
       rocm_package_version: ${{ needs.setup-asan.outputs.rocm_package_version }}
       release_type: dev
       repository: ${{ github.repository }}
