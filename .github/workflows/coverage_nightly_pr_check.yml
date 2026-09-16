@@ -30,10 +30,10 @@ on:
       - ".github/workflows/coverage_nightly_pr_check.yml"
       - ".github/workflows/multi_arch_ci_coverage_nightly.yml"
       - ".github/workflows/multi_arch_ci_coverage_linux.yml"
-      - ".github/workflows/test_component.yml"
+      - ".github/workflows/test_code_coverage_component.yml"
       - "build_tools/github_actions/configure_coverage_ci.py"
-      - "build_tools/github_actions/overlay_coverage_artifacts.py"
       - "build_tools/github_actions/merge_coverage_report.py"
+      - "build_tools/install_rocm_code_coverage_build.py"
       - "cmake/therock_subproject.cmake"
       - "CMakeLists.txt"
 
@@ -100,7 +100,7 @@ jobs:
       # header-only projects (hipCUB, rocPRIM, rocThrust, rocWMMA) are left
       # out. They have no library of their own to instrument, so they report
       # against instrumented test binaries instead, and their inline code is
-      # the linkonce_odr case the overlay cannot fully isolate. Worth doing,
+      # the linkonce_odr case the component swap cannot fully isolate. Worth doing,
       # but worth doing separately.
       #
       # rccl and rocshmem are absent because they are not selectable: they
