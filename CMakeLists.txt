@@ -12,6 +12,12 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+# amdsmi uses _FORTIFY_SOURCE=2 which requires at least -O1; pin it to
+# RelWithDebInfo when the global build type is Debug to avoid a compile error.
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+  set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
+endif()
+
 project(THEROCK)
 
 cmake_policy(SET CMP0135 NEW)
