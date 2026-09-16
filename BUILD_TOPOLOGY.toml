@@ -756,6 +756,7 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps"]
 feature_group = "CV_LIBS"
 disable_platforms = ["windows"]
+disable_processors = ["ppc64le"]
 
 # --- Media Integration ---
 
