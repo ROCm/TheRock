@@ -28,6 +28,7 @@ benefit from further discussion.
 - [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 - [RFC0011: Quartz: Central CI/CD Data Hub for the ROCm Ecosystem](./RFC0011-Quartz-CICD-Datahub.md)
 - [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
+- [RFC0014: Subproject Fingerprint Coverage and Portability](./RFC0014-Fingerprint-Coverage.md)
 
 ## Adding an RFC
 
