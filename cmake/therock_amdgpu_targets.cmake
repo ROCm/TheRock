@@ -3,6 +3,7 @@
 
 # Target metadata is maintained as global properties:
 #   THEROCK_AMDGPU_TARGETS: List of gfx target names
+#   THEROCK_AMDGPU_DEFAULT_TEST_TARGETS: Targets eligible for implicit tests
 #   THEROCK_AMDGPU_TARGET_FAMILIES: List of target families (may contain duplicates)
 #   THEROCK_AMDGPU_TARGET_NAME_{gfx_target}: Product name of the gfx target
 #   THEROCK_AMDGPU_TARGET_FAMILY_{family}: List of gfx targets within a named
@@ -12,19 +13,21 @@
 #
 # Note that each gfx_target will also create a family of the same name.
 set_property(GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
+set_property(GLOBAL PROPERTY THEROCK_AMDGPU_DEFAULT_TEST_TARGETS)
 
 # Declares an AMDGPU target, associating it with family names and optionally
 # setting additional characteristics.
 # Args: gfx_target product_name
 #
 # Keyword Args:
+# EXCLUDE_DEFAULT_TESTS: Require explicit selection for test compilation.
 # FAMILY: List of family names to associate the gfx target with.
 # EXCLUDE_TARGET_PROJECTS: sub-project names for which this target should be
 #   filtered out. This is used to work around bugs during bringup and should
 #   not be set on any fully supported targets.
 function(therock_add_amdgpu_target gfx_target product_name)
   cmake_parse_arguments(PARSE_ARGV 2 ARG
-    ""
+    "EXCLUDE_DEFAULT_TESTS"
     ""
     "FAMILY;EXCLUDE_TARGET_PROJECTS"
   )
@@ -34,6 +37,9 @@ function(therock_add_amdgpu_target gfx_target product_name)
     message(FATAL_ERROR "AMDGPU target ${gfx_target} already defined")
   endif()
   set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_TARGETS "${gfx_target}")
+  if(NOT ARG_EXCLUDE_DEFAULT_TESTS)
+    set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_DEFAULT_TEST_TARGETS "${gfx_target}")
+  endif()
   set_property(GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_NAME_${gfx_target}" "${product_name}")
   foreach(project_name IN LISTS ARG_EXCLUDE_TARGET_PROJECTS)
     set_property(GLOBAL APPEND PROPERTY THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${project_name} "${gfx_target}")
@@ -255,6 +261,8 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 )
 
 # gfx125X family
+# Strict is an explicit development target, outside broad build/test selection.
+therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict" EXCLUDE_DEFAULT_TESTS)
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
 # Optional extension targets (used for out of tree target development).
@@ -344,13 +352,13 @@ function(therock_validate_amdgpu_targets)
 
   # Expand test families (THEROCK_TEST_AMDGPU_FAMILIES -> THEROCK_TEST_AMDGPU_TARGETS).
   # If neither THEROCK_TEST_AMDGPU_FAMILIES nor THEROCK_TEST_AMDGPU_TARGETS is set,
-  # test targets default to ALL available targets so that a single _generic test
-  # artifact can be downloaded and run on any architecture, making the classic CI
-  # upload race harmless.
+  # test targets default to targets not marked EXCLUDE_DEFAULT_TESTS. A single
+  # _generic test artifact can be downloaded and run on those architectures,
+  # making the classic CI upload race harmless.
   set(_test_families "${THEROCK_TEST_AMDGPU_FAMILIES}")
   set(_test_expanded_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
   if(NOT _test_families AND NOT _test_expanded_targets)
-    set(_test_expanded_targets "${_available_targets}")
+    get_property(_test_expanded_targets GLOBAL PROPERTY THEROCK_AMDGPU_DEFAULT_TEST_TARGETS)
   else()
     foreach(_family ${_test_families})
       if(NOT "${_family}" IN_LIST _available_families)

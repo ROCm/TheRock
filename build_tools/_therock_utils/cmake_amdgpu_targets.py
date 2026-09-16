@@ -25,6 +25,7 @@ class AmdgpuTargetInfo:
     gfx_target: str
     product_name: str
     families: list[str] = field(default_factory=list)
+    exclude_default_tests: bool = False
 
 
 def parse_amdgpu_targets_cmake(cmake_path: Path) -> list[AmdgpuTargetInfo]:
@@ -63,13 +64,17 @@ def parse_amdgpu_targets_cmake(cmake_path: Path) -> list[AmdgpuTargetInfo]:
         if "FAMILY" in tokens:
             family_start = tokens.index("FAMILY") + 1
             # Collect until the next cmake keyword or end of tokens.
-            cmake_keywords = {"EXCLUDE_TARGET_PROJECTS"}
+            cmake_keywords = {"EXCLUDE_TARGET_PROJECTS", "EXCLUDE_DEFAULT_TESTS"}
             for tok in tokens[family_start:]:
                 if tok in cmake_keywords:
                     break
                 families.append(tok)
 
-        results.append(AmdgpuTargetInfo(gfx_target, product_name, families))
+        results.append(
+            AmdgpuTargetInfo(
+                gfx_target, product_name, families, "EXCLUDE_DEFAULT_TESTS" in tokens
+            )
+        )
 
     return results
 
