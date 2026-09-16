@@ -212,44 +212,15 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version "${{ inputs.rocm_version }}"
 
-      # Fork pull requests receive no secrets. That is not an error: the build
-      # step mounts nothing and Bazel runs without a remote cache.
-      - name: Write Bazel remote cache credentials
+      # Runner-local files at /data/ci-cert.{crt,key}, the same path XLA and
+      # JAX CI mount. GitHub secrets are not used, so fork pull requests can
+      # read the cache. Missing files leave the mount absent.
+      - name: Locate Bazel remote cache credentials
         id: cache_credentials
         env:
-          RBE_CI_CERT: ${{ secrets.RBE_CI_CERT }}
-          RBE_CI_KEY: ${{ secrets.RBE_CI_KEY }}
+          JAX_BAZEL_CACHE_CREDENTIALS_DIR: ${{ vars.JAX_BAZEL_CACHE_CREDENTIALS_DIR }}
         run: |
-          if [[ -z "${RBE_CI_CERT}" || -z "${RBE_CI_KEY}" ]]; then
-            echo "No cache credentials available; building without a remote cache."
-            exit 0
-          fi
-
-          # Written outside the workspace: that tree is published as artifacts.
-          credentials_dir="${RUNNER_TEMP}/bazel-cache-credentials"
-          umask 077
-          mkdir -p "${credentials_dir}"
-
-          # The secrets may hold PEM or base64-encoded PEM. Try decoding and
-          # keep whichever form yields a PEM block, rather than guessing from
-          # the leading characters.
-          write_credential() {
-            if ! printf '%s' "$1" | base64 -d > "$2" 2>/dev/null ||
-               ! grep -q -- "-----BEGIN" "$2"; then
-              printf '%s\n' "$1" > "$2"
-            fi
-            grep -q -- "-----BEGIN" "$2"
-          }
-
-          # Unusable credentials leave the mount absent so the build runs
-          # without a cache. Failing here would fail the wheel build itself.
-          if write_credential "${RBE_CI_CERT}" "${credentials_dir}/ci-cert.crt" &&
-             write_credential "${RBE_CI_KEY}" "${credentials_dir}/ci-cert.key"; then
-            echo "credentials_dir=${credentials_dir}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "Cache credentials are not usable PEM; building without a remote cache."
-            rm -rf "${credentials_dir}"
-          fi
+          python build_tools/github_actions/write_jax_bazel_cache_credentials.py
 
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
@@ -262,7 +233,8 @@ jobs:
           JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
           CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
-          # rocm.bazelrc reads the client credentials from /data.
+          # rocm.bazelrc reads the client credentials from /data, copied
+          # from the runner's /data/ci-cert.* into $RUNNER_TEMP.
           credentials_mount=""
           if [[ -n "${CACHE_CREDENTIALS_DIR}" ]]; then
             credentials_mount="--volume ${CACHE_CREDENTIALS_DIR}:/data:ro"

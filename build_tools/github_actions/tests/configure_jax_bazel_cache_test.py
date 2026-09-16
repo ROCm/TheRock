@@ -179,7 +179,7 @@ class MainTest(unittest.TestCase):
         self.assertIn("--bazel_options=--remote_upload_local_results=true", output)
 
     def test_prints_nothing_without_credentials(self):
-        # Fork pull requests get no secrets, so the mount is absent and the
+        # Runners without `/data/ci-cert.*` leave the mount absent, so the
         # build command must come out unchanged.
         self.assertEqual(
             self._main(["--release-type", "ci"], with_credentials=False), ""
