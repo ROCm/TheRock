@@ -83,7 +83,7 @@ In [`fetch_test_configurations.py`](/build_tools/github_actions/fetch_test_confi
 | ----------------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | job_name                      | string | Any      | Name of the job                                                                                                               |
 | fetch_artifact_args           | string | Any      | Arguments for which artifacts for [`install_rocm_from_artifacts.py`](/build_tools/install_rocm_from_artifacts.py) to retrieve |
-| additional_requirements_files | array  | Any      | Paths within the fetched artifacts to Python requirements files needed by this test                                           |
+| additional_requirements_files | array  | Any      | Repository-relative paths to Python requirements files needed by this test (include `build/` for fetched artifacts)           |
 | timeout_minutes               | int    | Any      | The timeout (in minutes) for the test step                                                                                    |
 | test_script                   | string | Any      | The path to the test script                                                                                                   |
 | platform                      | array  | Any      | An array of platforms that the test can execute on, options are `linux` and `windows`                                         |
@@ -113,7 +113,7 @@ in
     "job_name": "example",
     "fetch_artifact_args": "--example --tests",
     "additional_requirements_files": [
-        "share/example/tests/requirements-test.txt",
+        _get_artifact_path("share/example/tests/requirements-test.txt"),
     ],
     "timeout_minutes": 10,
     "test_script": f"python {_get_script_path('test_example.py')}",

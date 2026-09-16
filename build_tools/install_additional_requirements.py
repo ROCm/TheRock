@@ -6,7 +6,8 @@
 """Script to install additional requirements.txt files for projects that require additional files for testing.
 
 Requires a requirements-file input parameter that is a list of comma separated paths to requirements.txt files.
-An empty value is a no-op. Each path is relative to the absolute path of the OUTPUT_ARTIFACTS_DIR.
+An empty value is a no-op. Paths may be absolute or relative to the repository
+root. They are passed directly to uv, which runs from that root.
 
 Usage:
 python install_additional_requirements.py
@@ -38,9 +39,6 @@ import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent
-THEROCK_OUTPUT_DIR = str(
-    THEROCK_DIR / os.getenv("OUTPUT_ARTIFACTS_DIR").removeprefix("./")
-)
 
 
 def install_requirements(req_files_list: str):
@@ -60,7 +58,7 @@ def install_requirements(req_files_list: str):
             "pip",
             "install",
             "-r",
-            f"{THEROCK_OUTPUT_DIR}/{file}",
+            file,
         ]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

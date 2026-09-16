@@ -22,8 +22,9 @@ class ReproduceTestFailureTest(unittest.TestCase):
         total_shards: str = "4",
         test_type: str = "quick",
         fetch_artifact_args: str = "--blas --tests",
+        output_dir: str = "build",
         additional_requirements_files: str = (
-            "share/hipblaslt/tensilelite/requirements-test.txt"
+            "build/share/hipblaslt/tensilelite/requirements-test.txt"
         ),
     ) -> argparse.Namespace:
         return argparse.Namespace(
@@ -37,22 +38,25 @@ class ReproduceTestFailureTest(unittest.TestCase):
             test_type=test_type,
             container_image="test-image",
             fetch_artifact_args=fetch_artifact_args,
+            output_dir=output_dir,
             additional_requirements_files=additional_requirements_files,
             setup_only=False,
             print_cmd=False,
         )
 
     def test_build_reproduction_command_includes_non_default_arguments(self):
-        command = reproduce_test_failure.build_reproduction_command(self._make_args())
+        command = reproduce_test_failure.build_reproduction_command(
+            self._make_args(output_dir="artifacts")
+        )
 
         self.assertEqual(
             command,
             "python build_tools/github_actions/reproduce_test_failure.py "
             "--run-id 1234 --repository ROCm/TheRock "
             '--amdgpu-family gfx94X-dcgpu --test-script "python test.py" '
-            "--amdgpu-targets gfx942 --shard-index 2 --total-shards 4 "
+            '--amdgpu-targets gfx942 --output-dir "artifacts" --shard-index 2 --total-shards 4 '
             '--test-type quick --fetch-artifact-args="--blas --tests" '
-            '--additional-requirements-files="share/hipblaslt/'
+            '--additional-requirements-files="build/share/hipblaslt/'
             'tensilelite/requirements-test.txt"',
         )
 
@@ -129,6 +133,7 @@ class ReproduceTestFailureTest(unittest.TestCase):
         self.assertIn("--amdgpu-family gfx94X-dcgpu", artifact_command)
         self.assertIn("--amdgpu-targets gfx942", artifact_command)
         self.assertIn("--blas --tests", artifact_command)
+        self.assertIn('--output-dir "build"', artifact_command)
 
         requirements_command = next(
             line
@@ -136,7 +141,7 @@ class ReproduceTestFailureTest(unittest.TestCase):
             if "install_additional_requirements.py" in line
         )
         self.assertIn(
-            "share/hipblaslt/tensilelite/requirements-test.txt",
+            "build/share/hipblaslt/tensilelite/requirements-test.txt",
             requirements_command,
         )
 
@@ -146,6 +151,7 @@ class ReproduceTestFailureTest(unittest.TestCase):
         self.assertIn("export SHARD_INDEX=2", environment_command)
         self.assertIn("export TOTAL_SHARDS=4", environment_command)
         self.assertIn("export TEST_TYPE=quick", environment_command)
+        self.assertIn('export OUTPUT_ARTIFACTS_DIR="build"', environment_command)
         self.assertTrue(any(line.startswith("python test.py") for line in script_lines))
 
 
