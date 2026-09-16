@@ -105,11 +105,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-    # amdrocm-debugger: Exclude libpython requirements
+    # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
-    # automatically selects the binary matching the system's Python version
+    # automatically selects the binary matching the system's Python version.
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
-    # amdrocm-profiler: Exclude vendored TBB from auto-generated RPM metadata.
+    # amdrocm-profiler: Exclude vendored TBB from both Requires AND Provides metadata.
     # rocprofiler-systems bundles TBB for Dyninst; suppress public Provides so
     # dyninst/tbb do not block dnf autoremove (ROCM-28385), and suppress
     # auto-Requires so profiler does not couple to distro tbb at install time.
