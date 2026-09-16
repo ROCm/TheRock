@@ -42,6 +42,10 @@ on:
           - quick
           - standard
         default: "quick"
+      build_only:
+        description: 'Build only - skip test triggers (still produces artifacts)'
+        type: boolean
+        default: false
       dry_run:
         description: 'Dry run - create branch but do not trigger builds'
         type: boolean
@@ -55,6 +59,7 @@ permissions:
 run-name: >-
   Compiler Bump (${{ inputs.branch_suffix || 'COT' }})
   | Test: ${{ inputs.test_type || 'quick' }}
+  ${{ inputs.build_only && '| Build Only' || '' }}
 
 jobs:
   # ==========================================================================
@@ -175,8 +180,8 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "all"
       windows_amdgpu_families: "none"
-      build_pytorch: false
-      build_jax: false
+      build_pytorch: true
+      build_jax: true
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
     secrets: inherit
@@ -416,7 +421,7 @@ jobs:
   trigger-linux-tests:
     name: Trigger Linux Tests (gfx94X-dcgpu)
     needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
@@ -459,7 +464,7 @@ jobs:
   trigger-windows-tests:
     name: Trigger Windows Tests (gfx110X-all)
     needs: [create-branch, setup-windows, build-windows]
-    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
@@ -670,6 +675,12 @@ jobs:
             echo "> **Dry Run:** Branch was created but no builds were triggered." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # Build only note
+          if [ "${{ inputs.build_only }}" == "true" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Build Only:** Tests were skipped as requested." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           # Build outputs
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Build Outputs" >> "$GITHUB_STEP_SUMMARY"
@@ -692,6 +703,7 @@ jobs:
           echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Test Type | \`${{ inputs.test_type || 'quick' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build Only | \`${{ inputs.build_only || 'false' }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Linux Test Family | \`gfx94X-dcgpu\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows Test Family | \`gfx110X-all\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| llvm-project | \`${{ inputs.llvm_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"

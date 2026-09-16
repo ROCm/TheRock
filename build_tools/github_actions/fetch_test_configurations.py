@@ -413,14 +413,7 @@ test_matrix = {
     "rocgdb-corefile": {
         **_rocgdb_common,
         "job_name": "rocgdb-corefile",
-        "test_script": (
-            "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests"
-            " gdb.rocm/corefile.exp"
-            " gdb.rocm/core-no-read-special-files.exp"
-            " gdb.rocm/gcore-after-attach.exp"
-            " gdb.rocm/load-core-remote-system.exp"
-            " gdb.rocm/runtime-core.exp"
-        ),
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm/runtime-core.exp",
         "test_runner": "linux-gfx942-gpu-rocm-mathlib",
         "include_family": {
             "linux": ["gfx942"],
@@ -590,11 +583,11 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 2,
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing

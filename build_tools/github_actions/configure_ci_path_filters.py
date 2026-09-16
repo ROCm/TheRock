@@ -238,6 +238,7 @@ _SKIPPABLE_PATH_PATTERNS = [
     # directory roots: other test paths exercise built ROCm packages in CI.
     "build_tools/tests/*",
     "build_tools/github_actions/tests/*",
+    "build_tools/packaging/archives/tests/*",
     "build_tools/packaging/linux/tests/*",
     "build_tools/packaging/python/tests/*",
     "build_tools/third_party/s3_management/tests/*",
