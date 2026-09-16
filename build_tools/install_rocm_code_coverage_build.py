@@ -13,6 +13,7 @@ python build_tools/install_rocm_code_coverage_build.py
     [--code-coverage-run-id CODE_COVERAGE_RUN_ID]
     [--code-coverage-release-type CODE_COVERAGE_RELEASE_TYPE]
     [--code-coverage-github-repo CODE_COVERAGE_GITHUB_REPO]
+    [--skip-generic-install]
     [--replace-rocblas | --no-replace-rocblas]
     [--replace-rocsolver | --no-replace-rocsolver]
     [** all supported options of install_rocm_from_artifacts.py]
@@ -272,6 +273,13 @@ def main(argv):
         "Defaults to GITHUB_REPOSITORY. Distinct from --run-github-repo, which "
         "names the repository owning the generic build.",
     )
+    parser.add_argument(
+        "--skip-generic-install",
+        action="store_true",
+        help="Only replace the components, assuming the generic build is "
+        "already installed in --output-dir. For callers that install it "
+        "themselves, such as the setup_test_environment action.",
+    )
     artifacts_group = parser.add_argument_group("replace_comps")
     for comp in COMPONENT_MAP.keys():
         artifacts_group.add_argument(
@@ -284,7 +292,10 @@ def main(argv):
     opts = _read_passthrough_options(extra_args)
 
     # install generic build from --run-id artifacts
-    install_from_artifacts_main(extra_args)
+    if args.skip_generic_install:
+        log(f"Skipping the generic install; using {opts.output_dir} as it stands")
+    else:
+        install_from_artifacts_main(extra_args)
 
     # collect artifacts details as per the user options
     artifacts = {}

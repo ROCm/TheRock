@@ -118,6 +118,7 @@ jobs:
         shell: bash
     env:
       CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
+      VENV_DIR: ${{ github.workspace }}/.venv
       # Empty generic_run_id means this run is the whole stack, instrumented
       # components included, so it installs itself and the swap is a no-op.
       GENERIC_RUN_ID: "${{ inputs.generic_run_id != '' && inputs.generic_run_id || github.run_id }}"
@@ -175,34 +176,49 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      # Installs the generic build, then overwrites just this component's files
-      # with their instrumented counterparts, so the component's dependencies
-      # stay out of the profiles the test run is about to write.
+      # Sets up Python, the venv and the test requirements, and installs the
+      # generic non-instrumented build. Shared with every other component test
+      # rather than reimplemented here: the Python version, uv and the venv
+      # activation are maintained in one place.
+      - name: Run setup test environment workflow
+        timeout-minutes: 15
+        env:
+          RETRY_THIS_STEP: "true"
+          STEP_TIMEOUT_MINUTES: "15"
+        uses: "./.github/actions/setup_test_environment"
+        with:
+          ARTIFACT_RUN_ID: ${{ env.GENERIC_RUN_ID }}
+          RUN_GITHUB_REPO: ${{ inputs.generic_repository }}
+          # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
+          ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          RELEASE_TYPE: ${{ env.GENERIC_RELEASE_TYPE }}
+
+      # Everything installed above is non-instrumented. Replacing only this
+      # component's files leaves its dependencies out of the profiles the test
+      # run is about to write.
       #
-      # RELEASE_TYPE applies to the generic build; the instrumented run carries
-      # its own channel and repository, which are usually not the same ones.
-      - name: Install TheRock Code Coverage Build
+      # The instrumented run carries its own channel and repository, which are
+      # not the generic build's: coverage publishes to ci from this repository
+      # while the baseline is a nightly, possibly from ROCm/rockrel.
+      - name: Swap in the instrumented component
         timeout-minutes: 15
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TYPE: ${{ env.GENERIC_RELEASE_TYPE }}
           COVERAGE_RELEASE_TYPE: ${{ inputs.release_type }}
-          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          GENERIC_REPO_ARG: ${{ inputs.generic_repository != '' && format('--run-github-repo={0}', inputs.generic_repository) || '' }}
         run: |
-          pip3 install -r requirements-test.txt
-          python3 build_tools/install_rocm_code_coverage_build.py \
+          python ./build_tools/install_rocm_code_coverage_build.py \
+            --skip-generic-install \
             --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
             --code-coverage-release-type="${COVERAGE_RELEASE_TYPE}" \
             --code-coverage-github-repo="${GITHUB_REPOSITORY}" \
-            --run-id="${GENERIC_RUN_ID}" \
             --artifact-group="${AMDGPU_FAMILIES}" \
             --amdgpu-targets="${AMDGPU_TARGETS}" \
-            --tests \
             --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
-            --replace-"${REPLACE_COMPONENT}" \
-            ${GENERIC_REPO_ARG} \
-            ${FETCH_ARTIFACT_ARGS}
+            --replace-"${REPLACE_COMPONENT}"
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
