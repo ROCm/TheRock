@@ -83,8 +83,8 @@ jobs:
       contents: read
       id-token: write
 
-  ci_summary:
-    name: CI Summary
+  ci_asan_summary:
+    name: CI ASAN Summary
     if: always()
     needs:
       - setup

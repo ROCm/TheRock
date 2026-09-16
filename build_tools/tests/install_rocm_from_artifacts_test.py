@@ -403,6 +403,8 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         kfdtest=False,
         rocwmma=False,
         rpp=False,
+        solver=False,
+        sparse=False,
         libhipcxx=False,
         hipthreads=False,
         tests=False,
@@ -425,6 +427,19 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
     def test_debug_tools_includes_amd_llvm_dev(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
         self.assertIn("amd-llvm_dev", argv)
+
+
+class TestRocprofilerSdkDev(unittest.TestCase):
+    """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
+
+    def test_rocprofiler_sdk_tests_includes_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("rocprofiler-sdk_dev", argv)
+
+    def test_rocprofiler_sdk_tests_includes_configure_deps(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("amd-llvm_dev", argv)
+        self.assertIn("sysdeps_dev", argv)
 
 
 if __name__ == "__main__":
