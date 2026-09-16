@@ -6,7 +6,7 @@
 
 Covers structural metadata checks per TESTING.md packaging validation: variant
 routing (kpack/gfx-arch), metadata-based file indexing, version matching, verify
-tiers, rollup reporting, and report file output.
+tiers, rollup stdout reporting, and optional JSON report output.
 
 Run::
 
@@ -454,6 +454,8 @@ class ReportFormatTest(unittest.TestCase):
         self.assertTrue(payload["passed"])
         self.assertEqual(payload["variants_expected"], 1)
         self.assertEqual(payload["verify_type"], verify.VERIFY_TYPE_SMOKE)
+        self.assertEqual(payload["failed_variants"], [])
+        self.assertNotIn("package_files_found", payload)
         text = verify.format_report_text(summary)
         self.assertIn("ROCm build package verification report", text)
 
@@ -494,6 +496,13 @@ class ReportFormatTest(unittest.TestCase):
         self.assertIn("Verify type: full", text)
         self.assertIn("[FAIL] device-gfx1100", text)
         self.assertNotIn("[PASS] meta", text)
+        payload = json.loads(verify.format_report_json(summary))
+        self.assertEqual(len(payload["failed_variants"]), 1)
+        self.assertEqual(
+            payload["failed_variants"][0]["expected_name"],
+            "amdrocm-core-sdk7.14-gfx1100",
+        )
+        self.assertNotIn("reports", payload)
 
     def test_text_contains_pass(self):
         variant = verify.VariantBuildCheck(
@@ -522,10 +531,10 @@ class ReportFormatTest(unittest.TestCase):
         self.assertIn("amdrocm-core-sdk7.14", text)
 
 
-class WriteReportFilesTest(unittest.TestCase):
-    """Confirms all three report artifacts are written and parseable."""
+class WriteReportFileTest(unittest.TestCase):
+    """Confirms optional JSON report is written when --report-dir is used."""
 
-    def test_writes_both_reports(self):
+    def test_writes_json_report(self):
         variant = verify.VariantBuildCheck(
             base_package=PKG_CORE_SDK,
             label="main",
@@ -549,14 +558,14 @@ class WriteReportFilesTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             report_dir = Path(tmp)
-            verify.write_report_files(summary, report_dir)
-            self.assertTrue((report_dir / "build_status_report.txt").is_file())
-            self.assertTrue((report_dir / "build_status_report.json").is_file())
-            self.assertTrue((report_dir / "build_status_report.summary.json").is_file())
-            payload = json.loads(
-                (report_dir / "build_status_report.json").read_text(encoding="utf-8"),
-            )
+            verify.write_report_file(summary, report_dir)
+            json_path = report_dir / "build_status_report.json"
+            self.assertTrue(json_path.is_file())
+            self.assertFalse((report_dir / "build_status_report.txt").exists())
+            self.assertFalse((report_dir / "build_status_report.summary.json").exists())
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertTrue(payload["passed"])
+            self.assertEqual(payload["failed_variants"], [])
 
 
 class VerifyPackageIndexingTest(unittest.TestCase):
