@@ -1,0 +1,36 @@
+From 63d4b619a16cc422a78ddd9a57fc02629e1840ae Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 15 Sep 2026 15:54:02 +0000
+Subject: [PATCH] test(rccl): guard cpuid.h include in init-test.cc for non-x86
+
+init-test.cc includes <cpuid.h> unconditionally, which fails on non-x86
+architectures (ppc64le, aarch64). Guard the include and provide a stub
+__get_cpuid that returns 0 (cpuid not supported) on non-x86, matching
+the pattern already used in src/init.cc.
+---
+ projects/rccl/test/host/init-test.cc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/projects/rccl/test/host/init-test.cc b/projects/rccl/test/host/init-test.cc
+index 70a9401efaf..fd70003b43e 100644
+--- a/projects/rccl/test/host/init-test.cc
++++ b/projects/rccl/test/host/init-test.cc
+@@ -64,7 +64,15 @@ static int g_trCollNetDeviceCount = 0;
+ #include "fakes/nvtx_redirect.h"  // neuter / block nvtx.h before init.cc includes it
+ 
+ // Pulled in ahead of the redirects below so those macros cannot mangle the declarations they redirect.
++#if defined(__x86_64__) || defined(_M_X64)
+ #include <cpuid.h>
++#else
++static inline int __get_cpuid(unsigned int __leaf, unsigned int *__eax,
++                              unsigned int *__ebx, unsigned int *__ecx,
++                              unsigned int *__edx) {
++  return 0;
++}
++#endif
+ 
+ #include "kernel_config.h"
+ #include "os.h"
+-- 
+2.52.0
+
