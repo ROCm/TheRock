@@ -81,7 +81,8 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
+        "amd-llvm_DEBUG_INFO": "OFF"
       }
     },
     {
@@ -103,7 +104,8 @@
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4"
+        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
+        "amd-llvm_DEBUG_INFO": "OFF"
       }
     },
     {
@@ -129,6 +131,7 @@
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
         "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
+        "amd-llvm_DEBUG_INFO": "OFF",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },

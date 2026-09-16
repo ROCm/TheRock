@@ -1756,8 +1756,22 @@ function(_therock_cmake_subproject_setup_toolchain
   else()
     # The system compiler and the toolchain compiler are compatible, so we can
     # simply forward flags from the system compiler to the toolchain compiler.
-    string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT \"@CMAKE_C_FLAGS@\")\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
+    #
+    # CMAKE_C_FLAGS/CMAKE_CXX_FLAGS can carry super-project-wide debug-info
+    # flags (e.g. -g1 -gdwarf-4 for the asan-debug/host-asan-debug/tsan
+    # presets). A subproject can opt out of that forwarding via
+    # {target_name}_DEBUG_INFO=OFF, mirroring {target_name}_SANITIZER - e.g.
+    # amd-llvm, which is never sanitizer-instrumented in these variants
+    # (amd-llvm_SANITIZER=OFF) and gains nothing from being compiled with
+    # debug info itself.
+    set(_forward_debug_info_flags ON)
+    if(DEFINED "${target_name}_DEBUG_INFO")
+      set(_forward_debug_info_flags "${${target_name}_DEBUG_INFO}")
+    endif()
+    if(_forward_debug_info_flags)
+      string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT \"@CMAKE_C_FLAGS@\")\n")
+      string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
+    endif()
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
   endif()
