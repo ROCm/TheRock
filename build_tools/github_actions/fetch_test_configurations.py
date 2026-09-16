@@ -583,11 +583,11 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 15,
+        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 1,
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
