@@ -660,7 +660,7 @@ source_paths = ["rocsparse", "hipsparse", "hipsparselt"]
 [artifacts.solver]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+artifact_deps = ["blas", "prim", "sparse", "host-blas", "host-suite-sparse"]
 source_paths = ["rocsolver", "hipsolver"]
 
 [artifacts.rocalution]
