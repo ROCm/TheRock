@@ -418,7 +418,8 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
-            skip_gpu_tests=os.environ.get("SKIP_GPU_TESTS", "").lower() in ("1", "true"),
+            skip_gpu_tests=os.environ.get("SKIP_GPU_TESTS", "").lower()
+            in ("1", "true"),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
         inputs.validate()
