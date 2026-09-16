@@ -12,11 +12,11 @@
 # (multi_arch_ci_coverage_nightly.yml), which instruments every onboarded
 # project in one pass. This workflow only consumes it.
 #
-# `baseline_run_id` drives the hybrid install: the tree comes from a regular
-# nightly run and only the project under test is overlaid from the instrumented
-# run, keeping instrumented dependencies out of the report. Without it the
-# instrumented run's own artifacts are tested as built, which measures the
-# project's dependencies alongside it.
+# `baseline_run_id` drives the hybrid install: install_rocm_code_coverage_build.py
+# installs the tree from a regular nightly run and swaps in only the project
+# under test from the instrumented run, keeping instrumented dependencies out of
+# the report. Without it the instrumented run's own artifacts are tested as
+# built, which measures the project's dependencies alongside it.
 
 name: Multi-Arch CI Coverage - Linux
 
@@ -161,7 +161,7 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
-    uses: ./.github/workflows/test_component.yml
+    uses: ./.github/workflows/test_code_coverage_component.yml
     secrets: inherit
     with:
       artifact_group: multi-arch-coverage
@@ -175,12 +175,12 @@ jobs:
       build_variant: coverage
       coverage_enabled: true
       coverage_artifact_prefix: coverage-profraw-${{ inputs.project_name }}-${{ inputs.amdgpu_families }}
-      coverage_baseline_run_id: ${{ inputs.baseline_run_id }}
-      coverage_baseline_release_type: ${{ inputs.baseline_release_type }}
-      coverage_baseline_repository: ${{ inputs.baseline_repository }}
-      coverage_artifact_names: ${{ inputs.artifact_names }}
-      coverage_artifact_relpaths: ${{ inputs.artifact_relpaths }}
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      generic_run_id: ${{ inputs.baseline_run_id }}
+      generic_release_type: ${{ inputs.baseline_release_type }}
+      generic_repository: ${{ inputs.baseline_repository }}
+      # The registry key, not the test matrix job name: it is what
+      # install_rocm_code_coverage_build.py's COMPONENT_MAP is keyed on.
+      replace_component: ${{ inputs.project_name }}
 
   aggregate_coverage:
     name: Coverage Report (${{ inputs.project_name }})

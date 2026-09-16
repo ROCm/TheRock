@@ -16,6 +16,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parents[2]))
 
 import configure_coverage_ci
+import install_rocm_code_coverage_build
 from _therock_utils.build_topology import get_topology
 
 
@@ -355,6 +356,40 @@ class RegistryMatchesBuildTopologyTest(unittest.TestCase):
                         topology.get_stage_for_artifact(artifact),
                         project.stage,
                     )
+
+
+class RegistryMatchesInstallerTest(unittest.TestCase):
+    """The test job passes a registry key as the installer's --replace-<name>.
+
+    install_rocm_code_coverage_build.py keys its own COMPONENT_MAP on those
+    names, so a project the registry can select but the installer has never
+    heard of turns into an unrecognised argument, once the instrumented build
+    has already been paid for.
+    """
+
+    def test_every_selectable_project_has_a_component_mapping(self):
+        selectable = {
+            key
+            for key in configure_coverage_ci.SUPPORTED_PROJECTS
+            if configure_coverage_ci.COVERAGE_PROJECTS[key].stage
+            in configure_coverage_ci.BUILDABLE_STAGES
+        }
+        self.assertTrue(selectable)
+        for key in sorted(selectable):
+            with self.subTest(project=key):
+                self.assertIn(key, install_rocm_code_coverage_build.COMPONENT_MAP)
+
+    def test_mapped_artifact_names_agree_with_the_registry(self):
+        # Both sides record which artifact ships a project. The installer
+        # downloads by that name, so a disagreement means it fetches an
+        # archive the instrumented library is not in.
+        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+            mapping = install_rocm_code_coverage_build.COMPONENT_MAP.get(key)
+            if mapping is None or not project.artifact_names:
+                continue
+            artifact_name, _ = mapping
+            with self.subTest(project=key):
+                self.assertIn(artifact_name, project.artifact_names)
 
 
 class MainTest(unittest.TestCase):

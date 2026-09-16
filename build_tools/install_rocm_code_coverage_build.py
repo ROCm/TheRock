@@ -11,6 +11,8 @@ Additionally it replaces the --replace-<comp-name> component files / libs.
 Usage:
 python build_tools/install_rocm_code_coverage_build.py
     [--code-coverage-run-id CODE_COVERAGE_RUN_ID]
+    [--code-coverage-release-type CODE_COVERAGE_RELEASE_TYPE]
+    [--code-coverage-github-repo CODE_COVERAGE_GITHUB_REPO]
     [--replace-rocblas | --no-replace-rocblas]
     [--replace-rocsolver | --no-replace-rocsolver]
     [** all supported options of install_rocm_from_artifacts.py]
@@ -97,16 +99,28 @@ def _target_families(family, amdgpu_targets):
     return families
 
 
-def download_replacement_artifacts(code_coverage_run_id, artifact_names, opts):
+def download_replacement_artifacts(
+    code_coverage_run_id,
+    artifact_names,
+    opts,
+    release_type=None,
+    github_repository=None,
+):
     """Download the instrumented replacement artifacts from the code-coverage run.
 
     Uses the code coverage run ID as the run-id for the S3 backend, then fetches
     every component tar matching the requested artifact names and target family.
+
+    The channel and repository are the code coverage run's own, not the generic
+    build's: artifacts are bucketed per channel, and a coverage run publishing
+    to `ci` may well be overlaid onto a baseline from the `nightly` bucket of
+    another repository.
     """
     backend = create_backend_from_env(
         run_id=code_coverage_run_id,
-        github_repository=opts.run_github_repo,
+        github_repository=github_repository,
         platform=platform.system().lower(),
+        release_type=release_type,
     )
     log(f"Fetching replacement artifacts from {backend.base_uri}")
 
@@ -242,6 +256,22 @@ def main(argv):
         type=str,
         help="run id of the build from which instrumental components needs to be replaced",
     )
+    parser.add_argument(
+        "--code-coverage-release-type",
+        type=str,
+        default=None,
+        help="Release channel --code-coverage-run-id published to. Defaults to "
+        "RELEASE_TYPE, which is the generic build's channel and is only right "
+        "when both runs published to the same one.",
+    )
+    parser.add_argument(
+        "--code-coverage-github-repo",
+        type=str,
+        default=None,
+        help="Repository owning --code-coverage-run-id, in 'owner/repo' form. "
+        "Defaults to GITHUB_REPOSITORY. Distinct from --run-github-repo, which "
+        "names the repository owning the generic build.",
+    )
     artifacts_group = parser.add_argument_group("replace_comps")
     for comp in COMPONENT_MAP.keys():
         artifacts_group.add_argument(
@@ -274,7 +304,11 @@ def main(argv):
 
     # download selected component artifacts
     dest_dir = download_replacement_artifacts(
-        args.code_coverage_run_id, artifacts.keys(), opts
+        args.code_coverage_run_id,
+        artifacts.keys(),
+        opts,
+        release_type=args.code_coverage_release_type,
+        github_repository=args.code_coverage_github_repo,
     )
 
     # replace selected library folder paths in selected component artifacts
