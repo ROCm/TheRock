@@ -286,6 +286,7 @@ jobs:
           AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
         # determine_version.py emits multiple arguments from a parsed ROCm version.
         # Trust that repository script to produce this intentional shell fragment.
+        # Delayed expansion keeps metacharacters in input values from becoming CMD operators.
         run: | # zizmor: ignore[template-injection]
           setlocal EnableDelayedExpansion
           set "CACHE_FLAG="
@@ -326,8 +327,7 @@ jobs:
       - name: Sanity check wheel
         shell: cmd
         run: |
-          setlocal EnableDelayedExpansion
-          python external-builds/pytorch/sanity_check_wheel.py "!PACKAGE_DIST_DIR!"
+          python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
