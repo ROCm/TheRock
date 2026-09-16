@@ -44,6 +44,7 @@ THEROCK_CLANG_PLUS_PATH = THEROCK_LLVM_BIN_PATH / "amdclang++"
 # SDK Paths
 ROCPROFILER_SDK_PATH = THEROCK_PATH / "share" / "rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_PATH = ROCPROFILER_SDK_PATH / "tests"
+ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT = "spm_runner_preflight.py"
 ROCPROFILER_SDK_TESTS_BUILD_PATH = ROCPROFILER_SDK_TESTS_PATH / "build"
 
 _DEFAULT_CDASH_PROJECT = "rocprofiler-sdk-alt"
@@ -93,6 +94,7 @@ ASAN_EXCLUDED_TESTS = [
 
 logging.basicConfig(level=logging.INFO)
 environ_vars = os.environ.copy()
+_parsed_args: argparse.Namespace | None = None
 
 
 def get_asan_runtime_library():
@@ -200,6 +202,11 @@ def get_ctest_cmd() -> list[str]:
         "8",
         "--output-on-failure",
     ]
+    if _parsed_args is not None:
+        for label in _parsed_args.ctest_label:
+            ctest_cmd += ["-L", label]
+        for label in _parsed_args.ctest_label_exclude:
+            ctest_cmd += ["-LE", label]
     if is_asan():
         # Exclude tests known to fail/hang in the ASan configuration.
         exclude_regex = "|".join(ASAN_EXCLUDED_TESTS)
@@ -225,6 +232,24 @@ def cmake_config() -> None:
 # them against the install tree also validates the packaged developer surface.
 def cmake_build() -> None:
     _run_command(get_cmake_build_cmd())
+
+
+def run_spm_preflight() -> None:
+    """Run rocprofiler-sdk SPM runner checks before executing spm-labeled tests."""
+    preflight = ROCPROFILER_SDK_TESTS_PATH / ROCPROFILER_SDK_SPM_PREFLIGHT_SCRIPT
+    if not preflight.is_file():
+        raise FileNotFoundError(
+            f"Missing SPM preflight script in test tree: {preflight}"
+        )
+    logging.info(
+        f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {sys.executable} {preflight}"
+    )
+    subprocess.run(
+        [sys.executable, str(preflight)],
+        cwd=ROCPROFILER_SDK_TESTS_PATH,
+        check=True,
+        env=environ_vars,
+    )
 
 
 def execute_tests() -> None:
@@ -314,9 +339,16 @@ def _generate_dashboard(
         or socket.gethostname()
     )
     test_options = ""
+    if _parsed_args is not None and _parsed_args.ctest_label:
+        include_labels = ";".join(_parsed_args.ctest_label)
+        test_options += f'INCLUDE_LABEL "{_cmake_escape(include_labels)}" '
+    if _parsed_args is not None and _parsed_args.ctest_label_exclude:
+        exclude_labels = ";".join(_parsed_args.ctest_label_exclude)
+        test_options += f'EXCLUDE_LABEL "{_cmake_escape(exclude_labels)}" '
     if is_asan():
         exclude_regex = _cmake_escape("|".join(ASAN_EXCLUDED_TESTS))
-        test_options = f'EXCLUDE "{exclude_regex}"'
+        test_options += f'EXCLUDE "{exclude_regex}"'
+    test_options = test_options.strip()
 
     return _CMakeTemplate(
         """cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
@@ -463,22 +495,37 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--cdash-group",
         default=os.getenv("THEROCK_CDASH_GROUP", _DEFAULT_CDASH_GROUP),
     )
+    parser.add_argument(
+        "--ctest-label",
+        action="append",
+        default=[],
+        help="Run only CTest tests with this label (repeatable)",
+    )
+    parser.add_argument(
+        "--ctest-label-exclude",
+        action="append",
+        default=[],
+        help="Exclude CTest tests with this label (repeatable)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
+    global _parsed_args
+    _parsed_args = _parse_args(argv)
     setup_env()
 
-    if args.enable_cdash:
+    if _parsed_args.enable_cdash:
         run_cdash(
-            model=args.cdash_model,
-            group=args.cdash_group,
-            require_cdash_submission=args.require_cdash_submission,
+            model=_parsed_args.cdash_model,
+            group=_parsed_args.cdash_group,
+            require_cdash_submission=_parsed_args.require_cdash_submission,
         )
     else:
         cmake_config()
         cmake_build()
+        if "spm" in _parsed_args.ctest_label:
+            run_spm_preflight()
         execute_tests()
     return 0
 
