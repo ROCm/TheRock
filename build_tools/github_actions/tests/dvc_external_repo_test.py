@@ -59,13 +59,32 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
             f"rocm-systems config missing required keys: {required_keys - config.keys()}",
         )
 
-    def test_rocm_libraries_no_dvc_projects(self):
-        """Test that rocm-libraries doesn't have dvc_projects (not needed)."""
+    def test_rocm_libraries_has_dvc_projects(self):
+        """Test that rocm-libraries config includes dvc_projects."""
         config = get_repo_config("rocm-libraries")
 
-        # rocm-libraries doesn't use DVC for external builds
-        self.assertNotIn(
-            "dvc_projects", config, "rocm-libraries doesn't need dvc_projects"
+        # Verify dvc_projects key exists
+        self.assertIn(
+            "dvc_projects",
+            config,
+            "rocm-libraries config must have dvc_projects for hipdnn golden data",
+        )
+
+        # Verify it contains external-rocm-libraries
+        self.assertIn(
+            "external-rocm-libraries",
+            config["dvc_projects"],
+            "dvc_projects should contain external-rocm-libraries path",
+        )
+
+    def test_rocm_libraries_also_pulls_rocm_systems_dvc(self):
+        """Test that rocm-libraries dvc_projects also includes rocm-systems (wkmi)."""
+        config = get_repo_config("rocm-libraries")
+
+        self.assertIn(
+            "rocm-systems",
+            config["dvc_projects"],
+            "dvc_projects should contain rocm-systems for wkmi",
         )
 
 
@@ -142,8 +161,8 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
         self.assertIn("--skip-submodules rocm-systems", config_json_line)
         self.assertIn("--dvc-projects external-rocm-systems", config_json_line)
 
-    def test_rocm_libraries_no_dvc_args(self):
-        """Test that rocm-libraries doesn't generate --dvc-projects (not needed)."""
+    def test_rocm_libraries_generates_dvc_args(self):
+        """Test that rocm-libraries generates --dvc-projects in fetch_sources_args."""
         rc = detect_external_repo_config_main(
             [
                 "--repository",
@@ -156,12 +175,12 @@ class TestFetchSourcesArgsGeneration(unittest.TestCase):
         with open(self.temp_file, "r") as f:
             output = f.read()
 
-        # rocm-libraries should only have skip-submodules
+        # rocm-libraries should have both skip-submodules and dvc-projects
         self.assertIn("--skip-submodules rocm-libraries", output)
-        self.assertNotIn(
-            "--dvc-projects",
+        self.assertIn(
+            "--dvc-projects external-rocm-libraries rocm-systems",
             output,
-            "rocm-libraries shouldn't generate dvc-projects args",
+            "Should include --dvc-projects external-rocm-libraries rocm-systems",
         )
 
 

@@ -208,6 +208,7 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 # Changes matching these patterns shouldn't affect CI build/test workflows.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
+    "rocm-docs",
     "*.gitignore",
     "*.md",
     "*.mdc",
@@ -237,6 +238,7 @@ _SKIPPABLE_PATH_PATTERNS = [
     # directory roots: other test paths exercise built ROCm packages in CI.
     "build_tools/tests/*",
     "build_tools/github_actions/tests/*",
+    "build_tools/packaging/archives/tests/*",
     "build_tools/packaging/linux/tests/*",
     "build_tools/packaging/python/tests/*",
     "build_tools/third_party/s3_management/tests/*",

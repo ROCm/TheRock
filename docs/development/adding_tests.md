@@ -69,7 +69,7 @@ Add an entry in [`test_matrix`](/build_tools/github_actions/fetch_test_configura
 
 In [`fetch_test_configurations.py`](/build_tools/github_actions/fetch_test_configurations.py), a test option (in this example rocBLAS) in `test_matrix` is setup as:
 
-```
+```python
 "rocblas": {
     "job_name": "rocblas",
     "fetch_artifact_args": "--blas --tests",

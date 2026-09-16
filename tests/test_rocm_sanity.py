@@ -61,6 +61,11 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(), reason="rocminfo test fails with ASAN build, see TheRock#3312"
     )
+    # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="rocminfo test is disabled for gfx125X-dcgpu due to kernel bug, see #7659",
+    )
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -86,6 +91,10 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_windows(),
         reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
+    )
+    # TODO(#3313): Re-enable once test_hip_printf is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="test_hip_printf fails with ASAN build, see TheRock#3313"
     )
     # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
     @pytest.mark.skipif(

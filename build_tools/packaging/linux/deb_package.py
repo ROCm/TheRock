@@ -316,14 +316,14 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
             pkg_info, "DEBRecommends", config
         )
         debsuggests = process_secondary_dependencies(pkg_info, "DEBSuggests", config)
-        depends = process_main_dependencies(pkg_info, "DEBDepends", config)
+        depends = process_versioned_dependencies(pkg_info, "DEBDepends", config)
     else:
         # Get -> Transform -> Join
         provides = process_name_field(pkg_info, "Provides", debian_replace_devel_name)
         replaces = process_name_field(pkg_info, "Replaces", debian_replace_devel_name)
         conflicts = process_name_field(pkg_info, "Conflicts", debian_replace_devel_name)
         # Non-versioned package depends on versioned package itself
-        depends = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        depends = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -402,7 +402,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
         pattern = f"{pkg_name}-{script}.j2"
         for file in templates_root.glob(pattern):
             script_file = Path(deb_dir) / script
-            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            template = env.get_template(file.relative_to(SCRIPT_DIR).as_posix())
             with script_file.open("w", encoding="utf-8") as f:
                 f.write(template.render(context))
             os.chmod(script_file, 0o755)
@@ -434,19 +434,23 @@ def copy_package_contents(source_dir, destination_dir):
         src = item
         dst = destination_dir / item.name
 
-        if src.is_dir() and not dst.is_symlink():
-            shutil.copytree(
-                src,
-                dst,
-                dirs_exist_ok=True,
-                symlinks=True,
-                ignore_dangling_symlinks=True,
-            )
-        elif src.is_symlink():
-            # Copy the symlink itself (even if dangling)
+        # Check is_symlink() first because is_dir() follows symlinks and returns
+        # True for symlinks pointing to directories. We want to preserve symlinks.
+        if src.is_symlink():
             link_target = src.readlink()
-            dst.symlink_to(link_target)
-        else:
+            if not dst.exists() and not dst.is_symlink():
+                dst.symlink_to(link_target)
+        elif src.is_dir():
+            if not dst.is_symlink():
+                shutil.copytree(
+                    src,
+                    dst,
+                    dirs_exist_ok=True,
+                    symlinks=True,
+                    ignore_dangling_symlinks=True,
+                )
+            # else: skip - don't overwrite existing symlink with directory
+        elif src.is_file():
             shutil.copy2(src, dst)
 
 

@@ -30,8 +30,6 @@ else()
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
     set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
-    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
     # There is an issue with finding the zstd config built by TheRock when zstd
     # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
     # found in module mode, which ultimately fails to locate the library.
@@ -57,7 +55,12 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      # ppc64le has native 128-bit long double, so libquadmath is not needed.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        set(FLANG_RUNTIME_F128_MATH_LIB "")
+      else()
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)

@@ -153,11 +153,13 @@ class ROCmDevelTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
-                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
-                # explicitly and cannot necessarily be loaded standalone.
+                # Internal rocprofiler-sdk libraries cannot necessarily be loaded
+                # standalone. The duplicate SDK is a test fixture that requires the
+                # primary SDK to be preloaded by its test harness.
                 continue
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files

@@ -91,7 +91,7 @@ First, build TheRock as usual but requesting only a certain component. This is d
 
 The `hipify` sources are in the `compiler/hipify` directory and the outer build target and CMake flags are contained in the `compiler/CMakeLists.txt` file. Once the initial configure is done, you will see a corresponding directory in your build directory. At the time of writing, this directory looks something like this:
 
-```
+```bash
 $ ls -lh
 total 8.0K
 drwxrwxr-x 1 stella stella  272 Mar 11 19:38 build
@@ -133,7 +133,7 @@ If not doing deep development on the component, it is often effective to just us
 
 This can be done (using `hipify` as the example component name) with commands like this:
 
-```
+```bash
 ninja hipify+expunge && ninja hipify
 ```
 

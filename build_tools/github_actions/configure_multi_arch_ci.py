@@ -76,6 +76,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -123,6 +124,79 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
+# Maps build stages to the test labels that can run with artifacts from those
+# stages. Used to auto-filter tests when build_stages narrows the build graph.
+# Test labels not listed here require a full build.
+STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
+    "compiler-runtime": ["kfdtest"],
+    "runtime-tests": ["hip-tests", "rocrtst"],
+    "math-libs": [
+        "rocblas",
+        "hipblas",
+        "hipblaslt",
+        "rocfft",
+        "hipfft",
+        "rocrand",
+        "hiprand",
+        "rocsparse",
+        "hipsparse",
+        "rocsolver",
+        "hipsolver",
+        "rocprim",
+        "hipcub",
+        "rocthrust",
+        "rocalution",
+        "rocwmma",
+        "hiptensor",
+        "composable-kernel",
+    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
+    "comm-libs": ["rccl", "rocshmem"],
+    "storage-libs": ["hipfile"],
+    "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
+    "cv-libs": ["rpp"],
+    "media-libs": ["rocdecode", "rocjpeg"],
+    "debug-tools": ["rocgdb"],
+}
+
+
+def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | None:
+    """Return the test labels allowed for a partial build, or None for full builds.
+
+    When build_stages is empty (full build), returns None to indicate no filtering.
+    When build_stages is set, returns the union of test labels for those stages.
+    """
+    if not build_stages:
+        return None
+    allowed = set()
+    for stage in build_stages:
+        allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
+    return sorted(allowed) if allowed else []
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -161,8 +235,14 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
+    # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
+    changed_projects: list[str] = field(default_factory=list)
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
@@ -173,6 +253,28 @@ class CIInputs:
         print("CIInputs:")
         for f in fields(self):
             print(f"  {f.name}: {getattr(self, f.name)!r}")
+
+    def validate(self) -> None:
+        """Validate inputs for consistency (fail-fast behavior).
+
+        Raises ValueError if test labels require stages not in build_stages.
+        """
+        allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
+        if allowed_labels is not None:
+            for platform, labels in [
+                ("Linux", self.linux_test_labels),
+                ("Windows", self.windows_test_labels),
+            ]:
+                invalid = [
+                    lbl
+                    for lbl in labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"{platform} test labels {invalid} require stages not in "
+                        f"build_stages {self.build_stages}. Allowed: {allowed_labels}"
+                    )
 
     @property
     def is_pull_request(self) -> bool:
@@ -222,7 +324,7 @@ class CIInputs:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -251,7 +353,41 @@ class CIInputs:
             + pr_test_labels
         )
 
-        return CIInputs(
+        # When build_stages limits the build, validate or auto-select test labels.
+        # - If labels provided: fail-fast if they require stages not in build_stages
+        # - If no labels provided: auto-select compatible labels for the stages
+        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
+        if allowed_labels is not None:
+            if linux_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in linux_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Linux test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                linux_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+            if windows_test_labels:
+                invalid = [
+                    lbl
+                    for lbl in windows_test_labels
+                    if lbl.replace("test:", "") not in allowed_labels
+                ]
+                if invalid:
+                    raise ValueError(
+                        f"Windows test labels {invalid} require stages not in "
+                        f"build_stages {build_stages}. Allowed: {allowed_labels}"
+                    )
+            else:
+                windows_test_labels = [f"test:{lbl}" for lbl in allowed_labels]
+
+        inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
@@ -273,10 +409,16 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
+            changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
+        inputs.validate()
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -442,6 +584,9 @@ class BuildRocmDecision(JobGroupDecision):
     # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
     # TheRock's baseline runs instead of their own.
     baseline_repository: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -457,6 +602,15 @@ class BuildRocmDecision(JobGroupDecision):
             name
             for name, action in self.stage_decisions.items()
             if action == JobAction.RUN
+        ]
+
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
         ]
 
 
@@ -536,8 +690,13 @@ class BuildConfig:
     build_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
@@ -545,6 +704,9 @@ class BuildConfig:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["rebuild_artifacts"] = ",".join(self.rebuild_artifacts)
+        d["reusable_artifacts"] = ",".join(self.reusable_artifacts)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -778,12 +940,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            if label.lower().startswith("gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
+                # Family keys are lowercase, so normalize the target.
+                target = label.split("-")[0].lower()
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -940,9 +1102,26 @@ def decide_jobs(
     else:
         # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
         stage_decisions = {}
+        explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
+
+        # Log explicit baseline configuration when provided.
+        if ci_inputs.baseline_run_id and explicit_prebuilt_stages:
+            baseline_repo_info = (
+                f" from {ci_inputs.baseline_repository}"
+                if ci_inputs.baseline_repository
+                else ""
+            )
+            logging.info(
+                "[STAGE-REUSE] using explicit baseline_run_id=%s%s for "
+                "prebuilt_stages: %s",
+                ci_inputs.baseline_run_id,
+                baseline_repo_info,
+                ", ".join(explicit_prebuilt_stages),
+            )
 
         # In dry-run, automatic reuse is analyzed but not applied. In
         # reuse-stage, eligible stages are added to stage_decisions.
@@ -951,6 +1130,7 @@ def decide_jobs(
             mode=stage_reuse_mode,
             linux_amdgpu_families=targets.linux_families,
             windows_amdgpu_families=targets.windows_families,
+            explicit_prebuilt_stages=explicit_prebuilt_stages,
         )
 
         baseline_repository = ci_inputs.baseline_repository
@@ -962,11 +1142,38 @@ def decide_jobs(
         if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
             baseline_run_id = auto_stage_reuse.baseline_run_id
 
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
+
+    # For external repos, use changed_projects to determine artifact-level reuse.
+    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
+    # changed-file analysis.
+    rebuild_artifacts: list[str] = (
+        list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
+    )
+    reusable_artifacts: list[str] = (
+        list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
+    )
+    if ci_inputs.changed_projects and not rebuild_artifacts:
+        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
+            ci_inputs.changed_projects
+        )
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
+        rebuild_artifacts=rebuild_artifacts,
+        reusable_artifacts=reusable_artifacts,
     )
     # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
@@ -1082,24 +1289,7 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan":
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif build_variant == "host-asan":
+        if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
             # due to limited ASAN runner capacity and stability concerns.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
@@ -1117,6 +1307,23 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(
                     f"  {family_name}: no host-asan sandbox runner available, "
+                    f"disabling tests"
+                )
+        elif "asan" in build_variant:
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no ASAN sandbox runner available, "
                     f"disabling tests"
                 )
 
@@ -1155,6 +1362,36 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
+        # If trigger_test_label_only is set, only run tests when the family's
+        # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
+        # This allows families with limited hardware to have tests opt-in via
+        # PR labels rather than always running. Builds always run regardless.
+        # workflow_dispatch bypasses this check to allow manual test triggering.
+        if (
+            platform_info.get("trigger_test_label_only", False)
+            and not ci_inputs.is_workflow_dispatch
+        ):
+            family_label = platform_info["family"]
+            if family_label not in ci_inputs.pr_labels:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: trigger_test_label_only set, "
+                    f"'{family_label}' label not present, disabling tests"
+                )
+
+        # If test_type_for_family is set, force the test type for this family.
+        # This overrides the global test_type, allowing families with limited
+        # hardware to always run quick tests regardless of trigger type.
+        test_type_for_family = platform_info.get("test_type_for_family", "")
+        family_test_type = None
+        if test_type_for_family and test_runs_on:
+            family_test_type = test_type_for_family
+            if family_test_type != jobs.test_rocm.test_type:
+                print(
+                    f"  {family_name}: forcing test_type={family_test_type} "
+                    f"(global={jobs.test_rocm.test_type})"
+                )
+
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
@@ -1163,6 +1400,8 @@ def _expand_build_config_for_platform(
                 "sanity_check_only_for_family", False
             ),
         }
+        if family_test_type:
+            family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
         # Per-family test labels allow limiting which tests run for specific architectures
@@ -1208,7 +1447,7 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix == "asan"
+    is_asan = suffix in ("asan", "host-asan")
     build_python_packages = ci_inputs.build_python_packages and not is_asan
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
@@ -1218,6 +1457,24 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
+    build_native_linux = ci_inputs.build_native_linux
+
+    # When stages are skipped (partial build), disable package builds since
+    # they require a complete artifact set. Prebuilt/reused stages are OK
+    # because their artifacts are copied from a baseline run.
+    has_skipped_stages = bool(jobs.build_rocm.skipped_stages)
+    if has_skipped_stages:
+        print(
+            f"  Disabling package builds due to skipped stages: "
+            f"{jobs.build_rocm.skipped_stages}"
+        )
+        build_python_packages = False
+        build_pytorch = False
+        build_jax = False
+        build_native_linux = False
+        pytorch_build_matrix = []
+        jax_build_matrix = []
+        test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
@@ -1226,7 +1483,7 @@ def _expand_build_config_for_platform(
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=ci_inputs.build_native_linux,
+        build_native_linux=build_native_linux,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
@@ -1235,8 +1492,11 @@ def _expand_build_config_for_platform(
         build_runs_on=build_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
+        rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
+        reusable_artifacts=jobs.build_rocm.reusable_artifacts,
     )
 
 
