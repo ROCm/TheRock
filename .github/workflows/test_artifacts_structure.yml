@@ -72,10 +72,12 @@ jobs:
     container:
       image: python:3.12-slim
     env:
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
       PLATFORM: ${{ inputs.platform }}
       THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
-      RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,11 +94,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python ./build_tools/artifact_manager.py fetch \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-            --run-github-repo="${{ inputs.artifact_github_repo }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
-            --amdgpu-families="${{ inputs.amdgpu_families }}" \
-            --platform="${{ env.PLATFORM }}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --platform="${PLATFORM}" \
             --output-dir="${GITHUB_WORKSPACE}" \
             --no-extract
           # NOTE: artifact_manager.py appends /.download_cache to --output-dir
