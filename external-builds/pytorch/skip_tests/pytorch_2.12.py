@@ -4,6 +4,9 @@
 skip_tests = {
     "common": {
         "cuda": [
+            # TestCuda - conflicts with how our test script and runners are
+            # configured.
+            "test_hip_device_count",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
             # AssertionError: Scalars are not equal!
@@ -225,10 +228,6 @@ skip_tests = {
             "test_activity_filter_dict_syntax",
             # TestProfiler - kineto kernel metadata missing 'grid'
             "test_kineto_kernel_metadata_in_trace",
-        ],
-        "ci_sanity_check": [
-            # TestCISanityCheck - TheRock CI env differs from upstream
-            "test_env_vars_exist",
         ],
         "dataloader": [
             # TestDataLoader - large sampler indices

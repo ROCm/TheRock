@@ -299,6 +299,42 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("amdsmi", projects)
         self.assertIn("rdc", projects)
 
+    def test_nested_tensilelite_prefix_mapped(self) -> None:
+        # TensileLite is vendored inside hipBLASLt, so rocm-libraries change
+        # detection reports the nested subtree path. Without an alias this
+        # resolved to the non-existent graph key "hipblaslt/tensilelite" and
+        # selected nothing, letting TensileLite changes merge untested
+        # (rocm-libraries#11518, reverted by rocm-libraries#12022).
+        # Declares the synthetic node the real test_policies.toml also declares,
+        # so the walk past the alias is exercised rather than stubbed out.
+        root = _make_fixture(
+            policies='[synthetic.tensilelite]\nconsumers = ["hipblaslt"]\n'
+        )
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/hipblaslt/tensilelite",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                set(json.loads(proc.stdout.strip())), {"tensilelite", "hipblaslt"}
+            )
+            # Clean stderr is part of the assertion: the regression was a
+            # warning plus an empty selection, not a non-zero exit.
+            self.assertEqual(proc.stderr, "")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_shared_rocroller_prefix_mapped(self) -> None:
         proc = self._run("--changed-projects", "shared/rocroller", "--level", "4")
         self.assertEqual(proc.returncode, 0, proc.stderr)

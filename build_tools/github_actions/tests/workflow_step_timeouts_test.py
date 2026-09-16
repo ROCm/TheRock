@@ -48,7 +48,7 @@ _KNOWN_VIOLATIONS = frozenset(
         "multi_arch_build_windows_pytorch_wheels.yml / configure_pytorch_tests / 'Checkout CI config'",
         "multi_arch_build_windows_pytorch_wheels_ci.yml / build_pytorch_wheels / 'Checkout'",
         "multi_arch_ci.yml / ci_summary / 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'",
-        "multi_arch_ci_asan.yml / ci_summary / 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'",
+        "multi_arch_ci_asan.yml / ci_asan_summary / 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'",
         "multi_arch_ci_linux.yml / copy_prebuilt_stages / 'Checking out repository'",
         "multi_arch_ci_windows.yml / copy_prebuilt_stages / 'Checking out repository'",
         "multi_arch_release_linux.yml / publish_to_release_buckets / 'Checkout'",

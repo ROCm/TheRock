@@ -134,7 +134,7 @@ jobs:
             EXTRA_ARGS+=(--include-test-tarballs)
           fi
 
-          python build_tools/build_tarballs.py \
+          python build_tools/packaging/archives/build_tarballs.py \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
