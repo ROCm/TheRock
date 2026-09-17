@@ -992,6 +992,28 @@ HOST_ASAN_COMPONENTS = {
         "test_script": f"python {_get_script_path('test_stinkytofu_host_asan.py')}",
         "timeout_minutes": 10,
     },
+    "rocprim": {
+        "test_script": f"python {_get_script_path('test_rocprim_host_asan.py')}",
+        "timeout_minutes": 15,
+    },
+    "rocthrust": {
+        "test_script": f"python {_get_script_path('test_rocthrust_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocalution": {
+        # Select only the positive host-ASAN CTest label; the component's
+        # legacy wrapper would also admit device suites.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 10,
+    },
+    "composable-kernel": {
+        "job_name": "composable-kernel",
+        "fetch_artifact_args": "--composable-kernel --tests",
+        "test_script": (
+            f"python {_get_script_path('test_composable_kernel_host_asan.py')}"
+        ),
+        "timeout_minutes": 10,
+    },
 }
 
 
