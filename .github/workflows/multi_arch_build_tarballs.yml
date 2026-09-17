@@ -93,6 +93,7 @@ jobs:
   resolve-images:
     uses: ./.github/workflows/resolve-docker-images.yml
     with:
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
       image_name: python_slim
 
   build_tarballs:
