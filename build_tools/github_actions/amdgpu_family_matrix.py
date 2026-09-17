@@ -14,24 +14,26 @@ Architecture:
 The external config overlays runner labels onto the local architecture definitions.
 A family can exist for building even without CI runners configured for testing.
 
-For presubmit, postsubmit and nightly family selection:
-
-- presubmit runs the targets from presubmit dictionary on pull requests
-- postsubmit runs the targets from presubmit and postsubmit dictionaries on pushes to main branch
-- nightly runs targets from presubmit, postsubmit and nightly dictionaries
+Trigger-based build and test selection:
+- Each family specifies `builds_on_trigger` and `tests_on_trigger` lists
+- Trigger types: presubmit, postsubmit, submodule_bump, nightly
+- workflow_dispatch (on_demand) implicitly allows all families
+- Families are included in builds when any active trigger is in builds_on_trigger
+- Tests run when any active trigger is in tests_on_trigger
 
 TODO(#2200): clarify AMD GPU family selection
 """
-
-#############################################################################################
-# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
-#############################################################################################
 
 import copy
 import os
 import random
 import sys
 from pathlib import Path
+
+# Valid trigger types for builds_on_trigger and tests_on_trigger fields.
+# Note: "on_demand" (workflow_dispatch) is implicit - all families are allowed
+# when manually triggered, so it's not included in the explicit trigger lists.
+VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
 
 def _log(*args, **kwargs):
@@ -206,16 +208,23 @@ amdgpu_family_info_matrix dictionary fields:
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
+- builds_on_trigger: (required) list of triggers when this family should BUILD
+    Valid triggers: presubmit, postsubmit, submodule_bump, nightly
+    Note: workflow_dispatch (on_demand) implicitly allows all families.
+- tests_on_trigger: (required) list of triggers when this family should TEST
+    Valid triggers: presubmit, postsubmit, submodule_bump, nightly
+    Empty list means no tests run for this family.
+    Note: workflow_dispatch (on_demand) implicitly allows all families.
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
-- nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
-- submodule_bump_tests_only (optional): if enabled, only run tests when submodule changes are detected or on workflow_dispatch (builds always run)
 - test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
-- trigger_test_label_only (optional): if enabled, only run tests when the family's gfx* label is present on the PR (e.g., gfx125x label for gfx125x family). Builds always run regardless of label.
+- test_labels_for_family (optional): list of test labels to filter which tests run for this family
 """
-# The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-amdgpu_family_info_matrix_presubmit = {
+# Unified family matrix with explicit trigger-based build/test configuration.
+# Each family specifies exactly when it should build and test via trigger lists.
+amdgpu_family_info_matrix = {
+    # Primary CI family - builds and tests on all triggers
     "gfx94x": {
         "linux": {
             # TODO: Remove multi-label config once we get dedicated set of machines
@@ -248,8 +257,21 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan-debug",
                 "tsan",
             ],
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         }
     },
+    # Builds on presubmit, tests only on nightly
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
@@ -257,7 +279,13 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
@@ -265,8 +293,21 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         },
     },
+    # Builds on presubmit, tests only on nightly
     "gfx1151": {
         "linux": {
             "test-runs-on": "linux-gfx1151-gpu-rocm",
@@ -277,7 +318,13 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -286,10 +333,17 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
             # TODO(#3299): Re-enable quick tests once capacity is available for Windows gfx1151
-            "nightly_check_only_for_family": True,
+            "tests_on_trigger": ["nightly"],
         },
     },
+    # Builds on presubmit, tests only on nightly
     "gfx120x": {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
@@ -297,7 +351,13 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
@@ -305,9 +365,16 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": ["nightly"],
         },
     },
+    # Limited hardware - builds on presubmit, tests only on submodule_bump
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
@@ -324,33 +391,46 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
             ],
-            # Only run tests when gfx125X-dcgpu label is present
-            "trigger_test_label_only": True,
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            # Tests only on submodule changes due to limited hardware
+            "tests_on_trigger": ["submodule_bump"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
         },
     },
-}
-
-
-# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
-amdgpu_family_info_matrix_postsubmit = {
+    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
-            # Only run tests when gfx90a label is present on PR
-            "trigger_test_label_only": True,
+            "builds_on_trigger": [
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": ["postsubmit", "nightly"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": [
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": [],
         },
     },
+    # Limited hardware - builds on postsubmit, tests only on submodule_bump
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
@@ -366,14 +446,16 @@ amdgpu_family_info_matrix_postsubmit = {
                 "host-asan-debug",
                 "tsan",
             ],
-            # Only run tests when gfx950-dcgpu label is present
-            "trigger_test_label_only": True,
+            "builds_on_trigger": [
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            # Tests only on submodule changes due to limited hardware
+            "tests_on_trigger": ["submodule_bump"],
         }
     },
-}
-
-# The 'nightly' matrix runs on 'schedule' triggers.
-amdgpu_family_info_matrix_nightly = {
+    # Nightly-only build, no tests (no hardware available)
     "gfx900": {
         "linux": {
             # Disabled due to hardware availability
@@ -382,14 +464,19 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx900",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests (sanity check only)
     "gfx90c": {
         "linux": {
             "test-runs-on": "",
@@ -397,14 +484,19 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx90c",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests (no hardware available)
     # gfx906/908/90a split into separate families - each has different instruction
     # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
     "gfx906": {
@@ -415,6 +507,8 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
@@ -422,8 +516,11 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx906",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests (no hardware available)
     "gfx908": {
         "linux": {
             # Disabled due to hardware availability
@@ -432,104 +529,143 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx908",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests
     "gfx101x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only family, tests only on nightly
     "gfx103x": {
         "linux": {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": ["nightly"],
         },
     },
+    # Nightly-only family, tests only on nightly
     "gfx1150": {
         "linux": {
             "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only build, no tests
     "gfx1152": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
+    # Nightly-only family, tests only on nightly
     "gfx1153": {
         "linux": {
             "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": ["nightly"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
+            "builds_on_trigger": ["nightly"],
+            "tests_on_trigger": [],
         },
     },
 }
 
 
-def _get_local_families_for_trigger_types(trigger_types) -> dict:
-    """Returns combined family matrix from local definitions for trigger types."""
-    result = {}
-    matrix_map = {
-        "presubmit": amdgpu_family_info_matrix_presubmit,
-        "postsubmit": amdgpu_family_info_matrix_postsubmit,
-        "nightly": amdgpu_family_info_matrix_nightly,
-    }
+def _get_local_families_for_trigger_types(trigger_types: list[str]) -> dict:
+    """Returns family matrix filtered by builds_on_trigger field.
 
-    for trigger_type in trigger_types:
-        if trigger_type in matrix_map:
-            for family_name, family_config in matrix_map[trigger_type].items():
+    A family is included if any of the requested trigger_types appears
+    in its builds_on_trigger list for any platform.
+
+    Pass an empty list to get ALL families (used for workflow_dispatch where
+    all families are implicitly allowed).
+    """
+    # Empty trigger list means return all families (workflow_dispatch case)
+    if not trigger_types:
+        return dict(amdgpu_family_info_matrix)
+
+    trigger_set = set(trigger_types)
+    result = {}
+
+    for family_name, family_config in amdgpu_family_info_matrix.items():
+        # Check if any platform has a matching trigger
+        for platform in ("linux", "windows"):
+            if platform not in family_config:
+                continue
+            platform_info = family_config[platform]
+            builds_on_trigger = set(platform_info.get("builds_on_trigger", []))
+            if builds_on_trigger & trigger_set:
+                # Include the entire family (all platforms)
                 result[family_name] = family_config
+                break
 
     return result
 
@@ -613,12 +749,16 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
     return result
 
 
-def get_all_families_for_trigger_types(trigger_types):
+def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     """Returns combined family matrix for the specified trigger types.
 
     Local definitions (this file) are the source of truth for build architecture
     support. External config (therock-ci-config) provides runner labels which
     are overlaid onto local definitions when available.
+
+    Families are included if any of the trigger_types appears in their
+    builds_on_trigger list. Pass an empty list to get ALL families (used for
+    workflow_dispatch where all families are implicitly allowed).
     """
     # Always start with local definitions - source of truth for build support
     result = _get_local_families_for_trigger_types(trigger_types)
