@@ -1,0 +1,58 @@
+From c8cf22008d6c45a934b6001f6bcbf45672c6c83a Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Wed, 2 Sep 2026 10:59:37 -0600
+Subject: [PATCH] Update lookback scan and ordered_block_id optimizations to
+ include gfx1250
+
+---
+ projects/rocprim/CHANGELOG.md                               | 6 ++++++
+ .../include/rocprim/device/detail/lookback_scan_state.hpp   | 2 +-
+ .../include/rocprim/device/detail/ordered_block_id.hpp      | 2 +-
+ 3 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocprim/CHANGELOG.md b/projects/rocprim/CHANGELOG.md
+index 635fcfd2..33679484 100644
+--- a/projects/rocprim/CHANGELOG.md
++++ b/projects/rocprim/CHANGELOG.md
+@@ -2,6 +2,12 @@
+ 
+ Full documentation for rocPRIM is available at [https://rocm.docs.amd.com/projects/rocPRIM/en/latest/](https://rocm.docs.amd.com/projects/rocPRIM/en/latest/).
+ 
++## rocPRIM 5.0.0 for ROCM 10.2.0
++
++### Optimizations
++
++* Updated existing `ordered_block_id` and `lookback_scan` optimizations to include gfx1250.
++
+ ## rocPRIM 4.7.0 for ROCm 10.1.0
+ 
+ ### Changed 
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp b/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
+index f20409ab..ebd7300c 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
+@@ -46,7 +46,7 @@
+ // Global coherence of prefixes_*_values is ensured by atomic_load/atomic_store that bypass
+ // cache.
+ #ifndef ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES
+-    #if defined(__HIP_DEVICE_COMPILE__) && (defined(__gfx942__) || defined(__gfx950__) || defined(__gfx9_4_generic__))
++    #if defined(__HIP_DEVICE_COMPILE__) && (defined(__gfx942__) || defined(__gfx950__) || defined(__gfx9_4_generic__)) || defined(__gfx1250__)
+         #define ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES 1
+     #else
+         #define ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES 0
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/detail/ordered_block_id.hpp b/projects/rocprim/rocprim/include/rocprim/device/detail/ordered_block_id.hpp
+index 53259810..71859517 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/detail/ordered_block_id.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/detail/ordered_block_id.hpp
+@@ -300,7 +300,7 @@ hipError_t check_if_using_atomic_block_id(hipStream_t stream, bool& enable)
+         target_arch arch;
+         ROCPRIM_RETURN_ON_ERROR(rocprim::detail::get_device_arch(device_id, arch));
+ 
+-        needs_hotfix = (arch == target_arch::gfx942) || (arch == target_arch::gfx950);
++        needs_hotfix = (arch == target_arch::gfx942) || (arch == target_arch::gfx950) || (arch == target_arch::gfx1250);
+     }
+ 
+     switch(data.option)
+-- 
+2.43.0
+

@@ -1,0 +1,24 @@
+From a39288f179873838b0c39823b6891bf892cd7351 Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Tue, 15 Sep 2026 10:15:37 -0700
+Subject: [PATCH] remove extra endif
+
+---
+ projects/composablekernel/include/ck_tile/core/config.hpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/projects/composablekernel/include/ck_tile/core/config.hpp b/projects/composablekernel/include/ck_tile/core/config.hpp
+index 56870195..5d07c566 100644
+--- a/projects/composablekernel/include/ck_tile/core/config.hpp
++++ b/projects/composablekernel/include/ck_tile/core/config.hpp
+@@ -34,7 +34,6 @@
+     defined(__gfx1103__) || defined(__gfx115__) || defined(__gfx11_generic__)
+ #define __gfx11__
+ #endif
+-#endif
+ #if defined(__gfx1200__) || defined(__gfx1201__) || defined(__gfx12_generic__)
+ #define __gfx120__
+ #endif
+-- 
+2.43.0
+

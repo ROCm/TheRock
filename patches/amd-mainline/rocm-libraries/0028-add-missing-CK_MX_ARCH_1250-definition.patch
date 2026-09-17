@@ -1,0 +1,29 @@
+From 035ca44dbc95c116c75df1af43eab04adb7da105 Mon Sep 17 00:00:00 2001
+From: Illia Silin <Illia.Silin@amd.com>
+Date: Wed, 16 Sep 2026 10:21:01 -0700
+Subject: [PATCH] add missing CK_MX_ARCH_1250 definition
+
+---
+ projects/composablekernel/include/ck/utility/mxfp_utils.hpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/projects/composablekernel/include/ck/utility/mxfp_utils.hpp b/projects/composablekernel/include/ck/utility/mxfp_utils.hpp
+index 8fa51780..55d3fc8c 100644
+--- a/projects/composablekernel/include/ck/utility/mxfp_utils.hpp
++++ b/projects/composablekernel/include/ck/utility/mxfp_utils.hpp
+@@ -16,6 +16,12 @@
+ #define CK_MX_ARCH_125 0
+ #endif
+ 
++#if defined(__gfx1250__) && !defined(__gfx1250_strict__) && __HIP_DEVICE_COMPILE__
++#define CK_MX_ARCH_1250 1
++#else
++#define CK_MX_ARCH_1250 0
++#endif
++
+ #ifdef CK_CODE_GEN_RTC
+ #define UINT_MAX 4294967295
+ #endif
+-- 
+2.43.0
+

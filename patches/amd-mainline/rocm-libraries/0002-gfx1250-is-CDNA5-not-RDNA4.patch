@@ -1,0 +1,188 @@
+From 19929ee36b2ce2176c4b877bbc861ec74bdf34c2 Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Thu, 3 Sep 2026 09:28:02 -0600
+Subject: [PATCH] gfx1250 is CDNA5, not RDNA4
+
+---
+ .../rocprim/include/rocprim/config.hpp        | 21 +++++++++++++++++--
+ .../include/rocprim/device/config_types.hpp   | 11 ++++++++--
+ .../include/rocprim/intrinsics/atomic.hpp     |  8 +++----
+ .../include/rocprim/thread/thread_load.hpp    |  2 +-
+ .../include/rocprim/thread/thread_store.hpp   |  2 +-
+ 5 files changed, 34 insertions(+), 10 deletions(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/config.hpp b/projects/rocprim/rocprim/include/rocprim/config.hpp
+index 85842758..9b30586b 100644
+--- a/projects/rocprim/rocprim/include/rocprim/config.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/config.hpp
+@@ -115,11 +115,17 @@
+ #undef ROCPRIM_TARGET_CDNA1
+ #undef ROCPRIM_TARGET_CDNA2
+ #undef ROCPRIM_TARGET_CDNA3
++#undef ROCPRIM_TARGET_CDNA4
++#undef ROCPRIM_TARGET_CDNA5
+ #undef ROCPRIM_TARGET_UNKNOWN
+ 
+ // See https://llvm.org/docs/AMDGPUUsage.html#instructions
+-#if defined(__gfx942__) || defined(__gfx950__) || defined(__gfx9_4_generic__)
++if defined(__gfx1250__)
++    #define ROCPRIM_TARGET_CDNA5 1
++#elif defined(__gfx942__) || defined(__gfx9_4_generic__)
+     #define ROCPRIM_TARGET_CDNA3 1
++#elif defined(__gfx950__)
++    #define ROCPRIM_TARGET_CDNA4 1
+ #elif defined(__gfx90a__)
+     #define ROCPRIM_TARGET_CDNA2 1
+ #elif defined(__gfx908__)
+@@ -155,6 +161,8 @@
+     #if !defined(ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS)
+         #define ROCPRIM_THREAD_STORE_USE_CACHE_MODIFIERS 1
+     #endif
++    #define ROCPRIM_IS_CDNA5() (__builtin_amdgcn_processor_is("gfx1250"))
++    #define ROCPRIM_IS_CDNA4() (__builtin_amdgcn_processor_is("gfx950"))
+     #define ROCPRIM_IS_CDNA3()                                                              \
+         (__builtin_amdgcn_processor_is("gfx942") || __builtin_amdgcn_processor_is("gfx950") \
+          || __builtin_amdgcn_processor_is("gfx9-4-generic"))
+@@ -167,7 +175,6 @@
+          || __builtin_amdgcn_processor_is("gfx9-generic"))
+     #define ROCPRIM_IS_RDNA4()                                                                \
+         (__builtin_amdgcn_processor_is("gfx1200") || __builtin_amdgcn_processor_is("gfx1201") \
+-            || __builtin_amdgcn_processor_is("gfx1250")                                       \
+             || __builtin_amdgcn_processor_is("gfx12-generic"))
+     #define ROCPRIM_IS_RDNA3()                                                                   \
+         (__builtin_amdgcn_processor_is("gfx1100") || __builtin_amdgcn_processor_is("gfx1101")    \
+@@ -197,6 +204,16 @@
+          || __builtin_amdgcn_processor_is("gfx10-1-generic") \
+          || __builtin_amdgcn_processor_is("gfx12-generic"))
+ #else
++    #if defined(ROCPRIM_TARGET_CDNA5)
++        #define ROCPRIM_IS_CDNA5() 1
++    #else
++        #define ROCPRIM_IS_CDNA5() 0
++    #endif
++    #if defined(ROCPRIM_TARGET_CDNA3)
++        #define ROCPRIM_IS_CDNA3() 1
++    #else
++        #define ROCPRIM_IS_CDNA3() 0
++    #endif
+     #if defined(ROCPRIM_TARGET_CDNA3)
+         #define ROCPRIM_IS_CDNA3() 1
+     #else
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp b/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
+index 3d0891fa..fe8cbbcc 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
+@@ -187,6 +187,7 @@ enum class target_arch : unsigned int
+     gfx1153 = 1153,
+     gfx1200 = 1200,
+     gfx1201 = 1201,
++    gfx1250 = 1250,
+     unknown = std::numeric_limits<unsigned int>::max(),
+ };
+ #endif // DOXYGEN_SHOULD_SKIP_THIS
+@@ -206,6 +207,7 @@ enum class gen
+     cdna2,
+     cdna3,
+     cdna4,
++    cdna5,
+     rdna1,
+     rdna2,
+     rdna3,
+@@ -227,7 +229,8 @@ enum class gpu
+     mi300a,
+     mi308x,
+     mi325x,
+-    mi350x
++    mi350x,
++    mi455x,
+ };
+ 
+ constexpr gen gen_from_target_arch(target_arch i)
+@@ -255,12 +258,14 @@ constexpr gen gen_from_target_arch(target_arch i)
+         case target_arch::gfx1153: return gen::rdna3;
+         case target_arch::gfx1200:
+         case target_arch::gfx1201: return gen::rdna4;
++        case target_arch::gfx1250: return gen::cdna5;
+         case target_arch::unknown:
+         case target_arch::invalid: return gen::unknown;
+     }
+ }
+ 
+ constexpr std::tuple<std::string_view, gpu> target_gpu_names[] = {
++    std::make_tuple<std::string_view, gpu>("MI455X", gpu::mi455x),
+     std::make_tuple<std::string_view, gpu>("MI350X", gpu::mi350x),
+     std::make_tuple<std::string_view, gpu>("MI325X", gpu::mi325x),
+     std::make_tuple<std::string_view, gpu>("MI308X", gpu::mi308x),
+@@ -328,6 +333,7 @@ constexpr target_arch get_target_arch_from_name(const char* const arch_name, con
+     ROCPRIM_RETURN_IF_ARCH(gfx1153);
+     ROCPRIM_RETURN_IF_ARCH(gfx1200);
+     ROCPRIM_RETURN_IF_ARCH(gfx1201);
++    ROCPRIM_RETURN_IF_ARCH(gfx1250);
+ 
+     return target_arch::unknown;
+ }
+@@ -591,7 +597,8 @@ constexpr arch::wavefront::target get_wavefront_size(const gen gen = gen::unknow
+         case gen::cdna1:
+         case gen::cdna2:
+         case gen::cdna3:
+-        case gen::cdna4: return arch::wavefront::target::size64;
++        case gen::cdna4: 
++        case gen::cdna5: return arch::wavefront::target::size64;
+         case gen::rdna1:
+         case gen::rdna2:
+         case gen::rdna3:
+diff --git a/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp b/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
+index 022637bf..e2d34b2e 100644
+--- a/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/intrinsics/atomic.hpp
+@@ -375,8 +375,8 @@ namespace detail
+     ROCPRIM_DEVICE ROCPRIM_INLINE void atomic_fence_release_vmem_order_only()
+     {
+         __builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");
+-#if ROCPRIM_TARGET_RDNA4
+-        // RDNA4 (gfx12) splits waitcnt: wait for all store counts to complete
++#if ROCPRIM_TARGET_CDNA5
++        // CDNA5 (gfx1250) splits waitcnt: wait for all store counts to complete
+         asm volatile("s_wait_storecnt 0x0" : : : "memory");
+ #else
+         // Wait until all vmem operations complete (s_waitcnt vmcnt(0))
+@@ -395,8 +395,8 @@ namespace detail
+     /// developers that know what they are doing.
+     ROCPRIM_DEVICE ROCPRIM_INLINE void atomic_fence_acquire_order_only()
+     {
+-#if ROCPRIM_TARGET_RDNA4
+-        // RDNA4 (gfx12) splits waitcnt: wait for all load counts to complete
++#if ROCPRIM_TARGET_CDNA5
++        // CDNA5 (gfx1250) splits waitcnt: wait for all load counts to complete
+         asm volatile("s_wait_loadcnt 0x0" : : : "memory");
+ #else
+         __builtin_amdgcn_s_waitcnt(/*vmcnt*/ 0 | (/*exp_cnt*/ 0x7 << 4) | (/*lgkmcnt*/ 0xf << 8));
+diff --git a/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp b/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
+index 58194de0..83700c5f 100644
+--- a/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/thread/thread_load.hpp
+@@ -85,7 +85,7 @@ T asm_thread_load(void* ptr)
+         ROCPRIM_DEVICE ROCPRIM_INLINE type asm_thread_load<cache_modifier, type>(void* ptr) \
+         {                                                                                   \
+             interim_type retval;                                                            \
+-            if(ROCPRIM_IS_RDNA4())                                                          \
++            if(ROCPRIM_IS_CDNA5())                                                          \
+             {                                                                               \
+                 asm volatile(#asm_operator " %0, %1 th:TH_DEFAULT scope:SCOPE_DEV\n\t"      \
+                                            "s_wait_loadcnt_dscnt(%2)"                       \
+diff --git a/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp b/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
+index b56e3cab..063a73b4 100644
+--- a/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/thread/thread_store.hpp
+@@ -83,7 +83,7 @@ void asm_thread_store(void* ptr, T val)
+                                                                                    type  val) \
+         {                                                                                     \
+             interim_type temp_val = *bit_cast<interim_type*>(&val);                           \
+-            if(ROCPRIM_IS_RDNA4())                                                            \
++            if(ROCPRIM_IS_CDNA5))                                                            \
+             {                                                                                 \
+                 asm volatile(#asm_operator " %0, %1 th:TH_DEFAULT scope:SCOPE_DEV\n\t"        \
+                                            "s_wait_storecnt_dscnt(%2)"                        \
+-- 
+2.43.0
+

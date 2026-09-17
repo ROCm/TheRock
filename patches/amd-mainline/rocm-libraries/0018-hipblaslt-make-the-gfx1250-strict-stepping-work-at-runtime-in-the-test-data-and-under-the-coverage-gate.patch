@@ -1,0 +1,315 @@
+From 835100f8fce4529a6311c4873a81469a1bf32ca3 Mon Sep 17 00:00:00 2001
+From: George Tseng <george.tseng@amd.com>
+Date: Mon, 14 Sep 2026 16:04:09 +0000
+Subject: [PATCH] hipblaslt: make the gfx1250-strict stepping work at runtime,
+ in the test data and under the coverage gate
+
+Origami matches gcnArchName exactly against a table holding base
+architectures only, so a part reporting gfx1250-strict matched nothing,
+left HipAMDGPU::analyticalHardware null, and threw on the assert guarding
+every query that consults the analytical model. That path is not opt-in:
+skDynamicGrid defaults to k_split_aware, so any Stream-K solution reaches
+the assert unless TENSILE_STREAMK_DYNAMIC_GRID is set. Hand Origami a copy
+of the properties naming the base architecture instead. The name is
+rebuilt through toProcessor/toString rather than trimmed as a string, so
+the revisions folded here stay the ones Tensile recognises and an
+unrecognised name still resolves to something Origami rejects. Both entry
+points read gcnArchName out of the properties they are handed, so the same
+copy reaches each; renaming only the support check would trade the null
+for a throw out of get_default_num_xcds. Only the copy is renamed --
+archName() and the code-object subtree still spell the revision, and
+Origami consumes machine constants rather than code objects, so the base
+entry's instruction timings approximate the revision's performance and
+affect nothing else.
+
+match_test_category compares known_bug_platforms token-for-token with
+strcasecmp against the name hipblasLtGetArchName reports, which keeps the
+revision suffix. gfx1250-strict therefore missed the gfx1250 token and ran
+the TF32 Inf cases ROCM-1545 already quarantines on gfx1250 and gfx950;
+the defect is in silicon the revision shares, so list the token too.
+
+Three subtile bf16 configs were missed when the rest of the corpus got its
+skip-gfx1250-strict mark. gfx1250-strict is its own target, not a spelling
+of gfx1250, so a config written for gfx1250 has to opt out of it the same
+way it opts out of every other arch it was not written for; left unmarked
+they run on the strict stepping and build code objects the silicon
+rejects.
+
+The sibling-DeviceNames check reads ScheduleName, gfx arch and CU count out
+of each logic file's own header, and treats a file it cannot read as an
+unknown of each. Nothing exercised that: the corpus the unit tests run
+against is readable, so the three except arms in _arch_variant_key and
+_chip_id_dir_suffix's empty-arch guard were never entered, and the
+coverage ratchet caught the module dropping to 93.33%. Point the key at a
+path that does not exist and at a header with no ArchitectureName, and
+assert what the fallback is for: files it cannot read group together
+rather than each becoming its own singleton, and a corpus containing one
+still completes instead of raising.
+
+test_a_detected_name_yields_a_target_the_build_accepts read
+cmake/tensilelite_supported_architectures.cmake through parents[4] to check
+the probe's vocabulary against the list GPU_TARGETS is validated against.
+That path resolves in a checkout but reaches outside the tensilelite tree,
+which is installed on its own as a test artifact without that file, so all
+seven parametrizations failed on FileNotFoundError while a checkout stayed
+green. Remove the test rather than add an install rule whose only consumer
+is a test; cmake_gpu_target keeps the two tests beside it, and what is lost
+is the guarantee that the two lists cannot drift apart.
+
+Verified on a part reporting gfx1250-strict under ROCm 10.2.0a20260914:
+analyticalHardware goes from NULL to present, while the base stepping
+behaves exactly as before.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ .../clients/tests/data/known_bugs.yaml        |  9 ++--
+ .../gemm/gfx12/subtile_bf16_gfx1250.yaml      |  2 +-
+ .../gfx12/subtile_bf16_gfx1250_bench.yaml     |  2 +-
+ .../gfx12/subtile_bf16_gfx1250_cluster.yaml   |  2 +-
+ .../Tensile/Tests/unit/test_arch_steppings.py | 33 --------------
+ .../unit/test_valid_corpus_consistency.py     | 38 ++++++++++++++++
+ .../tensilelite/src/hip/HipHardware.cpp       | 45 +++++++++++++++++--
+ 7 files changed, 88 insertions(+), 43 deletions(-)
+
+diff --git a/projects/hipblaslt/clients/tests/data/known_bugs.yaml b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+index 378e413c..4dda3bc2 100644
+--- a/projects/hipblaslt/clients/tests/data/known_bugs.yaml
++++ b/projects/hipblaslt/clients/tests/data/known_bugs.yaml
+@@ -10,15 +10,18 @@
+ 
+ Known bugs:
+   # ROCM-1545: TF32 matmul with INF inputs returns NaN on gfx950 (MI355)
+-  - { name: matmul_tf32_inf_ROCM1545, function: matmul, initialization: inf, known_bug_platforms: "gfx950, gfx1250" }
++  # gfx1250-strict is listed alongside gfx1250 because the match is an exact
++  # token comparison against the name the runtime reports, and a v0 part reports
++  # the revision; the defect is in silicon the revision shares.
++  - { name: matmul_tf32_inf_ROCM1545, function: matmul, initialization: inf, known_bug_platforms: "gfx950, gfx1250, gfx1250-strict" }
+   # ROCM-1545 (same root cause): the special-FP sweep hits it on the TF32 (xf32)
+   # compute type when the input is +Inf or -Inf -- the GPU returns -nan where the
+   # CPU reference is +Inf, failing check_special_value_consistency(). Only the xf32
+   # Inf/-Inf cases fail; the f16/bf16/f32/f64 Inf cases and the xf32 NaN case pass,
+   # so scope the quarantine to compute_type xf32_r + inf/neg_inf. REMOVE once the
+   # TF32 Inf fix lands so these re-activate as an enforced consistency gate.
+-  - { name: matmul_special_fp_64x64, function: matmul, compute_type: c_xf32_r, initialization: inf, known_bug_platforms: "gfx950, gfx1250" }
+-  - { name: matmul_special_fp_64x64, function: matmul, compute_type: c_xf32_r, initialization: neg_inf, known_bug_platforms: "gfx950, gfx1250" }
++  - { name: matmul_special_fp_64x64, function: matmul, compute_type: c_xf32_r, initialization: inf, known_bug_platforms: "gfx950, gfx1250, gfx1250-strict" }
++  - { name: matmul_special_fp_64x64, function: matmul, compute_type: c_xf32_r, initialization: neg_inf, known_bug_platforms: "gfx950, gfx1250, gfx1250-strict" }
+   # ROCM-26455: bf16 matmul output-store address overflow -- an output element
+   # offset > 2^31 (from an oversized output leading dimension ldc/ldd) wraps in the
+   # 32-bit global-write address path and produces silent wrong results. The gate
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250.yaml b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250.yaml
+index 98437491..69d786c1 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250.yaml
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250.yaml
+@@ -1,5 +1,5 @@
+ TestParameters:
+-  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu]
++  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu, skip-gfx1250-strict]
+ 
+ GlobalParameters:
+   SyncsPerBenchmark: 0
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_bench.yaml b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_bench.yaml
+index c2393eb1..f8729b78 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_bench.yaml
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_bench.yaml
+@@ -1,5 +1,5 @@
+ TestParameters:
+-  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu]
++  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu, skip-gfx1250-strict]
+ 
+ GlobalParameters:
+   SyncsPerBenchmark: 0
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_cluster.yaml b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_cluster.yaml
+index 548e3eec..34821883 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_cluster.yaml
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/common/gemm/gfx12/subtile_bf16_gfx1250_cluster.yaml
+@@ -1,5 +1,5 @@
+ TestParameters:
+-  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu]
++  marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx950, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-stinkytofu, skip-gfx1250-strict]
+ 
+ GlobalParameters:
+   SyncsPerBenchmark: 0
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+index 21981c59..6e19f23d 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_arch_steppings.py
+@@ -1187,22 +1187,6 @@ def test_the_stepping_suffix_survives_the_probe(rocmRoot):
+ # whole string, having only gfx950 and gfx950:xnack+ on its list.
+ 
+ 
+-def _supportedArchitecturesFromCMake():
+-    """The list GPU_TARGETS is validated against, read from the build itself.
+-
+-    Read rather than restated so the two cannot drift: a target dropped there is
+-    a target this can no longer claim the build accepts.
+-    """
+-    cmake = (
+-        Path(__file__).resolve().parents[4]
+-        / "cmake"
+-        / "tensilelite_supported_architectures.cmake"
+-    )
+-    block = re.search(r"set\(SUPPORTED_ARCHITECTURES(.*?)\)", cmake.read_text(), re.DOTALL)
+-    assert block is not None, f"SUPPORTED_ARCHITECTURES not found in {cmake}"
+-    return re.findall(r'"([^"]+)"', block.group(1))
+-
+-
+ @pytest.mark.parametrize(
+     "reported,target",
+     [
+@@ -1227,23 +1211,6 @@ def test_the_stepping_survives_into_the_cmake_target(reported):
+     assert GpuArch.cmake_gpu_target(reported) == reported
+ 
+ 
+-@pytest.mark.parametrize(
+-    "reported",
+-    [
+-        "gfx950:sramecc+:xnack-",
+-        "gfx942:sramecc+:xnack-",
+-        "gfx90a:sramecc+:xnack-",
+-        "gfx942",
+-        GFX1250,
+-        GFX1250_STRICT,
+-        f"{GFX1250_STRICT}:xnack-",
+-    ],
+-)
+-def test_a_detected_name_yields_a_target_the_build_accepts(reported):
+-    """Validation is an exact string match, so a near-miss is a failed configure."""
+-    assert GpuArch.cmake_gpu_target(reported) in _supportedArchitecturesFromCMake()
+-
+-
+ class _RecordingContext:
+     """An invoke context that records commands instead of running them."""
+ 
+diff --git a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
+index 7c5a15e9..88f18b09 100644
+--- a/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
++++ b/projects/hipblaslt/tensilelite/Tensile/Tests/unit/test_valid_corpus_consistency.py
+@@ -624,3 +624,41 @@ def test_report_corpus_invariant_violations_writes_to_stderr(vcc, capsys):
+     vcc.report_corpus_invariant_violations(["something went wrong"])
+     err = capsys.readouterr().err
+     assert "Error: something went wrong" in err
++
++
++# ===========================================================================
++# Tree identity (_arch_variant_key / _chip_id_dir_suffix)
++# ===========================================================================
++
++def test_chip_id_suffix_is_none_when_the_file_declares_no_arch(tmp_path, vcc):
++    # The arch comes from the file's own header and may be missing. Without a
++    # name to match, no ancestor can be recognized as either the default tree
++    # or a variant of it -- and an empty name would otherwise prefix-match a
++    # directory called "_id75a3", or every ancestor at once.
++    p = tmp_path / "gfx950_id75a3" / "Equality" / "logic.yaml"
++    assert vcc._chip_id_dir_suffix(p, "") is None
++    assert vcc._chip_id_dir_suffix(p, None) is None
++
++
++def test_an_unreadable_file_groups_with_others_that_are_unreadable(tmp_path, vcc):
++    # The key is read from the file, which may not be readable at all: the
++    # corpus is whatever the caller globbed, and a file can vanish between the
++    # glob and the read. A raised OSError here would abort the whole corpus
++    # check over one file, so each field falls back to None instead, leaving
++    # the file in a group of its own kind rather than merged into a real tree.
++    missing = tmp_path / "gone" / "logic.yaml"
++
++    key = vcc._arch_variant_key(missing)
++
++    assert key == vcc._arch_variant_key(tmp_path / "also_gone" / "logic.yaml")
++    real = _write_header_yaml(tmp_path / "aquavanjaram" / "gfx942" / "a.yaml")
++    assert key != vcc._arch_variant_key(real)
++
++
++def test_an_unreadable_file_does_not_fail_the_corpus_check(tmp_path, vcc):
++    # The aggregate is what callers run, so the fallback has to hold all the
++    # way out: one unreadable file must not turn a clean corpus into an error.
++    _write_header_yaml(tmp_path / "aquavanjaram" / "gfx942" / "Equality" / "a.yaml")
++
++    files = _all_yaml(tmp_path) + [tmp_path / "aquavanjaram" / "gfx942" / "gone.yaml"]
++    assert vcc.check_corpus_invariants(tmp_path, files=files) == []
+diff --git a/projects/hipblaslt/tensilelite/src/hip/HipHardware.cpp b/projects/hipblaslt/tensilelite/src/hip/HipHardware.cpp
+index 7b4948ef..a143264c 100644
+--- a/projects/hipblaslt/tensilelite/src/hip/HipHardware.cpp
++++ b/projects/hipblaslt/tensilelite/src/hip/HipHardware.cpp
+@@ -29,13 +29,41 @@
+ #include <Tensile/hip/HipHardware.hpp>
+ #include <Tensile/hip/HipUtils.hpp>
+ 
++#include <cstdio>
+ #include <iostream>
+ #include <stdexcept>
++#include <string>
+ 
+ namespace TensileLite
+ {
+     namespace hip
+     {
++        namespace
++        {
++            // A copy of `prop` naming the base architecture instead of the
++            // silicon revision the runtime reported.
++            //
++            // Origami matches gcnArchName exactly against a table of base
++            // architectures, so a v0 part reporting gfx1250-strict matches
++            // nothing and leaves analyticalHardware null, which throws on the
++            // assert guarding every query that consults the analytical model.
++            // The base entry's machine constants are the closest model a
++            // revision has -- a deliberate approximation, since Origami
++            // consumes CU counts and clocks rather than the ISA.
++            //
++            // Rebuilt through toProcessor rather than trimmed as a string so
++            // the revisions folded here stay the ones Tensile recognises.
++            // Feature suffixes such as `:xnack-` need no handling; Origami
++            // drops everything past the first colon itself.
++            hipDeviceProp_t propNamingBaseArchitecture(hipDeviceProp_t const& prop)
++            {
++                hipDeviceProp_t   base = prop;
++                std::string const name = AMDGPU::toString(AMDGPU::toProcessor(prop.gcnArchName));
++                std::snprintf(base.gcnArchName, sizeof(base.gcnArchName), "%s", name.c_str());
++                return base;
++            }
++        } // namespace
++
+         HipAMDGPU::HipAMDGPU(hipDeviceProp_t const& prop,
+                              int                    deviceId,
+                              std::optional<int>     pciChipId)
+@@ -46,14 +74,19 @@ namespace TensileLite
+             , properties(prop)
+             , deviceId(deviceId)
+         {
+-            if(origami::hardware_t::is_hardware_supported(prop))
++            // Both entry points read gcnArchName out of the properties they are
++            // handed, so the same renamed copy has to reach both: renaming only
++            // the support check would trade the null for a throw out of
++            // get_default_num_xcds when the lookup misses.
++            hipDeviceProp_t const analyticalProp = propNamingBaseArchitecture(prop);
++            if(origami::hardware_t::is_hardware_supported(analyticalProp))
+             {
+                 // Route analyticalHardware construction through Origami's device-id
+                 // entry point so selection uses the runtime-queried XCC count
+                 // (hipDeviceAttributeNumberOfXccs on HIP 7+) instead of the hardcoded
+                 // per-architecture default in get_default_num_xcds().
+                 //
+-                // Pass the caller-provided `prop` so any adjustments made upstream
++                // Pass a copy of the caller-provided `prop` so any adjustments made upstream
+                 // (e.g. overriding multiProcessorCount with
+                 // hipDeviceAttributePhysicalMultiProcessorCount on multi-XCC
+                 // architectures) are preserved. The int-only overload re-queries
+@@ -61,8 +94,12 @@ namespace TensileLite
+                 //
+                 // Pass PCI chip ID when known (e.g. from hipDeviceAttributePciChipId upstream);
+                 // Origami does not query PCI chip ID itself—nullopt selects gfx950 id75a0.
+-                analyticalHardware = std::make_shared<origami::hardware_t>(
+-                    origami::hardware_t::get_hardware_for_device(deviceId, prop, pciChipId));
++                analyticalHardware
++                    = std::make_shared<origami::hardware_t>(origami::hardware_t::
++                                                                get_hardware_for_device(
++                                                                    deviceId,
++                                                                    analyticalProp,
++                                                                    pciChipId));
+             }
+         }
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,28 @@
+From bf3cdc30176dd462bdb9d0baddaa018ba1e4d899 Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Mon, 14 Sep 2026 11:43:24 -0600
+Subject: [PATCH] Move changes to ROCm 10.2
+
+---
+ projects/rocprim/CHANGELOG.md | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/projects/rocprim/CHANGELOG.md b/projects/rocprim/CHANGELOG.md
+index 33679484..c106319b 100644
+--- a/projects/rocprim/CHANGELOG.md
++++ b/projects/rocprim/CHANGELOG.md
+@@ -2,7 +2,11 @@
+ 
+ Full documentation for rocPRIM is available at [https://rocm.docs.amd.com/projects/rocPRIM/en/latest/](https://rocm.docs.amd.com/projects/rocPRIM/en/latest/).
+ 
++<<<<<<< HEAD
+ ## rocPRIM 5.0.0 for ROCM 10.2.0
++=======
++## rocPRIM 5.0.0 for ROCm 10.2.0
++>>>>>>> f5dd6287fc1 (Move changes to ROCm 10.2)
+ 
+ ### Optimizations
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,54 @@
+From a4d53ab56acafdd24958822db6abfa02fa95432e Mon Sep 17 00:00:00 2001
+From: Stanley Tsang <stanley.tsang@amd.com>
+Date: Fri, 11 Sep 2026 14:37:53 -0600
+Subject: [PATCH] Clean up code, add missing entries
+
+---
+ .../rocprim/rocprim/include/rocprim/device/config_types.hpp   | 4 ++--
+ .../device/detail/config/device_merge_sort_block_merge.hpp    | 1 +
+ .../include/rocprim/device/detail/lookback_scan_state.hpp     | 2 +-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp b/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
+index c81239c6..87b2a0ab 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/config_types.hpp
+@@ -597,8 +597,8 @@ constexpr arch::wavefront::target get_wavefront_size(const gen gen = gen::unknow
+         case gen::cdna1:
+         case gen::cdna2:
+         case gen::cdna3:
+-        case gen::cdna4: 
+-        case gen::cdna5: return arch::wavefront::target::size64;
++        case gen::cdna4: return arch::wavefront::target::size64;
++        case gen::cdna5:
+         case gen::rdna1:
+         case gen::rdna2:
+         case gen::rdna3:
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp b/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
+index ef6c43ec..d98c223e 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/detail/config/device_merge_sort_block_merge.hpp
+@@ -3757,6 +3757,7 @@ using merge_sort_block_merge_targets
+                    comp_target<gen::cdna2, target_arch::gfx90a, gpu::mi210, rep::amdgcn>,
+                    comp_target<gen::cdna3, target_arch::gfx942, gpu::mi300x, rep::amdgcn>,
+                    comp_target<gen::rdna4, target_arch::gfx1201, gpu::rx9070, rep::amdgcn>,
++                   comp_target<gen::cdna5, target_arch::gfx1250, gpu::mi455x, rep::amdgcn>,
+                    comp_target<gen::unknown, target_arch::unknown, gpu::generic, rep::amdgcn>>;
+ 
+ } // end namespace detail
+diff --git a/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp b/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
+index ebd7300c..6c7a5628 100644
+--- a/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
++++ b/projects/rocprim/rocprim/include/rocprim/device/detail/lookback_scan_state.hpp
+@@ -46,7 +46,7 @@
+ // Global coherence of prefixes_*_values is ensured by atomic_load/atomic_store that bypass
+ // cache.
+ #ifndef ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES
+-    #if defined(__HIP_DEVICE_COMPILE__) && (defined(__gfx942__) || defined(__gfx950__) || defined(__gfx9_4_generic__)) || defined(__gfx1250__)
++    #if defined(__HIP_DEVICE_COMPILE__) && (defined(__gfx942__) || defined(__gfx950__) || defined(__gfx9_4_generic__) || defined(__gfx1250__)) 
+         #define ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES 1
+     #else
+         #define ROCPRIM_DETAIL_LOOKBACK_SCAN_STATE_WITHOUT_SLOW_FENCES 0
+-- 
+2.43.0
+
