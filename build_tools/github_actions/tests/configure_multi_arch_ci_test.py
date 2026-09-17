@@ -1205,7 +1205,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on",
             "sanity_check_only_for_family",
         }
-        optional_keys = {"test-runs-on-labels"}
+        optional_keys = {"test-runs-on-labels", "test_type"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
@@ -1978,8 +1978,8 @@ class TestFamilyTestFilters(unittest.TestCase):
                     return family_info
         return None
 
-    def test_gfx90a_always_runs_tests(self):
-        """gfx90a (no trigger_test_label_only) runs tests on push and workflow_dispatch."""
+    def test_gfx90a_runs_tests_on_push_and_workflow_dispatch(self):
+        """gfx90a (trigger_test_label_only) runs tests on push and workflow_dispatch."""
         test_cases = [
             {
                 "name": "push",
@@ -2048,22 +2048,52 @@ class TestFamilyTestFilters(unittest.TestCase):
                 "extra_inputs": {"linux_amdgpu_families": ["gfx125x"]},
                 "expect_tests": False,
             },
-            # gfx950 tests
+            # gfx90a tests (postsubmit family with trigger_test_label_only)
+            # ci:run-all-archs includes gfx90a in PRs, but tests need gfx90a label
             {
-                "name": "gfx950_push_with_label_enabled",
-                "family_key": "gfx950",
-                "family_name": "gfx950-dcgpu",
-                "event_name": "push",
-                "pr_labels": ["gfx950-dcgpu"],
+                "name": "gfx90a_pr_with_label_enabled",
+                "family_key": "gfx90a",
+                "family_name": "gfx90a",
+                "event_name": "pull_request",
+                "pr_labels": ["ci:run-all-archs", "gfx90a"],
                 "extra_inputs": {},
                 "expect_tests": True,
             },
             {
-                "name": "gfx950_push_without_label_disabled",
+                "name": "gfx90a_pr_without_label_disabled",
+                "family_key": "gfx90a",
+                "family_name": "gfx90a",
+                "event_name": "pull_request",
+                "pr_labels": ["ci:run-all-archs"],
+                "extra_inputs": {},
+                "expect_tests": False,
+            },
+            # gfx950 push tests - push (postsubmit) always runs tests regardless of label
+            {
+                "name": "gfx950_push_always_runs_tests",
                 "family_key": "gfx950",
                 "family_name": "gfx950-dcgpu",
                 "event_name": "push",
                 "pr_labels": [],
+                "extra_inputs": {},
+                "expect_tests": True,
+            },
+            # gfx950 PR tests - requires label (ci:run-all-archs includes it in PRs)
+            {
+                "name": "gfx950_pr_with_label_enabled",
+                "family_key": "gfx950",
+                "family_name": "gfx950-dcgpu",
+                "event_name": "pull_request",
+                "pr_labels": ["ci:run-all-archs", "gfx950-dcgpu"],
+                "extra_inputs": {},
+                "expect_tests": True,
+            },
+            {
+                "name": "gfx950_pr_without_label_disabled",
+                "family_key": "gfx950",
+                "family_name": "gfx950-dcgpu",
+                "event_name": "pull_request",
+                "pr_labels": ["ci:run-all-archs"],
                 "extra_inputs": {},
                 "expect_tests": False,
             },

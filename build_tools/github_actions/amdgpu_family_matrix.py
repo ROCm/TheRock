@@ -341,6 +341,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
+            # Only run tests when gfx90a label is present on PR
+            "trigger_test_label_only": True,
         },
         "windows": {
             "test-runs-on": "",
