@@ -253,8 +253,9 @@ if(THEROCK_ENABLE_ROCSHMEM4PY)
     _rocshmem4py_python_executables
     _rocshmem4py_python_versions
   )
-  # therock_cmake_subproject_declare does not preserve CMake lists in
-  # CMAKE_ARGS, so escape the separators before forwarding the interpreters.
+  # CMAKE_ARGS is stored in a target property and expanded again by the
+  # subproject's configure command. Escape the list separators across those
+  # boundaries so the child receives one -D value containing all interpreters.
   list(JOIN _rocshmem4py_python_executables "\;"
     _rocshmem4py_python_executables_str
   )

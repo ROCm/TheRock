@@ -80,6 +80,19 @@ including a commit hash). You can also set an explicit fixed version with the
 [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py).
 and the [versioning documentation](versioning.md) for more version formats.
 
+### rocshmem4py
+
+When rocSHMEM is enabled, TheRock also publishes CPython-specific
+`rocshmem4py` wheels. The upstream public package version is retained, while
+TheRock replaces its local version with the ROCm build identity described in
+the [versioning documentation](versioning.md). For example, a development wheel
+can have version `0.1.0+devrocm10.1.0.dev0.<commit>`, while release wheels use
+versions such as `0.1.0+rocm10.1.0`.
+
+Each wheel declares an exact `rocm-sdk-core==<ROCm version>` runtime
+requirement. This ensures that its compiled extension loads the ROCm libraries
+from the same TheRock build instead of mixing incompatible builds.
+
 ### Package Target Selection
 
 The GPU target selected by the `rocm` meta package is determined in the following
