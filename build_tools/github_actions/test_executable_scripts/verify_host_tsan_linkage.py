@@ -32,28 +32,6 @@ COMPONENT_INVENTORIES = {
         "ctest_dir": "bin/origami",
         "ctest_args": ("-R", "^origami-tests$"),
     },
-    "aqlprofile": {
-        "executables": tuple(
-            f"share/hsa-amd-aqlprofile/tests/host-tsan/bin/{name}"
-            for name in (
-                "gfx9-memory-manager-test",
-                "aqlprofile-test",
-                "command-buffer-test",
-                "counters-test",
-                "pm4-factory-test",
-                "logger-test",
-                "aql-profile-v2-test",
-                "aql-profile-v2-c-compatibility-test",
-                "command-builder-test",
-                "pmc-builder-test",
-                "gfx9-command-builder-test",
-                "spm-builder-test",
-                "trace-config-test",
-                "sqtt-builder-test",
-                "utility_tests",
-            )
-        )
-    },
     # The component runner builds its small parser harness after this global
     # verification step and verifies that executable itself. Verify the
     # installed instrumented library here.

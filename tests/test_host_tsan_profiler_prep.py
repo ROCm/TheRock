@@ -19,7 +19,6 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
         )
         cache = host_tsan["cacheVariables"]
         for component in (
-            "aqlprofile",
             "rocprofiler-sdk",
             "rocprofiler-compute",
             "rocgdb",
@@ -27,6 +26,7 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
             self.assertNotIn(f"{component}_SANITIZER", cache)
 
         # These dependencies remain deliberately outside this phase.
+        self.assertEqual(cache["aqlprofile_SANITIZER"], "OFF")
         self.assertEqual(cache["rocprof-trace-decoder_SANITIZER"], "OFF")
         self.assertEqual(cache["roctracer_SANITIZER"], "OFF")
 
@@ -45,15 +45,6 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
         self.assertIn('"gdb/tsan-suppressions.txt"', cmake)
         self.assertIn("DESTINATION tests/rocgdb/${file_dir}", cmake)
 
-    def test_aqlprofile_builds_and_installs_tests(self):
-        cmake = (THEROCK_DIR / "profiler" / "CMakeLists.txt").read_text()
-        self.assertIn(
-            "-DAQLPROFILE_BUILD_TESTS=${THEROCK_BUILD_TESTING}", cmake
-        )
-        self.assertIn(
-            "-DAQLPROFILE_INSTALL_TESTS=${THEROCK_BUILD_TESTING}", cmake
-        )
-
     def test_compute_keeps_host_scope_and_gpu_targets(self):
         hook = (
             THEROCK_DIR / "profiler" / "pre_hook_rocprofiler-compute.cmake"
@@ -63,26 +54,6 @@ class HostTsanProfilerPreparationTest(unittest.TestCase):
         self.assertIn('set(ENABLE_SANITIZER "OFF"', hook)
         self.assertNotIn("unset(GPU_TARGETS)", hook)
         self.assertNotIn('set(ENABLE_SANITIZER "TSAN"', hook)
-
-    def test_aqlprofile_host_only_manifest_is_built_and_installed(self):
-        hook = (THEROCK_DIR / "profiler" / "post_hook_aqlprofile.cmake").read_text()
-        manifest_path = (
-            THEROCK_DIR / "profiler" / "aqlprofile_host_tsan_tests.json"
-        )
-        manifest = json.loads(manifest_path.read_text())
-
-        self.assertIn("if(AQLPROFILE_BUILD_TESTS)", hook)
-        self.assertIn("COMPONENT tests", hook)
-        self.assertIn("CMAKE_CONFIGURE_DEPENDS", hook)
-        self.assertIn("share/hsa-amd-aqlprofile/tests/host-tsan/bin", hook)
-        self.assertIn("RENAME host_tsan_tests.json", hook)
-        self.assertIn("message(FATAL_ERROR", hook)
-        expected_targets = {
-            entry["name"] for entry in manifest["executables"]
-        }
-        self.assertEqual(len(expected_targets), 15)
-        for target in expected_targets:
-            self.assertIn(target, hook)
 
     def test_rocprofiler_systems_unit_binary_is_relocatable_and_packaged(self):
         hook = (

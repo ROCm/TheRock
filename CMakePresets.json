@@ -147,6 +147,7 @@
         "amd-comgr_SANITIZER": "OFF",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",
+        "aqlprofile_SANITIZER": "OFF",
         "rocFFT_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",

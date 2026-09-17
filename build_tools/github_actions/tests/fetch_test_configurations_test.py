@@ -578,7 +578,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "rocrtst",
                 "rccl",
                 "rocshmem",
-                "aqlprofile",
                 "rocprofiler-sdk",
                 "rocprofiler-compute",
                 "rocprofiler-systems",
@@ -634,7 +633,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("test_native_host_tsan.py", scripts["rocrtst"])
         self.assertIn("test_rccl_host_tsan.py", scripts["rccl"])
         self.assertIn("test_native_host_tsan.py", scripts["rocshmem"])
-        self.assertIn("test_aqlprofile_host_tsan.py", scripts["aqlprofile"])
         self.assertIn(
             "test_profiler_host_tsan.py", scripts["rocprofiler-systems"]
         )

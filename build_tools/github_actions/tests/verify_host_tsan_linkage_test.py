@@ -54,7 +54,6 @@ class IsElfTest(unittest.TestCase):
 class DiscoverElfExecutablesTest(unittest.TestCase):
     def test_profiler_inventories_are_explicit_and_fail_closed(self):
         expected_counts = {
-            "aqlprofile": 15,
             "rocprofiler-compute": 2,
             "rocprofiler-sdk": 3,
             "rocprofiler-systems": 1,

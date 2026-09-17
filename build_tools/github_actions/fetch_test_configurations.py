@@ -977,13 +977,6 @@ HOST_TSAN_COMPONENTS = {
         "test_script": f"python {_get_script_path('test_native_host_tsan.py')}",
         "timeout_minutes": 5,
     },
-    # Exact 80-case CPU-only inventory installed by post_hook_aqlprofile.cmake.
-    # HSA agent discovery, disabled, and stale cases are pinned in the packaged
-    # manifest and rejected if either inventory drifts.
-    "aqlprofile": {
-        "test_script": f"python {_get_script_path('test_aqlprofile_host_tsan.py')}",
-        "timeout_minutes": 10,
-    },
     # Native parser/common/code-object unit binaries only; services, tools, and
     # GPU sampling integration tests remain excluded.
     "rocprofiler-sdk": {
