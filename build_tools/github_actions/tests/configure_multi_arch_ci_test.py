@@ -24,7 +24,6 @@ from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -901,6 +900,93 @@ class TestSelectTargets(unittest.TestCase):
         self.assertIn("gfx125x", result.linux_families)
         # gfx950 is postsubmit-only, should NOT be in PR defaults
         self.assertNotIn("gfx950", result.linux_families)
+
+    def test_external_pull_request_linux_only_projects_skip_windows(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=["emulation/mirage", "emulation/rocjitsu"],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertEqual(result.windows_families, [])
+
+    def test_external_pull_request_windows_only_project_skips_linux(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=["shared/amdgpu-windows-interop"],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, [])
+        self.assertGreater(len(result.windows_families), 0)
+
+    def test_external_pull_request_wkmi_keeps_both_platforms(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=["shared/amdgpu-windows-interop/wkmi"],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertGreater(len(result.windows_families), 0)
+
+    def test_external_pull_request_mixed_platform_projects_keep_both(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=[
+                "emulation/rocjitsu",
+                "shared/amdgpu-windows-interop",
+            ],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertGreater(len(result.windows_families), 0)
+
+    def test_external_pull_request_unknown_project_keeps_both(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=["projects/unknown"],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertGreater(len(result.windows_families), 0)
+
+    def test_external_pull_request_known_and_unknown_projects_keep_both(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            changed_projects=["emulation/rocjitsu", "projects/unknown"],
+            external_repo='{"repository":"ROCm/rocm-systems","ref":"abc123"}',
+        )
+        result = cm.select_targets(inputs)
+        self.assertGreater(len(result.linux_families), 0)
+        self.assertGreater(len(result.windows_families), 0)
 
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""

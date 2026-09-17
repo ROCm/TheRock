@@ -329,6 +329,10 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         self.assertFalse(r.run_all_tests)
         self.assertFalse(r.skip_tests)
 
+    def test_wkmi_is_surfaced_separately(self):
+        r = self._configure(["shared/amdgpu-windows-interop/wkmi/lnx/x.cpp"])
+        self.assertEqual(r.changed_projects, "shared/amdgpu-windows-interop/wkmi")
+
     def test_emulation_components_are_surfaced(self):
         r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])
         self.assertEqual(
@@ -355,7 +359,7 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
 
     def test_declared_prefixes_are_wellformed(self):
         for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:
-            self.assertEqual(len(prefix.split("/")), 2, prefix)
+            self.assertGreaterEqual(len(prefix.split("/")), 2, prefix)
 
 
 if __name__ == "__main__":

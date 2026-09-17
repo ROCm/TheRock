@@ -86,6 +86,17 @@ from stage_reuse_decision import (
 
 _NULL_GIT_SHA = "0" * 40
 
+# Native platforms required by external-repository projects with intentionally
+# platform-specific CI coverage. The WSL stage is hosted by the Linux workflow,
+# so wkmi retains Linux in addition to Windows. Unknown projects conservatively
+# retain both native platforms.
+_EXTERNAL_PROJECT_NATIVE_PLATFORMS = {
+    "emulation/mirage": frozenset({"linux"}),
+    "emulation/rocjitsu": frozenset({"linux"}),
+    "shared/amdgpu-windows-interop": frozenset({"windows"}),
+    "shared/amdgpu-windows-interop/wkmi": frozenset({"linux", "windows"}),
+}
+
 # ---------------------------------------------------------------------------
 # Input parsing helpers
 # ---------------------------------------------------------------------------
@@ -850,6 +861,29 @@ def _filter_families_by_platform(
     ]
 
 
+def _get_external_project_native_platforms(
+    changed_projects: list[str],
+) -> frozenset[str] | None:
+    """Return native platforms for a fully mapped external project set.
+
+    ``None`` means that at least one project is unknown and both platforms must
+    be retained. Platform sets are unioned so mixed Linux-only and Windows-only
+    changes also retain both platforms.
+    """
+    if not changed_projects:
+        return None
+
+    selected_platforms: set[str] = set()
+    for project in changed_projects:
+        normalized = project.strip().rstrip("/").lower()
+        project_platforms = _EXTERNAL_PROJECT_NATIVE_PLATFORMS.get(normalized)
+        if project_platforms is None:
+            return None
+        selected_platforms.update(project_platforms)
+
+    return frozenset(selected_platforms)
+
+
 def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
@@ -949,6 +983,23 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
+
+    # External-repository PRs can omit a native platform when every changed
+    # project has an explicit platform mapping. Manual and scheduled runs keep
+    # their caller-selected coverage, and unknown projects fail open to both.
+    if ci_inputs.is_pull_request and ci_inputs.external_repo:
+        native_platforms = _get_external_project_native_platforms(
+            ci_inputs.changed_projects
+        )
+        if native_platforms is not None:
+            if "linux" not in native_platforms:
+                linux_names = []
+            if "windows" not in native_platforms:
+                windows_names = []
+            print(
+                "  External projects select native platforms: "
+                f"{sorted(native_platforms)}"
+            )
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
