@@ -257,6 +257,9 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       external_repo_config: ${{ inputs.external_repo_config }}
+      # Host-ASAN CPU testing only needs rocSHMEM from this stage. Avoid the
+      # unrelated RCCL build while preserving granular reuse elsewhere.
+      rebuild_artifacts: ${{ startsWith(inputs.build_variant_label, 'host-asan') && 'rocshmem' || inputs.rebuild_artifacts }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read

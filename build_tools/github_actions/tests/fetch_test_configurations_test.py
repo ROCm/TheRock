@@ -107,6 +107,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hipfile",
                 "rocprofiler-compute",
                 "rocprofiler-sdk",
+                "rocrtst",
+                "hip-tests",
+                "rocshmem",
             },
         )
         sanity = json.loads(self.gha_output["sanity_component"])
@@ -148,6 +151,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hipfile",
                 "rocprofiler-compute",
                 "rocprofiler-sdk",
+                "rocrtst",
+                "hip-tests",
+                "rocshmem",
             },
         )
         self.assertEqual(
@@ -306,6 +312,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             components["rocprofiler-sdk"]["fetch_artifact_args"],
             "--rocprofiler-sdk --tests",
         )
+
+    def test_host_asan_runtime_comm_uses_fail_closed_runners(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = "rocrtst,hip-tests,rocshmem"
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(set(components), {"rocrtst", "hip-tests", "rocshmem"})
+        self.assertIn(
+            "test_hiptests_host_asan.py", components["hip-tests"]["test_script"]
+        )
+        for key in ("rocrtst", "rocshmem"):
+            self.assertIn(
+                "test_rocr_rocshmem_host_asan.py", components[key]["test_script"]
+            )
+        self.assertEqual(
+            components["rocrtst"]["fetch_artifact_args"], "--rocrtst --tests"
+        )
+        for component in components.values():
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_runner"], "host-only")
 
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
