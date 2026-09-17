@@ -105,6 +105,7 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
                     "--amdgpu-families", families, "--output-mode", "device-extras"
                 )
                 self.assertEqual(out.splitlines()[0], "device-gfx1250")
+                self.assertNotIn("gfx1250-strict", out)
 
     def test_targets_mode_preserves_distinct_targets(self):
         self.assertEqual(
