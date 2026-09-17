@@ -12,10 +12,16 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
-# amdsmi uses _FORTIFY_SOURCE=2 which requires at least -O1; pin it to
-# RelWithDebInfo when the global build type is Debug to avoid a compile error.
+# When building Debug globally, certain components must be overridden:
+#   - amdsmi: uses _FORTIFY_SOURCE=2 which requires at least -O1
+#   - therock-host-blas / therock-host-blas64: OpenBLAS installs to a
+#     config-specific subdir (e.g. lib/Debug/) in Debug mode, breaking the
+#     expected path lib/host-math/lib/librocm-openblas.so
+#   - therock-SuiteSparse: third-party lib with no debug build support
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
+  set(therock-host-blas_BUILD_TYPE Release CACHE STRING "Build type for host-blas" FORCE)
+  set(therock-SuiteSparse_BUILD_TYPE Release CACHE STRING "Build type for SuiteSparse" FORCE)
 endif()
 
 project(THEROCK)
