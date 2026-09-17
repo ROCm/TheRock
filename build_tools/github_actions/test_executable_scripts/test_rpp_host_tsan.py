@@ -26,7 +26,46 @@ EXPECTED_NAMES = (
     "rpp_qa_tests_tensor_image_host_all",
     "rpp_qa_tests_tensor_misc_host_all",
 )
-EXECUTED_NAMES = EXPECTED_NAMES[1:]
+PRESUBMIT_CASES = {
+    # One positive host-only case from every image augmentation family not
+    # already covered by the direct brightness/color canary. Each case still
+    # exercises U8/F32 and every supported host layout conversion.
+    EXPECTED_NAMES[1]: (
+        "5",  # pixelate
+        "21",  # resize
+        "40",  # erode
+        "49",  # box_filter
+        "61",  # magnitude
+        "65",  # bitwise_and
+        "70",  # copy
+        "90",  # tensor_mean
+    ),
+    # Keep positive tensor-shape, normalization, logarithmic, composition,
+    # logical, addition, and division seams from the smaller misc suite.
+    EXPECTED_NAMES[2]: (
+        "0",  # transpose
+        "1",  # normalize
+        "2",  # log
+        "3",  # concat
+        "5",  # tensor_and_tensor
+        "8",  # tensor_add_tensor
+        "11",  # tensor_divide_tensor
+    ),
+}
+EXECUTED_NAMES = tuple(PRESUBMIT_CASES)
+PRESUBMIT_EXTRA_ARGS = {
+    EXPECTED_NAMES[1]: (),
+    # Preserve both a low and high tensor rank without running every rank.
+    EXPECTED_NAMES[2]: ("--num_dims_list", "2", "4"),
+}
+PRESUBMIT_EXPECTED_QA = {
+    EXPECTED_NAMES[1]: 181,
+    EXPECTED_NAMES[2]: 90,
+}
+PRESUBMIT_TIMEOUT_SECONDS = {
+    EXPECTED_NAMES[1]: 900,
+    EXPECTED_NAMES[2]: 600,
+}
 EXPECTED_INVENTORY_SHA256 = (
     "0e0c49f9da7bd690d8853f9347d454b010b743ee8f96a353afffe5365ec9a521"
 )
@@ -35,7 +74,9 @@ _CTEST_NAME_RE = re.compile(r"^\s*Test\s+#\d+:\s+(.+?)\s*$")
 _RPP_CHILD_FAILURE_RE = re.compile(
     r"Returned non-zero exit status\s*:|"
     r"(?:WARNING|FATAL|SUMMARY): ThreadSanitizer|"
-    r"Segmentation fault",
+    r"Segmentation fault|Invalid case name or number|"
+    r"Traceback \(most recent call last\)|ERROR: QA failures|"
+    r"\b(?:SIGSEGV|SIGABRT)\b",
     re.IGNORECASE,
 )
 
@@ -68,11 +109,20 @@ def _test_environment(prefix: Path) -> dict[str, str]:
     # value from sched_getaffinity or inherited host settings.
     env["OMP_NUM_THREADS"] = "4"
     env["OPENBLAS_NUM_THREADS"] = "1"
+    # Keep libomp workers active. Sleeping workers exercise libomp's internal
+    # futex/suspension implementation, which is not TSAN-instrumented and
+    # produces a false positive in __kmp_lock_suspend_mx.
+    env["OMP_WAIT_POLICY"] = "ACTIVE"
+    env["KMP_BLOCKTIME"] = "infinite"
     return env
 
 
 def _run(
-    command: list[str], env: dict[str, str], cwd: Path, capture: bool = False
+    command: list[str],
+    env: dict[str, str],
+    cwd: Path,
+    capture: bool = False,
+    timeout_seconds: int | None = None,
 ) -> subprocess.CompletedProcess:
     print(f"++ Exec [{cwd}]$ {shlex.join(command)}", flush=True)
     return subprocess.run(
@@ -82,6 +132,7 @@ def _run(
         check=True,
         capture_output=capture,
         text=True,
+        timeout=timeout_seconds,
     )
 
 
@@ -127,44 +178,80 @@ def _selected_commands(build_dir: Path, env: dict[str, str]) -> list[dict]:
     return tests
 
 
-def _run_ctest(
+def _registered_command(tests: list[dict], name: str) -> list[str]:
+    test = next((test for test in tests if test.get("name") == name), None)
+    if test is None or not isinstance(test.get("command"), list):
+        raise RuntimeError(f"RPP registered command is missing: {name}")
+    command = test["command"]
+    expected_script = {
+        EXPECTED_NAMES[1]: "runImageTests.py",
+        EXPECTED_NAMES[2]: "runMiscTests.py",
+    }[name]
+    if len(command) < 2 or Path(command[1]).name != expected_script:
+        raise RuntimeError(f"RPP registered command changed: {name}")
+    if any(
+        argument in command
+        for argument in ("--case_list", "--case_start", "--case_end")
+    ):
+        raise RuntimeError(f"RPP registered command already filters cases: {name}")
+    return command
+
+
+def _run_presubmit_suite(
     build_dir: Path,
     env: dict[str, str],
+    tests: list[dict],
     name: str,
     *,
     timeout_seconds: int,
 ) -> None:
+    cases = PRESUBMIT_CASES[name]
+    registered = _registered_command(tests, name)
     command = [
         "setarch",
         platform.machine(),
         "-R",
-        "ctest",
-        "--test-dir",
-        str(build_dir),
-        "-R",
-        f"^{re.escape(name)}$",
-        "--output-on-failure",
-        "--no-tests=error",
-        "--timeout",
-        str(timeout_seconds),
+        registered[0],
+        "-u",
+        *registered[1:],
+        *PRESUBMIT_EXTRA_ARGS[name],
+        "--case_list",
+        *cases,
     ]
-    executed = _run(command, env, build_dir, capture=True)
+    executed = _run(
+        command,
+        env,
+        build_dir,
+        capture=True,
+        timeout_seconds=timeout_seconds,
+    )
     output = executed.stdout + executed.stderr
     print(output, end="")
-    if re.search(r"\*\*\*Skipped|Not Run|did not run", output, re.IGNORECASE):
-        raise RuntimeError(f"RPP host-TSAN execution skipped {name}")
-    last_test_log = _read_last_test_log(build_dir)
-    if _RPP_CHILD_FAILURE_RE.search(output + "\n" + last_test_log):
+    if _RPP_CHILD_FAILURE_RE.search(output):
         raise RuntimeError(f"RPP host-TSAN child process failed: {name}")
-    if not re.search(r"100% tests passed,\s+0 tests failed out of 1\b", output):
-        raise RuntimeError(f"RPP host-TSAN test did not pass: {name}")
+    requested = re.search(
+        r"Total test cases including all subvariants REQUESTED =\s*(\d+)", output
+    )
+    passed = re.search(
+        r"Total test cases including all subvariants PASSED =\s*(\d+)", output
+    )
+    expected_qa = PRESUBMIT_EXPECTED_QA[name]
+    if (
+        requested is None
+        or passed is None
+        or int(requested.group(1)) != expected_qa
+        or requested.group(1) != passed.group(1)
+    ):
+        raise RuntimeError(
+            f"RPP host-TSAN QA summary did not pass: {name}; "
+            f"expected {expected_qa} requested and passed"
+        )
 
-
-def _read_last_test_log(build_dir: Path) -> str:
-    path = build_dir / "Testing" / "Temporary" / "LastTest.log"
-    if not path.is_file():
-        raise RuntimeError(f"RPP CTest did not produce its execution log: {path}")
-    return path.read_text(encoding="utf-8", errors="replace")
+    binary_name = {
+        EXPECTED_NAMES[1]: "Tensor_image_host",
+        EXPECTED_NAMES[2]: "Tensor_misc_host",
+    }[name]
+    require_direct_clang_tsan(build_dir / "build" / binary_name, env)
 
 
 def _brightness_payload(tests: list[dict]) -> list[str]:
@@ -215,6 +302,14 @@ def main() -> int:
         cxx_compiler = _compiler(prefix, "amdclang++")
         compile_flags = "-fsanitize=thread -fno-omit-frame-pointer"
         link_flags = "-fsanitize=thread -shared-libsan"
+        # The registered Python drivers create their own nested CMake build.
+        # Carry the same compiler and TSAN flags into that build rather than
+        # validating one binary and executing a different, unsanitized one.
+        env["CC"] = str(c_compiler)
+        env["CXX"] = str(cxx_compiler)
+        env["CFLAGS"] = compile_flags
+        env["CXXFLAGS"] = compile_flags
+        env["LDFLAGS"] = link_flags
 
         with tempfile.TemporaryDirectory(prefix="rpp-host-tsan-") as temp:
             build_dir = Path(temp)
@@ -270,14 +365,21 @@ def main() -> int:
             # the exact registered brightness F32 arguments instead.
             _run_brightness(build_dir, env, selected_tests)
 
-            # The comprehensive image and misc drivers are intentionally
-            # serial: both recreate the same nested build directory. The cloud
-            # CPU runner needs more than CTest's previous 600-second allowance.
-            # Their child-process logs are scanned explicitly because the
-            # upstream drivers currently print child failures without exiting
-            # nonzero themselves.
+            # The comprehensive drivers are intentionally serial because both
+            # recreate the same nested build directory. Full image QA takes
+            # hours under TSAN on the shared cloud CPU, so use an explicit
+            # positive presubmit allowlist covering every image family plus the
+            # core misc seams. Device cases remain absent. Output is scanned
+            # fail-closed because the drivers can print child failures and
+            # still exit zero.
             for name in EXECUTED_NAMES:
-                _run_ctest(build_dir, env, name, timeout_seconds=1500)
+                _run_presubmit_suite(
+                    build_dir,
+                    env,
+                    selected_tests,
+                    name,
+                    timeout_seconds=PRESUBMIT_TIMEOUT_SECONDS[name],
+                )
         return 0
     except (
         json.JSONDecodeError,
@@ -285,8 +387,11 @@ def main() -> int:
         OSError,
         RuntimeError,
         subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
     ) as error:
-        if isinstance(error, subprocess.CalledProcessError):
+        if isinstance(
+            error, (subprocess.CalledProcessError, subprocess.TimeoutExpired)
+        ):
             if error.stdout:
                 print(error.stdout, end="")
             if error.stderr:

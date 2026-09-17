@@ -56,6 +56,35 @@ class RppHostTsanTest(unittest.TestCase):
                 "rpp_qa_tests_tensor_misc_host_all",
             ),
         )
+        self.assertEqual(
+            test_rpp_host_tsan.PRESUBMIT_CASES[
+                "rpp_qa_tests_tensor_image_host_all"
+            ],
+            (
+                "5",
+                "21",
+                "40",
+                "49",
+                "61",
+                "65",
+                "70",
+                "90",
+            ),
+        )
+        self.assertEqual(
+            test_rpp_host_tsan.PRESUBMIT_CASES[
+                "rpp_qa_tests_tensor_misc_host_all"
+            ],
+            (
+                "0",
+                "1",
+                "2",
+                "3",
+                "5",
+                "8",
+                "11",
+            ),
+        )
 
     def test_inventory_change_fails_closed(self):
         with self.assertRaisesRegex(RuntimeError, "inventory changed"):
@@ -79,6 +108,8 @@ class RppHostTsanTest(unittest.TestCase):
 
         self.assertEqual(env["OMP_NUM_THREADS"], "4")
         self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual(env["OMP_WAIT_POLICY"], "ACTIVE")
+        self.assertEqual(env["KMP_BLOCKTIME"], "infinite")
         self.assertEqual(env["ROCM_PATH"], os.fspath(Path("/opt/rocm")))
         self.assertIn("/existing", env["LD_LIBRARY_PATH"].split(os.pathsep))
 
@@ -152,31 +183,120 @@ class RppHostTsanTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "wrapper changed"):
             test_rpp_host_tsan._brightness_payload(tests)
 
-    def test_comprehensive_ctest_uses_extended_timeout_without_parallelism(self):
+    def test_presubmit_suite_uses_registered_command_and_positive_case_list(self):
         completed = subprocess.CompletedProcess(
-            [], 0, "100% tests passed, 0 tests failed out of 1\n", ""
+            [],
+            0,
+            "Total test cases including all subvariants REQUESTED = 181\n"
+            "Total test cases including all subvariants PASSED = 181\n",
+            "",
         )
+        tests = [
+            {
+                "name": test_rpp_host_tsan.EXECUTED_NAMES[0],
+                "command": ["python", "/src/HOST/runImageTests.py", "--qa_mode", "1"],
+            }
+        ]
         with mock.patch.object(
             test_rpp_host_tsan, "_run", return_value=completed
         ) as run, mock.patch.object(
-            test_rpp_host_tsan, "_read_last_test_log", return_value=""
-        ):
-            test_rpp_host_tsan._run_ctest(
+            test_rpp_host_tsan, "require_direct_clang_tsan"
+        ) as linkage:
+            test_rpp_host_tsan._run_presubmit_suite(
                 Path("/tmp/rpp"),
                 {},
+                tests,
                 test_rpp_host_tsan.EXECUTED_NAMES[0],
-                timeout_seconds=1500,
+                timeout_seconds=900,
             )
 
         command = run.call_args.args[0]
         self.assertEqual(
             command[:3], ["setarch", test_rpp_host_tsan.platform.machine(), "-R"]
         )
-        self.assertEqual(command[command.index("--timeout") + 1], "1500")
-        self.assertNotIn("--parallel", command)
-        self.assertNotIn("--repeat", command)
+        self.assertEqual(
+            command[3:8],
+            [
+                "python",
+                "-u",
+                "/src/HOST/runImageTests.py",
+                "--qa_mode",
+                "1",
+            ],
+        )
+        self.assertEqual(
+            command[command.index("--case_list") + 1 :],
+            list(
+                test_rpp_host_tsan.PRESUBMIT_CASES[
+                    test_rpp_host_tsan.EXECUTED_NAMES[0]
+                ]
+            ),
+        )
+        self.assertEqual(run.call_args.kwargs["timeout_seconds"], 900)
+        linkage.assert_called_once_with(
+            Path("/tmp/rpp/build/Tensor_image_host"), {}
+        )
 
-    def test_comprehensive_ctest_fails_closed_on_child_process_error(self):
+    def test_misc_presubmit_limits_tensor_ranks(self):
+        completed = subprocess.CompletedProcess(
+            [],
+            0,
+            "Total test cases including all subvariants REQUESTED = 90\n"
+            "Total test cases including all subvariants PASSED = 90\n",
+            "",
+        )
+        name = test_rpp_host_tsan.EXECUTED_NAMES[1]
+        tests = [
+            {
+                "name": name,
+                "command": [
+                    "python",
+                    "/src/HOST/runMiscTests.py",
+                    "--qa_mode",
+                    "1",
+                ],
+            }
+        ]
+        with mock.patch.object(
+            test_rpp_host_tsan, "_run", return_value=completed
+        ) as run, mock.patch.object(
+            test_rpp_host_tsan, "require_direct_clang_tsan"
+        ):
+            test_rpp_host_tsan._run_presubmit_suite(
+                Path("/tmp/rpp"), {}, tests, name, timeout_seconds=600
+            )
+
+        command = run.call_args.args[0]
+        rank_index = command.index("--num_dims_list")
+        self.assertEqual(
+            command[rank_index : rank_index + 3],
+            ["--num_dims_list", "2", "4"],
+        )
+        self.assertLess(rank_index, command.index("--case_list"))
+        self.assertEqual(run.call_args.kwargs["timeout_seconds"], 600)
+
+    def test_presubmit_suite_rejects_missing_expected_qa_variants(self):
+        completed = subprocess.CompletedProcess(
+            [],
+            0,
+            "Total test cases including all subvariants REQUESTED = 180\n"
+            "Total test cases including all subvariants PASSED = 180\n",
+            "",
+        )
+        name = test_rpp_host_tsan.EXECUTED_NAMES[0]
+        tests = [
+            {
+                "name": name,
+                "command": ["python", "/src/HOST/runImageTests.py"],
+            }
+        ]
+        with mock.patch.object(test_rpp_host_tsan, "_run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "expected 181"):
+                test_rpp_host_tsan._run_presubmit_suite(
+                    Path("/tmp/rpp"), {}, tests, name, timeout_seconds=900
+                )
+
+    def test_presubmit_suite_fails_closed_on_child_process_error(self):
         completed = subprocess.CompletedProcess(
             [],
             0,
@@ -186,15 +306,20 @@ class RppHostTsanTest(unittest.TestCase):
         )
         with mock.patch.object(
             test_rpp_host_tsan, "_run", return_value=completed
-        ), mock.patch.object(
-            test_rpp_host_tsan,
-            "_read_last_test_log",
-            return_value="Returned non-zero exit status : 86 WARNING: ThreadSanitizer",
         ):
             with self.assertRaisesRegex(RuntimeError, "child process failed"):
-                test_rpp_host_tsan._run_ctest(
+                test_rpp_host_tsan._run_presubmit_suite(
                     Path("/tmp/rpp"),
                     {},
+                    [
+                        {
+                            "name": test_rpp_host_tsan.EXECUTED_NAMES[0],
+                            "command": [
+                                "python",
+                                "/src/HOST/runImageTests.py",
+                            ],
+                        }
+                    ],
                     test_rpp_host_tsan.EXECUTED_NAMES[0],
                     timeout_seconds=1500,
                 )
