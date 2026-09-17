@@ -393,31 +393,85 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
     return None
 
 
-def detect_sriov():
-    """Return True when running on an SR-IOV virtual function (VF).
+def _is_hypervisor_guest():
+    """True when the host CPU exposes the hypervisor flag (we run in a VM)."""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("flags") and "hypervisor" in line.split():
+                    return True
+    except OSError:
+        pass
+    return False
 
-    Mirrors detect_asic_filter.sh: reads the amdgpu
-    `current_virtualization_mode` sysfs node and treats a value of "SRIOV" or
-    "VF" as virtualized. Best-effort -- returns False on non-Linux hosts, when
-    the node is absent (bare metal / older drivers), or on any read error.
+
+def _amd_gpu_pci_devices():
+    """Yield sysfs paths of AMD (vendor 0x1002) display/accelerator PCI devices."""
+    import glob
+
+    for dev in glob.glob("/sys/bus/pci/devices/*"):
+        try:
+            with open(os.path.join(dev, "vendor")) as f:
+                if f.read().strip() != "0x1002":
+                    continue
+            with open(os.path.join(dev, "class")) as f:
+                cls = f.read().strip()
+        except OSError:
+            continue
+        # 0x03xxxx = display controller, 0x12xxxx = processing accelerator
+        # (e.g. MI300A) -- mirrors is_gpu_class() in detect_virtualization_modes.sh.
+        if cls.startswith("0x03") or cls.startswith("0x12"):
+            yield dev
+
+
+def detect_sriov():
+    """Return True when the GPU under test is virtualized (SR-IOV VF / SR-IOV
+    PF / running inside a VM guest), where host-privileged read/write APIs can
+    return AMDSMI_STATUS_NO_PERM.
+
+    Ported from ROCm's detect_virtualization_modes.sh (Charis Poag). NOTE: the
+    amdgpu `current_virtualization_mode` sysfs node does NOT exist (the old
+    detect_asic_filter.sh check that keyed on it never fired), so detection
+    relies on:
+      1. The `hypervisor` CPU flag in /proc/cpuinfo -> we are a VM guest. Inside
+         a guest a passed-through VF is indistinguishable from a plain amdgpu
+         device (physfn is host-only bookkeeping), so this is the only reliable
+         signal there -- and it is exactly the case for the CI SR-IOV MI300X
+         rig, whose GPU otherwise reports BAREMETAL.
+      2. PCI SR-IOV sysfs on the AMD GPU device node (host side): a `physfn`
+         symlink proves a VF; `sriov_numvfs > 0` proves an SR-IOV-enabled PF; a
+         `gim`-bound device is an SR-IOV host PF. Any of these => not bare metal.
+
+    Best-effort; returns False on non-Linux or on any error (treated as bare
+    metal, i.e. the SR-IOV-only tests still run).
     """
     if platform.system() != "Linux":
         return False
     try:
-        import glob
+        # (1) VM guest: the decisive signal for the CI VF rig.
+        if _is_hypervisor_guest():
+            return True
 
-        for path in glob.glob(
-            "/sys/class/drm/card*/device/current_virtualization_mode"
-        ):
+        # (2) Host-side SR-IOV sysfs cross-checks on the AMD GPU(s).
+        for dev in _amd_gpu_pci_devices():
+            # physfn symlink present => this device is a VF.
+            if os.path.exists(os.path.join(dev, "physfn")):
+                return True
+            # sriov_numvfs > 0 => SR-IOV-enabled PF.
             try:
-                with open(path) as f:
-                    mode = "".join(f.read().split()).upper()
-            except OSError:
-                continue
-            if mode in ("SRIOV", "VF"):
+                with open(os.path.join(dev, "sriov_numvfs")) as f:
+                    if int((f.read().strip() or "0")) > 0:
+                        return True
+            except (OSError, ValueError):
+                pass
+            # gim driver => SR-IOV host PF.
+            driver_link = os.path.join(dev, "driver")
+            if os.path.islink(driver_link) and (
+                os.path.basename(os.path.realpath(driver_link)) == "gim"
+            ):
                 return True
     except Exception as e:
-        print(f"# Warning: SR-IOV detection failed: {e}", file=sys.stderr)
+        print(f"# Warning: virtualization detection failed: {e}", file=sys.stderr)
     return False
 
 
@@ -699,12 +753,12 @@ def main():
         print(f"# Found environment exclude labels: {sorted(env_exclude_labels)}")
     print()
 
-    # Detect SR-IOV virtual functions so the ex_sriov suite variant is selected
-    # (VF) or excluded (bare metal). Only meaningful when the tree ships ex_sriov
-    # labels; harmless otherwise.
+    # Detect virtualization (SR-IOV VF / VM guest) so the ex_sriov suite variant
+    # is selected (virtualized) or excluded (bare metal). Only meaningful when
+    # the tree ships ex_sriov labels; harmless otherwise.
     is_sriov = detect_sriov()
     if "ex_sriov" in env_exclude_labels:
-        print(f"# SR-IOV (VF) detected: {is_sriov}")
+        print(f"# Virtualized (SR-IOV / VM guest) detected: {is_sriov}")
     print()
 
     # Generate a CTest resource-spec file when the component provides the
