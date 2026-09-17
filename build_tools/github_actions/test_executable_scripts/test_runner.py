@@ -88,8 +88,17 @@ COMPONENT_DIR_MAPPING = {
     "hipblasltprovider": "hipblaslt_plugin",
     "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
+    # Multi-GPU split jobs reuse the single-GPU component's test directory/binary.
+    "hipfft-multi-gpu": "hipfft",
+    "rocfft-multi-gpu": "rocfft",
     # Add more mappings as needed
 }
+
+# Job names (TEST_COMPONENT values) that run the multi-GPU only subset of a
+# component's tests. For these, the ctest label queried is "multigpu_<category>"
+# (e.g. multigpu_full) instead of the base "<category>" label, so the job selects
+# only the multi-GPU tests defined in the component's test_categories.yaml.
+MULTI_GPU_COMPONENTS = {"hipfft-multi-gpu", "rocfft-multi-gpu"}
 
 # Get the test component from environment (required - no default)
 test_component_job_name = os.getenv("TEST_COMPONENT")
@@ -511,12 +520,20 @@ def build_ctest_command(
     # a single -LE regex.  Multiple -LE flags are ANDed by ctest, which would
     # only exclude tests matching ALL patterns.  We need OR semantics instead.
     le_patterns = []
-    include_labels = [category]
+    # Multi-GPU split components select the namespaced "multigpu_<category>" label
+    # (e.g. multigpu_full) so they run only the multi-GPU subset defined in the
+    # component's test_categories.yaml. Single-GPU jobs use the base "<category>"
+    # label, which (thanks to ^...$ anchoring below) never matches multigpu_* tests.
+    if test_component_job_name in MULTI_GPU_COMPONENTS:
+        primary_label = f"multigpu_{category}"
+    else:
+        primary_label = category
+    include_labels = [primary_label]
 
-    # Exclude {category}_exclude and {category}_therock_ci_exclude when present.
+    # Exclude {primary_label}_exclude and {primary_label}_therock_ci_exclude when present.
     for category_exclude_label in (
-        f"{category}_exclude",
-        f"{category}_therock_ci_exclude",
+        f"{primary_label}_exclude",
+        f"{primary_label}_therock_ci_exclude",
     ):
         if category_exclude_label in exclude_labels:
             le_patterns.append(category_exclude_label)
