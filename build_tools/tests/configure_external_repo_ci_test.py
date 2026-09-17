@@ -340,9 +340,7 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         self.assertTrue(r.skip_tests)
 
     def test_emulation_change_does_not_expand_mixed_project_selection(self):
-        r = self._configure(
-            ["emulation/mirage/a.cpp", "projects/rocm-core/src/x.cpp"]
-        )
+        r = self._configure(["emulation/mirage/a.cpp", "projects/rocm-core/src/x.cpp"])
         self.assertEqual(r.changed_projects, "projects/rocm-core")
         self.assertFalse(r.run_all_tests)
         self.assertFalse(r.skip_tests)
