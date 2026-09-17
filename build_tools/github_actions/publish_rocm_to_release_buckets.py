@@ -9,7 +9,7 @@ These release file types are supported:
 - [x] tarballs
 - [x] python packages
 - [x] native linux packages
-- [ ] native windows packages
+- [x] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
 
@@ -42,6 +42,11 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/deb/
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
+
+    native windows packages (dev/nightly), with ``--platform windows``:
+
+    s3://therock-dev-artifacts/12345-windows/packages/msi/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/msi/20250101-12345/
 
 ASAN build variant:
 
@@ -278,6 +283,43 @@ def publish_native_linux_packages(
             raise FileNotFoundError(f"No {pkg_type} packages found at {source.s3_uri}")
 
 
+def publish_native_windows_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+) -> None:
+    """Copy native Windows MSI packages from the artifacts bucket to the release bucket.
+
+    The source MSIs were uploaded by upload_msi_packages.py (called from
+    multi_arch_build_native_windows_packages.yml) as loose .msi files.
+
+    dev/nightly example:
+        s3://therock-dev-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages/msi/20250101-12345/
+
+    prerelease example:
+        s3://therock-prerelease-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/msi/
+    """
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    today = datetime.date.today().strftime("%Y%m%d")
+
+    source = artifacts_root.native_windows_packages("msi")
+
+    base_path = "v5/rocm/core/packages"
+    if release_type == "prerelease":
+        dest_prefix = f"{base_path}/msi"
+    else:
+        dest_prefix = f"{base_path}/msi/{today}-{artifacts_root.run_id}"
+
+    dest = StorageLocation(dest_bucket.name, dest_prefix)
+    logger.info("Native msi packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    count = backend.copy_directory(source, dest)
+    logger.info("Copied %d files for msi packages", count)
+    if count == 0:
+        raise FileNotFoundError(f"No msi packages found at {source.s3_uri}")
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Publish ROCm release files to release buckets"
@@ -360,6 +402,8 @@ def main(argv: list[str]) -> None:
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
         )
+    if artifacts_root.platform == "windows" and not args.skip_native_packages:
+        publish_native_windows_packages(artifacts_root, args.release_type, backend)
 
 
 if __name__ == "__main__":
