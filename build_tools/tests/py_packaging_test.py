@@ -833,6 +833,49 @@ class KpackSplitCompletenessTest(TmpDirTestCase):
         )
 
 
+class Rocshmem4pyWheelCollectionTest(TmpDirTestCase):
+    def _collect(self) -> list[Path]:
+        from build_python_packages import collect_rocshmem4py_wheels
+
+        return collect_rocshmem4py_wheels(
+            artifact_dir=self.temp_dir / "artifacts",
+            dest_dir=self.temp_dir / "packages",
+        )
+
+    def test_missing_artifact_is_skipped(self):
+        self.assertEqual(self._collect(), [])
+        self.assertFalse((self.temp_dir / "packages" / "dist").exists())
+
+    def test_present_artifact_without_wheels_fails(self):
+        artifact_dir = self.temp_dir / "artifacts" / "rocshmem4py_lib_generic"
+        artifact_dir.mkdir(parents=True)
+
+        with self.assertRaisesRegex(RuntimeError, "contains no wheels"):
+            self._collect()
+
+    def test_wheels_are_copied_to_dist(self):
+        wheel_dir = (
+            self.temp_dir
+            / "artifacts"
+            / "rocshmem4py_lib_generic"
+            / "comm-libs"
+            / "rocshmem4py"
+            / "stage"
+            / "share"
+            / "rocshmem4py"
+            / "wheels"
+        )
+        wheel_dir.mkdir(parents=True)
+        wheel = wheel_dir / "rocshmem4py-0.1.0-cp312-cp312-linux_x86_64.whl"
+        wheel.write_text("wheel contents")
+
+        copied_wheels = self._collect()
+
+        expected = self.temp_dir / "packages" / "dist" / wheel.name
+        self.assertEqual(copied_wheels, [expected])
+        self.assertEqual(expected.read_text(), "wheel contents")
+
+
 class RequiredDistPackagesTest(TmpDirTestCase):
     """Tests for validating required files in the final dist directory."""
 

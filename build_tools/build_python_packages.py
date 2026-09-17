@@ -23,6 +23,7 @@ Example
 import argparse
 import functools
 import json
+import shutil
 import subprocess
 from pathlib import Path
 import sys
@@ -224,6 +225,43 @@ def validate_required_dist_packages(
     )
 
 
+def collect_rocshmem4py_wheels(*, artifact_dir: Path, dest_dir: Path) -> list[Path]:
+    """Copy wheels from the optional rocshmem4py artifact into dist/."""
+    rocshmem4py_artifact_dir = artifact_dir / "rocshmem4py_lib_generic"
+    if not rocshmem4py_artifact_dir.exists():
+        print(
+            "::warning::rocshmem4py artifact not found; skipping rocshmem4py wheels. "
+            "This is expected when rocSHMEM is disabled or when packaging "
+            "artifacts from an older build."
+        )
+        return []
+
+    wheel_dir = (
+        rocshmem4py_artifact_dir
+        / "comm-libs"
+        / "rocshmem4py"
+        / "stage"
+        / "share"
+        / "rocshmem4py"
+        / "wheels"
+    )
+    wheels = sorted(wheel_dir.glob("*.whl"))
+    if not wheels:
+        raise RuntimeError(
+            f"rocshmem4py artifact exists at {rocshmem4py_artifact_dir}, but "
+            f"contains no wheels in {wheel_dir}"
+        )
+
+    dist_dir = dest_dir / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    copied_wheels = []
+    for wheel in wheels:
+        destination = shutil.copy2(wheel, dist_dir)
+        copied_wheels.append(Path(destination))
+        print(f"::: Copied rocshmem4py wheel to {destination}")
+    return copied_wheels
+
+
 def run(args: argparse.Namespace):
     manifest = load_therock_manifest(args.artifact_dir)
     kpack_split = manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
@@ -343,6 +381,11 @@ def run(args: argparse.Namespace):
         _run_legacy(args, params, core, host_triple)
 
     if args.build_packages:
+        if sys.platform.startswith("linux"):
+            collect_rocshmem4py_wheels(
+                artifact_dir=args.artifact_dir,
+                dest_dir=args.dest_dir,
+            )
         validate_required_dist_packages(
             dest_dir=args.dest_dir,
             version=args.version,

@@ -127,6 +127,7 @@ jobs:
       VENV_DIR: ${{ contains(inputs.test_runs_on, 'windows') && format('{0}/.venv with spaces', github.workspace) || format('{0}/.venv', github.workspace) }}
       PROFILER_VENV_DIR: ${{ github.workspace }}/.venv-profiler
       ROCSHMEM4PY_VENV_DIR: ${{ github.workspace }}/.venv-rocshmem4py
+      ROCSHMEM4PY_VALIDATION_SCRIPT: ${{ github.workspace }}/.rocshmem4py-validation/build_tools/github_actions/validate_rocshmem4py_install.py
 
     steps:
       - name: Checkout
@@ -134,6 +135,22 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
+
+      # Use the workflow revision instead of the caller-selected repository/ref.
+      - name: Checkout rocshmem4py validation helper
+        if: ${{ runner.os == 'Linux' && inputs.package_find_links_url != '' }}
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .rocshmem4py-validation
+          persist-credentials: false
+          sparse-checkout: |
+            build_tools/github_actions/determine_version.py
+            build_tools/github_actions/github_actions_api.py
+            build_tools/github_actions/validate_rocshmem4py_install.py
+          sparse-checkout-cone-mode: false
 
       # actions/setup-python only has prebuilt binaries for Ubuntu
       - name: Set up Python
@@ -177,113 +194,36 @@ jobs:
 
       - name: Install rocshmem4py from packages
         id: install_rocshmem4py
-        if: ${{ !cancelled() && runner.os == 'Linux' && steps.install_libraries.outcome == 'success' }}
+        if: >-
+          ${{
+            !cancelled()
+            && runner.os == 'Linux'
+            && steps.install_libraries.outcome == 'success'
+            && inputs.package_find_links_url != ''
+          }}
         env:
           PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
           PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+          ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
-          # Keep this inline: repository/ref may select untrusted checkout code.
-          # Use the provisioned pip to install into a clean, pip-less venv.
-          python - <<'PY'
-          import os
-          import venv
-
-          venv.create(os.environ["ROCSHMEM4PY_VENV_DIR"], with_pip=False, clear=True)
-          PY
-
-          pip_args=(--disable-pip-version-check --no-cache-dir --only-binary=:all: --pre rocshmem4py)
-          if [[ -n "${PACKAGE_INDEX_URL}" ]]; then
-            pip_args+=(--index-url "${PACKAGE_INDEX_URL}")
-          else
-            pip_args+=(--no-index)
-          fi
-          if [[ -n "${PACKAGE_FIND_LINKS_URL}" ]]; then
-            pip_args+=(--find-links "${PACKAGE_FIND_LINKS_URL}")
-          fi
-
-          for attempt in {1..13}; do
-            if pip --python "${ROCSHMEM4PY_VENV_DIR}" install "${pip_args[@]}"; then
-              break
-            fi
-            if [[ "${attempt}" == 13 ]]; then
-              exit 1
-            fi
-            sleep 15
-          done
+          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
+            install \
+            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
+            --rocm-version="${ROCM_VERSION}" \
+            --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}"
 
       - name: Test installed rocshmem4py wheel
         if: ${{ !cancelled() && steps.install_rocshmem4py.outcome == 'success' }}
         timeout-minutes: 5
         env:
-          EXPECTED_ROCM_VERSION: ${{ inputs.rocm_version }}
           ROCSHMEM_HEAP_SIZE: 268435456
+          ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
-          # Parse installed metadata with the provisioned pip environment.
-          python - "${ROCSHMEM4PY_VENV_DIR}/bin/python" <<'PY'
-          import os
-          from importlib.metadata import distributions
-          import subprocess
-          import sys
-
-          from pip._vendor.packaging.requirements import Requirement
-          from pip._vendor.packaging.utils import canonicalize_name
-          from pip._vendor.packaging.version import Version
-
-          target_python = sys.argv[1]
-          target_site_packages = subprocess.check_output(
-              [
-                  target_python,
-                  "-c",
-                  "import sysconfig; print(sysconfig.get_path('purelib'))",
-              ],
-              text=True,
-          ).strip()
-          installed = {
-              canonicalize_name(dist.metadata["Name"]): dist
-              for dist in distributions(path=[target_site_packages])
-          }
-          rocshmem4py_dist = installed["rocshmem4py"]
-          core_dist = installed["rocm-sdk-core"]
-
-          wheel_version = Version(rocshmem4py_dist.version)
-
-          expected_rocm_version = Version(os.environ["EXPECTED_ROCM_VERSION"])
-          identity = "devrocm" if expected_rocm_version.is_devrelease else "rocm"
-          expected_local = Version(
-              f"0+{identity}{str(expected_rocm_version).replace('+', '-')}"
-          ).local
-          assert wheel_version.local == expected_local
-          assert Version(core_dist.version) == expected_rocm_version
-
-          core_requirements = [
-              requirement
-              for requirement in map(Requirement, rocshmem4py_dist.requires or [])
-              if canonicalize_name(requirement.name) == "rocm-sdk-core"
-          ]
-          assert len(core_requirements) == 1
-          assert str(core_requirements[0].specifier) == (
-              f"=={expected_rocm_version}"
-          )
-          PY
-
-          "${ROCSHMEM4PY_VENV_DIR}/bin/python" - <<'PY'
-          import _rocshmem4py
-          import rocshmem4py
-
-          assert rocshmem4py.__rocshmem_version__
-
-          rocshmem4py.set_hip_device_from_env()
-          unique_id = rocshmem4py.rocshmem_get_uniqueid()
-          rocshmem4py.rocshmem_init_attr(0, 1, unique_id)
-          try:
-              buffer = rocshmem4py.rocshmem_create_buffer(4096)
-              assert buffer.ptr > 0
-              buffer.free()
-          finally:
-              rocshmem4py.hip_device_synchronize()
-              rocshmem4py.rocshmem_barrier_all()
-              rocshmem4py.rocshmem_finalize()
-          PY
+          python "${ROCSHMEM4PY_VALIDATION_SCRIPT}" \
+            validate \
+            --venv-dir="${ROCSHMEM4PY_VENV_DIR}" \
+            --rocm-version="${ROCM_VERSION}"
 
       - name: Install rocm[libraries,devel]
         id: install_devel
