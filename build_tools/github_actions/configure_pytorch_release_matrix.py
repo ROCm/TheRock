@@ -13,8 +13,9 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from github_actions.github_actions_api import gha_set_output
+from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
 
+# Build matrix configuration.
 RELEASE_TYPES = [
     "ci",
     "dev",
@@ -27,6 +28,9 @@ RELEASE_TYPES = [
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
+# All configured refs currently share this build-version range. When upstream
+# support windows diverge, replace it with an ordered per-ref version map and
+# derive each ref's primary test version from the oldest entry in that map.
 RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
@@ -75,6 +79,27 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
     },
 }
 
+# Test coverage configuration.
+#
+# PyTorch test levels are additive:
+#
+# * none schedules no self-hosted GPU tests. The wheel build job still runs
+#   its build-time wheel validation.
+# * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
+PYTORCH_TEST_LEVELS = ["none", "standard"]
+
+# Release workflows limit standard GPU testing to one primary Python version
+# per PyTorch ref. Use Python 3.11 to align with upstream's ROCm trunk testing.
+# Revisit each ref's selection as upstream's test and support versions change:
+# https://github.com/pytorch/pytorch/blob/main/.github/workflows/trunk.yml
+# https://github.com/pytorch/pytorch/blob/main/RELEASE.md#python
+PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS = {
+    "release/2.12": "3.11",
+    "release/2.13": "3.11",
+    "release/2.14": "3.11",
+    "nightly": "3.11",
+}
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -116,6 +141,29 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
+def _primary_test_python_version(pytorch_git_ref: str) -> str:
+    """Return the primary test version for a PyTorch ref.
+
+    Unknown explicit refs use the nightly policy because bring-up branches
+    generally track upstream main.
+    """
+    return PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS.get(
+        pytorch_git_ref, PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS["nightly"]
+    )
+
+
+def _select_test_level(
+    *, release_type: str, python_version: str, pytorch_git_ref: str
+) -> str:
+    # multi_arch_ci does not schedule PyTorch GPU tests yet. Preserve its
+    # standard level until that workflow's test policy is selected explicitly.
+    if release_type == "ci":
+        return "standard"
+    if python_version == _primary_test_python_version(pytorch_git_ref):
+        return "standard"
+    return "none"
+
+
 def generate_pytorch_matrix_for_release_type(
     *,
     release_type: str,
@@ -147,13 +195,15 @@ def generate_pytorch_matrix_for_release_type(
     #   {
     #     "python_version": "3.10",
     #     "pytorch_git_ref": "release/2.12",
-    #     "amdgpu_families": "gfx94X-dcgpu"
+    #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "test_level": "none"
     #   },
     #   ...
     #   {
     #     "python_version": "3.14",
     #     "pytorch_git_ref": "nightly",
-    #     "amdgpu_families": "gfx94X-dcgpu"
+    #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "test_level": "none"
     #   }
     # ]
     matrix: list[dict[str, str]] = []
@@ -170,18 +220,123 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
-                # TODO(#7185): PyTorch nightly's requirements-ci.txt pins
-                # scikit-image==0.22.0, which has no cp314 wheel and fails to
-                # build from source. Build those wheels but skip their tests
-                # until that is fixed.
-                "test_amdgpu_families": (
-                    "none"
-                    if (platform, ref, py) == ("windows", "nightly", "3.14")
-                    else "auto"
+                "test_level": _select_test_level(
+                    release_type=release_type,
+                    python_version=py,
+                    pytorch_git_ref=ref,
                 ),
+                "test_amdgpu_families": "auto",
             }
             matrix.append(row)
     return matrix
+
+
+def format_matrix_summary(
+    *,
+    release_type: str,
+    platform: str,
+    python_versions: list[str] | None,
+    pytorch_git_refs: list[str] | None,
+    amdgpu_families: str,
+    matrix: list[dict[str, str]],
+) -> str:
+    """Format the resolved release matrix for logs and the job summary."""
+
+    level_counts = {
+        level: sum(row["test_level"] == level for row in matrix)
+        for level in PYTORCH_TEST_LEVELS
+    }
+    count_summary = (
+        ", ".join(
+            f"`{level}`: {count}" for level, count in level_counts.items() if count
+        )
+        or "none"
+    )
+    selected_refs = list(dict.fromkeys(row["pytorch_git_ref"] for row in matrix))
+    primary_versions = (
+        ", ".join(
+            f"`{ref}`: `{_primary_test_python_version(ref)}`" for ref in selected_refs
+        )
+        or "none"
+    )
+    lines = [
+        "## PyTorch Release Matrix",
+        "",
+        "| Setting | Value |",
+        "| --- | --- |",
+        f"| Release type | `{release_type}` |",
+        f"| Platform | `{platform}` |",
+        "| Python selection | "
+        + (
+            ", ".join(f"`{version}`" for version in python_versions)
+            if python_versions
+            else "default"
+        )
+        + " |",
+        "| PyTorch ref selection | "
+        + (
+            ", ".join(f"`{ref}`" for ref in pytorch_git_refs)
+            if pytorch_git_refs
+            else "default"
+        )
+        + " |",
+        f"| Requested AMDGPU families | `{amdgpu_families or 'none'}` |",
+        f"| Generated rows | {len(matrix)} ({count_summary}) |",
+    ]
+
+    if not matrix:
+        lines.extend(
+            [
+                "",
+                "**Decision:** No build rows remain after applying the "
+                "PyTorch-ref AMDGPU-family support filters.",
+            ]
+        )
+    elif release_type == "ci":
+        lines.extend(
+            [
+                "",
+                "CI rows remain `standard` until multi-arch CI schedules "
+                "PyTorch GPU tests and selects its test policy explicitly.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "",
+                "Standard GPU testing is assigned only to each PyTorch ref's "
+                f"primary Python version: {primary_versions}. Other versions "
+                "use `none`.",
+            ]
+        )
+
+    if matrix and level_counts["none"] == len(matrix):
+        lines.extend(
+            [
+                "",
+                "All generated rows use `none` because none uses its "
+                "PyTorch ref's primary test Python version.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "| Python | PyTorch ref | AMDGPU families | Test level |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for row in matrix:
+        families = ", ".join(
+            f"`{family}`" for family in _split_families(row["amdgpu_families"])
+        )
+        lines.append(
+            f"| `{row['python_version']}` | `{row['pytorch_git_ref']}` | "
+            f"{families} | `{row['test_level']}` |"
+        )
+    if not matrix:
+        lines.append("| none | none | none | none |")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,6 +396,16 @@ def main(argv: list[str] | None = None) -> int:
         pytorch_git_refs=pytorch_git_refs,
         amdgpu_families=args.amdgpu_families,
         platform=args.platform,
+    )
+    gha_append_step_summary(
+        format_matrix_summary(
+            release_type=args.release_type,
+            platform=args.platform,
+            python_versions=python_versions,
+            pytorch_git_refs=pytorch_git_refs,
+            amdgpu_families=args.amdgpu_families,
+            matrix=matrix,
+        )
     )
     gha_set_output({"pytorch_matrix": json.dumps(matrix)})
     return 0

@@ -42,6 +42,10 @@ on:
           - quick
           - standard
         default: "quick"
+      build_only:
+        description: 'Build only - skip test triggers (still produces artifacts)'
+        type: boolean
+        default: false
       dry_run:
         description: 'Dry run - create branch but do not trigger builds'
         type: boolean
@@ -55,6 +59,7 @@ permissions:
 run-name: >-
   Compiler Bump (${{ inputs.branch_suffix || 'COT' }})
   | Test: ${{ inputs.test_type || 'quick' }}
+  ${{ inputs.build_only && '| Build Only' || '' }}
 
 jobs:
   # ==========================================================================
@@ -175,8 +180,8 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "all"
       windows_amdgpu_families: "none"
-      build_pytorch: false
-      build_jax: false
+      build_pytorch: true
+      build_jax: true
       repository: ${{ github.repository }}
       ref: ${{ needs.create-branch.outputs.branch_name }}
     secrets: inherit
@@ -373,42 +378,36 @@ jobs:
             --build-variant="release"
 
   # ==========================================================================
-  # Phase 2 - ASAN: Build only (no packaging, no tests)
+  # Phase 2 - ASAN: Dispatch as separate workflow (gets its own run_id)
   # ==========================================================================
-  setup-asan:
-    name: Setup ASAN Build
+  dispatch-asan-build:
+    name: Dispatch ASAN Build
     needs: create-branch
     if: ${{ inputs.dry_run != true }}
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan-debug"
-      release_type: dev
-      linux_amdgpu_families: "all"
-      windows_amdgpu_families: "none"
-      build_pytorch: false
-      build_jax: false
-      repository: ${{ github.repository }}
-      ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    runs-on: ubuntu-24.04
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
+    steps:
+      - name: Dispatch multi_arch_release_asan
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_asan.yml
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+          inputs: |
+            {
+              "release_type": "dev",
+              "linux_amdgpu_families": "all",
+              "build_pytorch": "false"
+            }
 
-  build-linux-asan:
-    name: Build Linux ASAN
-    needs: [create-branch, setup-asan]
-    if: ${{ inputs.dry_run != true && needs.setup-asan.outputs.linux_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit
-    with:
-      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-asan.outputs.linux_build_config).per_family_info) }}
-      dist_amdgpu_families: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).dist_amdgpu_families }}
-      artifact_group: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).artifact_group }}
-      build_variant_label: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_label }}
-      build_variant_cmake_preset: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_cmake_preset }}
-      build_variant_suffix: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on }}
-      rocm_package_version: ${{ needs.setup-asan.outputs.rocm_package_version }}
-      release_type: dev
-      repository: ${{ github.repository }}
-      ref: ${{ needs.setup-asan.outputs.ref }}
+      - name: Output ASAN run URL
+        run: |
+          echo "## ASAN Build Dispatched" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run URL:** ${{ steps.dispatch.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+          echo ""
+          echo "ASAN build runs as a separate workflow to ensure artifacts are stored"
+          echo "under a unique run_id, preventing mixing with release artifacts."
 
   # ==========================================================================
   # Phase 3 - Testing: gfx94x (Linux) and gfx110x (Windows) only
@@ -416,7 +415,7 @@ jobs:
   trigger-linux-tests:
     name: Trigger Linux Tests (gfx94X-dcgpu)
     needs: [create-branch, setup-linux, build-linux]
-    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
@@ -459,7 +458,7 @@ jobs:
   trigger-windows-tests:
     name: Trigger Windows Tests (gfx110X-all)
     needs: [create-branch, setup-windows, build-windows]
-    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     outputs:
       test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
@@ -516,8 +515,7 @@ jobs:
       - build-windows-tarballs
       - build-windows-python-packages
       - publish-windows-artifacts
-      - setup-asan
-      - build-linux-asan
+      - dispatch-asan-build
       - trigger-linux-tests
       - trigger-windows-tests
     if: always()
@@ -655,19 +653,30 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### ASAN" >> "$GITHUB_STEP_SUMMARY"
 
-          # Linux ASAN build
-          if [ "${{ needs.build-linux-asan.result }}" == "success" ]; then
-            echo "- :white_check_mark: Linux ASAN Build (all architectures)" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.build-linux-asan.result }}" == "failure" ]; then
-            echo "- :x: Linux ASAN Build failed" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.build-linux-asan.result }}" == "skipped" ]; then
-            echo "- :fast_forward: Linux ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          # ASAN build (dispatched as separate workflow)
+          if [ "${{ needs.dispatch-asan-build.result }}" == "success" ]; then
+            ASAN_URL="${{ needs.dispatch-asan-build.outputs.run_url }}"
+            if [ -n "$ASAN_URL" ]; then
+              echo "- :white_check_mark: ASAN Build dispatched: [View Run]($ASAN_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: ASAN Build dispatched" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.dispatch-asan-build.result }}" == "failure" ]; then
+            echo "- :x: ASAN Build dispatch failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.dispatch-asan-build.result }}" == "skipped" ]; then
+            echo "- :fast_forward: ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Dry run note
           if [ "${{ inputs.dry_run }}" == "true" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "> **Dry Run:** Branch was created but no builds were triggered." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Build only note
+          if [ "${{ inputs.build_only }}" == "true" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Build Only:** Tests were skipped as requested." >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Build outputs
@@ -692,6 +701,7 @@ jobs:
           echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Test Type | \`${{ inputs.test_type || 'quick' }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build Only | \`${{ inputs.build_only || 'false' }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Linux Test Family | \`gfx94X-dcgpu\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Windows Test Family | \`gfx110X-all\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| llvm-project | \`${{ inputs.llvm_ref || 'amd-staging' }}\` |" >> "$GITHUB_STEP_SUMMARY"

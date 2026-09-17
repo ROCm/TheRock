@@ -38,6 +38,9 @@ _KFD_DEVICE = "/dev/kfd"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
+# TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
+_ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
+
 
 def _get_kfd_version() -> Tuple[int, int]:
     # fcntl is a Unix-only stdlib module and is only needed for this Linux
@@ -142,12 +145,24 @@ def run_sanity(os_name: str) -> int:
             args=["static"],
             extra_command_search_paths=[bin_dir],
         )
-        run_command_with_search(
-            label="rocminfo",
-            command="rocminfo",
-            args=[],
-            extra_command_search_paths=[bin_dir],
+        # Check if rocminfo should be skipped for this GPU family
+        amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        skip_rocminfo = any(
+            family in amdgpu_families for family in _ROCMINFO_EXCLUDED_FAMILIES
         )
+        if skip_rocminfo:
+            log(f"\n=== rocminfo ===")
+            log(
+                f"Skipping rocminfo: disabled for {amdgpu_families} "
+                f"(excluded families: {_ROCMINFO_EXCLUDED_FAMILIES}), see #7659"
+            )
+        else:
+            run_command_with_search(
+                label="rocminfo",
+                command="rocminfo",
+                args=[],
+                extra_command_search_paths=[bin_dir],
+            )
         run_command_with_search(
             label="Kernel version",
             command="uname",

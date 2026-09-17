@@ -107,6 +107,14 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "projects/composablekernel": ["composable_kernel"],
     "projects/cuid": ["rdc"],
     "projects/hip": ["hip-clr"],
+    # TensileLite is vendored inside hipBLASLt rather than being its own
+    # subtree, so rocm-libraries change detection reports the nested path
+    # "projects/hipblaslt/tensilelite" (see rocm-libraries#11785). Without an
+    # alias that string falls through to the `projects/` strip, yields the
+    # non-existent graph key "hipblaslt/tensilelite", and selects no tests at
+    # all. "tensilelite" is a synthetic level-3 node, so this also pulls in
+    # hipblaslt/rocblas/hipblas transitively.
+    "projects/hipblaslt/tensilelite": ["tensilelite"],
     "projects/hipother": ["hip-clr"],
     "projects/rocdbgapi": ["amd-dbgapi"],
     "projects/rocm-smi-lib": ["rocm_smi_lib"],
@@ -118,6 +126,7 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
 }
 
 

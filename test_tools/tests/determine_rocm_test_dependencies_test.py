@@ -299,6 +299,42 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("amdsmi", projects)
         self.assertIn("rdc", projects)
 
+    def test_nested_tensilelite_prefix_mapped(self) -> None:
+        # TensileLite is vendored inside hipBLASLt, so rocm-libraries change
+        # detection reports the nested subtree path. Without an alias this
+        # resolved to the non-existent graph key "hipblaslt/tensilelite" and
+        # selected nothing, letting TensileLite changes merge untested
+        # (rocm-libraries#11518, reverted by rocm-libraries#12022).
+        # Declares the synthetic node the real test_policies.toml also declares,
+        # so the walk past the alias is exercised rather than stubbed out.
+        root = _make_fixture(
+            policies='[synthetic.tensilelite]\nconsumers = ["hipblaslt"]\n'
+        )
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/hipblaslt/tensilelite",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(
+                set(json.loads(proc.stdout.strip())), {"tensilelite", "hipblaslt"}
+            )
+            # Clean stderr is part of the assertion: the regression was a
+            # warning plus an empty selection, not a non-zero exit.
+            self.assertEqual(proc.stderr, "")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_shared_rocroller_prefix_mapped(self) -> None:
         proc = self._run("--changed-projects", "shared/rocroller", "--level", "4")
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -546,6 +582,15 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rdc", projects)  # amdsmi direct consumer
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)  # rocroller direct consumer
+
+    def test_rocgdb_graph_node_expands_to_runnable_test_jobs(self) -> None:
+        proc = self._run("--changed-projects", "amd-dbgapi", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = set(json.loads(proc.stdout.strip()))
+        self.assertNotIn("rocgdb", projects)
+        self.assertTrue(
+            {"rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"}.issubset(projects)
+        )
 
     def test_unmapped_external_namespace_fails(self) -> None:
         proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
