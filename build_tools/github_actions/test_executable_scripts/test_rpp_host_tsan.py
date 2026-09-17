@@ -43,6 +43,25 @@ def _compiler(prefix: Path, name: str) -> Path:
     raise RuntimeError(f"artifact compiler not found: {name}")
 
 
+def _test_environment(prefix: Path) -> dict[str, str]:
+    env = native_host_tsan_environment()
+    env["ROCM_PATH"] = str(prefix)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(
+        [
+            str(prefix / "lib"),
+            str(prefix / "lib" / "rocm_sysdeps" / "lib"),
+            str(prefix / "lib" / "llvm" / "lib"),
+            env.get("LD_LIBRARY_PATH", ""),
+        ]
+    ).rstrip(os.pathsep)
+    # The CI CPU allocation is not always exported as KUBE_CPU_REQUEST.
+    # Bound OpenMP/BLAS explicitly so the image and misc suites cannot
+    # oversubscribe the pod until the component timeout kills the runner.
+    env.setdefault("OMP_NUM_THREADS", "1")
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    return env
+
+
 def _run(
     command: list[str], env: dict[str, str], cwd: Path, capture: bool = False
 ) -> subprocess.CompletedProcess:
@@ -107,16 +126,7 @@ def main() -> int:
         if not source_dir.is_dir():
             raise RuntimeError(f"installed RPP test source is missing: {source_dir}")
 
-        env = native_host_tsan_environment()
-        env["ROCM_PATH"] = str(prefix)
-        env["LD_LIBRARY_PATH"] = os.pathsep.join(
-            [
-                str(prefix / "lib"),
-                str(prefix / "lib" / "rocm_sysdeps" / "lib"),
-                str(prefix / "lib" / "llvm" / "lib"),
-                env.get("LD_LIBRARY_PATH", ""),
-            ]
-        ).rstrip(os.pathsep)
+        env = _test_environment(prefix)
 
         c_compiler = _compiler(prefix, "amdclang")
         cxx_compiler = _compiler(prefix, "amdclang++")
@@ -180,6 +190,8 @@ def main() -> int:
                     TEST_REGEX,
                     "--output-on-failure",
                     "--no-tests=error",
+                    "--timeout",
+                    "600",
                 ],
                 env,
                 build_dir,

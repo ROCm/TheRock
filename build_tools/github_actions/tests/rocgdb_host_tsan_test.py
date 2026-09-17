@@ -114,7 +114,7 @@ class RocgdbHostTsanTest(unittest.TestCase):
         test_rocgdb_host_tsan.validate_outcome_profile(self._valid_outcome_log())
 
     def test_outcome_count_drift_fails_closed(self):
-        output = self._valid_outcome_log().replace("PASS: 2331", "PASS: 2330")
+        output = self._valid_outcome_log().replace("PASS: 2336", "PASS: 2335")
         with self.assertRaisesRegex(RuntimeError, "outcome profile changed"):
             test_rocgdb_host_tsan.validate_outcome_profile(output)
 

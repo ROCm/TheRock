@@ -46,19 +46,19 @@ EXPECTED_USED_LLVM_XFAILS = tuple(
 )
 EXPECTED_UNUSED_LLVM_XFAILS = ("gdb.dwarf2/fission-dw-form-strx.exp",)
 EXPECTED_OUTCOME_COUNTS = {
-    "GCC": {"PASS": 2715, "UNSUPPORTED": 13, "KFAIL": 6},
+    "GCC": {"PASS": 2720, "UNSUPPORTED": 12, "KFAIL": 6},
     "LLVM": {
-        "PASS": 2331,
+        "PASS": 2336,
         "FAIL": 10,
         "UNTESTED": 12,
-        "UNSUPPORTED": 38,
+        "UNSUPPORTED": 37,
         "KFAIL": 4,
     },
 }
 OUTCOME_VALIDATION_MARKER = (
     "Validated ROCgdb CPU-only host-TSAN outcome profile: "
-    "GCC pass=2715 unsupported=13 kfail=6; "
-    "LLVM pass=2331 fail=10 untested=12 unsupported=38 kfail=4; "
+    "GCC pass=2720 unsupported=12 kfail=6; "
+    "LLVM pass=2336 fail=10 untested=12 unsupported=37 kfail=4; "
     "approved failed files=8; unused approval files=1."
 )
 

@@ -6,6 +6,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT_DIR = Path(__file__).parent.parent / "test_executable_scripts"
 sys.path.insert(0, os.fspath(SCRIPT_DIR))
@@ -59,6 +60,30 @@ class RppHostTsanTest(unittest.TestCase):
             verify_host_tsan_linkage.COMPONENT_INVENTORIES["rpp"],
             {"libraries": ("lib/librpp.so",)},
         )
+
+    def test_environment_bounds_parallel_runtimes_when_ci_omits_limits(self):
+        with mock.patch.object(
+            test_rpp_host_tsan,
+            "native_host_tsan_environment",
+            return_value={"LD_LIBRARY_PATH": "/existing"},
+        ):
+            env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
+
+        self.assertEqual(env["OMP_NUM_THREADS"], "1")
+        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual(env["ROCM_PATH"], os.fspath(Path("/opt/rocm")))
+        self.assertIn("/existing", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+    def test_environment_preserves_explicit_parallel_runtime_limits(self):
+        with mock.patch.object(
+            test_rpp_host_tsan,
+            "native_host_tsan_environment",
+            return_value={"OMP_NUM_THREADS": "4", "OPENBLAS_NUM_THREADS": "2"},
+        ):
+            env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
+
+        self.assertEqual(env["OMP_NUM_THREADS"], "4")
+        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "2")
 
 
 if __name__ == "__main__":

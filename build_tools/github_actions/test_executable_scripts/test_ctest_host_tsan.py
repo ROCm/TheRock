@@ -257,6 +257,11 @@ def main() -> int:
         RuntimeError,
         subprocess.CalledProcessError,
     ) as error:
+        if isinstance(error, subprocess.CalledProcessError):
+            if error.stdout:
+                print(error.stdout, end="")
+            if error.stderr:
+                print(error.stderr, end="", file=sys.stderr)
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 

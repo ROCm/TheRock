@@ -141,6 +141,10 @@ def _validate_result(executable: Path, output: str, expected: dict) -> None:
 
 def _test_environment(prefix: Path, component: str) -> dict[str, str]:
     env = native_host_tsan_environment()
+    # Some SDK tests locate packaged tools (notably llvm-symbolizer) from the
+    # ROCm prefix instead of TSAN_SYMBOLIZER_PATH. Keep the strict no-skip
+    # contract by exposing the artifact prefix through the standard variable.
+    env["ROCM_PATH"] = str(prefix)
     library_dirs = (
         prefix / "lib",
         prefix / "lib" / "rocm_sysdeps" / "lib",

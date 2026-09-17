@@ -1183,9 +1183,8 @@ def run():
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
         if (
-            not host_only_tests
+            expanded_test_labels
             and key != "sanity"
-            and expanded_test_labels
             and key not in expanded_test_labels
         ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")

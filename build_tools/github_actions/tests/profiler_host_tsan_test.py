@@ -90,6 +90,7 @@ class ProfilerHostTsanTest(unittest.TestCase):
                 Path("/opt/rocm"), "rocprofiler-sdk"
             )
         self.assertNotIn("LD_PRELOAD", env)
+        self.assertEqual(env["ROCM_PATH"], os.fspath(Path("/opt/rocm")))
         self.assertEqual(
             env["ROCPROFILER_METRICS_PATH"],
             os.fspath(Path("/opt/rocm/share/rocprofiler-sdk")),

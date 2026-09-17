@@ -641,6 +641,28 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "test_profiler_host_tsan.py", scripts["rocprofiler-compute"]
         )
 
+    def test_host_tsan_test_labels_select_only_requested_components(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-tsan"
+        os.environ["TEST_LABELS"] = json.dumps(
+            [
+                "test:rpp",
+                "test:rocprofiler-sdk",
+                "test:hipfile",
+                "test:rocgdb-cpu",
+            ]
+        )
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(
+            json.loads(self.gha_output["sanity_component"])["job_name"], "sanity"
+        )
+        self.assertEqual(
+            {component["job_name"] for component in self._get_components()},
+            {"rpp", "rocprofiler-sdk", "hipfile", "rocgdb-cpu"},
+        )
+
     def test_host_only_rejects_non_tsan_variant(self):
         os.environ["HOST_ONLY_TESTS"] = "true"
         os.environ["BUILD_VARIANT"] = "host-asan"
