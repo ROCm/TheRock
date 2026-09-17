@@ -177,6 +177,13 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
 COMPONENT_OVERRIDES = {
+    # amdsmi installs its amdsmitst gtest binary under share/amd_smi/tests, and
+    # the generated install-time CTestTestfile.cmake one directory below it
+    # (share/amd_smi/tests/ctest) so its relative "../amdsmitst" path resolves.
+    # Point ctest at that fragment directory instead of the default bin/amdsmi.
+    "amdsmi": {
+        "test_dir": ["share", "amd_smi", "tests", "ctest"],
+    },
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
     # internally (-n), so concurrent ctest jobs over-subscribe.
@@ -382,18 +389,103 @@ def find_matching_gpu_arch(gpu_arch: str, available_gpu_archs: set[str]) -> str 
     return None
 
 
+def _is_hypervisor_guest():
+    """True when the host CPU exposes the hypervisor flag (we run in a VM)."""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("flags") and "hypervisor" in line.split():
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+def _amd_gpu_pci_devices():
+    """Yield sysfs paths of AMD (vendor 0x1002) display/accelerator PCI devices."""
+    import glob
+
+    for dev in glob.glob("/sys/bus/pci/devices/*"):
+        try:
+            with open(os.path.join(dev, "vendor")) as f:
+                if f.read().strip() != "0x1002":
+                    continue
+            with open(os.path.join(dev, "class")) as f:
+                cls = f.read().strip()
+        except OSError:
+            continue
+        # 0x03xxxx = display controller, 0x12xxxx = processing accelerator
+        # (e.g. MI300A) -- mirrors is_gpu_class() in detect_virtualization_modes.sh.
+        if cls.startswith("0x03") or cls.startswith("0x12"):
+            yield dev
+
+
+def detect_sriov():
+    """Return True when the GPU under test is virtualized (SR-IOV VF / SR-IOV
+    PF / running inside a VM guest), where host-privileged read/write APIs can
+    return AMDSMI_STATUS_NO_PERM.
+
+    Ported from ROCm's detect_virtualization_modes.sh (Charis Poag). NOTE: the
+    amdgpu `current_virtualization_mode` sysfs node does NOT exist (the old
+    detect_asic_filter.sh check that keyed on it never fired), so detection
+    relies on:
+      1. The `hypervisor` CPU flag in /proc/cpuinfo -> we are a VM guest. Inside
+         a guest a passed-through VF is indistinguishable from a plain amdgpu
+         device (physfn is host-only bookkeeping), so this is the only reliable
+         signal there -- and it is exactly the case for the CI SR-IOV MI300X
+         rig, whose GPU otherwise reports BAREMETAL.
+      2. PCI SR-IOV sysfs on the AMD GPU device node (host side): a `physfn`
+         symlink proves a VF; `sriov_numvfs > 0` proves an SR-IOV-enabled PF; a
+         `gim`-bound device is an SR-IOV host PF. Any of these => not bare metal.
+
+    Best-effort; returns False on non-Linux or on any error (treated as bare
+    metal, i.e. the SR-IOV-only tests still run).
+    """
+    if platform.system() != "Linux":
+        return False
+    try:
+        # (1) VM guest: the decisive signal for the CI VF rig.
+        if _is_hypervisor_guest():
+            return True
+
+        # (2) Host-side SR-IOV sysfs cross-checks on the AMD GPU(s).
+        for dev in _amd_gpu_pci_devices():
+            # physfn symlink present => this device is a VF.
+            if os.path.exists(os.path.join(dev, "physfn")):
+                return True
+            # sriov_numvfs > 0 => SR-IOV-enabled PF.
+            try:
+                with open(os.path.join(dev, "sriov_numvfs")) as f:
+                    if int((f.read().strip() or "0")) > 0:
+                        return True
+            except (OSError, ValueError):
+                pass
+            # gim driver => SR-IOV host PF.
+            driver_link = os.path.join(dev, "driver")
+            if os.path.islink(driver_link) and (
+                os.path.basename(os.path.realpath(driver_link)) == "gim"
+            ):
+                return True
+    except Exception as e:
+        print(f"# Warning: virtualization detection failed: {e}", file=sys.stderr)
+    return False
+
+
 def check_available_labels():
     """
     Discover GPU architecture labels and category exclude labels from ctest --print-labels.
 
     Parses labels of the form:
     - ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950)
+    - ex_{env} environment-exclusion labels that are NOT arch-scoped
+      (e.g. ex_sriov for SR-IOV virtual-function-only exclusions)
     - {category}_exclude, incl. {category}_therock_ci_exclude
       (e.g. quick_exclude, quick_therock_ci_exclude)
 
-    Returns (gpu_archs, exclude_labels) where:
+    Returns (gpu_archs, exclude_labels, env_exclude_labels) where:
     - gpu_archs is a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950')
     - exclude_labels is a set of exclude label strings (e.g., 'quick_exclude', 'standard_exclude')
+    - env_exclude_labels is a set of non-arch ex_* labels (e.g., 'ex_sriov')
     """
     test_dir = Path(TEST_DIR)
     if not test_dir.exists() or not test_dir.is_dir():
@@ -428,7 +520,9 @@ def check_available_labels():
 
         gpu_archs = set()
         exclude_labels = set()
+        env_exclude_labels = set()
         gpu_prefix = "ex_gpu_"
+        env_prefix = "ex_"
         exclude_suffix = "_exclude"
         for line in result.stdout.splitlines():
             label = line.strip()
@@ -436,10 +530,14 @@ def check_available_labels():
                 gpu_arch = label[len(gpu_prefix) :]
                 if gpu_arch.startswith("gfx"):
                     gpu_archs.add(gpu_arch)
+            elif label.startswith(env_prefix):
+                # Non-arch ex_* label (e.g. ex_sriov). Arch labels are handled
+                # above; everything else here is an environment exclusion axis.
+                env_exclude_labels.add(label)
             elif label.endswith(exclude_suffix):
                 exclude_labels.add(label)
 
-        return gpu_archs, exclude_labels
+        return gpu_archs, exclude_labels, env_exclude_labels
     except subprocess.CalledProcessError as e:
         print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
         sys.exit(1)
@@ -498,7 +596,13 @@ def generate_resource_spec():
 
 
 def build_ctest_command(
-    category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file=None
+    category,
+    gpu_arch,
+    available_gpu_archs,
+    exclude_labels,
+    env_exclude_labels=None,
+    is_sriov=False,
+    resource_spec_file=None,
 ):
     """
     Build the appropriate ctest command based on the category and GPU architecture.
@@ -506,6 +610,7 @@ def build_ctest_command(
     Returns a list of command arguments suitable for subprocess.run()
     """
     cmd = ["ctest"]
+    env_exclude_labels = env_exclude_labels or set()
 
     # Collect all exclude patterns into a list so they can be combined into
     # a single -LE regex.  Multiple -LE flags are ANDed by ctest, which would
@@ -535,6 +640,20 @@ def build_ctest_command(
         else:
             le_patterns.append("ex_gpu")
             print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
+
+    # Environment (SR-IOV) exclusion axis. When the tree ships an ex_sriov
+    # suite variant, either SELECT it (on a VF, so arch + SR-IOV failures are
+    # both excluded) or DESELECT it (off-VF, so the SR-IOV-only tests still run
+    # and preserve bare-metal coverage). Gated on the label actually existing
+    # so this is a no-op for components without an exclude_SRIOV section.
+    sriov_label = "ex_sriov"
+    if sriov_label in env_exclude_labels:
+        if is_sriov:
+            include_labels.append(sriov_label)
+            print(f"# SR-IOV detected: selecting {sriov_label} suite variant")
+        else:
+            le_patterns.append(sriov_label)
+            print(f"# Not SR-IOV: excluding {sriov_label} suite variant")
 
     # Add label options together for readability: -L ... -LE ...
     # Anchor each include label with ^...$ so ctest matches it exactly. ctest's
@@ -617,7 +736,7 @@ def main():
 
     # Discover available labels from ctest
     print("# Discovering available test labels...")
-    available_gpu_archs, exclude_labels = check_available_labels()
+    available_gpu_archs, exclude_labels, env_exclude_labels = check_available_labels()
 
     if available_gpu_archs:
         print(f"# Found {len(available_gpu_archs)} GPU suite test(s)")
@@ -626,6 +745,16 @@ def main():
         print("# Warning: No GPU specific test suites available")
     if exclude_labels:
         print(f"# Found exclude labels: {sorted(exclude_labels)}")
+    if env_exclude_labels:
+        print(f"# Found environment exclude labels: {sorted(env_exclude_labels)}")
+    print()
+
+    # Detect virtualization (SR-IOV VF / VM guest) so the ex_sriov suite variant
+    # is selected (virtualized) or excluded (bare metal). Only meaningful when
+    # the tree ships ex_sriov labels; harmless otherwise.
+    is_sriov = detect_sriov()
+    if "ex_sriov" in env_exclude_labels:
+        print(f"# Virtualized (SR-IOV / VM guest) detected: {is_sriov}")
     print()
 
     # Generate a CTest resource-spec file when the component provides the
@@ -635,7 +764,13 @@ def main():
 
     # Build the ctest command
     cmd = build_ctest_command(
-        category, gpu_arch, available_gpu_archs, exclude_labels, resource_spec_file
+        category,
+        gpu_arch,
+        available_gpu_archs,
+        exclude_labels,
+        env_exclude_labels,
+        is_sriov,
+        resource_spec_file,
     )
 
     print(f"# Running: {' '.join(cmd)}")
