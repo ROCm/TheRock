@@ -112,11 +112,6 @@ def build_environment() -> dict:
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
     environ_vars["CMAKE_GENERATOR"] = "Ninja"
-    # No HIPTHREADS_VCORES_PER_WGP override: hipThreads used to size its scheduler by
-    # multiplying a fixed vcores-per-WGP by the CU count, which over-subscribed the GPU
-    # and hung on CDNA at the shipped default (ROCM-30565). It now derives a safe grid
-    # from the device itself (occupancy-checked, clamped per architecture), so the
-    # library's own default is safe to run under here without CI dialing it down.
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
     if IS_WINDOWS:
