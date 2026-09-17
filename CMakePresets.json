@@ -168,6 +168,20 @@
       "inherits": [
         "windows-base"
       ]
+    },
+    {
+      "name": "windows-release-driver",
+      "displayName": "Windows driver-package release build",
+      "description": "Windows release with WINDOWS_DRIVER_BUILD (CFG, driver comgr DLL name), reduced to the components driver packaging consumes.",
+      "cacheVariables": {
+        "THEROCK_FLAG_WINDOWS_DRIVER_BUILD": "ON",
+        "THEROCK_ENABLE_ALL": "OFF",
+        "THEROCK_ENABLE_CORE": "ON",
+        "THEROCK_ENABLE_COMPILER": "ON"
+      },
+      "inherits": [
+        "windows-release"
+      ]
     }
   ]
 }
