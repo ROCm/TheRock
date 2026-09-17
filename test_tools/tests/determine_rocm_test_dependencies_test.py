@@ -583,6 +583,15 @@ class TestCliInputParsing(_FixtureTestCase):
         self.assertIn("rocroller", projects)
         self.assertIn("hipblaslt", projects)  # rocroller direct consumer
 
+    def test_rocgdb_graph_node_expands_to_runnable_test_jobs(self) -> None:
+        proc = self._run("--changed-projects", "amd-dbgapi", "--level", "4")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        projects = set(json.loads(proc.stdout.strip()))
+        self.assertNotIn("rocgdb", projects)
+        self.assertTrue(
+            {"rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"}.issubset(projects)
+        )
+
     def test_unmapped_external_namespace_fails(self) -> None:
         proc = self._run("--changed-projects", "shared/not-aliased", "--level", "4")
         self.assertNotEqual(proc.returncode, 0)
