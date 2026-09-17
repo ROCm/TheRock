@@ -104,6 +104,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hipblasltprovider",
                 "hipdnn-integration-tests",
                 "hipdnn_install",
+                "hipfile",
+                "rocprofiler-compute",
+                "rocprofiler-sdk",
             },
         )
         sanity = json.loads(self.gha_output["sanity_component"])
@@ -142,6 +145,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hipblasltprovider",
                 "hipdnn-integration-tests",
                 "hipdnn_install",
+                "hipfile",
+                "rocprofiler-compute",
+                "rocprofiler-sdk",
             },
         )
         self.assertEqual(
@@ -275,6 +281,31 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for component in components.values():
             self.assertTrue(component["linux_cpu_runner"])
             self.assertEqual(component["test_runner"], "host-only")
+
+    def test_host_asan_profiling_storage_uses_fail_closed_runner(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = (
+            "hipfile,rocprofiler-compute,rocprofiler-sdk"
+        )
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components),
+            {"hipfile", "rocprofiler-compute", "rocprofiler-sdk"},
+        )
+        for component in components.values():
+            self.assertIn(
+                "test_profiler_storage_host_asan.py", component["test_script"]
+            )
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_runner"], "host-only")
+        self.assertEqual(
+            components["rocprofiler-sdk"]["fetch_artifact_args"],
+            "--rocprofiler-sdk --tests",
+        )
 
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]

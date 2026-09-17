@@ -1042,6 +1042,25 @@ HOST_ASAN_COMPONENTS = {
         "test_script": f"python {_get_script_path('test_hipdnn_host_asan.py')}",
         "timeout_minutes": 5,
     },
+    "hipfile": {
+        "test_script": (
+            f"python {_get_script_path('test_profiler_storage_host_asan.py')}"
+        ),
+        "timeout_minutes": 15,
+    },
+    "rocprofiler-compute": {
+        "test_script": (
+            f"python {_get_script_path('test_profiler_storage_host_asan.py')}"
+        ),
+        "timeout_minutes": 5,
+    },
+    "rocprofiler-sdk": {
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
+        "test_script": (
+            f"python {_get_script_path('test_profiler_storage_host_asan.py')}"
+        ),
+        "timeout_minutes": 5,
+    },
 }
 
 
