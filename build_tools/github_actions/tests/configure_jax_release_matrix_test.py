@@ -12,6 +12,7 @@ import configure_jax_release_matrix as m
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
+    get_workflow_call_inputs,
     get_workflow_job,
     load_workflow,
 )
@@ -164,6 +165,28 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                     # workflow reads `matrix.unknown`, this test fails until
                     # the generator emits that key for every row.
                     self.assertEqual(matrix_references - set(row), set())
+
+    def test_build_workflows_accept_generated_row_keys(self):
+        # Both build workflows must accept any row the generator can emit, so
+        # a ref config can be moved between the CI and release defaults (or
+        # dispatched to either build workflow) without a workflow change. Every
+        # row key except jax_label, which only names the calling job, is an
+        # input on each build workflow; the callers forward what they need.
+        matrix = m.generate_jax_matrix(
+            jax_refs=["rocm-jaxlib-v0.11.1", "jax-main"],
+            python_versions=["3.12"],
+        )
+        self.assertEqual(len(matrix), 2)
+        row_keys = set().union(*(set(row) for row in matrix)) - {"jax_label"}
+        self.assertIn("wheel_type", row_keys)
+
+        for workflow_name in [
+            "multi_arch_build_linux_jax_wheels.yml",
+            "multi_arch_build_linux_jax_wheels_ci.yml",
+        ]:
+            with self.subTest(workflow=workflow_name):
+                workflow = load_workflow(WORKFLOWS_DIR / workflow_name)
+                self.assertEqual(row_keys - get_workflow_call_inputs(workflow), set())
 
     def test_ref_excluded_python_versions_are_filtered(self):
         # exclude_python_versions in JAX_REF_CONFIGS drops those Python versions

@@ -57,8 +57,9 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
-    # Upstream JAX at its moving tip, for the tip-vs-tip canary. Not in any
-    # default ref list below: a caller asks for it with --jax-refs jax-main.
+    # Upstream JAX at its moving tip, built against the ROCm of the same run
+    # (tip vs tip). Not yet in any default ref list below: a caller asks for
+    # it with --jax-refs jax-main.
     # The manylinux Dockerfile comes from rocm-jax's default branch, since
     # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
     # coupling.
