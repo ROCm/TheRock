@@ -34,6 +34,10 @@ import sys
 
 
 THIS_DIR = Path(__file__).resolve().parent
+
+sys.path.insert(0, str(THIS_DIR))
+from resolve_docker_image import get_image_ref
+
 REPO_DIR = THIS_DIR.parent
 
 
@@ -145,7 +149,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb",
+        default=get_image_ref("therock_build_manylinux_x86_64"),
         help="Build docker image",
     )
     p.add_argument(

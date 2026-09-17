@@ -27,7 +27,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-DEFAULT_CONTAINER_IMAGE = "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+from resolve_docker_image import get_image_ref
+
+DEFAULT_CONTAINER_IMAGE = get_image_ref("no_rocm_image_ubuntu24_04")
 
 is_windows = platform.system() == "Windows"
 

@@ -114,7 +114,7 @@ jobs:
     timeout-minutes: 30
     container:
       # Callers must supply a digest-pinned image, or no image for native runners.
-      image: ${{ contains(inputs.test_runs_on, 'linux') && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.image_ref) || null }} # zizmor: ignore[unpinned-images]
+      image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_name != 'native' && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.image_ref) || null }} # zizmor: ignore[unpinned-images]
       options: --ipc host
         --group-add video
         --device /dev/kfd
