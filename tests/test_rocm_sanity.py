@@ -122,9 +122,18 @@ class TestROCmSanity:
         ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
         # Compiling .cpp file using amdclang++
+        # On Linux, bin/amdclang++ is a symlink to lib/llvm/bin/amdclang++.
+        # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
         rocm_path = (THEROCK_BIN_DIR / "..").resolve()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
-        amdclangxx = THEROCK_BIN_DIR / f"amdclang++{platform_executable_suffix}"
+        amdclangxx = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / f"amdclang++{platform_executable_suffix}"
+        ).resolve()
         run_command(
             [
                 str(amdclangxx),
