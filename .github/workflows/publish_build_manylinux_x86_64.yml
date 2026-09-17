@@ -10,6 +10,7 @@ on:
       - 'stage/docker/**'
     paths:
       - dockerfiles/build_manylinux_x86_64*.Dockerfile
+      - dockerfiles/docker_images.json
       - .github/workflows/publish_build_manylinux_x86_64.yml
 
 permissions:
@@ -17,8 +18,15 @@ permissions:
   packages: write
 
 jobs:
+  resolve-images:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: manylinux_2_28_x86_64
+
   publish_build_manylinux_x86_64:
+    needs: [resolve-images]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: build_manylinux_x86_64
       DOCKER_IMAGE_NAME: therock_build_manylinux_x86_64
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-images.outputs.image_ref }}

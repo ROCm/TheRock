@@ -10,6 +10,7 @@ on:
       - 'stage/docker/**'
     paths:
       - dockerfiles/no_rocm_image_ubuntu24_04*.Dockerfile
+      - dockerfiles/docker_images.json
       - .github/workflows/publish_no_rocm_image_ubuntu24_04.yml
 
 permissions:
@@ -17,42 +18,60 @@ permissions:
   packages: write
 
 jobs:
+  resolve-base-image:
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: ubuntu_24_04
+
   publish_no_rocm_image_ubuntu24_04:
+    needs: [resolve-base-image]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-base-image.outputs.image_ref }}
+
+  resolve-parent-image:
+    needs: [publish_no_rocm_image_ubuntu24_04]
+    uses: ./.github/workflows/resolve-docker-images.yml
+    with:
+      image_name: no_rocm_image_ubuntu24_04
+
   # The image no_rocm_image_ubuntu24_04_rocgdb is an extension of
   # no_rocm_image_ubuntu24_04, so make sure we rebuild the _rocgdb
   # version whenever the base version changes.
   publish_no_rocm_image_ubuntu24_04_rocgdb:
-    needs: [publish_no_rocm_image_ubuntu24_04]
+    needs: [publish_no_rocm_image_ubuntu24_04, resolve-parent-image]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_rocgdb
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_rocgdb
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-parent-image.outputs.image_ref }}
   # image used in ocltst execution
   publish_no_rocm_image_ubuntu24_04_ocl_rt:
-    needs: [publish_no_rocm_image_ubuntu24_04]
+    needs: [publish_no_rocm_image_ubuntu24_04, resolve-parent-image]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_ocl_rt
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_ocl_rt
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-parent-image.outputs.image_ref }}
   # The image no_rocm_image_ubuntu24_04_media is an extension of
   # no_rocm_image_ubuntu24_04, so make sure we rebuild the _media
   # version whenever the base version changes.
   publish_no_rocm_image_ubuntu24_04_media:
-    needs: [publish_no_rocm_image_ubuntu24_04]
+    needs: [publish_no_rocm_image_ubuntu24_04, resolve-parent-image]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_media
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_media
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-parent-image.outputs.image_ref }}
   # The image no_rocm_image_ubuntu24_04_openmpi is an extension of
   # no_rocm_image_ubuntu24_04, so make sure we rebuild the _openmpi
   # version whenever the base version changes.
   publish_no_rocm_image_ubuntu24_04_openmpi:
-    needs: [publish_no_rocm_image_ubuntu24_04]
+    needs: [publish_no_rocm_image_ubuntu24_04, resolve-parent-image]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_openmpi
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_openmpi
+      BUILD_ARGS: BASE_IMAGE=${{ needs.resolve-parent-image.outputs.image_ref }}

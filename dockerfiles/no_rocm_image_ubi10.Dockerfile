@@ -2,7 +2,8 @@
 #
 # Base image: registry.access.redhat.com/ubi10/ubi:latest (Red Hat UBI 10). Catalog:
 # https://catalog.redhat.com/en/software/containers/ubi10/ubi/66f2b46b122803e4937d11ae
-FROM registry.access.redhat.com/ubi10/ubi:latest
+ARG BASE_IMAGE=registry.access.redhat.com/ubi10/ubi:latest
+FROM ${BASE_IMAGE}
 
 RUN dnf install -y --nodocs sudo && dnf clean all
 
