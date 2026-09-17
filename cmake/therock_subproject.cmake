@@ -89,12 +89,14 @@ endif()
 
 # Options added to every subproject when THEROCK_FLAG_WINDOWS_DRIVER_BUILD is set.
 # The compile flag is spelled per compiler; the link flag goes through CMake's
-# LINKER: prefix, which handles the driver difference.
+# LINKER: prefix, which handles the driver difference and splits on commas.
 # /machine and /DYNAMICBASE are omitted: CMake emits the former and the linker
 # defaults to the latter.
+# /DEBUG emits a .pdb; debug info is compiled in per subproject (see
+# pre_hook_amd-comgr.cmake).
 set(THEROCK_WINDOWS_DRIVER_BUILD_MSVC_COMPILE_FLAGS "/guard:cf")
 set(THEROCK_WINDOWS_DRIVER_BUILD_CLANG_COMPILE_FLAGS "-mguard=cf")
-set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf")
+set(THEROCK_WINDOWS_DRIVER_BUILD_LINK_FLAGS "/guard:cf,/DEBUG")
 
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.

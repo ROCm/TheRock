@@ -14,3 +14,11 @@ else()
 endif()
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
+
+# Debug info for comgr's own objects only, keeping the PDB at ~115MB not ~862MB.
+# /Z7 rather than /Zi: /Zi collides with LLVM's shared PCH (error C2859).
+# CMAKE_HOST_WIN32 rather than WIN32/MSVC, which are unset before project().
+if(CMAKE_HOST_WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  string(APPEND CMAKE_C_FLAGS " /Z7")
+  string(APPEND CMAKE_CXX_FLAGS " /Z7")
+endif()

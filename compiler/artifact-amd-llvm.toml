@@ -47,8 +47,15 @@ exclude = [
 # in the build tree because they need to be built separately in order to
 # install to different prefixes).
 [components.lib."compiler/amd-comgr/stage"]
+# 'run' is a catch-all here, so the PDB must be excluded to reach 'dbg' below.
 [components.run."compiler/amd-comgr/stage"]
+exclude = [
+  "**/*.pdb",
+]
 [components.dbg."compiler/amd-comgr/stage"]
+include = [
+  "**/*.pdb",
+]
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
 
