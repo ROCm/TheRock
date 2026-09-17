@@ -633,6 +633,17 @@ def audit_host_asan_ctest_command(cmd, env):
         properties = {
             prop.get("name"): prop.get("value") for prop in test.get("properties", [])
         }
+        # MIOpen-provider CTest may schedule this exact cache cleanup fixture
+        # alongside an admitted native test. It is housekeeping, not coverage;
+        # keep every other selected command behind the instrumentation gate.
+        if (
+            properties.get("FIXTURES_SETUP")
+            and Path(command[0]).name in {"cmake", "cmake.exe"}
+            and command[1:4] == ["-E", "rm", "-rf"]
+            and len(command) == 5
+            and Path(command[4]).name == "miopen_test_cache"
+        ):
+            continue
         executable = Path(command[0])
         if not executable.is_absolute():
             executable = (Path(TEST_DIR) / executable).resolve()

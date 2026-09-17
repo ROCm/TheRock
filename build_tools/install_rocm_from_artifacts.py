@@ -463,6 +463,9 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+            # hipDNN host-side install validation executes hipdnn_list_engines,
+            # which is packaged in the run component rather than lib/test.
+            argv.append("hipdnn_run")
         if args.hipdnn_integration_tests:
             extra_artifacts.append("hipdnn-integration-tests")
             # The main test binary `hipdnn_integration_tests` is in the artifact's

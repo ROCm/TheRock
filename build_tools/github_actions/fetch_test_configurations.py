@@ -1014,6 +1014,34 @@ HOST_ASAN_COMPONENTS = {
         ),
         "timeout_minutes": 10,
     },
+    "hipdnn": {
+        # The generic runner selects only positive host-ASAN labels rather than
+        # invoking the legacy wrapper's complete device-capable inventory.
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 30,
+    },
+    "hipkernelprovider": {"timeout_minutes": 10},
+    "miopenprovider": {
+        # Provider integration suites remain excluded because they are GPU
+        # coverage; this fetch set is the reviewed host-only provider payload.
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipblasltprovider": {
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "hipdnn-integration-tests": {
+        "test_script": f"python {_get_script_path('test_hipdnn_host_asan.py')}",
+        "timeout_minutes": 30,
+    },
+    "hipdnn_install": {
+        "fetch_artifact_args": "--hipdnn --tests",
+        "test_script": f"python {_get_script_path('test_hipdnn_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
 }
 
 
@@ -1115,6 +1143,14 @@ def run():
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
+    if (
+        host_only_tests
+        and "hipdnn" in project_array
+        and "hipdnn_install" not in project_array
+    ):
+        # A changed hipDNN backend/library must also validate installed plugin
+        # discovery; keep that companion job explicit for selective presubmits.
+        project_array.append("hipdnn_install")
 
     all_components = []
     for key in selected_matrix:
