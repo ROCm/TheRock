@@ -8,6 +8,11 @@ import shlex
 import subprocess
 from pathlib import Path
 
+from host_asan_instrumentation import (
+    native_host_asan_environment,
+    require_direct_clang_asan,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # repo + dirs
@@ -70,17 +75,31 @@ if platform == "linux":
 # TEST_TYPE → gtest filter
 TEST_TYPE = os.getenv("TEST_TYPE", "standard").lower()
 test_filter_arg = None
-if TEST_TYPE == "quick":
-    # keep this subset (TODO: add more tests)
-    quick_tests = [
+if TEST_TYPE in ("quick", "host-asan"):
+    # Positive allowlist: these parser/assembler/control-graph suites are
+    # independent of a GPU device. In particular, host-asan must not inherit
+    # the legacy negative-only filter below, which admits thousands of GPU
+    # parameterizations when a new suite is added.
+    host_safe_tests = [
         "ErrorFixtureDeathTest.*",
         "ArgumentLoaderTest.*",
         "AssemblerTest.*",
         "ControlGraphTest.*",
-        "CommandTest.*",
+        "CommandTest.Basic",
+        "CommandTest.ToString",
+        "CommandTest.ConvertOp",
+        "CommandTest.VectorAdd",
+        "CommandTest.DuplicateOp",
+        "CommandTest.XopInputOutputs",
+        "CommandTest.BlockScaleInline",
+        "CommandTest.BlockScaleSeparate",
+        "CommandTest.SetCommandArguments",
+        "CommandTest.FindCommandArguments",
+        "CommandTest.GetRuntimeArguments",
+        "CommandTest.CommandKernelPredicates",
         "ComponentTest.*",
     ]
-    test_filter_arg = "--gtest_filter=" + ":".join(quick_tests)
+    test_filter_arg = "--gtest_filter=" + ":".join(host_safe_tests)
 
 # Append to the existing filter or start a negative-only filter
 # TODO(#2030): re-enable these tests once compatible with TheRock
@@ -105,6 +124,10 @@ if test_filter_arg:
 extra = os.getenv("EXTRA_GTEST_ARGS", "")
 if extra:
     cmd += shlex.split(extra)
+
+if TEST_TYPE == "host-asan":
+    env = native_host_asan_environment(env)
+    require_direct_clang_asan(test_bin, env)
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=str(THEROCK_DIR), check=True, env=env)

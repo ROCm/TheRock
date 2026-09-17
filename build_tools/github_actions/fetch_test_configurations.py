@@ -959,6 +959,39 @@ HOST_ASAN_COMPONENTS = {
         "test_script": f"python {_get_script_path('test_host_asan_sanity.py')}",
         "timeout_minutes": 5,
     },
+    "rocroller": {"timeout_minutes": 15},
+    "tensilelite": {
+        # The interpreter itself is not instrumented. pytest_runner validates
+        # that the loaded native extension has a direct Clang-ASAN dependency
+        # before scoping the runtime preload to this Python process.
+        "test_script": (
+            'ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}detect_leaks=0" '
+            f"python {_get_script_path('pytest_runner.py')}"
+        ),
+        "timeout_minutes": 90,
+    },
+    "origami": {
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocrand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "hiprand": {
+        "test_script": f"python {_get_script_path('test_rand_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "rocsparse": {
+        "test_script": f"python {_get_script_path('test_rocsparse_host_asan.py')}",
+        "timeout_minutes": 5,
+    },
+    "stinkytofu": {
+        "job_name": "stinkytofu",
+        "fetch_artifact_args": "--blas --tests",
+        "test_script": f"python {_get_script_path('test_stinkytofu_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
 }
 
 
@@ -1179,7 +1212,7 @@ def run():
             # and ctest stages have to be chained here instead. Fold both
             # into test_runner.py's own dual-mode support and drop this
             # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
+            if key == "tensilelite" and test_type not in ("quick", "host-asan"):
                 job_config_data["test_script"] = (
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
