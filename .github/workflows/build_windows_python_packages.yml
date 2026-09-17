@@ -126,6 +126,7 @@ jobs:
       WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
       PACKAGE_VERSION: ${{ inputs.package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      OUTPUT_ROOT: "${{ github.workspace }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
     defaults:
@@ -167,10 +168,10 @@ jobs:
               --stage=all \
               --amdgpu-families="${AMDGPU_FAMILIES}" \
               --expand-family-to-targets \
-              --output-dir="${{ github.workspace }}"
+              --output-dir="${OUTPUT_ROOT}"
               # NOTE: artifact_manager.py appends /artifacts to --output-dir
-              # in non-flatten mode, so pass workspace root here so that
-              # artifacts land in ARTIFACTS_DIR ($workspace/artifacts).
+              # in non-flatten mode, so pass OUTPUT_ROOT here so that
+              # artifacts land in ARTIFACTS_DIR ($OUTPUT_ROOT/artifacts).
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
             echo "Fetching artifacts for single family: ${ARTIFACT_GROUP}"
