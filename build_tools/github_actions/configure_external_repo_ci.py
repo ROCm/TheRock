@@ -125,6 +125,29 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "emulation/rocjitsu",
 }
 
+# CI_RELEVANT_NON_SUBTREE_PREFIXES currently enumerates only rocm-systems' own
+# non-subtree dirs (see its docstring above). It is safe to union in
+# unconditionally in the normal changed-*file* path (find_matched_subtrees /
+# get_unclassified_paths): a rocm-libraries PR's modified_paths can never
+# actually contain a "shared/kpack/..." path, since that directory does not
+# exist in that repo's checkout. It is NOT safe to union in unconditionally
+# when *synthesizing* a "every project in this repo changed" identifier list
+# (the CI-orchestration-scoping path in configure()), since that path does
+# not check for real occurrences in modified_paths -- it would assert that
+# directories a different repo doesn't even have "changed". Gate on the owning
+# repo instead.
+_ROCM_SYSTEMS_REPO_SUFFIX = "/rocm-systems"
+
+
+def _owns_non_subtree_prefixes(github_repo: str) -> bool:
+    """Whether `github_repo` owns CI_RELEVANT_NON_SUBTREE_PREFIXES.
+
+    Currently just rocm-systems; see that set's docstring. Add repos here (and
+    split the set by owner) if a second repo ever needs its own non-subtree
+    dirs recognized.
+    """
+    return github_repo.lower().endswith(_ROCM_SYSTEMS_REPO_SUFFIX)
+
 
 @dataclass
 class ConfigureResult:
@@ -395,7 +418,10 @@ def configure(
     # paths, defeating the scoping this branch exists to provide.
     if matches_patterns(modified_paths, CI_ORCHESTRATION_TRIGGER_PATTERNS):
         if config:
-            all_projects = sorted(get_valid_prefixes(config))
+            all_projects_set = get_valid_prefixes(config)
+            if _owns_non_subtree_prefixes(github_repo):
+                all_projects_set = all_projects_set | CI_RELEVANT_NON_SUBTREE_PREFIXES
+            all_projects = sorted(all_projects_set)
             logger.info(
                 f"CI-orchestration files changed - testing all "
                 f"{len(all_projects)} project(s) registered for {github_repo} "
