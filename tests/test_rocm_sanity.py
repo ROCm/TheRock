@@ -87,6 +87,15 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    # TODO(#3313): Re-enable once test_hip_printf is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="test_hip_printf fails with ASAN build, see TheRock#3313"
+    )
+    # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="gfx1250 binary translator does not yet support this kernel code pattern, see #7458",
+    )
     def test_hip_vector_add(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
