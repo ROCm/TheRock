@@ -41,6 +41,10 @@ class IsSkippableTest(unittest.TestCase):
         self.assertTrue(is_skippable("docs/api.txt"))
         self.assertTrue(is_skippable("projects/rocblas/docs/readme.md"))
 
+    def test_standalone_emulation_projects_are_skippable(self):
+        self.assertTrue(is_skippable("emulation/mirage/src/mirage.cpp"))
+        self.assertTrue(is_skippable("emulation/rocjitsu/src/rocjitsu.cpp"))
+
     def test_source_files_are_not_skippable(self):
         self.assertFalse(is_skippable("src/main.cpp"))
         self.assertFalse(is_skippable("projects/rocblas/src/blas.cpp"))
@@ -329,12 +333,19 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         self.assertFalse(r.run_all_tests)
         self.assertFalse(r.skip_tests)
 
-    def test_emulation_components_are_surfaced(self):
+    def test_emulation_only_changes_skip_multi_arch_ci(self):
         r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])
-        self.assertEqual(
-            sorted(r.changed_projects.split(",")),
-            ["emulation/mirage", "emulation/rocjitsu"],
+        self.assertEqual(r.changed_projects, "")
+        self.assertFalse(r.run_all_tests)
+        self.assertTrue(r.skip_tests)
+
+    def test_emulation_change_does_not_expand_mixed_project_selection(self):
+        r = self._configure(
+            ["emulation/mirage/a.cpp", "projects/rocm-core/src/x.cpp"]
         )
+        self.assertEqual(r.changed_projects, "projects/rocm-core")
+        self.assertFalse(r.run_all_tests)
+        self.assertFalse(r.skip_tests)
 
     def test_ctest_harness_triggers_full_run(self):
         r = self._configure(["shared/ctest/TestCategories.cmake"])

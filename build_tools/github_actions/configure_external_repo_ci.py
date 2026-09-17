@@ -61,6 +61,10 @@ SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "projects/*/docs/*",
     "shared/*/docs/*",
+    # Standalone emulation projects do not consume or provide artifacts used by
+    # the Multi-Arch build and test pipeline.
+    "emulation/mirage/*",
+    "emulation/rocjitsu/*",
 ]
 
 # Patterns that trigger a full test run when changed (CI infrastructure)
@@ -371,7 +375,9 @@ def configure(
             changed_projects="", run_all_tests=True, skip_tests=False
         )
 
-    matched = find_matched_subtrees(modified_paths, valid_prefixes)
+    matched = find_matched_subtrees(
+        (path for path in modified_paths if not is_skippable(path)), valid_prefixes
+    )
     logger.info(f"Matched projects: {matched}")
 
     return ConfigureResult(
