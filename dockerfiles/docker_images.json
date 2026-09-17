@@ -60,9 +60,9 @@
   "manylinux_2_28_x86_64": {
     "registry": "quay.io/pypa",
     "image": "manylinux_2_28_x86_64",
-    "sha": "sha256:4dc41da7df20400310c80d162a2fe2d2c2f3d9734d8dec20f6b9843711618deb",
-    "timestamp": "2026-08-24T06:41:22.813001531Z",
-    "last_updated": "2026-08-28"
+    "sha": "sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4",
+    "timestamp": "2026-09-14T11:43:04.863046037Z",
+    "last_updated": "2026-09-17"
   },
   "ubuntu_24_04": {
     "registry": "docker.io",

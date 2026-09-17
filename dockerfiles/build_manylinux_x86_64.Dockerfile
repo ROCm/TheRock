@@ -11,7 +11,7 @@
 # new upstream versions as needed. The default below is kept in sync with
 # dockerfiles/docker_images.json's "manylinux_2_28_x86_64" entry; CI overrides
 # it explicitly via --build-arg so the registry stays the single source of truth.
-ARG BASE_IMAGE=quay.io/pypa/manylinux_2_28_x86_64@sha256:4dc41da7df20400310c80d162a2fe2d2c2f3d9734d8dec20f6b9843711618deb
+ARG BASE_IMAGE=quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
 FROM ${BASE_IMAGE}
 
 ######## Python and CMake setup #######
