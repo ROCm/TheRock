@@ -66,24 +66,38 @@ class RppHostTsanTest(unittest.TestCase):
             test_rpp_host_tsan,
             "native_host_tsan_environment",
             return_value={"LD_LIBRARY_PATH": "/existing"},
-        ):
-            env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
-
-        self.assertEqual(env["OMP_NUM_THREADS"], "1")
-        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
-        self.assertEqual(env["ROCM_PATH"], os.fspath(Path("/opt/rocm")))
-        self.assertIn("/existing", env["LD_LIBRARY_PATH"].split(os.pathsep))
-
-    def test_environment_preserves_explicit_parallel_runtime_limits(self):
-        with mock.patch.object(
-            test_rpp_host_tsan,
-            "native_host_tsan_environment",
-            return_value={"OMP_NUM_THREADS": "4", "OPENBLAS_NUM_THREADS": "2"},
+        ), mock.patch.object(
+            test_rpp_host_tsan.os,
+            "sched_getaffinity",
+            return_value=set(range(64)),
+            create=True,
         ):
             env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
 
         self.assertEqual(env["OMP_NUM_THREADS"], "4")
-        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "2")
+        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual(env["ROCM_PATH"], os.fspath(Path("/opt/rocm")))
+        self.assertIn("/existing", env["LD_LIBRARY_PATH"].split(os.pathsep))
+
+    def test_environment_replaces_inherited_host_parallel_runtime_limits(self):
+        with mock.patch.object(
+            test_rpp_host_tsan,
+            "native_host_tsan_environment",
+            return_value={"OMP_NUM_THREADS": "64", "OPENBLAS_NUM_THREADS": "32"},
+        ), mock.patch.object(
+            test_rpp_host_tsan.os,
+            "sched_getaffinity",
+            return_value=set(range(4)),
+            create=True,
+        ):
+            env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
+
+        self.assertEqual(env["OMP_NUM_THREADS"], "4")
+        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+
+    def test_ctest_execution_disables_aslr(self):
+        source = Path(test_rpp_host_tsan.__file__).read_text(encoding="utf-8")
+        self.assertIn('"setarch",\n                    platform.machine(),\n                    "-R",', source)
 
 
 if __name__ == "__main__":

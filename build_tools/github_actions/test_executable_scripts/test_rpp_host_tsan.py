@@ -6,6 +6,7 @@
 import hashlib
 import json
 import os
+import platform
 import re
 import shlex
 import subprocess
@@ -54,11 +55,16 @@ def _test_environment(prefix: Path) -> dict[str, str]:
             env.get("LD_LIBRARY_PATH", ""),
         ]
     ).rstrip(os.pathsep)
-    # The CI CPU allocation is not always exported as KUBE_CPU_REQUEST.
-    # Bound OpenMP/BLAS explicitly so the image and misc suites cannot
-    # oversubscribe the pod until the component timeout kills the runner.
-    env.setdefault("OMP_NUM_THREADS", "1")
-    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    # The CI CPU allocation is not always exported as KUBE_CPU_REQUEST, and
+    # inherited OpenMP defaults can reflect the host instead of the pod. Keep
+    # enough parallelism for the comprehensive suites while bounding it to the
+    # CPUs this process can actually use.
+    try:
+        available_cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        available_cpus = os.cpu_count() or 1
+    env["OMP_NUM_THREADS"] = str(max(1, min(4, available_cpus)))
+    env["OPENBLAS_NUM_THREADS"] = "1"
     return env
 
 
@@ -183,6 +189,9 @@ def main() -> int:
 
             executed = _run(
                 [
+                    "setarch",
+                    platform.machine(),
+                    "-R",
                     "ctest",
                     "--test-dir",
                     str(build_dir),

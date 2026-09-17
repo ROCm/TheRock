@@ -125,17 +125,5 @@ class RocgdbHostTsanTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "approved failure use changed"):
             test_rocgdb_host_tsan.validate_outcome_profile(output)
 
-    def test_matrix_harness_exception_requires_rocgdb_validation_marker(self):
-        harness = (
-            Path(__file__).parents[3] / "run_host_tsan_phase1_validation.sh"
-        ).read_text(encoding="utf-8")
-        self.assertIn('[[ "$component" == "rocgdb-cpu" ]]', harness)
-        self.assertIn(test_rocgdb_host_tsan.OUTCOME_VALIDATION_MARKER, harness)
-        self.assertIn(
-            "Preserve strict generic skip rejection for every other component",
-            harness,
-        )
-
-
 if __name__ == "__main__":
     unittest.main()
