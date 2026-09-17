@@ -9,6 +9,12 @@ on:
         type: string
       DOCKER_IMAGE_NAME:
         type: string
+      BUILD_ARGS:
+        description: >-
+          Optional newline-separated list of Docker build args (e.g.
+          "BASE_IMAGE=...") to pass through to docker/build-push-action.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -74,3 +80,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.BUILD_ARGS }}

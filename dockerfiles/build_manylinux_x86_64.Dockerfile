@@ -8,8 +8,11 @@
 #   stage/docker/*
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
-# new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
+# new upstream versions as needed. The default below is kept in sync with
+# dockerfiles/docker_images.json's "manylinux_2_28_x86_64" entry; CI overrides
+# it explicitly via --build-arg so the registry stays the single source of truth.
+ARG BASE_IMAGE=quay.io/pypa/manylinux_2_28_x86_64@sha256:4dc41da7df20400310c80d162a2fe2d2c2f3d9734d8dec20f6b9843711618deb
+FROM ${BASE_IMAGE}
 
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for

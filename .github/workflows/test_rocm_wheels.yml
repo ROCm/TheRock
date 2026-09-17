@@ -113,7 +113,7 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     timeout-minutes: 30
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.image_ref) || null }}
+      image: ${{ contains(inputs.test_runs_on, 'linux') && inputs.container_image_name != 'native' && (inputs.container_image_url != '' && inputs.container_image_url || needs.resolve-images.outputs.image_ref) || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd

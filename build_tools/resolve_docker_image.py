@@ -69,16 +69,18 @@ _DOCKER_IMAGES_PATH = _REPO_ROOT / "dockerfiles" / "docker_images.json"
 # sha256: followed by exactly 64 lowercase hex digits
 _SHA_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-# Docker tag: printable ASCII, no whitespace or forward-slash, max 128 chars
-_TAG_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
+# Docker tag: must start with an alphanumeric or underscore, max 128 chars
+_TAG_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
 
 # Registry hostname (optional port) or hostname/path-prefix
 _REGISTRY_RE = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?(:\d+)?(/[a-zA-Z0-9_.\-]+)*$"
 )
 
-# Image name: one or more path components separated by /
-_IMAGE_RE = re.compile(r"^[a-z0-9_.\-]+(/[a-z0-9_.\-]+)*$")
+# Image name: one or more path components separated by /, each component
+# starting and ending with an alphanumeric character
+_IMAGE_COMPONENT_RE = r"[a-z0-9]+(?:(?:\.|_{1,2}|-+)[a-z0-9]+)*"
+_IMAGE_RE = re.compile(rf"^{_IMAGE_COMPONENT_RE}(/{_IMAGE_COMPONENT_RE})*$")
 
 
 @dataclass

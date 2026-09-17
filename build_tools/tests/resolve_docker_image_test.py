@@ -12,6 +12,7 @@ Run from the repo root:
 
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
 import resolve_docker_image
 from resolve_docker_image import (
+    _REPO_ROOT,
     ValidationError,
     get_image_ref,
     load_images,
@@ -126,6 +128,30 @@ class ValidateEntryTest(unittest.TestCase):
     def test_tag_non_string(self):
         errs = self._errors("k", _entry(sha=None, tag=99))
         self.assertTrue(any("tag" in e for e in errs))
+
+    def test_tag_leading_hyphen_rejected(self):
+        errs = self._errors("k", _entry(sha=None, tag="-badtag"))
+        self.assertTrue(any("tag" in e for e in errs))
+
+    def test_tag_leading_dot_rejected(self):
+        errs = self._errors("k", _entry(sha=None, tag=".badtag"))
+        self.assertTrue(any("tag" in e for e in errs))
+
+    def test_image_component_leading_hyphen_rejected(self):
+        errs = self._errors("k", _entry(image="-badimage"))
+        self.assertTrue(any("image" in e for e in errs))
+
+    def test_image_component_leading_dot_rejected(self):
+        errs = self._errors("k", _entry(image=".badimage"))
+        self.assertTrue(any("image" in e for e in errs))
+
+    def test_image_component_trailing_hyphen_rejected(self):
+        errs = self._errors("k", _entry(image="badimage-"))
+        self.assertTrue(any("image" in e for e in errs))
+
+    def test_image_multi_segment_leading_hyphen_rejected(self):
+        errs = self._errors("k", _entry(image="good/-bad"))
+        self.assertTrue(any("image" in e for e in errs))
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +289,49 @@ class CLIValidateTest(unittest.TestCase):
         with patch.object(resolve_docker_image, "load_images", return_value=bad):
             code, _ = _run(["validate"])
         self.assertNotEqual(code, 0)
+
+
+# ---------------------------------------------------------------------------
+# Dockerfile <-> docker_images.json consistency
+# ---------------------------------------------------------------------------
+
+
+class DockerfileBaseImageSyncTest(unittest.TestCase):
+    """The ARG BASE_IMAGE default in these Dockerfiles is only a fallback for
+    manual `docker build` invocations; CI always overrides it from
+    docker_images.json via BUILD_ARGS. This test ensures the two don't
+    silently drift, since nothing else enforces that they stay in sync.
+    """
+
+    # (Dockerfile name, docker_images.json key it should match)
+    DOCKERFILE_REGISTRY_PAIRS = [
+        ("build_manylinux_x86_64.Dockerfile", "manylinux_2_28_x86_64"),
+        ("no_rocm_image_ubuntu24_04.Dockerfile", "ubuntu_24_04"),
+        ("no_rocm_image_ubi10.Dockerfile", "ubi10_base"),
+        ("no_rocm_image_ubuntu24_04_openmpi.Dockerfile", "no_rocm_image_ubuntu24_04"),
+        ("no_rocm_image_ubuntu24_04_media.Dockerfile", "no_rocm_image_ubuntu24_04"),
+        ("no_rocm_image_ubuntu24_04_ocl_rt.Dockerfile", "no_rocm_image_ubuntu24_04"),
+        ("no_rocm_image_ubuntu24_04_rocgdb.Dockerfile", "no_rocm_image_ubuntu24_04"),
+    ]
+
+    def test_default_base_images_match_registry(self):
+        for dockerfile_name, registry_key in self.DOCKERFILE_REGISTRY_PAIRS:
+            with self.subTest(dockerfile=dockerfile_name, registry_key=registry_key):
+                dockerfile = (_REPO_ROOT / "dockerfiles" / dockerfile_name).read_text()
+                match = re.search(r"^ARG BASE_IMAGE=(\S+)$", dockerfile, re.MULTILINE)
+                self.assertIsNotNone(
+                    match,
+                    f"Could not find 'ARG BASE_IMAGE=...' in {dockerfile_name}",
+                )
+                dockerfile_default = match.group(1)
+                registry_ref = get_image_ref(registry_key)
+                self.assertEqual(
+                    dockerfile_default,
+                    registry_ref,
+                    f"{dockerfile_name}'s ARG BASE_IMAGE default has drifted "
+                    f"from docker_images.json's '{registry_key}' entry; update "
+                    "the Dockerfile default to match.",
+                )
 
 
 if __name__ == "__main__":
