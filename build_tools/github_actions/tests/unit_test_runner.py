@@ -171,6 +171,65 @@ class BuildCtestCommandTest(unittest.TestCase):
                     "host-asan", ["ctest"], {"LD_PRELOAD": "/tmp/not-allowed.so"}
                 )
 
+    def test_host_asan_permits_exact_miopen_cache_fixture(self):
+        inventory = {
+            "tests": [
+                {
+                    "name": "clear_cache",
+                    "command": [
+                        "/usr/bin/cmake",
+                        "-E",
+                        "rm",
+                        "-rf",
+                        "/tmp/miopen_test_cache",
+                    ],
+                    "properties": [
+                        {"name": "FIXTURES_SETUP", "value": ["clear_cache"]}
+                    ],
+                },
+                {"name": "native", "command": ["/tests/native"]},
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        with (
+            patch.object(test_runner.subprocess, "run", return_value=completed),
+            patch.object(test_runner, "require_direct_clang_asan") as require_asan,
+        ):
+            test_runner.audit_host_asan_ctest_command(["ctest"], {})
+
+        require_asan.assert_called_once_with(Path("/tests/native").resolve(), {})
+
+    def test_host_asan_does_not_bypass_other_fixture_commands(self):
+        inventory = {
+            "tests": [
+                {
+                    "name": "unexpected_fixture",
+                    "command": [
+                        "/usr/bin/cmake",
+                        "-E",
+                        "rm",
+                        "-rf",
+                        "/tmp/other_cache",
+                    ],
+                    "properties": [
+                        {"name": "FIXTURES_SETUP", "value": ["unexpected_fixture"]}
+                    ],
+                }
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(inventory), stderr=""
+        )
+        with (
+            patch.object(test_runner.subprocess, "run", return_value=completed),
+            patch.object(test_runner, "require_direct_clang_asan") as require_asan,
+        ):
+            test_runner.audit_host_asan_ctest_command(["ctest"], {})
+
+        require_asan.assert_called_once_with(Path("/usr/bin/cmake").resolve(), {})
+
     def test_host_asan_rejects_zero_case_gtest_filter(self):
         inventory = {
             "tests": [

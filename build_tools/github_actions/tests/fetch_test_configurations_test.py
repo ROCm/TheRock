@@ -98,6 +98,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "rocthrust",
                 "rocalution",
                 "composable-kernel",
+                "hipdnn",
+                "hipkernelprovider",
+                "miopenprovider",
+                "hipblasltprovider",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
             },
         )
         sanity = json.loads(self.gha_output["sanity_component"])
@@ -130,6 +136,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "rocthrust",
                 "rocalution",
                 "composable-kernel",
+                "hipdnn",
+                "hipkernelprovider",
+                "miopenprovider",
+                "hipblasltprovider",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
             },
         )
         self.assertEqual(
@@ -214,6 +226,51 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(
             components["composable-kernel"]["fetch_artifact_args"],
             "--composable-kernel --tests",
+        )
+        for component in components.values():
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_runner"], "host-only")
+
+    def test_host_asan_dnn_uses_reviewed_cpu_suites(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = (
+            "hipdnn,hipkernelprovider,miopenprovider,hipblasltprovider,"
+            "hipdnn-integration-tests"
+        )
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components),
+            {
+                "hipdnn",
+                "hipkernelprovider",
+                "miopenprovider",
+                "hipblasltprovider",
+                "hipdnn-integration-tests",
+                "hipdnn_install",
+            },
+        )
+        self.assertIn("test_runner.py", components["hipdnn"]["test_script"])
+        self.assertIn(
+            "test_hipkernelprovider.py",
+            components["hipkernelprovider"]["test_script"],
+        )
+        self.assertEqual(
+            components["miopenprovider"]["fetch_artifact_args"],
+            "--blas --miopen --hipdnn --miopenprovider --tests",
+        )
+        self.assertEqual(
+            components["hipblasltprovider"]["fetch_artifact_args"],
+            "--blas --hipdnn --hipblasltprovider --tests",
+        )
+        for key in ("hipdnn-integration-tests", "hipdnn_install"):
+            self.assertIn("test_hipdnn_host_asan.py", components[key]["test_script"])
+        self.assertEqual(
+            components["hipdnn_install"]["fetch_artifact_args"],
+            "--hipdnn --tests",
         )
         for component in components.values():
             self.assertTrue(component["linux_cpu_runner"])

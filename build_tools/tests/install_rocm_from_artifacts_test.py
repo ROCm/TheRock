@@ -82,6 +82,11 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertIn("hipdnn-integration-tests_run", argv)
         self.assertIn("rand_lib", argv)
 
+    def test_hipdnn_includes_host_tools(self):
+        argv = self._run_main(["--hipdnn", "--tests"])
+        self.assertIn("hipdnn_run", argv)
+        self.assertIn("hipdnn_test", argv)
+
     def test_composable_kernel_includes_host_tests(self):
         argv = self._run_main(["--composable-kernel", "--tests"])
         self.assertIn("composable-kernel_lib", argv)
