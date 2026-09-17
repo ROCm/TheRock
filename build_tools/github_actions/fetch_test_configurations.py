@@ -951,6 +951,32 @@ test_matrix = {
     },
 }
 
+# CPU-only host-ASAN admission is deliberately separate from the regular test
+# depth tiers. Component PRs extend this explicit map; regular test additions
+# must never enter the sanitizer lane implicitly.
+HOST_ASAN_COMPONENTS = {
+    "sanity": {
+        "test_script": f"python {_get_script_path('test_host_asan_sanity.py')}",
+        "timeout_minutes": 5,
+    },
+}
+
+
+def _host_asan_matrix() -> dict:
+    """Build the explicit Linux CPU-only host-ASAN component matrix."""
+    result = {}
+    for key, overrides in HOST_ASAN_COMPONENTS.items():
+        entry = deepcopy(test_matrix.get(key, {}))
+        entry.update(overrides)
+        entry["platform"] = ["linux"]
+        entry["linux_cpu_runner"] = True
+        entry["total_shards_dict"] = {"linux": 1}
+        entry.pop("multi_gpu", None)
+        entry.pop("include_family", None)
+        entry.pop("exclude_family", None)
+        result[key] = entry
+    return result
+
 
 def run():
     parser = argparse.ArgumentParser()
@@ -968,6 +994,12 @@ def run():
     test_labels = ast.literal_eval(os.getenv("TEST_LABELS") or "[]")
     run_extended_tests = str2bool(os.getenv("RUN_EXTENDED_TESTS", "false"))
     build_variant = os.getenv("BUILD_VARIANT", "release")
+    host_only_tests = str2bool(os.getenv("HOST_ONLY_TESTS", "false"))
+
+    if host_only_tests and platform != "linux":
+        raise ValueError("HOST_ONLY_TESTS is supported only on Linux")
+    if host_only_tests and not build_variant.startswith("host-asan"):
+        raise ValueError("HOST_ONLY_TESTS requires a host-asan build variant")
 
     # Get runner config for per-component runner selection
     # This enables better load distribution across runner pools
@@ -999,8 +1031,16 @@ def run():
     # Build the selected test matrix:
     # 1) Start from regular tests
     # 2) Optionally merge extended tests (functional + benchmarks)
-    selected_matrix: dict = deepcopy(test_matrix)
-    logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
+    if host_only_tests:
+        selected_matrix = _host_asan_matrix()
+        test_type = "host-asan"
+        run_extended_tests = False
+        logging.info(
+            f"Using explicit host-ASAN matrix ({len(selected_matrix)} test(s))"
+        )
+    else:
+        selected_matrix = deepcopy(test_matrix)
+        logging.info(f"Using test_matrix ({len(selected_matrix)} test(s))")
 
     if run_extended_tests and functional_matrix:
         logging.info(
@@ -1068,7 +1108,12 @@ def run():
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+        if (
+            not host_only_tests
+            and key != "sanity"
+            and expanded_test_labels
+            and key not in expanded_test_labels
+        ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
@@ -1200,7 +1245,11 @@ def run():
     components_with_runners = []
     for component in all_components:
         job_name = component.get("job_name", "unknown")
-        if "multi_gpu_runner" in component:
+        if host_only_tests:
+            # Non-empty sentinel for the reusable workflow's sanity prerequisite.
+            # test_artifacts.yml routes host-only jobs to the build runner.
+            component["test_runner"] = "host-only"
+        elif "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels
             if test_runs_on_multi_gpu_labels:
                 component["multi_gpu_runner"] = select_weighted_label(
