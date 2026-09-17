@@ -10,10 +10,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from configure_asan_env import STATIC_ASAN_ENV, main, resolve_asan_env
+from configure_asan_env import (
+    STATIC_ASAN_ENV,
+    _asan_runtime_library_name,
+    main,
+    resolve_asan_env,
+)
 
 # The runtime is located by executing the artifact tree's clang, which the tests
 # stub with a shell script. Windows has no equivalent shebang mechanism.
@@ -31,7 +37,15 @@ def _make_executable(path: Path, contents: str) -> None:
 def _make_artifacts(root: Path, *, clang=True, symbolizer=True, runtime=True) -> Path:
     """Builds a fake artifact tree; returns the artifacts dir."""
     artifacts = root / "build"
-    runtime_path = artifacts / "lib" / "llvm" / "lib" / "clang" / "24" / "asan.so"
+    runtime_path = (
+        artifacts
+        / "lib"
+        / "llvm"
+        / "lib"
+        / "clang"
+        / "24"
+        / "libclang_rt.asan-x86_64.so"
+    )
     if runtime:
         runtime_path.parent.mkdir(parents=True, exist_ok=True)
         runtime_path.write_text("")
@@ -46,6 +60,21 @@ def _make_artifacts(root: Path, *, clang=True, symbolizer=True, runtime=True) ->
 
 
 class TestResolveAsanEnv(unittest.TestCase):
+    def test_runtime_library_name_normalizes_host_architecture(self):
+        for machine, expected_arch in (
+            ("x86_64", "x86_64"),
+            ("AMD64", "x86_64"),
+            ("aarch64", "aarch64"),
+            ("ARM64", "aarch64"),
+        ):
+            with self.subTest(machine=machine), patch(
+                "configure_asan_env.platform.machine", return_value=machine
+            ):
+                self.assertEqual(
+                    _asan_runtime_library_name(),
+                    f"libclang_rt.asan-{expected_arch}.so",
+                )
+
     @requires_posix
     def test_resolves_runtime_and_symbolizer(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -53,7 +82,9 @@ class TestResolveAsanEnv(unittest.TestCase):
             env, warnings = resolve_asan_env(artifacts)
 
             self.assertEqual(warnings, [])
-            self.assertTrue(env["ASAN_RUNTIME_PATH"].endswith("asan.so"))
+            self.assertTrue(
+                env["ASAN_RUNTIME_PATH"].endswith("libclang_rt.asan-x86_64.so")
+            )
             self.assertTrue(env["ASAN_SYMBOLIZER_PATH"].endswith("llvm-symbolizer"))
 
     def test_static_values_are_always_exported(self):
