@@ -37,6 +37,21 @@ if(THEROCK_ENABLE_SYSDEPS_GMP)
   )
 endif()
 
+# Optional sysdep: mpfr (depends on gmp)
+if(THEROCK_ENABLE_SYSDEPS_MPFR)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/mpfr" "${CMAKE_CURRENT_BINARY_DIR}/mpfr")
+  therock_provide_artifact(sysdeps-mpfr
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-mpfr.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-mpfr
+  )
+endif()
+
 # Optional sysdep: amd-mesa
 if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)
