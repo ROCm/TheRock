@@ -29,6 +29,7 @@ include = [
   # ROCm runtime libs (e.g. libhiprtc.so.7).
   "bin/rocshmem_functional_tests",
   "bin/rocshmem_unit_tests",
+  "bin/rocshmem_envvar_test",
   # CTest wrapper scripts referenced (by relative path) from the install-tree
   # CTestTestfile.cmake, plus the retry helper.
   "share/rocshmem/test_wrapper.sh",

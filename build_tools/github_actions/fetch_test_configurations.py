@@ -1061,6 +1061,23 @@ HOST_ASAN_COMPONENTS = {
         ),
         "timeout_minutes": 5,
     },
+    "rocrtst": {
+        "fetch_artifact_args": "--rocrtst --tests",
+        "test_script": (
+            f"python {_get_script_path('test_rocr_rocshmem_host_asan.py')}"
+        ),
+        "timeout_minutes": 5,
+    },
+    "hip-tests": {
+        "test_script": f"python {_get_script_path('test_hiptests_host_asan.py')}",
+        "timeout_minutes": 10,
+    },
+    "rocshmem": {
+        "test_script": (
+            f"python {_get_script_path('test_rocr_rocshmem_host_asan.py')}"
+        ),
+        "timeout_minutes": 5,
+    },
 }
 
 
