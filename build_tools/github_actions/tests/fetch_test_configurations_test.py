@@ -78,6 +78,49 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_host_asan_lane_starts_with_cpu_only_sanity(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(self._get_components(), [])
+        sanity = json.loads(self.gha_output["sanity_component"])
+        self.assertEqual(sanity["job_name"], "sanity")
+        self.assertTrue(sanity["linux_cpu_runner"])
+        self.assertEqual(sanity["test_type"], "host-asan")
+        self.assertEqual(sanity["total_shards"], 1)
+        self.assertEqual(sanity["test_runner"], "host-only")
+        self.assertNotIn("/dev/kfd", sanity["container_options"])
+        self.assertNotIn("/dev/dri", sanity["container_options"])
+
+    def test_host_asan_lane_ignores_regular_test_labels(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["TEST_LABELS"] = '["test:rocblas"]'
+
+        fetch_test_configurations.run()
+
+        self.assertEqual(self._get_components(), [])
+        self.assertEqual(
+            json.loads(self.gha_output["sanity_component"])["job_name"], "sanity"
+        )
+
+    def test_host_only_rejects_non_host_asan_variant(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "release"
+
+        with self.assertRaisesRegex(ValueError, "requires a host-asan"):
+            fetch_test_configurations.run()
+
+    def test_host_only_rejects_non_linux_platform(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        with self.assertRaisesRegex(ValueError, "only on Linux"):
+            fetch_test_configurations.run()
+
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
 
