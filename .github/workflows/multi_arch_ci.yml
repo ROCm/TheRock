@@ -105,7 +105,7 @@ on:
       - synchronize
 
 run-name: >-
-  Multi-Arch CI [win:azure-windows-scale-nosmt80core-tmp]
+  Multi-Arch CI [win:azure-windows-scale-nosmt176core-tmp]
 
 permissions:
   contents: read
@@ -200,7 +200,7 @@ jobs:
       #   - aws-windows-scale-rocm-customer-dev-g616xl     (AWS customer-dev)
       #   - aws-windows-scale-rocm-customer-dev-m8a24xl    (AWS customer-dev)
       #   - aws-windows-scale-rocm-customer-dev-m8azn24xl  (AWS customer-dev)
-      aws_windows_cpu_build_label: azure-windows-scale-nosmt80core-tmp
+      aws_windows_cpu_build_label: azure-windows-scale-nosmt176core-tmp
       skip_gpu_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.skip_gpu_tests) || false }}
     permissions:
       contents: read
