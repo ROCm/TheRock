@@ -3,6 +3,7 @@
 
 import hashlib
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -61,16 +62,11 @@ class RppHostTsanTest(unittest.TestCase):
             {"libraries": ("lib/librpp.so",)},
         )
 
-    def test_environment_bounds_parallel_runtimes_when_ci_omits_limits(self):
+    def test_environment_sets_required_parallel_runtimes_when_ci_omits_limits(self):
         with mock.patch.object(
             test_rpp_host_tsan,
             "native_host_tsan_environment",
             return_value={"LD_LIBRARY_PATH": "/existing"},
-        ), mock.patch.object(
-            test_rpp_host_tsan.os,
-            "sched_getaffinity",
-            return_value=set(range(64)),
-            create=True,
         ):
             env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
 
@@ -84,20 +80,70 @@ class RppHostTsanTest(unittest.TestCase):
             test_rpp_host_tsan,
             "native_host_tsan_environment",
             return_value={"OMP_NUM_THREADS": "64", "OPENBLAS_NUM_THREADS": "32"},
-        ), mock.patch.object(
-            test_rpp_host_tsan.os,
-            "sched_getaffinity",
-            return_value=set(range(4)),
-            create=True,
         ):
             env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
 
         self.assertEqual(env["OMP_NUM_THREADS"], "4")
         self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
 
+    def test_environment_does_not_collapse_to_single_affinity_cpu(self):
+        with mock.patch.object(
+            test_rpp_host_tsan,
+            "native_host_tsan_environment",
+            return_value={},
+        ), mock.patch.object(
+            test_rpp_host_tsan.os,
+            "sched_getaffinity",
+            return_value={0},
+            create=True,
+        ) as affinity:
+            env = test_rpp_host_tsan._test_environment(Path("/opt/rocm"))
+
+        affinity.assert_not_called()
+        self.assertEqual(env["OMP_NUM_THREADS"], "4")
+        self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+
     def test_ctest_execution_disables_aslr(self):
-        source = Path(test_rpp_host_tsan.__file__).read_text(encoding="utf-8")
-        self.assertIn('"setarch",\n                    platform.machine(),\n                    "-R",', source)
+        completed = subprocess.CompletedProcess(
+            [], 0, "100% tests passed, 0 tests failed out of 1\n", ""
+        )
+        with mock.patch.object(
+            test_rpp_host_tsan, "_run", return_value=completed
+        ) as run:
+            test_rpp_host_tsan._run_ctest(
+                Path("/tmp/rpp"),
+                {},
+                test_rpp_host_tsan.BRIGHTNESS_NAME,
+                timeout_seconds=120,
+                repeat_until_pass=3,
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command[:3], ["setarch", test_rpp_host_tsan.platform.machine(), "-R"]
+        )
+        self.assertIn("^rpp_sanity_test_brightness_host_f32$", command)
+        self.assertEqual(command[command.index("--timeout") + 1], "120")
+        self.assertEqual(command[command.index("--repeat") + 1], "until-pass:3")
+
+    def test_comprehensive_ctest_uses_extended_timeout_without_parallelism(self):
+        completed = subprocess.CompletedProcess(
+            [], 0, "100% tests passed, 0 tests failed out of 1\n", ""
+        )
+        with mock.patch.object(
+            test_rpp_host_tsan, "_run", return_value=completed
+        ) as run:
+            test_rpp_host_tsan._run_ctest(
+                Path("/tmp/rpp"),
+                {},
+                test_rpp_host_tsan.COMPREHENSIVE_NAMES[0],
+                timeout_seconds=1500,
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--timeout") + 1], "1500")
+        self.assertNotIn("--parallel", command)
+        self.assertNotIn("--repeat", command)
 
 
 if __name__ == "__main__":

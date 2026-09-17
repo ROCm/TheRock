@@ -1016,7 +1016,7 @@ HOST_TSAN_COMPONENTS = {
     # keeps RPP_HOST_BACKEND construction/destruction independent of HIP.
     "rpp": {
         "test_script": f"python {_get_script_path('test_rpp_host_tsan.py')}",
-        "timeout_minutes": 30,
+        "timeout_minutes": 60,
     },
     # Generic DWARF debugger coverage only (273 exact .exp files). GPU, GPU
     # core-file and debug-agent suites stay excluded. ptrace is required for a

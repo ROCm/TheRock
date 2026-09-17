@@ -623,6 +623,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             by_name["rocjpeg"]["fetch_artifact_args"], "--rocjpeg --tests"
         )
         self.assertEqual(by_name["rpp"]["fetch_artifact_args"], "--rpp --tests")
+        self.assertEqual(by_name["rpp"]["timeout_minutes"], 60)
         self.assertEqual(
             by_name["rocgdb-cpu"]["fetch_artifact_args"],
             "--debug-tools --tests",
