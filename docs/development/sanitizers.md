@@ -9,6 +9,12 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You don't have xnack-capable hardware (gfx942, gfx950)
   - You want faster builds (no xnack+ kernel variants)
   - You only need to catch host-side memory errors
+- `HOST_TSAN` : Enables host-side ThreadSanitizer (`-fsanitize=thread`) without
+  instrumenting device compilation or changing GPU targets. This is the mode
+  used by the multi-architecture host-TSAN workflow; its tests run on CPU
+  infrastructure from an explicit allowlist.
+- `TSAN` : Legacy full-scope ThreadSanitizer mode. It may pass sanitizer flags
+  through device compilation and is not the supported mode for host-only CI.
 - `OFF` : Explicitly disable sanitizers.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
@@ -21,6 +27,8 @@ In order to simplify use, the following presets are available for setting up spe
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
+- `--preset linux-release-host-tsan`: Host-only TSAN build with debug line
+  information for actionable race reports. GPU targets remain unchanged.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
 ## Sanitizer Aware Project Development
@@ -38,8 +46,8 @@ Some sub-projects have strict gfx target checks that do not allow these extends 
 
 When a project is configured for sanitizers, it will have certain variables injected into it. While it is often possible to not require projects to have any special knowledge of what sanitizer they were compiled for, some do need to know. For these cases, it can be necessary to use these special variables so injected.
 
-- `THEROCK_SANITIZER={ASAN|HOST_ASAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN.
-- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for both `ASAN` and `HOST_ASAN` modes.
+- `THEROCK_SANITIZER={ASAN|HOST_ASAN|TSAN|HOST_TSAN}` : Set if a sanitizer is active for the project and indicates which one. `HOST_TSAN` is the supported host-only thread-race mode.
+- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for all supported ASAN and TSAN modes.
 
 You are recommended to code defensively with patterns like:
 
@@ -181,4 +189,19 @@ export LD_PRELOAD="${ASAN_LIB_PATH%/*}/$ASAN_LIB_NAME:${ROCM_ASAN_PATH}/lib/liba
 
 ## Troubleshooting
 
-TODO: Add troubleshooting tips here.
+Host-TSAN executables must link the compiler-rt TSAN runtime directly. The CI
+test environment intentionally does not put TSAN in `LD_PRELOAD`, because that
+would instrument the Python/shell harness rather than prove the component under
+test is correctly linked. The workflow first runs a clean atomic canary and a
+deterministically racy canary; the second must emit a TSAN data-race report and
+exit with code 86 before component tests are admitted.
+
+The manual `multi_arch_ci_tsan.yml` and reusable
+`multi_arch_release_tsan.yml` workflows build the supported `gfx94x` and
+`gfx950` artifact families, then run the CPU suite once from a single artifact
+carrier. The current fail-closed allowlist is `rocroller`, `origami`,
+`rocrand`, `hiprand`, `rocsparse`, `rocprim`, `rocthrust`, and `hipfile`, plus
+the sanitizer canary. GPU device nodes, multi-GPU settings, sharding, and
+device-only tests are not inherited. Prebuilt-stage reuse and package
+publication are disabled during qualification so an uninstrumented baseline
+cannot be mixed into the result.

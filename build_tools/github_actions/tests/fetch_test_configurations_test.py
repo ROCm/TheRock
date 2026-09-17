@@ -555,6 +555,109 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         self.assertEqual(self.gha_output["platform"], "linux")
 
+    def test_host_tsan_uses_only_explicit_cpu_components(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-tsan"
+
+        fetch_test_configurations.run()
+
+        sanity = json.loads(self.gha_output["sanity_component"])
+        components = self._get_components()
+        self.assertEqual(
+            {component["job_name"] for component in components},
+            {
+                "hip-tests",
+                "rocroller",
+                "origami",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "rocprim",
+                "rocthrust",
+                "hipfile",
+                "rocrtst",
+                "rccl",
+                "rocshmem",
+                "aqlprofile",
+                "rocprofiler-sdk",
+                "rocprofiler-compute",
+                "rocprofiler-systems",
+                "rocdecode",
+                "rocjpeg",
+                "rpp",
+                "rocgdb-cpu",
+            },
+        )
+        self.assertEqual(sanity["job_name"], "sanity")
+        self.assertIn("test_host_tsan_sanity.py", sanity["test_script"])
+        for component in [sanity, *components]:
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["total_shards"], 1)
+            self.assertEqual(component["shard_arr"], [1])
+            self.assertEqual(component["test_runner"], "host-only")
+            self.assertNotIn("multi_gpu_runner", component)
+            self.assertNotIn("/dev/kfd", component["container_options"])
+            self.assertNotIn("/dev/dri", component["container_options"])
+            self.assertNotIn("SYS_MODULE", component["container_options"])
+            self.assertNotIn("/lib/modules", component["container_options"])
+        scripts = {
+            component["job_name"]: component["test_script"]
+            for component in components
+        }
+        self.assertIn("test_rocroller_host_tsan.py", scripts["rocroller"])
+        self.assertIn("test_ctest_host_tsan.py", scripts["origami"])
+        self.assertIn("test_ctest_host_tsan.py", scripts["hipfile"])
+        self.assertIn("test_hiptests_host_tsan.py", scripts["hip-tests"])
+        self.assertIn("test_media_host_tsan.py", scripts["rocdecode"])
+        self.assertIn("test_media_host_tsan.py", scripts["rocjpeg"])
+        self.assertIn("test_rpp_host_tsan.py", scripts["rpp"])
+        self.assertIn("test_rocgdb_host_tsan.py", scripts["rocgdb-cpu"])
+        by_name = {component["job_name"]: component for component in components}
+        self.assertEqual(
+            by_name["rocdecode"]["fetch_artifact_args"], "--rocdecode --tests"
+        )
+        self.assertIn(
+            "no_rocm_image_ubuntu24_04_media",
+            by_name["rocdecode"]["container_image"],
+        )
+        self.assertEqual(
+            by_name["rocjpeg"]["fetch_artifact_args"], "--rocjpeg --tests"
+        )
+        self.assertEqual(by_name["rpp"]["fetch_artifact_args"], "--rpp --tests")
+        self.assertEqual(
+            by_name["rocgdb-cpu"]["fetch_artifact_args"],
+            "--debug-tools --tests",
+        )
+        self.assertIn("--cap-add=SYS_PTRACE", by_name["rocgdb-cpu"]["container_options"])
+        for component in ("rocrand", "hiprand", "rocsparse", "rocprim", "rocthrust"):
+            self.assertIn("test_native_host_tsan.py", scripts[component])
+        self.assertIn("test_native_host_tsan.py", scripts["rocrtst"])
+        self.assertIn("test_rccl_host_tsan.py", scripts["rccl"])
+        self.assertIn("test_native_host_tsan.py", scripts["rocshmem"])
+        self.assertIn("test_aqlprofile_host_tsan.py", scripts["aqlprofile"])
+        self.assertIn(
+            "test_profiler_host_tsan.py", scripts["rocprofiler-systems"]
+        )
+        self.assertIn("test_profiler_host_tsan.py", scripts["rocprofiler-sdk"])
+        self.assertIn(
+            "test_profiler_host_tsan.py", scripts["rocprofiler-compute"]
+        )
+
+    def test_host_only_rejects_non_tsan_variant(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+
+        with self.assertRaisesRegex(ValueError, "requires a host-tsan"):
+            fetch_test_configurations.run()
+
+    def test_host_only_rejects_windows(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-tsan"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+
+        with self.assertRaisesRegex(ValueError, "only on Linux"):
+            fetch_test_configurations.run()
+
     def test_container_options_on_windows_is_string_not_list(self):
         # Regression: a list value here caused
         # `options: ${{ fromJSON(...).container_options }}` in test_component.yml

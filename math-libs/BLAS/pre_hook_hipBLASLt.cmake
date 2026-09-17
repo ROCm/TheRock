@@ -25,3 +25,15 @@ block(SCOPE_FOR VARIABLES)
   set(ENV{PATH} "${new_path}")
   message(STATUS "Augmented toolchain PATH=$ENV{PATH}")
 endblock()
+
+# hipBLASLt imports its sanitized _rocisa Python extension while generating
+# device libraries. A RUNPATH lets the loader locate compiler-rt, but TSAN must
+# be loaded before Python allocates static TLS or dlopen fails with
+# "cannot allocate memory in static TLS block". Upstream's TSAN option routes
+# its bundled Python/code-generation commands through an LD_PRELOAD launcher.
+# It does not duplicate TheRock's sanitizer flags: the upstream target flag
+# helper returns immediately whenever THEROCK_SANITIZER is set.
+if(THEROCK_SANITIZER STREQUAL "HOST_TSAN")
+  set(HIPBLASLT_ENABLE_TSAN ON CACHE BOOL
+    "Enable hipBLASLt's TSAN-aware Python code-generation launcher" FORCE)
+endif()

@@ -92,6 +92,9 @@ jobs:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      # Clang TSAN may re-exec build-time compiler probes with ASLR disabled.
+      # Docker's default seccomp profile blocks that personality syscall.
+      options: ${{ startsWith(inputs.build_variant_cmake_preset, 'linux-release-host-tsan') && '--security-opt seccomp=unconfined' || '' }}
     env:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_portable_linux_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"

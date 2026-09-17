@@ -13,6 +13,8 @@ include = [
 [components.test."comm-libs/rccl/stage"]
 include = [
   "bin/rccl/**",
+  # Includes the explicitly installed host-only Micro, MicroInit,
+  # MicroEnqueue, and NetTelemetry binaries used by host sanitizers.
   "bin/rccl-UnitTests*",
 ]
 

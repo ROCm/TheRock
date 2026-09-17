@@ -182,6 +182,13 @@ all_build_variants = {
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
         },
+        "host-tsan": {
+            "build_variant_label": "host-tsan",
+            # Keep host-only artifacts isolated from the legacy full TSAN
+            # variant so stage reuse and artifact lookup cannot cross modes.
+            "build_variant_suffix": "host-tsan",
+            "build_variant_cmake_preset": "linux-release-host-tsan",
+        },
     },
     "windows": {
         "release": {
@@ -246,6 +253,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "host-tsan",
             ],
         }
     },
@@ -360,6 +368,7 @@ amdgpu_family_info_matrix_postsubmit = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "host-tsan",
             ],
             # Only run tests on submodule bumps (builds always run)
             "submodule_bump_tests_only": True,
