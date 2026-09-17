@@ -442,7 +442,7 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
             _make_run_id_args(rocprofiler_systems_examples=True)
         )
         self.assertNotIn("hipfile_lib", argv)
-        
+
 
 class TestRocprofilerSdkDev(unittest.TestCase):
     """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
