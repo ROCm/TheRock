@@ -222,6 +222,10 @@ _SKIPPABLE_PATH_PATTERNS = [
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
+    # docker_images.json is excluded from this pattern below: it is resolved
+    # at CI run time by resolve-docker-images.yml, so a bad bump there can
+    # break every build using that image immediately, not just after a
+    # republish.
     "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
@@ -245,6 +249,14 @@ _SKIPPABLE_PATH_PATTERNS = [
     "build_tools/scan_tools/github_actions/tests/*",
     "test_tools/tests/*",
 ]
+
+# Exact paths that override _SKIPPABLE_PATH_PATTERNS above and always force a
+# CI run, even though they'd otherwise match a broader skippable pattern.
+_NEVER_SKIPPABLE_PATHS = {
+    # Resolved at CI run time by resolve-docker-images.yml, so a bad bump
+    # here can break every build using that image right away.
+    "dockerfiles/docker_images.json",
+}
 
 # GitHub workflow files that are used by CI workflows. Changes to any of
 # these trigger CI runs. This is an explicit list (not glob patterns) so that
@@ -290,6 +302,8 @@ _GITHUB_WORKFLOWS_CI_FILENAMES = {
 
 def _is_path_skippable(path: str) -> bool:
     """Checks if a single file path matches any skippable pattern."""
+    if path in _NEVER_SKIPPABLE_PATHS:
+        return False
     return any(fnmatch.fnmatch(path, pattern) for pattern in _SKIPPABLE_PATH_PATTERNS)
 
 
