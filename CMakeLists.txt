@@ -21,6 +21,7 @@ endif()
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   set(amdsmi_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type for amdsmi" FORCE)
   set(therock-host-blas_BUILD_TYPE Release CACHE STRING "Build type for host-blas" FORCE)
+  set(therock-host-blas64_BUILD_TYPE Release CACHE STRING "Build type for host-blas64" FORCE)
   set(therock-SuiteSparse_BUILD_TYPE Release CACHE STRING "Build type for SuiteSparse" FORCE)
 endif()
 
