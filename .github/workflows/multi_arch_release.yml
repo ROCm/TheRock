@@ -155,6 +155,9 @@ jobs:
       python_version: ${{ inputs.python_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
+      # This no-component-patches branch intentionally omits the stages that
+      # require the gfx1250-strict rocm-libraries and RCCL patch stacks.
+      build_stages: compiler-runtime,emulation,wsl-rocdxg,runtime-tests,cv-libs,storage-libs,debug-tools,dctools-core,profiler-apps,media-libs
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
