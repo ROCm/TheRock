@@ -581,7 +581,8 @@ test_matrix = {
         # PROJECTS_TO_TEST=hipfft), since this variant has no label of its own.
         "base_project": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 30,
+        # TEMP (diagnostic run): raised from 30 to fit a full test_prob=1.0 sweep.
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
