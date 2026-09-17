@@ -94,6 +94,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hiprand",
                 "rocsparse",
                 "stinkytofu",
+                "rocprim",
+                "rocthrust",
+                "rocalution",
+                "composable-kernel",
             },
         )
         sanity = json.loads(self.gha_output["sanity_component"])
@@ -122,6 +126,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hiprand",
                 "rocsparse",
                 "stinkytofu",
+                "rocprim",
+                "rocthrust",
+                "rocalution",
+                "composable-kernel",
             },
         )
         self.assertEqual(
@@ -177,6 +185,35 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertEqual(
             components["stinkytofu"]["fetch_artifact_args"], "--blas --tests"
+        )
+        for component in components.values():
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_runner"], "host-only")
+
+    def test_host_asan_cpp_math_uses_explicit_cpu_runners(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = (
+            "rocprim,rocthrust,rocalution,composable-kernel"
+        )
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components),
+            {"rocprim", "rocthrust", "rocalution", "composable-kernel"},
+        )
+        self.assertIn(
+            "test_rocprim_host_asan.py", components["rocprim"]["test_script"]
+        )
+        self.assertIn(
+            "test_rocthrust_host_asan.py", components["rocthrust"]["test_script"]
+        )
+        self.assertIn("test_runner.py", components["rocalution"]["test_script"])
+        self.assertEqual(
+            components["composable-kernel"]["fetch_artifact_args"],
+            "--composable-kernel --tests",
         )
         for component in components.values():
             self.assertTrue(component["linux_cpu_runner"])

@@ -82,6 +82,11 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertIn("hipdnn-integration-tests_run", argv)
         self.assertIn("rand_lib", argv)
 
+    def test_composable_kernel_includes_host_tests(self):
+        argv = self._run_main(["--composable-kernel", "--tests"])
+        self.assertIn("composable-kernel_lib", argv)
+        self.assertIn("composable-kernel_test", argv)
+
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     """Return a tarball name matching the platform under test."""
@@ -384,6 +389,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         miopenprovider=False,
         hipkernelprovider=False,
         hiptensor=False,
+        composable_kernel=False,
         hipblasltprovider=False,
         prim=False,
         rand=False,
