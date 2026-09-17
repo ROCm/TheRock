@@ -39,6 +39,12 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: >-
+          PyTorch test coverage: 'none' stops after build-time wheel validation
+          and 'standard' runs the selected GPU suite.
+        type: string
+        default: "standard"
       python_version:
         description: Python version to build wheels for.
         type: string
@@ -108,6 +114,13 @@ on:
           tests.
         type: string
         default: "auto"
+      test_level:
+        description: PyTorch test coverage level.
+        type: choice
+        options:
+          - none
+          - standard
+        default: standard
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -182,7 +195,10 @@ on:
         type: string
         default: ""
 
-run-name: Build Multi-Arch Windows PyTorch Wheels (${{ inputs.release_type }}, ${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
+run-name: >-
+  Build Multi-Arch Windows PyTorch Wheels
+  (${{ inputs.release_type }}, py ${{ inputs.python_version }},
+  torch ${{ inputs.pytorch_git_ref }}, tests ${{ inputs.test_level }})
 
 permissions:
   contents: read
@@ -537,7 +553,7 @@ jobs:
         run: python build_tools/github_actions/capture_job_summary.py
 
   configure_pytorch_tests:
-    name: Configure PyTorch Tests
+    name: Configure PyTorch Tests | ${{ inputs.test_level }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -568,6 +584,7 @@ jobs:
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
             --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
             --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
+            --test-level "${{ inputs.test_level }}" \
             --platform windows
 
       - name: Capture job summary
@@ -576,7 +593,9 @@ jobs:
         run: python build_tools/github_actions/capture_job_summary.py
 
   test_pytorch_wheels:
-    name: Test | ${{ matrix.amdgpu_family }} | ${{ matrix.test_runs_on }}
+    # Keep this name static: GitHub does not expand matrix expressions when
+    # the job is skipped before matrix evaluation (for example, for none).
+    name: Test PyTorch Wheels
     if: ${{ needs.configure_pytorch_tests.outputs.enabled == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests]
     permissions:
