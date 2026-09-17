@@ -442,6 +442,19 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
             _make_run_id_args(rocprofiler_systems_examples=True)
         )
         self.assertNotIn("hipfile_lib", argv)
+        
+
+class TestRocprofilerSdkDev(unittest.TestCase):
+    """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
+
+    def test_rocprofiler_sdk_tests_includes_dev(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("rocprofiler-sdk_dev", argv)
+
+    def test_rocprofiler_sdk_tests_includes_configure_deps(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_sdk=True, tests=True))
+        self.assertIn("amd-llvm_dev", argv)
+        self.assertIn("sysdeps_dev", argv)
 
 
 if __name__ == "__main__":

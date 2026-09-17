@@ -427,7 +427,10 @@ jobs:
   # ==========================================================================
   libraries_baseline_ready:
     name: "Libraries Baseline Ready"
-    if: always()
+    # No `if:` on purpose: GitHub skips a job whose `needs:` did not all
+    # succeed, and bump_automation.py rejects any conclusion but "success", so
+    # skipping rejects the baseline without failing the calling job and the
+    # test matrix behind it.
     needs:
       [
         runtime-tests,
@@ -442,12 +445,8 @@ jobs:
       ]
     runs-on: ubuntu-24.04
     steps:
-      - name: Require reused stages to have succeeded
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
-        run: |
-          echo "One or more stages rocm-libraries reuses via baseline_run_id did not succeed:"
-          echo '${{ toJSON(needs) }}'
-          exit 1
+      - name: Report reused stage results
+        run: echo '${{ toJSON(needs) }}'
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
