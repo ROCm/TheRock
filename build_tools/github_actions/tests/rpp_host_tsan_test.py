@@ -49,6 +49,13 @@ class RppHostTsanTest(unittest.TestCase):
             hashlib.sha256(normalized.encode()).hexdigest(),
             test_rpp_host_tsan.EXPECTED_INVENTORY_SHA256,
         )
+        self.assertEqual(
+            test_rpp_host_tsan.EXECUTED_NAMES,
+            (
+                "rpp_qa_tests_tensor_image_host_all",
+                "rpp_qa_tests_tensor_misc_host_all",
+            ),
+        )
 
     def test_inventory_change_fails_closed(self):
         with self.assertRaisesRegex(RuntimeError, "inventory changed"):
@@ -103,28 +110,47 @@ class RppHostTsanTest(unittest.TestCase):
         self.assertEqual(env["OMP_NUM_THREADS"], "4")
         self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
 
-    def test_ctest_execution_disables_aslr(self):
-        completed = subprocess.CompletedProcess(
-            [], 0, "100% tests passed, 0 tests failed out of 1\n", ""
-        )
-        with mock.patch.object(
-            test_rpp_host_tsan, "_run", return_value=completed
-        ) as run:
-            test_rpp_host_tsan._run_ctest(
-                Path("/tmp/rpp"),
-                {},
-                test_rpp_host_tsan.BRIGHTNESS_NAME,
-                timeout_seconds=120,
-                repeat_until_pass=3,
+    def test_brightness_runs_prebuilt_binary_without_build_and_test_wrapper(self):
+        tests = [
+            {
+                "name": test_rpp_host_tsan.EXPECTED_NAMES[0],
+                "command": [
+                    "cmake",
+                    "--build-and-test",
+                    "/src",
+                    "/build/HOST",
+                    "--test-command",
+                    "Tensor_image_host",
+                    "/src/images",
+                    "2",
+                    "0",
+                ],
+            }
+        ]
+        with mock.patch.object(test_rpp_host_tsan, "_run") as run:
+            test_rpp_host_tsan._run_brightness(
+                Path("/tmp/rpp-build"), {}, tests
             )
 
         command = run.call_args.args[0]
         self.assertEqual(
             command[:3], ["setarch", test_rpp_host_tsan.platform.machine(), "-R"]
         )
-        self.assertIn("^rpp_sanity_test_brightness_host_f32$", command)
-        self.assertEqual(command[command.index("--timeout") + 1], "120")
-        self.assertEqual(command[command.index("--repeat") + 1], "until-pass:3")
+        self.assertEqual(
+            command[3], os.fspath(Path("/tmp/rpp-build/HOST/Tensor_image_host"))
+        )
+        self.assertNotIn("--build-and-test", command)
+        self.assertEqual(command[4:], ["/src/images", "2", "0"])
+
+    def test_brightness_fails_closed_when_registered_payload_changes(self):
+        tests = [
+            {
+                "name": test_rpp_host_tsan.EXPECTED_NAMES[0],
+                "command": ["cmake", "--build-and-test", "/src", "/build"],
+            }
+        ]
+        with self.assertRaisesRegex(RuntimeError, "wrapper changed"):
+            test_rpp_host_tsan._brightness_payload(tests)
 
     def test_comprehensive_ctest_uses_extended_timeout_without_parallelism(self):
         completed = subprocess.CompletedProcess(
@@ -132,18 +158,46 @@ class RppHostTsanTest(unittest.TestCase):
         )
         with mock.patch.object(
             test_rpp_host_tsan, "_run", return_value=completed
-        ) as run:
+        ) as run, mock.patch.object(
+            test_rpp_host_tsan, "_read_last_test_log", return_value=""
+        ):
             test_rpp_host_tsan._run_ctest(
                 Path("/tmp/rpp"),
                 {},
-                test_rpp_host_tsan.COMPREHENSIVE_NAMES[0],
+                test_rpp_host_tsan.EXECUTED_NAMES[0],
                 timeout_seconds=1500,
             )
 
         command = run.call_args.args[0]
+        self.assertEqual(
+            command[:3], ["setarch", test_rpp_host_tsan.platform.machine(), "-R"]
+        )
         self.assertEqual(command[command.index("--timeout") + 1], "1500")
         self.assertNotIn("--parallel", command)
         self.assertNotIn("--repeat", command)
+
+    def test_comprehensive_ctest_fails_closed_on_child_process_error(self):
+        completed = subprocess.CompletedProcess(
+            [],
+            0,
+            "Returned non-zero exit status : 86 WARNING: ThreadSanitizer\n"
+            "100% tests passed, 0 tests failed out of 1\n",
+            "",
+        )
+        with mock.patch.object(
+            test_rpp_host_tsan, "_run", return_value=completed
+        ), mock.patch.object(
+            test_rpp_host_tsan,
+            "_read_last_test_log",
+            return_value="Returned non-zero exit status : 86 WARNING: ThreadSanitizer",
+        ):
+            with self.assertRaisesRegex(RuntimeError, "child process failed"):
+                test_rpp_host_tsan._run_ctest(
+                    Path("/tmp/rpp"),
+                    {},
+                    test_rpp_host_tsan.EXECUTED_NAMES[0],
+                    timeout_seconds=1500,
+                )
 
 
 if __name__ == "__main__":

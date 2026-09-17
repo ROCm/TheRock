@@ -26,13 +26,18 @@ EXPECTED_NAMES = (
     "rpp_qa_tests_tensor_image_host_all",
     "rpp_qa_tests_tensor_misc_host_all",
 )
-BRIGHTNESS_NAME = EXPECTED_NAMES[0]
-COMPREHENSIVE_NAMES = EXPECTED_NAMES[1:]
+EXECUTED_NAMES = EXPECTED_NAMES[1:]
 EXPECTED_INVENTORY_SHA256 = (
     "0e0c49f9da7bd690d8853f9347d454b010b743ee8f96a353afffe5365ec9a521"
 )
 TEST_REGEX = "^(" + "|".join(EXPECTED_NAMES) + ")$"
 _CTEST_NAME_RE = re.compile(r"^\s*Test\s+#\d+:\s+(.+?)\s*$")
+_RPP_CHILD_FAILURE_RE = re.compile(
+    r"Returned non-zero exit status\s*:|"
+    r"(?:WARNING|FATAL|SUMMARY): ThreadSanitizer|"
+    r"Segmentation fault",
+    re.IGNORECASE,
+)
 
 
 def _compiler(prefix: Path, name: str) -> Path:
@@ -128,7 +133,6 @@ def _run_ctest(
     name: str,
     *,
     timeout_seconds: int,
-    repeat_until_pass: int | None = None,
 ) -> None:
     command = [
         "setarch",
@@ -144,15 +148,57 @@ def _run_ctest(
         "--timeout",
         str(timeout_seconds),
     ]
-    if repeat_until_pass is not None:
-        command.extend(["--repeat", f"until-pass:{repeat_until_pass}"])
     executed = _run(command, env, build_dir, capture=True)
     output = executed.stdout + executed.stderr
     print(output, end="")
     if re.search(r"\*\*\*Skipped|Not Run|did not run", output, re.IGNORECASE):
         raise RuntimeError(f"RPP host-TSAN execution skipped {name}")
+    last_test_log = _read_last_test_log(build_dir)
+    if _RPP_CHILD_FAILURE_RE.search(output + "\n" + last_test_log):
+        raise RuntimeError(f"RPP host-TSAN child process failed: {name}")
     if not re.search(r"100% tests passed,\s+0 tests failed out of 1\b", output):
         raise RuntimeError(f"RPP host-TSAN test did not pass: {name}")
+
+
+def _read_last_test_log(build_dir: Path) -> str:
+    path = build_dir / "Testing" / "Temporary" / "LastTest.log"
+    if not path.is_file():
+        raise RuntimeError(f"RPP CTest did not produce its execution log: {path}")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _brightness_payload(tests: list[dict]) -> list[str]:
+    test = next(
+        (test for test in tests if test.get("name") == EXPECTED_NAMES[0]),
+        None,
+    )
+    if test is None or not isinstance(test.get("command"), list):
+        raise RuntimeError("RPP brightness CTest command is missing")
+    command = test["command"]
+    try:
+        marker = command.index("--test-command")
+    except ValueError as error:
+        raise RuntimeError("RPP brightness CTest wrapper changed") from error
+    payload = command[marker + 1 :]
+    if not payload or Path(payload[0]).name != "Tensor_image_host":
+        raise RuntimeError("RPP brightness CTest payload changed")
+    return payload[1:]
+
+
+def _run_brightness(
+    build_dir: Path, env: dict[str, str], tests: list[dict]
+) -> None:
+    _run(
+        [
+            "setarch",
+            platform.machine(),
+            "-R",
+            str(build_dir / "HOST" / "Tensor_image_host"),
+            *_brightness_payload(tests),
+        ],
+        env,
+        build_dir,
+    )
 
 
 def main() -> int:
@@ -207,7 +253,6 @@ def main() -> int:
                 build_dir / "HOST" / "Tensor_misc_host",
             ):
                 require_direct_clang_tsan(binary, env)
-
             listed = _run(
                 ["ctest", "--test-dir", str(build_dir), "-N", "-R", TEST_REGEX],
                 env,
@@ -216,23 +261,22 @@ def main() -> int:
             )
             names = _parse_names(listed.stdout)
             _validate_inventory(names)
-            _selected_commands(build_dir, env)
+            selected_tests = _selected_commands(build_dir, env)
 
-            # The short brightness smoke test is flaky on the shared cloud CPU
-            # runner: it can exit with SIGSEGV without a TSAN report while the
-            # same binary passes on retry. Keep it in the inventory and allow a
-            # bounded retry rather than masking a sanitizer finding.
-            _run_ctest(
-                build_dir,
-                env,
-                BRIGHTNESS_NAME,
-                timeout_seconds=120,
-                repeat_until_pass=3,
-            )
+            # The registered brightness smoke uses CTest --build-and-test to
+            # reconfigure the already configured HOST build directory in place;
+            # that wrapper deterministically corrupts/crashes on the shared AWS
+            # runner. Execute the already-built, linkage-verified binary with
+            # the exact registered brightness F32 arguments instead.
+            _run_brightness(build_dir, env, selected_tests)
+
             # The comprehensive image and misc drivers are intentionally
             # serial: both recreate the same nested build directory. The cloud
             # CPU runner needs more than CTest's previous 600-second allowance.
-            for name in COMPREHENSIVE_NAMES:
+            # Their child-process logs are scanned explicitly because the
+            # upstream drivers currently print child failures without exiting
+            # nonzero themselves.
+            for name in EXECUTED_NAMES:
                 _run_ctest(build_dir, env, name, timeout_seconds=1500)
         return 0
     except (
