@@ -22,6 +22,7 @@ import os
 import platform
 import shlex
 import subprocess
+import time
 from pathlib import Path
 
 from libhipcxx_utils import (
@@ -38,8 +39,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # Each example: where it lives under <artifacts>/hipthreads/examples, the binary
 # name produced, the argv to run it with, and a substring expected on stdout.
-# stdout is captured to a file (the raytracer emits a multi-million-line PPM) and
-# scanned for the marker.
+# print_marker_line also logs the matched line to the CI log on success.
 EXAMPLES = [
     {
         "name": "saxpy",
@@ -47,12 +47,14 @@ EXAMPLES = [
         "binary": "saxpy",
         "args": [],
         "marker": "Time to run saxpy(",
+        "print_marker_line": True,
     },
     {
         "name": "inOneWeekend",
         "subdir": "InOneWeekendRaytracer/step4-simdize",
         "binary": "inOneWeekend",
         "args": [],
+        # "P3" is the PPM header, not a timing line - nothing to surface here.
         "marker": "P3",
     },
     {
@@ -66,6 +68,7 @@ EXAMPLES = [
         "binary": "spmm",
         "args": ["../data/test_general.mtx"],
         "marker": "Time(",
+        "print_marker_line": True,
     },
 ]
 
@@ -193,38 +196,53 @@ def run_example(example: dict, binary: Path, environ_vars: dict) -> None:
 
     cmd = [str(binary), *example["args"]]
     logging.info(f"++ Run [{example['name']}]$ {shlex.join(cmd)}")
-    with open(stdout_path, "wt") as stdout_file:
-        # cwd = source dir so any relative paths in the example resolve as it
-        # expects when run from its own directory.
-        result = subprocess.run(
-            cmd,
-            cwd=EXAMPLES_ROOT / example["subdir"],
-            stdout=stdout_file,
-            stderr=subprocess.STDOUT,
-            env=environ_vars,
-            timeout=RUN_TIMEOUT_SECONDS,
+    try:
+        with open(stdout_path, "wt") as stdout_file:
+            # cwd = source dir so any relative paths in the example resolve as it
+            # expects when run from its own directory.
+            start = time.perf_counter()
+            result = subprocess.run(
+                cmd,
+                cwd=EXAMPLES_ROOT / example["subdir"],
+                stdout=stdout_file,
+                stderr=subprocess.STDOUT,
+                env=environ_vars,
+                timeout=RUN_TIMEOUT_SECONDS,
+            )
+            # Wall clock like `time <binary>`; covers inOneWeekend too (no internal print).
+            elapsed_seconds = time.perf_counter() - start
+
+        if result.returncode != 0:
+            logging.error(f"{example['name']} exited with code {result.returncode}")
+            _dump_tail(stdout_path)
+            raise subprocess.CalledProcessError(result.returncode, cmd)
+
+        marker = example["marker"]
+        marker_line = _find_marker_line(stdout_path, marker)
+        if marker_line is None:
+            logging.error(f"{example['name']} output missing marker {marker!r}")
+            _dump_tail(stdout_path)
+            raise RuntimeError(f"{example['name']}: expected marker {marker!r} not found")
+
+        if example.get("print_marker_line"):
+            logging.info(f"{example['name']}: {marker_line}")
+
+        logging.info(
+            f"PASS: {example['name']} (exit 0, found marker {marker!r}, "
+            f"wall clock {elapsed_seconds:.3f}s)"
         )
-
-    if result.returncode != 0:
-        logging.error(f"{example['name']} exited with code {result.returncode}")
-        _dump_tail(stdout_path)
-        raise subprocess.CalledProcessError(result.returncode, cmd)
-
-    marker = example["marker"]
-    if not _file_contains(stdout_path, marker):
-        logging.error(f"{example['name']} output missing marker {marker!r}")
-        _dump_tail(stdout_path)
-        raise RuntimeError(f"{example['name']}: expected marker {marker!r} not found")
-
-    logging.info(f"PASS: {example['name']} (exit 0, found marker {marker!r})")
+    finally:
+        # Discard the log (inOneWeekend's is a multi-million-line PPM) once used above.
+        stdout_path.unlink(missing_ok=True)
 
 
-def _file_contains(path: Path, needle: str) -> bool:
+def _find_marker_line(path: Path, needle: str) -> str | None:
+    """Returns the first line of path containing needle, or None if not found."""
     with open(path, "rt", errors="replace") as f:
         for line in f:
             if needle in line:
-                return True
-    return False
+                return line.rstrip("\n")
+    return None
 
 
 def _dump_tail(path: Path, lines: int = 40) -> None:
