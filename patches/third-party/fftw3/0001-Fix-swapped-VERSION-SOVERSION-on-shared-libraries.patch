@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nirmal Unnikrishnan <nunnikri@amd.com>
+Date: Wed, 9 Sep 2026 00:00:00 +0000
+Subject: [PATCH] Fix swapped VERSION/SOVERSION on shared libraries
+
+FFTW's CMakeLists.txt sets:
+
+  set_target_properties (${subtarget} PROPERTIES SOVERSION 3.6.9 VERSION 3)
+
+CMake ties the real installed filename to VERSION and the SONAME
+(embedded in the library, plus the symlink consumers link against) to
+SOVERSION. With these swapped, the real file is named libfftw3.so.3
+while the embedded SONAME/symlink is libfftw3.so.3.6.9 - backwards
+from the standard Unix shared-library layout, and from what FFTW's
+own autotools/libtool build produces for this exact release: libtool
+version-info "9:9:6" translates to SONAME major 3 and real file
+version 3.6.9, per configure.ac.
+
+Every consumer that links against this build records the wrong,
+overly-specific libfftw3.so.3.6.9 as its runtime dependency instead
+of the stable libfftw3.so.3 SONAME that distro fftw3 packages
+actually provide, breaking installs/execution wherever TheRock's own
+build of fftw3 isn't also bundled alongside it (ROCM-30822).
+
+Swap the two properties so VERSION carries the full version (real
+filename) and SOVERSION carries the major-only ABI version (SONAME),
+matching the conventional layout and what distro packages provide.
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -356,7 +356,7 @@
+ endif ()
+ 
+ foreach(subtarget ${subtargets})
+-  set_target_properties (${subtarget} PROPERTIES SOVERSION 3.6.9 VERSION 3)
++  set_target_properties (${subtarget} PROPERTIES VERSION 3.6.9 SOVERSION 3)
+   install (TARGETS ${subtarget}
+ 	  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+ 	  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+--
+2.43.0
