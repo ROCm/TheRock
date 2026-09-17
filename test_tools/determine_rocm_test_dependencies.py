@@ -126,6 +126,7 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
 }
 
 

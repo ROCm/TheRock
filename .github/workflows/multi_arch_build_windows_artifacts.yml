@@ -102,6 +102,7 @@ jobs:
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
+      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: B:\build
       CACHE_DIR: ${{ github.workspace }}/.cache
 
