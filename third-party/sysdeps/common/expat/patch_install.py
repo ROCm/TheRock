@@ -51,5 +51,9 @@ if platform.system() == "Linux":
     relativize_pc_files(install_prefix)
 
 elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
+    # The library is static and keeps its name.  Its libtool descriptor (*.la)
+    # holds the build tree's absolute paths and nothing that ships needs it, so
+    # remove it as Linux does, and fix the .pc file.
+    for file_path in (Path(install_prefix) / "lib").glob("*.la"):
+        file_path.unlink()
+    relativize_pc_files(install_prefix)

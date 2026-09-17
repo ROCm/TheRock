@@ -52,6 +52,21 @@ if(THEROCK_ENABLE_SYSDEPS_MPFR)
   )
 endif()
 
+# Optional sysdep: expat
+if(THEROCK_ENABLE_SYSDEPS_EXPAT)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/expat" "${CMAKE_CURRENT_BINARY_DIR}/expat")
+  therock_provide_artifact(sysdeps-expat
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-expat.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-expat
+  )
+endif()
+
 # Optional sysdep: amd-mesa
 if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)
