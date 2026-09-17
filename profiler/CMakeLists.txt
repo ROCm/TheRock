@@ -338,6 +338,7 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
       -DROCPROFSYS_BUILD_TESTING="${THEROCK_BUILD_TESTING}"
       -DROCPROFSYS_BUILD_FMT=OFF
+      -DROCPROFSYS_BUILD_GTEST=OFF
       -DROCPROFSYS_BUILD_SPDLOG=OFF
       -DROCPROFSYS_BUILD_SQLITE3=OFF
       -DROCPROFSYS_USE_PYTHON="${_ROCPROFSYS_USE_PYTHON}"
@@ -354,8 +355,9 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     BUILD_DEPS
-      therock-spdlog
       therock-fmt
+      therock-googletest
+      therock-spdlog
     RUNTIME_DEPS
       amdsmi
       aqlprofile
