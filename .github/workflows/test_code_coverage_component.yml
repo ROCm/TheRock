@@ -1,13 +1,39 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Test component
+name: Test Code Coverage Component
 
 on:
   workflow_call:
     inputs:
-      artifact_run_id:
+      generic_run_id:
         type: string
+        description: >-
+          Run holding the generic, non-instrumented build the instrumented
+          components are swapped into. Empty installs this run's own artifacts,
+          which only makes sense when this run built the whole stack itself.
+        default: ""
+      generic_release_type:
+        type: string
+        description: >-
+          Release channel generic_run_id published to. Artifacts are bucketed by
+          channel, so a baseline nightly is read from its own rather than from
+          this run's.
+        default: ""
+      generic_repository:
+        type: string
+        description: >-
+          Repository owning generic_run_id, in 'owner/repo' form. Needed when
+          the generic build is a release nightly, which ROCm/rockrel publishes.
+          Empty uses this repository.
+        default: ""
+      replace_component:
+        type: string
+        description: >-
+          Component to swap in instrumented, as named by
+          install_rocm_code_coverage_build.py's COMPONENT_MAP (e.g. 'hiprand').
+          Empty falls back to the test component's job name, which matches for
+          every project onboarded so far.
         default: ""
       artifact_group:
         type: string
@@ -46,51 +72,12 @@ on:
         description: >-
           Prefix for the uploaded profraw artifact name. A coverage run tests
           several projects in one workflow run, so the caller sets this to
-          something project-specific to keep each project's profiles apart.
+          something project-specific to keep each project profiles apart.
         type: string
         default: "coverage-profraw"
-      coverage_baseline_run_id:
-        description: >-
-          Regular nightly run holding the non-instrumented artifacts. When set,
-          the whole install tree comes from that run and only the project under
-          test is overlaid from this run's instrumented build, so its
-          dependencies stay out of the coverage report. Empty means the run's
-          own artifacts are already the ones to test.
-        type: string
-        default: ""
-      coverage_baseline_release_type:
-        description: >-
-          Release channel the baseline run published to. Artifacts are bucketed
-          by channel, so this has to match the run that produced them rather
-          than the coverage run reading them.
-        type: string
-        default: "nightly"
-      coverage_baseline_repository:
-        description: >-
-          Repository owning coverage_baseline_run_id, in 'owner/repo' form.
-          Needed when the baseline is a release nightly, which is published by
-          ROCm/rockrel rather than this repository. Empty uses this repository.
-        type: string
-        default: ""
-      coverage_artifact_names:
-        description: >-
-          Comma-separated artifact names holding the instrumented project
-          (e.g. 'rand'). Required alongside coverage_baseline_run_id.
-        type: string
-        default: ""
-      coverage_artifact_relpaths:
-        description: >-
-          Comma-separated subproject stage directories to overlay from those
-          artifacts (e.g. 'math-libs/hipRAND/stage'). TheRock's artifacts are
-          grouped, so this is what keeps sibling projects non-instrumented.
-        type: string
-        default: ""
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
-      quartz_tracking_id:
-        type: string
-        default: ""
 
 
 permissions:
@@ -130,16 +117,15 @@ jobs:
       run:
         shell: bash
     env:
-      QUARTZ_REPORTING_WORKFLOW: test_component.yml
-      QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
+      CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
       VENV_DIR: ${{ github.workspace }}/.venv
-      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      # Nightly coverage installs the baseline run and overlays the
-      # instrumented project afterwards; every other run installs its own
-      # artifacts directly. The channel travels with the run id because
-      # artifacts are bucketed by channel.
-      INSTALL_ARTIFACT_RUN_ID: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_run_id || (inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id) }}"
-      INSTALL_RELEASE_TYPE: "${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_release_type || inputs.release_type }}"
+      # Empty generic_run_id means this run is the whole stack, instrumented
+      # components included, so it installs itself and the swap is a no-op.
+      GENERIC_RUN_ID: "${{ inputs.generic_run_id != '' && inputs.generic_run_id || github.run_id }}"
+      # The channel travels with the run id, since artifacts are bucketed by
+      # channel. Installing this run means reading this run's channel.
+      GENERIC_RELEASE_TYPE: "${{ (inputs.generic_run_id != '' && inputs.generic_release_type != '') && inputs.generic_release_type || inputs.release_type }}"
+      REPLACE_COMPONENT: "${{ inputs.replace_component != '' && inputs.replace_component || fromJSON(inputs.component).job_name }}"
       # Instrumented libraries are built -O0 -g and counted on every branch, so
       # the same suite takes far longer than the per-component budget assumes:
       # rocRAND tests that normally run in milliseconds took 25 to 60 seconds
@@ -163,19 +149,9 @@ jobs:
       BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -195,44 +171,81 @@ jobs:
 
       - name: Checking repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      # Sets up Python, the venv and the test requirements, and installs the
+      # generic non-instrumented build. Shared with every other component test
+      # rather than reimplemented here: the Python version, uv and the venv
+      # activation are maintained in one place.
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+        timeout-minutes: 15
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
-        uses: './.github/actions/setup_test_environment'
+          STEP_TIMEOUT_MINUTES: "15"
+        uses: "./.github/actions/setup_test_environment"
         with:
-          ARTIFACT_RUN_ID: ${{ env.INSTALL_ARTIFACT_RUN_ID }}
-          RUN_GITHUB_REPO: ${{ inputs.coverage_baseline_run_id != '' && inputs.coverage_baseline_repository || '' }}
+          ARTIFACT_RUN_ID: ${{ env.GENERIC_RUN_ID }}
+          RUN_GITHUB_REPO: ${{ inputs.generic_repository }}
           # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
           ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-          RELEASE_TYPE: ${{ env.INSTALL_RELEASE_TYPE }}
+          RELEASE_TYPE: ${{ env.GENERIC_RELEASE_TYPE }}
 
-      # The step above installed the baseline run, so every library here is
-      # non-instrumented. Replacing just this project's files leaves its
-      # dependencies out of the profiles the test run is about to write.
-      - name: Overlay instrumented coverage artifacts
-        if: ${{ inputs.coverage_baseline_run_id != '' }}
+      # Everything installed above is non-instrumented. Replacing only this
+      # component's files leaves its dependencies out of the profiles the test
+      # run is about to write.
+      #
+      # The instrumented run carries its own channel and repository, which are
+      # not the generic build's: coverage publishes to ci from this repository
+      # while the baseline is a nightly, possibly from ROCm/rockrel.
+      - name: Swap in the instrumented component
         timeout-minutes: 15
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TYPE: ${{ inputs.release_type }}
+          COVERAGE_RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
-          python ./build_tools/github_actions/overlay_coverage_artifacts.py \
-            --run-id="${{ github.run_id }}" \
-            --amdgpu-families="${{ inputs.amdgpu_families }}" \
-            --amdgpu-targets="${{ inputs.amdgpu_targets }}" \
-            --artifact-names="${{ inputs.coverage_artifact_names }}" \
-            --artifact-relpaths="${{ inputs.coverage_artifact_relpaths }}" \
-            --install-dir="${{ env.OUTPUT_ARTIFACTS_DIR }}"
+          python ./build_tools/install_rocm_code_coverage_build.py \
+            --skip-generic-install \
+            --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
+            --code-coverage-release-type="${COVERAGE_RELEASE_TYPE}" \
+            --code-coverage-github-repo="${GITHUB_REPOSITORY}" \
+            --artifact-group="${AMDGPU_FAMILIES}" \
+            --amdgpu-targets="${AMDGPU_TARGETS}" \
+            --output-dir="${OUTPUT_ARTIFACTS_DIR}" \
+            --replace-"${REPLACE_COMPONENT}"
+
+      # The swapped-in binaries and the generic install can disagree on where
+      # the LLVM runtime lives. LLVM_ENABLE_PER_TARGET_RUNTIME_DIR puts
+      # libomp.so under lib/llvm/lib/<triple>/ rather than lib/llvm/lib/, and a
+      # binary's RUNPATH names only the layout its own build produced, so a
+      # client built one way cannot resolve libomp.so in a tree built the
+      # other. Naming both on LD_LIBRARY_PATH covers either layout;
+      # pytest_runner.py already does this for the same reason.
+      #
+      # test_runner.py inherits the environment and preserves LD_LIBRARY_PATH,
+      # so this reaches ctest and the test binaries under it.
+      - name: Add the LLVM runtime directories to the library path
+        timeout-minutes: 2
+        run: |
+          llvm_lib="$(cd "${OUTPUT_ARTIFACTS_DIR}" && pwd)/lib/llvm/lib"
+          if [[ ! -d "${llvm_lib}" ]]; then
+            echo "::warning::${llvm_lib} is missing; leaving LD_LIBRARY_PATH alone."
+            exit 0
+          fi
+          # Sorted so the result does not depend on directory order.
+          paths=("${llvm_lib}")
+          while IFS= read -r dir; do
+            paths+=("${dir}")
+          done < <(find "${llvm_lib}" -mindepth 2 -maxdepth 2 -name 'libomp.so*' -printf '%h\n' | sort -u)
+          joined=$(IFS=:; printf '%s' "${paths[*]}")
+          echo "Prepending to LD_LIBRARY_PATH: ${joined}"
+          echo "LD_LIBRARY_PATH=${joined}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -244,27 +257,9 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
-        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
-        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
-      - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.artifact_group, 'asan') }}
-        run: |
-          python ./build_tools/github_actions/configure_asan_env.py \
-            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
-
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
-        env:
-          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
-          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
-          # The probes load instrumented ROCm libraries, so LeakSanitizer reports
-          # whatever those leak at exit and the probe returns non-zero. This step
-          # answers "is the driver and GPU functional", not "is the runtime
-          # leak-free". Extends rather than replaces, to keep the options set by
-          # configure_asan_env.py; scoped here so component tests still run with
-          # leak detection enabled.
-          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
@@ -348,21 +343,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
 
-      - name: Print test reproduction command
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
-        run: |
-          python ./build_tools/github_actions/reproduce_test_failure.py \
-            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
-            --repository "${{ github.repository }}" \
-            --amdgpu-family "${{ inputs.amdgpu_families }}" \
-            --amdgpu-targets "${{ inputs.amdgpu_targets }}" \
-            --test-script "${{ fromJSON(inputs.component).test_script }}" \
-            --shard-index "${{ matrix.shard }}" \
-            --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
-            --test-type "${{ fromJSON(inputs.component).test_type }}" \
-            --print-cmd \
-            ${{ fromJSON(inputs.component).fetch_artifact_args && format('--fetch-artifact-args="{0}"', fromJSON(inputs.component).fetch_artifact_args) || '' }}
-
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
         timeout-minutes: 5
@@ -378,16 +358,3 @@ jobs:
         id: summary
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
-
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

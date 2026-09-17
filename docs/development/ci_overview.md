@@ -50,6 +50,16 @@ the job starts on a Windows runner, then runs artifact fetch, configure, build,
 and upload steps inside a WSL Ubuntu shell. See
 [WSL ROCDXG CI Stage](wsl_rocdxg.md) for details.
 
+Code coverage has its own entry point, because the projects it measures have to
+be rebuilt with instrumentation before their tests can be run:
+
+- [`.github/workflows/multi_arch_ci_coverage_nightly.yml`](/.github/workflows/multi_arch_ci_coverage_nightly.yml) - builds one instrumented stack covering every coverage-enabled project. Dispatched by hand: pass the run id of a recent nightly as `baseline_run_id` to take the non-instrumented dependencies from it, or leave it empty to build the whole stack within the run
+  - [`.github/workflows/multi_arch_ci_coverage_linux.yml`](/.github/workflows/multi_arch_ci_coverage_linux.yml) - runs one project's tests on one GPU family, then turns the collected profiles into an lcov file, a text summary and a browsable HTML report
+
+See [Code Coverage](code_coverage.md) for the CMake options and how to onboard a
+project, and [Coverage CI](code_coverage.md#coverage-ci) for the end-to-end
+walkthrough of a run.
+
 ## Build Phase
 
 TheRock builds ROCm components from source and produces **artifacts** - archive slices of key components.
@@ -158,6 +168,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 
 - [artifacts.md](artifacts.md) - Artifact organization and packaging
 - [build_system.md](build_system.md) - CMake build architecture
+- [code_coverage.md](code_coverage.md) - Instrumented builds and coverage reports
 - [dependencies.md](dependencies.md) - Dependency management
 - [installing_artifacts.md](installing_artifacts.md) - Installing ROCm from artifacts
 
@@ -174,6 +185,7 @@ See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [
 - [workflow_outputs.md](workflow_outputs.md) - CI output directory structure
 - [github_actions_debugging.md](github_actions_debugging.md) - Debugging GitHub Actions
 - [ci_behavior_manipulation.md](ci_behavior_manipulation.md) - Controlling CI behavior with labels and inputs
+- [code_coverage.md#coverage-ci](code_coverage.md#coverage-ci) - How a coverage run is dispatched, built, tested and reported
 - [stage_reuse.md](stage_reuse.md) - Reusing unaffected build stages from a baseline run
 - [manifest_diff.md](manifest_diff.md) - Manifest diff report (submodule SHA changes between two commits)
 
