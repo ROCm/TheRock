@@ -240,6 +240,46 @@ class BuildEnvironmentTest(unittest.TestCase):
             self.assertIn(str(llvm_lib), ld)
 
 
+class ConfigureTensileliteHostAsanTest(unittest.TestCase):
+    def test_requires_direct_extension_and_scopes_preload_to_python(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            component_root = Path(tmp) / "tensilelite"
+            extension = component_root / "rocisa" / "_rocisa.abi3.so"
+            runtime = Path(tmp) / "libclang_rt.asan.so"
+            extension.parent.mkdir(parents=True)
+            extension.touch()
+            runtime.touch()
+            source_env = {
+                "ASAN_RUNTIME_PATH": str(runtime),
+                "LD_PRELOAD": "/tmp/inherited-not-allowed.so",
+            }
+            checked_env = {}
+
+            def capture_checked_env(_extension, env):
+                checked_env.update(env)
+
+            with mock.patch.object(
+                pytest_runner,
+                "require_direct_clang_asan",
+                side_effect=capture_checked_env,
+            ) as require_asan:
+                env = pytest_runner.configure_tensilelite_host_asan(
+                    source_env, component_root
+                )
+
+        require_asan.assert_called_once()
+        self.assertEqual(require_asan.call_args.args[0], extension)
+        self.assertNotIn("LD_PRELOAD", checked_env)
+        self.assertEqual(env["LD_PRELOAD"], str(runtime.resolve()))
+
+    def test_missing_runtime_fails(self):
+        with self.assertRaisesRegex(RuntimeError, "ASAN runtime is missing"):
+            pytest_runner.configure_tensilelite_host_asan(
+                {"ASAN_RUNTIME_PATH": "/missing/libclang_rt.asan.so"},
+                Path("/tmp/tensilelite"),
+            )
+
+
 class RunPytestTest(unittest.TestCase):
     def setUp(self):
         # A cwd with one existing and one missing test path.

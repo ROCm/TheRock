@@ -84,7 +84,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         fetch_test_configurations.run()
 
-        self.assertEqual(self._get_components(), [])
+        self.assertEqual(
+            {job["job_name"] for job in self._get_components()},
+            {
+                "rocroller",
+                "tensilelite",
+                "origami",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "stinkytofu",
+            },
+        )
         sanity = json.loads(self.gha_output["sanity_component"])
         self.assertEqual(sanity["job_name"], "sanity")
         self.assertTrue(sanity["linux_cpu_runner"])
@@ -101,7 +112,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         fetch_test_configurations.run()
 
-        self.assertEqual(self._get_components(), [])
+        self.assertEqual(
+            {job["job_name"] for job in self._get_components()},
+            {
+                "rocroller",
+                "tensilelite",
+                "origami",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "stinkytofu",
+            },
+        )
         self.assertEqual(
             json.loads(self.gha_output["sanity_component"])["job_name"], "sanity"
         )
@@ -120,6 +142,45 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "only on Linux"):
             fetch_test_configurations.run()
+
+    def test_host_asan_math_foundations_use_explicit_cpu_runners(self):
+        os.environ["HOST_ONLY_TESTS"] = "true"
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        os.environ["PROJECTS_TO_TEST"] = (
+            "rocroller,tensilelite,origami,rocrand,hiprand,rocsparse,stinkytofu"
+        )
+
+        fetch_test_configurations.run()
+        components = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(
+            set(components),
+            {
+                "rocroller",
+                "tensilelite",
+                "origami",
+                "rocrand",
+                "hiprand",
+                "rocsparse",
+                "stinkytofu",
+            },
+        )
+        self.assertIn("pytest_runner.py", components["tensilelite"]["test_script"])
+        self.assertNotIn(
+            "test_executable_scripts/test_runner.py",
+            components["tensilelite"]["test_script"],
+        )
+        self.assertIn("test_rand_host_asan.py", components["rocrand"]["test_script"])
+        self.assertIn("test_rand_host_asan.py", components["hiprand"]["test_script"])
+        self.assertIn(
+            "test_rocsparse_host_asan.py", components["rocsparse"]["test_script"]
+        )
+        self.assertEqual(
+            components["stinkytofu"]["fetch_artifact_args"], "--blas --tests"
+        )
+        for component in components.values():
+            self.assertTrue(component["linux_cpu_runner"])
+            self.assertEqual(component["test_runner"], "host-only")
 
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
