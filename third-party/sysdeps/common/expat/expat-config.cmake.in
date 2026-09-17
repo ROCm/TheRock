@@ -7,11 +7,19 @@ if(_IMPORT_PREFIX STREQUAL "/")
 endif()
 
 if(NOT TARGET expat::expat)
-  add_library(expat::expat SHARED IMPORTED)
+  # The Windows build is static.
+  if(WIN32)
+    add_library(expat::expat STATIC IMPORTED)
+    set(_IMPORT_LIBRARY "${_IMPORT_PREFIX}/lib/libexpat.a")
+  else()
+    add_library(expat::expat SHARED IMPORTED)
+    set(_IMPORT_LIBRARY "${_IMPORT_PREFIX}/lib/libexpat.so")
+  endif()
   set_target_properties(expat::expat PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libexpat.so"
+    IMPORTED_LOCATION "${_IMPORT_LIBRARY}"
   )
 endif()
 
 set(_IMPORT_PREFIX)
+set(_IMPORT_LIBRARY)
