@@ -87,21 +87,12 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    # TODO(#4755): Re-enable test for windows once offload-arch.exe is fixed
-    @pytest.mark.skipif(
-        is_windows(),
-        reason="Windows offload-arch.exe is not retrieving correct data, ignoring test",
-    )
-    # TODO(#3313): Re-enable once test_hip_printf is fixed for ASAN builds
-    @pytest.mark.skipif(
-        is_asan(), reason="test_hip_printf fails with ASAN build, see TheRock#3313"
-    )
     # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
     @pytest.mark.skipif(
         AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
         reason="gfx1250 binary translator does not yet support this kernel code pattern, see #7458",
     )
-    def test_hip_printf(self):
+    def test_hip_vector_add(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
         # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
@@ -136,11 +127,21 @@ class TestROCmSanity:
         ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
         # Compiling .cpp file using amdclang++
+        # On Linux, bin/amdclang++ is a symlink to lib/llvm/bin/amdclang++.
+        # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
         rocm_path = (THEROCK_BIN_DIR / "..").resolve()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
+        amdclangxx = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / f"amdclang++{platform_executable_suffix}"
+        ).resolve()
         run_command(
             [
-                f"{THEROCK_BIN_DIR}/amdclang++",
+                str(amdclangxx),
                 f"--hip-path={rocm_path}",
                 f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
                 "-x",
