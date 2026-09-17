@@ -470,6 +470,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
       set(THEROCK_BUNDLED_ZLIB therock-zlib)
       set(THEROCK_BUNDLED_ZSTD therock-zstd)
     endif()
+    if(THEROCK_ENABLE_SYSDEPS_GMP)
+      set(THEROCK_BUNDLED_GMP therock-gmp)
+    endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       # meson is only needed to build the amd-mesa/libva sysdep; gate the
       # requirement so bundled-sysdeps builds without mesa don't need it.

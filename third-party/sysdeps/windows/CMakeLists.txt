@@ -22,6 +22,21 @@ if(THEROCK_ENABLE_SYSDEPS)
   )
 endif()
 
+# Optional sysdep: gmp
+if(THEROCK_ENABLE_SYSDEPS_GMP)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/gmp" "${CMAKE_CURRENT_BINARY_DIR}/gmp")
+  therock_provide_artifact(sysdeps-gmp
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-gmp.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-gmp
+  )
+endif()
+
 # Optional sysdep: amd-mesa
 if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)
