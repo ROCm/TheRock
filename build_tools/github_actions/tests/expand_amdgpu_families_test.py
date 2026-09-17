@@ -98,6 +98,20 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
         self.assertIn("gfx942", out.split(","))
         self.assertNotIn("device-", out)
 
+    def test_shared_owner_device_extras(self):
+        for families in ("gfx1250", "gfx1250-strict", "gfx1250;gfx1250-strict"):
+            with self.subTest(families=families):
+                out = self._run_and_capture(
+                    "--amdgpu-families", families, "--output-mode", "device-extras"
+                )
+                self.assertEqual(out.splitlines()[0], "device-gfx1250")
+
+    def test_targets_mode_preserves_distinct_targets(self):
+        self.assertEqual(
+            self._run_and_capture("--amdgpu-families", "gfx1250;gfx1250-strict"),
+            "gfx1250,gfx1250-strict",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

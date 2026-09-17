@@ -108,13 +108,7 @@ class Parameters:
             linux_set = set(self.linux_target_families)
             windows_set = set(self.windows_target_families)
             self.available_target_families: list[str] = sorted(linux_set | windows_set)
-            if kpack_split:
-                windows_owners = {package_owner(t) for t in windows_set}
-                intersection = sorted(
-                    t for t in linux_set if package_owner(t) in windows_owners
-                )
-            else:
-                intersection = sorted(linux_set & windows_set)
+            intersection = sorted(linux_set & windows_set)
             if intersection:
                 self.default_target_family: str | None = intersection[0]
             elif self.available_target_families:

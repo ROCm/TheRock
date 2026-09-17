@@ -22,11 +22,10 @@ _VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
 
-# Package gfx1250 and gfx1250-strict payloads in a single gfx1250 device
-# package. Include only supplied variants and preserve their distinct target
-# identities. This ownership mapping is shared by SDK build and install metadata.
-_PACKAGE_OWNERS = {"gfx1250": "gfx1250", "gfx1250-strict": "gfx1250"}
-_TARGET_ARCHITECTURAL_FAMILIES = {
+# Targets normally map 1:1 to packages with the same name.
+# Overrides allow multiple targets to share a package owner.
+_OVERRIDE_PACKAGE_OWNERS = {"gfx1250-strict": "gfx1250"}
+_OVERRIDE_TARGET_ARCHITECTURAL_FAMILIES = {
     "gfx1250": "gfx125X",
     "gfx1250-strict": "gfx125X",
 }
@@ -39,9 +38,10 @@ def canonical_target(target: str) -> str:
 
 
 def package_owner(target: str) -> str:
-    """Resolve a supplied target/family to its package owner, not its contents."""
+    """Resolve a supplied target/family to its package owner."""
     target = canonical_target(target)
-    return _PACKAGE_OWNERS.get(target, target)
+    owner = _OVERRIDE_PACKAGE_OWNERS.get(target)
+    return target if owner is None else owner
 
 
 def group_package_targets(targets: Iterable[str]) -> dict[str, list[str]]:
@@ -129,6 +129,8 @@ class PackageEntry:
             )
         kwargs = {}
         if target_family is not None:
+            # Shared-owner payload merging requires kpack-split packaging.
+            # Legacy per-target packages do not merge targets sharing a package name.
             kwargs["target_family"] = package_owner(target_family)
         return self.dist_package_template.format(**kwargs)
 
@@ -178,7 +180,9 @@ def discover_current_target_family() -> str | None:
                 # There may be multiple architecture supported on the system.
                 # This will select the first matching family.
                 canonical_arch = canonical_target(arch)
-                arch_family = _TARGET_ARCHITECTURAL_FAMILIES.get(canonical_arch)
+                arch_family = _OVERRIDE_TARGET_ARCHITECTURAL_FAMILIES.get(
+                    canonical_arch
+                )
                 if arch_family is None:
                     arch_family = canonical_arch[:-1] + "X"
                 for suffix in suffixes:
