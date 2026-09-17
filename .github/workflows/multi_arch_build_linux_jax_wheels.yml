@@ -46,6 +46,10 @@ on:
         description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
+      wheel_type:
+        description: "How the plugin wheel is versioned: release stamps the ref's own version; nightly stamps the newest published JAX nightly for that base version, so the test job can install jax/jaxlib to match (for refs without a PyPI release, such as jax-ml/jax@main)."
+        type: string
+        default: "release"
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -120,6 +124,13 @@ on:
         description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
+      wheel_type:
+        description: "release versions the plugin as the ref itself; nightly versions it as the newest published JAX nightly (for refs with no PyPI release, such as jax-ml/jax@main)."
+        type: choice
+        options:
+          - release
+          - nightly
+        default: release
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -263,17 +274,42 @@ jobs:
             --rocm-version "${ROCM_VERSION}"
 
 
+      - name: Check wheel_type
+        if: ${{ !contains(fromJSON('["release", "nightly"]'), inputs.wheel_type) }}
+        run: |
+          echo "::error::Unknown wheel_type '${{ inputs.wheel_type }}'; expected release or nightly"
+          exit 1
+
+      # A ref with no jax/jaxlib release on PyPI (upstream main) is versioned as
+      # the newest published JAX nightly for its base version, so the test job
+      # can install a jax/jaxlib of exactly the version the plugin reports.
+      - name: Resolve JAX nightly version
+        id: resolve_jax_nightly_version
+        if: ${{ inputs.wheel_type == 'nightly' }}
+        run: |
+          python build_tools/github_actions/resolve_jax_nightly_version.py \
+            --jax-source-dir jax-source \
+            --python-version "${{ inputs.python_version }}"
+
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
+          # XLA's python_wheel_version_suffix_repository drops
+          # ML_WHEEL_VERSION_SUFFIX for its "nightly" type, so a nightly build
+          # uses the "custom" type, which appends .dev<build date> and then the
+          # ROCm suffix: 0.11.2.dev20260914+rocm7.14.0a20260914.
+          ML_WHEEL_TYPE: ${{ inputs.wheel_type == 'nightly' && 'custom' || 'release' }}
+          ML_WHEEL_BUILD_DATE: ${{ steps.resolve_jax_nightly_version.outputs.build_date }}
         run: |
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env ML_WHEEL_TYPE="${ML_WHEEL_TYPE}" \
+            --env ML_WHEEL_BUILD_DATE="${ML_WHEEL_BUILD_DATE}" \
             --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
@@ -287,7 +323,8 @@ jobs:
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
-                --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
+                --bazel_options=--repo_env=ML_WHEEL_TYPE="${ML_WHEEL_TYPE}" \
+                --bazel_options=--repo_env=ML_WHEEL_BUILD_DATE="${ML_WHEEL_BUILD_DATE}" \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
                 --verbose \
