@@ -299,65 +299,28 @@ class TestBuildRunnerSelection(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self._orig_env)
 
-    def test_select_build_runner_large_linux_release(self):
-        """Large (default) runner is used for CPU-intensive Linux release stages."""
+    def test_select_build_runner(self):
+        """select_build_runner() returns the correct label for each platform/variant/size."""
+        cases = [
+            # (platform, variant, size, expected_runner_label)
+            ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
+            ("windows", "release", "large", "azure-windows-scale-rocm"),
+            # Sanitizer builds always use the large runner regardless of requested size
+            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            ("linux", "release", "small", "aws-linux-scale-rocm-small"),
+            # Windows has no small/medium pool — falls back to the Windows default
+            ("windows", "release", "small", "azure-windows-scale-rocm"),
+            ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
+            ("windows", "release", "medium", "azure-windows-scale-rocm"),
+        ]
         with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "release", size="large"),
-                "aws-linux-scale-rocm-prod",
-            )
-
-    def test_select_build_runner_large_windows(self):
-        """Windows still uses Azure for large runner."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("windows", "release", size="large"),
-                "azure-windows-scale-rocm",
-            )
-
-    def test_select_build_runner_sanitizer_uses_large_runner(self):
-        """Sanitizer builds (asan/tsan) always use the large runner regardless of size."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "asan", size="small"),
-                "aws-linux-scale-rocm-large",
-            )
-            self.assertEqual(
-                select_build_runner("linux", "tsan", size="medium"),
-                "aws-linux-scale-rocm-large",
-            )
-
-    def test_select_build_runner_small_linux_release(self):
-        """Small runner is used for low-CPU Linux release stages."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "release", size="small"),
-                "aws-linux-scale-rocm-small",
-            )
-
-    def test_select_build_runner_small_windows_falls_back_to_default(self):
-        """Windows has no small runner pool — falls back to the Windows default."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("windows", "release", size="small"),
-                "azure-windows-scale-rocm",
-            )
-
-    def test_select_build_runner_medium_linux_release(self):
-        """Medium runner is used for medium-CPU Linux stages."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("linux", "release", size="medium"),
-                "aws-linux-scale-rocm-medium",
-            )
-
-    def test_select_build_runner_medium_windows_falls_back_to_default(self):
-        """Windows has no medium runner pool — falls back to the Windows default."""
-        with patch("random.random", return_value=0.5):
-            self.assertEqual(
-                select_build_runner("windows", "release", size="medium"),
-                "azure-windows-scale-rocm",
-            )
+            for platform, variant, size, expected in cases:
+                with self.subTest(platform=platform, variant=variant, size=size):
+                    self.assertEqual(
+                        select_build_runner(platform, variant, size=size),
+                        expected,
+                    )
 
 
 if __name__ == "__main__":
