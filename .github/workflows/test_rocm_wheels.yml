@@ -50,6 +50,12 @@ on:
           on the runner (required for Windows and native Linux runners).
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26"
+      artifact_group:
+        description: >-
+          Artifact group under test. Only inspected for an 'asan' substring, which
+          selects the ASAN runtime preload `rocm-sdk test` needs.
+        type: string
+        default: ""
 
   workflow_call:
     inputs:
@@ -92,6 +98,12 @@ on:
         default: ""
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      artifact_group:
+        description: >-
+          Artifact group under test. Only inspected for an 'asan' substring, which
+          selects the ASAN runtime preload `rocm-sdk test` needs.
         type: string
         default: ""
 
@@ -167,10 +179,28 @@ jobs:
         run: |
           pip freeze
 
+      # Must run after the install (the runtime ships in the wheels) and before
+      # any `rocm-sdk test`, which needs ASAN_RUNTIME_PATH to preload.
+      - name: Enable sanitizer-specific test flags
+        if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
+        run: |
+          python ./build_tools/github_actions/configure_wheel_asan_env.py
+
       - name: Test rocm[libraries]
         id: test_libraries
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         timeout-minutes: 5
+        env:
+          # rocm_sdk.initialize_process() ctypes-loads instrumented ROCm
+          # libraries into this interpreter. CPython is not instrumented, so
+          # without the runtime already loaded the process aborts with "ASan
+          # runtime does not come first in initial library list" (#6331).
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          # Preloading puts uninstrumented CPython under LeakSanitizer, which
+          # then reports the interpreter's own allocations as leaks. This step
+          # answers "do the wheels load and work", not "is CPython leak-free".
+          # Extends rather than replaces, to keep the options set above.
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
 
@@ -195,6 +225,10 @@ jobs:
       - name: Test rocm[libraries,devel]
         if: ${{ !cancelled() && steps.install_devel.outcome == 'success' }}
         timeout-minutes: 5
+        env:
+          # Same venv as rocm[libraries], so the values resolved above still apply.
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
 
@@ -220,8 +254,18 @@ jobs:
         run: |
           pip freeze
 
+      # rocm[profiler] installs into its own venv, so the runtime has to be
+      # resolved again from that tree rather than reusing the value above.
+      - name: Enable sanitizer-specific test flags (profiler)
+        if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' && contains(inputs.artifact_group, 'asan') }}
+        run: |
+          python ./build_tools/github_actions/configure_wheel_asan_env.py
+
       - name: Test rocm[profiler]
         if: ${{ !cancelled() && steps.install_profiler.outcome == 'success' }}
         timeout-minutes: 5
+        env:
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           rocm-sdk test
