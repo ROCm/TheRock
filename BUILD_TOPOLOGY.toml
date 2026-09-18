@@ -578,6 +578,13 @@ feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
 source_paths = ["clr", "hip", "amdgpu-windows-interop"]
 
+[artifacts.core-hrr]
+artifact_group = "hip-runtime"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+source_paths = ["hrr"]
+feature_group = "CORE"  # Part of core, enabled by default
+
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
 type = "target-neutral"
@@ -619,7 +626,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.core-hiptests]
 artifact_group = "runtime-tests"
 type = "target-neutral"
-artifact_deps = ["core-hip"]
+artifact_deps = ["core-hip", "core-hrr"]
 feature_group = "CORE"  # Part of core, enabled by default
 source_paths = ["hip-tests"]
 
@@ -895,7 +902,7 @@ disable_platforms = ["windows"]
 [artifacts.rocjitsu]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["base", "sysdeps"]
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
 source_paths = ["rocjitsu", "machine-readable-isa"]
@@ -910,6 +917,6 @@ disable_platforms = ["windows"]
 [artifacts.mirage]
 artifact_group = "rocjitsu"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["base", "sysdeps"]
 feature_group = "EMULATION"
 disable_platforms = ["windows"]
