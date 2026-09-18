@@ -20,6 +20,7 @@ Requires Python 3.10+ (``packaging_utils`` type syntax).
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import types
@@ -406,7 +407,9 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                 spec = _read_spec_file(PKG_FFT, cfg)
                 self.assertEqual(_spec_field(spec, "Name"), "amdrocm-fft7.1-gfx1250")
                 for target in ("gfx1250", "gfx1250-strict"):
-                    artifact_path = str(cfg.artifacts_dir / f"fft_lib_{target}") + "/"
+                    artifact_path = (
+                        str(cfg.artifacts_dir / f"fft_lib_{target}") + os.sep
+                    )
                     self.assertEqual(artifact_path in spec, target in targets)
 
     @patch.object(build_package, "build_nonversioned_package", return_value=[])
