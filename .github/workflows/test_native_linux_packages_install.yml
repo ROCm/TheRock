@@ -16,7 +16,6 @@ on:
         type: string
       gpg_key_url:
         description: "GPG key URL for signed repos"
-        required: false
         type: string
         default: ""
       os_profile:
@@ -25,39 +24,32 @@ on:
         type: string
       artifact_group:
         description: Artifact group to extract GPU architecture from (e.g., gfx94X-dcgpu). Default gfx94X-dcgpu.
-        required: false
         type: string
         default: "gfx94X-dcgpu"
       install_prefix:
         description: Installation prefix path (optional, defaults to /opt/rocm/core).
-        required: false
         type: string
         default: "/opt/rocm/core"
       test_type:
         description: "Test type: quick, standard, comprehensive, full, install, or sanity. CI test types are mapped to native install test modes."
-        required: false
         type: string
         default: ""
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`"
         type: string
-        required: false
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow"
         type: string
-        required: false
       test_runs_on:
         description: >-
           GitHub runner label for the test job (Linux only). The runner should
           match the GPU pool for artifact_group (e.g.
           linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
           runner labels are rejected.
-        required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
         description: "Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). Changes expected package names to match variant-suffixed packages."
-        required: false
         type: string
         default: ""
       quartz_tracking_id:
@@ -69,7 +61,6 @@ on:
         default: ""
       run_uninstall:
         description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Enabled by default."
-        required: false
         type: boolean
         default: true
   workflow_dispatch:
@@ -106,7 +97,6 @@ on:
         description: Installation prefix path
         type: string
         default: "/opt/rocm/core"
-        required: false
       test_type:
         description: "Test type: quick, standard, comprehensive, full, install, or sanity (optional; leave empty for sanity)"
         type: string
@@ -123,7 +113,6 @@ on:
           match the GPU pool for artifact_group (e.g.
           linux-gfx942-1gpu-ccs-csp-ossci-rocm for gfx94X-dcgpu). Windows
           runner labels are rejected.
-        required: false
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       build_variant:
@@ -139,7 +128,6 @@ on:
         default: ""
       run_uninstall:
         description: "Enable uninstall verification: remove installed ROCm metapackages and assert clean teardown (sanity/full only). Disabled by default."
-        required: false
         type: boolean
         default: false
 
