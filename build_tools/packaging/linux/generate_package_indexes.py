@@ -67,11 +67,6 @@ def generate_index_html(directory: str) -> None:
         for entry in os.scandir(directory):
             if entry.name.startswith("."):
                 continue
-            if entry.is_dir():
-                rows.append(
-                    f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>'
-                )
-                continue
             # Escape only at render: quote() percent-encodes '+' (and any
             # other unsafe char) in the href, while html.escape() guards the
             # display text.
@@ -118,7 +113,7 @@ def generate_top_index_from_s3(
         for cp in page.get("CommonPrefixes", []):
             folder = cp["Prefix"][len(prefix) + 1 :].rstrip("/")
             rows.append(
-                f'<tr><td><a href="{folder}/index.html">{folder}/</a></td></tr>'
+                f'<tr><td><a href="{quote(folder)}/index.html">{html.escape(folder)}/</a></td></tr>'
             )
 
         # Add files at this level only (no nested files)
@@ -270,7 +265,7 @@ def generate_index_from_s3(
 
         for subdir in sorted(subdirs):
             rows.append(
-                f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>'
+                f'<tr><td><a href="{quote(subdir)}/index.html">{html.escape(subdir)}/</a></td></tr>'
             )
 
         # Add files. Escape only at render: quote() percent-encodes '+'
