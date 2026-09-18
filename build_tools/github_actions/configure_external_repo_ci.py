@@ -105,6 +105,7 @@ class ConfigureResult:
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
     skip_tests: bool
+    has_unmapped_files: bool = False  # True if some files couldn't be classified
 
 
 @dataclass
@@ -361,7 +362,8 @@ def configure(
     # Conservative guard: if any non-skippable change cannot be classified to a
     # known subtree, we cannot reason about its build/test impact. Narrowing on
     # just the recognized subset would silently drop the unclassified change, so
-    # fall back to a full run instead.
+    # fall back to a full run instead. Also set has_unmapped_files to signal
+    # downstream consumers (like sparse checkout) that fallback is needed.
     unclassified = get_unclassified_paths(modified_paths, valid_prefixes)
     if unclassified:
         logger.info(
@@ -369,7 +371,10 @@ def configure(
             " - running all tests"
         )
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
+            changed_projects="",
+            run_all_tests=True,
+            skip_tests=False,
+            has_unmapped_files=True,
         )
 
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
@@ -379,6 +384,7 @@ def configure(
         changed_projects=",".join(matched),
         run_all_tests=False,
         skip_tests=False,
+        has_unmapped_files=False,
     )
 
 
@@ -436,6 +442,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             "changed_projects": result.changed_projects,
             "run_all_tests": str(result.run_all_tests).lower(),
             "skip_tests": str(result.skip_tests).lower(),
+            "has_unmapped_files": str(result.has_unmapped_files).lower(),
         }
     )
 

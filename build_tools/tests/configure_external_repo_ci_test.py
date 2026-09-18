@@ -283,6 +283,46 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result.run_all_tests, True)
 
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_unmapped_files_sets_has_unmapped_files(self, mock_config, mock_api):
+        """Changes outside known subtrees should set has_unmapped_files=True and run_all_tests."""
+        mock_api.return_value = {
+            "projects/rocblas/src/main.cpp",
+            "experimental/foo/bar.cpp",  # Not a known subtree
+        }
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        # Unclassified files trigger run_all_tests and set has_unmapped_files
+        self.assertTrue(result.run_all_tests)
+        self.assertTrue(result.has_unmapped_files)
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_all_files_mapped_has_unmapped_files_false(self, mock_config, mock_api):
+        """When all files map to subtrees, has_unmapped_files should be False."""
+        mock_api.return_value = {"projects/rocblas/src/main.cpp"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result.changed_projects, "projects/rocblas")
+        self.assertFalse(result.has_unmapped_files)
+
 
 class GetUnclassifiedPathsTest(unittest.TestCase):
     """Tests for get_unclassified_paths()."""
