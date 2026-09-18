@@ -1,0 +1,67 @@
+From 456a7c5896a2a7e873a01359b6132cc41519e2e6 Mon Sep 17 00:00:00 2001
+From: Pedro Alves <pedro@palves.net>
+Date: Mon, 9 Nov 2026 11:46:06 +0000
+Subject: [PATCH] Use UCRT's own wcrtomb() and wctomb()
+
+Backport of the change from upstream snapshot 20260822, by Liu Hao:
+
+  > improve wide-character support with UCRT (patches by Liu Hao)
+    + use UCRT's wcrtomb rather than _nc_wctomb
+
+For MinGW, curses.priv.h replaces the C library's multibyte functions
+with ncurses' own: mbtowc(), mblen(), wctomb() and wcrtomb() become
+macros over _nc_mbtowc(), _nc_mblen() and _nc_wctomb(), as MinGW's
+wide-character functions "do not work correctly".  That was true of
+msvcrt, not of UCRT.
+
+With current mingw-w64 headers the macros also break the build.
+curses.h includes <wchar.h> only when NEED_WCHAR_H is set, which
+configure decides by checking whether mbstate_t is declared without it.
+mingw-w64 commit 8c4baed92d4d ("headers: crt: define mbstate_t in
+corecrt.h") moved mbstate_t to <corecrt.h>, which <stdlib.h> includes,
+so NEED_WCHAR_H comes out 0, and <wchar.h> is included after the
+macros.  The wcrtomb() macro then turns its declaration of wcrtomb()
+into a second, conflicting declaration of _nc_wctomb():
+
+  curses.priv.h:2300:25: error: conflicting types for '_nc_wctomb'; have 'size_t(char * restrict,  wchar_t)'
+
+Upstream skips the whole replacement under UCRT, both the macros in
+curses.priv.h and the definitions of the _nc_ functions in widechars.c,
+so the C runtime's own four functions are used and nothing is renamed.
+This patch makes the same two changes as the upstream snapshot.  The
+UCRT64 toolchain defines _UCRT.  Drop this patch once the bundled
+ncurses includes 20260822.
+---
+ ncurses/curses.priv.h        | 2 +-
+ ncurses/widechar/widechars.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ncurses/curses.priv.h b/ncurses/curses.priv.h
+index 8999ecd..e14bec7 100644
+--- a/ncurses/curses.priv.h
++++ b/ncurses/curses.priv.h
+@@ -2291,7 +2291,7 @@ extern NCURSES_EXPORT(int) _nc_eventlist_timeout(_nc_eventlist *);
+  */
+ #if USE_WIDEC_SUPPORT
+ 
+-#if defined(_NC_WINDOWS_NATIVE) && !defined(_NC_MSC) && !USE_NAMED_PIPES
++#if defined(_NC_WINDOWS_NATIVE) && !defined(_NC_MSC) && !USE_NAMED_PIPES && !defined(_UCRT)
+ /*
+  * MinGW has wide-character functions, but they do not work correctly.
+  */
+diff --git a/ncurses/widechar/widechars.c b/ncurses/widechar/widechars.c
+index 6ea008d..14f46a1 100644
+--- a/ncurses/widechar/widechars.c
++++ b/ncurses/widechar/widechars.c
+@@ -33,7 +33,7 @@
+ 
+ MODULE_ID("$Id: widechars.c,v 1.11 2025/02/20 01:02:09 tom Exp $")
+ 
+-#if defined(_NC_MINGW)
++#if defined(_NC_MINGW) && !defined(_UCRT)
+ /*
+  * MinGW has wide-character functions, but they do not work correctly.
+  */
+-- 
+2.55.0
+
