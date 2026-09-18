@@ -1,0 +1,442 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Launch kpack linux 4.18 kernel test on self-hosted runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_hostname:
+        description: "Self-hosted runner hostname. The runner must also have this value as a runner label so the correct self-hosted runner can be selected."
+        required: true
+        type: string
+        default: "kpack_old_kernel_test"
+      qcow_image_path:
+        description: "Absolute path to the Rocky Linux QCOW image on the self-hosted runner."
+        required: true
+        type: string
+        default: "/opt/github-runner/images/rockylinux-8.10-therock.qcow2"
+      pci_devices:
+        description: "Space-separated PCI BDFs to pass through to the VM, for example: 0000:03:00.0 0000:03:00.1"
+        required: true
+        type: string
+      vm_memory:
+        description: "VM memory size passed to QEMU, including unit suffix. For example: 8192M or 8G."
+        required: false
+        type: string
+        default: "8192M"
+      vm_cpus:
+        description: "VM vCPU count passed to QEMU."
+        required: false
+        type: string
+        default: "4"
+      vm_ssh_port:
+        description: "Localhost TCP port forwarded to guest SSH port 22."
+        required: false
+        type: string
+        default: "2222"
+      vm_ssh_private_key_path:
+        description: "Path to SSH private key on the self-hosted runner to connect to the VM as therock. If empty or missing, the THEROCK_ACTION_RUNNER_KVM_SSH_KEY secret is used when configured."
+        required: false
+        type: string
+        default: "/opt/github-runner/ssh/therock_ed25519"
+      rocm_repo_baseurl:
+        description: "ROCm RPM repository base URL to install from inside the VM."
+        required: false
+        type: string
+        default: "https://rocm.prereleases.amd.com/packages-multi-arch/rhel8/x86_64/"
+      rocm_gpgcheck:
+        description: "Enable GPG checking for ROCm RPM installation."
+        required: false
+        type: boolean
+        default: true
+      rocm_gpg_key:
+        description: "ROCm repository GPG key URL. Required when rocm_gpgcheck is enabled."
+        required: false
+        type: string
+        default: "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
+      rocfft_test_args:
+        description: "Arguments passed to rocfft-test. Defaults to a small kpack splitter smoke-test subset."
+        required: false
+        type: string
+        default: "--gtest_filter=bitwise*"
+
+permissions:
+  contents: read
+
+run-name: Launch kpack linux 4.18 kernel test on ${{ inputs.runner_hostname }}
+
+concurrency:
+  group: rocm-qcow-vm-${{ inputs.runner_hostname }}
+  cancel-in-progress: false
+
+jobs:
+  test_rocm_qcow_vm:
+    name: Launch kpack linux 4.18 kernel test
+    # Register each runner with labels:
+    # self-hosted, linux, x64, kvm, vfio, and its hostname (for example, myservername).
+    runs-on: [self-hosted, linux, x64, kvm, vfio, "${{ inputs.runner_hostname }}"]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      QCOW_IMAGE_PATH: ${{ inputs.qcow_image_path }}
+      PCI_DEVICES: ${{ inputs.pci_devices }}
+      VM_MEMORY: ${{ inputs.vm_memory }}
+      VM_CPUS: ${{ inputs.vm_cpus }}
+      VM_SSH_PORT: ${{ inputs.vm_ssh_port }}
+      VM_SSH_PRIVATE_KEY_PATH: ${{ inputs.vm_ssh_private_key_path }}
+      VM_SSH_USER: therock
+      ROCM_REPO_BASEURL: ${{ inputs.rocm_repo_baseurl }}
+      ROCM_GPG_KEY: ${{ inputs.rocm_gpg_key }}
+      ROCM_GPGCHECK: ${{ inputs.rocm_gpgcheck }}
+      ROCFFT_TEST_ARGS: ${{ inputs.rocfft_test_args }}
+      VM_PID_FILE: /tmp/therock-qcow-${{ github.run_id }}.pid
+      VM_SERIAL_LOG: /tmp/therock-qcow-${{ github.run_id }}.serial.log
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install host prerequisites
+        run: |
+          set -euo pipefail
+
+          if command -v qemu-system-x86_64 >/dev/null &&
+             command -v ssh >/dev/null &&
+             command -v lspci >/dev/null &&
+             command -v python3 >/dev/null; then
+            exit 0
+          fi
+
+          if command -v apt-get >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y qemu-system-x86 qemu-utils openssh-client pciutils python3
+          elif command -v dnf >/dev/null; then
+            sudo dnf install -y qemu-kvm qemu-img openssh-clients pciutils python3
+          else
+            echo "Unsupported runner OS: install QEMU, OpenSSH client, pciutils, and python3 on the self-hosted runner."
+            exit 1
+          fi
+
+      - name: Validate KVM, VFIO, QCOW image, and passthrough devices
+        run: |
+          set -euo pipefail
+
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::/dev/kvm is missing on this self-hosted runner."
+            echo "Verify that KVM is enabled and available to the GitHub runner host."
+            exit 1
+          fi
+
+          if [ ! -e /dev/vfio/vfio ]; then
+            echo "::error::/dev/vfio/vfio is missing on this self-hosted runner."
+            echo "Verify that VFIO is configured on the GitHub runner host."
+            exit 1
+          fi
+
+          if [ ! -f "${QCOW_IMAGE_PATH}" ]; then
+            echo "::error::QCOW image was not found: ${QCOW_IMAGE_PATH}"
+            echo "Copy the Rocky Linux QCOW image to this path on the self-hosted runner,"
+            echo "or set the qcow_image_path workflow input to the correct image path."
+            exit 1
+          fi
+
+          qemu-system-x86_64 --version
+          lspci
+
+          for pci_device in ${PCI_DEVICES}; do
+            device_path="/sys/bus/pci/devices/${pci_device}"
+            if [ ! -e "${device_path}" ]; then
+              echo "::error::PCI device ${pci_device} does not exist on this self-hosted runner."
+              echo "Run the passthrough PCI query workflow and copy its pci_devices output."
+              exit 1
+            fi
+
+            if [ ! -e "${device_path}/iommu_group" ]; then
+              echo "::error::PCI device ${pci_device} has no IOMMU group."
+              echo "Verify that IOMMU is enabled on the self-hosted runner host."
+              exit 1
+            fi
+
+            driver_path="${device_path}/driver"
+            if [ ! -e "${driver_path}" ]; then
+              echo "::error::PCI device ${pci_device} is not bound to a driver."
+              exit 1
+            fi
+
+            driver_name="$(basename "$(readlink "${driver_path}")")"
+            if [ "${driver_name}" != "vfio-pci" ]; then
+              echo "::error::PCI device ${pci_device} is bound to ${driver_name}, expected vfio-pci."
+              exit 1
+            fi
+          done
+
+      - name: Configure VM SSH key
+        env:
+          THEROCK_ACTION_RUNNER_KVM_SSH_KEY: ${{ secrets.THEROCK_ACTION_RUNNER_KVM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          install -m 700 -d "${HOME}/.ssh"
+
+          # Prefer the runner-local key when a path was provided and the file exists.
+          if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ] && [ -f "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+            echo "Using VM SSH private key from VM_SSH_PRIVATE_KEY_PATH: ${VM_SSH_PRIVATE_KEY_PATH}"
+            cp "${VM_SSH_PRIVATE_KEY_PATH}" "${HOME}/.ssh/therock_vm_key"
+          else
+            # If the local key is unavailable, require the GitHub secret fallback.
+            if [ -z "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" ]; then
+              if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+                echo "::error::VM_SSH_PRIVATE_KEY_PATH was provided but file does not exist: ${VM_SSH_PRIVATE_KEY_PATH}"
+                echo "::error::and GitHub secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is also not defined."
+                echo "You need to either"
+                echo "    copy the therock SSH private key to this path on the self-hosted runner,"
+                echo "or configure"
+                echo "    the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
+              else
+                echo "::error::No VM_SSH_PRIVATE_KEY_PATH was provided."
+                echo "::error::and GitHub secret THEROCK_ACTION_RUNNER_KVM_SSH_KEY is also not defined."
+                echo "You need to either"
+                echo "    set vm_ssh_private_key_path to a key file on the self-hosted runner,"
+                echo "or configure"
+                echo "    the THEROCK_ACTION_RUNNER_KVM_SSH_KEY GitHub secret."
+              fi
+              exit 1
+            fi
+            if [ -n "${VM_SSH_PRIVATE_KEY_PATH}" ]; then
+              echo "::warning::VM_SSH_PRIVATE_KEY_PATH was provided but file does not exist: ${VM_SSH_PRIVATE_KEY_PATH}"
+              echo "::warning::Because THEROCK_ACTION_RUNNER_KVM_SSH_KEY secret is defined, using it."
+            fi
+            printf '%s\n' "${THEROCK_ACTION_RUNNER_KVM_SSH_KEY}" > "${HOME}/.ssh/therock_vm_key"
+          fi
+
+          chmod 600 "${HOME}/.ssh/therock_vm_key"
+
+      - name: Launch Linux kernel 4.18 QCOW VM with PCI passthrough
+        run: |
+          set -euo pipefail
+
+          rm -f "${VM_PID_FILE}" "${VM_SERIAL_LOG}"
+
+          print_serial_log_tail() {
+            if [ -f "${VM_SERIAL_LOG}" ]; then
+              echo "Last lines from VM serial log:"
+              sudo tail -n 80 "${VM_SERIAL_LOG}" || true
+            fi
+          }
+
+          python3 - <<'PY'
+          import os
+          import socket
+          import sys
+
+          port = os.environ["VM_SSH_PORT"]
+          try:
+              port_number = int(port)
+          except ValueError:
+              print(f"::error::vm_ssh_port must be a TCP port number: {port}")
+              sys.exit(1)
+          if not 1 <= port_number <= 65535:
+              print(f"::error::vm_ssh_port must be between 1 and 65535: {port}")
+              sys.exit(1)
+
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              try:
+                  sock.bind(("127.0.0.1", port_number))
+              except OSError as exc:
+                  print(f"::error::TCP port 127.0.0.1:{port} is not available for VM SSH forwarding: {exc}")
+                  print("Choose another vm_ssh_port or stop the process currently using this port.")
+                  sys.exit(1)
+          PY
+
+          pci_args=()
+          for pci_device in ${PCI_DEVICES}; do
+            pci_args+=("-device" "vfio-pci,host=${pci_device}")
+          done
+
+          sudo qemu-system-x86_64 \
+            -enable-kvm \
+            -machine q35,accel=kvm \
+            -cpu host \
+            -m "${VM_MEMORY}" \
+            -smp "${VM_CPUS}" \
+            -drive "file=${QCOW_IMAGE_PATH},format=qcow2,if=virtio,cache=none,aio=native" \
+            -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:${VM_SSH_PORT}-:22" \
+            -device virtio-net-pci,netdev=net0 \
+            -device virtio-rng-pci \
+            "${pci_args[@]}" \
+            -display none \
+            -serial "file:${VM_SERIAL_LOG}" \
+            -monitor none \
+            -daemonize \
+            -pidfile "${VM_PID_FILE}"
+
+          if [ ! -f "${VM_PID_FILE}" ]; then
+            echo "::error::QEMU did not create pidfile: ${VM_PID_FILE}"
+            print_serial_log_tail
+            exit 1
+          fi
+
+          vm_pid="$(sudo cat "${VM_PID_FILE}")"
+          if ! sudo kill -0 "${vm_pid}" 2>/dev/null; then
+            echo "::error::QEMU process ${vm_pid} is not running after VM launch."
+            print_serial_log_tail
+            exit 1
+          fi
+
+      - name: Wait for VM SSH
+        run: |
+          set -euo pipefail
+
+          for _ in {1..60}; do
+            if ssh \
+              -i "${HOME}/.ssh/therock_vm_key" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=yes \
+              -o ConnectTimeout=5 \
+              -p "${VM_SSH_PORT}" \
+              "${VM_SSH_USER}@127.0.0.1" true; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "VM did not become reachable over SSH."
+          exit 1
+
+      - name: Install ROCm packages and run rocFFT test
+        run: |
+          set -euo pipefail
+
+          rocm_gpg_key_for_guest=""
+          if [ "${ROCM_GPGCHECK}" = "true" ]; then
+            rocm_gpg_key_for_guest="${ROCM_GPG_KEY}"
+          fi
+
+          {
+            printf 'ROCM_REPO_BASEURL=%q\n' "${ROCM_REPO_BASEURL}"
+            printf 'ROCM_GPG_KEY=%q\n' "${rocm_gpg_key_for_guest}"
+            printf 'ROCM_GPGCHECK=%q\n' "${ROCM_GPGCHECK}"
+            printf 'ROCFFT_TEST_ARGS=%q\n' "${ROCFFT_TEST_ARGS}"
+            printf 'export ROCM_REPO_BASEURL ROCM_GPG_KEY ROCM_GPGCHECK ROCFFT_TEST_ARGS\n'
+            cat <<'EOF'
+          set -euxo pipefail
+
+          if [ "${ROCM_GPGCHECK}" = "true" ]; then
+            if [ -z "${ROCM_GPG_KEY}" ]; then
+              echo "::error::rocm_gpgcheck is enabled but rocm_gpg_key is empty."
+              echo "Set rocm_gpg_key or uncheck rocm_gpgcheck."
+              exit 1
+            fi
+
+            sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
+          [rocm]
+          name=ROCm Repository
+          baseurl=${ROCM_REPO_BASEURL}
+          enabled=1
+          gpgcheck=1
+          gpgkey=${ROCM_GPG_KEY}
+          REPO
+          else
+            sudo tee /etc/yum.repos.d/rocm.repo >/dev/null <<REPO
+          [rocm]
+          name=ROCm Repository
+          baseurl=${ROCM_REPO_BASEURL}
+          enabled=1
+          gpgcheck=0
+          REPO
+          fi
+
+          echo "Generated /etc/yum.repos.d/rocm.repo:"
+          sudo cat /etc/yum.repos.d/rocm.repo
+
+          if command -v lspci >/dev/null; then
+            lspci -nn
+          fi
+
+          sudo dnf clean all
+          # Remove any preinstalled ROCm test packages so the install below
+          # uses the versions from the currently configured repositories even if they are older version.
+          sudo dnf remove -y amdrocm-core-sdk amdrocm-fft-test || true
+          echo "DNF install command: sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test"
+          sudo dnf install -y amdrocm-core-sdk amdrocm-fft-test
+
+          if [ -x /opt/rocm/bin/rocminfo ]; then
+            /opt/rocm/bin/rocminfo
+          fi
+
+          cd /opt/rocm/bin/
+          # Run only a small default subset to validate that the kpack splitter
+          # executables launch correctly without running thousands of tests.
+          read -r -a rocfft_args <<< "${ROCFFT_TEST_ARGS}"
+          ./rocfft-test "${rocfft_args[@]}"
+          EOF
+          } | ssh \
+            -i "${HOME}/.ssh/therock_vm_key" \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o BatchMode=yes \
+            -o ConnectTimeout=5 \
+            -p "${VM_SSH_PORT}" \
+            "${VM_SSH_USER}@127.0.0.1" \
+            bash -s
+
+      - name: Stop Linux kernel 4.18 QCOW VM
+        if: always()
+        run: |
+          set +e
+
+          # Prefer a clean guest shutdown so the qcow2 filesystem is flushed
+          # before the host-side QEMU process exits.
+          if [ -f "${HOME}/.ssh/therock_vm_key" ]; then
+            ssh \
+              -i "${HOME}/.ssh/therock_vm_key" \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
+              -o BatchMode=yes \
+              -o ConnectTimeout=5 \
+              -p "${VM_SSH_PORT}" \
+              "${VM_SSH_USER}@127.0.0.1" \
+              "sudo shutdown now"
+          fi
+
+          if [ -f "${VM_PID_FILE}" ]; then
+            vm_pid="$(sudo cat "${VM_PID_FILE}")"
+
+            # If guest shutdown works, QEMU should exit on its own. Keep the
+            # pidfile fallback for failures that happen before SSH is reachable.
+            for _ in {1..30}; do
+              if ! sudo kill -0 "${vm_pid}" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
+            if sudo kill -0 "${vm_pid}" 2>/dev/null; then
+              sudo kill "${vm_pid}"
+              sleep 10
+            fi
+
+            if sudo kill -0 "${vm_pid}" 2>/dev/null; then
+              sudo kill -9 "${vm_pid}"
+            fi
+
+            sudo rm -f "${VM_PID_FILE}"
+          fi
+
+          # QEMU runs with sudo, so the serial log may be root-owned. Make it
+          # readable before actions/upload-artifact tries to package it.
+          if [ -f "${VM_SERIAL_LOG}" ]; then
+            sudo chmod a+r "${VM_SERIAL_LOG}"
+          fi
+
+      - name: Upload VM serial log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: therock-qcow-vm-serial-log
+          path: /tmp/therock-qcow-${{ github.run_id }}.serial.log
+          if-no-files-found: ignore
