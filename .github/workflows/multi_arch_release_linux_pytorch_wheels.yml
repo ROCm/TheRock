@@ -8,6 +8,10 @@
 # * https://github.com/ROCm/TheRock/issues/3332
 # * https://github.com/ROCm/TheRock/issues/3291
 
+# Secret inheritance is intentional within this workflow chain.
+# When called by https://github.com/ROCm/rockrel, inherit its Quartz credentials for build and test notifications.
+# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+
 name: Multi-Arch Release Linux PyTorch Wheels
 
 on:
@@ -194,7 +198,7 @@ jobs:
       # request more permissions than its caller grants).
       actions: write
     uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}

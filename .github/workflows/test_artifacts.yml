@@ -1,6 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# Secret inheritance is intentional within this workflow chain.
+# Callers supply benchmark credentials and, for https://github.com/ROCm/rockrel runs, Quartz notification credentials.
+# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+
 name: Test Artifacts
 
 on:
@@ -195,7 +199,7 @@ jobs:
     needs: configure_test_matrix
     if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
@@ -232,7 +236,7 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}

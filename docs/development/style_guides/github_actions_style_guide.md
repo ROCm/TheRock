@@ -284,3 +284,53 @@ to supply executable code. Document that assumption beside a local suppression:
   run: | # zizmor: ignore[template-injection]
     cmake -B build ${{ inputs.cmake_args }}
 ```
+
+#### Security - Limit secrets at workflow entry points
+
+See [secrets-inherit](https://docs.zizmor.sh/audits/#secrets-inherit) and
+[GitHub's forwarding rules](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#passing-secrets-to-nested-workflows).
+
+- **Limited trust `pull_request` events:** Forward only the secrets the child
+  needs, and declare them under its `on.workflow_call.secrets`.
+- **Trusted `push`, `workflow_dispatch`, or `schedule` events:** Use explicit
+  forwarding or `secrets: inherit`. Internal workflows may inherit the set
+  passed by their caller and inherited secrets need no declarations.
+- **No secrets needed:** Omit `secrets:` (`GITHUB_TOKEN` is always available).
+
+Inheritance reduces repeated declarations and mappings, but gives children all
+forwarded secrets. Document that choice at the top of the workflow and suppress
+individual calls. For workflows with multiple entry paths, restrict secrets at
+PR callers even if trusted callers inherit them.
+
+```yaml
+# ci.yml
+on:
+  # This is a limited trust trigger so always forward only what children need.
+  pull_request:
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets:
+      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
+```
+
+```yaml
+# test.yml
+on:
+  # Callers may or may not trust us with secrets, add explicit entries as needed.
+  workflow_call:
+    secrets:
+      # Needed for the explicit `uses:` with `secrets:` above
+      BENCHMARK_DB_URL:
+        required: false
+  # Trusted manual runs may inherit all available secrets.
+  workflow_dispatch:
+jobs:
+  component:
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+```
+
+For example, [rockrel](https://github.com/ROCm/rockrel) forwards Quartz credentials
+through release workflows but TheRock's `pull_request` entry points do not need
+them.

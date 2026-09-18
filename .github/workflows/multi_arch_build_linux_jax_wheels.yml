@@ -12,6 +12,9 @@
 #   - Uploads the resulting wheels to the multi-arch release bucket.
 #   - Runs the JAX test subset against the published multi-arch index.
 
+# Secret inheritance is intentional within this workflow chain.
+# See docs/development/style_guides/github_actions_style_guide.md for the policy.
+
 name: Multi-Arch Build Linux JAX Wheels
 
 on:
@@ -361,7 +364,7 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}

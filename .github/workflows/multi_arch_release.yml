@@ -4,7 +4,7 @@
 # This workflow is the entry point for multi-arch releases.
 #
 # For manual dev releases, trigger via workflow_dispatch on TheRock.
-# For scheduled nightly releases, rockrel will call this via workflow_call
+# For scheduled nightly releases, https://github.com/ROCm/rockrel will call this via workflow_call
 # (TODO: pass required inputs through to setup job explicitly as needed).
 #
 # If we want per-platform status badges, independent retryability, or
@@ -12,6 +12,10 @@
 # dispatching each platform job via workflow_dispatch. That will also
 # let us have this pre-trigger job freeze commits/versions so re-runs use
 # consistent values, see https://github.com/ROCm/TheRock/issues/1236.
+
+# Secret inheritance is intentional within this workflow chain.
+# When called by https://github.com/ROCm/rockrel, inherit its Quartz credentials through the release workflow chain.
+# See docs/development/style_guides/github_actions_style_guide.md for the policy.
 
 name: Multi-Arch Release
 
@@ -158,14 +162,14 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.enable_quartz_tracking && format('{0};{1}', github.run_id, inputs.release_type) || '' }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: ${{ needs.setup.outputs.linux_build_config != '' }}
     uses: ./.github/workflows/multi_arch_release_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
@@ -190,7 +194,7 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.windows_build_config != '' }}
     uses: ./.github/workflows/multi_arch_release_windows.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
