@@ -447,7 +447,8 @@ if [ "$PROFILE" = "slim" ]; then
     # Installs the compiler toolchain (hipcc/amdclang++), HIP runtime,
     # development headers, and base utilities (rocminfo).
     # These packages are architecture-independent (no GPU target suffix).
-    # Debian/Ubuntu repositories use '-dev'; RPM repositories use '-devel'.
+    # Debian/Ubuntu uses '-dev' (renamed via debian_replace_devel_name in
+    # build_tools/packaging/linux/packaging_utils.py); RPM uses '-devel'.
     if [ "$PKG_TYPE" = "deb" ]; then
         META_PACKAGES="amdrocm-runtime-dev${MAJOR_MINOR}"
     else
