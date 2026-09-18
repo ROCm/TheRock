@@ -290,8 +290,23 @@ For more details on using the `rocm-sdk-devel` package to build projects, see
 ##### Supported Python `[device-*]` install extras
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
-`torchvision`), select your GPU using a `[device-*]` install extra from the
-table below. See also the
+`torchvision`), select your GPU using a `[device-*]` install extra.
+
+###### Detect your GPU automatically
+
+The
+[`rocm-bootstrap`](https://pypi.org/project/rocm-bootstrap/) package can
+detect your GPU's `gfx` target for you:
+
+```bash
+$ pip install rocm-bootstrap
+$ rocm-bootstrap-detect
+gfx1103
+```
+
+###### GFX target lookup table
+
+If you know your GPU you can also check the table below or the
 [GPU architecture specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)
 for a full list of supported AMD GPUs.
 
