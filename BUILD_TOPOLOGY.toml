@@ -918,9 +918,8 @@ disable_platforms = ["windows"]
 [artifacts.rocgdb]
 artifact_group = "debug-tools"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
+artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses", "sysdeps-libiconv"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
-disable_platforms = ["windows"]
 
 # --- ROCm Emulation Tools ---
 
