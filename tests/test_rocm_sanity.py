@@ -131,17 +131,22 @@ class TestROCmSanity:
         # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
         rocm_path = (THEROCK_BIN_DIR / "..").resolve()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
-        amdclangxx = (
-            THEROCK_BIN_DIR
-            / ".."
-            / "lib"
-            / "llvm"
-            / "bin"
-            / f"amdclang++{platform_executable_suffix}"
-        ).resolve()
+        if is_windows():
+            amdclangxx_path = str(
+                (
+                    THEROCK_BIN_DIR
+                    / ".."
+                    / "lib"
+                    / "llvm"
+                    / "bin"
+                    / f"amdclang++{platform_executable_suffix}"
+                ).resolve()
+            )
+        else:
+            amdclangxx_path = f"{THEROCK_BIN_DIR}/amdclang++"
         run_command(
             [
-                str(amdclangxx),
+                amdclangxx_path,
                 f"--hip-path={rocm_path}",
                 f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
                 "-x",
