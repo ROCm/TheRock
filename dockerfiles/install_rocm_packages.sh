@@ -6,11 +6,17 @@
 #
 # Installs ROCm from deb/rpm packages via the system package manager.
 # Automatically detects the distribution and configures the appropriate repository.
-# Installs both the runtime meta-package (amdrocm*) and the core SDK meta-package
-# (amdrocm-core-sdk*) to provide a complete ROCm installation.
+#
+# Supports two installation profiles:
+#   - "full" (default): Installs the complete ROCm SDK including all math/ML
+#     libraries, profilers, debugger, and development headers.
+#   - "slim": Installs only the HIP compiler toolchain (hipcc/amdclang++),
+#     HIP runtime, development headers, and base utilities (rocminfo).
+#     Produces a much smaller image suitable for development and derivative
+#     container builds that don't need prebuilt math libraries.
 #
 # Usage:
-#   ./install_rocm_packages.sh <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+#   ./install_rocm_packages.sh <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE] [PROFILE]
 #
 # Arguments:
 #   VERSION          - Full version string (e.g., 7.13.0a20260322, 7.11.0)
@@ -19,6 +25,7 @@
 #                      AMD's multi-arch repository, which supports all GPU
 #                      families in a single image.
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, stable
+#   PROFILE          - Installation profile: full (default), slim
 #
 # Examples:
 #   ./install_rocm_packages.sh 7.13.0a20260322 gfx110x
@@ -26,6 +33,7 @@
 #   ./install_rocm_packages.sh 7.12.0 gfx94x prereleases
 #   ./install_rocm_packages.sh 7.11.0 gfx110x stable
 #   ./install_rocm_packages.sh 7.13.0a20260322 multi-arch nightlies   # multi-arch
+#   ./install_rocm_packages.sh 7.14.0 multi-arch stable slim          # slim profile
 
 set -euo pipefail
 
@@ -33,6 +41,7 @@ set -euo pipefail
 VERSION="${1:?Error: VERSION is required}"
 AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
 RELEASE_TYPE="${3:-nightlies}"
+PROFILE="${4:-full}"
 
 # Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
 # all GPU families, sourced from AMD's multi-arch repositories.
@@ -410,13 +419,35 @@ REPOEOF
 # ===========================================================================
 
 MAJOR_MINOR=$(extract_major_minor "$VERSION")
-# Install both the runtime meta-package (amdrocm*) and the core SDK meta-package
-# (amdrocm-core-sdk*) so the image gets a complete ROCm installation.
+
+# Resolve GPU target for repository URL construction.
 if [ "$MULTI_ARCH" = "1" ]; then
     GPU_TARGET="multi-arch"
-    META_PACKAGES="amdrocm${MAJOR_MINOR} amdrocm-core-sdk${MAJOR_MINOR}"
 else
     GPU_TARGET=$(normalize_gpu_target "$AMDGPU_FAMILY")
+fi
+
+# Detect distribution first so PKG_TYPE is known
+detect_distro_info
+map_distro_to_repo "$DISTRO_ID" "$DISTRO_VERSION"
+
+# Select meta-packages based on the installation profile.
+if [ "$PROFILE" = "slim" ]; then
+    # Slim profile: minimal HIP development environment.
+    # Installs the compiler toolchain (hipcc/amdclang++), HIP runtime,
+    # development headers, and base utilities (rocminfo).
+    # These packages are architecture-independent (no GPU target suffix).
+    # Debian/Ubuntu repositories use '-dev'; RPM repositories use '-devel'.
+    if [ "$PKG_TYPE" = "deb" ]; then
+        META_PACKAGES="amdrocm-runtime-dev${MAJOR_MINOR}"
+    else
+        META_PACKAGES="amdrocm-runtime-devel${MAJOR_MINOR}"
+    fi
+elif [ "$MULTI_ARCH" = "1" ]; then
+    # Full profile, multi-arch: install all libraries for all GPU families.
+    META_PACKAGES="amdrocm${MAJOR_MINOR} amdrocm-core-sdk${MAJOR_MINOR}"
+else
+    # Full profile, single-family: install all libraries for one GPU family.
     META_PACKAGES="amdrocm${MAJOR_MINOR}-${GPU_TARGET} amdrocm-core-sdk${MAJOR_MINOR}-${GPU_TARGET}"
 fi
 
@@ -427,19 +458,14 @@ echo "Version:         ${VERSION}"
 echo "Major.Minor:     ${MAJOR_MINOR}"
 echo "AMDGPU Family:   ${AMDGPU_FAMILY}"
 echo "GPU Target:      ${GPU_TARGET}"
+echo "Profile:         ${PROFILE}"
 echo "Meta Packages:   ${META_PACKAGES}"
-echo "Release Type:    ${RELEASE_TYPE}"
-echo "Install Mode:    $([ "$MULTI_ARCH" = "1" ] && echo "multi-arch" || echo "single-family")"
-echo "=============================================="
-
-# Detect distribution
-detect_distro_info
-map_distro_to_repo "$DISTRO_ID" "$DISTRO_VERSION"
-
 echo "Distribution:    ${DISTRO_ID} ${DISTRO_VERSION}"
 echo "Repo Distro:     ${REPO_DISTRO}"
 echo "Package Type:    ${PKG_TYPE}"
 echo "Package Manager: ${PKG_MGR}"
+echo "Release Type:    ${RELEASE_TYPE}"
+echo "Install Mode:    $([ "$MULTI_ARCH" = "1" ] && echo "multi-arch" || echo "single-family")"
 echo "=============================================="
 
 # Resolve nightly build directory if needed
