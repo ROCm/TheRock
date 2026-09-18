@@ -831,18 +831,14 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards_dict": {"linux": 1},
         "exclude_family": {
-            # rocprofiler-compute only supports gfx908, gfx90a, gfx942, gfx950, gfx1250
-            # (see TheRock#2892)
+            # rocprofiler-compute supports gfx908, gfx90a, gfx942, gfx950,
+            # gfx115X and gfx1250 (see TheRock#2892)
             "linux": [
                 "gfx1030",
                 "gfx1100",
                 "gfx1101",
                 "gfx1102",
                 "gfx1103",
-                "gfx1150",
-                "gfx1151",
-                "gfx1152",
-                "gfx1153",
                 "gfx1200",
                 "gfx1201",
             ],
