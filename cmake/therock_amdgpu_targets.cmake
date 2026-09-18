@@ -255,8 +255,7 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 )
 
 # gfx125X family
-# TODO(#8278): strict is outside outside broad build/test selection, with family added later.
-therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict")
+therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
 # Optional extension targets (used for out of tree target development).
@@ -353,13 +352,6 @@ function(therock_validate_amdgpu_targets)
   set(_test_expanded_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
   if(NOT _test_families AND NOT _test_expanded_targets)
     set(_test_expanded_targets "${_available_targets}")
-    # TODO(#8278): Remove this opt-in restriction when gfx1250-strict joins gfx125X.
-    # Include selected strict builds in default test compilation. Check dist
-    # targets too so target-neutral CI stages use the same test target list.
-    if(NOT "gfx1250-strict" IN_LIST _expanded_targets AND
-       NOT "gfx1250-strict" IN_LIST _dist_expanded_targets)
-      list(REMOVE_ITEM _test_expanded_targets gfx1250-strict)
-    endif()
   else()
     foreach(_family ${_test_families})
       if(NOT "${_family}" IN_LIST _available_families)
