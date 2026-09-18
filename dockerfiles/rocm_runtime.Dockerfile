@@ -47,6 +47,10 @@
 # - RELEASE_TYPE     : Release type (default: nightlies). Options: prereleases, devreleases, stable
 #                      Note: devreleases is only supported with INSTALL_METHOD=tarball.
 # - INSTALL_METHOD   : Installation method (default: tarball). Options: tarball, packages
+# - PROFILE          : Package installation profile (default: full). Options: full, slim
+#                      Only applies when INSTALL_METHOD=packages.
+#                      "full" installs all ROCm SDK libraries including math/ML.
+#                      "slim" installs only the HIP compiler toolchain and runtime (~745 MB content size vs ~8 GB full).
 #
 # Build examples (tarball, default):
 #
@@ -107,6 +111,32 @@
 #     --build-arg INSTALL_METHOD=packages \
 #     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm:debian13-multi-arch-7.13.0 \
+#     dockerfiles/
+#
+# Build examples (slim profile — packages only):
+#
+#   # Ubuntu 24.04 + multi-arch, slim profile (stable)
+#   docker build \
+#     --build-arg BASE_IMAGE=ubuntu:24.04 \
+#     --build-arg VERSION=7.14.0 \
+#     --build-arg AMDGPU_FAMILY=multi-arch \
+#     --build-arg RELEASE_TYPE=stable \
+#     --build-arg INSTALL_METHOD=packages \
+#     --build-arg PROFILE=slim \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-dev:ubuntu24.04-7.14.0 \
+#     dockerfiles/
+#
+#   # Ubuntu 24.04 + gfx110x, slim profile (stable)
+#   docker build \
+#     --build-arg BASE_IMAGE=ubuntu:24.04 \
+#     --build-arg VERSION=7.14.0 \
+#     --build-arg AMDGPU_FAMILY=gfx110x \
+#     --build-arg RELEASE_TYPE=stable \
+#     --build-arg INSTALL_METHOD=packages \
+#     --build-arg PROFILE=slim \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm-dev:ubuntu24.04-gfx110x-7.14.0 \
 #     dockerfiles/
 #
 #   # RHEL 8.10 UBI + gfx94X (nightly)
@@ -210,6 +240,7 @@ ARG VERSION
 ARG AMDGPU_FAMILY
 ARG RELEASE_TYPE=nightlies
 ARG INSTALL_METHOD=tarball
+ARG PROFILE=full
 
 LABEL org.opencontainers.image.title="ROCm runtime image (TheRock)" \
     org.opencontainers.image.description="ROCm user-space runtime image built from TheRock project; installs ROCm from prebuilt tarballs or packages during build." \
@@ -226,12 +257,14 @@ RUN chmod +x /tmp/install_rocm_deps.sh && \
     /tmp/install_rocm_deps.sh
 
 # Install ROCm via tarball or packages based on INSTALL_METHOD
+# The PROFILE argument (slim/full) only applies to packages installs.
 RUN chmod +x /tmp/install_rocm_tarball.sh /tmp/install_rocm_packages.sh && \
     if [ "${INSTALL_METHOD}" = "packages" ]; then \
         /tmp/install_rocm_packages.sh \
             "${VERSION}" \
             "${AMDGPU_FAMILY}" \
-            "${RELEASE_TYPE}"; \
+            "${RELEASE_TYPE}" \
+            "${PROFILE}"; \
     else \
         /tmp/install_rocm_tarball.sh \
             "${VERSION}" \
