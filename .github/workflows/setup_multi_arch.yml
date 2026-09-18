@@ -246,9 +246,11 @@ jobs:
           # checked-out TheRock commit.
           STAGE_REUSE_CURRENT_SHA: >-
             ${{
-              github.event_name == 'pull_request' &&
-              (inputs.repository == '' || inputs.repository == github.repository) &&
-              github.event.pull_request.base.sha ||
+              (
+                github.event_name == 'pull_request' &&
+                (inputs.repository == '' || inputs.repository == github.repository) &&
+                github.event.pull_request.base.sha
+              ) ||
               steps.checkout.outputs.commit
             }}
           STAGE_REUSE_MAX_AGE_HOURS: ${{ inputs.stage_reuse_max_age_hours }}
