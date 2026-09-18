@@ -31,7 +31,7 @@ RELEASE_TYPES = [
 # All configured refs currently share this build-version range. When upstream
 # support windows diverge, replace it with an ordered per-ref version map and
 # derive each ref's primary test version from the oldest entry in that map.
-RELEASE_PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13", "3.14"]
+RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
@@ -193,10 +193,10 @@ def generate_pytorch_matrix_for_release_type(
     #
     # [
     #   {
-    #     "python_version": "3.10",
+    #     "python_version": "3.11",
     #     "pytorch_git_ref": "release/2.12",
     #     "amdgpu_families": "gfx94X-dcgpu",
-    #     "test_level": "none"
+    #     "test_level": "standard"
     #   },
     #   ...
     #   {
