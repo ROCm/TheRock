@@ -211,6 +211,13 @@ jobs:
       id-token: write
       contents: read
     env:
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}
+      PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      CACHE_TYPE: ${{ inputs.cache_type }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       CHECKOUT_ROOT: B:/src
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
@@ -268,7 +275,7 @@ jobs:
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+            --python-version "${PYTHON_VERSION}"
 
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
@@ -332,14 +339,14 @@ jobs:
         timeout-minutes: 30
         run: |
           git config --global core.longpaths true
-          pytorch_origin="${{ inputs.pytorch_gitrepo_origin }}"
+          pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
           if [ -z "${pytorch_origin}" ]; then
             pytorch_origin="https://github.com/ROCm/pytorch.git"
           fi
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
             --gitrepo-origin "${pytorch_origin}" \
-            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_audio \
@@ -357,7 +364,7 @@ jobs:
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         run: |
           python build_tools/github_actions/determine_version.py \
-            --rocm-version ${{ inputs.rocm_version }}
+            --rocm-version "${ROCM_VERSION}"
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
@@ -386,8 +393,8 @@ jobs:
         id: expand
         run: |
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.amdgpu_families }}")
-          echo "Expanded families '${{ inputs.amdgpu_families }}' -> '${targets}'"
+            --amdgpu-families "${AMDGPU_FAMILIES}")
+          echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
       # Using 'cmd' here is load bearing! There are configuration issues when
@@ -404,36 +411,41 @@ jobs:
           # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
           ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
           ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
-        run: |
+          AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
+        # determine_version.py emits multiple arguments from a parsed ROCm version.
+        # Trust that repository script to produce this intentional shell fragment.
+        # Delayed expansion keeps metacharacters in input values from becoming CMD operators.
+        run: | # zizmor: ignore[template-injection]
+          setlocal EnableDelayedExpansion
           set "CACHE_FLAG="
-          if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
-          if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+          if "!CACHE_TYPE!"=="sccache" set "CACHE_FLAG=--use-sccache"
+          if "!CACHE_TYPE!"=="ccache" set "CACHE_FLAG=--use-ccache"
 
-          echo "Building PyTorch wheels for ${{ inputs.amdgpu_families }} (cache: ${{ inputs.cache_type }})"
+          echo "Building PyTorch wheels for !AMDGPU_FAMILIES! (cache: !CACHE_TYPE!)"
           REM build_prod_wheels.py forwards each of these to pip and ignores an
           REM empty value, so pass both and supply whichever source applies:
           REM --index-url for a PEP 503 index, --find-links for a flat page.
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --index-url="%ROCM_INDEX_URL%" ^
-            --find-links="%ROCM_FIND_LINKS%" ^
+            --index-url="!ROCM_INDEX_URL!" ^
+            --find-links="!ROCM_FIND_LINKS!" ^
             --root-checkout-dir ${{ env.CHECKOUT_ROOT }} ^
             --clean ^
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
-            %CACHE_FLAG% ^
-            --release-type="${{ inputs.release_type }}" ^
-            --pytorch-rocm-arch ${{ steps.expand.outputs.targets }} ^
+            --output-dir "!PACKAGE_DIST_DIR!" ^
+            !CACHE_FLAG! ^
+            --release-type="!BUILD_RELEASE_TYPE!" ^
+            --pytorch-rocm-arch "!AMDGPU_TARGETS!" ^
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
         if: ${{ !cancelled() && inputs.cache_type != 'none' }}
         run: |
-          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+          if [ "${CACHE_TYPE}" = "sccache" ]; then
             echo "sccache stats:"
             echo "--------------"
             sccache --show-stats || true
-          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+          elif [ "${CACHE_TYPE}" = "ccache" ]; then
             echo "ccache stats:"
             echo "-------------"
             ccache -s -v || true
@@ -442,7 +454,7 @@ jobs:
       - name: Sanity check wheel
         shell: cmd
         run: |
-          python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
+          python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 
       # The kpack wheel splitter takes the fat torch wheel and produces a
       # smaller host wheel plus one device wheel per gfx target. Source-install
@@ -465,7 +477,7 @@ jobs:
       # document the standalone developer workflow.
       - name: Split fat wheels (torch + torchvision)
         run: |
-          DIST_DIR="$(cygpath -u "${{ env.PACKAGE_DIST_DIR }}")"
+          DIST_DIR="$(cygpath -u "${PACKAGE_DIST_DIR}")"
 
           # LLVM binaries ship inside the already-installed rocm-sdk-devel.
           ROCM_SDK_ROOT="$(cygpath -u "$(python -m rocm_sdk path --root)")"
@@ -531,7 +543,7 @@ jobs:
         id: pytorch-versions
         shell: cmd
         run: |
-          python build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+          python build_tools/github_actions/write_torch_versions.py --dist-dir "%PACKAGE_DIST_DIR%"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -543,8 +555,8 @@ jobs:
         id: publish-pytorch-wheels
         run: |
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
-            --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}" \
+            --source-dir="${PACKAGE_DIST_DIR}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
 
       - name: Capture job summary
@@ -561,6 +573,11 @@ jobs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
+    env:
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEST_AMDGPU_FAMILIES: ${{ inputs.test_amdgpu_families }}
+      TEST_LEVEL: ${{ inputs.test_level }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -582,9 +599,9 @@ jobs:
           CI_CONFIG_PATH: ci-config
         run: |
           python build_tools/github_actions/configure_pytorch_test_matrix.py \
-            --build-amdgpu-families "${{ inputs.amdgpu_families }}" \
-            --test-amdgpu-families "${{ inputs.test_amdgpu_families }}" \
-            --test-level "${{ inputs.test_level }}" \
+            --build-amdgpu-families "${AMDGPU_FAMILIES}" \
+            --test-amdgpu-families "${TEST_AMDGPU_FAMILIES}" \
+            --test-level "${TEST_LEVEL}" \
             --platform windows
 
       - name: Capture job summary
