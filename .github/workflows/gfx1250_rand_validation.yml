@@ -1,0 +1,177 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+# Temporary validation workflow: do not land on main.
+name: Restricted gfx1250 RAND validation
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RELEASE_TYPE: ci
+  VALIDATION_VERSION: 0.0.1.dev20260918
+
+jobs:
+  build:
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 480
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb
+    env:
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      TEATIME_FORCE_INTERACTIVE: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Python requirements
+        run: pip install -r requirements.txt
+      - name: Fetch sources and record revisions
+        run: |
+          git config --global --add safe.directory "$PWD"
+          python build_tools/fetch_sources.py --stage compiler-runtime --jobs 12 --depth 1
+          python build_tools/fetch_sources.py --stage math-libs --jobs 12 --depth 1
+          mkdir -p validation-reports
+          git rev-parse HEAD > validation-reports/therock-revision.txt
+          git submodule status --recursive > validation-reports/submodule-revisions.txt
+          test -f rocm-systems/python/rocm-bootstrap/python/rocm_bootstrap/package_metadata.py
+          pip install ./rocm-systems/python/rocm-bootstrap ./rocm-systems/shared/kpack
+      - name: Configure ccache
+        run: |
+          python build_tools/setup_ccache.py --release-type ci \
+            --dir "$(dirname "$CCACHE_CONFIGPATH")" --local-path "$PWD/.container-cache/ccache"
+      - name: Configure compiler HIP and RAND
+        run: |
+          cmake -B build-rand-validation -S . -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPython3_EXECUTABLE="$(command -v python)" \
+            -DTHEROCK_PACKAGE_VERSION="$VALIDATION_VERSION" \
+            -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON \
+            -DTHEROCK_VALIDATE_RAND_SUBSET=ON \
+            -DBUILD_TESTING=OFF -DTHEROCK_BUILD_TESTING=OFF \
+            -DTHEROCK_AMDGPU_FAMILIES=gfx125X-all \
+            -DTHEROCK_DIST_AMDGPU_FAMILIES=gfx125X-all \
+            -DTHEROCK_TEST_AMDGPU_FAMILIES=gfx125X-all \
+            -DTHEROCK_AMDGPU_TARGETS= -DTHEROCK_DIST_AMDGPU_TARGETS= \
+            -DTHEROCK_TEST_AMDGPU_TARGETS= \
+            -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=ON
+      - name: Build RAND and materialize prerequisite artifacts
+        run: |
+          cmake --build build-rand-validation --target artifact-rand
+          cmake --build build-rand-validation --target \
+            artifact-base artifact-sysdeps artifact-amd-llvm \
+            artifact-core-runtime artifact-core-kpack artifact-core-hip artifact-rand
+      - name: Verify split artifacts
+        env:
+          PYTHONPATH: rocm-systems/shared/kpack/python
+        run: |
+          python build_tools/github_actions/validate_gfx1250_rand.py artifacts \
+            --artifact-dir build-rand-validation/artifacts --families gfx125X-all
+          python -m rocm_kpack.tools.verify_artifacts \
+            --artifacts-dir build-rand-validation/artifacts --verbose \
+            --clang-offload-bundler build-rand-validation/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-bundler
+      - uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+      - name: Upload build artifacts to this CI run
+        run: python build_tools/artifact_manager.py push --stage all --build-dir build-rand-validation
+      - name: Preserve build reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rand-build-reports
+          path: |
+            validation-reports/
+            build-rand-validation/CMakeCache.txt
+            build-rand-validation/logs/
+
+  sdk:
+    needs: build
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [gfx1250, gfx1250-strict, gfx125X-all]
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb
+    env:
+      VALIDATION_FAMILY: ${{ matrix.family }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare packaging dependencies
+        run: |
+          pip install -r requirements.txt
+          git submodule update --init --depth 1 rocm-systems
+          test -f rocm-systems/python/rocm-bootstrap/python/rocm_bootstrap/package_metadata.py
+          pip install ./rocm-systems/python/rocm-bootstrap ./rocm-systems/shared/kpack
+      - name: Fetch the selected family
+        run: |
+          python build_tools/artifact_manager.py fetch --stage all \
+            --amdgpu-families="$VALIDATION_FAMILY" --expand-family-to-targets --output-dir=input
+      - name: Build and check SDK subset
+        run: |
+          python build_tools/github_actions/validate_gfx1250_rand.py sdk \
+            --artifact-dir input/artifacts --families "$VALIDATION_FAMILY" \
+            --output-dir packages --version "$VALIDATION_VERSION"
+      - name: Preserve SDK wheels
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rand-sdk-${{ matrix.family }}
+          compression-level: 0
+          path: packages/dist/
+
+  native:
+    needs: build
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [gfx1250, gfx1250-strict, gfx125X-all]
+        format: [deb, rpm]
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+    env:
+      VALIDATION_FAMILY: ${{ matrix.family }}
+      PACKAGE_FORMAT: ${{ matrix.format }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Prepare packaging dependencies
+        run: |
+          pip install -r requirements.txt
+          git submodule update --init --depth 1 rocm-systems
+          test -f rocm-systems/python/rocm-bootstrap/python/rocm_bootstrap/package_metadata.py
+          pip install ./rocm-systems/python/rocm-bootstrap ./rocm-systems/shared/kpack
+          sudo apt-get update
+          sudo apt-get install -y rpm debhelper-compat build-essential dpkg-dev patchelf cpio llvm-20
+      - name: Fetch the selected family
+        run: |
+          python build_tools/artifact_manager.py fetch --stage all \
+            --amdgpu-families="$VALIDATION_FAMILY" --expand-family-to-targets --output-dir=input
+      - name: Build RAND native packages
+        run: |
+          python build_tools/github_actions/validate_gfx1250_rand.py artifacts \
+            --artifact-dir input/artifacts --families "$VALIDATION_FAMILY"
+          python build_tools/packaging/linux/build_package.py \
+            --artifacts-dir input/artifacts --dest-dir packages \
+            --rocm-version 10.1.0 --version-suffix "$GITHUB_RUN_ID" \
+            --pkg-type "$PACKAGE_FORMAT" --pkg-names amdrocm-rand \
+            --enable-kpack --runpath-pkg --parallel 1
+          python build_tools/github_actions/validate_gfx1250_rand.py native \
+            --artifact-dir input/artifacts --families "$VALIDATION_FAMILY" \
+            --output-dir packages --package-format "$PACKAGE_FORMAT"
+      - name: Preserve native packages and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rand-native-${{ matrix.family }}-${{ matrix.format }}
+          compression-level: 0
+          path: |
+            packages/
+            logs/

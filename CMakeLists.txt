@@ -276,6 +276,16 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 therock_finalize_features()
 therock_report_features()
 
+# Temporary validation branch only: reject accidental expansion of the build.
+if(THEROCK_VALIDATE_RAND_SUBSET)
+  set(_rand_validation_features SYSDEPS BASE COMPILER CORE_RUNTIME KPACK HIP_RUNTIME RAND)
+  foreach(_feature IN LISTS THEROCK_ALL_FEATURES)
+    if(THEROCK_ENABLE_${_feature} AND NOT _feature IN_LIST _rand_validation_features)
+      message(FATAL_ERROR "Outside the restricted RAND validation subset: ${_feature}")
+    endif()
+  endforeach()
+endif()
+
 ################################################################################
 # GPU target selection
 #

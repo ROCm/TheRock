@@ -111,7 +111,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  restricted_rand_validation:
+    # Temporary branch-only validation, selectable through the existing dispatch UI.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/users/marbre/gfx1250-strict-rand-ci-validation' }}
+    uses: ./.github/workflows/gfx1250_rand_validation.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
   setup:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/users/marbre/gfx1250-strict-rand-ci-validation') }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -187,6 +197,7 @@ jobs:
     name: CI Summary
     if: always()
     needs:
+      - restricted_rand_validation
       - setup
       - linux_build_and_test
       - windows_build_and_test
