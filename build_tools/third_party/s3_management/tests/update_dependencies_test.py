@@ -42,6 +42,7 @@ class FakeBucket:
         "numpy-2.0.0-cp312-cp312-linux_x86_64.whl",
         "numpy-2.0.0-cp313-cp313-linux_x86_64.whl",
         "numpy-2.0.0-cp314-cp314-linux_x86_64.whl",
+        "numpy-2.0.0-cp315-cp315-linux_x86_64.whl",
         # manylinux variants
         "numpy-2.0.0-cp310-cp310-manylinux_2_17_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-manylinux2014_x86_64.whl",
