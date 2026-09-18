@@ -331,6 +331,9 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          # ROCm/TheRock#6724: nightly's numpy==1.23.2 pin for py3.10 segfaults in numpy.dot; bump only that pin to 1.26.4.
+          sed -i 's|numpy==1.23.2; python_version == "3.10"|numpy==1.26.4; python_version == "3.10"|' \
+            external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
