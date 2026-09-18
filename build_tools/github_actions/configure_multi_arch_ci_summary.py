@@ -96,6 +96,14 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
     if ci_inputs.release_type:
         highlights.append(f"Release type: {ci_inputs.release_type}")
 
+    # FLAGS.cmake overrides requested for this run.
+    if ci_inputs.build_flags:
+        rendered = ", ".join(
+            f"`THEROCK_FLAG_{name}={value}`"
+            for name, value in sorted(ci_inputs.build_flags.items())
+        )
+        highlights.append(f"Build flags: {rendered}")
+
     # Explicit family selection (workflow_dispatch)
     if ci_inputs.is_workflow_dispatch:
         parts = []
