@@ -115,6 +115,8 @@ class TestResolveWheelAsanEnv(unittest.TestCase):
 
 
 class TestFindSymbolizer(unittest.TestCase):
+    # Windows has no executable bit; os.access(X_OK) is true for any file there.
+    @requires_posix
     def test_ignores_a_non_executable_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             package = _make_package(Path(tmp), symbolizer=False)
