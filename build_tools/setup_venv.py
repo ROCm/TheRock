@@ -244,9 +244,13 @@ def install_packages_into_venv(
         # Look up known index name.
         index_url = ROCM_INDEX_URLS_MAP[index_name]
 
+    if index_url == "" and extra_index_url:
+        # There is no index left to supplement, so the extra index becomes the
+        # only index rather than being dropped along with it.
+        index_url = extra_index_url
+        extra_index_url = None
+
     if index_url == "":
-        if extra_index_url:
-            raise ValueError("Can't set extra_index_url when the index is disabled")
         pip_install_cmd.append("--no-index")
         pip_install_cmd.append("--no-build-isolation")
     elif index_url:
