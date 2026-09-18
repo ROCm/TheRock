@@ -867,9 +867,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
       taken directly from the workflow inputs, giving the caller the ability
       to either replicate what CI does on PRs/push or build/test a narrow
       set of targets for investigation.
-    - external repository pull requests and pushes: Explicit per-platform
-      family inputs supplied by the caller take precedence over TheRock's
-      trigger defaults. PR labels can still extend this caller-selected set.
+    - pull requests and pushes with explicit per-platform family inputs: The
+      caller-supplied families take precedence over trigger defaults. PR labels
+      can still extend this caller-selected set.
 
     Returns per-platform family lists, filtered to only include families
     that have a platform entry in amdgpu_family_matrix.py.
@@ -898,14 +898,13 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
-    elif (
-        (ci_inputs.is_pull_request or ci_inputs.is_push)
-        and ci_inputs.external_repo
-        and (ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families)
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and (
+        ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families
     ):
-        # External repositories define their intended build coverage through
-        # the reusable workflow inputs. Keep native TheRock trigger defaults
-        # unchanged while honoring that caller-selected coverage.
+        # Callers can define their intended build coverage through the reusable
+        # workflow inputs. When either platform is explicit, an empty input for
+        # the other platform skips it; trigger defaults apply only when both
+        # inputs are empty.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
         if linux_names == ["all"]:
@@ -918,7 +917,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
-        print("  External repository -> using caller-supplied GPU families")
+        print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
         # the set below (gfx* for individual families, ci:run-all-archs

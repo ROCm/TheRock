@@ -969,8 +969,8 @@ class TestSelectTargets(unittest.TestCase):
         self.assertEqual(result.linux_families, ["gfx94x"])
         self.assertEqual(result.windows_families, expected_windows_families)
 
-    def test_native_pull_request_ignores_family_inputs(self):
-        """Native PRs continue to use TheRock's presubmit family defaults."""
+    def test_native_pull_request_uses_caller_supplied_families(self):
+        """Native PRs also honor explicit per-platform build coverage."""
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="pull_request",
@@ -978,11 +978,11 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
             linux_amdgpu_families=["gfx950"],
-            windows_amdgpu_families=["gfx90a"],
+            windows_amdgpu_families=["gfx110x"],
         )
         result = cm.select_targets(inputs)
-        self.assertNotIn("gfx950", result.linux_families)
-        self.assertNotIn("gfx90a", result.windows_families)
+        self.assertEqual(result.linux_families, ["gfx950"])
+        self.assertEqual(result.windows_families, ["gfx110x"])
 
     def test_pull_request_gfx_label_adds_family(self):
         """PR with a gfx label adds that family to the defaults."""
