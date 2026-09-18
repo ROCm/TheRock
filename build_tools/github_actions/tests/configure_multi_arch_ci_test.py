@@ -713,6 +713,12 @@ class TestDecideJobs(unittest.TestCase):
         # Both labels are compatible with the stages
         self.assertEqual(outputs.linux_test_labels, ["test:hip-tests", "test:kfdtest"])
 
+    def test_debug_tools_stage_allows_all_debugger_tests(self):
+        self.assertEqual(
+            cm._get_allowed_test_labels_for_stages(["debug-tools"]),
+            ["rocgdb", "rocr-debug-agent"],
+        )
+
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing
     def test_asan_tests_only_run_on_nightly_triggers(self):
         """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
