@@ -4,6 +4,7 @@ include = [
   "bin/**",
 ]
 [components.dbg."core/hrr/stage"]
+[components.lib."core/hrr/stage"]
 [components.dev."core/hrr/stage"]
 include = [
   "include/hrr/**",

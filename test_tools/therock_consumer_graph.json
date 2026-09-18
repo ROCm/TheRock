@@ -352,6 +352,7 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
+      "hrr",
       "libhipcxx",
       "miopen",
       "ocl-clr",
