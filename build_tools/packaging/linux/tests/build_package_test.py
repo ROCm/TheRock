@@ -25,6 +25,7 @@ import tempfile
 import types
 import unittest
 from argparse import Namespace
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -99,6 +100,10 @@ from packaging_utils import (  # noqa: E402
     is_gfxarch_package,
     is_key_defined,
     update_package_name,
+    PackageCollisionError,
+    validate_package_roots,
+    expand_kpack_meta_dependencies,
+    process_main_dependencies_kpack,
 )
 
 
@@ -229,8 +234,9 @@ def _stage_package_artifacts(
     gfx_arch: str,
     *,
     enable_kpack: bool = True,
+    payload_name: str = STAGING_PAYLOAD_NAME,
 ) -> list[Path]:
-    """Stage artifact dirs + manifests from ``package.json`` via ``get_package_info``."""
+    """Stage artifacts from ``package.json`` and return their manifest stage roots."""
     pkg_info = get_package_info(pkg_name)
     if enable_kpack and gfx_arch == GFX_META:
         return []
@@ -268,15 +274,16 @@ def _stage_package_artifacts(
 
             for component in components:
                 artifact_dir = artifacts_dir / f"{prefix}_{component}_{suffix}"
-                rel_path = f"{subdir_name}/{component}/{STAGING_PAYLOAD_NAME}"
+                rel_path = f"{subdir_name}/{component}/{payload_name}"
                 payload = artifact_dir / rel_path
                 payload.parent.mkdir(parents=True, exist_ok=True)
                 payload.write_bytes(STAGING_PAYLOAD_BYTES)
                 manifest = artifact_dir / "artifact_manifest.txt"
-                manifest.write_text(f"{rel_path}\n", encoding="utf-8")
+                # Artifact manifests list stage roots, not individual files.
+                manifest.write_text(f"{subdir_name}/{component}/\n", encoding="utf-8")
                 if not manifest.exists():
                     raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
-                created.append(artifact_dir)
+                created.append(artifact_dir / subdir_name / component)
     return created
 
 
@@ -336,6 +343,191 @@ def _stage_fft_kpack_tree(artifacts_dir: Path, *, include_host: bool = False) ->
 # ---------------------------------------------------------------------------
 # Artifact staging — validates production discovery APIs
 # ---------------------------------------------------------------------------
+class SharedOwnerPackagingTest(BuildPackageTestCase):
+    """Keep selected payload identities inside one native package per owner."""
+
+    def _stage_targets(
+        self, targets: tuple[str, ...], pkg_type: str = "deb"
+    ) -> PackageConfig:
+        cfg = _kpack_config(
+            self.temp_dir / ";".join(targets) / pkg_type,
+            target=list(targets),
+            pkg_type=pkg_type,
+        )
+        # Supply both targets to ensure selection does not implicitly include the other.
+        self.stage_roots: dict[str, list[Path]] = {}
+        for target in ("gfx1250", "gfx1250-strict"):
+            self.stage_roots[target] = _stage_package_artifacts(
+                PKG_FFT,
+                cfg.artifacts_dir,
+                target,
+                payload_name=f".kpack/fft_{target}.kpack",
+            )
+        return replace(cfg, gfx_arch="gfx1250", versioned_pkg=True)
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_retains_only_selected_payloads(self, mock_build, _mock_move):
+        for targets in (
+            ("gfx1250",),
+            ("gfx1250-strict",),
+            ("gfx1250", "gfx1250-strict"),
+        ):
+            with self.subTest(targets=targets):
+                cfg = self._stage_targets(targets)
+                deb_package.create_versioned_deb_package(PKG_FFT, cfg)
+                control = _read_control_file(PKG_FFT, cfg)
+                self.assertEqual(
+                    _control_field(control, "Package"), "amdrocm-fft7.1-gfx1250"
+                )
+                package_dir = mock_build.call_args.args[0]
+                payload_dir = package_dir / cfg.install_prefix.lstrip("/") / ".kpack"
+                self.assertEqual(
+                    {path.name for path in payload_dir.iterdir()},
+                    {f"fft_{target}.kpack" for target in targets},
+                )
+                for target in targets:
+                    self.assertEqual(
+                        (payload_dir / f"fft_{target}.kpack").read_bytes(),
+                        STAGING_PAYLOAD_BYTES,
+                    )
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_rpm_spec_includes_only_selected_roots(self, _mock_build, _mock_move):
+        for targets in (
+            ("gfx1250",),
+            ("gfx1250-strict",),
+            ("gfx1250", "gfx1250-strict"),
+        ):
+            with self.subTest(targets=targets):
+                cfg = self._stage_targets(targets, "rpm")
+                rpm_package.create_versioned_rpm_package(PKG_FFT, cfg)
+                spec = _read_spec_file(PKG_FFT, cfg)
+                self.assertEqual(_spec_field(spec, "Name"), "amdrocm-fft7.1-gfx1250")
+                for target in ("gfx1250", "gfx1250-strict"):
+                    artifact_path = str(cfg.artifacts_dir / f"fft_lib_{target}") + "/"
+                    self.assertEqual(artifact_path in spec, target in targets)
+
+    @patch.object(build_package, "build_nonversioned_package", return_value=[])
+    @patch.object(build_package, "build_meta_package", return_value=[])
+    @patch.object(build_package, "build_host_package", return_value=[])
+    @patch.object(build_package, "build_device_package", return_value=[])
+    def test_device_package_built_once(self, device, _host, _meta, _nonversioned):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
+        build_package.build_gfxarch_package_variants(PKG_FFT, cfg)
+        device.assert_called_once_with(PKG_FFT, cfg, "gfx1250")
+
+    def test_meta_dependency_lists_owner_once(self):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
+        self.assertEqual(
+            expand_kpack_meta_dependencies(PKG_FFT, cfg.gfxarch_list, cfg),
+            ["amdrocm-fft-host7.1", "amdrocm-fft7.1-gfx1250"],
+        )
+
+    def test_device_dependency_uses_selected_member_availability(self):
+        cfg = self._stage_targets(("gfx1250-strict",))
+        _stage_package_artifacts("amdrocm-rand", cfg.artifacts_dir, "gfx1250-strict")
+        _stage_package_artifacts(
+            "amdrocm-rocalution", cfg.artifacts_dir, "gfx1250-strict"
+        )
+        info = get_package_info("amdrocm-rocalution")
+        for field in ("DEBDepends", "RPMRequires"):
+            with self.subTest(field=field):
+                deps = process_main_dependencies_kpack(info, field, cfg)
+                self.assertIn("amdrocm-rand7.1-gfx1250", deps)
+                self.assertNotIn("gfx1250-strict", deps)
+
+    def _stage_conflicting_targets(self, pkg_type: str) -> PackageConfig:
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"), pkg_type)
+        for target, roots in self.stage_roots.items():
+            for root in roots:
+                (root / "shared").write_text(target)
+        return cfg
+
+    @patch.object(
+        build_package,
+        "create_versioned_deb_package",
+        deb_package.create_versioned_deb_package,
+    )
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_conflict_propagates_before_building(self, external_build):
+        cfg = self._stage_conflicting_targets("deb")
+        with self.assertRaisesRegex(
+            PackageCollisionError, "Conflicting package path shared"
+        ):
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
+        external_build.assert_not_called()
+
+    @patch.object(
+        build_package,
+        "create_versioned_rpm_package",
+        rpm_package.create_versioned_rpm_package,
+    )
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_rpm_conflict_propagates_before_building(self, external_build):
+        cfg = self._stage_conflicting_targets("rpm")
+        with self.assertRaisesRegex(
+            PackageCollisionError, "Conflicting package path shared"
+        ):
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
+        external_build.assert_not_called()
+
+
+class PackageFailureExitTest(BuildPackageTestCase):
+    def _run_failing_build(self, error: Exception) -> None:
+        config = _kpack_config(self.temp_dir)
+        _stage_fft_kpack_tree(config.artifacts_dir)
+        args = _args(self.temp_dir, runpath_pkg=True, pkg_names=[PKG_FFT], parallel=1)
+        # Exercise the real worker and orchestration without external package builds.
+        with (
+            patch.object(build_package, "create_package_config", return_value=config),
+            patch.object(build_package, "cleanup_packaging_environment"),
+            patch.object(build_package, "ProcessPoolExecutor", ThreadPoolExecutor),
+            patch.object(build_package, "build_package_variants", side_effect=error),
+        ):
+            build_package.run(args)
+
+    def test_collision_exits_nonzero(self):
+        with self.assertRaises(SystemExit) as raised:
+            self._run_failing_build(
+                PackageCollisionError("Conflicting package path shared")
+            )
+        self.assertEqual(raised.exception.code, 1)
+
+    def test_other_failure_keeps_existing_exit_behavior(self):
+        self._run_failing_build(RuntimeError("Package build failed"))
+
+
+class PackageRootCollisionTest(BuildPackageTestCase):
+    def setUp(self):
+        super().setUp()
+        self.roots = [self.temp_dir / "first", self.temp_dir / "second"]
+        for root in self.roots:
+            root.mkdir()
+
+    def test_file_directory_collision_is_rejected(self):
+        (self.roots[0] / "shared").write_bytes(b"file")
+        (self.roots[1] / "shared").mkdir()
+        with self.assertRaisesRegex(
+            PackageCollisionError, "Conflicting package path shared"
+        ):
+            validate_package_roots(self.roots)
+
+    def test_identical_dangling_symlinks_are_accepted(self):
+        for root in self.roots:
+            (root / "shared").symlink_to("external-target")
+        validate_package_roots(self.roots)
+
+    def test_conflicting_symlinks_are_rejected(self):
+        (self.roots[0] / "shared").symlink_to("first-target")
+        (self.roots[1] / "shared").symlink_to("second-target")
+        with self.assertRaisesRegex(
+            PackageCollisionError, "Conflicting package path shared"
+        ):
+            validate_package_roots(self.roots)
+
+
 class ArtifactStagingTest(BuildPackageTestCase):
     """``_stage_package_artifacts`` produces trees ``filter_components`` accepts."""
 
@@ -766,6 +958,22 @@ class CopyPackageContentsTest(BuildPackageTestCase):
     (e.g., llvm -> lib/llvm) were incorrectly expanded via copytree because
     Path.is_dir() follows symlinks and returns True.
     """
+
+    def test_identical_nested_entries_merge(self) -> None:
+        destination = self.temp_dir / "dest"
+        for name in ("first", "second"):
+            source = self.temp_dir / name
+            nested = source / ".kpack"
+            nested.mkdir(parents=True)
+            (nested / "shared").write_bytes(b"shared payload")
+            (nested / "shared-link").symlink_to("shared")
+            deb_package.copy_package_contents(source, destination)
+        self.assertEqual(
+            (destination / ".kpack/shared").read_bytes(), b"shared payload"
+        )
+        self.assertEqual(
+            (destination / ".kpack/shared-link").readlink(), Path("shared")
+        )
 
     def test_valid_symlink_to_directory_preserved(self) -> None:
         """Symlink to existing directory must remain a symlink.
