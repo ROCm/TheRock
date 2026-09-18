@@ -203,6 +203,13 @@ _rocgdb_common = {
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 #
+# A component may restrict which test tiers it runs on via "test_types", a list of
+# allowed TEST_TYPE values (any of "quick", "standard", "comprehensive", "full").
+# When set, the component is skipped entirely -- no job is scheduled -- for any tier
+# not in the list; omit the field to run on every tier (the default). For example, a
+# component whose suite is too slow for the quick sanity tier opts out of it with:
+#   "test_types": ["standard", "comprehensive", "full"]
+#
 # rocprofiler-sdk SPM: the default rocprofiler-sdk job and rocprofiler-sdk-spm share
 # one artifact but use different runners. SPM-labeled tests run on a pinned gfx94x
 # runner; the default job excludes them via --ctest-label-exclude spm. Preflight
@@ -595,6 +602,35 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
+        },
+    },
+    # MIOpen dbsync (StaticFDBSync) -- GPU-free under the rocjitsu KMD interposer on a CPU runner.
+    # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
+    # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
+    # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
+    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
+    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
+    # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
+    "miopen-dbsync": {
+        "job_name": "miopen-dbsync",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # Standard/comprehensive/full only: "test_types" makes the framework skip this
+        # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
+        # or rocjitsu build is paid for on quick (the runner script also self-skips on
+        # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
+        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
+        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        "timeout_minutes": 30,
+        "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "include_family": {
+            "linux": ["gfx942"],
+        },
+        "total_shards_dict": {
+            "linux": 1,
         },
     },
     # RCCL tests
@@ -1096,6 +1132,17 @@ def run():
         ]
         if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Tier gate: a component may declare which test tiers it runs on via
+        # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
+        # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
+        # quick. Omit the field to run on every tier.
+        allowed_test_types = selected_matrix[key].get("test_types")
+        if allowed_test_types and test_type not in allowed_test_types:
+            logging.info(
+                f"Excluding job {job_name}: test_type {test_type} not in {allowed_test_types}"
+            )
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
