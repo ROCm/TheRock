@@ -236,10 +236,42 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
+  build-linux-native-deb-packages:
+    name: Build Linux DEB Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_deb_package_version }}
+      native_package_type: deb
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  build-linux-native-rpm-packages:
+    name: Build Linux RPM Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
   publish-linux-artifacts:
     name: Publish Linux Artifacts
-    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages]
-    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' }}
+    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages, build-linux-native-deb-packages, build-linux-native-rpm-packages]
+    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' && needs.build-linux-native-deb-packages.result == 'success' && needs.build-linux-native-rpm-packages.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -378,42 +410,36 @@ jobs:
             --build-variant="release"
 
   # ==========================================================================
-  # Phase 2 - ASAN: Build only (no packaging, no tests)
+  # Phase 2 - ASAN: Dispatch as separate workflow (gets its own run_id)
   # ==========================================================================
-  setup-asan:
-    name: Setup ASAN Build
+  dispatch-asan-build:
+    name: Dispatch ASAN Build
     needs: create-branch
     if: ${{ inputs.dry_run != true }}
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan-debug"
-      release_type: dev
-      linux_amdgpu_families: "all"
-      windows_amdgpu_families: "none"
-      build_pytorch: false
-      build_jax: false
-      repository: ${{ github.repository }}
-      ref: ${{ needs.create-branch.outputs.branch_name }}
-    secrets: inherit
+    runs-on: ubuntu-24.04
+    outputs:
+      run_url: ${{ steps.dispatch.outputs.runUrlHtml }}
+    steps:
+      - name: Dispatch multi_arch_release_asan
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: multi_arch_release_asan.yml
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+          inputs: |
+            {
+              "release_type": "dev",
+              "linux_amdgpu_families": "all",
+              "build_pytorch": "false"
+            }
 
-  build-linux-asan:
-    name: Build Linux ASAN
-    needs: [create-branch, setup-asan]
-    if: ${{ inputs.dry_run != true && needs.setup-asan.outputs.linux_build_config != '' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
-    secrets: inherit
-    with:
-      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup-asan.outputs.linux_build_config).per_family_info) }}
-      dist_amdgpu_families: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).dist_amdgpu_families }}
-      artifact_group: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).artifact_group }}
-      build_variant_label: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_label }}
-      build_variant_cmake_preset: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_cmake_preset }}
-      build_variant_suffix: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_variant_suffix }}
-      build_runs_on: ${{ fromJSON(needs.setup-asan.outputs.linux_build_config).build_runs_on }}
-      rocm_package_version: ${{ needs.setup-asan.outputs.rocm_package_version }}
-      release_type: dev
-      repository: ${{ github.repository }}
-      ref: ${{ needs.setup-asan.outputs.ref }}
+      - name: Output ASAN run URL
+        run: |
+          echo "## ASAN Build Dispatched" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Run URL:** ${{ steps.dispatch.outputs.runUrlHtml }}" >> "$GITHUB_STEP_SUMMARY"
+          echo ""
+          echo "ASAN build runs as a separate workflow to ensure artifacts are stored"
+          echo "under a unique run_id, preventing mixing with release artifacts."
 
   # ==========================================================================
   # Phase 3 - Testing: gfx94x (Linux) and gfx110x (Windows) only
@@ -515,14 +541,15 @@ jobs:
       - build-linux
       - build-linux-tarballs
       - build-linux-python-packages
+      - build-linux-native-deb-packages
+      - build-linux-native-rpm-packages
       - publish-linux-artifacts
       - setup-windows
       - build-windows
       - build-windows-tarballs
       - build-windows-python-packages
       - publish-windows-artifacts
-      - setup-asan
-      - build-linux-asan
+      - dispatch-asan-build
       - trigger-linux-tests
       - trigger-windows-tests
     if: always()
@@ -594,6 +621,15 @@ jobs:
             echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+          # Linux native packages
+          if [ "${{ needs.build-linux-native-deb-packages.result }}" == "success" ] && [ "${{ needs.build-linux-native-rpm-packages.result }}" == "success" ]; then
+            echo "- :white_check_mark: Native packages (DEB + RPM)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "failure" ] || [ "${{ needs.build-linux-native-rpm-packages.result }}" == "failure" ]; then
+            echo "- :x: Native packages failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Native packages skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
           # Linux publish
           if [ "${{ needs.publish-linux-artifacts.result }}" == "success" ]; then
             echo "- :white_check_mark: Published to release buckets" >> "$GITHUB_STEP_SUMMARY"
@@ -660,13 +696,18 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### ASAN" >> "$GITHUB_STEP_SUMMARY"
 
-          # Linux ASAN build
-          if [ "${{ needs.build-linux-asan.result }}" == "success" ]; then
-            echo "- :white_check_mark: Linux ASAN Build (all architectures)" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.build-linux-asan.result }}" == "failure" ]; then
-            echo "- :x: Linux ASAN Build failed" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.build-linux-asan.result }}" == "skipped" ]; then
-            echo "- :fast_forward: Linux ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          # ASAN build (dispatched as separate workflow)
+          if [ "${{ needs.dispatch-asan-build.result }}" == "success" ]; then
+            ASAN_URL="${{ needs.dispatch-asan-build.outputs.run_url }}"
+            if [ -n "$ASAN_URL" ]; then
+              echo "- :white_check_mark: ASAN Build dispatched: [View Run]($ASAN_URL)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :white_check_mark: ASAN Build dispatched" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ "${{ needs.dispatch-asan-build.result }}" == "failure" ]; then
+            echo "- :x: ASAN Build dispatch failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.dispatch-asan-build.result }}" == "skipped" ]; then
+            echo "- :fast_forward: ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Dry run note

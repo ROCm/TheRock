@@ -42,6 +42,20 @@ logging.basicConfig(level=logging.INFO)
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+OUTPUT_ARTIFACTS_DIR = Path(os.environ.get("OUTPUT_ARTIFACTS_DIR", "build"))
+
+
+def _get_script_path(script_name: str) -> str:
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    return (SCRIPT_DIR / script_name).as_posix()
+
+
+def _get_artifact_path(artifact_path: str) -> str:
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    return (OUTPUT_ARTIFACTS_DIR / artifact_path).as_posix()
+
 
 # Maps a group label (the part after "test:") to the individual test matrix
 # keys it expands to. Use this when a single label should select multiple
@@ -49,14 +63,6 @@ SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
 }
-
-
-def _get_script_path(script_name: str) -> str:
-    platform_path = SCRIPT_DIR / script_name
-    # Convert to posix (using `/` instead of `\\`) so test workflows can use
-    # 'bash' as the shell on Linux and Windows.
-    posix_path = platform_path.as_posix()
-    return str(posix_path)
 
 
 # Base container options applied to all Linux containers
@@ -144,7 +150,9 @@ def _family_matches(
 
 
 # Common settings applied to all jobs
-_common_settings = {}
+_common_settings = {
+    "additional_requirements_files": [],
+}
 
 # Common settings for rocgdb jobs
 _rocgdb_common = {
@@ -194,6 +202,11 @@ _rocgdb_common = {
 # "gfx125X-dcgpu"). Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
+#
+# rocprofiler-sdk SPM: the default rocprofiler-sdk job and rocprofiler-sdk-spm share
+# one artifact but use different runners. SPM-labeled tests run on a pinned gfx94x
+# runner; the default job excludes them via --ctest-label-exclude spm. Preflight
+# and spm labels live in the companion rocm-systems rocprofiler-sdk PR.
 
 test_matrix = {
     # Sanity tests - always run first as a prerequisite for other component tests
@@ -289,6 +302,11 @@ test_matrix = {
         "job_name": "tensilelite",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
+        # TODO: Use "build/share/hipblaslt/tensilelite/requirements-test.txt" after
+        # https://github.com/ROCm/rocm-libraries/pull/11396 is integrated.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-tensilelite.txt",
+        ],
         # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
         # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
         # see the "tensilelite" special-case in the component loop
@@ -583,11 +601,11 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "timeout_minutes": 15,
+        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 1,
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
@@ -613,9 +631,9 @@ test_matrix = {
         "fetch_artifact_args": "--tests",
         "timeout_minutes": 15,
         "additional_requirements_files": [
-            "share/rocprofiler-sdk/tests/requirements.txt",
+            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash --ctest-label-exclude spm",
         "platform": ["linux"],
         "container_options": ["--cap-add=SYS_PTRACE"],
         "total_shards_dict": {
@@ -625,6 +643,31 @@ test_matrix = {
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+    },
+    # rocprofiler-sdk SPM tests: same artifact as rocprofiler-sdk above, but only
+    # CTest tests labeled "spm" run here on a pinned gfx94x runner (driver preflight
+    # in the companion rocm-systems PR). To disable scheduling, comment out this entry.
+    "rocprofiler-sdk-spm": {
+        "job_name": "rocprofiler-sdk-spm",
+        "fetch_artifact_args": "--rocprofiler-sdk --tests",
+        "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --ctest-label spm",
+        "platform": ["linux"],
+        "container_options": ["--cap-add=SYS_PTRACE"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
+        # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
+        # the specialized openmpi image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "test_runner": "linux-gfx942-gpu-rocm-profiler",
+        "include_family": {
+            "linux": ["gfx94X-dcgpu"],
+        },
     },
     # hipDNN tests
     "hipdnn": {
@@ -745,8 +788,8 @@ test_matrix = {
         "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
-            "libexec/rocprofiler-compute/requirements.txt",
-            "libexec/rocprofiler-compute/requirements-test.txt",
+            _get_artifact_path("libexec/rocprofiler-compute/requirements.txt"),
+            _get_artifact_path("libexec/rocprofiler-compute/requirements-test.txt"),
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
@@ -774,7 +817,7 @@ test_matrix = {
         "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
-            "share/rocprofiler-systems/tests/requirements.txt",
+            _get_artifact_path("share/rocprofiler-systems/tests/requirements.txt"),
         ],
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
@@ -788,6 +831,11 @@ test_matrix = {
         "job_name": "libhipcxx_amdclang",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
+        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
+        # https://github.com/ROCm/libhipcxx/pull/29.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -800,6 +848,11 @@ test_matrix = {
         "job_name": "libhipcxx_hiprtc",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
+        # TODO: Use "build/libhipcxx/requirements-test.txt" after the submodule includes
+        # https://github.com/ROCm/libhipcxx/pull/29.
+        "additional_requirements_files": [
+            "build_tools/github_actions/test_executable_scripts/requirements-test-libhipcxx.txt",
+        ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -812,6 +865,9 @@ test_matrix = {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_artifact_path("hipthreads/test/requirements-test.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
