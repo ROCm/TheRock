@@ -1702,14 +1702,12 @@
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-amdsmi",
-      "amdrocm-hipfile",
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-amdsmi",
-      "amdrocm-hipfile",
       "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
