@@ -164,6 +164,57 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             "99999-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
         )
 
+    # -- Native packages --
+
+    def test_native_linux_packages(self):
+        loc = self.root.native_linux_packages("deb")
+        self._assert_relative_path(loc, "99999-linux/packages/deb")
+
+    def test_native_linux_repo_package(self):
+        loc = self.root.native_linux_repo_package("deb", "ubuntu2404")
+        self._assert_relative_path(
+            loc,
+            "99999-linux/packages/deb/repo/ubuntu2404/amdrocm-repo.deb",
+        )
+
+    def test_native_linux_repo_package_all_profiles(self):
+        cases = [
+            ("deb", "ubuntu2404"),
+            ("rpm", "rhel8"),
+            ("rpm", "rhel10"),
+            ("rpm", "sles16"),
+        ]
+        for pkg_type, os_profile in cases:
+            with self.subTest(pkg_type=pkg_type, os_profile=os_profile):
+                loc = self.root.native_linux_repo_package(pkg_type, os_profile)
+                self._assert_relative_path(
+                    loc,
+                    f"99999-linux/packages/{pkg_type}/repo/{os_profile}"
+                    f"/amdrocm-repo.{pkg_type}",
+                )
+
+    def test_repo_package_sits_outside_the_package_index(self):
+        # The bootstrap file is fetched by URL, so it must not land inside the
+        # repository index: deb indexes dists/ + pool/, rpm indexes x86_64/.
+        # One amdrocm-repo is built per OS profile and they all carry the same
+        # package name, so indexing them together would collide. The filenames
+        # differ, since the dist tag expands per profile.
+        for pkg_type, index_dirs in [
+            ("deb", ("dists", "pool")),
+            ("rpm", ("x86_64",)),
+        ]:
+            with self.subTest(pkg_type=pkg_type):
+                packages = self.root.native_linux_packages(pkg_type)
+                repo_pkg = self.root.native_linux_repo_package(pkg_type, "ubuntu2404")
+                # Shares the per-run package prefix ...
+                self.assertTrue(
+                    repo_pkg.relative_path.startswith(packages.relative_path + "/")
+                )
+                # ... but never sits under an index directory.
+                tail = repo_pkg.relative_path[len(packages.relative_path) + 1 :]
+                for index_dir in index_dirs:
+                    self.assertFalse(tail.startswith(index_dir + "/"))
+
     # -- Python packages --
 
     def test_python_packages(self):
@@ -220,6 +271,24 @@ class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
         self.assertEqual(
             loc.relative_path,
             "Fork-TheRock/12345-linux/logs/gfx94X-dcgpu",
+        )
+
+    def test_native_linux_repo_package_with_external_repo(self):
+        # external_repo is only ever non-empty for the 'ci' release type from a
+        # fork or a non-ROCm/TheRock repository, which is the only case that
+        # resolves to therock-ci-artifacts-external. The signed lines
+        # (prerelease, release) and nightly resolve to their own buckets, so
+        # their external_repo is "" and the key below has no leading segment.
+        root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts-external",
+            external_repo="Fork-TheRock/",
+            run_id="12345",
+            platform="linux",
+        )
+        loc = root.native_linux_repo_package("rpm", "rhel10")
+        self.assertEqual(
+            loc.relative_path,
+            "Fork-TheRock/12345-linux/packages/rpm/repo/rhel10/amdrocm-repo.rpm",
         )
 
 
