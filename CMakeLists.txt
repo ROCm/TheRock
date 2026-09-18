@@ -479,6 +479,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
     if(THEROCK_ENABLE_SYSDEPS_EXPAT)
       set(THEROCK_BUNDLED_EXPAT therock-expat)
     endif()
+    if(THEROCK_ENABLE_SYSDEPS_NCURSES)
+      set(THEROCK_BUNDLED_NCURSES therock-ncurses)
+    endif()
     if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       # meson is only needed to build the amd-mesa/libva sysdep; gate the
       # requirement so bundled-sysdeps builds without mesa don't need it.

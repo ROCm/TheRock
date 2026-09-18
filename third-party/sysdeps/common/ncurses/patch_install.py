@@ -38,7 +38,9 @@ def rename_pc_files(pc_file: Path) -> None:
 
 def symlink_or_copy(existing_path, new_link):
     """Create symlink if the destination filesystem supports it. Create a copy otherwise.
-    Exists to support Windows, where only modern systems might support symlinks.
+    Always a copy on Windows: creating a symlink there takes a privilege
+    (administrator, or Developer Mode) that not every machine grants, so an
+    artifact holding one would not extract the same everywhere.
     """
     existing_path = Path(existing_path)
     new_link = Path(new_link)
@@ -50,12 +52,13 @@ def symlink_or_copy(existing_path, new_link):
         else:
             new_link.unlink()
 
-    try:
-        rel_target = os.path.relpath(existing_path, start=new_link.parent)
-        new_link.symlink_to(rel_target, target_is_directory=existing_path.is_dir())
-        return
-    except OSError:
-        pass
+    if platform.system() != "Windows":
+        try:
+            rel_target = os.path.relpath(existing_path, start=new_link.parent)
+            new_link.symlink_to(rel_target, target_is_directory=existing_path.is_dir())
+            return
+        except OSError:
+            pass
 
     if existing_path.is_dir():
         shutil.copytree(existing_path, new_link)
@@ -190,5 +193,7 @@ if platform.system() == "Linux":
         rename_pc_files(pc_file)
 
 elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
+    # The libraries are static, built under their usual names (no
+    # rocm_sysdeps_ prefix, which only shared libraries need), so only the .pc
+    # files need fixing.
+    relativize_pc_files(install_prefix)
