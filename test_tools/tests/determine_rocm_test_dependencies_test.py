@@ -550,6 +550,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "projects/rocm-smi-lib": "rocm_smi_lib",
                 "projects/rocprofiler": "rocprofiler-sdk",
                 "shared/amdgpu-windows-interop": "hip-clr",
+                "shared/amdgpu-windows-interop/wkmi": "hip-clr",
                 "shared/kpack": "rocm-kpack",
                 "shared/machine-readable-isa": "rocjitsu",
             }

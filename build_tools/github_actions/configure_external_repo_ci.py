@@ -90,6 +90,7 @@ FULL_TEST_TRIGGER_PATTERNS = [
 # rocm-libraries paths already resolve as repos-config subtrees.)
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "shared/amdgpu-windows-interop",
+    "shared/amdgpu-windows-interop/wkmi",
     "shared/kpack",
     "shared/machine-readable-isa",
     "shared/primbench",
