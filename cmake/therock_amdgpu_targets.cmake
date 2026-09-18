@@ -257,7 +257,7 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 # gfx125X family
 # TODO(#8278): strict is outside outside broad build/test selection, with family added later.
 # Temporary validation branch only; do not land this family expansion.
-therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict" FAMILY gfx125X-all)
+therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict" FAMILY gfx125X-all gfx125X-dcgpu)
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 
 # Optional extension targets (used for out of tree target development).
