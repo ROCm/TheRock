@@ -227,8 +227,6 @@ jobs:
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         -e KUBE_CPU_REQUEST
         -e KUBE_MEMORY_REQUEST
-        --dns 8.8.8.8
-        --dns 8.8.4.4
 
     defaults:
       run:
@@ -237,11 +235,19 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_jax_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test JAX wheels (partial)"
-      VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      JAX_PLUGIN_VERSION: ${{ inputs.jax_plugin_version }}
+      JAX_VERSION: ${{ inputs.jax_version }}
+      JAXLIB_VERSION: ${{ inputs.jaxlib_version }}
+      JAX_PJRT_VERSION: ${{ inputs.jax_pjrt_version }}
+      JAX_REF: ${{ inputs.jax_ref }}
+      TEST_SUBSET: ${{ inputs.test_subset }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
       WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      VIRTUAL_ENV: ${{ github.workspace }}/.venv
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -298,7 +304,7 @@ jobs:
           # The plugin/pjrt wheels embed the ROCm major version in their package
           # name (jax_rocm7_*, jax_rocm10_*), tracking the ROCm release they were
           # built against.
-          rocm_major="${{ inputs.rocm_version }}"
+          rocm_major="${ROCM_VERSION}"
           rocm_major="${rocm_major%%.*}"
           if [ -z "${rocm_major}" ]; then
             echo "::error::rocm_version is required to determine the JAX plugin package name"
@@ -307,23 +313,21 @@ jobs:
           echo "JAX_PLUGIN_PACKAGE=jax_rocm${rocm_major}_plugin" >> "$GITHUB_ENV"
           echo "JAX_PJRT_PACKAGE=jax_rocm${rocm_major}_pjrt" >> "$GITHUB_ENV"
 
-          if [ -n "${{ inputs.jax_plugin_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
-            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
-            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
-            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
-            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
+          if [ -n "${JAX_PLUGIN_VERSION}" ] && [ -n "${JAX_VERSION}" ]; then
+            echo "Using versions passed from build workflow"
           else
             pip install packaging
 
             python build_tools/github_actions/compute_jax_package_version.py \
-              --rocm-version "${{ inputs.rocm_version }}" \
+              --rocm-version "${ROCM_VERSION}" \
               --jax-requirements rocm-jax/build/requirements.txt
           fi
+
       - name: Compute ROCm device extras
         id: expand
         run: |
           python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${{ inputs.test_amdgpu_family }}" \
+            --amdgpu-families "${TEST_AMDGPU_FAMILY}" \
             --output-mode=device-extras
 
       # rocm[libraries] alone, since that is what RELEASES.md tells users to
@@ -373,9 +377,9 @@ jobs:
         run: |
           python external-builds/jax/run_jax_tests.py \
             --jax-dir jax \
-            --jax-ref "${{ inputs.jax_ref }}" \
-            --amdgpu-family "${{ inputs.test_amdgpu_family }}" \
-            --test-subset "${{ inputs.test_subset }}"
+            --jax-ref "${JAX_REF}" \
+            --amdgpu-family "${TEST_AMDGPU_FAMILY}" \
+            --test-subset "${TEST_SUBSET}"
 
       # The multi-GPU job is the one a nightly takes weekly, and the workloads
       # need those GPUs, so they ride along with it instead of asking the pool
