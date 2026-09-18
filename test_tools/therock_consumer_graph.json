@@ -780,6 +780,7 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "rocprofiler-systems",
       "therock-frugally-deep"
     ]
   },
