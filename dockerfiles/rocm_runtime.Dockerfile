@@ -50,7 +50,7 @@
 # - PROFILE          : Package installation profile (default: full). Options: full, slim
 #                      Only applies when INSTALL_METHOD=packages.
 #                      "full" installs all ROCm SDK libraries including math/ML.
-#                      "slim" installs only the HIP compiler toolchain and runtime (~1 GB vs ~7 GB).
+#                      "slim" installs only the HIP compiler toolchain and runtime (~745 MB content size vs ~8 GB full).
 #
 # Build examples (tarball, default):
 #
