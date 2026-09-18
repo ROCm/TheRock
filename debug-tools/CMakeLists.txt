@@ -64,11 +64,10 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
   endif()
 
-  # Build a static library on Windows until there is ABI stability.
-  set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS)
-  if(WIN32)
-    set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
-  endif()
+  # amd-dbgapi is a shared library on Windows too: rocgdb is built by the
+  # ucrt64 gcc, which cannot link an MSVC-built static amd-dbgapi, whose C++
+  # pulls in the MSVC C++ runtime.  The DLL's name carries its version
+  # (rocm-dbgapi-0-84.dll and so on), so a mismatched rocgdb fails to start.
 
   # Only build and link against GoogleTest when tests are requested, so
   # the dependency isn't pulled in for non-testing configurations.
@@ -86,7 +85,6 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
       "-DENABLE_TESTS=${THEROCK_BUILD_TESTING}"
-      ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
       ${EXTRA_AMD_DBGAPI_BUILD_DEPS}
