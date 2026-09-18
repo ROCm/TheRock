@@ -583,21 +583,17 @@ test_matrix = {
             "linux": 4,
             "windows": 4,
         },
-        # POC (ALMIOPEN sharding investigation): both fields below are only
-        # honored when the family being configured is gfx94X (see the
-        # is_gfx94x_family gate in run()) -- every other family/platform gets
-        # today's stock total_shards_dict above, unaffected. For gfx94X/linux,
-        # gfx94x_total_shards_override bumps the *gtest-level* shard count to
-        # 16 while gfx94x_job_shard_dict keeps only 4 physical GHA jobs/GPU-
-        # runners, so each runner backgrounds 4 concurrent gtest sub-shards
-        # sharing its single GPU, mirroring Jenkins' CTEST_PARALLEL_LEVEL=4
-        # model instead of TheRock's default one-shard-per-runner model.
-        "gfx94x_total_shards_override": {
-            "linux": 16,
-        },
-        "gfx94x_job_shard_dict": {
-            "linux": 4,
-        },
+        # POC (ALMIOPEN sharding investigation): sub-sharding (16 gtest-level
+        # shards concurrently sharing 4 physical GPU-runners) was tried here
+        # and reverted -- it exposed a real HW GPU hang (`HW Exception ...
+        # reason: GPU Hang`) on 3/4 shards in one run. Root cause undetermined
+        # (possibly the gfx942 "ccs" minority runner pool vs "ccs-csp"
+        # majority pool -- see amdgpu_family_matrix.py's weighted
+        # test-runs-on-labels -- rather than the concurrency itself), but
+        # removed for now so the coverage-gap measurement isn't confounded by
+        # lost shards. Stock total_shards_dict above (4 shards, 1 physical
+        # job each, no GPU sharing) now applies to gfx94X like every other
+        # family.
         # POC (ALMIOPEN sharding investigation): HipGraphExist is excluded
         # from the main "exhaustive" filter (test_categories.yaml) because
         # running it concurrently with sibling sub-shards on the same GPU can
