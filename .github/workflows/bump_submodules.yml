@@ -42,7 +42,7 @@ jobs:
       pull-requests: write
 
     env:
-      SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
+      INPUT_SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
 
     steps:
       - name: Checkout ROCm/TheRock
@@ -96,11 +96,11 @@ jobs:
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule' && steps.schedule.outputs.submodules != ''
         env:
-          SUBMODULES: ${{ steps.schedule.outputs.submodules }}
+          SCHEDULE_SUBMODULES: ${{ steps.schedule.outputs.submodules }}
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
           LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
         run: |
-          for submodule in ${SUBMODULES}; do
+          for submodule in ${SCHEDULE_SUBMODULES}; do
             python3 build_tools/github_actions/bump_automation.py \
               --event_type "schedule" \
               --submodule "${submodule}" \
@@ -118,7 +118,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/bump_automation.py \
             --event_type "schedule" \
-            --submodule "${SUBMODULE}" \
+            --submodule "${INPUT_SUBMODULE}" \
             --systems_token "${SYSTEMS_TOKEN}" \
             --libraries_token "${LIBRARIES_TOKEN}" \
             --rocgdb_token "${SYSTEMS_TOKEN}" \
