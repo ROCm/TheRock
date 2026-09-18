@@ -341,6 +341,8 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
             "build_variants": ["release"],
+            # Only run tests when gfx90a label is present on PR
+            "trigger_test_label_only": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -515,6 +517,20 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
+# Targets must be named explicitly; excluded from all and default CI selections.
+amdgpu_family_info_matrix_explicit_only = {
+    "gfx1250-strict": {
+        "linux": {
+            "family": "gfx1250-strict",
+            "test-runs-on": "",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "bypass_tests_for_releases": True,
+        },
+    },
+}
+
+
 def _get_local_families_for_trigger_types(trigger_types) -> dict:
     """Returns combined family matrix from local definitions for trigger types."""
     result = {}
@@ -522,6 +538,7 @@ def _get_local_families_for_trigger_types(trigger_types) -> dict:
         "presubmit": amdgpu_family_info_matrix_presubmit,
         "postsubmit": amdgpu_family_info_matrix_postsubmit,
         "nightly": amdgpu_family_info_matrix_nightly,
+        "explicit_only": amdgpu_family_info_matrix_explicit_only,
     }
 
     for trigger_type in trigger_types:

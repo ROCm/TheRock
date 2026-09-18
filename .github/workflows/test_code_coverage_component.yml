@@ -1,12 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Test component
+name: Test Code Coverage Component
 
 on:
   workflow_call:
     inputs:
-      artifact_run_id:
+      generic_run_id:
         type: string
         default: ""
       artifact_group:
@@ -35,12 +35,23 @@ on:
         description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
         type: string
         default: "release"
+      coverage_enabled:
+        description: >-
+          Collect llvm profraw files from the test run and upload them as a
+          workflow artifact. Only meaningful against a coverage instrumented
+          build.
+        type: boolean
+        default: false
+      coverage_artifact_prefix:
+        description: >-
+          Prefix for the uploaded profraw artifact name. A coverage run tests
+          several projects in one workflow run, so the caller sets this to
+          something project-specific to keep each project profiles apart.
+        type: string
+        default: "coverage-profraw"
       default_container_image:
         type: string
         default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
-      quartz_tracking_id:
-        type: string
-        default: ""
 
 
 permissions:
@@ -80,10 +91,7 @@ jobs:
       run:
         shell: bash
     env:
-      QUARTZ_REPORTING_WORKFLOW: test_component.yml
-      QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
-      VENV_DIR: ${{ github.workspace }}/.venv
-      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      CODE_COVERAGE_RUN_ID: ${{ github.run_id }}
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -96,19 +104,9 @@ jobs:
       BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
       BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
@@ -128,25 +126,27 @@ jobs:
 
       - name: Checking repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+      - name: Install TheRock Code Coverage Build
+        timeout-minutes: 15
         env:
-          RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
-        uses: './.github/actions/setup_test_environment'
-        with:
-          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
-          ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
-          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
-          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
-          VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+        run: |
+          pip3 install -r requirements-test.txt
+          python3 build_tools/install_rocm_code_coverage_build.py \
+            --code-coverage-run-id=${{ env.CODE_COVERAGE_RUN_ID }} \
+            --run-id=${{ inputs.generic_run_id }} \
+            --artifact-group=${{ inputs.amdgpu_families }} \
+            --amdgpu-targets=${{ inputs.amdgpu_targets }} \
+            --tests \
+            --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
+            --replace-${{ fromJSON(inputs.component).job_name }} \
+            ${FETCH_ARTIFACT_ARGS}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -158,37 +158,37 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
-        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
-        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
-      - name: Enable sanitizer-specific test flags
-        if: ${{ contains(inputs.artifact_group, 'asan') }}
-        run: |
-          python ./build_tools/github_actions/configure_asan_env.py \
-            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
-
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
-        env:
-          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
-          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
-          # The probes load instrumented ROCm libraries, so LeakSanitizer reports
-          # whatever those leak at exit and the probe returns non-zero. This step
-          # answers "is the driver and GPU functional", not "is the runtime
-          # leak-free". Extends rather than replaces, to keep the options set by
-          # configure_asan_env.py; scoped here so component tests still run with
-          # leak detection enabled.
-          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
       - name: Setup Additional Requirements
-        env:
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         run: |
           python ./build_tools/install_additional_requirements.py \
-            --requirements-files "${REQUIREMENTS_FILES}"
+            --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
 
+        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+      - name: Enable sanitizer-specific test flags
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
+        run: |
+          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
+          echo "HSA_XNACK=1" >> $GITHUB_ENV
+          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+
+      # Instrumented binaries write one profraw per process. %p (pid) and %m
+      # (binary signature) keep the files distinct so a shard that forks or
+      # loads several instrumented libraries does not overwrite itself.
+      - name: Prepare coverage profile directory
+        if: ${{ inputs.coverage_enabled }}
+        env:
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/coverage-report/profraw"
+          echo "LLVM_PROFILE_FILE=${GITHUB_WORKSPACE}/coverage-report/profraw/${TEST_COMPONENT}-shard${SHARD_INDEX}-%p-%m.profraw" >> "${GITHUB_ENV}"
 
       # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
       # Must be done at runtime since container env vars aren't in GitHub's env context.
@@ -228,34 +228,20 @@ jobs:
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-        # This input is intentionally a shell program from fetch_test_configurations.py,
-        # including command chains and per-command environment assignments. Callers
-        # must be trusted to select code, just as they select repository/ref above.
-        run: | # zizmor: ignore[template-injection]
+        run: |
           ${{ fromJSON(inputs.component).test_script }}
 
-      - name: Print test reproduction command
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
-        env:
-          MATRIX_SHARD: ${{ matrix.shard }}
-          COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
-          COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
-          COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
-        run: |
-          python ./build_tools/github_actions/reproduce_test_failure.py \
-            --run-id "${ARTIFACT_RUN_ID}" \
-            --repository "${{ github.repository }}" \
-            --amdgpu-family "${AMDGPU_FAMILIES}" \
-            --amdgpu-targets "${AMDGPU_TARGETS}" \
-            --test-script "${COMPONENT_TEST_SCRIPT}" \
-            --shard-index "${MATRIX_SHARD}" \
-            --total-shards "${COMPONENT_TOTAL_SHARDS}" \
-            --test-type "${COMPONENT_TEST_TYPE}" \
-            --print-cmd \
-            --fetch-artifact-args="${COMPONENT_FETCH_ARTIFACT_ARGS}" \
-            --additional-requirements-files="${REQUIREMENTS_FILES}"
+      # Uploaded even when the test step failed: partial coverage from a failing
+      # shard is still useful, and the aggregation job tolerates missing shards.
+      - name: Upload coverage profraw files
+        if: ${{ always() && inputs.coverage_enabled }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: >-
+            ${{ inputs.coverage_artifact_prefix }}-${{ fromJSON(inputs.component).job_name }}-shard${{ matrix.shard }}
+          path: ${{ github.workspace }}/coverage-report/profraw/*.profraw
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
@@ -272,16 +258,3 @@ jobs:
         id: summary
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
-
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
