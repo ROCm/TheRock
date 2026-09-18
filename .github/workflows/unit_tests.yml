@@ -15,6 +15,19 @@ permissions:
   contents: read
 
 jobs:
+  validate_docker_images:
+    name: "Validate docker_images.json"
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      timeout-minutes: 15
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: 3.12
+
+    - name: Validate docker_images.json
+      run: python3 build_tools/resolve_docker_image.py validate
+
   unit_tests:
     name: "Unit Tests :: ${{ matrix.runs-on}}"
     strategy:
@@ -70,6 +83,7 @@ jobs:
     name: Unit Tests Summary
     if: always()
     needs:
+      - validate_docker_images
       - unit_tests
     runs-on: ubuntu-24.04
     steps:

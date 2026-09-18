@@ -40,6 +40,24 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
+    def test_dont_run_ci_if_only_other_dockerfile_changes_edited(self):
+        paths = ["dockerfiles/build_manylinux_x86_64.Dockerfile"]
+        run_ci = is_ci_run_required(paths)
+        self.assertFalse(run_ci)
+
+    def test_run_ci_if_docker_images_json_edited(self):
+        # docker_images.json is resolved at CI run time, so a bad bump can
+        # break every build using that image right away. This should always
+        # force a full CI run, even though it lives under dockerfiles/ (which
+        # is otherwise skippable).
+        paths = ["dockerfiles/docker_images.json"]
+        run_ci = is_ci_run_required(paths)
+        self.assertTrue(run_ci)
+
+        paths = ["dockerfiles/docker_images.json", "README.md"]
+        run_ci = is_ci_run_required(paths)
+        self.assertTrue(run_ci)
+
     def test_run_ci_if_related_workflow_file_edited(self):
         paths = [".github/workflows/multi_arch_ci.yml"]
         run_ci = is_ci_run_required(paths)

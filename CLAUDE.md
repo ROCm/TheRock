@@ -223,5 +223,6 @@ Reference the below for specialty tasks and deeper analysis, asking questions wi
 - [docs/development/build_system.md](docs/development/build_system.md) - Build architecture
 - [docs/development/development_guide.md](docs/development/development_guide.md) - Component development
 - [docs/development/dependencies.md](docs/development/dependencies.md) - Dependency management
+- [dockerfiles/README.md](dockerfiles/README.md) - Dockerfiles, image publishing, and bumping `docker_images.json` pins
 
 If development patterns become useful for certain development styles, prefer to document the salient details locally in this CLAUDE.md in addition to exhaustive documentation elsewhere.

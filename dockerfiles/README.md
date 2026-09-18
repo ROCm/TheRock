@@ -233,9 +233,54 @@ Tags for built docker images are set based on the branch name pattern:
 | `stage/docker/SUFFIX` | `stage-SUFFIX` |
 | `OTHER_NAME`          | `OTHER_NAME`   |
 
+### The `docker_images.json` registry
+
+[`docker_images.json`](docker_images.json) is the single source of truth for
+image references used across CI workflows and Dockerfiles. Each entry pins an
+image by `sha` (preferred, immutable) or `tag` (mutable, used for third-party
+base images we don't control), plus `timestamp` (the image's own publish date)
+and `last_updated` (when we last touched the entry). See the docstring in
+[`build_tools/resolve_docker_image.py`](/build_tools/resolve_docker_image.py)
+for the full field reference and resolution rules.
+
+Workflows read an entry through the reusable
+[`.github/workflows/resolve-docker-images.yml`](/.github/workflows/resolve-docker-images.yml)
+job, and Dockerfiles that need a registry-controlled base image use the
+`ARG BASE_IMAGE=<default>` / `FROM ${BASE_IMAGE}` pattern, with the default
+kept in sync with the registry entry. That pairing is enforced by
+`DockerfileBaseImageSyncTest` in
+[`build_tools/tests/resolve_docker_image_test.py`](/build_tools/tests/resolve_docker_image_test.py),
+so a stale `ARG BASE_IMAGE` default fails CI instead of silently drifting.
+
+To check whether a SHA-pinned entry is behind the upstream registry, query the
+registry's manifest digest directly, for example with
+[`skopeo`](https://github.com/containers/skopeo) (no Docker daemon or auth
+needed for public images):
+
+```bash
+skopeo inspect --no-tags docker://quay.io/pypa/manylinux_2_28_x86_64:latest
+```
+
+Compare the top-level `Digest` field to the `sha` in `docker_images.json`.
+Tag-pinned entries (no `sha`) are expected to drift as the upstream tag moves
+and don't need this check.
+
+To bump a SHA-pinned entry:
+
+1. Update `sha` to the new digest, `timestamp` to the image's own publish
+   date, and `last_updated` to today.
+1. If the entry is paired with a Dockerfile's `ARG BASE_IMAGE` default (see
+   `DockerfileBaseImageSyncTest.DOCKERFILE_REGISTRY_PAIRS`), update that
+   default to match.
+1. Run `python3 build_tools/resolve_docker_image.py validate` and
+   `pytest build_tools/tests/resolve_docker_image_test.py` to confirm
+   everything is consistent.
+
 ### Updating images used by GitHub Actions workflows
 
-The general sequence for updating an image is this:
+For images not yet migrated to `docker_images.json`, or for base image
+changes to the Dockerfiles themselves (not just a digest bump), the general
+sequence for updating an image is this:
 
 1. Make any changes to the relevant Dockerfiles and/or scripts
 1. Build and test images locally
