@@ -248,6 +248,14 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Resource-usage profiling override for the build observability report
+    # (Linux builds only): "true" forces it on, "false" forces it off, and ""
+    # (default) falls back to the release_type gate (nightly/release only).
+    # See #7692. Mirrors the ENABLE_RESOURCE_PROFILING gate in
+    # multi_arch_build_portable_linux_artifacts.yml so the summary can report the
+    # effective state.
+    force_resource_profiling: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -416,6 +424,9 @@ class CIInputs:
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            force_resource_profiling=os.environ.get(
+                "FORCE_RESOURCE_PROFILING", ""
+            ).strip(),
         )
         inputs.validate()
         return inputs

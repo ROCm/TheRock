@@ -48,6 +48,12 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      force_resource_profiling:
+        description: >-
+          Override for resource-usage profiling. "false" forces it off; "true"
+          or "" (default) keeps it on for all builds. See #7692.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -112,6 +118,7 @@ jobs:
       external_repo_config: ${{ inputs.external_repo_config }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      force_resource_profiling: ${{ inputs.force_resource_profiling }}
     permissions:
       contents: read
       id-token: write

@@ -76,6 +76,12 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      force_resource_profiling:
+        description: >-
+          Override for resource-usage profiling. "false" forces it off; "true"
+          or "" (default) keeps it on for all builds. See #7692.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -102,6 +108,13 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
+      # Resource-usage profiling (resource_info.py as the compiler launcher)
+      # wraps ccache (ccache still caches), so it is enabled by default for all
+      # builds and each build_observability.html embeds a CPU/memory usage
+      # timeline. A run can force it off via the force_resource_profiling input
+      # ("false"); "true" (or empty) keeps it on. See #7692.
+      ENABLE_RESOURCE_PROFILING: >-
+        ${{ inputs.force_resource_profiling != 'false' && 'true' || 'false' }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
 
@@ -188,6 +201,12 @@ jobs:
 
       - name: Configure
         run: |
+          # resource_info.py invokes ccache internally, so it is a drop-in
+          # replacement for the ccache launcher when profiling is enabled.
+          COMPILER_LAUNCHER=ccache
+          if [ "${ENABLE_RESOURCE_PROFILING}" = "true" ]; then
+            COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py"
+          fi
           SUBPROJECT_TEST_JOBS="$(( $(nproc) / 2 ))"
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
@@ -195,8 +214,8 @@ jobs:
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER="${COMPILER_LAUNCHER}" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="${COMPILER_LAUNCHER}" \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
@@ -234,6 +253,20 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      # Generate the per-stage build_observability.html report from this stage's
+      # .ninja_log (and comp-summary.html when resource profiling is enabled).
+      # The report lands in ${BUILD_DIR}/logs and is uploaded by "Upload stage
+      # logs" below. The links are surfaced in one consolidated "Build
+      # Observability" table in the top-level configure job summary (see
+      # configure_multi_arch_ci_summary.py), not from this per-stage job summary.
+      - name: Analyze build times
+        if: ${{ !cancelled() }}
+        run: |
+          if [ "${ENABLE_RESOURCE_PROFILING}" = "true" ]; then
+            python3 build_tools/resource_info.py --finalize || true
+          fi
+          python3 build_tools/analyze_build_times.py --build-dir "${BUILD_DIR}"
 
       - name: Test Packaging
         run: |
