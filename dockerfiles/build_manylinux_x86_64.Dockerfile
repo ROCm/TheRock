@@ -149,3 +149,7 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+# This build image requires root for CI steps that install build dependencies.
+# trivy:ignore:DS-0002
+USER root
