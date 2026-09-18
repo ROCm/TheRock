@@ -366,7 +366,8 @@ jobs:
   # STAGE: cv-libs (generic)
   # ==========================================================================
   cv-libs:
-    needs: compiler-runtime
+    # math-libs is needed because RPP consumes the fft (rocFFT) artifact.
+    needs: [compiler-runtime, math-libs]
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'cv-libs') && !contains(inputs.skip_stages, 'cv-libs') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit

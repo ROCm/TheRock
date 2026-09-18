@@ -516,8 +516,11 @@ add_subdirectory(emulation)
 # Data center tools (RDC, etc.)
 add_subdirectory(dctools)
 add_subdirectory(comm-libs)
-add_subdirectory(cv-libs)
+# math-libs must be added before cv-libs: RPP (in cv-libs) declares rocFFT (a
+# math-libs subproject) as a RUNTIME_DEP, which is resolved eagerly at
+# subproject-activation time and requires the rocFFT target to already exist.
 add_subdirectory(math-libs)
+add_subdirectory(cv-libs)
 add_subdirectory(ml-libs)
 
 if(THEROCK_BUILD_TESTING)
