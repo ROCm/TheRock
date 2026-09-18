@@ -43,6 +43,16 @@ AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
 RELEASE_TYPE="${3:-nightlies}"
 PROFILE="${4:-full}"
 
+# Validate installation profile
+case "$PROFILE" in
+    full|slim)
+        ;;
+    *)
+        echo "Error: Unsupported profile: '$PROFILE'. Supported profiles: full, slim" >&2
+        exit 1
+        ;;
+esac
+
 # Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
 # all GPU families, sourced from AMD's multi-arch repositories.
 if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then

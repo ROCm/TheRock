@@ -153,10 +153,13 @@ how much of the ROCm SDK to install:
 - `full` (default): Installs the complete ROCm SDK including all math/ML
   libraries (rocBLAS, hipBLAS, MIOpen, RCCL, etc.), profilers, debugger,
   and development headers. Produces an image of ~7–8 GB.
-- `slim`: Installs only the HIP compiler toolchain (`hipcc`/`amdclang++`),
-  HIP runtime, development headers, and base utilities (`rocminfo`).
-  Produces an image of ~1 GB — suitable for development workflows and
-  derivative container builds that install additional libraries as needed.
+- `slim`: Installs a minimal HIP/runtime development profile containing
+  only the compiler toolchain (`hipcc`/`amdclang++`), HIP runtime,
+  development headers, and base utilities (`rocminfo`). Intentionally
+  excludes prebuilt math/ML libraries (rocBLAS, MIOpen, RCCL, etc.).
+  Produces a lightweight image of ~745 MB content size — suitable for
+  HIP application development and derivative container builds that install
+  specialized libraries as needed.
 
 Supporting scripts:
 
