@@ -236,10 +236,42 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-linux.outputs.ref }}
 
+  build-linux-native-deb-packages:
+    name: Build Linux DEB Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_deb_package_version }}
+      native_package_type: deb
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
+  build-linux-native-rpm-packages:
+    name: Build Linux RPM Packages
+    needs: [create-branch, setup-linux, build-linux]
+    if: ${{ inputs.dry_run != true && needs.build-linux.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_rpm_package_version }}
+      native_package_type: rpm
+      release_type: dev
+      build_variant: release
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-linux.outputs.ref }}
+
   publish-linux-artifacts:
     name: Publish Linux Artifacts
-    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages]
-    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' }}
+    needs: [create-branch, setup-linux, build-linux, build-linux-tarballs, build-linux-python-packages, build-linux-native-deb-packages, build-linux-native-rpm-packages]
+    if: ${{ inputs.dry_run != true && needs.build-linux-tarballs.result == 'success' && needs.build-linux-python-packages.result == 'success' && needs.build-linux-native-deb-packages.result == 'success' && needs.build-linux-native-rpm-packages.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -509,6 +541,8 @@ jobs:
       - build-linux
       - build-linux-tarballs
       - build-linux-python-packages
+      - build-linux-native-deb-packages
+      - build-linux-native-rpm-packages
       - publish-linux-artifacts
       - setup-windows
       - build-windows
@@ -585,6 +619,15 @@ jobs:
             echo "- :x: Packaging failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.build-linux-tarballs.result }}" == "skipped" ]; then
             echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Linux native packages
+          if [ "${{ needs.build-linux-native-deb-packages.result }}" == "success" ] && [ "${{ needs.build-linux-native-rpm-packages.result }}" == "success" ]; then
+            echo "- :white_check_mark: Native packages (DEB + RPM)" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "failure" ] || [ "${{ needs.build-linux-native-rpm-packages.result }}" == "failure" ]; then
+            echo "- :x: Native packages failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-linux-native-deb-packages.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Native packages skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Linux publish
