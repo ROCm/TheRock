@@ -155,7 +155,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
-      TEST_CONFIGS: ${{ inputs.test_configs }}
+      INPUT_TEST_CONFIGS: ${{ inputs.test_configs }}
       TEST_RUNS_ON: ${{ inputs.test_runs_on }}
       TEST_RUNS_ON_MULTI_GPU: ${{ inputs.test_runs_on_multi_gpu }}
 
@@ -180,7 +180,7 @@ jobs:
       - id: generate
         run: |
           python external-builds/pytorch/generate_test_sharding_matrix.py \
-            --test-configs "${TEST_CONFIGS}" \
+            --test-configs "${INPUT_TEST_CONFIGS}" \
             --default-runner "${TEST_RUNS_ON}" \
             --multi-gpu-runner "${TEST_RUNS_ON_MULTI_GPU}"
 
@@ -236,7 +236,7 @@ jobs:
       # non-deterministic results in tests like test_entropy_monte_carlo.
       OPENBLAS_NUM_THREADS: "1"
       PYTORCH_NUM_PYTEST_RERUNS: "2"
-      TEST_CONFIG: ${{ matrix.test_config }}
+      MATRIX_TEST_CONFIG: ${{ matrix.test_config }}
       TESTS_TO_INCLUDE: ${{ inputs.tests_to_include }}
 
     steps:
@@ -372,6 +372,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config "${MATRIX_TEST_CONFIG}" \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
             -- \
