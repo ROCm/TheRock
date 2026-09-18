@@ -6,6 +6,7 @@
 from pathlib import Path
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -50,13 +51,21 @@ def get_module_shared_libraries(mod) -> list[Path]:
 
 
 def find_console_script(script_name: str) -> Path | None:
-    scripts_paths = [sysconfig.get_path("scripts")]
+    scripts_paths = [
+        Path(sys.executable).parent,
+        sysconfig.get_path("scripts"),
+    ]
     if is_windows:
         scripts_paths.append(sysconfig.get_path("scripts", "nt_user"))
     else:
         scripts_paths.append(sysconfig.get_path("scripts", "posix_user"))
     for scripts_path in scripts_paths:
+        if scripts_path is None:
+            continue
         script_path = (Path(scripts_path) / script_name).with_suffix(exe_suffix)
         if script_path.exists():
             return script_path
+    which_path = shutil.which(script_name)
+    if which_path:
+        return Path(which_path)
     return None

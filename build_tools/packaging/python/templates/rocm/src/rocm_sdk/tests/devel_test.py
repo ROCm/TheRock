@@ -78,8 +78,9 @@ class ROCmDevelTest(unittest.TestCase):
 
         # CLI scripts by default run from _rocm_sdk_core.
         # When the devel package is installed they should run from _rocm_sdk_devel.
+        hipconfig = utils.find_console_script("hipconfig")
         rocmpath_output = (
-            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
+            utils.run_command([hipconfig or "hipconfig", "--rocmpath"], capture=True)
             .decode()
             .strip()
         )
