@@ -429,6 +429,22 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
         self.assertIn("amd-llvm_dev", argv)
 
 
+class TestRocprofilerSystemsHipfile(unittest.TestCase):
+    """--rocprofiler-systems fetches hipfile for sample-time dlopen telemetry."""
+
+    def test_rocprofiler_systems_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+    def test_rocprofiler_systems_examples_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(rocprofiler_systems_examples=True)
+        )
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+
 class TestRocprofilerSdkDev(unittest.TestCase):
     """Tests that --rocprofiler-sdk --tests pulls rocprofiler-sdk_dev."""
 
