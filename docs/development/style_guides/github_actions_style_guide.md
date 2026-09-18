@@ -284,3 +284,21 @@ to supply executable code. Document that assumption beside a local suppression:
   run: | # zizmor: ignore[template-injection]
     cmake -B build ${{ inputs.cmake_args }}
 ```
+
+#### Security - Disable checkout credential persistence
+
+Set `persist-credentials: false` on `actions/checkout` unless later Git
+operations need authentication. This limits credential exposure to subsequent
+steps and uploaded artifacts. See the
+[checkout configuration reference](https://github.com/actions/checkout#usage)
+and [artipacked](https://docs.zizmor.sh/audits/#artipacked).
+
+```diff
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    with:
++     persist-credentials: false
+```
+
+**Exceptions:** If later Git operations need the checkout credentials, set
+`persist-credentials: true` explicitly and add a comment naming the step that
+needs them, such as a step that pushes a branch.

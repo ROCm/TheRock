@@ -48,6 +48,8 @@ jobs:
       - name: Checkout ROCm/TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Bump automation pushes from temporary clones authenticated with GitHub App tokens.
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Select scheduled submodule
@@ -93,6 +95,8 @@ jobs:
         run: |
           pip install requests
 
+      # The script authenticates temporary clones and pushes with SYSTEMS_TOKEN or LIBRARIES_TOKEN
+      # from the GitHub App token steps above; it does not use checkout credentials.
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule' && steps.schedule.outputs.submodules != ''
         env:
@@ -110,6 +114,7 @@ jobs:
               --mesa_token "${SYSTEMS_TOKEN}"
           done
 
+      # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run manually dispatched bump automation
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -124,6 +129,7 @@ jobs:
             --rocgdb_token "${SYSTEMS_TOKEN}" \
             --mesa_token "${SYSTEMS_TOKEN}"
 
+      # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run push automation
         if: github.event_name == 'push'
         env:
