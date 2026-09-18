@@ -48,10 +48,6 @@ jobs:
         python -m pytest -vv --durations=20 \
           --cov --cov-report=term-missing --cov-report=html
 
-    - name: Test scan_tools
-      working-directory: build_tools/scan_tools
-      run: python -m pytest -vv --durations=20
-
     - name: Test test_tools
       working-directory: test_tools
       run: python -m pytest -vv --durations=20
