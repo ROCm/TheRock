@@ -437,11 +437,12 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
         self.assertIn("hipfile_lib", argv)
         self.assertIn("sysdeps-util-linux_lib", argv)
 
-    def test_rocprofiler_systems_examples_does_not_imply_hipfile(self) -> None:
+    def test_rocprofiler_systems_examples_includes_hipfile(self) -> None:
         argv = _captured_fetch_argv(
             _make_run_id_args(rocprofiler_systems_examples=True)
         )
-        self.assertNotIn("hipfile_lib", argv)
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
 
 
 if __name__ == "__main__":
