@@ -8,6 +8,8 @@ construct the input dataclass, call the function, assert on the output.
 No environment variables or filesystem access needed (except from_environ tests).
 """
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -193,6 +195,24 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 event_payload={},
                 extra_env={"BUILD_FLAGS": "NOT_A_REAL_FLAG=ON"},
             )
+
+    def test_bad_build_flags_report_a_workflow_error(self):
+        """A bad flag is annotated for the job log, not raised as a traceback."""
+        stderr = io.StringIO()
+        with (
+            patch.object(
+                cm.CIInputs,
+                "from_environ",
+                side_effect=cm.BuildFlagError("Unknown build flag 'NOT_A_REAL_FLAG'."),
+            ),
+            contextlib.redirect_stderr(stderr),
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                cm.main()
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn("::error::Invalid build_flags input:", stderr.getvalue())
+        self.assertIn("NOT_A_REAL_FLAG", stderr.getvalue())
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""

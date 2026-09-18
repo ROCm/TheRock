@@ -77,17 +77,17 @@ from github_actions_api import (
     gha_set_output,
 )
 from stage_impact import analyze_artifact_impact_from_projects
-from therock_build_flags import (
-    BuildFlagError,
-    build_flags_suffix,
-    format_build_flags,
-    parse_build_flags,
-)
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
     compute_auto_stage_reuse,
     render_step_summary,
+)
+from therock_build_flags import (
+    BuildFlagError,
+    build_flags_suffix,
+    format_build_flags,
+    parse_build_flags,
 )
 
 _NULL_GIT_SHA = "0" * 40
@@ -1738,7 +1738,12 @@ def main():
         level=logging.INFO,
         format="%(message)s",
     )
-    ci_inputs = CIInputs.from_environ()
+    try:
+        ci_inputs = CIInputs.from_environ()
+    except BuildFlagError as e:
+        # Surface as a workflow annotation rather than a traceback.
+        print(f"::error::Invalid build_flags input: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
