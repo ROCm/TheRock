@@ -105,10 +105,15 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-    # amdrocm-debugger: Exclude libpython requirements
+    # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
-    # automatically selects the binary matching the system's Python version
+    # automatically selects the binary matching the system's Python version.
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
+    # amdrocm-profiler: Exclude vendored TBB from both Requires AND Provides metadata.
+    # rocprofiler-systems bundles TBB for Dyninst; suppress public Provides so
+    # dyninst/tbb do not block dnf autoremove (ROCM-28385), and suppress
+    # auto-Requires so profiler does not couple to distro tbb at install time.
+    exclude_vendored_tbb_metadata = pkg_name == "amdrocm-profiler"
 
     if config.versioned_pkg:
         # Get -> Filter -> Transform
@@ -116,7 +121,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_info, "RPMRecommends", config
         )
         rpmsuggests = process_secondary_dependencies(pkg_info, "RPMSuggests", config)
-        requires = process_main_dependencies(pkg_info, "RPMRequires", config)
+        requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
             pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
@@ -149,7 +154,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         obsoletes = process_name_field(pkg_info, "Obsoletes")
         conflicts = process_name_field(pkg_info, "Conflicts")
         # Non-versioned package requires versioned package itself
-        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        requires = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -184,6 +189,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
+        "exclude_vendored_tbb_metadata": exclude_vendored_tbb_metadata,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:

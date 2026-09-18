@@ -160,6 +160,20 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
+def is_devel_package(pkg_info):
+    """
+    Verifies whether this is a development package (ends with -devel).
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if package name ends with -devel, False otherwise.
+    """
+    pkg_name = pkg_info.get("Package", "")
+    return pkg_name.endswith("-devel")
+
+
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
@@ -253,10 +267,9 @@ def is_gfxarch_package(
            cannot classify the package as gfx-arch-specific without an artifact path.
     """
     if enable_kpack:
-        pkgname = pkg_info.get("Package", "")
         # Only non-metapackage -devel should be non-gfxarch
         # Metapackages like amdrocm-core-devel should create arch-specific variants
-        if pkgname.endswith("-devel") and not is_meta_package(pkg_info):
+        if is_devel_package(pkg_info) and not is_meta_package(pkg_info):
             return False
 
     # In kpack mode, verify arch-specific artifacts exist
@@ -561,7 +574,51 @@ def process_name_field(
     return ", ".join(name_list)
 
 
-def process_main_dependencies(
+def process_nonversioned_dependencies(pkg_info: dict, config: PackageConfig) -> str:
+    """Process dependencies for non-versioned packages.
+
+    Non-versioned packages depend on their versioned counterpart.
+    This applies to all package types:
+    - devel / non-devel
+    - meta / non-meta
+    - GfxArch=True / GfxArch=False
+
+    Examples (kpack mode):
+    - amdrocm-blas -> amdrocm-blas8.2
+    - amdrocm-blas-devel -> amdrocm-blas-devel8.2
+    - amdrocm-core -> amdrocm-core8.2
+    - amdrocm-core-devel -> amdrocm-core-devel8.2
+
+    Examples (single-arch mode):
+    - amdrocm-blas -> amdrocm-blas8.2-gfx1100
+
+    Parameters:
+    pkg_info: Package details from JSON
+    config: Configuration object (must have versioned_pkg=False)
+
+    Returns: Versioned package name as dependency string
+    """
+    pkg_name = pkg_info.get("Package")
+
+    # Create config for versioned package lookup
+    # In kpack mode: GFX_META ensures no arch suffix (just version)
+    # In single-arch mode: preserve original gfx_arch for arch-specific deps
+    if config.enable_kpack:
+        versioned_config = replace(config, versioned_pkg=True, gfx_arch=GFX_META)
+    else:
+        versioned_config = replace(config, versioned_pkg=True)
+
+    # Get versioned package name
+    versioned_pkg_name = update_package_name(pkg_name, versioned_config)
+
+    # Add version suffix only for meta packages
+    if is_meta_package(pkg_info):
+        return append_version_suffix(versioned_pkg_name, config)
+
+    return versioned_pkg_name
+
+
+def process_versioned_dependencies(
     pkg_info: dict, field_key: str, config: PackageConfig
 ) -> str:
     """Process main dependency field (DEBDepends/RPMRequires).
@@ -663,7 +720,7 @@ def process_main_dependencies_kpack(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
 
 
 def process_main_dependencies_single_arch(
@@ -685,7 +742,7 @@ def process_main_dependencies_single_arch(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
 
 
 def process_secondary_dependencies(
@@ -708,7 +765,7 @@ def process_secondary_dependencies(
 
     if not dep_list:
         return ""
-    return resolve_versioned_dependencies(dep_list, config, is_meta)
+    return resolve_versioned_dependency_list(dep_list, config, is_meta)
 
 
 def convert_to_versiondependency(
@@ -964,7 +1021,7 @@ def filter_components_fromartifactory(
     return sourcedir_list
 
 
-def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
+def resolve_versioned_dependency_list(dep_list, config: PackageConfig, is_meta):
     """Resolve a dependency list into a versioned dependency string.
 
     Handles three cases based on multi-arch mode and package type:
