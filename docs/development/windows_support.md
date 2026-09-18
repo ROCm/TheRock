@@ -56,7 +56,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |                |           |                                                            |
 | debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                                            |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                                |
-| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                                |
+| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ✅        | Needs MSYS2, see [Install tools](#install-tools)           |
 |                     |                                                                                                                          |                |           |                                                            |
 | profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | rocm-systems   | ❌        | Unsupported                                                |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | rocm-systems   | ❌        | Unsupported                                                |
@@ -244,9 +244,10 @@ If you prefer to install tools manually, you will need:
   `THEROCK_ENABLE_SYSDEPS_AMD_MESA` is `OFF`.
 
 - MSYS2 (**required for the debug tools**): https://www.msys2.org/.
-  The autotools sysdeps the debug tools use (gmp, mpfr, expat and ncurses)
-  are built by MSYS2's UCRT64 gcc. `build_tools/setup_msys2.ps1` installs
-  MSYS2 with the packages the build uses, in `C:\msys64` by default:
+  rocgdb and the autotools sysdeps it links (gmp, mpfr, expat, ncurses and
+  libiconv) are built by MSYS2's UCRT64 gcc. `build_tools/setup_msys2.ps1`
+  installs MSYS2 with the packages the build uses, in `C:\msys64` by
+  default:
 
   ```bash
   powershell.exe .\build_tools\setup_msys2.ps1 -Install
@@ -259,9 +260,12 @@ If you prefer to install tools manually, you will need:
   `-Install` leaves such an installation alone unless given `-Force`. Run
   the script with `-Help` for the details.
 
-  Needed whenever one of the four `THEROCK_ENABLE_SYSDEPS_*` features for
-  those libraries is enabled, as `THEROCK_ENABLE_DEBUG_TOOLS`, on by default,
-  does.
+  Needed whenever `THEROCK_ENABLE_ROCGDB` or one of the five
+  `THEROCK_ENABLE_SYSDEPS_*` features for those libraries is enabled, as
+  `THEROCK_ENABLE_DEBUG_TOOLS`, on by default, does. To build without MSYS2,
+  configure with `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF`, which also turns off
+  amd-dbgapi. `-DTHEROCK_ENABLE_ROCGDB=OFF` alone keeps the sysdeps, and so
+  still needs MSYS2.
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
