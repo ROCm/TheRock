@@ -874,6 +874,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
     )
+    default_family_names = list(all_families)
+    if ci_inputs.is_workflow_dispatch:
+        all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
@@ -883,12 +886,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
         if linux_names == ["all"]:
-            linux_names = list(all_families.keys())
+            linux_names = default_family_names
             print("  linux_amdgpu_families='all' -> all Linux families")
         elif linux_names == ["none"]:
             linux_names = []
         if windows_names == ["all"]:
-            windows_names = list(all_families.keys())
+            windows_names = default_family_names
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
@@ -1366,10 +1369,10 @@ def _expand_build_config_for_platform(
         # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
         # This allows families with limited hardware to have tests opt-in via
         # PR labels rather than always running. Builds always run regardless.
-        # workflow_dispatch bypasses this check to allow manual test triggering.
+        # push and workflow_dispatch bypass this check (postsubmit always runs tests).
         if (
             platform_info.get("trigger_test_label_only", False)
-            and not ci_inputs.is_workflow_dispatch
+            and ci_inputs.is_pull_request
         ):
             family_label = platform_info["family"]
             if family_label not in ci_inputs.pr_labels:
@@ -1550,6 +1553,7 @@ def expand_build_configs(
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
+        + (["explicit_only"] if ci_inputs.is_workflow_dispatch else [])
     )
 
     # =========================================================================
