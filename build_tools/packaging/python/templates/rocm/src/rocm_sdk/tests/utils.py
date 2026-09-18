@@ -6,7 +6,6 @@
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
 import sysconfig
@@ -67,7 +66,4 @@ def find_console_script(script_name: str) -> Path | None:
             script_path = (Path(scripts_path) / script_name).with_suffix(ext)
             if script_path.is_file():
                 return script_path
-    which_path = shutil.which(script_name)
-    if which_path:
-        return Path(which_path)
     return None
