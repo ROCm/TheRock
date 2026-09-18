@@ -215,6 +215,22 @@ class FilesetToolTest(unittest.TestCase):
         if not is_windows():
             self.assertTrue(is_executable(flat2_dir / "share" / "doc" / "executable"))
 
+    def testCopyToExistingDestReplacesFile(self):
+        src_dir = self.temp_dir / "copy_src"
+        dest_dir = self.temp_dir / "copy_dest"
+        src_dir.mkdir()
+        dest_dir.mkdir()
+        src_path = src_dir / "artifact.txt"
+        dest_path = dest_dir / "artifact.txt"
+        src_path.write_text("new contents")
+        dest_path.write_text("old contents")
+
+        pm = __import__("_therock_utils.pattern_match", fromlist=["PatternMatcher"]).PatternMatcher()
+        pm.add_basedir(src_dir)
+        pm.copy_to(destdir=dest_dir, remove_dest=False)
+
+        self.assertEqual(dest_path.read_text(), "new contents")
+
     @unittest.skipIf(is_windows(), "Hardlinks not supported the same way on Windows")
     def testHardlinkPreservation(self):
         """Test that hardlinks are preserved through archive/flatten cycle."""

@@ -9,10 +9,24 @@ import platform
 import re
 import shutil
 import sys
+import time
 
 from .os_util import rmtree_with_retry
 
 _IS_WINDOWS = platform.system() == "Windows"
+_TRACE_FILESYSTEM = os.environ.get("THEROCK_TRACE_FILESYSTEM", "").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+
+def _trace_filesystem(action: str, **kv: object) -> None:
+    if not _TRACE_FILESYSTEM:
+        return
+    details = " ".join(f"{key}={value}" for key, value in kv.items())
+    print(f"[therock-fs-trace] {action} {details}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -39,10 +53,29 @@ _IS_WINDOWS = platform.system() == "Windows"
 def _hardlink_or_copy_from_source(src: str, destpath: Path, verbose: bool) -> None:
     """Hardlink destpath to src, falling back to copy on failure."""
     try:
+        if destpath.exists():
+            try:
+                if os.path.samefile(src, destpath):
+                    _trace_filesystem(
+                        "hardlink-skipped",
+                        src=src,
+                        dest=destpath,
+                        reason="already-hardlinked",
+                    )
+                    return
+            except (OSError, ValueError):
+                pass
         if verbose:
             print(f"hardlink {src} -> {destpath}", file=sys.stderr, end="")
         os.link(src, destpath, follow_symlinks=False)
-    except OSError:
+    except OSError as exc:
+        _trace_filesystem(
+            "hardlink-fallback",
+            src=src,
+            dest=destpath,
+            exc_type=type(exc).__name__,
+            exc_str=str(exc),
+        )
         if verbose:
             print(" (falling back to copy) ", file=sys.stderr, end="")
         _plain_copy(src, destpath, verbose)
@@ -82,6 +115,21 @@ def _copy_preserving_hardlink_groups(
 def _plain_copy(src: str, destpath: Path, verbose: bool) -> None:
     if verbose:
         print(f"copy {src} -> {destpath}", file=sys.stderr, end="")
+    _trace_filesystem("copy-start", src=src, dest=destpath)
+    if destpath.exists():
+        temp_path = destpath.with_name(f"{destpath.name}.therock-tmp-{os.getpid()}-{time.monotonic_ns()}")
+        _trace_filesystem("copy-atomic-replace", src=src, dest=destpath, tmp=temp_path)
+        try:
+            shutil.copy2(src, temp_path, follow_symlinks=False)
+            os.replace(temp_path, destpath)
+        except Exception:
+            try:
+                if temp_path.exists():
+                    temp_path.unlink()
+            except OSError:
+                pass
+            raise
+        return
     shutil.copy2(src, destpath, follow_symlinks=False)
 
 
