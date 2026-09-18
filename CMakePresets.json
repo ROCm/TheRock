@@ -32,6 +32,7 @@
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SANITIZER": "ASAN",
         "amd-llvm_SANITIZER": "OFF",
+        "amd-llvm_GENERATE_DEBUG_INFO": "OFF",
         "amd-comgr_SANITIZER": "ASAN",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",
@@ -52,6 +53,7 @@
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SANITIZER": "HOST_ASAN",
         "amd-llvm_SANITIZER": "OFF",
+        "amd-llvm_GENERATE_DEBUG_INFO": "OFF",
         "amd-comgr_SANITIZER": "HOST_ASAN",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",
@@ -80,9 +82,7 @@
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
-        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "amd-llvm_DEBUG_INFO": "OFF"
+        "THEROCK_DEBUG_INFO_FLAGS": "-g1 -gdwarf-4"
       }
     },
     {
@@ -103,9 +103,7 @@
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
-        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "amd-llvm_DEBUG_INFO": "OFF"
+        "THEROCK_DEBUG_INFO_FLAGS": "-g1 -gdwarf-4"
       }
     },
     {
@@ -120,6 +118,7 @@
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SANITIZER": "TSAN",
         "amd-llvm_SANITIZER": "OFF",
+        "amd-llvm_GENERATE_DEBUG_INFO": "OFF",
         "amd-comgr_SANITIZER": "OFF",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",
@@ -129,9 +128,7 @@
         "roctracer_SANITIZER": "OFF",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
-        "CMAKE_CXX_FLAGS": "-g1 -gdwarf-4",
-        "CMAKE_C_FLAGS": "-g1 -gdwarf-4",
-        "amd-llvm_DEBUG_INFO": "OFF",
+        "THEROCK_DEBUG_INFO_FLAGS": "-g1 -gdwarf-4",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       }
     },
