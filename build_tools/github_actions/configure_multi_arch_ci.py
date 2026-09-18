@@ -324,7 +324,7 @@ class CIInputs:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -874,6 +874,9 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
     )
+    default_family_names = list(all_families)
+    if ci_inputs.is_workflow_dispatch:
+        all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
@@ -883,12 +886,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
         if linux_names == ["all"]:
-            linux_names = list(all_families.keys())
+            linux_names = default_family_names
             print("  linux_amdgpu_families='all' -> all Linux families")
         elif linux_names == ["none"]:
             linux_names = []
         if windows_names == ["all"]:
-            windows_names = list(all_families.keys())
+            windows_names = default_family_names
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
@@ -940,12 +943,12 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 windows_names = list(all_families.keys())
                 print("  Label 'ci:run-all-archs' -> all families")
                 break
-            if label.startswith("gfx"):
+            if label.lower().startswith("gfx"):
                 # Trim suffixes from labels since amdgpu_family_matrix.py
                 # specifies families with no suffix (e.g. `gfx94x`) but
                 # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
+                # Family keys are lowercase, so normalize the target.
+                target = label.split("-")[0].lower()
                 linux_names.append(target)
                 windows_names.append(target)
                 print(f"  Label '{label}' -> adding target {target}")
@@ -1362,19 +1365,35 @@ def _expand_build_config_for_platform(
                 f"disabling tests (no submodule changes detected)"
             )
 
-        # If skip_tests_on_submodule_bump is set, skip tests when submodule changes
-        # are detected. This is the inverse of submodule_bump_tests_only - useful for
-        # architectures with limited hardware where submodule bumps are tested elsewhere.
+        # If trigger_test_label_only is set, only run tests when the family's
+        # label (e.g., gfx950-dcgpu, gfx125X-dcgpu) is present on the PR.
+        # This allows families with limited hardware to have tests opt-in via
+        # PR labels rather than always running. Builds always run regardless.
+        # push and workflow_dispatch bypass this check (postsubmit always runs tests).
         if (
-            platform_info.get("skip_tests_on_submodule_bump", False)
-            and not ci_inputs.is_workflow_dispatch
-            and git_context.has_submodule_changes is True
+            platform_info.get("trigger_test_label_only", False)
+            and ci_inputs.is_pull_request
         ):
-            test_runs_on = ""
-            print(
-                f"  {family_name}: skip_tests_on_submodule_bump flag set, "
-                f"disabling tests (submodule changes detected)"
-            )
+            family_label = platform_info["family"]
+            if family_label not in ci_inputs.pr_labels:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: trigger_test_label_only set, "
+                    f"'{family_label}' label not present, disabling tests"
+                )
+
+        # If test_type_for_family is set, force the test type for this family.
+        # This overrides the global test_type, allowing families with limited
+        # hardware to always run quick tests regardless of trigger type.
+        test_type_for_family = platform_info.get("test_type_for_family", "")
+        family_test_type = None
+        if test_type_for_family and test_runs_on:
+            family_test_type = test_type_for_family
+            if family_test_type != jobs.test_rocm.test_type:
+                print(
+                    f"  {family_name}: forcing test_type={family_test_type} "
+                    f"(global={jobs.test_rocm.test_type})"
+                )
 
         family_info = {
             "amdgpu_family": platform_info["family"],
@@ -1384,6 +1403,8 @@ def _expand_build_config_for_platform(
                 "sanity_check_only_for_family", False
             ),
         }
+        if family_test_type:
+            family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
         # Per-family test labels allow limiting which tests run for specific architectures
@@ -1532,6 +1553,7 @@ def expand_build_configs(
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
+        + (["explicit_only"] if ci_inputs.is_workflow_dispatch else [])
     )
 
     # =========================================================================
