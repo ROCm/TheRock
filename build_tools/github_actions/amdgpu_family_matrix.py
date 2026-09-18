@@ -297,7 +297,6 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx120X-gpu-rocm",
@@ -305,7 +304,6 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
         },
     },
     "gfx125x": {
