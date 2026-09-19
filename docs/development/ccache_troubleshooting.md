@@ -110,8 +110,37 @@ unaffected and continue to use a shared remote cache.
 > ```text
 > [setup_ccache] Cache mode: release_type=prerelease preset=local remote=disabled local=/.../ccache
 > [setup_ccache] Cache mode: release_type=nightly-bkc preset=local remote=disabled local=/.../ccache
-> [setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=/.../ccache
+> [setup_ccache] Cache mode: release_type=nightly preset=github-oss-release remote=http://bazelremote-svc-rel...:8080|layout=bazel|connect-timeout=50 local=skipped (remote_only)
 > ```
+
+### Remote-backed builds skip local storage (`remote_only`)
+
+The `github-oss-dev` and `github-oss-release` presets set `remote_only = true`,
+so a cache hit is served straight from the remote server and is never
+re-serialized into the local cache directory.
+
+CI runners are ephemeral, so the local cache is discarded when the job ends. It
+can only ever serve sources that a single job compiles more than once — for
+example a client `.cpp` that is built into both a "bench" and a "test" target.
+Measured on a Windows math-libs stage, that was 347 of 8,380 lookups (4.1%),
+paid for with 16,381 local writes. Those writes land on the checkout volume
+(`C:`) rather than the build volume (`B:`), and the resulting contention showed
+up in the log as roughly 80 `failed to rename ... The data is invalid` errors
+and 4,300 failed lock acquisitions per job.
+
+It also occasionally corrupted a restored object file. `lld-link` then reported
+every symbol from that one translation unit as undefined, so a link failed on
+some runs of a commit and not others, with a different translation unit and a
+different subproject each time. `remote_only` removes that write path; the 4.1%
+of lookups local storage answered are served by the remote cache instead.
+
+`cache_dir` is still configured, because ccache uses it for temporary files,
+lock files, and the statistics counters that the "Report" step prints.
+
+In the "Report" step the local `Hits`/`Writes` counters are expected to be at
+or near zero, and `Remote storage` should account for essentially every hit.
+Local-only presets (`prerelease`, `nightly-bkc`, `local`) are unaffected and
+keep writing to the local cache.
 
 ## Downloading and inspecting CI logs
 

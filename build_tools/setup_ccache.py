@@ -58,13 +58,29 @@ CONFIG_PRESETS_MAP = {
     # (post-merge) presets — presubmit serves varied code at mixed trust
     # levels while postsubmit serves a uniform stream of approved commits,
     # so separating them improves both cache hit rates and data integrity.
+    # remote_only: CI runners are ephemeral, so the local cache is discarded at
+    # the end of every job and only ever serves the handful of sources a single
+    # job compiles twice (e.g. a client .cpp built into both a "bench" and a
+    # "test" target). Measured on a Windows math-libs stage, local storage
+    # answered 347 of 8,380 lookups (4.1%) while performing 16,381 writes --
+    # every remote hit was re-serialized to disk for nothing. Those writes land
+    # on the checkout volume (C:) rather than the build volume (B:), and under
+    # the resulting contention ccache logged ~80 "failed to rename ... The data
+    # is invalid" errors and ~4,300 failed lock acquisitions per job, and
+    # occasionally left a restored object file incomplete. lld-link then
+    # reported every symbol from that one translation unit as undefined,
+    # producing a link failure that reproduced on some runs of a commit but not
+    # others. Skipping local storage removes that write path entirely; the 4.1%
+    # of lookups it answered are still served by the remote cache.
     "github-oss-dev": {
         "remote_storage": CACHE_SRV_DEV,
+        "remote_only": "true",
         "max_size": "10G",
         "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
     "github-oss-release": {
         "remote_storage": CACHE_SRV_REL,
+        "remote_only": "true",
         "max_size": "10G",
         "namespace": f"therock-{CCACHE_NAMESPACE_VERSION}",
     },
@@ -158,11 +174,16 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     # generated config rather than inferred from the selected preset. Readers
     # and CI log scrapers can then confirm what was actually written.
     remote_storage = _config_value(lines, "remote_storage")
+    remote_only = _config_value(lines, "remote_only") == "true"
     cache_dir = _config_value(lines, "cache_dir")
+    if remote_only:
+        local_mode = "skipped (remote_only)"
+    else:
+        local_mode = cache_dir or "disabled"
     _log(
         f"Cache mode: release_type={args.release_type or '(unset)'} "
         f"preset={config_preset} remote={remote_storage or 'disabled'} "
-        f"local={cache_dir or 'disabled'}"
+        f"local={local_mode}"
     )
 
     # End with blank line.

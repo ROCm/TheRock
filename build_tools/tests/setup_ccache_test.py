@@ -87,6 +87,27 @@ class GenConfigTest(unittest.TestCase):
         self.assertNotIn("remote_storage", config)
         self.assertIn("cache_dir", config)
 
+    def test_remote_presets_skip_local_storage(self):
+        """Remote-backed CI presets must not write results to local storage.
+
+        The local cache is thrown away with the ephemeral runner, so writing to
+        it only adds contention on the checkout volume, which has corrupted
+        restored object files and produced spurious link failures.
+        """
+        for release_type in ("ci", "dev", "dev-bkc", "nightly"):
+            with self.subTest(release_type=release_type):
+                config = self.gen_config("--release-type", release_type)
+                self.assertIn("remote_storage", config)
+                self.assertEqual(config["remote_only"], "true")
+
+    def test_local_only_presets_do_not_set_remote_only(self):
+        """Presets without a remote cache must keep using local storage."""
+        for args in (("--release-type", "prerelease"), ("--config-preset=local",)):
+            with self.subTest(args=args):
+                config = self.gen_config(*args)
+                self.assertNotIn("remote_only", config)
+                self.assertIn("cache_dir", config)
+
 
 class ConfigValueTest(unittest.TestCase):
     def test_parses_like_ccache(self):
