@@ -171,6 +171,43 @@ jobs:
         run: |
           python build_tools/health_status.py
 
+      # Diagnostic for the transient lld-link "undefined symbol" flake. The
+      # failing object is always present, correct, and byte-identical to a
+      # passing run, and re-running only the link succeeds, so the read itself
+      # is failing. A filesystem filter driver sitting between the build and
+      # the volume is the most likely cause, and nothing else captures which
+      # ones are loaded. Pool failure rates differ sharply (nosmt80core 20%
+      # pass vs nosmt176core 100%), so this also shows whether those pools
+      # differ in image rather than only in hardware.
+      - name: Filesystem and filter driver inventory
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "===== filter drivers (fltmc) ====="
+          fltmc filters
+          Write-Host "`n===== filter driver instances on the build volume ====="
+          fltmc instances -v B:
+          Write-Host "`n===== volumes ====="
+          Get-Volume | Format-Table -AutoSize DriveLetter, FileSystemLabel, FileSystem, HealthStatus,
+            @{n='SizeGB';e={[math]::Round($_.Size/1GB,1)}},
+            @{n='FreeGB';e={[math]::Round($_.SizeRemaining/1GB,1)}}
+          Write-Host "`n===== physical disks ====="
+          Get-PhysicalDisk | Format-Table -AutoSize DeviceId, FriendlyName, MediaType, BusType,
+            @{n='SizeGB';e={[math]::Round($_.Size/1GB,1)}}
+          Write-Host "`n===== B: mount target ====="
+          Get-Item B:\ | Select-Object -ExpandProperty Target
+          Write-Host "`n===== Defender status ====="
+          try {
+            Get-MpComputerStatus | Format-List AMRunningMode, RealTimeProtectionEnabled,
+              OnAccessProtectionEnabled, IoavProtectionEnabled, AntivirusEnabled
+            (Get-MpPreference).ExclusionPath | ForEach-Object { "exclusion: $_" }
+          } catch {
+            Write-Host "Defender cmdlets unavailable: $($_.Exception.Message)"
+          }
+          Write-Host "`n===== OS build ====="
+          [System.Environment]::OSVersion.VersionString
+          (Get-CimInstance Win32_OperatingSystem).Caption
+
       - name: Setup ccache
         run: |
           python ./build_tools/setup_ccache.py \
