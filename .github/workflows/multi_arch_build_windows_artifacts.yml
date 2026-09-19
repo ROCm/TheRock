@@ -263,6 +263,46 @@ jobs:
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
+      # Keeps a runner alive after a link failure so the failed state can be
+      # inspected with `kubectl exec` before the pod is torn down. These pods
+      # are ephemeral and disappear within seconds of a failure, which is why
+      # every diagnosis so far has had to work from uploaded logs.
+      #
+      # Opt-in and time-bounded: it only engages when the repository variable
+      # WINDOWS_DEBUG_HOLD_MINUTES is set to a positive number, so normal CI is
+      # unaffected even though the step is present on every job. Clear the
+      # variable, or touch the release file the step prints, to end a hold
+      # early.
+      - name: Hold runner for live debugging
+        if: ${{ failure() && vars.WINDOWS_DEBUG_HOLD_MINUTES != '' && vars.WINDOWS_DEBUG_HOLD_MINUTES != '0' }}
+        shell: pwsh
+        env:
+          HOLD_MINUTES: ${{ vars.WINDOWS_DEBUG_HOLD_MINUTES }}
+        run: |
+          $minutes = [int]$env:HOLD_MINUTES
+          $release = "$env:BUILD_DIR\_debug_release"
+          Write-Host "=========================================================="
+          Write-Host " RUNNER HELD FOR DEBUGGING - up to $minutes minute(s)"
+          Write-Host " pod   : $env:COMPUTERNAME"
+          Write-Host " build : $env:BUILD_DIR"
+          Write-Host ""
+          Write-Host " kubectl --context Win-Runner-Large-admin -n <ns> exec -it \"
+          Write-Host "   $env:COMPUTERNAME -- powershell"
+          Write-Host ""
+          Write-Host " release early:  New-Item -ItemType File '$release'"
+          Write-Host "=========================================================="
+          $deadline = (Get-Date).AddMinutes($minutes)
+          while ((Get-Date) -lt $deadline) {
+            if (Test-Path $release) {
+              Write-Host "release file seen; ending hold early"
+              break
+            }
+            $left = [int]($deadline - (Get-Date)).TotalMinutes
+            Write-Host "[hold] $left minute(s) remaining - $env:COMPUTERNAME"
+            Start-Sleep -Seconds 60
+          }
+          Write-Host "hold finished; job will continue its failure path"
+
       - name: Run build tests (Comgr, blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         env:
